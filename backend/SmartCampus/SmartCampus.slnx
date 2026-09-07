@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="SmartCampus.Application/SmartCampus.Application.csproj" />
+    <Project Path="src/SmartCampus.Domain/SmartCampus.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+</Solution>
