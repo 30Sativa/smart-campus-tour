@@ -38,7 +38,7 @@ class StopNavigator(Node):
     def __init__(self):
         super().__init__('stop_navigator')
 
-        self.declare_parameter('bus_id', 'bus1')
+        self.declare_parameter('bus_id', 'robot_01')
         self.declare_parameter('stops_file', '')
         self.declare_parameter('global_frame', 'map')
         self.declare_parameter('nav2_wait_timeout', 10.0)

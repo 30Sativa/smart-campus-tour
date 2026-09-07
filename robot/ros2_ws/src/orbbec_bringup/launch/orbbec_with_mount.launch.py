@@ -12,11 +12,12 @@ Phase 1 is "the camera is trustworthy"; wiring it into navigation is Phase 2.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (DeclareLaunchArgument, GroupAction,
+                            IncludeLaunchDescription)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -52,12 +53,17 @@ MOUNT_ARGS = [
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     pkg = FindPackageShare('orbbec_bringup')
     driver_launch = PathJoinSubstitution([pkg, 'launch', 'astra_pro.launch.py'])
     mount_launch = PathJoinSubstitution([pkg, 'launch', 'camera_mount.launch.py'])
     rviz_config = PathJoinSubstitution([pkg, 'rviz', 'astra_pro.rviz'])
 
     declared = [
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
+    ] + [
         DeclareLaunchArgument(name, default_value=default)
         for name, default in DRIVER_ARGS + MOUNT_ARGS
     ]
@@ -65,7 +71,8 @@ def generate_launch_description():
         'rviz', default_value='false',
         description='Open RViz2 with the Phase 1 verification layout.'))
 
-    return LaunchDescription(declared + [
+    return LaunchDescription(declared + [GroupAction([
+        PushRosNamespace(robot_id),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(driver_launch),
             launch_arguments={n: LaunchConfiguration(n) for n, _ in DRIVER_ARGS}.items(),
@@ -82,4 +89,4 @@ def generate_launch_description():
             output='screen',
             condition=IfCondition(LaunchConfiguration('rviz')),
         ),
-    ])
+    ])])

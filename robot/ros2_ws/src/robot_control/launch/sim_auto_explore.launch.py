@@ -26,8 +26,9 @@ from launch.actions import (DeclareLaunchArgument, GroupAction,
                             IncludeLaunchDescription)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node, SetRemap
+from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
+                                  PythonExpression)
+from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -35,6 +36,7 @@ def generate_launch_description():
     default_world = os.path.join(
         get_package_share_directory('simulation'),
         'worlds', 'warehouse_12x12.world')
+    robot_id = LaunchConfiguration('robot_id')
     world = LaunchConfiguration('world')
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_teleop = LaunchConfiguration('enable_teleop')
@@ -68,6 +70,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this simulated robot.'),
         DeclareLaunchArgument(
             'use_sim_time', default_value='true',
             description='Use the Gazebo clock for all nodes.'),
@@ -105,6 +110,7 @@ def generate_launch_description():
             package='robot_control',
             executable='mode_manager_node',
             name='mode_manager_node',
+            namespace=robot_id,
             output='screen',
             parameters=[
                 mode_manager_config,
@@ -120,18 +126,42 @@ def generate_launch_description():
             package='topic_tools',
             executable='relay',
             name='cmd_vel_sim_relay',
+            namespace=robot_id,
             output='screen',
-            arguments=['/cmd_vel', drive_cmd_topic],
+            arguments=['cmd_vel', drive_cmd_topic],
+        ),
+
+        Node(
+            package='topic_tools',
+            executable='relay',
+            name='odom_sim_relay',
+            namespace=robot_id,
+            output='screen',
+            arguments=['/diff_drive_controller/odom', 'odom'],
+        ),
+        Node(
+            package='topic_tools',
+            executable='relay',
+            name='scan_sim_relay',
+            namespace=robot_id,
+            output='screen',
+            condition=IfCondition(PythonExpression([
+                "'", robot_id, "' != ''",
+            ])),
+            arguments=['/scan', 'scan'],
         ),
 
         # 4) SLAM (online async mapping).
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(slam_launch),
-            launch_arguments={
-                'use_sim_time': use_sim_time,
-                'slam_params_file': slam_params_file,
-            }.items(),
-        ),
+        GroupAction([
+            PushRosNamespace(robot_id),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(slam_launch),
+                launch_arguments={
+                    'use_sim_time': use_sim_time,
+                    'slam_params_file': slam_params_file,
+                }.items(),
+            ),
+        ]),
 
         # 5) Nav2, with controller/smoother velocity output remapped to
         #    /cmd_vel_nav so it feeds the mux instead of /cmd_vel directly.
@@ -168,11 +198,12 @@ def generate_launch_description():
             # so this works - but never pass use_composition:=True here or every
             # rule below is silently dropped and Nav2 drives /cmd_vel directly,
             # bypassing mode_manager and the e-stop.
-            SetRemap(src='cmd_vel', dst='/cmd_vel_ctrl'),
-            SetRemap(src='cmd_vel_smoothed', dst='/cmd_vel_nav'),
+            SetRemap(src='cmd_vel', dst='cmd_vel_ctrl'),
+            SetRemap(src='cmd_vel_smoothed', dst='cmd_vel_nav'),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(nav2_launch),
                 launch_arguments={
+                    'namespace': robot_id,
                     'use_sim_time': use_sim_time,
                     'params_file': nav2_params_file,
                     'autostart': 'true',
@@ -185,6 +216,7 @@ def generate_launch_description():
             package='robot_control',
             executable='simple_frontier_explorer',
             name='simple_frontier_explorer',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_explorer),
             parameters=[
@@ -198,12 +230,12 @@ def generate_launch_description():
             package='teleop_twist_keyboard',
             executable='teleop_twist_keyboard',
             name='teleop_keyboard',
+            namespace=robot_id,
             output='screen',
             emulate_tty=True,
             condition=IfCondition(enable_teleop),
             remappings=[
-                ('cmd_vel', '/cmd_vel_manual'),
-                ('/cmd_vel', '/cmd_vel_manual'),
+                ('cmd_vel', 'cmd_vel_manual'),
             ],
         ),
     ])

@@ -1,5 +1,5 @@
 # Phase 4 person perception. Every number here should be a measured one.
-person_perception:
+/**/person_perception:
   ros__parameters:
     # Absolute path to the exported OpenVINO IR. Export on a laptop:
     #   yolo export model=yolo26n.pt format=openvino imgsz=320 int8=True

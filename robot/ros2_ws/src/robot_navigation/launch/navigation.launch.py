@@ -63,6 +63,7 @@ def _check_map(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     port = LaunchConfiguration('port')
     baudrate = LaunchConfiguration('baudrate')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -120,6 +121,10 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot. Use robot_01 for the '
+                        'first production robot.'),
         DeclareLaunchArgument('port', default_value='/dev/ttyACM0',
                               description='STM32 USB CDC serial port.'),
         DeclareLaunchArgument('baudrate', default_value='115200',
@@ -194,6 +199,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(manual_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'port': port,
                 'baudrate': baudrate,
                 'initial_mode': 'explore',
@@ -209,6 +215,7 @@ def generate_launch_description():
             package='rplidar_ros',
             executable='rplidar_node',
             name='rplidar_node',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[{
@@ -230,6 +237,7 @@ def generate_launch_description():
             package='laser_filters',
             executable='scan_to_scan_filter_chain',
             name='scan_range_filter',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[scan_filter_params],
@@ -246,6 +254,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(camera_launch),
             condition=IfCondition(enable_camera),
             launch_arguments={
+                'robot_id': robot_id,
                 'enable_color': LaunchConfiguration('camera_enable_color'),
                 'color_info_url': LaunchConfiguration('camera_color_info_url'),
                 'enable_ir': 'false',
@@ -269,6 +278,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(localization_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'map': map_yaml,
                 'use_sim_time': use_sim_time,
                 'params_file': localization_params_file,
@@ -309,11 +319,12 @@ def generate_launch_description():
             # so this works - but never pass use_composition:=True here or every
             # rule below is silently dropped and Nav2 drives /cmd_vel directly,
             # bypassing mode_manager and the e-stop.
-            SetRemap(src='cmd_vel', dst='/cmd_vel_ctrl'),
-            SetRemap(src='cmd_vel_smoothed', dst='/cmd_vel_nav'),
+            SetRemap(src='cmd_vel', dst='cmd_vel_ctrl'),
+            SetRemap(src='cmd_vel_smoothed', dst='cmd_vel_nav'),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(nav2_launch),
                 launch_arguments={
+                    'namespace': robot_id,
                     'use_sim_time': use_sim_time,
                     'params_file': nav2_params_file,
                     'autostart': 'true',

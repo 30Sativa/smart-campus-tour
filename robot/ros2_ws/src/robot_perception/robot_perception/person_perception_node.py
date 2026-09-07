@@ -236,16 +236,16 @@ class PersonPerceptionNode(Node):
 
         qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
                          reliability=ReliabilityPolicy.BEST_EFFORT)
-        self.create_subscription(Image, f'/{self.cam}/color/image_raw',
+        self.create_subscription(Image, f'{self.cam}/color/image_raw',
                                  lambda m: setattr(self, 'rgb', m), qos)
-        self.create_subscription(CameraInfo, f'/{self.cam}/color/camera_info',
+        self.create_subscription(CameraInfo, f'{self.cam}/color/camera_info',
                                  lambda m: setattr(self, 'info', m), qos)
-        self.create_subscription(PointCloud2, f'/{self.cam}/depth/points',
+        self.create_subscription(PointCloud2, f'{self.cam}/depth/points',
                                  lambda m: setattr(self, 'cloud', m), qos)
 
-        self.people_pub = self.create_publisher(PoseArray, '/people', 10)
-        self.marker_pub = self.create_publisher(MarkerArray, '/people_markers', 10)
-        self.limit_pub = self.create_publisher(SpeedLimit, '/speed_limit', 10)
+        self.people_pub = self.create_publisher(PoseArray, 'people', 10)
+        self.marker_pub = self.create_publisher(MarkerArray, 'people_markers', 10)
+        self.limit_pub = self.create_publisher(SpeedLimit, 'speed_limit', 10)
 
         self.net = self._load_model()
         rate = max(0.5, float(self.get_parameter('rate_hz').value))

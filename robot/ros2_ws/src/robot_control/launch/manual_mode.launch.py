@@ -8,6 +8,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     port = LaunchConfiguration('port')
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
@@ -43,6 +44,10 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot. Use robot_01 for the '
+                        'first production robot.'),
         DeclareLaunchArgument('port', default_value='/dev/ttyACM0',
                               description='STM32 USB CDC serial port.'),
         DeclareLaunchArgument('baudrate', default_value='115200',
@@ -75,6 +80,7 @@ def generate_launch_description():
             package='robot_state_publisher',
             executable='robot_state_publisher',
             name='robot_state_publisher',
+            namespace=robot_id,
             output='screen',
             parameters=[{
                 'robot_description': robot_description,
@@ -86,6 +92,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(stm32_bridge_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'port': port,
                 'baudrate': baudrate,
                 'wheel_base': wheel_base,
@@ -105,6 +112,7 @@ def generate_launch_description():
             package='robot_control',
             executable='mode_manager_node',
             name='mode_manager_node',
+            namespace=robot_id,
             output='screen',
             parameters=[
                 mode_manager_config,

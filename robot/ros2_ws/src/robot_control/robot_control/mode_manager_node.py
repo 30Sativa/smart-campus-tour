@@ -16,7 +16,7 @@ VALID_MODES = {MANUAL_MODE, EXPLORE_MODE}
 
 
 class ModeManagerNode(Node):
-    """Select the safe velocity source and publish the final /cmd_vel."""
+    """Select the safe velocity source and publish the final cmd_vel."""
 
     def __init__(self):
         super().__init__('mode_manager_node')
@@ -28,7 +28,7 @@ class ModeManagerNode(Node):
         self.declare_parameter('manual_priority_in_explore', True)
         self.declare_parameter('cancel_nav2_on_manual', True)
         self.declare_parameter(
-            'nav2_cancel_service', '/navigate_to_pose/_action/cancel_goal')
+            'nav2_cancel_service', 'navigate_to_pose/_action/cancel_goal')
 
         initial_mode = self._normalize_mode(
             str(self.get_parameter('initial_mode').value))
@@ -64,18 +64,18 @@ class ModeManagerNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
 
-        self._cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self._cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
         self._mode_state_pub = self.create_publisher(
-            String, '/robot_mode_state', state_qos)
+            String, 'robot_mode_state', state_qos)
         self._estop_state_pub = self.create_publisher(
-            Bool, '/emergency_stop_state', state_qos)
+            Bool, 'emergency_stop_state', state_qos)
 
         self.create_subscription(
-            Twist, '/cmd_vel_manual', self._manual_callback, 10)
-        self.create_subscription(Twist, '/cmd_vel_nav', self._nav_callback, 10)
-        self.create_subscription(String, '/robot_mode',
+            Twist, 'cmd_vel_manual', self._manual_callback, 10)
+        self.create_subscription(Twist, 'cmd_vel_nav', self._nav_callback, 10)
+        self.create_subscription(String, 'robot_mode',
                                  self._mode_topic_callback, 10)
-        self.create_service(SetBool, '/emergency_stop',
+        self.create_service(SetBool, 'emergency_stop',
                             self._emergency_stop_callback)
         self._cancel_client = self.create_client(
             CancelGoal, self.nav2_cancel_service)

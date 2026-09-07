@@ -151,8 +151,7 @@ def _launch_setup(context, *args, **kwargs):
             output='screen',
             parameters=[params],
             remappings=[
-                ('/%s/depth/color/points' % camera_name,
-                 '/%s/depth_registered/points' % camera_name),
+                ('depth/color/points', 'depth_registered/points'),
             ],
         ),
     ]

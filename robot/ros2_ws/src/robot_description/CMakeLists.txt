@@ -19,6 +19,10 @@ if(BUILD_TESTING)
     NAME robot_description_mesh_references
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/test_mesh_references.py"
   )
+  add_test(
+    NAME robot_description_geometry_consistency
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/test_geometry_consistency.py"
+  )
 endif()
 
 ament_package()

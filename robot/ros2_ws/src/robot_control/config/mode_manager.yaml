@@ -1,4 +1,4 @@
-mode_manager_node:
+/**/mode_manager_node:
   ros__parameters:
     initial_mode: manual
     manual_timeout: 0.5
@@ -6,4 +6,4 @@ mode_manager_node:
     output_rate_hz: 20.0
     manual_priority_in_explore: true
     cancel_nav2_on_manual: true
-    nav2_cancel_service: /navigate_to_pose/_action/cancel_goal
+    nav2_cancel_service: navigate_to_pose/_action/cancel_goal

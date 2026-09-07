@@ -17,6 +17,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     map_yaml = LaunchConfiguration('map')
     use_sim_time = LaunchConfiguration('use_sim_time')
     params_file = LaunchConfiguration('params_file')
@@ -35,6 +36,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
+        DeclareLaunchArgument(
             'map', default_value=default_map,
             description='Full path to the saved map .yaml file.'),
         DeclareLaunchArgument(
@@ -51,6 +55,7 @@ def generate_launch_description():
             package='nav2_map_server',
             executable='map_server',
             name='map_server',
+            namespace=robot_id,
             output='screen',
             parameters=[
                 params_file,
@@ -65,6 +70,7 @@ def generate_launch_description():
             package='nav2_amcl',
             executable='amcl',
             name='amcl',
+            namespace=robot_id,
             output='screen',
             parameters=[
                 params_file,
@@ -76,6 +82,7 @@ def generate_launch_description():
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
+            namespace=robot_id,
             output='screen',
             parameters=[{
                 'use_sim_time': use_sim_time,

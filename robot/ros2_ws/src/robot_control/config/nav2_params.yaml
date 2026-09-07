@@ -3,7 +3,7 @@ bt_navigator:
     use_sim_time: false
     global_frame: map
     robot_base_frame: base_footprint
-    odom_topic: /odom
+    odom_topic: odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -13,7 +13,7 @@ controller_server:
     use_sim_time: false
     controller_frequency: 10.0
     costmap_update_timeout: 0.30
-    odom_topic: /odom
+    odom_topic: odom
     publish_zero_velocity: true
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
@@ -106,7 +106,7 @@ local_costmap:
         # trusted alone - see expected_update_rate below.
         observation_sources: scan pointcloud
         scan:
-          topic: /scan
+          topic: scan
           max_obstacle_height: 2.0
           clearing: true
           marking: true
@@ -116,7 +116,7 @@ local_costmap:
           obstacle_max_range: 12.0  # A3M1; keep < raytrace so far obstacles still get cleared.
           obstacle_min_range: 0.12
         pointcloud:
-          topic: /camera/depth/points
+          topic: camera/depth/points
           data_type: PointCloud2
           marking: true
           clearing: true
@@ -187,7 +187,7 @@ global_costmap:
         # obstacles that stopped existing ten minutes ago.
         observation_sources: scan
         scan:
-          topic: /scan
+          topic: scan
           max_obstacle_height: 2.0
           clearing: true
           marking: true
@@ -269,7 +269,7 @@ velocity_smoother:
     min_velocity: [-0.20, 0.0, -1.20]
     max_accel: [0.50, 0.0, 2.50]
     max_decel: [-0.50, 0.0, -2.50]
-    odom_topic: /odom
+    odom_topic: odom
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 0.5

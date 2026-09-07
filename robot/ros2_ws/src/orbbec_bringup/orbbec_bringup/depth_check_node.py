@@ -121,11 +121,11 @@ class DepthCheckNode(Node):
         qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
                          reliability=ReliabilityPolicy.BEST_EFFORT)
         self.create_subscription(
-            CameraInfo, f'/{self.camera_name}/depth/camera_info', self._on_info, qos)
+            CameraInfo, f'{self.camera_name}/depth/camera_info', self._on_info, qos)
         self.create_subscription(
-            Image, f'/{self.camera_name}/depth/image_raw', self._on_depth, qos)
+            Image, f'{self.camera_name}/depth/image_raw', self._on_depth, qos)
         self.create_subscription(
-            PointCloud2, f'/{self.camera_name}/depth/points', self._on_cloud, qos)
+            PointCloud2, f'{self.camera_name}/depth/points', self._on_cloud, qos)
 
         self.create_timer(float(self.get_parameter('report_period').value), self._report)
         print(f'[depth_check] watching /{self.camera_name}/depth/* '
@@ -381,7 +381,7 @@ class DepthCheckNode(Node):
         # --- 5. topic ma Phase 3 se dung ----------------------------------
         lines.append('')
         lines.append('-- 5. San sang cho Phase 3 (Nav2) ------------------------------')
-        topic = f'/{self.camera_name}/depth/points'
+        topic = f'{self.camera_name}/depth/points'
         if self.cloud is None:
             lines.append(f'   FAIL  {topic} chua co ban tin nao.')
             lines.append('         Nav2 doc topic NAY, khong doc depth/image_raw.')

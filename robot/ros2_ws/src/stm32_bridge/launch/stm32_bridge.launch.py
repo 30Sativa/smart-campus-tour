@@ -10,6 +10,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     port = LaunchConfiguration('port')
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
@@ -51,6 +52,10 @@ def generate_launch_description():
     twist_covariance_diagonal = LaunchConfiguration('twist_covariance_diagonal')
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot. Empty preserves the '
+                        'single-robot graph.'),
         DeclareLaunchArgument(
             'port',
             default_value='/dev/ttyACM0',
@@ -139,19 +144,19 @@ def generate_launch_description():
             description='Publish the four SR04T readings as sensor_msgs/Range.'),
         DeclareLaunchArgument(
             'sonar1_topic',
-            default_value='/ultrasonic/sonar1/range',
+            default_value='ultrasonic/sonar1/range',
             description='SONAR1 Range topic.'),
         DeclareLaunchArgument(
             'sonar2_topic',
-            default_value='/ultrasonic/sonar2/range',
+            default_value='ultrasonic/sonar2/range',
             description='SONAR2 Range topic.'),
         DeclareLaunchArgument(
             'sonar3_topic',
-            default_value='/ultrasonic/sonar3/range',
+            default_value='ultrasonic/sonar3/range',
             description='SONAR3 Range topic.'),
         DeclareLaunchArgument(
             'sonar4_topic',
-            default_value='/ultrasonic/sonar4/range',
+            default_value='ultrasonic/sonar4/range',
             description='SONAR4 Range topic.'),
         DeclareLaunchArgument(
             'sonar1_frame',
@@ -213,6 +218,7 @@ def generate_launch_description():
             package='stm32_bridge',
             executable='stm32_bridge_node',
             name='stm32_bridge_node',
+            namespace=robot_id,
             output='screen',
             parameters=[{
                 'port': port,

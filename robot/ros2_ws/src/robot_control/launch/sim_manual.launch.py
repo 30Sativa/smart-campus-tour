@@ -30,11 +30,13 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (DeclareLaunchArgument, GroupAction,
+                            IncludeLaunchDescription)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
+                                  PythonExpression)
+from launch_ros.actions import Node, PushRosNamespace
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -42,6 +44,7 @@ def generate_launch_description():
     default_world = os.path.join(
         get_package_share_directory('simulation'),
         'worlds', 'warehouse_12x12.world')
+    robot_id = LaunchConfiguration('robot_id')
     world = LaunchConfiguration('world')
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_teleop = LaunchConfiguration('enable_teleop')
@@ -71,6 +74,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this simulated robot.'),
         DeclareLaunchArgument(
             'world', default_value=default_world,
             description='Gazebo .world file to load.'),
@@ -102,6 +108,7 @@ def generate_launch_description():
             package='robot_control',
             executable='mode_manager_node',
             name='mode_manager_node',
+            namespace=robot_id,
             output='screen',
             parameters=[
                 mode_manager_config,
@@ -117,31 +124,57 @@ def generate_launch_description():
             package='topic_tools',
             executable='relay',
             name='cmd_vel_sim_relay',
+            namespace=robot_id,
             output='screen',
-            arguments=['/cmd_vel', drive_cmd_topic],
+            arguments=['cmd_vel', drive_cmd_topic],
+        ),
+
+        # Gazebo remains a single global entity in this milestone. These
+        # relays expose the same odom/scan interface as the real robot stack.
+        Node(
+            package='topic_tools',
+            executable='relay',
+            name='odom_sim_relay',
+            namespace=robot_id,
+            output='screen',
+            arguments=['/diff_drive_controller/odom', 'odom'],
+        ),
+        Node(
+            package='topic_tools',
+            executable='relay',
+            name='scan_sim_relay',
+            namespace=robot_id,
+            output='screen',
+            condition=IfCondition(PythonExpression([
+                "'", robot_id, "' != ''",
+            ])),
+            arguments=['/scan', 'scan'],
         ),
 
         # 4) SLAM (optional) -> builds /map from /scan while you drive.
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(slam_launch),
-            condition=IfCondition(enable_slam),
-            launch_arguments={
-                'use_sim_time': use_sim_time,
-                'slam_params_file': slam_params_file,
-            }.items(),
-        ),
+        GroupAction([
+            PushRosNamespace(robot_id),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(slam_launch),
+                condition=IfCondition(enable_slam),
+                launch_arguments={
+                    'use_sim_time': use_sim_time,
+                    'slam_params_file': slam_params_file,
+                }.items(),
+            ),
+        ]),
 
         # 5) Teleop keyboard -> /cmd_vel_manual (NOT /cmd_vel directly).
         Node(
             package='teleop_twist_keyboard',
             executable='teleop_twist_keyboard',
             name='teleop_keyboard',
+            namespace=robot_id,
             output='screen',
             emulate_tty=True,
             condition=IfCondition(enable_teleop),
             remappings=[
-                ('cmd_vel', '/cmd_vel_manual'),
-                ('/cmd_vel', '/cmd_vel_manual'),
+                ('cmd_vel', 'cmd_vel_manual'),
             ],
         ),
     ])

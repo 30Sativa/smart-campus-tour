@@ -67,6 +67,39 @@ Named-stop navigation is exposed as a ROS 2 action: `go_to_stop`
 (`bus_manager` / `bus_interfaces`). This is the natural seam for the backend
 to command a tour.
 
+### 2.1 Robot identity and ROS namespace
+
+The canonical robot ID format is `robot_NN`, starting with `robot_01`. The
+same value is used by the backend/twin identity field, `BusStatus.bus_id`, and
+the ROS namespace. Do not introduce parallel names such as `bus1`, `amr1`, or
+`robot1` for the same vehicle.
+
+Robot-owned ROS topics, actions, and services use relative names. With no
+namespace they retain the original single-robot names such as `/cmd_vel`; with
+`robot_id:=robot_01` the same interface resolves below `/robot_01`:
+
+| Relative interface | Namespaced example |
+|---|---|
+| `cmd_vel`, `cmd_vel_manual`, `cmd_vel_nav` | `/robot_01/cmd_vel`, `/robot_01/cmd_vel_manual`, `/robot_01/cmd_vel_nav` |
+| `odom`, `scan` | `/robot_01/odom`, `/robot_01/scan` |
+| `robot_mode`, `robot_mode_state` | `/robot_01/robot_mode`, `/robot_01/robot_mode_state` |
+| `emergency_stop`, `emergency_stop_state` | `/robot_01/emergency_stop`, `/robot_01/emergency_stop_state` |
+| `go_to_stop`, `bus_status` | `/robot_01/go_to_stop`, `/robot_01/bus_status` |
+
+The global campus frame remains `map`. Per-robot frames must use the canonical
+ID as a prefix when multi-robot TF is implemented:
+
+```text
+map -> robot_01/odom -> robot_01/base_footprint -> robot_01/base_link
+map -> robot_02/odom -> robot_02/base_footprint -> robot_02/base_link
+```
+
+This milestone namespaces the ROS interfaces and supports one namespaced real
+robot or one namespaced simulated robot. It deliberately does not implement
+multi-entity Gazebo or prefixed TF frames yet. Until both are implemented and
+hardware-tested, do not run multiple robot stacks in one ROS domain: topic
+isolation alone is not enough to prevent TF and Gazebo controller collisions.
+
 ---
 
 ## 3. Robot <-> Backend contract

@@ -19,6 +19,36 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `bus_interfaces` | action/msg definitions for the bus system |
 | `simulation` | Gazebo worlds/models for testing without hardware |
 
+## Robot identity and namespaces
+
+Use `robot_01` as the first robot's canonical ID. The ID is also its ROS
+namespace and its `BusStatus.bus_id`; do not mix in aliases such as `bus1` or
+`amr1`. Launch files accept an optional `robot_id` argument. Leaving it empty
+preserves the existing single-robot graph, while this runs the real stack under
+`/robot_01`:
+
+```bash
+ros2 launch robot_navigation navigation.launch.py \
+  robot_id:=robot_01 map:=/path/to/campus_floor_1.yaml
+```
+
+Robot-owned endpoints are relative names, so the same stack exposes
+`/robot_01/cmd_vel`, `/robot_01/odom`, `/robot_01/scan`, and
+`/robot_01/go_to_stop` when namespaced. The simulator keeps its single global
+Gazebo entity/controller behind relays for now; this is not multi-entity
+Gazebo support.
+
+The shared global frame is `map`. The required future multi-robot TF layout is
+`map -> robot_NN/odom -> robot_NN/base_footprint -> robot_NN/base_link`.
+Frame prefixing is not enabled in this milestone, so do not run two robot
+stacks in the same ROS domain yet.
+
+Robot geometry is authoritative in
+`robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`.
+`robot/ros2_ws/src/robot_description/config/diff_drive_controller.yaml` and
+the real bridge launch defaults must match its `wheel_radius` and
+`wheel_separation`; tests enforce that relationship.
+
 `robot/firmware/stm32/motor_controller` is the STM32G431 firmware for the HBS57H
 STEP/DIR motor controller.
 

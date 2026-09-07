@@ -3,12 +3,13 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node, SetRemap
+from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     port = LaunchConfiguration('port')
     baudrate = LaunchConfiguration('baudrate')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -65,6 +66,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
         DeclareLaunchArgument('port', default_value='/dev/ttyACM0',
                               description='STM32 USB CDC serial port.'),
         DeclareLaunchArgument('baudrate', default_value='115200',
@@ -103,6 +107,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(manual_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'port': port,
                 'baudrate': baudrate,
                 'initial_mode': 'explore',
@@ -117,6 +122,7 @@ def generate_launch_description():
             package='rplidar_ros',
             executable='rplidar_node',
             name='rplidar_node',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[{
@@ -138,6 +144,7 @@ def generate_launch_description():
             package='laser_filters',
             executable='scan_to_scan_filter_chain',
             name='scan_range_filter',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[scan_filter_params],
@@ -147,13 +154,16 @@ def generate_launch_description():
             ],
         ),
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(slam_launch),
-            launch_arguments={
-                'use_sim_time': use_sim_time,
-                'slam_params_file': slam_params_file,
-            }.items(),
-        ),
+        GroupAction([
+            PushRosNamespace(robot_id),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(slam_launch),
+                launch_arguments={
+                    'use_sim_time': use_sim_time,
+                    'slam_params_file': slam_params_file,
+                }.items(),
+            ),
+        ]),
 
         GroupAction([
             # Nav2 Humble's navigation_launch.py already wires an internal
@@ -188,11 +198,12 @@ def generate_launch_description():
             # so this works - but never pass use_composition:=True here or every
             # rule below is silently dropped and Nav2 drives /cmd_vel directly,
             # bypassing mode_manager and the e-stop.
-            SetRemap(src='cmd_vel', dst='/cmd_vel_ctrl'),
-            SetRemap(src='cmd_vel_smoothed', dst='/cmd_vel_nav'),
+            SetRemap(src='cmd_vel', dst='cmd_vel_ctrl'),
+            SetRemap(src='cmd_vel_smoothed', dst='cmd_vel_nav'),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(nav2_launch),
                 launch_arguments={
+                    'namespace': robot_id,
                     'use_sim_time': use_sim_time,
                     'params_file': nav2_params_file,
                     'autostart': 'true',
@@ -204,6 +215,7 @@ def generate_launch_description():
             package='robot_control',
             executable='simple_frontier_explorer',
             name='simple_frontier_explorer',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_explorer),
             parameters=[explorer_params_file],

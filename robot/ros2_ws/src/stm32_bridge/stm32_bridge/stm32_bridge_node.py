@@ -78,10 +78,10 @@ class Stm32BridgeNode(Node):
         # base_link two parents and break the TF tree.
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('publish_sonar', True)
-        self.declare_parameter('sonar1_topic', '/ultrasonic/sonar1/range')
-        self.declare_parameter('sonar2_topic', '/ultrasonic/sonar2/range')
-        self.declare_parameter('sonar3_topic', '/ultrasonic/sonar3/range')
-        self.declare_parameter('sonar4_topic', '/ultrasonic/sonar4/range')
+        self.declare_parameter('sonar1_topic', 'ultrasonic/sonar1/range')
+        self.declare_parameter('sonar2_topic', 'ultrasonic/sonar2/range')
+        self.declare_parameter('sonar3_topic', 'ultrasonic/sonar3/range')
+        self.declare_parameter('sonar4_topic', 'ultrasonic/sonar4/range')
         self.declare_parameter('sonar1_frame', 'sonar1_link')
         self.declare_parameter('sonar2_frame', 'sonar2_link')
         self.declare_parameter('sonar3_frame', 'sonar3_link')
@@ -252,7 +252,7 @@ class Stm32BridgeNode(Node):
         self._sonar3_pub = None
         self._sonar4_pub = None
         if self.publish_odom:
-            self._odom_pub = self.create_publisher(Odometry, '/odom', 10)
+            self._odom_pub = self.create_publisher(Odometry, 'odom', 10)
         if self.publish_tf:
             self._tf_broadcaster = TransformBroadcaster(self)
         if self.publish_sonar:
@@ -284,7 +284,7 @@ class Stm32BridgeNode(Node):
 
         self._open_serial()
 
-        self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_callback, 10)
+        self.create_subscription(Twist, 'cmd_vel', self._cmd_vel_callback, 10)
         self._timer = self.create_timer(
             1.0 / self.send_rate_hz, self._timer_callback)
 

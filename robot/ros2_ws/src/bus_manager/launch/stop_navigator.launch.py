@@ -9,13 +9,15 @@
 # =============================================================================
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
+                                  PythonExpression)
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    bus_id = LaunchConfiguration('bus_id')
+    robot_id = LaunchConfiguration('robot_id')
     stops_file = LaunchConfiguration('stops_file')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
@@ -26,8 +28,10 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
-        DeclareLaunchArgument('bus_id', default_value='bus1',
-                              description='Bus ID in BusStatus.'),
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='Canonical robot ID and ROS namespace. Empty keeps '
+                        'the legacy global graph and reports robot_01.'),
         DeclareLaunchArgument('stops_file', default_value=default_stops,
                               description='YAML file with named stop poses.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
@@ -37,9 +41,13 @@ def generate_launch_description():
             package='bus_manager',
             executable='stop_navigator',
             name='stop_navigator',
+            namespace=robot_id,
             output='screen',
             parameters=[{
-                'bus_id': bus_id,
+                'bus_id': ParameterValue(PythonExpression([
+                    "'", robot_id, "' if '", robot_id,
+                    "' else 'robot_01'",
+                ]), value_type=str),
                 'stops_file': stops_file,
                 'use_sim_time': use_sim_time,
             }],

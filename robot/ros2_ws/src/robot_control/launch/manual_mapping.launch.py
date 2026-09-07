@@ -1,14 +1,16 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (DeclareLaunchArgument, GroupAction,
+                            IncludeLaunchDescription)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     port = LaunchConfiguration('port')
     baudrate = LaunchConfiguration('baudrate')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -46,6 +48,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
         DeclareLaunchArgument('port', default_value='/dev/ttyACM0',
                               description='STM32 USB CDC serial port.'),
         DeclareLaunchArgument('baudrate', default_value='115200',
@@ -74,6 +79,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(manual_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'port': port,
                 'baudrate': baudrate,
                 'initial_mode': 'manual',
@@ -89,6 +95,7 @@ def generate_launch_description():
             package='rplidar_ros',
             executable='rplidar_node',
             name='rplidar_node',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[{
@@ -111,6 +118,7 @@ def generate_launch_description():
             package='laser_filters',
             executable='scan_to_scan_filter_chain',
             name='scan_range_filter',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(enable_lidar),
             parameters=[scan_filter_params],
@@ -120,13 +128,16 @@ def generate_launch_description():
             ],
         ),
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(slam_launch),
-            launch_arguments={
-                'use_sim_time': use_sim_time,
-                'slam_params_file': slam_params_file,
-            }.items(),
-        ),
+        GroupAction([
+            PushRosNamespace(robot_id),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(slam_launch),
+                launch_arguments={
+                    'use_sim_time': use_sim_time,
+                    'slam_params_file': slam_params_file,
+                }.items(),
+            ),
+        ]),
         Node(
             package='rviz2',
             executable='rviz2',

@@ -36,6 +36,7 @@ def _setup(context, *args, **kwargs):
         package='robot_perception',
         executable='person_perception',
         name='person_perception',
+        namespace=LaunchConfiguration('robot_id'),
         output='screen',
         emulate_tty=True,
         parameters=[LaunchConfiguration('params_file'), overrides],
@@ -48,6 +49,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
         DeclareLaunchArgument('params_file', default_value=default_params),
         DeclareLaunchArgument(
             'model_xml', default_value='',

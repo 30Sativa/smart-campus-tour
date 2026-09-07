@@ -107,8 +107,8 @@ class CostmapContribNode(Node):
         super().__init__('costmap_contrib')
 
         self.declare_parameter('camera_name', 'camera')
-        self.declare_parameter('scan_topic', '/scan')
-        self.declare_parameter('costmap_topic', '/local_costmap/costmap')
+        self.declare_parameter('scan_topic', 'scan')
+        self.declare_parameter('costmap_topic', 'local_costmap/costmap')
         self.declare_parameter('base_frame', 'base_footprint')
         # Mirror of the `pointcloud` observation source in nav2_params.yaml.
         self.declare_parameter('min_obstacle_height', 0.08)
@@ -140,7 +140,7 @@ class CostmapContribNode(Node):
                              durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
         self.create_subscription(
-            PointCloud2, f'/{self.camera_name}/depth/points', self._on_cloud, sensor_qos)
+            PointCloud2, f'{self.camera_name}/depth/points', self._on_cloud, sensor_qos)
         self.create_subscription(
             LaserScan, self.get_parameter('scan_topic').value, self._on_scan, sensor_qos)
         self.create_subscription(
@@ -189,7 +189,7 @@ class CostmapContribNode(Node):
 
         lines.append('-- 0. Dau vao ---------------------------------------------------')
         for label, msg, count in (
-                (f'/{self.camera_name}/depth/points', self.cloud, self.n_cloud),
+                (f'{self.camera_name}/depth/points', self.cloud, self.n_cloud),
                 (self.get_parameter('scan_topic').value, self.scan, self.n_scan),
                 (self.get_parameter('costmap_topic').value, self.grid, self.n_grid)):
             state = f'{count} ban tin' if msg is not None else 'CHUA CO BAN TIN'

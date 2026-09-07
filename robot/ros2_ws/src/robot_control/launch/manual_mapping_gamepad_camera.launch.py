@@ -20,6 +20,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    robot_id = LaunchConfiguration('robot_id')
     robot_control = FindPackageShare('robot_control')
     orbbec = FindPackageShare('orbbec_bringup')
 
@@ -37,6 +38,9 @@ def generate_launch_description():
     ])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_id', default_value='',
+            description='ROS namespace for this robot.'),
         DeclareLaunchArgument(
             'port', default_value='/dev/ttyACM0',
             description='STM32 USB CDC serial port.'),
@@ -89,6 +93,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(mapping_launch),
             launch_arguments={
+                'robot_id': robot_id,
                 'port': LaunchConfiguration('port'),
                 'lidar_serial_port': LaunchConfiguration('lidar_serial_port'),
                 'lidar_serial_baudrate': LaunchConfiguration('lidar_serial_baudrate'),
@@ -99,6 +104,7 @@ def generate_launch_description():
             package='joy_linux',
             executable='joy_linux_node',
             name='joy_linux_node',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(LaunchConfiguration('enable_gamepad')),
             parameters=[{
@@ -111,11 +117,12 @@ def generate_launch_description():
             package='teleop_twist_joy',
             executable='teleop_node',
             name='teleop_twist_joy_node',
+            namespace=robot_id,
             output='screen',
             condition=IfCondition(LaunchConfiguration('enable_gamepad')),
             parameters=[gamepad_config],
             remappings=[
-                ('cmd_vel', '/cmd_vel_manual'),
+                ('cmd_vel', 'cmd_vel_manual'),
             ],
         ),
 
@@ -123,6 +130,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(camera_launch),
             condition=IfCondition(LaunchConfiguration('enable_camera')),
             launch_arguments={
+                'robot_id': robot_id,
                 'camera_name': LaunchConfiguration('camera_name'),
                 'uvc_product_id': LaunchConfiguration('uvc_product_id'),
                 'enable_color': LaunchConfiguration('camera_enable_color'),

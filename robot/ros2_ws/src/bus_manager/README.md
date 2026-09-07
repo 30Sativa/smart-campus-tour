@@ -7,28 +7,29 @@ Tầng "bus" của hệ thống Smart Campus Bus: điều xe tới các **bến 
 
 ```
 client (CLI / app gọi xe / dispatcher sau này)
-   │  action: /go_to_stop (bus_interfaces/GoToStop)
+   │  action: /robot_01/go_to_stop (bus_interfaces/GoToStop)
    ▼
 stop_navigator ── tra bus_stops.yaml ──► NavigateToPose ──► Nav2
    │
-   └── publish /bus_status (bus_interfaces/BusStatus, 1 Hz)
+   └── publish /robot_01/bus_status (bus_interfaces/BusStatus, 1 Hz)
 ```
 
 ## Chạy thử (sau khi navigation stack đã lên)
 
 ```bash
 # 1. Navigation stack (sim hoặc thật) — xem robot_navigation/README.md
-ros2 launch robot_navigation sim_navigation.launch.py map:=...
+ros2 launch robot_navigation sim_navigation.launch.py robot_id:=robot_01 map:=...
 
 # 2. Stop navigator
-ros2 launch bus_manager stop_navigator.launch.py use_sim_time:=true
+ros2 launch bus_manager stop_navigator.launch.py \
+  robot_id:=robot_01 use_sim_time:=true
 
 # 3. Gọi bus tới bến
-ros2 action send_goal /go_to_stop bus_interfaces/action/GoToStop \
+ros2 action send_goal /robot_01/go_to_stop bus_interfaces/action/GoToStop \
     "{stop_id: library}" --feedback
 
 # 4. Theo dõi trạng thái xe
-ros2 topic echo /bus_status
+ros2 topic echo /robot_01/bus_status
 ```
 
 ## bus_stops.yaml
@@ -50,6 +51,6 @@ library, dorm_a) — chỉnh sau khi quét map.
 
 1. Route scheduler: `Route.msg` (chuỗi bến), chạy tuyến vòng lặp, dừng đón
    trả tại mỗi bến.
-2. 2-3 xe: namespace per-bus (`/bus1/...`), dispatcher phân xe theo yêu cầu
+2. 2-3 xe: namespace per robot (`/robot_01/...`), dispatcher phân xe theo yêu cầu
    gọi (điểm đón gần nhất, xe rảnh).
 3. Digital twin campus (Isaac Sim / Gazebo world campus) để test toàn hệ thống.

@@ -32,10 +32,10 @@ class SimpleFrontierExplorer(Node):
     def __init__(self):
         super().__init__('simple_frontier_explorer')
 
-        self.declare_parameter('map_topic', '/map')
-        self.declare_parameter('mode_state_topic', '/robot_mode_state')
+        self.declare_parameter('map_topic', 'map')
+        self.declare_parameter('mode_state_topic', 'robot_mode_state')
         self.declare_parameter(
-            'emergency_stop_state_topic', '/emergency_stop_state')
+            'emergency_stop_state_topic', 'emergency_stop_state')
         self.declare_parameter('navigate_action', 'navigate_to_pose')
         self.declare_parameter('global_frame', 'map')
         self.declare_parameter('robot_base_frame', 'base_footprint')
