@@ -1,26 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>SmartCampus.Application</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\SmartCampus.Domain\SmartCampus.Domain.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Common\Abstractions\NewFolder\" />
-    <Folder Include="Common\Abstractions\Persistence\" />
-    <Folder Include="Common\Exceptions\" />
-    <Folder Include="Features\" />
+    <ProjectReference Include="..\SmartCampus.Domain\SmartCampus.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="MediatR" Version="14.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Features\Commands\" />
+    <Folder Include="Features\Queries\" />
   </ItemGroup>
 
 </Project>

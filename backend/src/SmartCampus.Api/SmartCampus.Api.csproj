@@ -4,7 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SmartCampus.Api</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartCampus.Application\SmartCampus.Application.csproj" />
+    <ProjectReference Include="..\SmartCampus.Infrastructure\SmartCampus.Infrastructure.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />

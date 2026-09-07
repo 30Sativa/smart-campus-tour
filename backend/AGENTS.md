@@ -1,10 +1,5 @@
 # AGENTS.md — `backend/`
 
-> **STATUS: STACK DECIDED, NOT SCAFFOLDED YET.** Solution/projects have not
-> been created (`dotnet new` not run). This file records the decisions so
-> whoever scaffolds it (agent or human) follows the same structure. Delete
-> this banner once the solution exists and Section 2 reflects the real tree.
-
 Booking, tour scheduling and multi-robot dispatch API for CampusTour DT-AMR
 (Work Package 2). Read the repo-root `AGENTS.md` first for the shared rules;
 this file only covers what is specific to `backend/`.
@@ -17,7 +12,7 @@ this file only covers what is specific to `backend/`.
 - Framework: **ASP.NET Core Web API** (controller-based, not Minimal API).
 - Database: **SQL Server**.
 - ORM: **Entity Framework Core**, code-first, migrations checked into
-  `src/CampusTour.Infrastructure/Persistence/Migrations/`.
+  `src/SmartCampus.Infrastructure/Persistence/Migrations/`.
 - Architecture style: **Clean Architecture**, not DDD — no aggregates, domain
   events, or value-object-heavy modelling unless a task explicitly asks for
   it. Entities are plain, services hold behaviour.
@@ -27,35 +22,38 @@ this file only covers what is specific to `backend/`.
 
 ## 2. Layout
 
-Planned structure — **4 separate `.csproj` per layer** in one solution, not
-folders inside one project. Dependencies point inward only (API ->
-Infrastructure/Application -> Domain; nothing points back out to API).
+**4 separate `.csproj` per layer** in one solution, not folders inside one
+project. Dependencies point inward only (API -> Infrastructure/Application ->
+Domain; nothing points back out to API).
 
 ```
 backend/
-├── CampusTour.sln
+├── SmartCampus.slnx
 ├── src/
-│   ├── CampusTour.Domain/          entities, enums, domain exceptions.
-│   │                                No dependency on any other project.
-│   ├── CampusTour.Application/     use cases / services, interfaces
-│   │                                (IRepository, IEmailSender, ...).
-│   │                                Depends on Domain only.
-│   ├── CampusTour.Infrastructure/  EF Core DbContext, migrations,
-│   │                                repository implementations, external
-│   │                                service clients. Depends on Application
-│   │                                + Domain.
-│   └── CampusTour.Api/             controllers, DI wiring, Program.cs,
-│                                    appsettings. Depends on all three.
-├── tests/
-│   ├── CampusTour.Application.Tests/       unit tests, xUnit
-│   ├── CampusTour.Api.Tests/                unit tests, xUnit
-│   └── CampusTour.Infrastructure.IntegrationTests/  <!-- TODO(WP2): tên/tồn tại tùy quyết định integration test ở mục 4 -->
+│   ├── SmartCampus.Domain/          Entities/, Enums/, Exceptions/.
+│   │                                 No project reference at all.
+│   ├── SmartCampus.Application/     Common/{Abstractions,Behaviors,
+│   │                                 Exceptions,Models}/, Features/
+│   │                                 {Commands,Queries}/, DependencyInjection.cs.
+│   │                                 -> Domain. MediatR + FluentValidation.
+│   ├── SmartCampus.Infrastructure/  Persistence/ (DbContext, Repositories/,
+│   │                                 Migrations/), Authentication/,
+│   │                                 Integrations/, DependencyInjection.cs.
+│   │                                 -> Application.
+│   └── SmartCampus.Api/             Controllers/, Common/{Requests,Responses}/,
+│                                     ExceptionHandling/, Hubs/, Program.cs,
+│                                     appsettings. -> Application + Infrastructure.
+├── tests/                           <!-- TODO(WP2): chưa tạo -->
+│   ├── SmartCampus.Application.Tests/       unit tests, xUnit
+│   ├── SmartCampus.Api.Tests/                unit tests, xUnit
+│   └── SmartCampus.Infrastructure.IntegrationTests/  <!-- TODO(WP2): tên/tồn tại tùy quyết định integration test ở mục 4 -->
 └── scripts/verify
 ```
 
-<!-- TODO(WP2): once `dotnet new` has been run for real, replace this planned
-tree with the actual one (exact folder names inside each project, e.g.
-Domain/Entities, Application/Common/Interfaces, etc.) and delete this note. -->
+Wiring: `Program.cs` gọi `builder.Services.AddApplication()` và
+`AddInfrastructure(builder.Configuration)` — mỗi layer tự đăng ký DI của mình
+trong `DependencyInjection.cs` của layer đó, `Api` không new trực tiếp class
+của `Infrastructure`.
 
 ---
 
@@ -64,13 +62,13 @@ Domain/Entities, Application/Common/Interfaces, etc.) and delete this note. -->
 Clean Architecture, dependencies point inward only:
 
 ```
-CampusTour.Api
+SmartCampus.Api
     v
-CampusTour.Infrastructure  --\
+SmartCampus.Infrastructure  --\
     v                         > both depend on
-CampusTour.Application     --/
+SmartCampus.Application     --/
     v
-CampusTour.Domain
+SmartCampus.Domain
 ```
 
 - `Domain` has zero project references. No EF Core, no ASP.NET, no external
@@ -111,8 +109,8 @@ Scheduling / dispatch specifically:
 
 - Unit test framework: **xUnit**.
 - Mock/assertion library: <!-- TODO(WP2): chưa chốt. Ứng viên: Moq + FluentAssertions, hoặc NSubstitute + FluentAssertions, hoặc xUnit thuần (Assert.*). Chốt khi bắt đầu viết test đầu tiên. -->
-- Layout: `tests/CampusTour.Application.Tests/` covers `Application` services
-  (mock the repository interfaces, no real database). `tests/CampusTour.Api.Tests/`
+- Layout: `tests/SmartCampus.Application.Tests/` covers `Application` services
+  (mock the repository interfaces, no real database). `tests/SmartCampus.Api.Tests/`
   covers controllers/HTTP concerns (status codes, validation, routing) —
   mock `Application` services, do not hit a real database here either.
 - Integration tests (real EF Core against real SQL Server, not mocked):
@@ -121,7 +119,7 @@ Scheduling / dispatch specifically:
   vs. EF Core In-Memory provider (nhanh, không cần Docker, nhưng không bắt
   được lỗi đặc thù SQL Server: constraint, index, raw SQL). Chốt khi biết
   môi trường CI có Docker hay không, rồi ghi rõ project test riêng (ví dụ
-  `tests/CampusTour.Infrastructure.IntegrationTests/`) và cách nó chạy trong
+  `tests/SmartCampus.Infrastructure.IntegrationTests/`) và cách nó chạy trong
   `backend/scripts/verify`. -->
 - No coverage threshold for now — `dotnet test` passing is the bar. Revisit
   if/when the team wants a minimum coverage gate.
@@ -197,12 +195,10 @@ trước khi code hai đầu. -->
 backend/scripts/verify
 ```
 
-Order once scaffolded: `dotnet restore` -> `dotnet build -warnaserror` ->
-`dotnet test` -> (if migrations exist) `dotnet ef migrations has-pending-model-changes`
-or equivalent check that no model change is missing a migration.
-
-<!-- TODO(WP2): once CampusTour.sln exists, replace the SKIPPED branch in
-backend/scripts/verify with these real dotnet commands. -->
+Order: `dotnet restore` -> `dotnet build -warnaserror` -> `dotnet test` (bỏ qua
+khi `tests/` chưa có project nào) -> `dotnet ef migrations
+has-pending-model-changes` (chỉ chạy khi
+`src/SmartCampus.Infrastructure/Persistence/Migrations/` đã có migration).
 
 ---
 

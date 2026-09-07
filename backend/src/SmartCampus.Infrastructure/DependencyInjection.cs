@@ -2,8 +2,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SmartCampus.Infrastructure
-
-
 {
     public static class DependencyInjection
     {

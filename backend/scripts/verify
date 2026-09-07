@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
-# TODO(WP2): khi CampusTour.sln đã được tạo (dotnet new), xóa nhánh SKIPPED
-# bên dưới và bật khối lệnh thật đã note sẵn.
-#   Bắt buộc: exit 0 khi pass, exit != 0 khi fail. Đừng nuốt lỗi bằng `|| true`.
+# backend/scripts/verify — exit 0 = PASS, exit != 0 = FAIL. Không nuốt lỗi bằng `|| true`.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-SOLUTION="CampusTour.sln"
+SOLUTION="SmartCampus.slnx"
 
 if [ ! -f "$SOLUTION" ]; then
-  echo "SKIPPED: backend/ chưa có $SOLUTION. Không có gì để verify."
-  exit 3   # 3 = SKIPPED (chưa có gì để verify)
+  echo "FAIL: không tìm thấy $SOLUTION trong backend/."
+  exit 1
 fi
 
-# --- Real checks once the solution exists (uncomment) ---
-# dotnet restore "$SOLUTION"
-# dotnet build "$SOLUTION" -warnaserror
-# dotnet test "$SOLUTION"
-# # If EF Core migrations exist, also fail when the model has pending changes
-# # not captured in a migration:
-# dotnet ef migrations has-pending-model-changes \
-#   --project src/CampusTour.Infrastructure \
-#   --startup-project src/CampusTour.Api
+dotnet restore "$SOLUTION"
+dotnet build "$SOLUTION" -warnaserror --no-restore
 
-echo "FAIL: $SOLUTION tồn tại nhưng scripts/verify chưa được điền."
-echo "      Mở backend/scripts/verify, bỏ comment khối lệnh dotnet thật."
-exit 1
+if compgen -G "tests/*/*.csproj" > /dev/null; then
+  dotnet test "$SOLUTION" --no-build
+else
+  echo "WARN: chưa có project test nào trong tests/ — bỏ qua dotnet test."
+fi
+
+# Nếu đã có migration: fail khi model đổi mà chưa sinh migration.
+if compgen -G "src/SmartCampus.Infrastructure/Persistence/Migrations/*.cs" > /dev/null; then
+  dotnet ef migrations has-pending-model-changes \
+    --project src/SmartCampus.Infrastructure \
+    --startup-project src/SmartCampus.Api
+fi
+
+echo "PASS"
