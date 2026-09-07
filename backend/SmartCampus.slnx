@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/SmartCampus.Domain/SmartCampus.Domain.csproj" />
-    <Project Path="src/SmartCampus.Application/SmartCampus.Application.csproj" />
-    <Project Path="src/SmartCampus.Infrastructure/SmartCampus.Infrastructure.csproj" />
     <Project Path="src/SmartCampus.Api/SmartCampus.Api.csproj" />
+    <Project Path="src/SmartCampus.Application/SmartCampus.Application.csproj" />
+    <Project Path="src/SmartCampus.Domain/SmartCampus.Domain.csproj" />
+    <Project Path="src/SmartCampus.Infrastructure/SmartCampus.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="SmartCampus.IntegrationTests/SmartCampus.IntegrationTests.csproj" Id="071db34a-6781-4708-a113-aa0cc3cf9376" />
+    <Project Path="tests/SmartCampus.UnitTests/SmartCampus.UnitTests.csproj" Id="9a2cfc54-7a3e-400f-a63b-be0af6effea8" />
+  </Folder>
 </Solution>

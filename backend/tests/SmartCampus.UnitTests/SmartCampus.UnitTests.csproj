@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\SmartCampus.Application\SmartCampus.Application.csproj" />
+    <ProjectReference Include="..\..\src\SmartCampus.Domain\SmartCampus.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
