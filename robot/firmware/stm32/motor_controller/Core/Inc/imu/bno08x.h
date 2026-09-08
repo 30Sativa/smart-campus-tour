@@ -35,7 +35,50 @@ uint8_t BNO08x_ReadRotationVector(float *qi, float *qj, float *qk, float *qr,
                                   BNO08x_Euler *euler);
 float BNO08x_GetLastYaw(uint8_t *valid);
 
+/* So mau rotation vector nhan duoc trong giay vua roi.  Ky vong ~50 khi
+ * EnableRotationVector(20). Thap hon nhieu = dang mat mau / doc khong kip. */
+uint32_t BNO08x_GetSampleRate(void);
+
+/* Muc tin cay cua mau gan nhat: 0 = tu ke chua hieu chuan, 3 = tot.
+ * Heading van co gia tri khi accuracy = 0 nhung co the sai hang chuc do. */
+uint8_t BNO08x_GetAccuracy(void);
+
+/* Bo dem suc khoe bus. Tang len trong luc chay = bus dang co van de. */
+uint32_t BNO08x_GetBusWarnCount(void);
+uint32_t BNO08x_GetBusRecoverCount(void);
+
+/* 0 = DWT CYCCNT khong chay, bb_delay dang dung duong du phong (bus se cham hon). */
+uint8_t BNO08x_IsDwtOk(void);
+
+/* Tare mem (chi anh huong yaw, khong ghi flash cua BNO08x).
+ * SetYawDeg(0) = "huong dang quay mat vao la 0 do". */
+void BNO08x_SetYawDeg(float yaw_deg);
+void BNO08x_ClearYawOffset(void);
+float BNO08x_GetYawOffset(void);
+
 /* Chan doan bit-bang. 0=ACK, 1=NOACK. */
-uint8_t BNO08x_Diag(uint32_t *err_code);
+uint8_t BNO08x_Diag(void);
+
+/* Muc dien ap khi tha 2 duong bus. Ca hai phai = 1 (co pull-up len 3V3).
+ * =0 nghia la thieu pull-up, chap xuong GND, hoac chan bi cau hinh sai. */
+void BNO08x_BusIdle(uint8_t *sda_high, uint8_t *scl_high);
+
+/* Quet dia chi 0x08..0x77, ghi cac dia chi co ACK vao found[].
+ * Tra ve tong so thiet bi tim thay. */
+uint8_t BNO08x_ScanBus(uint8_t *found, uint8_t max_found);
+
+/* Co pull-up NGOAI tren bus khong?
+ * Tam doi 2 chan sang input + pull-down noi (~40k) roi doc.  Van ra muc cao
+ * = co dien tro keo len 3V3 o ben ngoai => day thuc su noi toi module dang
+ * co nguon.  Ra muc thap = day dut, module mat nguon, hoac thieu pull-up. */
+void BNO08x_BusPullTest(uint8_t *sda_ext, uint8_t *scl_ext);
+
+/* Do dai goi SHTP dang cho o dau hang doi (doc 4 byte header).
+ * 0 = khong co du lieu, 0xFFFF = khong doc duoc. Chi dung de chan doan. */
+uint16_t BNO08x_PeekPacketLen(uint8_t *channel);
+
+/* Do tan so clock that su cua bit-bang (bit/giay) bang cach dap clock rong.
+ * I2C standard mode = 100000. Thap hon nhieu thi bus khong tai noi 50Hz. */
+uint32_t BNO08x_BusClockHz(void);
 
 #endif /* IMU_BNO08X_H */

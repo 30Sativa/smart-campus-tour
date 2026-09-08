@@ -19,4 +19,10 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // The router module exports route config, not components — the
+    // fast-refresh rule does not apply to it.
+    files: ['src/app/router/index.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])

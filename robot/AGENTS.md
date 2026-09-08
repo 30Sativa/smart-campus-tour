@@ -21,6 +21,9 @@ robot/
 ```
 
 Architecture, package roles, sensor dataflow and run commands: **`robot/README.md`**.
+Serial contract between the STM32 firmware and `stm32_bridge`:
+**`robot/docs/PROTOCOL_FB.md`** — single source of truth, read it before
+touching either side of the wire.
 Per-phase design, close-out criteria and error tables: **`robot/docs/phase*.md`**.
 
 ---

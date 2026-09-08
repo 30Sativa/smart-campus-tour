@@ -15,7 +15,7 @@
 
 #define PROTOCOL_RX_LINE_SIZE 96U
 #define PROTOCOL_RX_QUEUE_COUNT 8U
-#define PROTOCOL_TX_BUFFER_SIZE 160U
+#define PROTOCOL_TX_BUFFER_SIZE 224U
 #define PROTOCOL_TX_BUFFER_COUNT 2U
 
 typedef enum
@@ -207,6 +207,142 @@ void Protocol_ProcessLine(char *line)
 		return;
 	}
 
+	/* TARE,<seq>          -> dat huong hien tai = 0 do
+	 * TARE,<seq>,<deg>    -> dat huong hien tai = <deg> do
+	 * TARE,<seq>,RAW      -> bo offset, ve lai yaw tho
+	 * Khong dung lai watchdog motor: day khong phai lenh chuyen dong. */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "TARE") != 0U)
+	{
+		uint32_t seq;
+		float yaw_deg = 0.0f;
+		uint8_t clear = 0U;
+
+		if ((token_count < 2U) || (token_count > 3U) ||
+			(Protocol_ParseU32(tokens[1], &seq) == 0U))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+
+		if (token_count == 3U)
+		{
+			if (Protocol_EqualsIgnoreCase(tokens[2], "RAW") != 0U)
+			{
+				clear = 1U;
+			}
+			else if (Protocol_ParseFloat(tokens[2], &yaw_deg) == 0U)
+			{
+				Protocol_ReportBadCommand();
+				return;
+			}
+		}
+
+		last_seq = seq;
+		if (clear != 0U) BNO08x_ClearYawOffset();
+		else             BNO08x_SetYawDeg(yaw_deg);
+		return;
+	}
+
+	/* DIAG,<seq> -> chan doan IMU tai cho, tra ve mot dong DIAG,...
+	 * Blocking ~1.1s (co reset chip) nen dung motor truoc.
+	 *   DIAG,<seq>,<ACK|NOACK>,<SELFTEST_OK|SELFTEST_FAIL>,<sw>,<RV_OK|RV_NONE>,
+	 *        SDA=<0|1>,SCL=<0|1>,SCAN=<danh sach dia chi ACK> */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "DIAG") != 0U)
+	{
+		uint32_t seq;
+		uint8_t maj = 0U;
+		uint8_t min = 0U;
+		uint8_t ack;
+		uint8_t selftest;
+		uint8_t rv = 0U;
+		uint32_t t0;
+		uint8_t sda_high = 0U;
+		uint8_t scl_high = 0U;
+		uint8_t sda_ext = 0U;
+		uint8_t scl_ext = 0U;
+		uint16_t pkt_len;
+		uint8_t pkt_ch = 0xFFU;
+		uint32_t clk_hz;
+		uint8_t scan[8];
+		uint8_t scan_count;
+		char scan_text[32];
+
+		if ((token_count != 2U) || (Protocol_ParseU32(tokens[1], &seq) == 0U))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+
+		Motor_StopAll();
+		protocol_status = PROTOCOL_STATUS_STOP;
+		last_seq = seq;
+
+		/* Do truoc tien, khi chua ping/reset gi ca: 1.2s chi doc IMU, de
+		 * RATE phan anh dung trang thai chay binh thuong. */
+		pkt_len = BNO08x_PeekPacketLen(&pkt_ch);
+		t0 = HAL_GetTick();
+		while ((uint32_t)(HAL_GetTick() - t0) < 1200U)
+		{
+			if (BNO08x_ReadRotationVector(NULL, NULL, NULL, NULL, NULL) != 0U) rv = 1U;
+		}
+
+		clk_hz = BNO08x_BusClockHz();
+		BNO08x_BusIdle(&sda_high, &scl_high);
+		BNO08x_BusPullTest(&sda_ext, &scl_ext);
+
+		scan_count = BNO08x_ScanBus(scan, (uint8_t)(sizeof(scan)));
+		scan_text[0] = '\0';
+		if (scan_count == 0U)
+		{
+			(void)snprintf(scan_text, sizeof(scan_text), "none");
+		}
+		else
+		{
+			int pos = 0;
+			uint8_t shown = (scan_count < (uint8_t)sizeof(scan))
+			                ? scan_count : (uint8_t)sizeof(scan);
+			for (uint8_t i = 0U; i < shown; i++)
+			{
+				int w = snprintf(&scan_text[pos], sizeof(scan_text) - (size_t)pos,
+				                 (i == 0U) ? "%02X" : " %02X", (unsigned)scan[i]);
+				if ((w <= 0) || ((size_t)(pos + w) >= sizeof(scan_text))) break;
+				pos += w;
+			}
+		}
+
+		ack = (uint8_t)(BNO08x_Diag() == 0U);
+		selftest = BNO08x_SelfTest(&maj, &min);
+
+		/* Self-test co reset chip -> phai bat lai rotation vector. */
+		(void)BNO08x_EnableRotationVector(20U);
+
+		for (uint32_t retry = 0U; retry < 100U; retry++)
+		{
+			if (Protocol_TrySendFormatted(
+					"DIAG,%lu,%s,%s,%u.%u,%s,SDA=%u,SCL=%u,EXTPU=%u%u,SCAN=%s,PKT=%u/ch%u,RATE=%lu,CLK=%lu,SYS=%luMHz,ACC=%u,WARN=%lu,REC=%lu,DWT=%u\r\n",
+					(unsigned long)seq,
+					(ack != 0U) ? "ACK" : "NOACK",
+					(selftest != 0U) ? "SELFTEST_OK" : "SELFTEST_FAIL",
+					(unsigned)maj, (unsigned)min,
+					(rv != 0U) ? "RV_OK" : "RV_NONE",
+					(unsigned)sda_high, (unsigned)scl_high,
+					(unsigned)sda_ext, (unsigned)scl_ext,
+					scan_text, (unsigned)pkt_len, (unsigned)pkt_ch,
+					(unsigned long)BNO08x_GetSampleRate(),
+					(unsigned long)clk_hz,
+					(unsigned long)(SystemCoreClock / 1000000U),
+					(unsigned)BNO08x_GetAccuracy(),
+					(unsigned long)BNO08x_GetBusWarnCount(),
+					(unsigned long)BNO08x_GetBusRecoverCount(),
+					(unsigned)BNO08x_IsDwtOk()) != 0U)
+			{
+				break;
+			}
+			HAL_Delay(2);
+		}
+		return;
+	}
+
 	Protocol_ReportBadCommand();
 }
 
@@ -335,12 +471,17 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	uint8_t sonar3_valid = 0U;
 	uint8_t sonar4_valid = 0U;
 
-	/* Yaw tu IMU (cache). Gui dang centi-do (yaw*100) kieu integer de tranh
+	/* CONTRACT: robot/docs/PROTOCOL_FB.md la nguon su that duy nhat cua khung
+	 * nay. Chi duoc THEM truong o CUOI, va phai cap nhat doc + test o ca hai
+	 * dau trong cung mot lan thay doi.
+	 *
+	 * Yaw tu IMU (cache). Gui dang centi-do (yaw*100) kieu integer de tranh
 	 * phu thuoc %f. yaw_valid=1 neu IMU da co du lieu.
 	 * Format moi (tuong thich nguoc, them yaw va 4 SR04T):
 	 *   FB,<seq>,<left>,<right>,<dt_ms>,<status>,<yaw_cdeg>,<yaw_valid>,
 	 *      <sonar1_mm>,<sonar1_valid>,<sonar2_mm>,<sonar2_valid>,
-	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid> */
+	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>
+	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do. */
 	uint8_t yaw_valid = 0U;
 	float   yaw_deg   = BNO08x_GetLastYaw(&yaw_valid);
 	long    yaw_cdeg  = (long)(yaw_deg * 100.0f);
@@ -350,7 +491,7 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	SR04T_GetReading(3U, &sonar4_mm, &sonar4_valid);
 
 	return Protocol_TrySendFormatted(
-		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
 		(unsigned long)last_seq,
 		(long)Motor_GetLeftCount(),
 		(long)Motor_GetRightCount(),
@@ -365,7 +506,8 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 		(unsigned)sonar3_mm,
 		(unsigned)sonar3_valid,
 		(unsigned)sonar4_mm,
-		(unsigned)sonar4_valid);
+		(unsigned)sonar4_valid,
+		(unsigned)BNO08x_GetAccuracy());
 }
 
 static uint8_t Protocol_TrySendRaw(const char *text)

@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# TODO(WP5): khi web/package.json đã được tạo, xóa nhánh SKIPPED bên dưới và
-# bật khối lệnh thật đã note sẵn.
-#   Bắt buộc: exit 0 khi pass, exit != 0 khi fail. Đừng nuốt lỗi bằng `|| true`.
+# Verification for web/. Exit 0 = PASS, non-zero = FAIL.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-if [ ! -f package.json ]; then
-  echo "SKIPPED: web/ chưa có package.json. Không có gì để verify."
-  exit 3   # 3 = SKIPPED (chưa có gì để verify)
-fi
-
-# --- Real checks once the app exists (uncomment) ---
-# npm ci
-# npm run typecheck
-# npm run lint
-# npm run test
-# npm run build
-
-echo "FAIL: package.json tồn tại nhưng scripts/verify chưa được điền."
-echo "      Mở web/scripts/verify, bỏ comment khối lệnh npm thật."
-exit 1
+npm ci
+npm run typecheck
+npm run lint
+npm run test
+npm run build

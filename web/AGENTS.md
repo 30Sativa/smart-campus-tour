@@ -1,10 +1,5 @@
 # AGENTS.md — `web/`
 
-> **STATUS: STACK DECIDED, NOT SCAFFOLDED YET.** No app has been created yet
-> (`npm create vite` not run). This file records the decisions so whoever
-> scaffolds it (agent or human) follows the same structure. Delete this
-> banner once the app exists and Section 2 reflects the real tree.
-
 Visitor booking app and operations dashboard for CampusTour DT-AMR (Work
 Package 5). Read the repo-root `AGENTS.md` first for the shared rules; this
 file only covers what is specific to `web/`.
@@ -32,9 +27,14 @@ file only covers what is specific to `web/`.
   - `/admin/*` is **lazy-loaded** (`React.lazy` + route-based code splitting)
     so a visitor loading `/` never downloads dashboard code, and vice versa
     for a staff member going straight to `/admin`.
-- Local run + backend URL: <!-- TODO(WP5): once scaffolded, fill in the exact
-  `npm run dev` command and which env var carries the backend base URL (e.g.
-  `VITE_API_BASE_URL`). -->
+- Local run: `cd web && npm install && npm run dev` (Vite, port 5173).
+- Backend base URL: **`VITE_API_BASE_URL`** (see `.env.example`, e.g.
+  `http://localhost:5000`). Read it only through `src/api/client.ts` — never
+  hard-code a backend URL in a component.
+- Realtime transport: **SignalR** (`@microsoft/signalr`) — see Section 4.
+- Structure: **feature-based**. Code is grouped by what it does
+  (`src/features/<feature>/`), not by file kind. Only genuinely shared UI goes
+  in `src/components/`.
 - Auth mechanism: **JWT access token + refresh token in an HttpOnly cookie**.
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
     on every API request. Carries the user's role (`staff`/`ops`/etc.) as a
@@ -65,24 +65,38 @@ file only covers what is specific to `web/`.
 
 ## 2. Layout
 
-Planned structure — a single Vite + React app, split internally by route:
+Actual structure — a single Vite + React app, split internally by route:
 
 ```
 web/
-├── package.json
-├── src/
-│   ├── routes/
-│   │   ├── public/            visitor booking flow ("/")
-│   │   └── admin/              ops dashboard ("/admin/*"), lazy-loaded
-│   ├── components/             shared UI components used by both areas
-│   ├── api/                    the one API client module (Section 3)
-│   ├── auth/                   route guard, role check, login flow
-│   └── ...
-└── scripts/verify
+├── index.html
+├── package.json          dev / build / lint / typecheck / test
+├── vite.config.ts        Vite + Tailwind + Vitest config
+├── .env.example          VITE_API_BASE_URL
+├── scripts/verify
+└── src/
+    ├── main.tsx          StrictMode -> QueryProvider -> RouterProvider
+    ├── index.css         @import "tailwindcss"
+    ├── vite-env.d.ts     typing for VITE_* env vars
+    ├── app/
+    │   ├── providers/    query-provider.tsx (TanStack Query)
+    │   └── router/       index.tsx — route config
+    ├── routes/
+    │   ├── public/       PublicHomePage.tsx  ("/")
+    │   └── admin/        AdminDashboardPage.tsx, DigitalTwinPage.tsx
+    │                     ("/admin", "/admin/digital-twin"), lazy-loaded
+    ├── features/         feature-based modules (empty until the first feature)
+    ├── components/ui/    shared UI (MotionTest.tsx — motion smoke test)
+    ├── api/              client.ts (the one API client), signalr.ts (hub factory)
+    ├── auth/             route guard + login flow (empty — not implemented yet)
+    ├── stores/           ui-store.ts (Zustand, client/UI state only)
+    ├── three/            DigitalTwinCanvas.tsx (R3F smoke test)
+    └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-<!-- TODO(WP5): once scaffolded for real, replace this planned tree with the
-actual one and delete this note. -->
+`src/features/` and `src/auth/` are empty on purpose: they get their first file
+when the first real feature / the auth flow lands. Tests live next to the code
+they cover (`*.test.ts(x)`).
 
 ---
 
@@ -105,8 +119,9 @@ actual one and delete this note. -->
   component unless Tailwind genuinely cannot express it (e.g. a keyframe
   animation).
 
-<!-- TODO(WP5): thêm rule về component structure (folder-by-feature vs
-folder-by-type) khi bắt đầu viết component đầu tiên. -->
+- Component structure is **folder-by-feature**: a feature owns its components,
+  hooks and query hooks under `src/features/<feature>/`. Promote something to
+  `src/components/ui/` only when a second feature actually needs it.
 
 ---
 
@@ -119,9 +134,19 @@ How the backend itself gets that state from the robots is settled (a bridge
 node in `robot/`, `docs/architecture.md` §3). What is still open is only the
 last hop, backend -> browser.
 
-<!-- TODO(WP5): chốt cách web nhận realtime từ backend (websocket / SSE /
-polling bằng TanStack Query refetchInterval) và ghi vào docs/architecture.md.
-Polling là mặc định hợp lý nếu tần suất cập nhật vài giây là đủ. -->
+Decision (backend -> browser): **SignalR** (`@microsoft/signalr`), matching the
+ASP.NET backend. `src/api/signalr.ts` exposes a `createHubConnection(hubPath)`
+factory only:
+
+- the hub URL is resolved against `VITE_API_BASE_URL` — never hard-coded;
+- nothing connects on import. The component/hook that needs live data owns
+  `start()` / `stop()`;
+- `withAutomaticReconnect()` is on by default.
+
+No hub is consumed yet — the backend hub contract is not defined.
+
+<!-- TODO(WP5): ghi quyết định SignalR + tên hub/method vào
+docs/architecture.md khi backend chốt contract. -->
 
 ---
 
@@ -131,12 +156,13 @@ Polling là mặc định hợp lý nếu tần suất cập nhật vài giây l
 web/scripts/verify
 ```
 
-Order once scaffolded: `npm run typecheck` -> `npm run lint` ->
-`npm run test` -> `npm run build`. Build must be part of verify — a clean
-typecheck can still fail at build time.
+Runs, in order: `npm ci` -> `npm run typecheck` -> `npm run lint` ->
+`npm run test` -> `npm run build`. Build is part of verify — a clean typecheck
+can still fail at build time. `npm test` is `vitest run` (single run, no watch)
+so it exits and is CI-safe.
 
-<!-- TODO(WP5): once the app exists, replace the SKIPPED branch in
-web/scripts/verify with these real npm commands. -->
+Tests run in jsdom. Do not try to assert on WebGL/Canvas output there — the R3F
+setup is checked by rendering `/admin/digital-twin` in a browser.
 
 ---
 

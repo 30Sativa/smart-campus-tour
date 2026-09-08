@@ -29,9 +29,15 @@ static void SR04T_DelayUs(uint32_t delay_us)
 {
 	uint32_t start = DWT->CYCCNT;
 	uint32_t ticks = delay_us * cycles_per_us;
+	/* Tran vong lap: neu DWT->CYCCNT khong chay (vai dong Cortex-M can
+	 * debugger, hoac TRCENA bi tat) thi vong nay se quay mai va treo cung
+	 * ca firmware.  Co tran thi truong hop xau nhat chi la xung trigger sai
+	 * do dai, sonar doc sai -- van hon la xe dung im giua duong. */
+	uint32_t guard = (ticks * 4U) + 1000U;
 
-	while ((uint32_t)(DWT->CYCCNT - start) < ticks)
+	while (((uint32_t)(DWT->CYCCNT - start) < ticks) && (guard != 0U))
 	{
+		guard--;
 	}
 }
 

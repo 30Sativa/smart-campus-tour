@@ -44,6 +44,7 @@ def _install_ros_stubs():
     sensor_msgs_msg = _stub_module('sensor_msgs.msg')
     sensor_msgs.msg = sensor_msgs_msg
     sensor_msgs_msg.Range = type('Range', (), {'ULTRASOUND': 0})
+    sensor_msgs_msg.Imu = type('Imu', (), {})
 
     rclpy = _stub_module('rclpy')
     rclpy_node = _stub_module('rclpy.node')
@@ -75,7 +76,12 @@ _PKG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
-from stm32_bridge.stm32_bridge_node import Stm32BridgeNode  # noqa: E402
+from stm32_bridge.stm32_bridge_node import (  # noqa: E402
+    DEFAULT_IMU_YAW_VARIANCE,
+    Stm32BridgeNode,
+    imu_yaw_variance,
+    yaw_to_quaternion_z,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +208,7 @@ def test_parse_feedback_six_field():
     parsed = Stm32BridgeNode._parse_feedback_line(
         Stm32BridgeNode, 'FB,42,1200,1195,20,OK')
     assert parsed is not None
-    seq, left, right, dt_ms, status, yaw_rad = parsed
+    seq, left, right, dt_ms, status, yaw_rad, yaw_acc = parsed
     assert seq == 42
     assert left == 1200
     assert right == 1195
@@ -215,7 +221,7 @@ def test_parse_feedback_five_field_fallback():
     parsed = Stm32BridgeNode._parse_feedback_line(
         Stm32BridgeNode, 'FB,1200,1195,50,STOP')
     assert parsed is not None
-    seq, left, right, dt_ms, status, yaw_rad = parsed
+    seq, left, right, dt_ms, status, yaw_rad, yaw_acc = parsed
     assert seq is None
     assert left == 1200
     assert right == 1195
@@ -229,7 +235,7 @@ def test_parse_feedback_eight_field_with_yaw():
     parsed = Stm32BridgeNode._parse_feedback_line(
         Stm32BridgeNode, 'FB,7,100,110,20,OK,9000,1')
     assert parsed is not None
-    seq, left, right, dt_ms, status, yaw_rad = parsed
+    seq, left, right, dt_ms, status, yaw_rad, yaw_acc = parsed
     assert seq == 7
     assert left == 100
     assert right == 110
@@ -243,7 +249,7 @@ def test_parse_feedback_eight_field_yaw_invalid():
     parsed = Stm32BridgeNode._parse_feedback_line(
         Stm32BridgeNode, 'FB,7,100,110,20,OK,9000,0')
     assert parsed is not None
-    _, _, _, _, _, yaw_rad = parsed
+    _, _, _, _, _, yaw_rad, _ = parsed
     assert yaw_rad is None
 
 
@@ -254,7 +260,7 @@ def test_parse_feedback_twelve_field_with_two_sonars():
         include_sonar=True,
     )
     assert parsed is not None
-    (seq, left, right, dt_ms, status, yaw_rad,
+    (seq, left, right, dt_ms, status, yaw_rad, yaw_acc,
      sonar1, sonar2, sonar3, sonar4) = parsed
     assert seq == 8
     assert left == 100
@@ -275,7 +281,7 @@ def test_parse_feedback_sixteen_field_with_four_sonars():
         include_sonar=True,
     )
     assert parsed is not None
-    (seq, left, right, dt_ms, status, yaw_rad,
+    (seq, left, right, dt_ms, status, yaw_rad, yaw_acc,
      sonar1, sonar2, sonar3, sonar4) = parsed
     assert seq == 9
     assert left == 100
@@ -287,6 +293,141 @@ def test_parse_feedback_sixteen_field_with_four_sonars():
     assert sonar2 == (0, False)
     assert sonar3 == (2000, True)
     assert sonar4 == (500, False)
+
+
+def test_parse_feedback_seventeen_field_with_accuracy():
+    # Dinh dang hien tai: 16 truong cu + <yaw_acc> o cuoi.
+    parsed = Stm32BridgeNode._parse_feedback_line(
+        Stm32BridgeNode,
+        'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0,3',
+        include_sonar=True,
+    )
+    assert parsed is not None
+    (seq, left, right, dt_ms, status, yaw_rad, yaw_acc,
+     sonar1, sonar2, sonar3, sonar4) = parsed
+    assert seq == 9
+    approx(yaw_rad, math.pi / 2, tol=1e-6)
+    assert yaw_acc == 3
+    assert sonar1 == (1234, True)
+    assert sonar4 == (500, False)
+
+
+def test_parse_feedback_sixteen_field_has_no_accuracy():
+    # Firmware cu: khong co yaw_acc -> None, KHONG duoc mac dinh thanh 0
+    # (0 co nghia la "khong tin duoc" va se chan het heading IMU).
+    parsed = Stm32BridgeNode._parse_feedback_line(
+        Stm32BridgeNode,
+        'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0',
+        include_sonar=True,
+    )
+    assert parsed is not None
+    assert parsed[6] is None
+
+
+def test_parse_feedback_ignores_unknown_trailing_fields():
+    # Bao ve chinh cai loi da xay ra: firmware them truong o cuoi thi node
+    # PHAI van parse duoc, khong duoc tra None.
+    parsed = Stm32BridgeNode._parse_feedback_line(
+        Stm32BridgeNode,
+        'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0,2,777,888',
+        include_sonar=True,
+    )
+    assert parsed is not None
+    assert parsed[6] == 2                 # yaw_acc van doc dung
+    assert parsed[7] == (1234, True)      # sonar khong bi xe dich
+
+
+def test_parse_feedback_accuracy_is_clamped():
+    for raw, want in (('-1', 0), ('0', 0), ('3', 3), ('9', 3)):
+        parsed = Stm32BridgeNode._parse_feedback_line(
+            Stm32BridgeNode,
+            f'FB,1,0,0,20,OK,0,1,0,0,0,0,0,0,0,0,{raw}',
+        )
+        assert parsed is not None
+        assert parsed[6] == want, raw
+
+
+def test_imu_yaw_variance_mapping():
+    # Accuracy cang thap thi variance cang lon -> EKF tu ha trong so.
+    assert imu_yaw_variance(3) < imu_yaw_variance(2) < imu_yaw_variance(1)
+    assert imu_yaw_variance(1) < imu_yaw_variance(0)
+    # Firmware cu khong gui accuracy: khong duoc tin nhu acc=3.
+    assert imu_yaw_variance(None) == DEFAULT_IMU_YAW_VARIANCE
+    assert imu_yaw_variance(None) > imu_yaw_variance(3)
+    assert imu_yaw_variance(99) == DEFAULT_IMU_YAW_VARIANCE
+
+
+def test_yaw_to_quaternion_z_roundtrip():
+    for yaw in (0.0, 0.5, -1.2, math.pi / 2, -math.pi / 2):
+        qz, qw = yaw_to_quaternion_z(yaw)
+        recovered = math.atan2(2.0 * qw * qz, 1.0 - 2.0 * qz * qz)
+        approx(recovered, yaw, tol=1e-9)
+
+
+class _ImuHeadingHarness:
+    """Vo toi thieu de goi _update_imu_heading ma khong can ROS."""
+
+    def __init__(self, min_accuracy=2):
+        self.imu_min_accuracy = min_accuracy
+        self._theta = 0.0
+        self._imu_yaw = None
+        self._imu_yaw_offset = None
+        self._last_imu_acc_warn = 0.0
+        self._feedback_warn_period = 5.0
+        self.warns = []
+
+    def get_logger(self):
+        harness = self
+
+        class _L:
+            def warn(self, msg, *a, **k):
+                harness.warns.append(msg)
+
+        return _L()
+
+    _update_imu_heading = Stm32BridgeNode._update_imu_heading
+    _drop_imu_heading = Stm32BridgeNode._drop_imu_heading
+    # staticmethod: khong duoc de no bi bind lai thanh method cua harness
+    _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
+
+
+def test_imu_heading_rejected_when_accuracy_too_low():
+    h = _ImuHeadingHarness(min_accuracy=2)
+    h._update_imu_heading(0.5, 0, now_mono=100.0)
+    assert h._imu_yaw is None, 'acc=0 khong duoc dung lam heading'
+    assert h.warns, 'phai canh bao khi bo qua IMU'
+
+    h._update_imu_heading(0.5, 1, now_mono=200.0)
+    assert h._imu_yaw is None, 'acc=1 van duoi nguong'
+
+
+def test_imu_heading_accepted_at_threshold():
+    h = _ImuHeadingHarness(min_accuracy=2)
+    h._update_imu_heading(0.5, 2, now_mono=100.0)
+    approx(h._imu_yaw, 0.0, tol=1e-9)   # can theo _theta = 0
+    assert not h.warns
+
+
+def test_imu_heading_accepted_when_firmware_sends_no_accuracy():
+    # Firmware cu (16 truong): khong chan, giu nguyen hanh vi truoc day.
+    h = _ImuHeadingHarness(min_accuracy=2)
+    h._update_imu_heading(0.5, None, now_mono=100.0)
+    assert h._imu_yaw is not None
+
+
+def test_imu_offset_recalibrates_after_dropout():
+    # Mat IMU roi co lai: offset phai duoc can lai theo heading encoder hien
+    # tai, neu khong pose se nhay mot phat khi IMU quay ve.
+    h = _ImuHeadingHarness(min_accuracy=2)
+    h._update_imu_heading(0.0, 3, now_mono=100.0)
+    assert h._imu_yaw_offset is not None
+
+    h._update_imu_heading(0.0, 0, now_mono=200.0)      # acc tut -> bo IMU
+    assert h._imu_yaw_offset is None
+
+    h._theta = 1.0                                      # encoder da troi di
+    h._update_imu_heading(2.0, 3, now_mono=300.0)       # IMU quay lai
+    approx(h._imu_yaw, 1.0, tol=1e-9)                   # bam vao theta, khong nhay
 
 
 def test_parse_feedback_garbage_returns_none():

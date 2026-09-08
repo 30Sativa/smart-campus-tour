@@ -6,7 +6,7 @@ from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Range
+from sensor_msgs.msg import Imu, Range
 from tf2_ros import TransformBroadcaster
 
 try:
@@ -43,6 +43,32 @@ DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     99999.0,
     0.1,
 ]
+
+# Variance cua yaw theo muc accuracy BNO08x bao ve (truong yaw_acc cua khung FB).
+# 0 = tu ke chua hieu chuan: heading van co gia tri nhung co the sai hang chuc do.
+IMU_YAW_VARIANCE_BY_ACCURACY = {
+    3: 0.0020,    # ~2.5 do 1-sigma
+    2: 0.0100,    # ~5.7 do
+    1: 0.0500,    # ~13 do
+    0: 1.0000,    # ~57 do -- coi nhu khong dung duoc
+}
+# Firmware cu khong gui yaw_acc: gia dinh trung binh thay vi tin tuyet doi.
+DEFAULT_IMU_YAW_VARIANCE = 0.05
+# Roll/pitch khong duoc do (chi bat Rotation Vector, va xe chay nen phang).
+IMU_UNMEASURED_VARIANCE = 99999.0
+
+
+def imu_yaw_variance(yaw_acc: Optional[int]) -> float:
+    """Variance cua yaw ung voi muc accuracy. None = firmware khong gui."""
+    if yaw_acc is None:
+        return DEFAULT_IMU_YAW_VARIANCE
+    return IMU_YAW_VARIANCE_BY_ACCURACY.get(yaw_acc, DEFAULT_IMU_YAW_VARIANCE)
+
+
+def yaw_to_quaternion_z(yaw_rad: float) -> Tuple[float, float]:
+    """Yaw (radian) -> (z, w) cua quaternion xoay quanh truc Z. x = y = 0."""
+    half = yaw_rad / 2.0
+    return math.sin(half), math.cos(half)
 
 
 class Stm32BridgeNode(Node):
@@ -101,6 +127,13 @@ class Stm32BridgeNode(Node):
         # encoder vi khong troi do banh truot). Tu dong fallback ve encoder
         # neu firmware khong gui yaw.
         self.declare_parameter('use_imu_heading', True)
+        # Muc accuracy toi thieu (0..3) de tin heading IMU. Duoi nguong nay
+        # thi roi ve encoder: acc=0 nghia la tu ke chua hieu chuan, heading
+        # van co gia tri nhung co the sai hang chuc do.
+        self.declare_parameter('imu_min_accuracy', 2)
+        self.declare_parameter('publish_imu', True)
+        self.declare_parameter('imu_topic', 'imu/data')
+        self.declare_parameter('imu_frame', 'imu_link')
         self.declare_parameter(
             'odom_covariance_diagonal',
             DEFAULT_ODOM_COVARIANCE_DIAGONAL,
@@ -157,6 +190,11 @@ class Stm32BridgeNode(Node):
             self.get_parameter('feedback_rate_warn_hz').value)
         self.use_imu_heading = bool(
             self.get_parameter('use_imu_heading').value)
+        self.imu_min_accuracy = int(
+            self.get_parameter('imu_min_accuracy').value)
+        self.publish_imu = bool(self.get_parameter('publish_imu').value)
+        self.imu_topic = str(self.get_parameter('imu_topic').value)
+        self.imu_frame = str(self.get_parameter('imu_frame').value)
         self.reset_odom_on_start = bool(
             self.get_parameter('reset_odom_on_start').value)
         self.odom_covariance_diagonal = self._read_diagonal_parameter(
@@ -234,6 +272,8 @@ class Stm32BridgeNode(Node):
         # IMU yaw (radian) tu STM32 feedback (truong yaw_cdeg/yaw_valid).
         self._imu_yaw: Optional[float] = None
         self._imu_yaw_offset: Optional[float] = None  # de zero hoa luc bat dau
+        self._imu_pub = None
+        self._last_imu_acc_warn = 0.0
         self._last_left_count: Optional[int] = None
         self._last_right_count: Optional[int] = None
         self._last_feedback_mono: Optional[float] = None
@@ -255,6 +295,8 @@ class Stm32BridgeNode(Node):
             self._odom_pub = self.create_publisher(Odometry, 'odom', 10)
         if self.publish_tf:
             self._tf_broadcaster = TransformBroadcaster(self)
+        if self.publish_imu:
+            self._imu_pub = self.create_publisher(Imu, self.imu_topic, 10)
         if self.publish_sonar:
             self._sonar1_pub = self.create_publisher(Range, self.sonar1_topic, 10)
             self._sonar2_pub = self.create_publisher(Range, self.sonar2_topic, 10)
@@ -482,13 +524,15 @@ class Stm32BridgeNode(Node):
         if parsed is None:
             return
 
-        (seq, left_count, right_count, dt_ms, status, yaw_rad,
+        (seq, left_count, right_count, dt_ms, status, yaw_rad, yaw_acc,
          sonar1, sonar2, sonar3, sonar4) = parsed
 
-        self._update_imu_heading(yaw_rad)
         now_mono = time.monotonic()
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
+
+        self._update_imu_heading(yaw_rad, yaw_acc, now_mono)
+        self._publish_imu(now_ros, yaw_rad, yaw_acc)
 
         if sonar1 is not None:
             self._publish_sonar_range(
@@ -546,9 +590,27 @@ class Stm32BridgeNode(Node):
         )
         self._publish_odometry(now_ros, linear_velocity, angular_velocity)
 
-    def _update_imu_heading(self, yaw_rad: Optional[float]):
+    def _update_imu_heading(
+            self,
+            yaw_rad: Optional[float],
+            yaw_acc: Optional[int] = None,
+            now_mono: Optional[float] = None):
         if yaw_rad is None or not math.isfinite(yaw_rad):
-            self._imu_yaw = None
+            self._drop_imu_heading()
+            return
+
+        # yaw_acc None = firmware cu khong gui truong nay -> khong chan.
+        if yaw_acc is not None and yaw_acc < self.imu_min_accuracy:
+            # Tu ke chua hieu chuan. Heading van ra so nhin hop ly nhung co the
+            # sai hang chuc do, tin vao la odom lech ma khong ai biet.
+            self._drop_imu_heading()
+            now = time.monotonic() if now_mono is None else now_mono
+            if now - self._last_imu_acc_warn >= self._feedback_warn_period:
+                self.get_logger().warn(
+                    f'IMU accuracy {yaw_acc} < imu_min_accuracy '
+                    f'{self.imu_min_accuracy}; dung heading encoder. '
+                    'Hieu chuan tu ke bang cach ve hinh so 8 trong khong khi.')
+                self._last_imu_acc_warn = now
             return
 
         if self._imu_yaw_offset is None:
@@ -559,80 +621,110 @@ class Stm32BridgeNode(Node):
         self._imu_yaw = self._normalize_angle(
             yaw_rad - self._imu_yaw_offset)
 
+    def _drop_imu_heading(self):
+        """Ngung dung IMU va xoa luon offset.
+
+        Xoa offset de khi IMU quay lai no duoc can lai theo heading encoder
+        hien tai. Giu offset cu thi sau mot quang mat IMU, encoder da troi di,
+        va mau IMU dau tien quay lai se lam pose nhay mot phat.
+        """
+        self._imu_yaw = None
+        self._imu_yaw_offset = None
+
+    def _publish_imu(self, stamp, yaw_rad: Optional[float],
+                     yaw_acc: Optional[int]):
+        """Publish sensor_msgs/Imu chi voi orientation yaw.
+
+        Khong co gyro/accel tho (firmware chi bat Rotation Vector) nen dat -1
+        vao phan tu dau cua hai covariance con lai -- quy uoc chuan cua ROS de
+        bao "khong co du lieu nay", robot_localization se bo qua chung.
+        """
+        if self._imu_pub is None:
+            return
+        if yaw_rad is None or not math.isfinite(yaw_rad):
+            return
+
+        msg = Imu()
+        msg.header.stamp = stamp.to_msg()
+        msg.header.frame_id = self.imu_frame
+
+        qz, qw = yaw_to_quaternion_z(yaw_rad)
+        msg.orientation.x = 0.0
+        msg.orientation.y = 0.0
+        msg.orientation.z = qz
+        msg.orientation.w = qw
+
+        msg.orientation_covariance = [
+            IMU_UNMEASURED_VARIANCE, 0.0, 0.0,
+            0.0, IMU_UNMEASURED_VARIANCE, 0.0,
+            0.0, 0.0, imu_yaw_variance(yaw_acc),
+        ]
+        msg.angular_velocity_covariance[0] = -1.0
+        msg.linear_acceleration_covariance[0] = -1.0
+        self._imu_pub.publish(msg)
+
     def _parse_feedback_line(
             self,
             line: str,
             include_sonar: bool = False
     ) -> Optional[Tuple]:
+        """Parse mot dong FB. Contract: robot/docs/PROTOCOL_FB.md
+
+        Doc theo VI TRI voi so truong TOI THIEU, khong khop chinh xac do dai.
+        Ban cu dung "if len(parts) == 16" nen khi firmware them <yaw_acc> vao
+        cuoi khung thi moi dong deu tra None -- mat sach odometry ma khong co
+        loi nao ro rang. Truong la o cuoi phai duoc bo qua, khong duoc lam chet
+        node.
+        """
         parts = [part.strip() for part in line.split(',')]
+        n = len(parts)
+        seq: Optional[int] = None
         yaw_rad: Optional[float] = None
-        sonar1 = None
-        sonar2 = None
-        sonar3 = None
-        sonar4 = None
+        yaw_acc: Optional[int] = None
+        sonars: list = [None, None, None, None]
+
         try:
-            # Current format appends mm/valid pairs for SONAR1-4.
-            if len(parts) == 16:
-                seq = int(parts[1])
-                left_count = int(parts[2])
-                right_count = int(parts[3])
-                dt_ms = float(parts[4])
-                status = parts[5].upper()
-                yaw_cdeg = int(parts[6])
-                yaw_valid = int(parts[7])
-                if yaw_valid != 0:
-                    yaw_rad = math.radians(yaw_cdeg / 100.0)
-                sonar1 = (int(parts[8]), int(parts[9]) != 0)
-                sonar2 = (int(parts[10]), int(parts[11]) != 0)
-                sonar3 = (int(parts[12]), int(parts[13]) != 0)
-                sonar4 = (int(parts[14]), int(parts[15]) != 0)
-            # Older format: mm/valid pairs for SONAR1 and SONAR2 only.
-            elif len(parts) == 12:
-                seq = int(parts[1])
-                left_count = int(parts[2])
-                right_count = int(parts[3])
-                dt_ms = float(parts[4])
-                status = parts[5].upper()
-                yaw_cdeg = int(parts[6])
-                yaw_valid = int(parts[7])
-                if yaw_valid != 0:
-                    yaw_rad = math.radians(yaw_cdeg / 100.0)
-                sonar1 = (int(parts[8]), int(parts[9]) != 0)
-                sonar2 = (int(parts[10]), int(parts[11]) != 0)
-            # Format with IMU only: FB,seq,left,right,dt,status,yaw_cdeg,yaw_valid
-            elif len(parts) == 8:
-                seq = int(parts[1])
-                left_count = int(parts[2])
-                right_count = int(parts[3])
-                dt_ms = float(parts[4])
-                status = parts[5].upper()
-                yaw_cdeg = int(parts[6])
-                yaw_valid = int(parts[7])
-                if yaw_valid != 0:
-                    yaw_rad = math.radians(yaw_cdeg / 100.0)
-            elif len(parts) == 6:
-                seq = int(parts[1])
-                left_count = int(parts[2])
-                right_count = int(parts[3])
-                dt_ms = float(parts[4])
-                status = parts[5].upper()
-            elif len(parts) == 5:
-                seq = None
+            if n == 5:
+                # Ban cu nhat: FB,left,right,dt,status (chua co seq)
                 left_count = int(parts[1])
                 right_count = int(parts[2])
                 dt_ms = float(parts[3])
                 status = parts[4].upper()
+            elif n >= 6:
+                seq = int(parts[1])
+                left_count = int(parts[2])
+                right_count = int(parts[3])
+                dt_ms = float(parts[4])
+                status = parts[5].upper()
+
+                if n >= 8:
+                    yaw_cdeg = int(parts[6])
+                    if int(parts[7]) != 0:
+                        yaw_rad = math.radians(yaw_cdeg / 100.0)
+
+                # Tu index 8: toi da 4 cap <mm>,<valid>
+                pair_fields = min(8, max(0, n - 8))
+                pair_fields -= pair_fields % 2
+                for i in range(pair_fields // 2):
+                    base = 8 + (i * 2)
+                    sonars[i] = (int(parts[base]), int(parts[base + 1]) != 0)
+
+                # Truong tuy chon ngay sau khoi sonar: yaw_acc 0..3
+                acc_index = 8 + pair_fields
+                if n > acc_index:
+                    yaw_acc = max(0, min(3, int(parts[acc_index])))
+                # Truong la sau do: bo qua co y.
             else:
-                raise ValueError(
-                    f'expected 5, 6, 8, 12 or 16 CSV fields, got {len(parts)}')
-        except ValueError as exc:
+                raise ValueError(f'expected at least 5 CSV fields, got {n}')
+        except (ValueError, IndexError) as exc:
             self.get_logger().warn(
                 f'Failed to parse STM32 feedback "{line}": {exc}')
             return None
 
-        parsed = seq, left_count, right_count, dt_ms, status, yaw_rad
+        parsed = (seq, left_count, right_count, dt_ms, status,
+                  yaw_rad, yaw_acc)
         if include_sonar:
-            return parsed + (sonar1, sonar2, sonar3, sonar4)
+            return parsed + tuple(sonars)
         return parsed
 
     def _compute_count_delta(

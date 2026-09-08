@@ -50,13 +50,11 @@ void App_Init(void)
 		 * tren Tera Term du mo tre. */
 		for (uint8_t k = 0; k < 5U; k++)
 		{
-			uint32_t err = 0;
-			uint8_t d = BNO08x_Diag(&err);
+			uint8_t d = BNO08x_Diag();
 			char line[96];
 			const char *txt = (d == 0) ? "ACK-OK" : "NOACK";
 			snprintf(line, sizeof(line),
-			         "[diag %u] BNO08x PB6/PB7=%s, err=0x%lX\r\n",
-			         k, txt, (unsigned long)err);
+			         "[diag %u] BNO08x PB6/PB7=%s\r\n", k, txt);
 			app_cdc_log(line);
 			HAL_Delay(300);
 		}
@@ -87,6 +85,8 @@ void App_Loop(void)
 
 	{
 		BNO08x_Euler e;
+
+		/* Driver tu xa het hang doi va giu mau moi nhat. */
 		if (BNO08x_ReadRotationVector(NULL, NULL, NULL, NULL, &e))
 		{
 #if BNO08X_DEBUG_PRINT_EULER
