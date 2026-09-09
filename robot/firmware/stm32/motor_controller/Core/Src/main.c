@@ -237,15 +237,22 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB1_SONAR1_ECHO_Pin PB12_SONAR2_ECHO_Pin PB14_SONAR3_ECHO_Pin */
+  /* PULLDOWN (khong phai NOPULL): chan ECHO cua SR04T nghi o muc thap va phat
+     xung len cao. De tha noi thi khi chua cam cam bien (hoac dut day, hoac cam
+     bien chet) chan bat nhieu, EXTI hai suon sinh xung ngau nhien, va driver
+     tinh ra khoang cach "hop ly" roi gan co valid=1 -- vat can ma di thang vao
+     local costmap cua Nav2 ma khong co dau hieu loi nao.
+     Cam bien that co ngo ra push-pull, thang dien tro noi ~40k de dang, nen
+     phep do khong bi anh huong. Gia tri nay cung da duoc sua trong .ioc. */
   GPIO_InitStruct.Pin = PB1_SONAR1_ECHO_Pin|PB12_SONAR2_ECHO_Pin|PB14_SONAR3_ECHO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA6_SONAR4_ECHO_Pin */
   GPIO_InitStruct.Pin = PA6_SONAR4_ECHO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/

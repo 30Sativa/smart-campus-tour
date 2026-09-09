@@ -79,3 +79,29 @@ bit-bang, có hỗ trợ chờ clock stretching của BNO08x (timeout 25 ms).
 - 74HCT245 phải cấp 5V nếu dùng để nâng mức tín hiệu STEP/DIR; `OE#` phải được
   kéo đúng mức để output hoạt động.
 - PB8/PB9 không được tự nhận là CAN chỉ vì tài liệu cũ từng đề xuất như vậy.
+
+## Chân ECHO của sonar phải là PULLDOWN
+
+Bốn chân ECHO (PB1, PB12, PB14, PA6) dùng ngắt trên cả hai sườn. Ban đầu chúng
+được cấu hình `GPIO_NOPULL` — thả nổi.
+
+Chân input thả nổi bắt nhiễu, sinh sườn lên/xuống ngẫu nhiên, và driver tính ra
+khoảng cách nằm gọn trong dải hợp lệ 200–6000 mm rồi gắn cờ `valid=1`. Quan sát
+thực tế: khi **chưa cắm cảm biến nào**, khung `FB` vẫn báo `642mm valid` và
+`1364mm valid`.
+
+Chế độ hỏng này im lặng và nguy hiểm — vật cản ma đi thẳng vào local costmap của
+Nav2, và dây đứt hay cảm biến chết cũng cho ra đúng triệu chứng đó thay vì báo
+`valid=0`.
+
+`GPIO_PULLDOWN` là trạng thái nghỉ đúng: ECHO của SR04T nghỉ ở mức thấp và phát
+xung lên cao. Không cắm cảm biến → không có sườn → timeout → `valid=0`. Cảm biến
+thật có ngõ ra push-pull nên thắng điện trở nội ~40 kΩ dễ dàng, phép đo không
+bị ảnh hưởng.
+
+Sửa ở **cả** `motor_controller.ioc` (để CubeMX nhớ) và `Core/Src/main.c` (để
+chạy được ngay). Nếu generate lại từ CubeMX, kiểm tra bốn chân này vẫn là
+PULLDOWN.
+
+**Đây là lỗi cấu hình phần mềm, không phải lỗi PCB.** Điện trở pull-down nằm
+bên trong STM32, bật bằng một bit thanh ghi.

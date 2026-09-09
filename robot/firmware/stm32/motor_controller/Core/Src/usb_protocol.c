@@ -4,6 +4,7 @@
 #include "motor/motor.h"
 #include "imu/bno08x.h"
 #include "sonar/sr04t.h"
+#include "usb_rx_queue.h"
 #include "usbd_cdc_if.h"
 
 #include <ctype.h>
@@ -13,8 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PROTOCOL_RX_LINE_SIZE 96U
-#define PROTOCOL_RX_QUEUE_COUNT 8U
 #define PROTOCOL_TX_BUFFER_SIZE 224U
 #define PROTOCOL_TX_BUFFER_COUNT 2U
 
@@ -26,14 +25,10 @@ typedef enum
 	PROTOCOL_STATUS_ERR
 } ProtocolStatus;
 
-static char rx_active_line[PROTOCOL_RX_LINE_SIZE];
-static char rx_line_queue[PROTOCOL_RX_QUEUE_COUNT][PROTOCOL_RX_LINE_SIZE];
+static char rx_active_line[USB_RX_LINE_SIZE];
+static UsbRxQueue rx_queue;
 static volatile uint32_t rx_active_line_len = 0U;
-static volatile uint8_t rx_queue_head = 0U;
-static volatile uint8_t rx_queue_tail = 0U;
-static volatile uint8_t rx_queue_count = 0U;
 static volatile uint8_t rx_overflow = 0U;
-static volatile uint8_t rx_bad_line_ready = 0U;
 
 static char tx_buffers[PROTOCOL_TX_BUFFER_COUNT][PROTOCOL_TX_BUFFER_SIZE];
 static uint8_t tx_write_index = 0U;
@@ -66,12 +61,9 @@ void Protocol_Init(void)
 	uint32_t now = HAL_GetTick();
 
 	__disable_irq();
+	usb_rx_queue_reset(&rx_queue);
 	rx_active_line_len = 0U;
-	rx_queue_head = 0U;
-	rx_queue_tail = 0U;
-	rx_queue_count = 0U;
 	rx_overflow = 0U;
-	rx_bad_line_ready = 0U;
 	__enable_irq();
 
 	last_seq = 0U;
@@ -107,24 +99,15 @@ void Protocol_ProcessRxByte(uint8_t b)
 	{
 		if (rx_overflow != 0U)
 		{
-			rx_bad_line_ready = 1U;
+			usb_rx_queue_mark_bad(&rx_queue);
 			rx_overflow = 0U;
 			rx_active_line_len = 0U;
 		}
 		else if (rx_active_line_len > 0U)
 		{
-			if (rx_queue_count < PROTOCOL_RX_QUEUE_COUNT)
-			{
-				uint8_t write_index = rx_queue_head;
-				rx_active_line[rx_active_line_len] = '\0';
-				memcpy(rx_line_queue[write_index], rx_active_line, PROTOCOL_RX_LINE_SIZE);
-				rx_queue_head = (uint8_t)((rx_queue_head + 1U) % PROTOCOL_RX_QUEUE_COUNT);
-				rx_queue_count++;
-			}
-			else
-			{
-				rx_bad_line_ready = 1U;
-			}
+			rx_active_line[rx_active_line_len] = '\0';
+			/* Queue day -> dong bi bo va bad_ready duoc set ben trong. */
+			(void)usb_rx_queue_push(&rx_queue, rx_active_line);
 			rx_active_line_len = 0U;
 		}
 		return;
@@ -144,7 +127,7 @@ void Protocol_ProcessRxByte(uint8_t b)
 		return;
 	}
 
-	if (rx_active_line_len < (PROTOCOL_RX_LINE_SIZE - 1U))
+	if (rx_active_line_len < (USB_RX_LINE_SIZE - 1U))
 	{
 		rx_active_line[rx_active_line_len] = c;
 		rx_active_line_len++;
@@ -362,26 +345,26 @@ uint32_t Protocol_GetLastSeq(void)
 	return last_seq;
 }
 
+/* Rut HET cac dong dang cho trong mot lan goi.
+ *
+ * Hai diem quan trong (day la cho tung gay ERR,bad_command lien tuc):
+ *  1. Co bad_ready duoc doc/xoa RIENG, khong dung else-if voi viec pop queue.
+ *     Mot dong hong khong duoc chan cac dong hop le phia sau.
+ *  2. Drain toi da USB_RX_QUEUE_COUNT dong / lan goi. App_Loop chay ~200 ms
+ *     (SR04T + BNO08x), neu chi xu ly 1 dong/vong thi host >= 10 Hz se lam
+ *     queue day vinh vien. Chan tren = kich thuoc queue nen thoi gian
+ *     App_Loop van co bien.
+ *
+ * Critical section chi bao mot lan pop (copy <= USB_RX_LINE_SIZE byte).
+ * Protocol_ProcessLine() chay NGOAI critical section: no co the goi
+ * Motor_*, CDC_Transmit_FS, va DIAG con block ~1.2 s. */
 static void Protocol_CheckRxLine(void)
 {
-	char line[PROTOCOL_RX_LINE_SIZE];
-	uint8_t has_line = 0U;
-	uint8_t has_bad_line = 0U;
+	char line[USB_RX_LINE_SIZE];
+	uint8_t has_bad_line;
 
 	__disable_irq();
-	if (rx_bad_line_ready != 0U)
-	{
-		rx_bad_line_ready = 0U;
-		has_bad_line = 1U;
-	}
-	else if (rx_queue_count > 0U)
-	{
-		uint8_t read_index = rx_queue_tail;
-		memcpy(line, rx_line_queue[read_index], PROTOCOL_RX_LINE_SIZE);
-		rx_queue_tail = (uint8_t)((rx_queue_tail + 1U) % PROTOCOL_RX_QUEUE_COUNT);
-		rx_queue_count--;
-		has_line = 1U;
-	}
+	has_bad_line = usb_rx_queue_take_bad(&rx_queue);
 	__enable_irq();
 
 	if (has_bad_line != 0U)
@@ -389,8 +372,19 @@ static void Protocol_CheckRxLine(void)
 		Protocol_ReportBadCommand();
 	}
 
-	if (has_line != 0U)
+	for (uint8_t i = 0U; i < USB_RX_QUEUE_COUNT; i++)
 	{
+		uint8_t has_line;
+
+		__disable_irq();
+		has_line = usb_rx_queue_pop(&rx_queue, line);
+		__enable_irq();
+
+		if (has_line == 0U)
+		{
+			break;
+		}
+
 		Protocol_ProcessLine(line);
 	}
 }

@@ -10,6 +10,7 @@ Trong luc chay (go roi Enter):
     <so>      -> TARE,<so>  dat huong hien tai = <so> do
     raw       -> TARE,RAW   bo offset, ve yaw tho
     d         -> DIAG       chan doan IMU tai cho
+    (cot son=[s1 s2 s3 s4]: ---- la khong co so do hop le)
     <lenh,..> -> gui nguyen van (vd: CMD,9,100,100)
     q         -> thoat
 """
@@ -117,10 +118,22 @@ def main():
             if now - last_print < 0.2:
                 continue
             last_print = now
-            bar = "#" * int((yaw + 180) / 360 * 40)
+            bar = "#" * int((yaw + 180) / 360 * 20)
             acc = f[16] if len(f) > 16 else "?"
-            print(f"seq={f[1]:>6} status={f[5]:<7} "
-                  f"yaw={yaw:8.2f} {'OK ' if valid else 'STALE'} acc={acc} |{bar:<40}|")
+
+            # 4 cap <mm>,<valid> bat dau tu vi tri 8. Chua cam cam bien thi
+            # phai ra "----" het; ra so nghia la chan ECHO dang bat nhieu.
+            son = []
+            for i in range(4):
+                mm_i, v_i = 8 + (i * 2), 9 + (i * 2)
+                if len(f) > v_i and f[v_i] == "1":
+                    son.append(f"{int(f[mm_i]):>4}")
+                else:
+                    son.append("----")
+
+            print(f"seq={f[1]:>5} {f[5]:<7} "
+                  f"yaw={yaw:8.2f} {'OK ' if valid else 'STALE'} acc={acc} "
+                  f"son=[{' '.join(son)}] |{bar:<20}|")
     except KeyboardInterrupt:
         print("\ndung.")
     except serial.SerialException as exc:

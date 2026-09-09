@@ -8,10 +8,15 @@ out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
 echo "== build test host =="
-gcc -std=c11 -Wall -Wextra -Werror -O1 \
-    -I "$root/Core/Inc" \
-    "$root/tests/test_bno08x_parse.c" \
-    -lm -o "$out/test_bno08x_parse"
+for t in test_bno08x_parse test_usb_rx_queue; do
+    gcc -std=c11 -Wall -Wextra -Werror -O1 \
+        -I "$root/Core/Inc" \
+        "$root/tests/$t.c" \
+        -lm -o "$out/$t"
+done
 
 echo "== run =="
-"$out/test_bno08x_parse"
+for t in test_bno08x_parse test_usb_rx_queue; do
+    echo "-- $t"
+    "$out/$t"
+done
