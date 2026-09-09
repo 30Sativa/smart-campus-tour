@@ -297,7 +297,7 @@ void Protocol_ProcessLine(char *line)
 		selftest = BNO08x_SelfTest(&maj, &min);
 
 		/* Self-test co reset chip -> phai bat lai rotation vector. */
-		(void)BNO08x_EnableRotationVector(20U);
+		(void)BNO08x_EnableRotationVector(BNO08X_RV_INTERVAL_MS);
 
 		for (uint32_t retry = 0U; retry < 100U; retry++)
 		{

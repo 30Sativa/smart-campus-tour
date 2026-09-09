@@ -60,6 +60,56 @@ Ghi chú: `CLK` chưa đạt 90 kHz như tính toán vì ở SYSCLK 16 MHz thì
 `HAL_GPIO_WritePin` và vòng đọc DWT chiếm phần lớn thời gian mỗi bit. Bus dùng
 ~52% băng thông, đủ chạy 50 Hz.
 
+## Ngân sách thời gian của main loop
+
+`App_Loop()` là vòng lặp co-operative duy nhất: `Motor_Update()`,
+`Protocol_Update()` (feedback + watchdog lệnh 300 ms) và
+`BNO08x_ReadRotationVector()` dùng chung nó.
+
+Bản cũ xả **tối đa 8 gói SHTP mỗi lần gọi** `ReadRotationVector()`. Trên bus
+22.5 kHz, một vòng `App_Loop()` tốn ~220 ms, nên feedback tụt xuống **4.5 Hz**
+dù `FEEDBACK_PERIOD_MS = 20`, và `ros2 topic hz /odom` chỉ còn ~4.5 Hz.
+
+Đo trên phần cứng, 30 s gửi `STOP` ở 20 Hz:
+
+| | trước |
+|---|---|
+| command gửi | 594 |
+| feedback nhận | 136 |
+| `ERR` | 0 |
+| `dt_ms` min/max | 210 / 231 |
+| `dt_ms` trung bình | 220.6 |
+
+Hai hằng số chặn việc này, cả hai ở `bno08x.h`:
+
+| Hằng số | Giá trị | Chặn cái gì |
+|---|---|---|
+| `BNO08X_MAX_PACKETS_PER_UPDATE` | 1 | Độ trễ của main loop |
+| `BNO08X_RV_INTERVAL_MS` | 50 (20 Hz) | Backlog trong FIFO của BNO08x |
+
+Cần **cả hai**, và mỗi cái giải quyết một việc khác nhau:
+
+- Băng thông bus mới là thứ chặn trên tốc độ tiêu thụ, **không phải** số gói
+  mỗi vòng. Đọc N gói tốn ~N lần thời gian, nên số gói/giây gần như không đổi
+  dù N là 1 hay 8. Vì vậy giảm N **một mình** làm feedback nhanh lên nhưng
+  **không** chống được backlog — đúng cái bẫy "đổi 8 → 1 là xong".
+- Chống backlog phải làm ở phía **phát**: `BNO08X_RV_INTERVAL_MS` đặt tốc độ
+  phát ≤ tốc độ tiêu thụ. 20 Hz khớp đúng nhịp `FEEDBACK_PERIOD_MS = 20 ms` —
+  khung `FB` chỉ mang được mẫu yaw **mới nhất**, nên phát nhanh hơn chỉ đốt
+  băng thông bus chứ không làm `/odom` chính xác hơn.
+- Chọn N = 1 chứ không phải 2: throughput y hệt (bus chặn), nhưng độ trễ
+  worst-case của main loop chỉ bằng một nửa.
+
+Cách kiểm tra sau khi flash — chạy `DIAG` và đọc hai trường:
+
+- `RATE` ≈ `1000 / BNO08X_RV_INTERVAL_MS` (= ~20). Thấp hơn nhiều = đọc không
+  kịp → **nới rộng** `BNO08X_RV_INTERVAL_MS`, đừng tăng số gói mỗi vòng.
+- `PKT` giữ ~23 (một report/gói). `PKT` lớn dần = chip đang dồn mẫu vì đọc
+  chậm — dấu hiệu sớm của death spiral mô tả ở mục bus 2 kHz phía trên.
+
+Nếu sau này SYSCLK lên PLL (mục dưới) thì bus nhanh hơn nhiều và có thể hạ
+`BNO08X_RV_INTERVAL_MS` về 20 (50 Hz), kiểm lại bằng `RATE`/`PKT`.
+
 ## SYSCLK đang là 16 MHz, không phải 96 MHz
 
 `SystemClock_Config` bật PLL (16 MHz × 12 / 2 = 96 MHz) nhưng lại đặt

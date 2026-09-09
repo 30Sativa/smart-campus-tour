@@ -74,7 +74,7 @@ void App_Init(void)
 	}
 #endif
 
-	BNO08x_EnableRotationVector(20);
+	BNO08x_EnableRotationVector(BNO08X_RV_INTERVAL_MS);
 }
 
 void App_Loop(void)

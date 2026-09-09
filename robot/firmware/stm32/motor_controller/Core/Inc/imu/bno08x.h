@@ -21,6 +21,41 @@
 
 #include <stdint.h>
 
+/* ---- Ngan sach thoi gian cua main loop --------------------------------------
+ *
+ * App_Loop() la vong lap co-operative duy nhat: Motor_Update(), Protocol_Update()
+ * (feedback + watchdog lenh 300 ms) va BNO08x_ReadRotationVector() dung chung
+ * no. Doc I2C bit-bang la viec dat nhat trong vong, nen no PHAI co chan tren.
+ *
+ * So goi SHTP xu ly trong MOT lan goi ReadRotationVector.
+ * Vi sao 1: bang thong bus la thu chan tren toc do tieu thu, KHONG phai so goi
+ * moi vong -- doc N goi ton ~N lan thoi gian, nen so goi/giay gan nhu khong doi
+ * du N la 1 hay 8. Tang N chi lam vong lap dai them (feedback cham di) ma khong
+ * tieu thu IMU nhanh hon. Chon 1 = do tre main loop nho nhat, throughput y het.
+ */
+#ifndef BNO08X_MAX_PACKETS_PER_UPDATE
+#define BNO08X_MAX_PACKETS_PER_UPDATE 1U
+#endif
+
+#if (BNO08X_MAX_PACKETS_PER_UPDATE < 1U) || (BNO08X_MAX_PACKETS_PER_UPDATE > 8U)
+#error "BNO08X_MAX_PACKETS_PER_UPDATE phai nam trong [1, 8]"
+#endif
+
+/* Chu ky bao cao rotation vector (ms) = toc do PHAT cua BNO08x.
+ * Phai khop voi toc do TIEU THU thuc te, neu khong FIFO trong BNO day len va
+ * heading tre dan -- doc duoc bang truong PKT trong lenh DIAG.
+ *
+ * 50 ms (20 Hz) khop dung nhip FEEDBACK_PERIOD_MS = 20 ms: FB chi mang duoc
+ * mau yaw MOI NHAT, nen phat nhanh hon 20 Hz chi dot bang thong bus chu khong
+ * lam /odom chinh xac hon.
+ *
+ * Neu sau nay SYSCLK duoc dua len PLL (xem ghi chu trong bno08x.c) thi bus
+ * nhanh len va co the ha lai ve 20 ms (50 Hz).
+ */
+#ifndef BNO08X_RV_INTERVAL_MS
+#define BNO08X_RV_INTERVAL_MS 50U
+#endif
+
 typedef struct
 {
     float yaw;     /* quay quanh Z (heading) */
@@ -35,8 +70,9 @@ uint8_t BNO08x_ReadRotationVector(float *qi, float *qj, float *qk, float *qr,
                                   BNO08x_Euler *euler);
 float BNO08x_GetLastYaw(uint8_t *valid);
 
-/* So mau rotation vector nhan duoc trong giay vua roi.  Ky vong ~50 khi
- * EnableRotationVector(20). Thap hon nhieu = dang mat mau / doc khong kip. */
+/* So mau rotation vector nhan duoc trong giay vua roi.  Ky vong ~1000 /
+ * BNO08X_RV_INTERVAL_MS (= 20 voi 50 ms). Thap hon nhieu = dang mat mau /
+ * doc khong kip. */
 uint32_t BNO08x_GetSampleRate(void);
 
 /* Muc tin cay cua mau gan nhat: 0 = tu ke chua hieu chuan, 3 = tot.

@@ -78,7 +78,23 @@ static uint32_t s_nop_loops = 1U;  /* duong du phong khi DWT chet */
  * Ban cu dung "for (volatile int i=0; i<150; i++)" -- so vong chon dai, va
  * thoi gian thuc te phu thuoc ca tan so CPU lan muc optimize khi bien dich.
  * Do ra thi no cho 250us/nua chu ky = 2 kHz, cham hon chuan 50 lan.
- * Dem chu ky CPU qua DWT thi doc lap voi ca hai thu do. */
+ * Dem chu ky CPU qua DWT thi doc lap voi ca hai thu do.
+ *
+ * DO THUC TE (DIAG tren phan cung): CLK=22500, tuc ~22.5 kHz chu khong phai
+ * 100 kHz nhu thiet ke. Nua chu ky thuc ~22us thay vi 5us. Phan chenh ~17us
+ * KHONG nam o bb_delay ma o overhead co dinh moi canh clock:
+ * HAL_GPIO_WritePin (goi ham, khong inline) + vong guard doc DWT.
+ *
+ * Nguyen nhan goc: DIAG bao SYS=16MHz -- SystemClock_Config() bat PLL nhung
+ * de SYSCLKSource = RCC_SYSCLKSOURCE_HSI, tuc PLL chi chay de cap 48 MHz cho
+ * USB qua PLLQ con loi CPU van o HSI 16 MHz. Overhead tren tinh bang CHU KY
+ * CPU nen no dat gap ~6 lan so voi khi chay PLL.
+ *
+ * => HA BNO08X_BB_HALF_PERIOD_US XUONG SE KHONG GIUP: bo han delay chi nhanh
+ *    them ~20%, vi overhead moi la phan chiem thoi gian. Cach dung la dua
+ *    SYSCLK len PLL. Do la thay doi trong .ioc + regenerate bang STM32CubeIDE
+ *    (keo theo flash latency, TIM2/PWM motor, timing SR04T), khong duoc sua
+ *    tay o day -- xem robot/AGENTS.md muc 5. */
 #ifndef BNO08X_BB_HALF_PERIOD_US
 #define BNO08X_BB_HALF_PERIOD_US 5U
 #endif
@@ -512,11 +528,21 @@ uint8_t BNO08x_ReadRotationVector(float *qi, float *qj, float *qk, float *qr,
     uint8_t buf[256];
     uint8_t got = 0U;
 
-    /* Xa HET hang doi moi lan goi, giu lai mau moi nhat.
+    /* Xa toi da BNO08X_MAX_PACKETS_PER_UPDATE goi moi lan goi, giu mau moi nhat.
      * Quan trong: goi khong phai channel 3 (control, executable) va goi qua co
      * van phai doc bo roi di tiep -- dung lai o do thi hang doi cu day len va
-     * heading tre dan (do duoc bang PKT trong lenh DIAG). */
-    for (uint8_t n = 0U; n < 8U; n++)
+     * heading tre dan (do duoc bang PKT trong lenh DIAG). Goi bi bo qua VAN
+     * tinh vao ngan sach, neu khong thi chan tren khong con y nghia.
+     *
+     * Ban cu xa toi 8 goi/lan -> mot vong App_Loop() ton ~220 ms, feedback tut
+     * xuong ~4.5 Hz du FEEDBACK_PERIOD_MS = 20 ms. Xem ghi chu ngan sach thoi
+     * gian trong bno08x.h.
+     *
+     * Chong backlog KHONG nam o vong lap nay ma o BNO08X_RV_INTERVAL_MS: toc do
+     * phat phai <= toc do tieu thu. Neu DIAG bao RATE tut sau nhieu so voi
+     * 1000/BNO08X_RV_INTERVAL_MS, hoac PKT lon dan, thi bus dang khong kip va
+     * phai NOI RONG interval (hoac tang toc bus), khong phai tang so goi/vong. */
+    for (uint8_t n = 0U; n < BNO08X_MAX_PACKETS_PER_UPDATE; n++)
     {
         int plen = shtp_read(buf, sizeof(buf));
         if (plen == 0) break;        /* hang doi rong */
