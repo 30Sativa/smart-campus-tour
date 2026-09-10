@@ -1,0 +1,3 @@
+# Repo nay build Docker image Linux. Neu Git tren Windows doi sang CRLF thi
+# docker/ros_entrypoint.sh se chet voi "bad interpreter". Ep LF cho tat ca.
+* text=auto eol=lf

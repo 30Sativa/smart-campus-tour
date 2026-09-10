@@ -27,8 +27,14 @@ def generate_launch_description():
         'urdf',
         'robot.urdf.xacro',
     ])
+    # use_ros2_control:=false: duong hardware khong chay controller_manager
+    # (stm32_bridge lo viec dieu khien + odometry). Neu de mac dinh true, URDF
+    # van nhet block <ros2_control> voi plugin diffdrive_arduino tro vao
+    # /dev/ttyUSB0 -- dung cong RPLiDAR. Hien vo hai vi khong ai nap no, nhung
+    # la min: chay ros2_control_node mot cai la gianh cong LiDAR.
     robot_description = ParameterValue(
-        Command(['xacro ', robot_xacro, ' use_sim:=false']),
+        Command(['xacro ', robot_xacro,
+                 ' use_sim:=false use_ros2_control:=false']),
         value_type=str,
     )
 

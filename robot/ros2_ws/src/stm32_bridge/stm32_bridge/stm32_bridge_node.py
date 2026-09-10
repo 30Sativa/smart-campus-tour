@@ -130,7 +130,25 @@ class Stm32BridgeNode(Node):
         # Muc accuracy toi thieu (0..3) de tin heading IMU. Duoi nguong nay
         # thi roi ve encoder: acc=0 nghia la tu ke chua hieu chuan, heading
         # van co gia tri nhung co the sai hang chuc do.
-        self.declare_parameter('imu_min_accuracy', 2)
+        #
+        # = 0 (khong chan): do LA CHU Y, khong phai bo qua canh bao.
+        # Ly do: ACC canh bao ve sai so heading TUYET DOI. Nhung code nay dung
+        # yaw IMU nhu DELTA -- _imu_yaw_offset triet tieu moi bias co dinh, va
+        # huong tuyet doi do slam_toolbox lo qua map->odom. Nen bias tuyet doi
+        # khong quan trong.
+        # Nguoc lai, roi ve heading encoder thi TE HON HAN: encoder o day la
+        # dem xung STEP do firmware phat ra (khong co encoder that -- xem
+        # stm32_bridge/README.md muc Limitations). Stepper truot/mat buoc thi
+        # count van tang du -> odom bao quay hang tram do khong he xay ra ->
+        # slam_toolbox chen scan sai goc -> MAP BI XOE HINH NAN QUAT.
+        # Do la nguyen nhan that cua loi map ngay 09-10/09/2026.
+        # De 2 con gay them tac hai: gate bat/tat lam heading NHAY QUA LAI giua
+        # hai nguon giua chuyen dong.
+        # Do duoc: BNO085 chi len ACC=1 khi quay quanh truc doc (muon ACC=3
+        # phai ve hinh so 8 phu ca 3 truc), nen de 2 la IMU BI BO VINH VIEN.
+        # Khi nao doi lai duoc: sau khi firmware chuyen sang Game Rotation
+        # Vector (report 0x08, 6 truc, bo tu ke) thi truong ACC het y nghia.
+        self.declare_parameter('imu_min_accuracy', 0)
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')

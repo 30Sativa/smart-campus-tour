@@ -39,7 +39,7 @@
   <gazebo reference="lidar_link">
     <material>Gazebo/Blue</material>
     <sensor name="lidar" type="ray">
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 0 0.03 0 0 0</pose>
       <!-- false: khong ve tia laser trong gzclient (nhe hon nhieu cho VM);
            van co topic /scan, xem tia trong RViz. -->
       <visualize>false</visualize>

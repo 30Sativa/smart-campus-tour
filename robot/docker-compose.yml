@@ -50,6 +50,19 @@ services:
       # Lưu map RA NGOÀI container: map robot build được nằm ở host, KHÔNG mất
       # khi container tắt/update image. Trỏ vào package robot_navigation/maps.
       - ./robot_maps:/maps
+      # Source mount live (giống service ros2-debug): pull code trên host rồi
+      # `colcon build` TRONG container, khỏi phải rebuild + push image mỗi lần
+      # sửa một dòng. Không có dòng này thì mọi sửa trong container sẽ MẤT khi
+      # container bị recreate / miniPC tắt nguồn.
+      #
+      # LƯU Ý: chỉ `src` được mount, còn build/ install/ log/ nằm trong
+      # container. Nên sau MỖI lần `git pull` hoặc container bị recreate, phải:
+      #   cd /ros2_ws && colcon build --symlink-install && source install/setup.bash
+      # Nếu không, launch vẫn chạy bản install cũ nướng trong image.
+      #
+      # KHI CHỐT PRODUCTION: bỏ dòng này ra và build image cuối, để cái đang
+      # chạy khớp đúng cái trong image.
+      - ./ros2_ws/src:/ros2_ws/src
     stdin_open: true
     tty: true
     # KHÔNG hardcode một launch cụ thể ở đây. Container chỉ khởi động ROS env và
