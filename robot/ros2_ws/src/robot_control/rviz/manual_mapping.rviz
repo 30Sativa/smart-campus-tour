@@ -1,3 +1,8 @@
+# manual_mapping.rviz -- layout cho BUILD MAP (chay tren VMware, khong tren robot).
+#
+# Chi bat nhung gi mapping can: Map, LaserScan, RobotModel, 2 sonar.
+# Camera depth cloud va depth image DA BO HAN (camera chay RGB-only, depth OFF).
+# RGB Camera co san nhung TAT mac dinh -- xem ghi chu ngay tren display do.
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
@@ -92,48 +97,25 @@ Visualization Manager:
       Marker Scale: 0.25
       Frame Timeout: 15
       Value: false
-    - Class: rviz_default_plugins/PointCloud2
-      Name: Camera Depth Cloud
-      Enabled: true
-      Topic:
-        Value: /camera/depth/points
-        Depth: 5
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Durability Policy: Volatile
-      Style: Points
-      Size (Pixels): 2
-      Alpha: 0.65
-      Decay Time: 0
-      Color Transformer: AxisColor
-      Axis: Z
-      Position Transformer: XYZ
-      Selectable: true
-      Use Fixed Frame: true
-      Value: true
+    # TAT mac dinh. Lam map thi KHONG dung camera -- bat len la miniPC phai
+    # serialize + day anh qua Tailscale, an CPU cua slam_toolbox va stm32_bridge.
+    # Muon xem thi tick tay, va phai chay san pipeline camera (runbook muc 24):
+    #   MiniPC : astra_pro.launch.py enable_depth:=false enable_point_cloud:=false
+    #            color_width:=320 color_height:=240 color_fps:=15
+    #          + image_transport republish -> /camera/color/image_net/compressed
+    #   VMware : Python Best Effort decompressor -> /camera/color/image_local
+    # Topic la image_local (da giai nen o local), KHONG phai image_raw --
+    # raw qua Tailscale tut xuong 4-5 Hz va lam nghen ca do thi.
     - Class: rviz_default_plugins/Image
       Name: RGB Camera
-      Enabled: true
+      Enabled: false
       Topic:
-        Value: /camera/color/image_raw
+        Value: /camera/color/image_local
         Depth: 5
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Durability Policy: Volatile
-      Value: true
-    - Class: rviz_default_plugins/Image
-      Name: Depth Image
-      Enabled: true
-      Topic:
-        Value: /camera/depth/image_raw
-        Depth: 5
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Durability Policy: Volatile
-      Normalize Range: true
-      Min Value: 0
-      Max Value: 1
-      Value: true
+      Value: false
   Global Options:
     Background Color: 38; 38; 42
     Fixed Frame: map
