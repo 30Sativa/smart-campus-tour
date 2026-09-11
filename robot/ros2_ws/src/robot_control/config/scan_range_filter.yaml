@@ -19,8 +19,25 @@
         #     Chỉ tăng tới khi vừa hết chấm giả, ĐỪNG tăng dư.
         #   - Vật thật sát xe không hiện / bị đụng -> giảm xuống 0.15.
         lower_threshold: 0.20
-        # Giữ nguyên tầm xa tối đa của A3M1 (khớp max_laser_range SLAM = 12 m).
-        upper_threshold: 12.0
+        # TẦM XA. Đây là NÚT THẮT thật của chất lượng map, không phải tham số phụ.
+        #
+        # Filter này chạy TRƯỚC slam_toolbox, nên nó quyết định tất cả: mọi điểm
+        # xa hơn upper_threshold bị thay bằng .inf và slam_toolbox KHÔNG BAO GIỜ
+        # thấy. Đặt max_laser_range trong slam_toolbox lớn hơn giá trị này là vô
+        # nghĩa -- điểm đã bị băm từ đây rồi.
+        #
+        # Vì sao 12.0 là quá ngắn: toà nhà đang map rộng ~30 m. Cắt ở 12 m thì
+        # scan matcher không bao giờ thấy tường đối diện -- mất điểm tựa xa duy
+        # nhất khoá được vị trí theo phương dọc hành lang. Không có gì để khớp
+        # thì nó buộc phải bám odom, mà odom là dem xung stepper ho mach.
+        # Ket qua do duoc (10/09/2026): map bbox 43x34 m cho khong gian 30 m
+        # (gian ~40%), va di-ve 60 m thi lech 24 m luc quay lai diem xuat phat.
+        #
+        # 25.0 = tầm thật của A3M1. Giữ trần thay vì để vô cực để bỏ bớt return
+        # rác ở cực xa trên bề mặt tối/bóng.
+        # Nếu sau này map ở không gian nhỏ (phòng < 10 m) mà thấy nhiễu xa thì
+        # hạ lại, nhưng ĐỪNG hạ dưới ~1.5x đường chéo của không gian đang map.
+        upper_threshold: 25.0
         # Điểm bị lọc -> đặt thành inf (vô cực), KHÔNG phải 0.
         # inf = "không có vật ở hướng này", để costmap raytrace/clear đúng.
         # 0 hoặc NaN sẽ bị hiểu nhầm là vật cản sát robot.
