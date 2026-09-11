@@ -28,6 +28,7 @@ và sơ đồ dây thực tế.
 | PB14 | SR04T SONAR3 ECHO | J_SONAR3 pin 3, EXTI15_10 input |
 | PB15 | SR04T SONAR4 TRIG | J_SONAR4 pin 1, GPIO output |
 | PA6 | SR04T SONAR4 ECHO | J_SONAR4 pin 3, EXTI9_5 input |
+| PB10 | CONTACTOR_EN | J_CONTACTOR pin 2 / EN -> J_MCU_L pin 5, GPIO output |
 
 ## ST-LINK / SWD
 
@@ -36,8 +37,16 @@ ST-LINK SWDIO  -> STM32 PA13 (SWDIO)
 ST-LINK SWCLK  -> STM32 PA14 (SWCLK)
 ST-LINK GND    -> STM32 GND
 ST-LINK VTref  -> STM32 3V3 (mức tham chiếu, không phải nguồn 5V)
-ST-LINK NRST   -> STM32 NRST (khuyến nghị, có thể bỏ qua nếu board không đưa ra)
+ST-LINK NRST   -> STM32 NRST (BẮT BUỘC, xem docs/FLASHING.md)
 ```
+
+**Cả 5 dây đều bắt buộc.** Thiếu NRST thì lúc firmware chạy nặng (USB CDC +
+4 sonar EXTI + I2C bit-bang) ST-LINK không giành được quyền halt, báo
+`init mode failed (unable to connect to the target)`. Chi tiết sự cố và cách
+xử lý: `docs/FLASHING.md`.
+
+Không cấp nguồn cho board từ chân 3V3 của mạch nạp DAPLink — ngõ ra đó quá yếu,
+board sụt áp và SWD báo `cannot read IDR`.
 
 USB nối vào cổng USB CDC của board chỉ dùng cho giao tiếp firmware/ROS, không
 thay thế được dây SWD. ST-LINK phải được USB attach vào đúng hệ điều hành đang
@@ -66,7 +75,7 @@ bit-bang, có hỗ trợ chờ clock stretching của BNO08x (timeout 25 ms).
 | PB8/PB9 | Chưa dùng. Không được ghi là I2C1 trong tài liệu hiện tại. Có thể dành cho CAN sau khi cấu hình CubeMX và driver CAN. |
 | I2C1/I2C2/I2C3 | Chưa có peripheral nào được khởi tạo trong `main.c`; các giá trị clock I2C còn lại trong `.ioc` không có nghĩa là I2C đang chạy. |
 | CAN/FDCAN | Chưa có cấu hình và driver trong firmware hiện tại. |
-| PA7, PA8, PA9, PA10, PA15, PB2–PB5, PB8–PB10, PC4, PC6, PC10–PC15, PF0–PF1 | Đang để dành; phải kiểm tra alternate function trong CubeMX trước khi dùng. |
+| PA7, PA8, PA9, PA10, PA15, PB2–PB5, PB8/PB9, PC4, PC6, PC10–PC15, PF0–PF1 | Đang để dành; phải kiểm tra alternate function trong CubeMX trước khi dùng. |
 
 ## Lưu ý phần cứng
 

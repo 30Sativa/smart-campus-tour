@@ -89,6 +89,8 @@ void Error_Handler(void);
 #define PB6___IMU_SCL_BITBANG_GPIO_Port GPIOB
 #define PB7___IMU_SDA_BITBANG_Pin GPIO_PIN_7
 #define PB7___IMU_SDA_BITBANG_GPIO_Port GPIOB
+#define CONTACTOR_EN_Pin GPIO_PIN_10
+#define CONTACTOR_EN_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

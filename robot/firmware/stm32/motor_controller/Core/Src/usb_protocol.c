@@ -1,5 +1,6 @@
 #include "usb_protocol.h"
 
+#include "contactor/contactor.h"
 #include "main.h"
 #include "motor/motor.h"
 #include "imu/bno08x.h"
@@ -187,6 +188,33 @@ void Protocol_ProcessLine(char *line)
 		last_valid_rx_ms = HAL_GetTick();
 		protocol_status = PROTOCOL_STATUS_STOP;
 		Motor_StopAll();
+		return;
+	}
+
+	/* CONTACTOR,<seq>,<ON|OFF> -> dieu khien rieng PB10.
+	 * Khong refresh watchdog motor: day khong phai lenh chuyen dong. */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "CONTACTOR") != 0U)
+	{
+		uint32_t seq;
+
+		if ((token_count != 3U) ||
+			(Protocol_ParseU32(tokens[1], &seq) == 0U) ||
+			((Protocol_EqualsIgnoreCase(tokens[2], "ON") == 0U) &&
+			 (Protocol_EqualsIgnoreCase(tokens[2], "OFF") == 0U)))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+
+		last_seq = seq;
+		if (Protocol_EqualsIgnoreCase(tokens[2], "ON") != 0U)
+		{
+			Contactor_On();
+		}
+		else
+		{
+			Contactor_Off();
+		}
 		return;
 	}
 

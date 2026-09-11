@@ -1,4 +1,5 @@
 #include "app/app.h"
+#include "contactor/contactor.h"
 #include "motor/motor.h"
 #include "usb_protocol.h"
 #include "imu/bno08x.h"
@@ -36,6 +37,7 @@ static void app_cdc_log(const char *s)
 
 void App_Init(void)
 {
+	Contactor_Init();
 	Motor_Init();
 	Protocol_Init();
 

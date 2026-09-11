@@ -28,6 +28,8 @@ file này tồn tại.
 | `TARE,<seq>,<deg>` | Đặt hướng hiện tại = `<deg>` |
 | `TARE,<seq>,RAW` | Bỏ offset tare |
 | `DIAG,<seq>` | Chẩn đoán IMU. **Blocking ~2.5 s và dừng động cơ** — chỉ dùng khi debug |
+| `CONTACTOR,<seq>,ON` | Bật output contactor PB10. Không refresh motor watchdog |
+| `CONTACTOR,<seq>,OFF` | Tắt output contactor PB10. Không refresh motor watchdog |
 
 Kết thúc dòng bằng `\n`. Sai cú pháp → `ERR,bad_command`.
 
