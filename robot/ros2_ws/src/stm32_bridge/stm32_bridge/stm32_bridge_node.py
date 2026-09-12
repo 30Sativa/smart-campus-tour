@@ -553,9 +553,6 @@ class Stm32BridgeNode(Node):
         if delta_left_count is None or delta_right_count is None:
             return
 
-        if dt <= 0.0:
-            return
-
         # NOTE: do NOT reuse invert_left/invert_right here. The firmware counts
         # steps as `count += direction`, where direction already follows the
         # sign of the (already-inverted) wheel command. So the feedback count
@@ -575,6 +572,13 @@ class Stm32BridgeNode(Node):
             delta_right_count,
             dt,
         )
+
+        # Invalid dt means velocity is unavailable, but the STEP delta is still
+        # a valid pose measurement. Keep the integration and omit this sample
+        # from wheel/odom so no fake-zero twist reaches the EKF.
+        if dt <= 0.0:
+            return
+
         self._publish_odometry(now_ros, linear_velocity, angular_velocity)
 
     def _publish_imu(self, stamp, yaw_rad: Optional[float],

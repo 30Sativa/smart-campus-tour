@@ -435,6 +435,15 @@ def test_cached_imu_measurement_is_not_republished():
 
 class _FeedbackHarness:
     def __init__(self):
+        model = OdometryModel()
+        self.steps_per_meter = model.steps_per_meter
+        self.wheel_base = model.wheel_base
+        self._x = 0.0
+        self._y = 0.0
+        self._theta = 0.0
+        self.max_steps_per_sec = 12000.0
+        self.send_rate_hz = 20.0
+        self._last_count_jump_warn_time = 0.0
         self.feedback_counts_are_cumulative = True
         self.reset_odom_on_start = True
         self._last_left_count = None
@@ -458,6 +467,9 @@ class _FeedbackHarness:
     _compute_count_delta = Stm32BridgeNode._compute_count_delta
     _resolve_feedback_dt = Stm32BridgeNode._resolve_feedback_dt
     _diff_signed_32 = staticmethod(Stm32BridgeNode._diff_signed_32)
+    _warn_if_count_jump = Stm32BridgeNode._warn_if_count_jump
+    _update_odometry = Stm32BridgeNode._update_odometry
+    _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
@@ -466,10 +478,15 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
         harness.published_odometry.append((linear, angular)))
     harness._publish_imu = lambda *args: None
     harness._publish_sonar_range = lambda *args: None
-    harness._parse_feedback_line = lambda *args, **kwargs: (
-        1, 100, 100, 0.0, 'OK', None, None,
-        None, None, None, None,
-    )
+    samples = iter([
+        (1, 100, 100, 0.0, 'OK', None, None,
+         None, None, None, None),
+        (2, 110, 110, 0.0, 'OK', None, None,
+         None, None, None, None),
+        (3, 120, 120, 20.0, 'OK', None, None,
+         None, None, None, None),
+    ])
+    harness._parse_feedback_line = lambda *args, **kwargs: next(samples)
     harness.get_clock = lambda: SimpleNamespace(now=lambda: SimpleNamespace(
         nanoseconds=0,
     ))
@@ -478,16 +495,29 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
 
     # The first cumulative sample only establishes the count baseline.
     assert harness.published_odometry == []
+    assert harness._x == 0.0
+    assert harness._y == 0.0
+    assert harness._theta == 0.0
 
-    harness._parse_feedback_line = lambda *args, **kwargs: (
-        1, 110, 110, 0.0, 'OK', None, None,
-        None, None, None, None,
-    )
     Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
 
-    # A sample without a valid firmware or ROS time delta is not evidence that
-    # the robot stopped, so it must not inject a zero twist into the EKF.
+    # The STEP delta is still valid, so it must be integrated into pose even
+    # though this sample has no valid firmware or ROS time delta.
     assert harness.published_odometry == []
+    expected_ten_steps = 10.0 / harness.steps_per_meter
+    approx(harness._x, expected_ten_steps, tol=1e-12)
+    approx(harness._y, 0.0, tol=1e-12)
+    approx(harness._theta, 0.0, tol=1e-12)
+
+    Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
+
+    # A later valid sample publishes normally and retains the prior 10 STEP
+    # pose increment, for a total of 20 STEP from the baseline.
+    expected_twenty_steps = 20.0 / harness.steps_per_meter
+    approx(harness._x, expected_twenty_steps, tol=1e-12)
+    approx(harness._y, 0.0, tol=1e-12)
+    approx(harness._theta, 0.0, tol=1e-12)
+    assert len(harness.published_odometry) == 1
 
 
 def test_diff_drive_vy_constraint_variance():
