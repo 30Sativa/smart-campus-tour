@@ -56,8 +56,10 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 16 | `yaw_acc` | 0–3. **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ** |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
-Hai thứ khác nhau. Bridge chỉ dùng IMU làm heading khi `yaw_acc >= 2`
-(tham số `imu_min_accuracy`), thấp hơn thì rơi về encoder.
+Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data` và chuyển
+`yaw_acc` thành orientation covariance; `robot_localization` dùng covariance
+đó khi fuse yaw với wheel velocity. Bridge không còn dùng yaw để sửa wheel
+odometry.
 
 ### Các độ dài đã từng tồn tại
 

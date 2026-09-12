@@ -35,7 +35,8 @@ The sensor hierarchy is a deliberate decision, not an accident
 
 ```
 RPLiDAR A3M1        -> /scan                  -> local + global costmap, AMCL, SLAM
-encoder + IMU       -> /odom                  -> odom -> base_link TF
+STM32 STEP counts   -> /wheel/odom -\
+BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points   -> LOCAL costmap ONLY
 Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 ```

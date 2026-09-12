@@ -22,6 +22,12 @@ def generate_launch_description():
     initial_mode = LaunchConfiguration('initial_mode')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
+    ekf_config = PathJoinSubstitution([
+        FindPackageShare('robot_control'),
+        'config',
+        'ekf.yaml',
+    ])
+
     robot_xacro = PathJoinSubstitution([
         FindPackageShare('robot_description'),
         'urdf',
@@ -81,7 +87,6 @@ def generate_launch_description():
                               description='manual or explore.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='Use simulation clock.'),
-
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -110,8 +115,30 @@ def generate_launch_description():
                 'odom_frame': odom_frame,
                 'base_frame': base_frame,
                 'publish_odom': 'true',
-                'publish_tf': 'true',
+                'publish_tf': 'false',
             }.items(),
+        ),
+
+        # The EKF is the only odom -> base_footprint TF owner on real hardware.
+        # Input: wheel/odom (vx + vyaw) and imu/data (relative yaw).
+        # Output: odom, remapped from robot_localization's default name.
+        Node(
+            package='robot_localization',
+            executable='ekf_node',
+            name='ekf_filter_node',
+            namespace=robot_id,
+            output='screen',
+            parameters=[
+                ekf_config,
+                {
+                    'use_sim_time': ParameterValue(
+                        use_sim_time, value_type=bool),
+                    'odom_frame': odom_frame,
+                    'world_frame': odom_frame,
+                    'base_link_frame': base_frame,
+                },
+            ],
+            remappings=[('odometry/filtered', 'odom')],
         ),
 
         Node(

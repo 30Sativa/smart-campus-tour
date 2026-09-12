@@ -9,7 +9,7 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 
 | Package | Role |
 |---|---|
-| `stm32_bridge` | `/cmd_vel` -> STM32 motor controller over USB CDC serial; publishes odom + sonar |
+| `stm32_bridge` | `/cmd_vel` -> STM32 over USB CDC; publishes wheel odometry, BNO085 orientation, and sonar |
 | `robot_control` | mode manager (cmd_vel mux), manual / manual-mapping / auto-explore launches, Nav2 + SLAM configs, frontier explorer |
 | `robot_description` | URDF/xacro robot model, Gazebo + display launches |
 | `robot_navigation` | localization (map_server + AMCL) and navigation on a saved map |
@@ -33,7 +33,8 @@ ros2 launch robot_navigation navigation.launch.py \
 ```
 
 Robot-owned endpoints are relative names, so the same stack exposes
-`/robot_01/cmd_vel`, `/robot_01/odom`, `/robot_01/scan`, and
+`/robot_01/cmd_vel`, `/robot_01/wheel/odom`, `/robot_01/imu/data`,
+`/robot_01/odom`, `/robot_01/scan`, and
 `/robot_01/go_to_stop` when namespaced. The simulator keeps its single global
 Gazebo entity/controller behind relays for now; this is not multi-entity
 Gazebo support.
@@ -58,12 +59,13 @@ the stepping logic.
 
 ## Sensors & architecture
 
-LiDAR + encoder/IMU are the navigation backbone; the Astra Pro is a
+LiDAR + wheel/IMU state estimation are the navigation backbone; the Astra Pro is a
 supplementary RGB-D perception sensor, **not** the primary localization source.
 
 ```
-RPLiDAR A3M1 -> /scan               -> local + global costmap, AMCL, SLAM
-encoder + IMU (STM32) -> /odom       -> odom -> base_footprint TF
+RPLiDAR A3M1       -> /scan                         -> costmaps, AMCL, SLAM
+STM32 STEP counts  -> stm32_bridge -> /wheel/odom -\
+BNO085 Rotation Vector            -> /imu/data   -> EKF -> /odom + odom TF
 Astra Pro -> /camera/depth/points    -> local costmap ONLY (3D obstacles)
 Astra Pro -> RGB                     -> Phase 4 person detection
 ```

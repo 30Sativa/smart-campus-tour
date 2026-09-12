@@ -44,7 +44,16 @@ def _install_ros_stubs():
     sensor_msgs_msg = _stub_module('sensor_msgs.msg')
     sensor_msgs.msg = sensor_msgs_msg
     sensor_msgs_msg.Range = type('Range', (), {'ULTRASOUND': 0})
-    sensor_msgs_msg.Imu = type('Imu', (), {})
+
+    class Imu:
+        def __init__(self):
+            self.header = SimpleNamespace(stamp=None, frame_id='')
+            self.orientation = SimpleNamespace(x=0.0, y=0.0, z=0.0, w=0.0)
+            self.orientation_covariance = [0.0] * 9
+            self.angular_velocity_covariance = [0.0] * 9
+            self.linear_acceleration_covariance = [0.0] * 9
+
+    sensor_msgs_msg.Imu = Imu
 
     rclpy = _stub_module('rclpy')
     rclpy_node = _stub_module('rclpy.node')
@@ -85,9 +94,7 @@ from stm32_bridge.stm32_bridge_node import (  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# Lightweight, ROS-free reimplementation that mirrors the node's odometry math.
-# It calls the node's *static* helpers directly so the formulas under test are
-# the exact ones used in production, not a copy.
+# Lightweight ROS-free harness for the production odometry method.
 # ---------------------------------------------------------------------------
 class OdometryModel:
     def __init__(self, wheel_radius=0.09725, wheel_base=0.4325,
@@ -100,6 +107,12 @@ class OdometryModel:
         self.theta = 0.0
         self.last_left = None
         self.last_right = None
+
+    def get_logger(self):
+        return SimpleNamespace(debug=lambda *args, **kwargs: None)
+
+    _update_odometry = Stm32BridgeNode._update_odometry
+    _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
 
     def feed(self, left_count, right_count, dt):
         """Integrate one cumulative feedback sample. Returns (lin_v, ang_v)."""
@@ -114,19 +127,14 @@ class OdometryModel:
         self.last_left = left_count
         self.last_right = right_count
 
-        left_dist = dl / self.steps_per_meter
-        right_dist = dr / self.steps_per_meter
-        delta_s = (right_dist + left_dist) / 2.0
-        delta_theta = (right_dist - left_dist) / self.wheel_base
-        heading = self.theta + delta_theta / 2.0
-
-        self.x += delta_s * math.cos(heading)
-        self.y += delta_s * math.sin(heading)
-        self.theta = Stm32BridgeNode._normalize_angle(self.theta + delta_theta)
-
-        if dt > 0.0:
-            return delta_s / dt, delta_theta / dt
-        return 0.0, 0.0
+        self._x = self.x
+        self._y = self.y
+        self._theta = self.theta
+        velocities = self._update_odometry(dl, dr, dt)
+        self.x = self._x
+        self.y = self._y
+        self.theta = self._theta
+        return velocities
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +188,24 @@ def test_pure_rotation_in_place():
     approx(m.theta, expected_theta, tol=1e-3)
     approx(lin, 0.0, tol=1e-3)
     approx(ang, expected_theta / 1.0, tol=1e-3)
+
+
+def test_wheel_odometry_is_independent_of_imu_yaw():
+    first = OdometryModel()
+    second = OdometryModel()
+    first.feed(0, 0, 0.02)
+    second.feed(0, 0, 0.02)
+
+    # A stale attribute models two different BNO085 readings. Production
+    # wheel integration must depend only on STEP-count deltas.
+    first._imu_yaw = -1.5
+    second._imu_yaw = 2.2
+    first.feed(-1000, 1000, 0.02)
+    second.feed(-1000, 1000, 0.02)
+
+    approx(first.theta, second.theta, tol=1e-12)
+    approx(first.theta, 2000 / first.steps_per_meter / first.wheel_base,
+           tol=1e-12)
 
 
 def test_int32_wrap_is_handled():
@@ -364,70 +390,29 @@ def test_yaw_to_quaternion_z_roundtrip():
         approx(recovered, yaw, tol=1e-9)
 
 
-class _ImuHeadingHarness:
-    """Vo toi thieu de goi _update_imu_heading ma khong can ROS."""
+class _ImuPublishHarness:
+    def __init__(self):
+        self.messages = []
+        self._imu_pub = SimpleNamespace(publish=self.messages.append)
+        self.imu_frame = 'imu_link'
 
-    def __init__(self, min_accuracy=2):
-        self.imu_min_accuracy = min_accuracy
-        self._theta = 0.0
-        self._imu_yaw = None
-        self._imu_yaw_offset = None
-        self._last_imu_acc_warn = 0.0
-        self._feedback_warn_period = 5.0
-        self.warns = []
-
-    def get_logger(self):
-        harness = self
-
-        class _L:
-            def warn(self, msg, *a, **k):
-                harness.warns.append(msg)
-
-        return _L()
-
-    _update_imu_heading = Stm32BridgeNode._update_imu_heading
-    _drop_imu_heading = Stm32BridgeNode._drop_imu_heading
-    # staticmethod: khong duoc de no bi bind lai thanh method cua harness
-    _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
+    _publish_imu = Stm32BridgeNode._publish_imu
 
 
-def test_imu_heading_rejected_when_accuracy_too_low():
-    h = _ImuHeadingHarness(min_accuracy=2)
-    h._update_imu_heading(0.5, 0, now_mono=100.0)
-    assert h._imu_yaw is None, 'acc=0 khong duoc dung lam heading'
-    assert h.warns, 'phai canh bao khi bo qua IMU'
+def test_imu_message_publishes_yaw_and_accuracy_covariance():
+    harness = _ImuPublishHarness()
+    stamp = SimpleNamespace(to_msg=lambda: 'stamp')
+    harness._publish_imu(stamp, math.pi / 2.0, 2)
 
-    h._update_imu_heading(0.5, 1, now_mono=200.0)
-    assert h._imu_yaw is None, 'acc=1 van duoi nguong'
-
-
-def test_imu_heading_accepted_at_threshold():
-    h = _ImuHeadingHarness(min_accuracy=2)
-    h._update_imu_heading(0.5, 2, now_mono=100.0)
-    approx(h._imu_yaw, 0.0, tol=1e-9)   # can theo _theta = 0
-    assert not h.warns
-
-
-def test_imu_heading_accepted_when_firmware_sends_no_accuracy():
-    # Firmware cu (16 truong): khong chan, giu nguyen hanh vi truoc day.
-    h = _ImuHeadingHarness(min_accuracy=2)
-    h._update_imu_heading(0.5, None, now_mono=100.0)
-    assert h._imu_yaw is not None
-
-
-def test_imu_offset_recalibrates_after_dropout():
-    # Mat IMU roi co lai: offset phai duoc can lai theo heading encoder hien
-    # tai, neu khong pose se nhay mot phat khi IMU quay ve.
-    h = _ImuHeadingHarness(min_accuracy=2)
-    h._update_imu_heading(0.0, 3, now_mono=100.0)
-    assert h._imu_yaw_offset is not None
-
-    h._update_imu_heading(0.0, 0, now_mono=200.0)      # acc tut -> bo IMU
-    assert h._imu_yaw_offset is None
-
-    h._theta = 1.0                                      # encoder da troi di
-    h._update_imu_heading(2.0, 3, now_mono=300.0)       # IMU quay lai
-    approx(h._imu_yaw, 1.0, tol=1e-9)                   # bam vao theta, khong nhay
+    assert len(harness.messages) == 1
+    msg = harness.messages[0]
+    assert msg.header.stamp == 'stamp'
+    assert msg.header.frame_id == 'imu_link'
+    approx(msg.orientation.z, math.sqrt(0.5), tol=1e-9)
+    approx(msg.orientation.w, math.sqrt(0.5), tol=1e-9)
+    assert msg.orientation_covariance[8] == imu_yaw_variance(2)
+    assert msg.angular_velocity_covariance[0] == -1.0
+    assert msg.linear_acceleration_covariance[0] == -1.0
 
 
 def test_parse_feedback_garbage_returns_none():
@@ -487,23 +472,6 @@ def test_forward_twist_is_inverted_for_installed_drive():
     assert node._left_mm_s == -60
     assert node._right_mm_s == -60
     assert not node._command_is_stop
-
-
-def test_imu_starts_aligned_and_invalid_sample_falls_back():
-    node = Stm32BridgeNode.__new__(Stm32BridgeNode)
-    node._theta = 1.0
-    node._imu_yaw = None
-    node._imu_yaw_offset = None
-
-    node._update_imu_heading(2.0)
-    approx(node._imu_yaw, 1.0)
-
-    node._update_imu_heading(None)
-    assert node._imu_yaw is None
-
-    node._theta = 1.1
-    node._update_imu_heading(2.1)
-    approx(node._imu_yaw, 1.1)
 
 
 def _run_all():

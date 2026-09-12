@@ -54,7 +54,8 @@ Sensor hierarchy — this is a decision, see
 
 ```
 RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SLAM
-encoder + IMU       -> /odom                 -> odom -> base_link TF
+STM32 STEP counts   -> /wheel/odom -\
+BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
@@ -81,7 +82,7 @@ namespace they retain the original single-robot names such as `/cmd_vel`; with
 | Relative interface | Namespaced example |
 |---|---|
 | `cmd_vel`, `cmd_vel_manual`, `cmd_vel_nav` | `/robot_01/cmd_vel`, `/robot_01/cmd_vel_manual`, `/robot_01/cmd_vel_nav` |
-| `odom`, `scan` | `/robot_01/odom`, `/robot_01/scan` |
+| `wheel/odom`, `imu/data`, `odom`, `scan` | `/robot_01/wheel/odom`, `/robot_01/imu/data`, `/robot_01/odom`, `/robot_01/scan` |
 | `robot_mode`, `robot_mode_state` | `/robot_01/robot_mode`, `/robot_01/robot_mode_state` |
 | `emergency_stop`, `emergency_stop_state` | `/robot_01/emergency_stop`, `/robot_01/emergency_stop_state` |
 | `go_to_stop`, `bus_status` | `/robot_01/go_to_stop`, `/robot_01/bus_status` |

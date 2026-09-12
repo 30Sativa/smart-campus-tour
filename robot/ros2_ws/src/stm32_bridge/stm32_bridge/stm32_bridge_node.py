@@ -123,32 +123,6 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('feedback_counts_are_cumulative', True)
         self.declare_parameter('feedback_rate_warn_hz', 2.0)
         self.declare_parameter('reset_odom_on_start', True)
-        # = True: dung yaw tu IMU (BNO08x) lam heading odometry (chinh xac hon
-        # encoder vi khong troi do banh truot). Tu dong fallback ve encoder
-        # neu firmware khong gui yaw.
-        self.declare_parameter('use_imu_heading', True)
-        # Muc accuracy toi thieu (0..3) de tin heading IMU. Duoi nguong nay
-        # thi roi ve encoder: acc=0 nghia la tu ke chua hieu chuan, heading
-        # van co gia tri nhung co the sai hang chuc do.
-        #
-        # = 0 (khong chan): do LA CHU Y, khong phai bo qua canh bao.
-        # Ly do: ACC canh bao ve sai so heading TUYET DOI. Nhung code nay dung
-        # yaw IMU nhu DELTA -- _imu_yaw_offset triet tieu moi bias co dinh, va
-        # huong tuyet doi do slam_toolbox lo qua map->odom. Nen bias tuyet doi
-        # khong quan trong.
-        # Nguoc lai, roi ve heading encoder thi TE HON HAN: encoder o day la
-        # dem xung STEP do firmware phat ra (khong co encoder that -- xem
-        # stm32_bridge/README.md muc Limitations). Stepper truot/mat buoc thi
-        # count van tang du -> odom bao quay hang tram do khong he xay ra ->
-        # slam_toolbox chen scan sai goc -> MAP BI XOE HINH NAN QUAT.
-        # Do la nguyen nhan that cua loi map ngay 09-10/09/2026.
-        # De 2 con gay them tac hai: gate bat/tat lam heading NHAY QUA LAI giua
-        # hai nguon giua chuyen dong.
-        # Do duoc: BNO085 chi len ACC=1 khi quay quanh truc doc (muon ACC=3
-        # phai ve hinh so 8 phu ca 3 truc), nen de 2 la IMU BI BO VINH VIEN.
-        # Khi nao doi lai duoc: sau khi firmware chuyen sang Game Rotation
-        # Vector (report 0x08, 6 truc, bo tu ke) thi truong ACC het y nghia.
-        self.declare_parameter('imu_min_accuracy', 0)
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')
@@ -206,10 +180,6 @@ class Stm32BridgeNode(Node):
             self.get_parameter('feedback_counts_are_cumulative').value)
         self.feedback_rate_warn_hz = float(
             self.get_parameter('feedback_rate_warn_hz').value)
-        self.use_imu_heading = bool(
-            self.get_parameter('use_imu_heading').value)
-        self.imu_min_accuracy = int(
-            self.get_parameter('imu_min_accuracy').value)
         self.publish_imu = bool(self.get_parameter('publish_imu').value)
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.imu_frame = str(self.get_parameter('imu_frame').value)
@@ -287,11 +257,7 @@ class Stm32BridgeNode(Node):
         self._x = 0.0
         self._y = 0.0
         self._theta = 0.0
-        # IMU yaw (radian) tu STM32 feedback (truong yaw_cdeg/yaw_valid).
-        self._imu_yaw: Optional[float] = None
-        self._imu_yaw_offset: Optional[float] = None  # de zero hoa luc bat dau
         self._imu_pub = None
-        self._last_imu_acc_warn = 0.0
         self._last_left_count: Optional[int] = None
         self._last_right_count: Optional[int] = None
         self._last_feedback_mono: Optional[float] = None
@@ -310,7 +276,7 @@ class Stm32BridgeNode(Node):
         self._sonar3_pub = None
         self._sonar4_pub = None
         if self.publish_odom:
-            self._odom_pub = self.create_publisher(Odometry, 'odom', 10)
+            self._odom_pub = self.create_publisher(Odometry, 'wheel/odom', 10)
         if self.publish_tf:
             self._tf_broadcaster = TransformBroadcaster(self)
         if self.publish_imu:
@@ -337,6 +303,7 @@ class Stm32BridgeNode(Node):
             f'odom_invert_right={self.odom_invert_right}, '
             f'publish_odom={self.publish_odom}, publish_tf={self.publish_tf}, '
             f'odom_frame={self.odom_frame}, base_frame={self.base_frame}, '
+            f'wheel_odom_topic=wheel/odom, imu_topic={self.imu_topic}, '
             f'publish_sonar={self.publish_sonar}, '
             f'sonar_topics=({self.sonar1_topic},{self.sonar2_topic},'
             f'{self.sonar3_topic},{self.sonar4_topic}), '
@@ -549,7 +516,6 @@ class Stm32BridgeNode(Node):
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
-        self._update_imu_heading(yaw_rad, yaw_acc, now_mono)
         self._publish_imu(now_ros, yaw_rad, yaw_acc)
 
         if sonar1 is not None:
@@ -607,47 +573,6 @@ class Stm32BridgeNode(Node):
             dt,
         )
         self._publish_odometry(now_ros, linear_velocity, angular_velocity)
-
-    def _update_imu_heading(
-            self,
-            yaw_rad: Optional[float],
-            yaw_acc: Optional[int] = None,
-            now_mono: Optional[float] = None):
-        if yaw_rad is None or not math.isfinite(yaw_rad):
-            self._drop_imu_heading()
-            return
-
-        # yaw_acc None = firmware cu khong gui truong nay -> khong chan.
-        if yaw_acc is not None and yaw_acc < self.imu_min_accuracy:
-            # Tu ke chua hieu chuan. Heading van ra so nhin hop ly nhung co the
-            # sai hang chuc do, tin vao la odom lech ma khong ai biet.
-            self._drop_imu_heading()
-            now = time.monotonic() if now_mono is None else now_mono
-            if now - self._last_imu_acc_warn >= self._feedback_warn_period:
-                self.get_logger().warn(
-                    f'IMU accuracy {yaw_acc} < imu_min_accuracy '
-                    f'{self.imu_min_accuracy}; dung heading encoder. '
-                    'Hieu chuan tu ke bang cach ve hinh so 8 trong khong khi.')
-                self._last_imu_acc_warn = now
-            return
-
-        if self._imu_yaw_offset is None:
-            # Align the first IMU sample with the current encoder heading. This
-            # avoids snapping odom back to zero when IMU data starts late.
-            self._imu_yaw_offset = self._normalize_angle(
-                yaw_rad - self._theta)
-        self._imu_yaw = self._normalize_angle(
-            yaw_rad - self._imu_yaw_offset)
-
-    def _drop_imu_heading(self):
-        """Ngung dung IMU va xoa luon offset.
-
-        Xoa offset de khi IMU quay lai no duoc can lai theo heading encoder
-        hien tai. Giu offset cu thi sau mot quang mat IMU, encoder da troi di,
-        va mau IMU dau tien quay lai se lam pose nhay mot phat.
-        """
-        self._imu_yaw = None
-        self._imu_yaw_offset = None
 
     def _publish_imu(self, stamp, yaw_rad: Optional[float],
                      yaw_acc: Optional[int]):
@@ -791,26 +716,11 @@ class Stm32BridgeNode(Node):
         right_distance = delta_right_count / self.steps_per_meter
 
         delta_s = (right_distance + left_distance) / 2.0
-        # delta_theta tu encoder (du phong khi khong co IMU).
-        delta_theta_enc = (right_distance - left_distance) / self.wheel_base
-
-        use_imu = self.use_imu_heading and (self._imu_yaw is not None)
-        if use_imu:
-            # Heading lay TRUC TIEP tu IMU (chinh xac hon, khong troi do encoder
-            # truot). delta_theta = chenh lech yaw IMU so voi buoc truoc.
-            prev_theta = self._theta
-            new_theta = self._imu_yaw
-            delta_theta = self._normalize_angle(new_theta - prev_theta)
-            heading = prev_theta + delta_theta / 2.0
-            self._x += delta_s * math.cos(heading)
-            self._y += delta_s * math.sin(heading)
-            self._theta = self._normalize_angle(new_theta)
-        else:
-            delta_theta = delta_theta_enc
-            heading = self._theta + delta_theta / 2.0
-            self._x += delta_s * math.cos(heading)
-            self._y += delta_s * math.sin(heading)
-            self._theta = self._normalize_angle(self._theta + delta_theta)
+        delta_theta = (right_distance - left_distance) / self.wheel_base
+        heading = self._theta + delta_theta / 2.0
+        self._x += delta_s * math.cos(heading)
+        self._y += delta_s * math.sin(heading)
+        self._theta = self._normalize_angle(self._theta + delta_theta)
 
         if dt > 0.0:
             linear_velocity = delta_s / dt

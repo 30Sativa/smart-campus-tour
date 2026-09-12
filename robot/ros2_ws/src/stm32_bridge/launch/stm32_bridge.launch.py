@@ -124,7 +124,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'publish_odom',
             default_value='true',
-            description='Publish nav_msgs/Odometry on /odom.'),
+            description='Publish wheel-only nav_msgs/Odometry on wheel/odom.'),
         DeclareLaunchArgument(
             'publish_tf',
             default_value='true',

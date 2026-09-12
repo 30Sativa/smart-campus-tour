@@ -21,7 +21,7 @@ setup(
     zip_safe=True,
     maintainer='Duy',
     maintainer_email='caoduy856@gmail.com',
-    description='ROS2 serial bridge from /cmd_vel to the STM32 motor controller.',
+    description='ROS2 command and sensor bridge for the STM32 motor controller.',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={

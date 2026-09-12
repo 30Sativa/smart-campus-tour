@@ -16,12 +16,16 @@ teleop_twist_keyboard / Nav2
 STM32
         -> FB feedback
         -> stm32_bridge_node
-        -> /odom
-        -> TF odom -> base_footprint
+        +-> /wheel/odom (STEP-count wheel odometry)
+        +-> /imu/data   (BNO085 Rotation Vector yaw)
+                -> robot_localization EKF
+                -> /odom + TF odom -> base_footprint
 ```
 
-The laptop only sends wheel speed commands and computes odometry from STM32
-feedback. The STM32 firmware keeps ownership of real-time STEP/DIR generation.
+The laptop sends wheel speed commands and publishes separate wheel and IMU
+measurements from STM32 feedback. The STM32 firmware keeps ownership of
+real-time STEP/DIR generation; the EKF in the real-robot launch owns the fused
+state and odometry TF.
 
 ## STM32 Protocol
 
@@ -100,21 +104,31 @@ delta_s = (right_distance + left_distance) / 2
 delta_theta = (right_distance - left_distance) / wheel_base
 ```
 
-It publishes:
+Wheel pose and twist are integrated only from STEP counts; BNO085 yaw never
+overrides this pose inside the bridge. The bridge publishes:
 
 | Topic | Type |
 |---|---|
-| `/odom` | `nav_msgs/msg/Odometry` |
+| `/wheel/odom` | `nav_msgs/msg/Odometry` |
+| `/imu/data` | `sensor_msgs/msg/Imu` (orientation only) |
 | `/ultrasonic/sonar1/range` | `sensor_msgs/msg/Range` |
 | `/ultrasonic/sonar2/range` | `sensor_msgs/msg/Range` |
 | `/ultrasonic/sonar3/range` | `sensor_msgs/msg/Range` |
 | `/ultrasonic/sonar4/range` | `sensor_msgs/msg/Range` |
 
-It broadcasts:
+For standalone debugging, `publish_tf:=true` broadcasts the wheel-only pose:
 
 ```text
 odom -> base_footprint
 ```
+
+The real `robot_control/manual_mode.launch.py` always passes
+`publish_tf:=false` and starts `robot_localization`. That EKF fuses
+`wheel/odom` twist `linear.x` + `angular.z` with `imu/data` orientation yaw,
+publishes final `odom`, and is the only `odom -> base_footprint` TF owner.
+`imu0_relative: true` makes the first BNO085 yaw the relative odom reference,
+so startup does not snap to magnetic north. SLAM or AMCL remains responsible
+for `map -> odom`.
 
 Default drivetrain values match the current firmware notes:
 
@@ -198,14 +212,14 @@ source ~/ros2_ws/install/setup.bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
-## Check Odometry
+## Check Measurements
 
 ```bash
-ros2 topic echo /odom
+ros2 topic echo /wheel/odom
+ros2 topic echo /imu/data
 ```
 
-You should see pose and twist changing while the robot moves and STM32 feedback
-arrives.
+Use a `robot_control` real launch to also check the EKF output on `/odom`.
 
 ## Check TF
 
@@ -239,10 +253,13 @@ ros2 run tf2_tools view_frames
 | `odom_invert_left` | `false` | Flip left feedback count sign for **odometry only** |
 | `odom_invert_right` | `false` | Flip right feedback count sign for **odometry only** |
 | `speed_scale` | `0.3` | Scale wheel commands before invert and clamp |
-| `publish_odom` | `true` | Publish `/odom` |
-| `publish_tf` | `true` | Broadcast `odom -> base_footprint` |
+| `publish_odom` | `true` | Publish wheel-only `/wheel/odom` |
+| `publish_tf` | `true` | Standalone/debug wheel TF; real stack overrides to `false` |
 | `odom_frame` | `odom` | Odometry parent frame |
 | `base_frame` | `base_footprint` | Robot base child frame |
+| `publish_imu` | `true` | Publish valid BNO085 orientation samples |
+| `imu_topic` | `imu/data` | Relative IMU topic name |
+| `imu_frame` | `imu_link` | IMU message frame |
 | `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |
@@ -250,7 +267,7 @@ ros2 run tf2_tools view_frames
 | `odom_covariance_diagonal` | `[0.01, 0.01, 99999.0, 99999.0, 99999.0, 0.1]` | Pose covariance diagonal |
 | `twist_covariance_diagonal` | `[0.01, 99999.0, 99999.0, 99999.0, 99999.0, 0.1]` | Twist covariance diagonal |
 
-## If `/odom` Does Not Change
+## If `/wheel/odom` Does Not Change
 
 1. Confirm the STM32 is sending lines like `FB,42,1200,1195,20,OK`.
 2. Use a serial monitor or `tools/motor_serial_debug.ps1` from this repo to
@@ -272,8 +289,9 @@ ros2 run tf2_tools view_frames
 - If forward motion moves one wheel only, test each driver path with
   `tools/motor_test_one_wheel.ps1` and compare the left/right counts in `FB`.
 - Releasing keys or losing `/cmd_vel` for `cmd_timeout` sends `STOP,<seq>`.
-- Incoming `FB,...` lines update `/odom`.
-- `tf2_echo odom base_link` shows a live transform.
+- Incoming `FB,...` lines update `/wheel/odom` and valid yaw updates `/imu/data`.
+- In the real stack, `/odom` updates and `tf2_echo odom base_link` is live from
+  the EKF; the bridge must not publish that TF.
 - Serial disconnect/reconnect does not crash the node.
 - If one wheel spins the wrong way, set `invert_left`/`invert_right` (command).
   If the pose integrates the wrong way, set `odom_invert_left`/`odom_invert_right`
@@ -283,13 +301,14 @@ ros2 run tf2_tools view_frames
 
 ## Assumptions and Limitations
 
-Read these before trusting `/odom` on the real robot.
+Read these before trusting wheel or fused odometry on the real robot.
 
-- **Open-loop step odometry, not a real encoder.** The firmware count increments
-  once per STEP pulse it generates (`count += direction`), not per measured wheel
-  rotation. If a wheel slips or the motor stalls, the count still rises and the
-  pose drifts. Odometry is only as good as the steps actually translating into
-  motion. A real quadrature encoder or IMU fusion is a Stage 4 task.
+- **ROS receives STEP count, not measured encoder position.** The HBS57H uses
+  its motor encoder internally to prevent lost steps, but it does not return
+  encoder position to the STM32 or ROS. Firmware increments the feedback count
+  once per generated STEP pulse (`count += direction`). Wheel slip can therefore
+  still make both wheel and fused odometry drift. The BNO085 yaw stabilizes
+  heading; SLAM/AMCL supplies environment-based global pose correction.
 
 - **`dt_ms` is "time since last successfully-sent feedback", not a fixed period.**
   In firmware, `dt_ms = now - last_feedback_sent_ms`. If a USB CDC frame is

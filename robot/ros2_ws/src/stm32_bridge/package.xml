@@ -3,7 +3,7 @@
 <package format="3">
   <name>stm32_bridge</name>
   <version>0.1.0</version>
-  <description>ROS2 serial bridge from /cmd_vel to the STM32 motor controller.</description>
+  <description>ROS2 command and sensor bridge for the STM32 motor controller.</description>
 
   <maintainer email="caoduy856@gmail.com">Duy</maintainer>
   <license>Apache-2.0</license>

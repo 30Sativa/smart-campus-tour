@@ -32,7 +32,7 @@ ros2_ws/
 | `robot_description` | Mô tả hình học/frame của xe, 7 STL, LiDAR, IMU và `ros2_control`. |
 | `robot_navigation` | Map server, AMCL và Nav2 trên map đã lưu. |
 | `simulation` | World Gazebo; hiện có `warehouse_12x12.world`. |
-| `stm32_bridge` | Đổi `/cmd_vel` thành lệnh serial gửi STM32, đọc feedback và publish `/odom`. |
+| `stm32_bridge` | Đổi `/cmd_vel` thành lệnh serial gửi STM32, publish `wheel/odom`, `imu/data` và sonar. |
 | `bus_bringup` | Hiện chỉ có `launch/.gitkeep`; chưa phải package và chưa có chức năng runtime. |
 
 Phần arm trước đây (`arm_bridge`, `arm_description`) đã được bỏ khỏi workspace.
@@ -67,7 +67,7 @@ Phần arm trước đây (`arm_bridge`, `arm_description`) đã được bỏ k
 
 ### `stm32_bridge`
 
-- `stm32_bridge_node.py`: serial bridge và odometry.
+- `stm32_bridge_node.py`: serial bridge, wheel odometry từ STEP count và BNO085 IMU publisher.
 - `launch/stm32_bridge.launch.py`: launch node với cổng serial và thông số bánh.
 - `test/test_odometry.py`: test odometry.
 
@@ -149,7 +149,9 @@ Luồng drivetrain:
 
 ```text
 /cmd_vel -> stm32_bridge -> USB CDC -> STM32 -> motor controller
-STM32 feedback -> stm32_bridge -> /odom -> TF odom -> base_footprint
+STM32 STEP count -> stm32_bridge -> /wheel/odom -\
+BNO085 yaw       -> stm32_bridge -> /imu/data   -> robot_localization EKF
+                                                 -> /odom + TF odom -> base_footprint
 ```
 
 ## Thứ tự đọc code cho người mới

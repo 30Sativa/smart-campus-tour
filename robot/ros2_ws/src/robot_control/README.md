@@ -29,7 +29,9 @@ subscribes only to `/cmd_vel`.
 | `/emergency_stop` | `std_srvs/srv/SetBool` | `true` engages, `false` releases |
 | `/emergency_stop_state` | `std_msgs/msg/Bool` | Emergency stop state |
 | `/scan` | `sensor_msgs/msg/LaserScan` | RPLiDAR scan |
-| `/odom` | `nav_msgs/msg/Odometry` | STM32 step-count odometry |
+| `/wheel/odom` | `nav_msgs/msg/Odometry` | Wheel-only odometry from STM32 STEP counts |
+| `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Rotation Vector orientation |
+| `/odom` | `nav_msgs/msg/Odometry` | EKF output consumed by SLAM/Nav2 |
 | `/ultrasonic/sonar1/range` | `sensor_msgs/msg/Range` | SR04T SONAR1 |
 | `/ultrasonic/sonar2/range` | `sensor_msgs/msg/Range` | SR04T SONAR2 |
 | `/ultrasonic/sonar3/range` | `sensor_msgs/msg/Range` | SR04T SONAR3 |
@@ -44,9 +46,10 @@ Expected real-robot tree:
 map -> odom -> base_footprint -> base_link -> lidar_link
 ```
 
-The launch files run `robot_state_publisher` from `robot_description`. They pass
-`base_frame:=base_footprint` into `stm32_bridge` so the bridge publishes
-`odom -> base_footprint` and the URDF publishes fixed robot frames below it.
+The real launch files run `robot_state_publisher` and `robot_localization`.
+`stm32_bridge` publishes measurements without TF; the EKF is the only publisher
+of `odom -> base_footprint`. SLAM or AMCL publishes `map -> odom`, and the URDF
+publishes fixed robot frames below `base_footprint`.
 
 The RPLiDAR launch default uses `frame_id=lidar_link` to match the current URDF.
 If your hardware driver is already publishing `laser`, either set
@@ -97,6 +100,7 @@ ros2 launch robot_control manual_mapping.launch.py \
 This launches:
 
 - `stm32_bridge`
+- `robot_localization` EKF
 - `mode_manager_node`
 - `rplidar_ros`
 - `slam_toolbox` online async
@@ -141,6 +145,8 @@ During mapping, verify the data path in a second terminal:
 
 ```bash
 ros2 topic echo /scan --once
+ros2 topic echo /wheel/odom --once
+ros2 topic echo /imu/data --once
 ros2 topic echo /odom --once
 ros2 topic echo /map --once
 ros2 topic echo /joy --once
@@ -265,7 +271,10 @@ firmware `STOP,<seq>` command.
 - `stm32_bridge` real wheel odometry uses `wheel_radius=0.09725`, matched to the
   URDF/controller geometry.
 - STM32 feedback counts are generated STEP pulses, not physical encoder ticks.
-  Odometry will drift if wheels slip or motors stall.
+  HBS57H closes its encoder loop internally, but ROS does not read encoder
+  position. Wheel odometry still drifts with slip or motion not represented by
+  STEP count; the EKF cannot remove all of that error. SLAM/AMCL provides the
+  environment-based global correction through `map -> odom`.
 
 ## Troubleshooting
 
@@ -278,7 +287,7 @@ Robot does not move:
 
 Map is distorted:
 
-- Verify `/odom` changes in the correct direction.
+- Verify `/wheel/odom` and final `/odom` change in the correct direction.
 - Tune `wheel_radius`, `wheel_base`, `odom_invert_left`, and
   `odom_invert_right`.
 - Confirm `/scan` frame matches a valid TF under `base_footprint`.
@@ -292,7 +301,7 @@ Nav2 does not accept goals:
 TF missing:
 
 - Check `robot_state_publisher` is running.
-- Check `stm32_bridge` was launched with `base_frame:=base_footprint`.
+- Check `ekf_filter_node` is running and `stm32_bridge` has `publish_tf=false`.
 - Check RPLiDAR `frame_id` matches `lidar_link` or your chosen frame.
 
 Multiple `/cmd_vel` publishers:
