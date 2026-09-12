@@ -211,7 +211,7 @@ def generate_launch_description():
             description='Six diagonal covariance values for odom pose.'),
         DeclareLaunchArgument(
             'twist_covariance_diagonal',
-            default_value='[0.01, 99999.0, 99999.0, 99999.0, 99999.0, 0.1]',
+            default_value='[0.01, 0.0025, 99999.0, 99999.0, 99999.0, 0.1]',
             description='Six diagonal covariance values for odom twist.'),
 
         Node(

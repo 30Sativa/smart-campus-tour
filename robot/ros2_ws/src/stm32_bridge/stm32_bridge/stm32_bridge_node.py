@@ -37,7 +37,7 @@ DEFAULT_ODOM_COVARIANCE_DIAGONAL = [
 ]
 DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     0.01,
-    99999.0,
+    0.0025,
     99999.0,
     99999.0,
     99999.0,
@@ -258,6 +258,7 @@ class Stm32BridgeNode(Node):
         self._y = 0.0
         self._theta = 0.0
         self._imu_pub = None
+        self._last_imu_measurement: Optional[Tuple[float, Optional[int]]] = None
         self._last_left_count: Optional[int] = None
         self._last_right_count: Optional[int] = None
         self._last_feedback_mono: Optional[float] = None
@@ -550,7 +551,9 @@ class Stm32BridgeNode(Node):
         self._last_feedback_ros_sec = now_ros_sec
 
         if delta_left_count is None or delta_right_count is None:
-            self._publish_odometry(now_ros, 0.0, 0.0)
+            return
+
+        if dt <= 0.0:
             return
 
         # NOTE: do NOT reuse invert_left/invert_right here. The firmware counts
@@ -587,6 +590,10 @@ class Stm32BridgeNode(Node):
         if yaw_rad is None or not math.isfinite(yaw_rad):
             return
 
+        measurement_key = (yaw_rad, yaw_acc)
+        if measurement_key == self._last_imu_measurement:
+            return
+
         msg = Imu()
         msg.header.stamp = stamp.to_msg()
         msg.header.frame_id = self.imu_frame
@@ -605,6 +612,7 @@ class Stm32BridgeNode(Node):
         msg.angular_velocity_covariance[0] = -1.0
         msg.linear_acceleration_covariance[0] = -1.0
         self._imu_pub.publish(msg)
+        self._last_imu_measurement = measurement_key
 
     def _parse_feedback_line(
             self,
@@ -703,7 +711,7 @@ class Stm32BridgeNode(Node):
         if now_mono - self._last_invalid_dt_warn_time >= self._feedback_warn_period:
             self.get_logger().warn(
                 'Invalid feedback dt_ms and no valid ROS fallback dt yet; '
-                'publishing zero velocity for this sample.')
+                'dropping wheel odometry for this sample.')
             self._last_invalid_dt_warn_time = now_mono
         return 0.0
 
@@ -757,6 +765,7 @@ class Stm32BridgeNode(Node):
             odom.pose.covariance = self._diagonal_to_covariance(
                 self.odom_covariance_diagonal)
             odom.twist.twist.linear.x = linear_velocity
+            odom.twist.twist.linear.y = 0.0
             odom.twist.twist.angular.z = angular_velocity
             odom.twist.covariance = self._diagonal_to_covariance(
                 self.twist_covariance_diagonal)

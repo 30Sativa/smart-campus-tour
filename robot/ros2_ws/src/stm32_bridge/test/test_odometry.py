@@ -87,6 +87,7 @@ if _PKG_ROOT not in sys.path:
 
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_YAW_VARIANCE,
+    DEFAULT_TWIST_COVARIANCE_DIAGONAL,
     Stm32BridgeNode,
     imu_yaw_variance,
     yaw_to_quaternion_z,
@@ -395,6 +396,7 @@ class _ImuPublishHarness:
         self.messages = []
         self._imu_pub = SimpleNamespace(publish=self.messages.append)
         self.imu_frame = 'imu_link'
+        self._last_imu_measurement = None
 
     _publish_imu = Stm32BridgeNode._publish_imu
 
@@ -413,6 +415,91 @@ def test_imu_message_publishes_yaw_and_accuracy_covariance():
     assert msg.orientation_covariance[8] == imu_yaw_variance(2)
     assert msg.angular_velocity_covariance[0] == -1.0
     assert msg.linear_acceleration_covariance[0] == -1.0
+
+
+def test_cached_imu_measurement_is_not_republished():
+    harness = _ImuPublishHarness()
+    stamp = SimpleNamespace(to_msg=lambda: 'stamp')
+
+    harness._publish_imu(stamp, 0.25, 3)
+    harness._publish_imu(stamp, 0.25, 3)
+    assert len(harness.messages) == 1
+
+    # Accuracy is part of the key because it changes EKF covariance weighting.
+    harness._publish_imu(stamp, 0.25, 2)
+    assert len(harness.messages) == 2
+
+    harness._publish_imu(stamp, 0.30, 2)
+    assert len(harness.messages) == 3
+
+
+class _FeedbackHarness:
+    def __init__(self):
+        self.feedback_counts_are_cumulative = True
+        self.reset_odom_on_start = True
+        self._last_left_count = None
+        self._last_right_count = None
+        self._last_feedback_ros_sec = None
+        self._last_feedback_mono = None
+        self._last_feedback_seq = None
+        self._last_feedback_status = ''
+        self._last_invalid_dt_warn_time = 0.0
+        self._feedback_warn_period = 0.5
+        self.odom_invert_left = False
+        self.odom_invert_right = False
+        self.published_odometry = []
+
+    def get_logger(self):
+        return SimpleNamespace(
+            debug=lambda *args, **kwargs: None,
+            warn=lambda *args, **kwargs: None,
+        )
+
+    _compute_count_delta = Stm32BridgeNode._compute_count_delta
+    _resolve_feedback_dt = Stm32BridgeNode._resolve_feedback_dt
+    _diff_signed_32 = staticmethod(Stm32BridgeNode._diff_signed_32)
+
+
+def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
+    harness = _FeedbackHarness()
+    harness._publish_odometry = lambda stamp, linear, angular: (
+        harness.published_odometry.append((linear, angular)))
+    harness._publish_imu = lambda *args: None
+    harness._publish_sonar_range = lambda *args: None
+    harness._parse_feedback_line = lambda *args, **kwargs: (
+        1, 100, 100, 0.0, 'OK', None, None,
+        None, None, None, None,
+    )
+    harness.get_clock = lambda: SimpleNamespace(now=lambda: SimpleNamespace(
+        nanoseconds=0,
+    ))
+
+    Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
+
+    # The first cumulative sample only establishes the count baseline.
+    assert harness.published_odometry == []
+
+    harness._parse_feedback_line = lambda *args, **kwargs: (
+        1, 110, 110, 0.0, 'OK', None, None,
+        None, None, None, None,
+    )
+    Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
+
+    # A sample without a valid firmware or ROS time delta is not evidence that
+    # the robot stopped, so it must not inject a zero twist into the EKF.
+    assert harness.published_odometry == []
+
+
+def test_diff_drive_vy_constraint_variance():
+    assert DEFAULT_TWIST_COVARIANCE_DIAGONAL[1] == 0.0025
+    covariance = Stm32BridgeNode._diagonal_to_covariance(
+        DEFAULT_TWIST_COVARIANCE_DIAGONAL)
+    assert covariance[7] == 0.0025
+
+    node_path = os.path.join(_PKG_ROOT, 'stm32_bridge',
+                             'stm32_bridge_node.py')
+    with open(node_path, encoding='utf-8') as source:
+        assert 'odom.twist.twist.linear.y = 0.0' in source.read()
 
 
 def test_parse_feedback_garbage_returns_none():

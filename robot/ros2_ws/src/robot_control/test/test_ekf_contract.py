@@ -17,7 +17,7 @@ def _ekf_parameters():
     return config['/**/ekf_filter_node']['ros__parameters']
 
 
-def test_ekf_fuses_only_wheel_vx_vyaw_and_imu_yaw():
+def test_ekf_fuses_diff_drive_twist_constraint_and_imu_yaw():
     params = _ekf_parameters()
     assert params['two_d_mode'] is True
     assert params['odom0'] == 'wheel/odom'
@@ -30,9 +30,11 @@ def test_ekf_fuses_only_wheel_vx_vyaw_and_imu_yaw():
     imu_fields = [
         i for i, enabled in enumerate(params['imu0_config']) if enabled
     ]
-    assert wheel_fields == [6, 11]
+    assert wheel_fields == [6, 7, 11]
     assert imu_fields == [5]
     assert params['imu0_relative'] is True
+    assert params['imu0_differential'] is False
+    assert params['frequency'] == 30.0
 
 
 def test_ekf_owns_final_odom_and_tf_in_real_launch():

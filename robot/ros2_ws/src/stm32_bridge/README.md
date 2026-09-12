@@ -124,8 +124,11 @@ odom -> base_footprint
 
 The real `robot_control/manual_mode.launch.py` always passes
 `publish_tf:=false` and starts `robot_localization`. That EKF fuses
-`wheel/odom` twist `linear.x` + `angular.z` with `imu/data` orientation yaw,
-publishes final `odom`, and is the only `odom -> base_footprint` TF owner.
+`wheel/odom` twist `linear.x`, the diff-drive constraint `linear.y=0`, and
+`angular.z` with `imu/data` orientation yaw, publishes final `odom`, and is the
+only `odom -> base_footprint` TF owner. Repeated cached IMU measurements with
+the same `(yaw, yaw_acc)` are not republished. A wheel sample without a valid
+delta or time interval is dropped instead of publishing a fake zero twist.
 `imu0_relative: true` makes the first BNO085 yaw the relative odom reference,
 so startup does not snap to magnetic north. SLAM or AMCL remains responsible
 for `map -> odom`.
@@ -265,7 +268,7 @@ ros2 run tf2_tools view_frames
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |
 | `reset_odom_on_start` | `true` | Use first cumulative sample as zero baseline |
 | `odom_covariance_diagonal` | `[0.01, 0.01, 99999.0, 99999.0, 99999.0, 0.1]` | Pose covariance diagonal |
-| `twist_covariance_diagonal` | `[0.01, 99999.0, 99999.0, 99999.0, 99999.0, 0.1]` | Twist covariance diagonal |
+| `twist_covariance_diagonal` | `[0.01, 0.0025, 99999.0, 99999.0, 99999.0, 0.1]` | Twist covariance diagonal; `linear.y` encodes the diff-drive `vy=0` constraint |
 
 ## If `/wheel/odom` Does Not Change
 
