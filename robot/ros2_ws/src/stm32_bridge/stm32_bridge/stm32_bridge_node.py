@@ -95,7 +95,7 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('invert_right', True)
         self.declare_parameter('odom_invert_left', False)
         self.declare_parameter('odom_invert_right', False)
-        self.declare_parameter('speed_scale', 0.3)
+        self.declare_parameter('speed_scale', 1.0)
         self.declare_parameter('publish_odom', True)
         self.declare_parameter('publish_tf', True)
         self.declare_parameter('odom_frame', 'odom')
@@ -235,8 +235,8 @@ class Stm32BridgeNode(Node):
 
         if not math.isfinite(self.speed_scale) or self.speed_scale < 0.0:
             self.get_logger().warn(
-                'speed_scale must be finite and >= 0. Falling back to 0.3.')
-            self.speed_scale = 0.3
+                'speed_scale must be finite and >= 0. Falling back to 1.0.')
+            self.speed_scale = 1.0
 
         self.steps_per_meter = self._compute_steps_per_meter()
         self._feedback_warn_period = 1.0 / self.feedback_rate_warn_hz
@@ -331,14 +331,23 @@ class Stm32BridgeNode(Node):
         left_mm_s *= self.speed_scale
         right_mm_s *= self.speed_scale
 
+        peak_mm_s = max(abs(left_mm_s), abs(right_mm_s))
+        if peak_mm_s > self.max_wheel_speed_mm_s:
+            scale = self.max_wheel_speed_mm_s / peak_mm_s
+            unscaled_left_mm_s = left_mm_s
+            unscaled_right_mm_s = right_mm_s
+            left_mm_s *= scale
+            right_mm_s *= scale
+            self.get_logger().warn(
+                f'Wheel command pair scaled by {scale:.3f}: '
+                f'({unscaled_left_mm_s:.1f}, {unscaled_right_mm_s:.1f}) '
+                f'-> ({left_mm_s:.1f}, {right_mm_s:.1f}) mm/s')
+
         if self.invert_left:
             left_mm_s = -left_mm_s
 
         if self.invert_right:
             right_mm_s = -right_mm_s
-
-        left_mm_s = self._clamp_wheel_speed(left_mm_s, 'left')
-        right_mm_s = self._clamp_wheel_speed(right_mm_s, 'right')
 
         self._left_mm_s = int(round(left_mm_s))
         self._right_mm_s = int(round(right_mm_s))
@@ -373,19 +382,6 @@ class Stm32BridgeNode(Node):
             self._send_stop()
         else:
             self._send_command(self._left_mm_s, self._right_mm_s)
-
-    def _clamp_wheel_speed(self, value: float, wheel_name: str) -> float:
-        clamped = max(
-            -self.max_wheel_speed_mm_s,
-            min(self.max_wheel_speed_mm_s, value),
-        )
-
-        if not math.isclose(value, clamped, rel_tol=0.0, abs_tol=1e-9):
-            self.get_logger().warn(
-                f'{wheel_name} wheel command clamped: '
-                f'{value:.1f} -> {clamped:.1f} mm/s')
-
-        return clamped
 
     def _send_command(self, left_mm_s: int, right_mm_s: int):
         seq = self._seq

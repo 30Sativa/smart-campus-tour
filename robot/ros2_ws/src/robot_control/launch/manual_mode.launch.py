@@ -72,9 +72,10 @@ def generate_launch_description():
         DeclareLaunchArgument('wheel_radius', default_value='0.09725',
                               description='Real wheel radius for odometry.'),
         DeclareLaunchArgument('max_wheel_speed_mm_s', default_value='250.0',
-                              description='Per-wheel safety clamp.'),
-        DeclareLaunchArgument('speed_scale', default_value='0.3',
-                              description='Bench-safe command scale.'),
+                              description='Peak wheel speed safety limit.'),
+        DeclareLaunchArgument(
+            'speed_scale', default_value='1.0',
+            description='Real-robot command scale; 1.0 applies no hidden scaling.'),
         DeclareLaunchArgument(
             'invert_left', default_value='true',
             description='Invert left wheel command for the installed drivetrain.'),

@@ -19,6 +19,8 @@ def test_wheel_geometry_matches_all_consumers():
     common = PACKAGE / 'urdf' / 'common_properties.xacro'
     controller = PACKAGE / 'config' / 'diff_drive_controller.yaml'
     manual_launch = SRC / 'robot_control' / 'launch' / 'manual_mode.launch.py'
+    firmware_header = (SRC.parents[1] / 'firmware' / 'stm32' / 'motor_controller' /
+                       'Core' / 'Inc' / 'motor' / 'motor.h')
 
     urdf_radius = _capture(
         common, r'name="wheel_radius"\s+value="([0-9.]+)"')
@@ -34,9 +36,12 @@ def test_wheel_geometry_matches_all_consumers():
     bridge_separation = _capture(
         manual_launch,
         r"'wheel_base', default_value='([0-9.]+)'")
+    firmware_diameter = _capture(
+        firmware_header, r'#define WHEEL_DIAMETER_MM\s+([0-9.]+)f')
 
     assert controller_radius == urdf_radius == bridge_radius
     assert controller_separation == urdf_separation == bridge_separation
+    assert firmware_diameter == urdf_radius * 2.0 * 1000.0
 
 
 if __name__ == '__main__':

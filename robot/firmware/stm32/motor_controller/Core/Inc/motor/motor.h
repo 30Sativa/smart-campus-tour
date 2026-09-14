@@ -9,14 +9,14 @@
  * Chuyen doi mm/s <-> Hz dua tren drivetrain, roi uy quyen xuong motor_core.
  *
  * Tune cac gia tri sau cho khop drivetrain va DIP switch HBS57H:
- *   - Wheel: 190 mm.
+ *   - Wheel: 194.5 mm (ROS wheel_radius = 0.09725 m).
  *   - Motor 57EBP98ALC, 1.8 deg/step (200 step/rev).
  *   - Driver HBS57H SW1-4 = on/off/on/on -> 1600 pulse/rev.
  *   - Gearbox F57-L1-10-P2, 10:1.
  *   => 1600 * 10 = 16000 pulse / vong banh.
  */
 #ifndef WHEEL_DIAMETER_MM
-#define WHEEL_DIAMETER_MM      190.0f
+#define WHEEL_DIAMETER_MM      194.5f
 #endif
 
 #ifndef GEAR_RATIO

@@ -20,6 +20,7 @@ def generate_launch_description():
     scan_mode = LaunchConfiguration('scan_mode')
     enable_lidar = LaunchConfiguration('enable_lidar')
     slam_params_file = LaunchConfiguration('slam_params_file')
+    max_wheel_speed_mm_s = LaunchConfiguration('max_wheel_speed_mm_s')
 
     manual_launch = PathJoinSubstitution([
         FindPackageShare('robot_control'),
@@ -71,6 +72,9 @@ def generate_launch_description():
                               default_value=default_slam_params,
                               description='slam_toolbox parameter file.'),
         DeclareLaunchArgument(
+            'max_wheel_speed_mm_s', default_value='350.0',
+            description='Peak wheel speed mapping limit in mm/s.'),
+        DeclareLaunchArgument(
             'rviz', default_value='false',
             description='Open RViz with the mapping layout. Default false so a '
                         'headless robot does not hang; run RViz on your dev '
@@ -84,6 +88,8 @@ def generate_launch_description():
                 'baudrate': baudrate,
                 'initial_mode': 'manual',
                 'use_sim_time': use_sim_time,
+                'speed_scale': '1.0',
+                'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
             }.items(),
         ),
 

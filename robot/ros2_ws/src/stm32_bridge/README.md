@@ -144,8 +144,9 @@ steps_per_meter ~= 26185     # 1600 * 10 / (pi * 0.1945)
 ```
 
 These match the physical constants compiled into the firmware
-(`firmware/.../motor_driver.h`: `DRIVER_PULSE_PER_REV=1600`, `GEAR_RATIO=10`,
-`WHEEL_DIAMETER_MM=190`). If you change a DIP switch or the gearbox, update both
+(`robot/firmware/stm32/motor_controller/Core/Inc/motor/motor.h`:
+`DRIVER_PULSE_PER_REV=1600`, `GEAR_RATIO=10`,
+`WHEEL_DIAMETER_MM=194.5`). If you change a DIP switch or the gearbox, update both
 the firmware header and these parameters.
 
 ## Environment
@@ -198,13 +199,15 @@ ros2 launch stm32_bridge stm32_bridge.launch.py invert_left:=false invert_right:
 ros2 launch stm32_bridge stm32_bridge.launch.py publish_odom:=true publish_tf:=true
 ```
 
-The launch defaults are intentionally bench-safe. For the installed drivetrain,
-both command signs are inverted so `i` (ROS `linear.x > 0`) drives physically
-forward. Override both `invert_*` arguments together only after verifying the
-motor direction on a raised-wheel bench test. `teleop_twist_keyboard` usually
-sends `0.5 m/s` when pressing `i`; with `speed_scale=0.3` the bridge sends about
-`150 mm/s` to both wheels. The `1600` value in firmware is the HBS57H driver
-resolution in pulses per motor revolution, not a wheel speed.
+The real-robot defaults keep the peak wheel speed limit at `250 mm/s`; lower
+`speed_scale` values remain available for bench/debug work. For the installed
+drivetrain, both command signs are inverted so `i` (ROS `linear.x > 0`) drives
+physically forward. Override both `invert_*` arguments together only after
+verifying the motor direction on a raised-wheel bench test. `teleop_twist_keyboard`
+usually sends `0.5 m/s` when pressing `i`; with `speed_scale=1.0`, the bridge
+passes the command through before the `250 mm/s` pair-scaling limit. The `1600`
+value in firmware is the HBS57H driver resolution in pulses per motor
+revolution, not a wheel speed.
 
 ## Run Teleop
 
@@ -248,14 +251,14 @@ ros2 run tf2_tools view_frames
 | `microstep` | `8.0` | HBS57H microstep multiplier |
 | `gear_ratio` | `10.0` | Motor-to-wheel gear ratio |
 | `max_steps_per_sec` | `12000.0` | Expected max step rate for jump warnings |
-| `max_wheel_speed_mm_s` | `250.0` | Clamp per-wheel command, mm/s |
+| `max_wheel_speed_mm_s` | `250.0` | Peak wheel speed limit for pair scaling, mm/s |
 | `send_rate_hz` | `20.0` | Periodic serial send/read rate |
 | `cmd_timeout` | `0.5` | Send STOP after this many seconds without `/cmd_vel` |
 | `invert_left` | `true` | Flip left **command** sign only (does not affect odometry) |
 | `invert_right` | `true` | Flip right **command** sign only (does not affect odometry) |
 | `odom_invert_left` | `false` | Flip left feedback count sign for **odometry only** |
 | `odom_invert_right` | `false` | Flip right feedback count sign for **odometry only** |
-| `speed_scale` | `0.3` | Scale wheel commands before invert and clamp |
+| `speed_scale` | `1.0` | Scale wheel commands before invert and pair scaling |
 | `publish_odom` | `true` | Publish wheel-only `/wheel/odom` |
 | `publish_tf` | `true` | Standalone/debug wheel TF; real stack overrides to `false` |
 | `odom_frame` | `odom` | Odometry parent frame |

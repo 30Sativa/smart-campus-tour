@@ -92,7 +92,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'max_wheel_speed_mm_s',
             default_value='250.0',
-            description='Clamp each wheel command to +/- this speed in mm/s.'),
+            description='Scale the wheel pair when its peak exceeds this '
+                        'speed in mm/s.'),
         DeclareLaunchArgument(
             'send_rate_hz',
             default_value='20.0',
@@ -119,8 +120,9 @@ def generate_launch_description():
             description='Invert right feedback count sign for odometry only.'),
         DeclareLaunchArgument(
             'speed_scale',
-            default_value='0.3',
-            description='Scale wheel commands before invert and clamp.'),
+            default_value='1.0',
+            description='Scale wheel commands before invert and pair scaling; '
+                        '1.0 applies no hidden scaling.'),
         DeclareLaunchArgument(
             'publish_odom',
             default_value='true',

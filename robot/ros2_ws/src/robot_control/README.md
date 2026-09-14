@@ -100,6 +100,14 @@ ros2 launch robot_control manual_mapping.launch.py \
   lidar_serial_port:=/dev/ttyUSB0
 ```
 
+Manual mapping uses `speed_scale=1.0` and a `350 mm/s` peak wheel speed limit by
+default. The limit can be adjusted at launch, for example:
+
+```bash
+ros2 launch robot_control manual_mapping.launch.py \
+  max_wheel_speed_mm_s:=300
+```
+
 This launches:
 
 - `stm32_bridge`

@@ -61,6 +61,26 @@ def test_real_launch_inverts_both_feedback_counts_for_odometry():
         assert f"'{argument}': {argument}" in launch
 
 
+def test_real_robot_speed_policy_is_explicit():
+    manual = _read('robot_control/launch/manual_mode.launch.py')
+    mapping = _read('robot_control/launch/manual_mapping.launch.py')
+    auto_explore = _read('robot_control/launch/auto_explore.launch.py')
+    navigation = _read('robot_navigation/launch/navigation.launch.py')
+    bridge_launch = _read('stm32_bridge/launch/stm32_bridge.launch.py')
+    bridge_node = _read('stm32_bridge/stm32_bridge/stm32_bridge_node.py')
+
+    assert "'max_wheel_speed_mm_s', default_value='250.0'" in manual
+    assert "'speed_scale', default_value='1.0'" in manual
+    assert "'max_wheel_speed_mm_s', default_value='350.0'" in mapping
+    assert "LaunchConfiguration('max_wheel_speed_mm_s')" in mapping
+    assert "'speed_scale': '1.0'" in mapping
+    assert "'max_wheel_speed_mm_s': max_wheel_speed_mm_s" in mapping
+    assert "'max_wheel_speed_mm_s': '350.0'" not in auto_explore
+    assert "'max_wheel_speed_mm_s': '350.0'" not in navigation
+    assert "'speed_scale',\n            default_value='1.0'" in bridge_launch
+    assert "declare_parameter('speed_scale', 1.0)" in bridge_node
+
+
 def test_bridge_publishes_relative_measurement_topics_only():
     bridge = _read('stm32_bridge/stm32_bridge/stm32_bridge_node.py')
     assert "create_publisher(Odometry, 'wheel/odom', 10)" in bridge

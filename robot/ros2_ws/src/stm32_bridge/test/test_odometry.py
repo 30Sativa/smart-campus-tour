@@ -567,11 +567,81 @@ def test_non_finite_twist_is_rejected():
     assert not Stm32BridgeNode._is_finite_twist(twist(0.0, float('inf')))
 
 
+def _command_harness(max_wheel_speed_mm_s=250.0):
+    node = Stm32BridgeNode.__new__(Stm32BridgeNode)
+    node.wheel_base = 0.4325
+    node.speed_scale = 1.0
+    node.invert_left = False
+    node.invert_right = False
+    node.max_wheel_speed_mm_s = max_wheel_speed_mm_s
+    node._left_mm_s = 0
+    node._right_mm_s = 0
+    node._command_is_stop = True
+    node._last_cmd_time = None
+    node._timed_out = True
+    node._warnings = []
+    node.get_logger = lambda: SimpleNamespace(
+        warn=node._warnings.append,
+        error=node._warnings.append,
+    )
+    return node
+
+
+def _send_command(node, linear_x, angular_z):
+    node._cmd_vel_callback(SimpleNamespace(
+        linear=SimpleNamespace(x=linear_x, y=0.0, z=0.0),
+        angular=SimpleNamespace(x=0.0, y=0.0, z=angular_z),
+    ))
+
+
+def test_wheel_pair_below_limit_is_unchanged():
+    node = _command_harness()
+    _send_command(node, linear_x=0.2, angular_z=0.0)
+
+    assert (node._left_mm_s, node._right_mm_s) == (200, 200)
+    assert node._warnings == []
+
+
+def test_straight_wheel_pair_above_limit_scales_equally():
+    node = _command_harness()
+    _send_command(node, linear_x=0.4, angular_z=0.0)
+
+    assert (node._left_mm_s, node._right_mm_s) == (250, 250)
+    assert len(node._warnings) == 1
+    assert 'Wheel command pair scaled' in node._warnings[0]
+
+
+def test_in_place_rotation_preserves_symmetric_opposite_wheels():
+    node = _command_harness()
+    _send_command(node, linear_x=0.0, angular_z=2.0)
+
+    assert (node._left_mm_s, node._right_mm_s) == (-250, 250)
+
+
+def test_mixed_command_scales_both_wheels_when_one_exceeds_limit():
+    node = _command_harness()
+    # Before scaling this produces (80, 400) mm/s.
+    angular_z = 320.0 / (node.wheel_base * 1000.0)
+    _send_command(node, linear_x=0.24, angular_z=angular_z)
+
+    assert (node._left_mm_s, node._right_mm_s) == (50, 250)
+
+
+def test_pair_scaling_preserves_ratio_and_sign():
+    node = _command_harness()
+    # Before scaling this produces (-400, 80) mm/s.
+    angular_z = 480.0 / (node.wheel_base * 1000.0)
+    _send_command(node, linear_x=-0.16, angular_z=angular_z)
+
+    assert (node._left_mm_s, node._right_mm_s) == (-250, 50)
+    assert node._left_mm_s / node._right_mm_s == -5.0
+
+
 def test_forward_twist_is_inverted_for_installed_drive():
     """The installed motor wiring needs both command signs flipped."""
     node = Stm32BridgeNode.__new__(Stm32BridgeNode)
     node.wheel_base = 0.4325
-    node.speed_scale = 0.3
+    node.speed_scale = 1.0
     node.invert_left = True
     node.invert_right = True
     node.max_wheel_speed_mm_s = 250.0
@@ -586,8 +656,8 @@ def test_forward_twist_is_inverted_for_installed_drive():
         angular=SimpleNamespace(x=0.0, y=0.0, z=0.0),
     ))
 
-    assert node._left_mm_s == -60
-    assert node._right_mm_s == -60
+    assert node._left_mm_s == -200
+    assert node._right_mm_s == -200
     assert not node._command_is_stop
 
 
