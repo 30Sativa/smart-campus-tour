@@ -553,13 +553,14 @@ class Stm32BridgeNode(Node):
         if delta_left_count is None or delta_right_count is None:
             return
 
-        # NOTE: do NOT reuse invert_left/invert_right here. The firmware counts
-        # steps as `count += direction`, where direction already follows the
-        # sign of the (already-inverted) wheel command. So the feedback count
-        # direction tracks the *physical* wheel motion. Re-applying the command
-        # invert would cancel out and make the pose run backwards. Use the
-        # dedicated odom_invert_* parameters only when the firmware's count sign
-        # is genuinely reversed relative to physical forward motion.
+        # NOTE: do NOT reuse invert_left/invert_right here. The firmware STEP
+        # count uses the direction of the command after command inversion. On
+        # the current drivetrain, hardware tests show that physical forward and
+        # CCW motion produce raw STEP-based odometry signs opposite to the ROS
+        # convention. Use odom_invert_* to correct feedback for odometry only;
+        # these parameters do not change motor direction. If the wiring or
+        # command-direction configuration changes, hardware-test the count sign
+        # again instead of assuming the current correction remains valid.
         if self.odom_invert_left:
             delta_left_count = -delta_left_count
         if self.odom_invert_right:

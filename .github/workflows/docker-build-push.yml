@@ -3,14 +3,20 @@ name: Build and Push ROS2 Docker Image
 on:
   pull_request:
     paths:
-      - "robot/**"
+      - "robot/Dockerfile"
+      - "robot/.dockerignore"
+      - "robot/docker/**"
+      - "robot/ros2_ws/src/**"
       - ".github/workflows/docker-build-push.yml"
   push:
     branches:
       - main
       - master
     paths:
-      - "robot/**"
+      - "robot/Dockerfile"
+      - "robot/.dockerignore"
+      - "robot/docker/**"
+      - "robot/ros2_ws/src/**"
       - ".github/workflows/docker-build-push.yml"
   workflow_dispatch:
 
@@ -65,6 +71,8 @@ jobs:
           build-args: |
             ROS_DISTRO=${{ env.ROS_DISTRO }}
           push: ${{ github.event_name == 'push' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ steps.image.outputs.image }}:latest
             ${{ steps.image.outputs.image }}:${{ steps.tags.outputs.short_sha }}

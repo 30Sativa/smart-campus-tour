@@ -17,6 +17,8 @@ def generate_launch_description():
     speed_scale = LaunchConfiguration('speed_scale')
     invert_left = LaunchConfiguration('invert_left')
     invert_right = LaunchConfiguration('invert_right')
+    odom_invert_left = LaunchConfiguration('odom_invert_left')
+    odom_invert_right = LaunchConfiguration('odom_invert_right')
     base_frame = LaunchConfiguration('base_frame')
     odom_frame = LaunchConfiguration('odom_frame')
     initial_mode = LaunchConfiguration('initial_mode')
@@ -79,6 +81,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'invert_right', default_value='true',
             description='Invert right wheel command for the installed drivetrain.'),
+        DeclareLaunchArgument(
+            'odom_invert_left', default_value='true',
+            description='Invert left feedback count sign for odometry only.'),
+        DeclareLaunchArgument(
+            'odom_invert_right', default_value='true',
+            description='Invert right feedback count sign for odometry only.'),
         DeclareLaunchArgument('base_frame', default_value='base_footprint',
                               description='Bridge odometry child frame.'),
         DeclareLaunchArgument('odom_frame', default_value='odom',
@@ -112,6 +120,8 @@ def generate_launch_description():
                 'speed_scale': speed_scale,
                 'invert_left': invert_left,
                 'invert_right': invert_right,
+                'odom_invert_left': odom_invert_left,
+                'odom_invert_right': odom_invert_right,
                 'odom_frame': odom_frame,
                 'base_frame': base_frame,
                 'publish_odom': 'true',

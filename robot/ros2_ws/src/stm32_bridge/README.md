@@ -322,11 +322,16 @@ Read these before trusting wheel or fused odometry on the real robot.
   bridge already falls back to ROS-clock dt when `dt_ms <= 0`.
 
 - **Command invert vs. odometry invert are separate.** `invert_left/right` flip
-  only the motor command. Because the firmware derives its step direction from the
-  (already inverted) command, the feedback count direction already follows the
-  physical wheel, so the bridge does **not** reuse the command invert for
-  odometry. Use `odom_invert_left/right` only if the count sign is genuinely
-  reversed relative to physical forward motion.
+  only the motor command. The firmware STEP feedback follows the command
+  direction after command inversion, but hardware tests on the current
+  drivetrain show that physical forward and CCW motion produce raw STEP-based
+  odometry signs opposite to the ROS convention. Use `odom_invert_left/right`
+  to correct feedback for odometry only; they do not change motor direction.
+  The standalone bridge launch can remain at its `false/false` defaults, while
+  the production real stack (`robot_control/manual_mode.launch.py`) overrides
+  both to `true/true`. If wiring or command-direction configuration changes,
+  hardware-test the count sign again instead of assuming the current correction
+  remains valid.
 
 - **`reset_odom_on_start` zeroes the count baseline, not the pose.** Pose
   (`x/y/theta`) always starts at 0 on node startup; the first cumulative feedback

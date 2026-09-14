@@ -52,6 +52,15 @@ def test_ekf_owns_final_odom_and_tf_in_real_launch():
     assert 'enable_ekf' not in launch
 
 
+def test_real_launch_inverts_both_feedback_counts_for_odometry():
+    launch = _read('robot_control/launch/manual_mode.launch.py')
+    for side in ('left', 'right'):
+        argument = f'odom_invert_{side}'
+        assert f"{argument} = LaunchConfiguration('{argument}')" in launch
+        assert f"'{argument}', default_value='true'" in launch
+        assert f"'{argument}': {argument}" in launch
+
+
 def test_bridge_publishes_relative_measurement_topics_only():
     bridge = _read('stm32_bridge/stm32_bridge/stm32_bridge_node.py')
     assert "create_publisher(Odometry, 'wheel/odom', 10)" in bridge

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 ARG ROS_DISTRO=humble
 FROM ros:${ROS_DISTRO}-ros-base
 
@@ -20,16 +22,23 @@ RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then \
     fi && \
     rosdep update --rosdistro "${ROS_DISTRO}"
 
-WORKDIR ${ROS_WS}
-COPY ros2_ws/src ./src
+WORKDIR /tmp/rosdep_ws
+
+# Keep this layer dependent on manifests only. --parents preserves the ROS
+# package directory layout, and the recursive glob picks up newly added
+# packages under ros2_ws/src without maintaining a package-name list.
+COPY --parents ros2_ws/src/**/package.xml ./
 
 RUN apt-get update && \
     rosdep install \
-      --from-paths src \
+      --from-paths ros2_ws/src \
       --ignore-src \
       --rosdistro "${ROS_DISTRO}" \
       -r -y && \
     rm -rf /var/lib/apt/lists/*
+
+WORKDIR ${ROS_WS}
+COPY ros2_ws/src ./src
 
 RUN source "/opt/ros/${ROS_DISTRO}/setup.bash" && \
     colcon build

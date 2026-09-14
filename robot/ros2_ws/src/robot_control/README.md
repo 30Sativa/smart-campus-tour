@@ -86,6 +86,9 @@ The installed drivetrain uses `invert_left:=true invert_right:=true` by default
 so the `i` key (positive ROS `linear.x`) moves the robot forward. Pass both as
 `false` together only if a bench test confirms the motor wiring is already
 forward-oriented.
+The real stack separately defaults `odom_invert_left:=true` and
+`odom_invert_right:=true` so STEP feedback follows the ROS odometry convention;
+these two arguments affect feedback only, not motor commands.
 
 ## Manual Mapping
 
