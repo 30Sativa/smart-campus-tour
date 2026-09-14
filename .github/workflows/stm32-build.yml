@@ -24,7 +24,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: robot/firmware/stm32/motor_controller/Debug
+        working-directory: robot/firmware/stm32/motor_controller
 
     steps:
       - name: Checkout
@@ -35,28 +35,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi make
 
-      - name: Make generated STM32CubeIDE makefile portable
-        run: |
-          perl -0pi -e 's#[A-Za-z]:\\[^"\s]*\\STM32G431C6UX_FLASH\.ld#../STM32G431C6UX_FLASH.ld#g' makefile
-
-      - name: Compile firmware
+      - name: Compile firmware and generate artifacts
         run: |
           make clean
           make -j"$(nproc)" all
-
-      - name: Generate bin and hex artifacts
-        run: |
-          arm-none-eabi-objcopy -O binary MotorController_G431.elf MotorController_G431.bin
-          arm-none-eabi-objcopy -O ihex MotorController_G431.elf MotorController_G431.hex
 
       - name: Upload firmware build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: stm32-motor-controller
           path: |
-            robot/firmware/stm32/motor_controller/Debug/MotorController_G431.elf
-            robot/firmware/stm32/motor_controller/Debug/MotorController_G431.bin
-            robot/firmware/stm32/motor_controller/Debug/MotorController_G431.hex
-            robot/firmware/stm32/motor_controller/Debug/MotorController_G431.map
-            robot/firmware/stm32/motor_controller/Debug/MotorController_G431.list
+            robot/firmware/stm32/motor_controller/build/MotorController_G431.elf
+            robot/firmware/stm32/motor_controller/build/MotorController_G431.bin
+            robot/firmware/stm32/motor_controller/build/MotorController_G431.hex
+            robot/firmware/stm32/motor_controller/build/MotorController_G431.map
+            robot/firmware/stm32/motor_controller/build/MotorController_G431.list
           if-no-files-found: error

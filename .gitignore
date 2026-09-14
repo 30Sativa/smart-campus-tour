@@ -445,6 +445,9 @@ FodyWeavers.xsd
 # Rác chờ xoá tay (agent không có quyền delete file trên máy bạn)
 _to_delete/
 
+# STM32 repository-owned CI/local build output
+/robot/firmware/stm32/motor_controller/build/
+
 # Docker Compose env override (DOCKER_IMAGE=<dockerhub-username>/robot-ros2:latest, etc).
 # Machine-local, never commit — see robot/docker-compose.yml comments.
 .env
