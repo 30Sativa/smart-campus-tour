@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+ROBOT_ROOT="$HOME/smart-campus-tour/robot"
+
+if [ ! -f "$ROBOT_ROOT/.env" ]; then
+    echo "ERROR: $ROBOT_ROOT/.env not found"
+    return 1 2>/dev/null || exit 1
+fi
+
+set -a
+source "$ROBOT_ROOT/.env"
+set +a
+
+source /opt/ros/humble/setup.bash
+
+if [ -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]; then
+    source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
+fi
+
+echo "ROS environment loaded:"
+echo "  DOMAIN=$ROS_DOMAIN_ID"
+echo "  DISCOVERY=$ROS_DISCOVERY_SERVER"
+echo "  RMW=$RMW_IMPLEMENTATION"
