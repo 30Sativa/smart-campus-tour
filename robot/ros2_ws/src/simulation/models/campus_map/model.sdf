@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="campus_map">
+    <static>true</static>
+    <link name="campus_map_link">
+      <collision name="campus_map_collision">
+        <geometry>
+          <mesh>
+            <uri>model://campus_map/meshes/map.STL</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="campus_map_visual">
+        <geometry>
+          <mesh>
+            <uri>model://campus_map/meshes/map.obj</uri>
+            <scale>1 1 1</scale>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

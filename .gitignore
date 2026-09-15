@@ -451,3 +451,7 @@ _to_delete/
 # Docker Compose env override (DOCKER_IMAGE=<dockerhub-username>/robot-ros2:latest, etc).
 # Machine-local, never commit — see robot/docker-compose.yml comments.
 .env
+
+# Repository-owned Gazebo campus model assets (not Visual Studio build output).
+!robot/ros2_ws/src/simulation/models/campus_map/model.sdf
+!robot/ros2_ws/src/simulation/models/campus_map/meshes/map.obj
