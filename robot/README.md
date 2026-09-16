@@ -119,10 +119,16 @@ lỗi `error gathering device information ... /dev/ttyACM0: no such file or dire
 `x-ros2-common-env` dùng chung chỉ chứa biến môi trường ROS, không chứa
 devices, nên service debug/sim không thể kế thừa serial port.
 
-Cả ba service dùng cùng Dockerfile và entrypoint. Khi mở shell mới bằng
-`docker exec -it <container> bash`, `/root/.bashrc` tự source ROS 2 Humble
-trước, sau đó source `/ros2_ws/install/setup.bash` nếu workspace đã được
-build. Không cần source tay trong shell mới.
+Cả ba service dùng chung một Dockerfile và entrypoint: `debug` và `sim` build
+tại chỗ, còn `hardware` chạy image prebuilt mà CI build từ đúng Dockerfile đó.
+Khi mở shell mới bằng `docker exec -it <container> bash`, `/root/.bashrc` tự
+source ROS 2 Humble trước, sau đó source `/ros2_ws/install/setup.bash` nếu
+workspace đã được build. Không cần source tay trong shell mới.
+
+`docker exec` KHÔNG chạy ENTRYPOINT, nên `/root/.bashrc` (chứ không phải
+`docker/ros_entrypoint.sh`) mới là thứ auto-source cho shell tương tác. Vì
+profile `hardware` dùng image prebuilt, behavior này chỉ có trên miniPC sau
+khi CI build lại image và `docker compose --profile hardware pull`.
 
 Bind mount `./ros2_ws/src:/ros2_ws/src` chỉ thay source, không tự build lại
 workspace. Sau `git pull` có thay đổi ROS code, chạy
@@ -340,8 +346,11 @@ secrets into this repository.
 
 ## How miniPC Pulls And Runs The Image
 
-The robot compose file is `docker-compose.yml`. A ready-to-copy template is
-using `robot/.env.minipc.example` for the MiniPC or `robot/.env.vmware.example` for VMware — `.env` itself is git-ignored, never commit it:
+The robot compose file is `docker-compose.yml`. Copy the template that matches
+the machine: `robot/.env.minipc.example` (miniPC, profile `hardware`),
+`robot/.env.vmware.example` (VMware, profile `debug`) or
+`robot/.env.sim.example` (VMware, profile `sim`). `.env` itself is git-ignored,
+never commit it:
 
 ```bash
 cp .env.minipc.example .env

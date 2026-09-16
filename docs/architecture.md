@@ -5,54 +5,58 @@ crosses a folder boundary. Anything internal to one folder is documented
 inside that folder.
 
 - Robot internals: [`robot/README.md`](../robot/README.md)
-- Digital Twin internals: [`digital-twin/README.md`](../digital-twin/README.md)
+- Digital Twin research tooling: [`digital-twin/README.md`](../digital-twin/README.md)
 - Backend internals: [`backend/AGENTS.md`](../backend/AGENTS.md)
 - AI tour-guide internals: [`ai-assistant/README.md`](../ai-assistant/README.md)
 - Frontend internals: [`web/AGENTS.md`](../web/AGENTS.md)
 
 ---
 
-## 1. Components
+## 1. Components and ownership
 
+```text
+   Visitor                         Campus staff
+      |                                 |
+      v                                 v
+   +----------------------------------------------------+
+   | web/  visitor app + ops dashboard + 3D Digital Twin |
+   +---------------------------+------------------------+
+                               | HTTP + SignalR
+                               v
+   +----------------------------------------------------+
+   | backend/  booking, tour orchestration and dispatch  |
+   +-------------------+------------------+-------------+
+                       |                  |
+          transport/auth TBD             | same external fleet contract
+                       |                  |
+                       v                  v
+   +---------------------------+   +-----------------------------+
+   | robot/ physical or one    |   | digital-twin/ Fleet Emulator|
+   | Gazebo AMR + fleet_bridge |   | + measurement tooling       |
+   +---------------------------+   +-----------------------------+
+                       |
+                       | assistant integration TBD
+                       v
+   +----------------------------------------------------+
+   | ai-assistant/  STT + visitor Q&A/LLM + TTS          |
+   +----------------------------------------------------+
 ```
-   Visitor                     Campus staff
-      |                             |
-      v                             v
-   +-----------------------------------------+
-   |  web/     visitor app + ops dashboard    |
-   +---------------------+-------------------+
-                         | HTTP / realtime
-                         v
-   +-----------------------------------------+
-   |  backend/  booking, scheduling, dispatch |
-   +---------------------+-------------------+
-                         | REST|gRPC (TBD) via fleet_bridge -> Section 3
-                         v
-   +-----------------------------------------+       +------------------------+
-   |  robot/   ROS 2 fleet + STM32 firmware   |  ???  |  ai-assistant/         |
-   |  person perception + thin audio adapter  |<----->|  STT + dialogue + TTS |
-   +-----------------------------------------+       +------------------------+
-                         |
-                         | ??? twin synchronization
-                         v
-   +-----------------------------------------+
-   |  digital-twin/ scenarios + measurements  |
-   +-----------------------------------------+
-```
 
-`???` marks cross-deploy-unit contracts that are not fixed yet. The assistant
-box is deliberately outside `robot/`; Section 5 defines the ownership boundary.
-
-<!-- TODO(WP1): khi backend và web có hình dạng thật thì vẽ lại sơ đồ này cho đúng. -->
+The backend owns `TourRoute`, `TourSlot`, `Booking`, `TourInstance`,
+`TourLeg`, robot assignment/dispatch, and authoritative POI/navigation-target
+data. A robot executes one navigation leg at a time; it does not own the tour
+workflow. The web app owns the Web-based 3D Operational Digital Twin. The
+`digital-twin/` deploy unit owns synthetic fleet clients and controlled
+measurement tooling, not the 3D frontend.
 
 ---
 
-## 2. Robot subsystem (settled)
+## 2. Robot subsystem
 
-Sensor hierarchy — this is a decision, see
+Sensor hierarchy is settled by
 [ADR-0001](decisions/0001-lidar-primary-astra-supplementary.md):
 
-```
+```text
 RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SLAM
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
@@ -64,15 +68,18 @@ Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
 The STM32G431 owns real-time stepping. ROS 2 sends wheel-speed commands over
 USB CDC serial and does not reach below that line.
 
-Named-stop navigation is exposed as a ROS 2 action: `go_to_stop`
-(`bus_manager` / `bus_interfaces`). This is the natural seam for the backend
-to command a tour.
+The current `go_to_stop` ROS 2 action (`bus_manager` / `bus_interfaces`)
+resolves a named stop through `bus_stops.yaml`. That is retained for local ROS
+development, manual testing, and as a fallback/test fixture. It is not the
+production source of truth for POI coordinates. Migration to the external
+per-leg contract in Section 3 is intentionally not implemented by this
+documentation change; see [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md).
 
 ### 2.1 Robot identity and ROS namespace
 
 The canonical robot ID format is `robot_NN`, starting with `robot_01`. The
-same value is used by the backend/twin identity field, `BusStatus.bus_id`, and
-the ROS namespace. Do not introduce parallel names such as `bus1`, `amr1`, or
+same value is used by backend/twin identity, `BusStatus.bus_id`, and the ROS
+namespace. Do not introduce parallel names such as `bus1`, `amr1`, or
 `robot1` for the same vehicle.
 
 Robot-owned ROS topics, actions, and services use relative names. With no
@@ -95,115 +102,230 @@ map -> robot_01/odom -> robot_01/base_footprint -> robot_01/base_link
 map -> robot_02/odom -> robot_02/base_footprint -> robot_02/base_link
 ```
 
-This milestone namespaces the ROS interfaces and supports one namespaced real
-robot or one namespaced simulated robot. It deliberately does not implement
-multi-entity Gazebo or prefixed TF frames yet. Until both are implemented and
-hardware-tested, do not run multiple robot stacks in one ROS domain: topic
-isolation alone is not enough to prevent TF and Gazebo controller collisions.
+The current milestone supports one namespaced real robot or one namespaced
+Gazebo robot. Multi-entity Gazebo and prefixed TF frames are not a core fleet
+validation requirement. Until both are implemented and hardware-tested, do
+not run multiple robot stacks in one ROS domain: topic isolation alone is not
+enough to prevent TF and Gazebo controller collisions.
 
 ---
 
-## 3. Robot <-> Backend contract
+## 3. Backend-owned tour orchestration and fleet contract
 
-> **SHAPE DECIDED, SCHEMA NOT.** The bridge topology below is fixed. The wire
-> protocol and the message schema are still open — until they are filled in,
-> neither side should hardcode a field name.
+The backend does not speak ROS. For a physical or Gazebo robot, a thin bridge
+inside `robot/` translates between the external fleet contract and ROS 2. The
+Fleet Emulator is a separate external client under `digital-twin/` and uses
+the same external contract without referencing backend implementation
+projects.
 
-The backend does **not** speak ROS. A thin bridge node inside `robot/`
-translates between ROS 2 and the backend API:
-
+```text
+backend/ <---- transport/auth TBD ----> robot/.../fleet_bridge <---- ROS 2 ----> robot stack
+    ^
+    +------- same external contract ------ digital-twin/Fleet Emulator
 ```
-backend/ (.NET)  <-- REST | gRPC (TBD) -->  robot/ .../fleet_bridge  <-- ROS 2 -->  robot stack
+
+The wire transport, robot authentication, exact update frequency, and exact
+schema/serialization are still TBD. The following is the decided conceptual
+shape, not an instruction to hardcode a transport DTO:
+
+```text
+go_to {
+  leg_id,
+  stop_id,
+  x,
+  y,
+  yaw
+}
+
+cancel {
+  leg_id
+}
+
+state {
+  robot_id,
+  seq,
+  stamp,
+  x,
+  y,
+  yaw,
+  battery?,
+  status,
+  leg_id?,
+  fault_code?
+}
 ```
 
-Settled properties of that bridge:
+Robot execution states are `IDLE`, `NAVIGATING`, `ARRIVED`, and `FAILED`.
+Battery is an optional/nullable capability: the physical firmware/hardware is
+not assumed to provide a percentage. It is not a mandatory dispatch rule.
 
-- **It lives in `robot/`** (WP3 owns it) as a thin ROS 2 package, ships in the
-  robot's existing Docker image, and runs one instance per miniPC. It is not a
-  separate deploy unit and does not live in `backend/` or `digital-twin/`.
-- **It carries both directions**: telemetry robot -> backend, and commands
-  backend -> robot.
-- **It is a translator only.** No booking rules, no scheduling, no robot
-  assignment, no persistence. Those belong to `backend/` — the assignment
-  algorithm is a `CampusTour.Application` service (`backend/AGENTS.md` §3).
-  A bridge that starts deciding *which* robot does *what* is a design error.
-- **Commands land on existing ROS interfaces.** A tour command becomes the
-  `go_to_stop` action from Section 2 — the bridge does not invent a parallel
-  ad-hoc command topic, and does not publish `/cmd_vel` itself.
-- **The connection is outbound from the robot** where possible, so a miniPC on
-  campus wifi behind NAT does not need an inbound route.
+The bridge is a translator only. It contains no booking rules, scheduling,
+robot assignment, tour state machine, or persistence. Commands use the
+robot's navigation boundary rather than publishing `/cmd_vel` directly. The
+outbound-from-robot connection preference remains, but its transport is TBD.
 
-<!-- TODO(WP2 + WP3): chốt và điền phần còn lại:
+### 3.1 POI target invariant
 
-Wire protocol:    REST | gRPC   (chưa chốt — chốt xong ghi vào đây và ADR)
-Auth:             robot control channel phải authenticated (yêu cầu NFR bảo mật).
-                  Chưa chốt dùng lại JWT của backend hay credential riêng cho robot.
+Production target poses belong to backend-managed POI/route data. A
+`TourLeg` resolves to `stop_id`, `x`, `y`, and `yaw` before dispatch. Any POI
+coordinate is meaningful only with the map/frame/context in which it was
+defined. This invariant does not introduce a MapVersion subsystem.
 
-Telemetry robot đẩy lên (tối thiểu):
-  robot_id, pose (x, y, theta, frame), battery %, task state,
-  current/next stop, fault code, timestamp
-  tần suất: ? Hz
+### 3.2 Booking, dispatch, and per-leg flow
 
-Lệnh backend đẩy xuống:
-  assign_tour(robot_id, route_id, stops[], start_time)
-  cancel_tour(robot_id)
-  ...
+A `TourSlot` represents one timed tour group. Multiple visitors may book
+places in it up to visitor capacity, and one `TourInstance` executes for that
+group. A confirmed booking does not reserve a robot days in advance. Robot
+assignment happens near the tour start.
 
-Đổi bất kỳ field nào ở trên = contract change: sửa file này trong cùng PR.
--->
+```text
+TourInstance READY
+  -> dispatcher selects an AVAILABLE robot
+  -> backend sends the current TourLeg
+  -> robot NAVIGATING
+  -> robot ARRIVED
+  -> backend marks the tour AT_POI
+  -> POI narration / visitor interaction
+  -> timeout or visitor Continue
+  -> backend sends the next TourLeg
+  -> repeat until COMPLETED
+```
+
+If no robot is available at tour time, the `TourInstance` enters an
+operational waiting/delayed state such as `WAITING_FOR_ROBOT` or `DELAYED` so
+an operator can intervene. A previously confirmed booking does not fail merely
+because a robot is temporarily unavailable. Cancellation, rescheduling,
+no-show, payment, refund, and priority policies remain undecided.
+
+Core business invariants:
+
+- confirmed visitor count never exceeds `TourSlot` capacity;
+- one robot has at most one active assignment;
+- one active `TourInstance` has at most one assigned robot;
+- transient robot telemetry state is separate from tour business state;
+- retries or duplicate commands do not create duplicate business-level leg
+  execution;
+- stale or out-of-order robot state does not overwrite newer state; `seq`
+  supports ordering and gap detection.
+
+These are architecture requirements, not implementations in the current
+documentation task.
+
+### 3.3 State storage and realtime delivery
+
+Current robot pose/state is transient latest-state data and belongs in memory
+or a suitable cache at the architecture level. This does not select or add
+Redis. SQL Server stores meaningful business events and state transitions; it
+must not receive every pose update. A controlled benchmark may write telemetry
+to a dedicated experiment log/file.
+
+Backend-to-browser realtime delivery uses SignalR. Exact hub and method schema
+remain TBD.
 
 ---
 
-## 4. Digital Twin
+## 4. Web-based 3D Operational Digital Twin
 
-`robot/ros2_ws/src/simulation/` and `digital-twin/` have different purposes:
+The core Digital Twin UI is in `web/`, using the existing React Three Fiber /
+Three.js stack. It loads the campus model, renders robot models, and visualizes
+backend fleet state: robot identity, pose/heading, connection and operational
+state, active tour/leg, fault/health, and battery only when that telemetry is
+actually available. Physical, Gazebo, and multiple synthetic robots can all
+appear through the same backend state view.
 
-| Concern | Location | Responsibility |
+Mapping a ROS/backend pose into the Twin world requires an explicit transform
+with origin offset, axis conversion, rotation, and scale. Do not scatter a
+single hardcoded formula such as `x, -z, yaw` across frontend components. The
+campus model should use the same floor-plan/SLAM reference so scale and origin
+can be aligned deliberately.
+
+The web twin is not a physics engine, web Nav2 implementation, collision
+simulator, LiDAR point-cloud or camera-texture viewer, scenario editor, or
+predictive engine.
+
+---
+
+## 5. Fleet-scale validation and research
+
+The external Fleet Emulator belongs in `digital-twin/`; see
+[ADR-0004](decisions/0004-external-fleet-emulator.md). It simulates
+pose/state progression toward per-leg `go_to` targets and supplies controlled
+multi-robot load through the same external contract as physical and Gazebo
+robots. It does not reference `SmartCampus.Application`,
+`SmartCampus.Infrastructure`, or other backend implementation projects. A
+shared wire-contract package may be considered later if DTO duplication
+becomes a real problem; none is introduced now.
+
+Validation environments have distinct claims:
+
+| Environment | Validates | Does not establish |
 |---|---|---|
-| Robot simulation | `robot/ros2_ws/src/simulation/` | Minimal Gazebo worlds and launches for developing/testing the robot stack without hardware |
-| Digital Twin | `digital-twin/` | Live state synchronization, scenario orchestration, replay and repeatable latency/accuracy experiments |
+| Physical AMR | Real hardware integration, ROS 2/Nav2, leg execution, and state synchronization | Fleet-scale capacity by itself |
+| One Gazebo AMR | Navigation simulation, route testing, and mission-contract compatibility | Multi-entity fleet load as a core requirement |
+| N Fleet Emulator robots | Multi-robot dispatch, concurrent tours, fleet monitoring, and backend/realtime load | Nav2 quality, obstacle avoidance, physical safety, or multi-robot collision avoidance |
 
-The Digital Twin runs on a simulation workstation/server, never on the robot
-miniPC. It must not duplicate the authoritative robot model, navigation logic
-or ROS interfaces from `robot/`, and a scenario result must not directly
-command a physical robot. Applying a validated route or schedule goes through
-the authenticated backend/operator workflow.
+Scenario orchestration, what-if analysis, replay engines, predictive
+simulation, Isaac Sim, and a stress-test scenario editor are future/stretch
+work, not core requirements.
 
-> **INTERFACE NOT DECIDED YET.** WP2 and WP3 must define the synchronization
-> transport, telemetry schema, timestamp/clock policy, update rate and replay
-> format here before implementing the bridge. The experiment runner must record
-> enough configuration and timing data for latency/accuracy results to be
-> reproduced.
+The primary research question is how increasing fleet load affects the
+Web-based Operational Digital Twin's synchronization latency and update
+freshness. Primary metrics are:
+
+- p95 end-to-end state synchronization latency;
+- effective frontend update rate / state freshness.
+
+The measured latency starts when the robot/emulator creates state and stops
+when the browser SignalR callback receives it. Three.js render time is outside
+this synchronization metric. One-way measurements across machines must
+document NTP/chrony or an equivalent synchronization mechanism and the clock
+policy in the methodology.
+
+Sequence numbers support ordering and gap detection. A skipped `seq` is not
+automatically "packet loss": latest-state/coalescing semantics may
+intentionally omit intermediate states.
+
+Experiments increase the synthetic fleet until a predefined latency/freshness
+SLO is violated, resource use approaches a predefined safe limit, or a
+predefined test cap is reached. Crashing the server is not the success
+criterion. Exact SLOs, update frequency, safe resource limit, and test cap
+remain TBD and must be recorded with each experiment.
 
 ---
 
-## 5. AI tour-guide assistant
+## 6. Safety boundary
 
-`robot_perception` and the AI tour-guide assistant are separate systems with
-different owners and safety boundaries:
+Backend/web operational commands may assign or reassign a robot and cancel a
+mission or leg. Cloud/web cancellation is not an Emergency Stop and must not
+be presented as one. Physical/local emergency-stop and fail-safe behaviour
+remain robot-side safety concerns; the real ROS emergency-stop interfaces are
+unchanged.
+
+---
+
+## 7. AI narration and visitor Q&A
+
+POI narration does not require an LLM. It may use TTS from approved POI
+content, or audio generated/cached when that content is published or updated.
+The LLM is used for visitor Q&A. NLP and translation quality are outside the
+Digital Twin synchronization research scope.
+
+`robot_perception` and the AI tour-guide assistant remain separate systems:
 
 | Concern | Owner | Runs on | Responsibility |
 |---|---|---|---|
 | Person perception | WP3, `robot/ros2_ws/src/robot_perception/` | robot miniPC | RGB-D person detection and Nav2 speed limiting |
-| AI tour guide | WP4, `ai-assistant/` | server/cloud | multilingual STT, campus knowledge/dialogue and TTS |
+| AI tour guide | WP4, `ai-assistant/` | server/cloud | multilingual STT, visitor Q&A/LLM, narration TTS |
 
-`robot_perception` does not answer visitor questions, generate narration or
-own campus content. The AI tour guide does not publish `/cmd_vel`, set Nav2
-goals, alter `/speed_limit`, or make any movement/safety decision.
-
-A future thin robot-side adapter may listen for stop/task events, capture or
-forward visitor audio, play returned speech and use cached narration when the
-assistant is unavailable. That adapter belongs in `robot/`; STT, retrieval,
-LLM/dialogue and TTS orchestration belong in `ai-assistant/`.
-
-> **INTERFACE NOT DECIDED YET.** Before either side implements the integration,
-> WP3 and WP4 must define the event/audio transport, schemas, authentication,
-> timeouts and offline fallback here. Until then, neither side should hardcode
-> cross-boundary field names.
+The assistant never publishes `/cmd_vel`, sets Nav2 goals, alters
+`/speed_limit`, or makes a movement/safety decision. A future thin robot-side
+adapter may handle stop/task events, visitor audio, speech playback, and
+cached narration. Event/audio transport, schemas, authentication, timeouts,
+and offline fallback remain TBD.
 
 ---
 
-## 6. Deployment
+## 8. Deployment
 
 | Unit | Built by | Deployed how | Target |
 |---|---|---|---|
@@ -214,5 +336,5 @@ LLM/dialogue and TTS orchestration belong in `ai-assistant/`.
 | `ai-assistant/` | <!-- TODO(WP4) --> | service/container | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
-CI never flashes the STM32 and the miniPC never auto-flashes it — see
+CI never flashes the STM32 and the miniPC never auto-flashes it; see
 [ADR-0002](decisions/0002-manual-stlink-flash-no-can-bootloader.md).

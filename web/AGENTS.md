@@ -130,6 +130,16 @@ they cover (`*.test.ts(x)`).
 The dashboard shows live fleet state. That data crosses a contract boundary
 owned jointly with `robot/` and `backend/` — see `docs/architecture.md`.
 
+The Web-based 3D Operational Digital Twin is core UI scope and lives in this
+app. It loads the campus model, renders physical/Gazebo/synthetic robot models,
+and visualizes backend identity, pose/heading, connection/operational state,
+active tour/leg, fault/health, and optional battery telemetry. Pose conversion
+uses one explicit ROS-map -> Twin-world transform (origin offset, axis
+conversion, rotation, and scale), rather than hardcoded coordinate formulas
+scattered across components. The 3D view is not a physics engine, web Nav2,
+collision simulator, sensor-stream viewer, scenario editor, or predictive
+engine.
+
 How the backend itself gets that state from the robots is settled (a bridge
 node in `robot/`, `docs/architecture.md` §3). What is still open is only the
 last hop, backend -> browser.
@@ -180,8 +190,11 @@ claim the UI is correct.
 - No API token, DockerHub credential, or backend secret in frontend source or
   in a `VITE_*`/`NEXT_PUBLIC_*` style env var. Anything shipped to the browser
   is public.
-- No control action (dispatch a robot, override an assignment, e-stop) without
-  an explicit confirmation step.
+- No operational control action (assign, reassign, or cancel a mission/leg)
+  without an explicit confirmation step.
+- A cloud/web cancel action is **not** an Emergency Stop. Do not label it as
+  one or treat the browser/backend path as safety-critical E-stop. Physical and
+  local fail-safe behaviour remains robot-side.
 - Do not commit `node_modules/` or build output.
 
 <!-- TODO(WP5): thêm constraint khác khi có. -->

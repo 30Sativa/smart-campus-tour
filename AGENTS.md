@@ -24,7 +24,7 @@ build, its own verification, and its own `AGENTS.md`.
 | Folder | What it is | Deploys to | Read before editing |
 |---|---|---|---|
 | `robot/` | ROS 2 Humble workspace + STM32 motor firmware | robot miniPC (Docker image) | `robot/AGENTS.md` |
-| `digital-twin/` | Twin synchronization, scenarios and research metrics | simulation workstation/server | `digital-twin/AGENTS.md` |
+| `digital-twin/` | Fleet Emulator, load experiments and synchronization research tooling | simulation workstation/server | `digital-twin/AGENTS.md` |
 | `backend/` | Booking, scheduling & dispatch API | AWS EC2 | `backend/AGENTS.md` |
 | `ai-assistant/` | Multilingual STT, dialogue/LLM and TTS service | server/cloud, not the robot miniPC | `ai-assistant/AGENTS.md` |
 | `web/` | Visitor app + operations dashboard | Vercel | `web/AGENTS.md` |

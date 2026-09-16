@@ -33,6 +33,8 @@ adding a test, bumping a patch version.
 | [0001](0001-lidar-primary-astra-supplementary.md) | LiDAR is the navigation backbone; the Astra Pro is supplementary | accepted |
 | [0002](0002-manual-stlink-flash-no-can-bootloader.md) | STM32 firmware is flashed manually over ST-Link | accepted |
 | [0003](0003-deploy-robot-via-docker-image.md) | The robot runs a prebuilt Docker image, not a build on the miniPC | accepted |
+| [0004](0004-external-fleet-emulator.md) | Use an external Fleet Emulator for fleet-scale validation | accepted |
+| [0005](0005-backend-authoritative-poi-per-leg-orchestration.md) | Backend owns authoritative POI navigation targets and per-leg tour orchestration | accepted |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn transport cho contract robot <-> backend

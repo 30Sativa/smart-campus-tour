@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-ROBOT_ROOT="$HOME/smart-campus-tour/robot"
+# Resolve the clone this script actually lives in. Hard-coding a path under
+# $HOME silently sources a stale install/ if the miniPC still has an older
+# clone under a different directory name.
+ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ ! -f "$ROBOT_ROOT/.env" ]; then
     echo "ERROR: $ROBOT_ROOT/.env not found"
@@ -15,9 +18,14 @@ source /opt/ros/humble/setup.bash
 
 if [ -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]; then
     source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
+else
+    echo "WARNING: $ROBOT_ROOT/ros2_ws/install/setup.bash not found."
+    echo "         Native ROS packages are NOT on the path. Build first:"
+    echo "         cd $ROBOT_ROOT/ros2_ws && colcon build --symlink-install"
 fi
 
 echo "ROS environment loaded:"
+echo "  WS=$ROBOT_ROOT/ros2_ws"
 echo "  DOMAIN=$ROS_DOMAIN_ID"
 echo "  DISCOVERY=$ROS_DISCOVERY_SERVER"
 echo "  RMW=$RMW_IMPLEMENTATION"

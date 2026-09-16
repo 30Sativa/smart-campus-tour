@@ -27,7 +27,7 @@ ros2_ws/
 | Package | Chức năng |
 |---|---|
 | `bus_interfaces` | Định nghĩa `BusStatus.msg` và action `GoToStop.action`; không chạy node riêng. |
-| `bus_manager` | Điều phối xe tới trạm bus, dùng `config/bus_stops.yaml` và action `GoToStop`. |
+| `bus_manager` | Thực thi điều hướng một xe tới trạm đặt tên, dùng `config/bus_stops.yaml` và action `GoToStop` cho local/manual development. |
 | `robot_control` | Launch cho robot thật/Gazebo, mode manager, manual mapping và frontier exploration. |
 | `robot_description` | Mô tả hình học/frame của xe, 7 STL, LiDAR, IMU và `ros2_control`. |
 | `robot_navigation` | Map server, AMCL và Nav2 trên map đã lưu. |
@@ -74,7 +74,8 @@ Phần arm trước đây (`arm_bridge`, `arm_description`) đã được bỏ k
 ### `bus_manager` và `bus_interfaces`
 
 - `bus_manager/stop_navigator_node.py`: điều hướng theo trạm.
-- `bus_manager/config/bus_stops.yaml`: danh sách trạm.
+- `bus_manager/config/bus_stops.yaml`: fixture/fallback trạm cho local/manual
+  development; không phải nguồn tọa độ POI production.
 - `bus_interfaces/msg/BusStatus.msg`: trạng thái bus.
 - `bus_interfaces/action/GoToStop.action`: yêu cầu đi tới trạm.
 

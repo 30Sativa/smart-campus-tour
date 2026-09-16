@@ -36,7 +36,9 @@ ros2 topic echo /robot_01/bus_status
 
 Tọa độ bến phải lấy từ **map đã lưu** (RViz "Publish Point" → `/clicked_point`).
 Giá trị trong `config/bus_stops.yaml` là placeholder (depot, main_gate,
-library, dorm_a) — chỉnh sau khi quét map.
+library, dorm_a) cho local ROS development/manual testing. File này không phải
+nguồn authoritative cho tọa độ POI production; backend sẽ resolve target pose
+của từng `TourLeg` cùng đúng map/frame/context.
 
 ## Hành vi
 
@@ -47,10 +49,12 @@ library, dorm_a) — chỉnh sau khi quét map.
 - `/bus_status`: `state` (idle/navigating/error), bến hiện tại/đích, quãng
   đường còn lại — nền cho dispatcher nhiều xe.
 
-## Tiếp theo (roadmap Smart Campus Bus)
+## Boundary tiếp theo
 
-1. Route scheduler: `Route.msg` (chuỗi bến), chạy tuyến vòng lặp, dừng đón
-   trả tại mỗi bến.
-2. 2-3 xe: namespace per robot (`/robot_01/...`), dispatcher phân xe theo yêu cầu
-   gọi (điểm đón gần nhất, xe rảnh).
-3. Digital twin campus (Isaac Sim / Gazebo world campus) để test toàn hệ thống.
+- Backend sở hữu route, tour workflow, dispatch và gửi từng navigation leg;
+  `bus_manager` không trở thành route scheduler.
+- Việc chuyển từ named-stop local sang target pose của external per-leg
+  contract là task implementation riêng; tài liệu này không thay đổi action
+  hoặc node hiện tại.
+- Một Gazebo AMR dùng để test navigation/contract. Fleet Emulator ngoài ROS ở
+  `digital-twin/` mới là cơ chế core để test dispatch và load nhiều robot.

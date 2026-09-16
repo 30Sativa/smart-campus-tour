@@ -91,17 +91,42 @@ SmartCampus.Domain
 
 Scheduling / dispatch specifically:
 
-- The robot-assignment algorithm (which robot takes which tour, when) lives in
-  an **`Application` service** — e.g. `DispatchService`. It fetches robots and
-  bookings through repository interfaces and returns the decision. Do not put
-  it in a controller, a repository, or the ROS bridge.
+- The backend owns `TourRoute`, `TourSlot`, `Booking`, `TourInstance`,
+  `TourLeg`, POI/navigation-target data, robot assignment, and the per-leg tour
+  state machine. These business concepts and their use cases belong in
+  `Domain`/`Application` according to the dependency rules above.
+- A `TourSlot` is a timed group with visitor capacity. Confirmed visitors share
+  one `TourInstance`; booking a place does not reserve a robot days in advance.
+  Robot assignment happens near the tour start.
+- The robot-assignment algorithm (which available robot takes which ready tour,
+  when) lives in an **`Application` service** — e.g. `DispatchService`. It
+  fetches robots and tour state through repository interfaces and returns the
+  decision. Do not put it in a controller, a repository, or a fleet client.
+- The backend sends only the current `TourLeg`, waits for robot arrival, owns
+  the `AT_POI` narration/interaction pause, and then decides when to send the
+  next leg. Never send a whole stop list for the robot to orchestrate.
+- If no robot is available at the tour time, put the `TourInstance` into an
+  operational waiting/delayed state such as `WAITING_FOR_ROBOT` or `DELAYED`
+  for operator intervention. Do not fail an already confirmed booking merely
+  because a robot is temporarily unavailable.
 - The fleet bridge client (the thing that actually talks to the robot over
-  REST/gRPC) is **`Infrastructure`**, behind an `Application` interface such as
-  `IFleetGateway`. `Application` code calls the interface, never an HTTP/gRPC
-  client directly.
+  the still-TBD external transport) is **`Infrastructure`**, behind an
+  `Application` interface such as `IFleetGateway`. `Application` code calls
+  the interface, never a transport client directly.
 - **A controller must never call the bridge directly.** The path is always
   `Api -> Application service -> IFleetGateway -> Infrastructure`, even for a
   one-line "send this command" endpoint.
+
+Core invariants (implementation is deferred until the relevant feature task):
+
+- confirmed visitor count never exceeds `TourSlot` capacity;
+- one robot has at most one active assignment;
+- one active `TourInstance` has at most one assigned robot;
+- transient robot telemetry state and tour business state remain separate;
+- retries/duplicate commands do not create duplicate business-level leg
+  execution;
+- stale/out-of-order robot state cannot overwrite newer state; `seq` supports
+  ordering.
 
 ---
 
@@ -175,13 +200,26 @@ in `robot/` and translates to ROS 2 on the other side — full topology in
 `docs/architecture.md` §3. For the backend that means:
 
 - One `Application` interface (`IFleetGateway` or similar) describes what the
-  fleet can do — send a tour assignment, cancel, read last-known state. Its
-  implementation in `Infrastructure` is the REST/gRPC client for the bridge.
+  fleet can do — send/cancel one leg and receive/read latest robot state. Its
+  implementation in `Infrastructure` uses the external transport once that
+  transport is decided.
 - Do not add ROS concepts (topic names, action names, message types) to
   `Domain` or `Application`. They stop at the `Infrastructure` boundary.
 - Treat the robot as unreliable: it can be offline, slow, or mid-reboot. A
-  dispatch call that cannot reach a robot must fail the booking cleanly, not
-  hang a request thread or leave a half-assigned booking in the database.
+  dispatch call that cannot reach a robot must not hang a request thread or
+  leave an inconsistent assignment. Keep the confirmed booking intact and
+  move the `TourInstance` to the documented waiting/delayed operational path.
+- Production POI target poses are backend-managed data. Each `TourLeg`
+  resolves `stop_id`, `x`, `y`, and `yaw` in its map/frame/context before
+  dispatch; robot-local `bus_stops.yaml` is not authoritative production data.
+- Robot state is transient latest-state data. Do not persist every pose update
+  to transactional SQL Server; persist meaningful business state transitions
+  and use a dedicated experiment log/file when a benchmark needs telemetry.
+- Battery is optional/nullable telemetry, not a guaranteed physical capability
+  or a mandatory dispatch threshold.
+- The external Fleet Emulator in `digital-twin/` uses this same boundary and
+  must not reference `SmartCampus.Application` or
+  `SmartCampus.Infrastructure`.
 
 <!-- TODO(WP2+WP3): chốt wire protocol (REST vs gRPC), auth cho kênh điều
 khiển robot, và schema telemetry/command — rồi ghi vào docs/architecture.md §3

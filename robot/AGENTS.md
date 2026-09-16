@@ -16,6 +16,7 @@ robot/
 ├── tools/                PowerShell motor bring-up / debug scripts
 ├── docs/                 phase docs (phase1..phase4)
 ├── scripts/verify        this folder's verification gate
+├── scripts/source-minipc `source` it on the miniPC HOST for native ROS procs
 ├── Dockerfile            builds the ROS 2 image (build context = robot/)
 └── docker-compose.yml    what the miniPC runs
 ```
@@ -56,11 +57,17 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   cross-folder contract must be recorded in `docs/architecture.md` first.
 - The **fleet bridge** to the backend lives here (planned:
   `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. It is a translator
-  only — ROS 2 on one side, the backend's REST/gRPC API on the other. It must
+  only — ROS 2 on one side, the backend's still-TBD external transport on the
+  other. It must
   not contain booking rules, scheduling, or robot-assignment logic; those are
-  backend concerns (`docs/architecture.md` §3). It sends commands through
-  existing interfaces such as the `go_to_stop` action, never straight onto
-  `/cmd_vel`.
+  backend concerns (`docs/architecture.md` §3). The robot executes one leg at
+  a time; it never receives a full tour to orchestrate. Bridge commands go
+  through the robot navigation boundary, never straight onto `/cmd_vel`.
+- Production POI target poses come from backend-managed route/POI data and are
+  meaningful only in their map/frame/context. The current
+  `bus_manager/config/bus_stops.yaml` remains a local/manual-development
+  fallback or test fixture, not the production source of truth. The ROS
+  migration needed for the per-leg external contract is a separate task.
 - Launch files must keep RViz **off by default** (`rviz:=true` to enable) so a
   headless miniPC does not hang.
 - Fast DDS Discovery Server can make CLI graph introspection (`ros2 topic list`,
@@ -147,5 +154,10 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
 - Deployment is image-based: build in CI, push to DockerHub, pull on the
   miniPC. Do not add a "git pull and colcon build on the robot" path.
   See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
+- **Exception, TEST phase only:** the `hardware` service currently bind-mounts
+  `./ros2_ws/src:/ros2_ws/src` so a fix can be built in the container without a
+  CI round trip. This is temporary and marked as such in `docker-compose.yml`.
+  Remove the mount before production so what runs matches the image. Do not
+  build on the naked miniPC host — that path still does not exist.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

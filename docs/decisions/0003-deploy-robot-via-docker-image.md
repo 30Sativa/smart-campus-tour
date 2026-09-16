@@ -23,6 +23,13 @@ The deployment artifact is a Docker image.
 
 There is no "git pull and colcon build on the robot" path.
 
+Temporary exception during bring-up: the `hardware` service bind-mounts
+`./ros2_ws/src:/ros2_ws/src`, so ROS source can be `git pull`-ed on the host
+and rebuilt *inside the container* (`colcon build --symlink-install`) without
+a CI round trip. The build still never runs on the naked host. The mount is
+marked in `docker-compose.yml` and is removed before production, at which
+point this decision applies without exception.
+
 Maps are stored on the host and bind-mounted (`./robot_maps:/maps`) so a map
 the robot built survives an image update. The Astra Pro runs natively on the
 host, not in the container; `network_mode: host` plus a shared `ROS_DOMAIN_ID`
