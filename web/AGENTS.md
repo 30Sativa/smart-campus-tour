@@ -76,8 +76,7 @@ web/
 ├── scripts/verify
 └── src/
     ├── main.tsx          StrictMode -> QueryProvider -> ThemeProvider -> RouterProvider
-    ├── index.css         @import "tailwindcss"
-    ├── landing.css       landing-page styles
+    ├── index.css         @import "tailwindcss" + design tokens + body base
     ├── vite-env.d.ts     typing for VITE_* env vars
     ├── app/
     │   ├── providers/    query-provider.tsx, theme-provider.tsx
@@ -86,8 +85,9 @@ web/
     │   ├── public/       PublicHomePage.tsx  ("/")
     │   └── admin/        thin ops pages ("/admin/*"), all lazy-loaded
     ├── features/
+    │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
+    │   │                 sections/ (one component per landing section)
     │   └── operations/   ops shell, shared ops UI, formatters, query hooks
-    ├── components/ui/    shared UI (ThemeToggle.tsx)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
     ├── auth/             LoginPage.tsx, roles.ts, use-logout.ts
@@ -102,6 +102,13 @@ There are exactly two entry points: `/` (public landing page) and `/admin/*`
 the second, duplicate ops tree at `/staff/*` were removed on 2026-09-16 — the
 files are kept in `_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms
 the deletion. `/staff/*` still redirects to `/admin` so old bookmarks work.
+
+`src/components/` currently holds nothing: the landing page redesign on
+2026-09-17 gave the theme control its own landing-token styling inside
+`features/landing/sections/SiteNav.tsx`, which left `components/ui/ThemeToggle.tsx`
+with no consumer. It moved to `_to_delete/web-fe-cleanup-2026-09-16/` under the
+same rule as above. Re-create `src/components/` only when a component genuinely
+has more than one consumer.
 
 Tests live next to the code they cover (`*.test.ts(x)`).
 
@@ -135,6 +142,11 @@ and the flag once the backend lands.
 - Styling is Tailwind utility classes in JSX. Avoid a separate CSS file per
   component unless Tailwind genuinely cannot express it (e.g. a keyframe
   animation).
+- One documented exception: `features/landing/landing.css`. The public landing
+  page is a marketing surface with its own token set (`--lp-*`), its own type
+  and spacing scale, and scroll/hover choreography. It is scoped under the `.lp`
+  root class so nothing leaks into the ops dashboard. Admin screens stay on
+  Tailwind utilities; do not grow a second CSS file for them.
 
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for

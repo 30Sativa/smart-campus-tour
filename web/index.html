@@ -2,14 +2,30 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/images/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
-    <meta name="description" content="Nhanh chóng, thông minh và tiện lợi. Tận hưởng chuyến tham quan trường đại học với robot dẫn đường tự động của CampusTour." />
+    <link rel="icon" type="image/png" href="/images/logo-mark.png" />
+    <!-- Pinch zoom stays available: capping the scale locks out low-vision users. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#060d11" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f7f8" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Tham quan khuôn viên đại học cùng robot tự hành AMR, trợ lý AI đa ngôn ngữ và bản sao kỹ thuật số theo thời gian thực." />
     <title>Smart Campus Tour</title>
-    <!-- Google Fonts: Inter -->
+
+    <!--
+      Be Vietnam Pro: chosen because every headline on this page carries stacked
+      Vietnamese diacritics, and this family draws them without collision at
+      tight display leading.
+      TODO khi có mạng: self-host bằng `npm i @fontsource-variable/be-vietnam-pro`
+      và bỏ thẻ <link> này, để tránh phụ thuộc vào Google Fonts lúc chạy thật.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Largest contentful paint on the landing page is the hero frame. -->
+    <link rel="preload" as="image" href="/images/hero-campus.jpg" fetchpriority="high" />
   </head>
   <body>
     <div id="root"></div>
