@@ -58,7 +58,7 @@ If your hardware driver is already publishing `laser`, either set
 ## Build
 
 ```bash
-cd ~/ros2_ws
+cd robot/ros2_ws  # from the repository root
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-select robot_control stm32_bridge robot_description
 source install/setup.bash

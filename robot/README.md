@@ -109,14 +109,26 @@ Chỉ còn **một** file: `robot/docker-compose.yml`. Mỗi máy chọn một p
 |---|---|---|---|---|---|
 | `hardware` | robot miniPC | `robot-ros2` | Prebuilt DockerHub image | STM32, LiDAR, gamepad | không |
 | `debug` | Ubuntu guest trong VMware | `ros2-debug` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
+| `sim` | Ubuntu guest trong VMware | `ros2-sim` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
 
 Mọi service đều nằm sau profile, nên `docker compose up` trần sẽ không khởi
 động gì. Nhờ vậy trên VMware không thể vô tình start service hardware và gặp
 lỗi `error gathering device information ... /dev/ttyACM0: no such file or directory`.
 
-`devices:` chỉ tồn tại trong service `robot-ros2`. Anchor `x-ros2-env` dùng
-chung chỉ chứa biến môi trường ROS, không chứa devices, nên service debug không
-thể kế thừa serial port.
+`devices:` chỉ tồn tại trong service `robot-ros2`. Anchor
+`x-ros2-common-env` dùng chung chỉ chứa biến môi trường ROS, không chứa
+devices, nên service debug/sim không thể kế thừa serial port.
+
+Cả ba service dùng cùng Dockerfile và entrypoint. Khi mở shell mới bằng
+`docker exec -it <container> bash`, `/root/.bashrc` tự source ROS 2 Humble
+trước, sau đó source `/ros2_ws/install/setup.bash` nếu workspace đã được
+build. Không cần source tay trong shell mới.
+
+Bind mount `./ros2_ws/src:/ros2_ws/src` chỉ thay source, không tự build lại
+workspace. Sau `git pull` có thay đổi ROS code, chạy
+`cd /ros2_ws && colcon build --symlink-install`. Shell đang chạy build vẫn cần
+`source /ros2_ws/install/setup.bash` một lần để nhận overlay vừa build, hoặc
+thoát ra và mở shell `docker exec` mới để `.bashrc` tự source.
 
 ### Networking giữa VMware và miniPC
 
@@ -204,6 +216,25 @@ Khi xong, thu hồi quyền X11:
 ```bash
 xhost -local:docker
 ```
+
+### Chạy trên VMware (simulation standalone)
+
+```bash
+cd robot
+cp .env.sim.example .env
+xhost +local:docker
+docker compose --profile sim up -d --build
+docker exec -it ros2-sim bash
+```
+
+Trong container, chạy launch simulation cần thiết, ví dụ:
+
+```bash
+ros2 launch robot_navigation sim_navigation.launch.py rviz:=true
+```
+
+Profile `sim` không map hardware device và không yêu cầu
+`ROS_DISCOVERY_SERVER`. Khi xong, chạy `xhost -local:docker` trên VMware.
 
 
 ## How To Build Docker Image Locally
@@ -325,7 +356,7 @@ SERIAL_PORT=/dev/ttyACM0
 BAUDRATE=115200
 ROS_DOMAIN_ID=30
 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-ROS_DISCOVERY_SERVER=
+ROS_DISCOVERY_SERVER=127.0.0.1:11811
 ```
 
 Start or update the robot runtime:

@@ -26,7 +26,7 @@ sudo apt install -y \
 ## 1. Build package
 
 ```bash
-cd ~/ros2_ws          # đổi cho đúng đường dẫn workspace của bạn
+cd robot/ros2_ws      # chạy từ repository root
 colcon build --packages-select robot_description
 source install/setup.bash
 ```
@@ -56,7 +56,8 @@ Nếu robot lật/nảy/chìm sàn → xem mục Sự cố bên dưới.
 Mở **terminal mới** (nhớ source lại):
 
 ```bash
-source ~/ros2_ws/install/setup.bash
+cd robot/ros2_ws      # chạy từ repository root
+source install/setup.bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard \
   --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel_unstamped
 ```

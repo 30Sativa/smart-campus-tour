@@ -50,7 +50,7 @@ base_footprint
 ## Build
 
 ```bash
-cd ~/ros2_ws
+cd robot/ros2_ws  # from the repository root
 colcon build --packages-select robot_description
 source install/setup.bash
 ```

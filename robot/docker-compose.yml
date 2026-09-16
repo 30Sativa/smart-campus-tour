@@ -55,8 +55,11 @@ services:
       # container bị recreate / miniPC tắt nguồn.
       #
       # LƯU Ý: chỉ `src` được mount, còn build/ install/ log/ nằm trong
-      # container. Nên sau MỖI lần `git pull` hoặc container bị recreate, phải:
-      #   cd /ros2_ws && colcon build --symlink-install && source install/setup.bash
+      # container. Sau `git pull` có đổi ROS code (hoặc sau recreate nếu
+      # source trên host mới hơn source đã bake trong image), phải:
+      #   cd /ros2_ws && colcon build --symlink-install
+      # Sau build, source install/setup.bash trong shell hiện tại hoặc mở một
+      # shell `docker exec` mới (được auto-source qua /root/.bashrc).
       # Nếu không, launch vẫn chạy bản install cũ nướng trong image.
       #
       # KHI CHỐT PRODUCTION: bỏ dòng này ra và build image cuối, để cái đang

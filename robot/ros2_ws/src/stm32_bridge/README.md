@@ -172,7 +172,7 @@ Then log out and log back in.
 ## Build
 
 ```bash
-cd ~/ros2_ws
+cd robot/ros2_ws  # from the repository root
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-select stm32_bridge
 source install/setup.bash
@@ -214,7 +214,8 @@ revolution, not a wheel speed.
 In another terminal:
 
 ```bash
-source ~/ros2_ws/install/setup.bash
+cd robot/ros2_ws  # from the repository root
+source install/setup.bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 

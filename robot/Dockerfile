@@ -43,6 +43,18 @@ COPY ros2_ws/src ./src
 RUN source "/opt/ros/${ROS_DISTRO}/setup.bash" && \
     colcon build
 
+# `docker exec ... bash` does not run ENTRYPOINT, so interactive shells need
+# the same base-then-overlay setup order in root's bashrc. Keep ROS_DISTRO
+# literal here so the persisted container environment resolves it at runtime.
+RUN printf '%s\n' \
+    '' \
+    '# ROS 2 environment for interactive container shells.' \
+    'source "/opt/ros/${ROS_DISTRO}/setup.bash"' \
+    'if [ -f "/ros2_ws/install/setup.bash" ]; then' \
+    '  source "/ros2_ws/install/setup.bash"' \
+    'fi' \
+    >> /root/.bashrc
+
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 
