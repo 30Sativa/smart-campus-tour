@@ -1,8 +1,8 @@
 import { Activity, BellRing, Bot, CalendarClock, CalendarDays, CheckCircle2, CircleAlert, Radio, WifiOff } from 'lucide-react'
 import { Link } from 'react-router'
 import { useStaffDashboard } from '../../api/staff-hooks'
-import { DistributionChart, TourOutcomeChart, TourVolumeChart } from '../../components/staff/StaffCharts'
-import { EmptyPanel, ErrorPanel, formatDateTime, formatTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime, formatTime } from '../../components/staff/StaffFormatters'
 
 const cards = [
   { key: 'todayTours', label: 'Tour hôm nay', icon: CalendarDays, color: 'text-[#4f7fca]', bg: 'bg-[#eaf4ff]' },

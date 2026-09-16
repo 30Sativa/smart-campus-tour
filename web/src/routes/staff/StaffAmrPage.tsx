@@ -1,6 +1,7 @@
 import { BatteryMedium, Bot, MapPin, Radio, Wifi, WifiOff } from 'lucide-react'
 import { useStaffAmrs } from '../../api/staff-hooks'
-import { ErrorPanel, formatDateTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime } from '../../components/staff/StaffFormatters'
 
 const connectionHelp = 'Live là telemetry còn mới, Stale là dữ liệu cũ, Disconnected là mất tín hiệu. Robot Stale/Disconnected không được hiển thị như đang khỏe mạnh.'
 

@@ -4,7 +4,8 @@ import { useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import type { Assignment } from '../../api/staff'
 import { useAssignAmr, useMissionCommand, useReassignAmr, useStaffAmrs, useTourSession } from '../../api/staff-hooks'
-import { ErrorPanel, formatDateTime, formatTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime, formatTime } from '../../components/staff/StaffFormatters'
 
 function AssignmentPanel({ sessionId, sessionStatus, assignments }: { sessionId: string; sessionStatus: string; assignments: Assignment[] }) {
   const amrs = useStaffAmrs()

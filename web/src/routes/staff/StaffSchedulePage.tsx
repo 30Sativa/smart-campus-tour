@@ -2,7 +2,8 @@ import { CalendarDays, ChevronRight, Filter } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { useMemo } from 'react'
 import { useStaffSchedule } from '../../api/staff-hooks'
-import { ErrorPanel, formatTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatTime } from '../../components/staff/StaffFormatters'
 
 const filters = ['All', 'Today', 'Upcoming', 'Scheduled', 'Active', 'Paused', 'Completed', 'Cancelled']
 

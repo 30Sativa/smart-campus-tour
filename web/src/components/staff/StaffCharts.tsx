@@ -24,12 +24,12 @@ export function TourOutcomeChart() {
 
 export function DistributionChart({ title, description, series }: { title: string; description: string; series: Series[] }) {
   const total = series.reduce((sum, item) => sum + item.value, 0)
-  let offset = 0
-  const segments = series.map((item) => {
+  const segments = series.map((item, index) => {
     const portion = total ? (item.value / total) * 100 : 0
-    const segment = { ...item, offset, portion }
-    offset += portion
-    return segment
+    const offset = total
+      ? series.slice(0, index).reduce((sum, previous) => sum + (previous.value / total) * 100, 0)
+      : 0
+    return { ...item, offset, portion }
   })
   return <ChartFrame title={title} description={description}><div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center"><div className="relative mx-auto grid h-36 w-36 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${segments.map((item) => `${item.color} ${item.offset}% ${item.offset + item.portion}%`).join(', ')})` }}><div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><strong className="text-2xl font-extrabold tracking-[-0.05em] text-[#1f314d]">{total}</strong><span className="text-[10px] font-semibold text-[#8a98ac]">Tổng số</span></div></div><div className="min-w-0 flex-1 space-y-3">{series.map((item) => <div key={item.label} className="flex items-center justify-between gap-3"><span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-[#647793]"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span><span className="text-xs font-extrabold text-[#40546f]">{item.value}</span></div>)}</div></div></ChartFrame>
 }

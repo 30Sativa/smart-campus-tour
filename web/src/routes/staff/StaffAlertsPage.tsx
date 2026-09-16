@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { BellRing, Check, Filter } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { useAcknowledgeAlert, useStaffAlerts } from '../../api/staff-hooks'
-import { ErrorPanel, formatDateTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime } from '../../components/staff/StaffFormatters'
 
 const severities = ['', 'Information', 'Warning', 'Critical']
 

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -17,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SmartCampus.Application\SmartCampus.Application.csproj" />
     <ProjectReference Include="..\..\src\SmartCampus.Domain\SmartCampus.Domain.csproj" />
-    <ProjectReference Include="..\..\src\SmartCampus.Infrastructure\SmartCampus.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

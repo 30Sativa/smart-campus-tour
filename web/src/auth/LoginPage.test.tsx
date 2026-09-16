@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import LoginPage from './LoginPage';
 
 describe('LoginPage', () => {
-  it('renders the CampusTour login experience and toggles password visibility', () => {
+  it('renders login, toggles password visibility, and opens registration mode', async () => {
     render(
       <MemoryRouter>
         <LoginPage />
@@ -12,12 +12,15 @@ describe('LoginPage', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Đăng nhập CampusTour' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Tạo tài khoản' })).toHaveAttribute('href', '/register');
 
     const password = screen.getByPlaceholderText('Nhập mật khẩu');
     expect(password).toHaveAttribute('type', 'password');
     fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }));
     expect(password).toHaveAttribute('type', 'text');
     expect(screen.getByRole('button', { name: 'Ẩn mật khẩu' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo tài khoản' }));
+    expect(await screen.findByRole('heading', { name: 'Tạo tài khoản' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Đăng ký ngay' })).toBeInTheDocument();
   });
 });

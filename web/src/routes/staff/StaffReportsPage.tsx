@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ChartNoAxesCombined, Star } from 'lucide-react'
 import { useFeedbackReports } from '../../api/staff-hooks'
-import { ErrorPanel, formatDateTime, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime } from '../../components/staff/StaffFormatters'
 
 export default function StaffReportsPage() {
   const [rating, setRating] = useState('')
