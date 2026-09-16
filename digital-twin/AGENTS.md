@@ -1,7 +1,7 @@
 # AGENTS.md — `digital-twin/`
 
-> **STATUS: SKELETON.** Nothing is implemented yet. Fill the TODO blocks when
-> Digital Twin work starts; delete this banner at that point.
+> **STATUS: FOUNDATION.** The .NET 10 Fleet Emulator project exists, but no
+> emulator behaviour or research tooling is implemented yet.
 
 External fleet emulation and synchronization research tooling for CampusTour
 DT-AMR (WP3). Read the repo-root `AGENTS.md` first; this file covers only this
@@ -29,11 +29,13 @@ work, not core requirements.
 
 ## 2. Stack and layout
 
-<!-- TODO(WP3): choose the Fleet Emulator runtime, build/container strategy
-     and local run command. -->
+The Fleet Emulator is a .NET 10 console app under `src/FleetEmulator/`.
+Its future external robot/backend connection will use the official
+`Microsoft.AspNetCore.SignalR.Client` package. Tests live under
+`tests/FleetEmulator.Tests/` and are run through `SmartCampus.DigitalTwin.slnx`.
 
-<!-- A possible future layout is src/FleetEmulator/ and
-     experiments/fleet-load/. Do not scaffold it before implementation starts. -->
+The current entry point is intentionally only a runnable skeleton. Do not add
+emulator behaviour or research tooling until the external contract is ready.
 
 ---
 
@@ -73,8 +75,9 @@ work, not core requirements.
 digital-twin/scripts/verify
 ```
 
-<!-- TODO(WP3): replace the skeleton with format/lint, build, unit/integration
-     tests and deterministic emulator/metric checks required by the stack. -->
+The current check restores, builds, and tests `SmartCampus.DigitalTwin.slnx`.
+Add format/lint, integration tests, and deterministic emulator/metric checks
+only when the corresponding implementation exists.
 
 ---
 

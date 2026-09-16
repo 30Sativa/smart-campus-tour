@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/FleetEmulator/FleetEmulator.csproj" />
+  <Project Path="tests/FleetEmulator.Tests/FleetEmulator.Tests.csproj" />
+</Solution>

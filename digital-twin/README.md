@@ -50,10 +50,14 @@ must not automatically be labelled packet loss. Experiments stop at a
 predefined latency/freshness SLO violation, a predefined safe resource limit,
 or a predefined test cap; crashing the server is not required.
 
-## Status
+## Foundation status
 
-**Not started.** No Fleet Emulator code or scaffold exists. Transport,
-authentication, exact wire schema, update frequency, runtime, SLOs, safe
+The .NET 10 Fleet Emulator console-app foundation is in place. It is an
+external synthetic client and currently only prints a startup message. The
+official SignalR client is referenced for the future robot/backend connection;
+there is no connection, authentication, command, state, or benchmark logic yet.
+
+Transport, authentication, exact wire schema, update frequency, SLOs, safe
 resource limits, and test caps remain undecided.
 
 ## Verification
@@ -62,5 +66,5 @@ resource limits, and test caps remain undecided.
 digital-twin/scripts/verify
 ```
 
-The script currently returns `SKIPPED` until source and a real verification
-pipeline are added.
+The verification script restores, builds, and tests
+`SmartCampus.DigitalTwin.slnx`.
