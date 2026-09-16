@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest';
 import LoginPage from './LoginPage';
 
 describe('LoginPage', () => {
-  it('renders login, toggles password visibility, and opens registration mode', async () => {
-    render(
-      <MemoryRouter>
-        <LoginPage />
-      </MemoryRouter>,
-    );
+  const renderPage = () => render(
+    <MemoryRouter>
+      <LoginPage />
+    </MemoryRouter>,
+  );
+
+  it('renders the staff sign-in form and toggles password visibility', () => {
+    renderPage();
 
     expect(screen.getByRole('heading', { name: 'Đăng nhập CampusTour' })).toBeInTheDocument();
 
@@ -18,9 +20,18 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }));
     expect(password).toHaveAttribute('type', 'text');
     expect(screen.getByRole('button', { name: 'Ẩn mật khẩu' })).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo tài khoản' }));
-    expect(await screen.findByRole('heading', { name: 'Tạo tài khoản' })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Đăng ký ngay' })).toBeInTheDocument();
+  it('says that sign-in is running on mock data instead of presenting it as real auth', () => {
+    renderPage();
+
+    expect(screen.getByText(/đăng nhập mẫu/i)).toBeInTheDocument();
+  });
+
+  it('no longer offers self-registration, which has no backend and no visitor app', () => {
+    renderPage();
+
+    expect(screen.queryByRole('button', { name: 'Tạo tài khoản' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đăng ký ngay' })).not.toBeInTheDocument();
   });
 });

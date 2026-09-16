@@ -1,45 +1,37 @@
 import { render, screen } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import PublicHomePage from './PublicHomePage'
 import { useAuthStore } from '../../stores/auth-store'
 
 describe('PublicHomePage', () => {
+  afterEach(() => useAuthStore.setState({ accessToken: null, user: null, isAuthenticated: false }))
+
   const renderPage = () => render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter>
-        <PublicHomePage />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <PublicHomePage />
+    </MemoryRouter>,
   )
 
-  it('renders brand title and links to tours and auth', () => {
+  it('sends a signed-out visitor to sign in, not to a removed visitor route', () => {
     renderPage()
 
-    // Check brand logo/text
     expect(screen.getAllByText(/CampusTour/i)[0]).toBeInTheDocument()
-
-    // Check link to explore tours
-    const toursLink = screen.getByRole('link', { name: /Khám Phá Tour/i })
-    expect(toursLink).toHaveAttribute('href', '/tours')
-
-    // Check link to login
-    const loginLink = screen.getByRole('link', { name: /Đăng nhập/i })
-    expect(loginLink).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: /Đăng nhập$/i })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: /Đăng nhập điều hành/i })).toHaveAttribute('href', '/login')
+    expect(screen.queryAllByRole('link').some((link) => ['/tours', '/my-bookings', '/register'].includes(link.getAttribute('href') ?? ''))).toBe(false)
   })
 
-  it('does not show visitor navigation controls for an admin account', () => {
+  it('offers the operations dashboard to a staff account', () => {
     useAuthStore.setState({
-      accessToken: 'admin-token',
+      accessToken: 'mock-token',
       isAuthenticated: true,
-      user: { userId: 'admin-1', username: 'admin', role: 'Admin' },
+      user: { userId: 'user-1', username: 'admin', role: 'Admin' },
     })
 
     renderPage()
 
-    expect(screen.queryByRole('link', { name: /Vé Của Tôi/i })).not.toBeInTheDocument()
-    expect(screen.queryAllByRole('link').some((link) => link.getAttribute('href') === '/my-bookings')).toBe(false)
-    expect(screen.getAllByRole('link', { name: 'Admin' })[0]).toHaveAttribute('href', '/admin')
+    expect(screen.getAllByRole('link', { name: /Ops Admin|^Admin$/ })[0]).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('link', { name: /Vào trang điều hành/i })).toHaveAttribute('href', '/admin')
   })
 })

@@ -72,33 +72,56 @@ web/
 ├── index.html
 ├── package.json          dev / build / lint / typecheck / test
 ├── vite.config.ts        Vite + Tailwind + Vitest config
-├── .env.example          VITE_API_BASE_URL
+├── .env.example          VITE_API_BASE_URL, VITE_USE_MOCK_API
 ├── scripts/verify
 └── src/
-    ├── main.tsx          StrictMode -> QueryProvider -> RouterProvider
+    ├── main.tsx          StrictMode -> QueryProvider -> ThemeProvider -> RouterProvider
     ├── index.css         @import "tailwindcss"
+    ├── landing.css       landing-page styles
     ├── vite-env.d.ts     typing for VITE_* env vars
     ├── app/
-    │   ├── providers/    query-provider.tsx (TanStack Query)
-    │   └── router/       index.tsx — route config
+    │   ├── providers/    query-provider.tsx, theme-provider.tsx
+    │   └── router/       index.tsx — routes, RequireStaff guard, lazy boundaries
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
-    │   └── admin/        AdminDashboardPage.tsx, DigitalTwinPage.tsx
-    │                     ("/admin", "/admin/digital-twin"), lazy-loaded
-    ├── features/         feature-based modules (empty until the first feature)
-    ├── components/ui/    shared UI (MotionTest.tsx — motion smoke test)
-    ├── api/              client.ts (the one API client), signalr.ts (hub factory)
-    ├── auth/             route guard + login flow (empty — not implemented yet)
-    ├── stores/           ui-store.ts (Zustand, client/UI state only)
-    ├── three/            DigitalTwinCanvas.tsx (R3F smoke test)
+    │   └── admin/        thin ops pages ("/admin/*"), all lazy-loaded
+    ├── features/
+    │   └── operations/   ops shell, shared ops UI, formatters, query hooks
+    ├── components/ui/    shared UI (ThemeToggle.tsx)
+    ├── api/              client.ts (the one HTTP client), signalr.ts (hub
+    │                     factory), contracts/ (endpoint DTOs + calls)
+    ├── auth/             LoginPage.tsx, roles.ts, use-logout.ts
+    ├── mocks/            labelled mock backend — see below
+    ├── stores/           auth-store.ts (memory only), theme-store.ts
+    ├── three/            DigitalTwinCanvas.tsx (R3F canvas)
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-`src/features/` and `src/auth/` are empty on purpose: they get their first file
-when the first real feature / the auth flow lands. Tests live next to the code
-they cover (`*.test.ts(x)`).
+There are exactly two entry points: `/` (public landing page) and `/admin/*`
+(operations dashboard, behind the role guard). The visitor booking/tour flow and
+the second, duplicate ops tree at `/staff/*` were removed on 2026-09-16 — the
+files are kept in `_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms
+the deletion. `/staff/*` still redirects to `/admin` so old bookmarks work.
 
----
+Tests live next to the code they cover (`*.test.ts(x)`).
+
+### Mock backend mode
+
+The auth/booking/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
+`/api/staff/*` do not exist. While `VITE_USE_MOCK_API` is not `"false"`, the app
+runs on the labelled fixtures in `src/mocks/`:
+
+- `mocks/operations-mock.ts` implements the same `OperationsApi` contract as the
+  HTTP client, so feature code is identical in both modes and the switch is made
+  once, in `features/operations/operations-hooks.ts`;
+- `mocks/auth-mock.ts` issues a fake token so the `/admin/*` guard can be
+  exercised. It is not authentication and grants nothing server-side;
+- every screen on mock data says so (banner in the ops shell, note on the login
+  page).
+
+This is a **mode, not a fallback**. Mock data must never replace a failed
+request: with the flag off, a transport error stays an error. Delete `src/mocks/`
+and the flag once the backend lands.
 
 ## 3. Development Rules
 

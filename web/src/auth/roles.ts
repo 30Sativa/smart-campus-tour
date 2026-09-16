@@ -1,3 +1,7 @@
+/**
+ * Roles that may enter `/admin/*`. The role comes from the access token's
+ * `role` claim; the server is what actually enforces it.
+ */
 export const STAFF_ROLES = ['TourOperator', 'CampusStaff', 'Admin'] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
 
@@ -13,21 +17,11 @@ const LEGACY_MAP: Record<string, StaffRole> = {
 
 export function normalizeRole(raw?: string | null): string {
   if (!raw) return 'Visitor'
-  const s = raw.trim()
-  const lower = s.toLowerCase()
+  const lower = raw.trim().toLowerCase()
   if (LEGACY_MAP[lower]) return LEGACY_MAP[lower]
-  const found = [...STAFF_ROLES, 'Visitor'].find((r) => r.toLowerCase() === lower)
-  return found ?? 'Visitor'
+  return [...STAFF_ROLES, 'Visitor'].find((role) => role.toLowerCase() === lower) ?? 'Visitor'
 }
 
 export function isStaffRole(role?: string | null): boolean {
   return STAFF_ROLES.includes(normalizeRole(role) as StaffRole)
-}
-
-export function isAdminRole(role?: string | null): boolean {
-  return normalizeRole(role) === 'Admin'
-}
-
-export function staffHomePath(role?: string | null): string {
-  return isAdminRole(role) ? '/admin' : '/staff'
 }

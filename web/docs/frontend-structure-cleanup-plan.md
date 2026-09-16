@@ -1,5 +1,17 @@
 # Kế hoạch làm sạch cấu trúc frontend
 
+> **Trạng thái 2026-09-16.** Đợt cắt gọn đầu tiên đã chạy: FE thu về đúng hai lối
+> vào — landing page `/` và dashboard vận hành `/admin/*`. Đã xử lý P0 #1 (một cây
+> `/admin/*` + redirect `/staff/*`), #2 (bỏ `persist`, token chỉ trong memory),
+> #3 (lazy cả shell lẫn page), #4 (một cách hiểu role duy nhất qua `isStaffRole`),
+> #5 (gỡ E-Stop khỏi browser), #7 (một `useLogout` dùng chung), #8 (refresh
+> single-flight reject mọi request đang chờ); P1 #1, #2, #4, #6, #7 và phần lớn
+> P2. Backend đã bị gỡ nên mọi endpoint được thay bằng lớp mock có nhãn trong
+> `src/mocks/` (xem `web/AGENTS.md` §2). Còn lại: P1 lifecycle/CSS của landing
+> (mục 3 bên dưới) và Phase 5 realtime/Digital Twin.
+>
+> File bị loại nằm ở `_to_delete/web-fe-cleanup-2026-09-16/`, chưa xoá hẳn.
+
 ## 1. Mục tiêu và phạm vi
 
 Kế hoạch này dựa trên `web/AGENTS.md` mới ở nhánh `main`. Phạm vi là tổ chức lại

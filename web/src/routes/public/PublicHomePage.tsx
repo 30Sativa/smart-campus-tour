@@ -4,7 +4,8 @@ import gsap from 'gsap';
 import ScrollTrigger from 'gsap/ScrollTrigger';
 import Lenis from '@studio-freight/lenis';
 import { useAuthStore } from '../../stores/auth-store';
-import { BookingWidget } from '../../components/ui/BookingWidget';
+import { useLogout } from '../../auth/use-logout';
+import { isStaffRole } from '../../auth/roles';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 import '../../landing.css';
 
@@ -12,9 +13,10 @@ gsap.registerPlugin(ScrollTrigger);
 
 export default function PublicHomePage() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isAuthenticated, user, logout } = useAuthStore();
-  const role = user?.role?.toLowerCase();
-  const isStaff = role === 'ops' || role === 'admin' || role === 'staff';
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+  const logout = useLogout();
+  const isStaff = isStaffRole(user?.role);
 
   useEffect(() => {
     // Lenis smooth scroll
@@ -287,11 +289,6 @@ export default function PublicHomePage() {
             </div>
           </a>
           <div className="nav-links" id="nav-links">
-            {isAuthenticated && !isStaff && (
-              <Link to="/my-bookings" className="nav-link" style={{ color: '#6ee7b7' }}>
-                Vé Của Tôi
-              </Link>
-            )}
             <a href="#gioi-thieu" className="nav-link">Giới thiệu</a>
             <a href="#tinh-nang" className="nav-link">Tính năng</a>
             <a href="#quy-trinh" className="nav-link">Quy trình</a>
@@ -316,16 +313,13 @@ export default function PublicHomePage() {
             <ThemeToggle />
             {isAuthenticated ? (
               <>
-                {!isStaff && (
-                  <Link
-                    to="/my-bookings"
-                    className="nav-link"
-                    style={{ fontSize: '13px', marginRight: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block', flexShrink: 0 }}></span>
-                    <span style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.username}</span>
-                  </Link>
-                )}
+                <span
+                  className="nav-link"
+                  style={{ fontSize: '13px', marginRight: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block', flexShrink: 0 }}></span>
+                  <span style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.username}</span>
+                </span>
                 {isStaff && (
                   <Link
                     to="/admin"
@@ -354,14 +348,6 @@ export default function PublicHomePage() {
               <>
                 <Link to="/login" className="nav-link" style={{ fontSize: '13px', marginRight: 0, whiteSpace: 'nowrap' }}>
                   Đăng nhập
-                </Link>
-                <Link
-                  to="/register"
-                  className="btn btn-dark"
-                  id="nav-cta"
-                  style={{ padding: '9px 16px', minWidth: 'auto', whiteSpace: 'nowrap', fontSize: '12px' }}
-                >
-                  Đăng ký
                 </Link>
               </>
             )}
@@ -397,23 +383,7 @@ export default function PublicHomePage() {
               <p id="hstat" style={{ fontSize: '15px', lineHeight: 1.7, color: 'rgba(255,255,255,.7)', maxWidth: '480px', marginBottom: '28px', fontWeight: 300 }}>
                 Tham quan khuôn viên qua góc nhìn công nghệ cao với hướng dẫn viên robot thông minh và bản đồ 3D tương tác.
               </p>
-              {!isAuthenticated ? (
-                <div>
-                  <Link
-                    to="/login"
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      padding: '14px 28px', borderRadius: '9999px',
-                      background: 'linear-gradient(135deg,#10b981,#06b6d4)',
-                      color: '#000', fontWeight: 700, fontSize: '14px',
-                      boxShadow: '0 0 32px rgba(16,185,129,.35)', textDecoration: 'none',
-                      transition: 'opacity .2s', whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Bắt đầu khám phá
-                  </Link>
-                </div>
-              ) : isStaff ? (
+              {isAuthenticated && isStaff ? (
                 <div>
                   <Link
                     to="/admin"
@@ -426,13 +396,13 @@ export default function PublicHomePage() {
                       transition: 'opacity .2s', whiteSpace: 'nowrap'
                     }}
                   >
-                    Vào trang quản trị
+                    Vào trang điều hành
                   </Link>
                 </div>
               ) : (
                 <div>
-                  <a
-                    href="#booking-section"
+                  <Link
+                    to="/login"
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '8px',
                       padding: '14px 28px', borderRadius: '9999px',
@@ -442,8 +412,8 @@ export default function PublicHomePage() {
                       transition: 'opacity .2s', whiteSpace: 'nowrap'
                     }}
                   >
-                    Đặt Tour Ngay
-                  </a>
+                    Đăng nhập điều hành
+                  </Link>
                 </div>
               )}
               <div id="hscroll" className="scroll-wrap" style={{ marginTop: '40px', opacity: 0.5 }}>
@@ -454,19 +424,6 @@ export default function PublicHomePage() {
           </section>
         </div>
 
-        {/* 2.5. Booking Section (Only for authenticated users who are not staff) */}
-        {isAuthenticated && !isStaff && (
-          <section id="booking-section" className="relative w-full bg-slate-100 dark:bg-[#03060a] px-4 sm:px-6 py-20 z-20 transition-colors">
-             <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&q=80')] opacity-5 dark:opacity-5 bg-cover bg-fixed"></div>
-             <div className="relative z-10 w-full max-w-7xl mx-auto">
-               <div className="text-center mb-10">
-                 <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4">Sẵn Sàng Khởi Hành</h2>
-                 <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">Trải nghiệm khuôn viên đại học một cách khác biệt. Robot AMR đã sẵn sàng chờ đón bạn.</p>
-               </div>
-               <BookingWidget />
-             </div>
-          </section>
-        )}
 
         <section className="showcase" id="gioi-thieu">
           <div className="ctn">
@@ -789,8 +746,8 @@ export default function PublicHomePage() {
             <h2 className="cta-t">Trải nghiệm<br />khuôn viên theo<br />cách mới</h2>
             <p className="cta-p">Đặt lịch tour với robot AMR — nhanh chóng, thông minh và hoàn toàn tự động. Khám phá đại học theo cách chưa từng có.</p>
             <div className="cta-btns">
-              <Link to="/tours" className="btn btn-dark">
-                Khám Phá Tour
+              <Link to="/login" className="btn btn-dark">
+                Đăng nhập điều hành
                 <span className="btn-arrow">
                   <svg width="11" height="8" viewBox="0 0 12 8" fill="none">
                     <path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor" />
