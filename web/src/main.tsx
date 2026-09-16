@@ -5,10 +5,14 @@ import { QueryProvider } from './app/providers/query-provider'
 import { router } from './app/router'
 import './index.css'
 
+import { ThemeProvider } from './app/providers/theme-provider'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </QueryProvider>
   </StrictMode>,
 )

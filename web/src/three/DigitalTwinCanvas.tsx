@@ -7,7 +7,7 @@ import { Canvas } from '@react-three/fiber'
  */
 export function DigitalTwinCanvas() {
   return (
-    <div className="h-screen w-full bg-slate-950">
+    <div className="h-[calc(100dvh-4rem)] w-full bg-slate-950">
       <Canvas camera={{ position: [3, 3, 3] }}>
         <ambientLight intensity={1.5} />
         <directionalLight position={[5, 5, 5]} />

@@ -1,0 +1,163 @@
+﻿<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo"><div class="logo-box"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C16.81 13.47 18 11.38 18 9c0-3.87-3.13-7-6-7z" fill="currentColor"/><path d="M9 21h6v-1H9v1z" fill="currentColor" opacity=".6"/><circle cx="12" cy="9" r="2" fill="black"/></svg></div>CampusTour</a>
+    <div class="nav-links" id="nav-links">
+      <a href="#gioi-thieu" class="nav-link">Giới thiệu</a>
+      <a href="#tinh-nang" class="nav-link">Tính năng</a>
+      <a href="#quy-trinh" class="nav-link">Quy trình</a>
+      <a href="#robot" class="nav-link">Robot AMR</a>
+      <a href="#lien-he" class="nav-link">Liên hệ</a>
+    </div>
+    <a href="#dat-tour" class="btn btn-dark" id="nav-cta">Đặt Tour <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a>
+    <div class="burger" id="burger"><span></span><span></span><span></span></div>
+  </div>
+</nav>
+<div style="position:relative">
+  <div style="position:sticky;top:0">
+    <section class="hero" id="hero">
+      <div class="hero-img" id="hero-img"><img src="images/hero-campus.jpg" alt="Robot AMR"/></div>
+      <div class="hero-ov"></div>
+      <div class="hero-body ctn">
+        <div class="hero-titles"><h1 class="h1-hero" id="ht1">CAMPUS</h1><div class="hero-t2"><div class="h1-hero" id="ht2">TOUR</div></div></div>
+        <div class="hero-btm">
+          <div class="hero-tags" id="htags"><span class="dot"></span><span class="h6" style="color:rgba(255,255,255,.6)">Robot AMR</span><span class="h6" style="color:rgba(255,255,255,.3)">|</span><span class="h6" style="color:rgba(255,255,255,.6)">AI Assistant</span><span class="h6" style="color:rgba(255,255,255,.3)">|</span><span class="h6" style="color:rgba(255,255,255,.6)">2026</span></div>
+          <div class="scroll-wrap" id="hscroll"><span class="scroll-lbl">scroll</span><div class="scroll-ln"></div></div>
+          <div class="h6" id="hstat" style="color:var(--secondary);flex-shrink:0">Tham quan thông minh — 24/7 tự động</div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <section class="showcase" id="gioi-thieu">
+    <div class="ctn"><div class="showcase-wrap">
+      <div class="sc-main"><img src="images/digital-twin.jpg" alt="Digital Twin"/></div>
+      <div class="sc-title-w"><h2 class="sc-title">Trải nghiệm tham quan khuôn viên đại học thông minh, tự động và được cá nhân hóa bởi AI</h2></div>
+      <div class="sc-floats">
+        <div class="sc-fi" style="left:3%;top:10%"><img src="images/booking-app.jpg" alt="App đặt tour"/></div>
+        <div class="sc-fi" style="right:3%;top:18%"><img src="images/ai-assistant.jpg" alt="AI trợ lý"/></div>
+        <div class="sc-fi" style="left:7%;bottom:14%"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+        <div class="sc-fi" style="right:7%;bottom:10%"><img src="images/digital-twin.jpg" alt="Digital twin"/></div>
+      </div>
+    </div></div>
+  </section>
+</div>
+<section class="sec" id="quy-trinh" style="background:var(--black)">
+  <div class="ctn">
+    <div class="flex-sb">
+      <div style="flex:0 0 38%;max-width:38%"><div class="sub">// &nbsp; Quy trình hoạt động</div><h2 class="sec-title">Hành trình trong mỗi chuyến tour</h2></div>
+      <div style="flex:0 0 28%;max-width:28%"><p>Hành trình tham quan thông minh kết hợp robot tự hành, AI đa ngôn ngữ và giám sát song song thời gian thực.</p></div>
+    </div>
+    <div class="proc-grid" id="proc-grid">
+      <div class="proc-card" data-a="0">
+        <div class="proc-img"><img src="images/booking-app.jpg" alt="Đặt lịch"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">01 — Đặt lịch</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M8 2v3M16 2v3M3 9h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">Đặt lịch trực tuyến</div><p style="font-size:13px;margin-top:6px">Chọn lộ trình, giờ đến và số người — hệ thống tự phân bổ robot phù hợp</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">Đặt lịch trực tuyến →</div></div>
+      </div>
+      <div class="proc-card" data-a="1">
+        <div class="proc-img"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">02 — Dẫn đường</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">Robot tự hành AMR</div><p style="font-size:13px;margin-top:6px">Robot điều hướng chính xác, tránh vật cản, dẫn đến từng điểm tham quan</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">Robot AMR dẫn đường →</div></div>
+      </div>
+      <div class="proc-card" data-a="0">
+        <div class="proc-img"><img src="images/ai-assistant.jpg" alt="AI"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">03 — Khám phá</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2z" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">AI hướng dẫn đa ngôn ngữ</div><p style="font-size:13px;margin-top:6px">AI thuyết minh, trả lời câu hỏi bằng tiếng Việt, Anh và nhiều ngôn ngữ</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">AI đa ngôn ngữ →</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="mqw"><div class="mq-track" id="mq">
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Robot AMR tự hành</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">AI đa ngôn ngữ</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Digital Twin thời gian thực</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">Đặt tour trực tuyến</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Giám sát đội robot</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">Navigation ROS 2</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">LiDAR &amp; Camera</span></div>
+</div></div>
+<section class="sec" id="tinh-nang" style="background:var(--black);padding-bottom:120px">
+  <div class="ctn">
+    <div style="text-align:center;margin-bottom:56px"><div class="sub">// &nbsp; Tính năng hệ thống</div><h2 class="sec-title">Thiết kế với mục đích rõ ràng</h2></div>
+    <div class="svc-layout">
+      <div class="svc-left">
+        <div class="svc-stack">
+          <div class="svc-img on"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+          <div class="svc-img"><img src="images/booking-app.jpg" alt="Booking"/></div>
+          <div class="svc-img"><img src="images/ai-assistant.jpg" alt="AI"/></div>
+          <div class="svc-img"><img src="images/digital-twin.jpg" alt="Digital twin"/></div>
+          <div class="svc-img"><img src="images/hero-campus.jpg" alt="Dashboard"/></div>
+        </div>
+        <div style="text-align:center"><p style="margin-bottom:22px">Từ đặt lịch đến khám phá — giải pháp tham quan toàn diện, tự động và thông minh.</p><a href="#dat-tour" class="btn btn-dark" style="margin:0 auto">Khám phá thêm <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a></div>
+      </div>
+      <div class="svc-right" id="svc-right">
+        <div class="svc-item on" data-i="0"><div class="svc-row"><div class="svc-name">Robot tự hành AMR</div><div class="svc-num">01</div></div><div class="svc-desc">Robot di động tự hành sử dụng ROS 2, LiDAR và camera RGB-D để điều hướng an toàn trên khuôn viên. Tự tránh vật cản, tuân thủ lộ trình và quay về trạm sạc tự động.</div></div>
+        <div class="svc-item" data-i="1"><div class="svc-row"><div class="svc-name">Đặt lịch &amp; Lên lộ trình</div><div class="svc-num">02</div></div><div class="svc-desc">Khách tham quan đặt tour qua web app. Hệ thống backend tự động lên lịch, phân bổ robot phù hợp và gửi thông báo thời gian thực về trạng thái chuyến tour.</div></div>
+        <div class="svc-item" data-i="2"><div class="svc-row"><div class="svc-name">AI Trợ lý đa ngôn ngữ</div><div class="svc-num">03</div></div><div class="svc-desc">Trợ lý AI tích hợp STT, LLM và TTS hỗ trợ tiếng Việt, tiếng Anh và nhiều ngôn ngữ. Thuyết minh điểm tham quan, trả lời câu hỏi tức thì bằng giọng nói.</div></div>
+        <div class="svc-item" data-i="3"><div class="svc-row"><div class="svc-name">Digital Twin thời gian thực</div><div class="svc-num">04</div></div><div class="svc-desc">Bản sao kỹ thuật số của khuôn viên đồng bộ theo thời gian thực với vị trí robot. Đội vận hành theo dõi toàn bộ đội robot, quản lý lịch trình và phát hiện sự cố tức thì.</div></div>
+        <div class="svc-item" data-i="4"><div class="svc-row"><div class="svc-name">Bảng điều khiển vận hành</div><div class="svc-num">05</div></div><div class="svc-desc">Dashboard trực quan: theo dõi trạng thái pin, lịch tour, cảnh báo sự cố và số liệu hiệu suất — tất cả trong một giao diện duy nhất.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="stats-sec"><div class="ctn"><div class="stats-grid">
+  <div class="stat-box"><div class="stat-n"><span id="s1">500</span>+</div><div class="stat-lbl">Lượt tham quan / tháng</div><div class="stat-sub">Robot phục vụ không gián đoạn 24/7</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s2">15</span>+</div><div class="stat-lbl">Điểm tham quan</div><div class="stat-sub">Tòa nhà, phòng lab, thư viện, công viên</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s3">5</span></div><div class="stat-lbl">Ngôn ngữ hỗ trợ</div><div class="stat-sub">Việt, Anh, Pháp, Nhật, Hàn</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s4">99</span><span class="ac">%</span></div><div class="stat-lbl">Uptime hệ thống</div><div class="stat-sub">Giám sát và phục hồi tự động</div></div>
+</div></div></div>
+<section class="how-sec" id="robot">
+  <div class="ctn"><div class="flex-sb" style="align-items:flex-end">
+    <div><div class="sub">// &nbsp; Hệ thống robot</div><h2 class="sec-title">Công nghệ trong từng bước đi</h2></div>
+    <div class="how-nav"><button class="how-btn" id="how-prev"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="how-btn" id="how-next"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+  </div></div>
+  <div class="how-slides" id="how-slides"><div class="how-track" id="how-track">
+    <div class="how-slide on"><img src="images/hero-campus.jpg" alt="Nav"/><div class="how-cnt"><div class="how-num">01 — NAVIGATION</div><div class="how-ttl">Điều hướng tự hành ROS 2</div><div class="how-dsc">SLAM, Nav2, costmap — robot tự tạo bản đồ và lên kế hoạch đường đi tối ưu</div></div></div>
+    <div class="how-slide"><img src="images/digital-twin.jpg" alt="DT"/><div class="how-cnt"><div class="how-num">02 — DIGITAL TWIN</div><div class="how-ttl">Bản sao kỹ thuật số</div><div class="how-dsc">Đồng bộ trạng thái robot và môi trường theo thời gian thực qua ROS Bridge</div></div></div>
+    <div class="how-slide"><img src="images/ai-assistant.jpg" alt="AI"/><div class="how-cnt"><div class="how-num">03 — AI ASSISTANT</div><div class="how-ttl">STT · LLM · TTS Pipeline</div><div class="how-dsc">Whisper STT → LLM dialogue → TTS engine — hội thoại tự nhiên đa ngôn ngữ</div></div></div>
+    <div class="how-slide"><img src="images/booking-app.jpg" alt="Book"/><div class="how-cnt"><div class="how-num">04 — BOOKING</div><div class="how-ttl">API Đặt lịch &amp; Điều phối</div><div class="how-dsc">FastAPI phân bổ tour, điều phối đội robot và quản lý hàng đợi tự động</div></div></div>
+    <div class="how-slide"><img src="images/hero-campus.jpg" alt="Ops"/><div class="how-cnt"><div class="how-num">05 — OPERATIONS</div><div class="how-ttl">Dashboard vận hành đội robot</div><div class="how-dsc">Theo dõi pin, cảnh báo, metrics — quản lý toàn bộ fleet từ một nơi duy nhất</div></div></div>
+  </div></div>
+</section>
+<section class="tech-sec">
+  <div class="ctn">
+    <div class="flex-sb">
+      <div style="flex:0 0 38%;max-width:38%"><div class="sub">// &nbsp; Nghiên cứu &amp; phát triển</div><h2 class="sec-title">Được xây dựng trên nền tảng vững chắc</h2></div>
+      <div style="flex:0 0 28%;max-width:28%"><p>Hệ thống tích hợp các công nghệ robotics, AI và IoT tiên tiến nhất, phát triển theo phương pháp Agile với kiểm thử liên tục.</p></div>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">ROS 2 HUMBLE</div><div class="tech-ttl">Navigation Stack</div><div class="tech-sub">Nav2 · SLAM Toolbox · MoveIt 2</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">AI STACK</div><div class="tech-ttl">Multilingual Pipeline</div><div class="tech-sub">Whisper STT · GPT-4o · Coqui TTS</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">BACKEND</div><div class="tech-ttl">Booking &amp; Dispatch API</div><div class="tech-sub">FastAPI · PostgreSQL · Redis · AWS EC2</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">FRONTEND</div><div class="tech-ttl">Visitor App &amp; Dashboard</div><div class="tech-sub">React · TypeScript · Vite · Three.js</div></div></div>
+    </div>
+  </div>
+</section>
+<section class="cta-sec" id="dat-tour"><div class="ctn"><div class="cta-box">
+  <div class="cta-glow"></div>
+  <div class="sub" style="color:var(--accent);position:relative;z-index:1">// &nbsp; Bắt đầu ngay hôm nay</div>
+  <h2 class="cta-t">Trải nghiệm<br/>khuôn viên theo<br/>cách mới</h2>
+  <p class="cta-p">Đặt lịch tour với robot AMR — nhanh chóng, thông minh và hoàn toàn tự động. Khám phá đại học theo cách chưa từng có.</p>
+  <div class="cta-btns">
+    <a href="#" class="btn btn-dark">Đặt Tour Ngay <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a>
+    <a href="#" class="btn btn-ghost">Xem demo hệ thống</a>
+  </div>
+</div></div></section>
+<footer class="footer" id="lien-he"><div class="ctn">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo" style="font-size:17px"><div class="logo-box"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C16.81 13.47 18 11.38 18 9c0-3.87-3.13-7-6-7z" fill="currentColor"/><path d="M9 21h6v-1H9v1z" fill="currentColor" opacity=".6"/><circle cx="12" cy="9" r="2" fill="black"/></svg></div>CampusTour DT-AMR</a>
+      <p class="footer-tag">Hệ thống tham quan khuôn viên đại học bằng robot tự hành AMR kết hợp AI trợ lý đa ngôn ngữ và Digital Twin theo thời gian thực.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="fc"><div class="fc-title">Hệ thống</div><a href="#">Robot AMR</a><a href="#">AI Assistant</a><a href="#">Digital Twin</a><a href="#">Booking API</a><a href="#">Dashboard</a></div>
+      <div class="fc"><div class="fc-title">Thông tin</div><a href="#">Về dự án</a><a href="#">Kiến trúc hệ thống</a><a href="#">Tài liệu kỹ thuật</a><a href="#">Nhóm phát triển</a></div>
+      <div class="fc"><div class="fc-title">Liên hệ</div><a href="#">GitHub Repository</a><a href="#">Báo lỗi</a><a href="#">Đóng góp</a><a href="#">Email nhóm</a></div>
+    </div>
+  </div>
+  <div class="footer-bot">
+    <div class="footer-copy">© 2026 CampusTour DT-AMR. Dự án nghiên cứu &amp; phát triển.</div>
+    <div class="soc"><a href="#" class="soc-a">GH</a><a href="#" class="soc-a">FB</a><a href="#" class="soc-a">YT</a></div>
+  </div>
+</div></footer>

@@ -1,2 +1,382 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design Tokens ── */
+:root {
+  /* Light Mode */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-card: #ffffff;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-inverse: #ffffff;
+  
+  --border-color: #e2e8f0;
+  --navbar-bg: rgba(255, 255, 255, 0.95);
+  --modal-bg: #ffffff;
+  
+  --accent: #06b6d4;
+  --accent-teal: #14b8a6;
+  
+  --hero-gradient: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.2) 100%);
+}
+
+html.dark {
+  /* Dark Mode */
+  --bg-primary: #071014;
+  --bg-secondary: #0b151a;
+  --bg-card: #111c22;
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-inverse: #0f172a;
+  
+  --border-color: #24323a;
+  --navbar-bg: rgba(7, 16, 20, 0.95);
+  --modal-bg: #111c22;
+  
+  --accent: #22d3ee;
+  --accent-teal: #2dd4bf;
+  
+  --hero-gradient: linear-gradient(to bottom, rgba(7,16,20,0.7) 0%, rgba(7,16,20,0.5) 50%, rgba(7,16,20,0.95) 100%);
+}
+
+/* ── Global base ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Glassmorphism card ── */
+.glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
+    0 20px 60px -8px rgba(0, 0, 0, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.glass-featured {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 8px 12px -2px rgba(0, 0, 0, 0.05),
+    0 28px 70px -8px rgba(0, 0, 0, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ── Card hover lift ── */
+.card-lift {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+.card-lift:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 8px 16px -2px rgba(0, 0, 0, 0.06),
+    0 36px 80px -8px rgba(0, 0, 0, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ── Nav link underline animation ── */
+.nav-link {
+  position: relative;
+  padding-bottom: 2px;
+  transition: color 0.15s ease;
+}
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1.5px;
+  background: #111;
+  border-radius: 9999px;
+  transition: width 0.2s ease;
+}
+.nav-link:hover { color: #111; }
+.nav-link:hover::after { width: 100%; }
+
+/* ── Pill buttons ── */
+.pill-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #0d0d0d;
+  color: #fff;
+  padding: 11px 24px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.pill-dark:hover {
+  background: #2a2a2a;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+.pill-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #111;
+  padding: 10px 22px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+}
+.pill-light:hover {
+  background: #f3f4f6;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
+}
+
+/* ── Circle arrow button ── */
+.circle-arrow {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s, transform 0.18s;
+}
+.circle-arrow:hover {
+  background: #3b3b3b;
+  transform: scale(1.1) rotate(6deg);
+}
+
+/* ── Feature tag ── */
+.feature-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: #0d0d0d;
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+/* ── Overlapping avatars ── */
+.avatar-item {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  margin-left: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.avatar-item:first-child { margin-left: 0; }
+
+/* ── Hero title responsive ── */
+.hero-title {
+  font-size: clamp(2.8rem, 6vw, 5.4rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: #0d0d0d;
+}
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatRobot {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-12px) rotate(0.8deg); }
+  66%       { transform: translateY(-6px) rotate(-0.8deg); }
+}
+
+@keyframes floatMini {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-16px) rotate(2deg); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.8); }
+}
+
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+
+.animate-fade-in-up { animation: fadeInUp 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+.animate-float-robot { animation: floatRobot 6s ease-in-out infinite; }
+.animate-float-mini  { animation: floatMini 8s ease-in-out infinite; }
+.animate-pulse-dot   { animation: pulseDot 2.4s ease-in-out infinite; }
+.animate-blink       { animation: blink 4s ease-in-out infinite; }
+
+.delay-0  { animation-delay: 0s; }
+.delay-1  { animation-delay: 0.08s; }
+.delay-2  { animation-delay: 0.16s; }
+.delay-3  { animation-delay: 0.26s; }
+.delay-4  { animation-delay: 0.36s; }
+.delay-5  { animation-delay: 0.46s; }
+.delay-6  { animation-delay: 0.58s; }
+.delay-7  { animation-delay: 0.72s; }
+
+/* ── Background noise/glow ── */
+.hero-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Responsive cards grid */
+.cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-title {
+    font-size: clamp(2.4rem, 9vw, 3.8rem);
+  }
+}
+
+/* ══════════════════════════════════════════
+   SMARTBUS ROBOT ANIMATIONS
+══════════════════════════════════════════ */
+
+/* Robot tổng thể: lắc nhẹ khi "lăn" */
+@keyframes robotDrive {
+  0%   { transform: translateY(0px) rotate(0deg); }
+  20%  { transform: translateY(-3px) rotate(0.4deg); }
+  40%  { transform: translateY(0px) rotate(0deg); }
+  60%  { transform: translateY(-2px) rotate(-0.3deg); }
+  80%  { transform: translateY(0px) rotate(0.2deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+/* Robot di chuyển nhẹ từ phải sang trái (lơ lửng) */
+@keyframes robotFloat {
+  0%   { transform: translateX(0px) translateY(0px); }
+  25%  { transform: translateX(-8px) translateY(-5px); }
+  50%  { transform: translateX(-4px) translateY(-10px); }
+  75%  { transform: translateX(-12px) translateY(-5px); }
+  100% { transform: translateX(0px) translateY(0px); }
+}
+
+/* Bánh xe xoay */
+@keyframes wheelSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* LiDAR quét tròn */
+@keyframes lidarSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Đèn LED xanh viền nhấp nháy */
+@keyframes ledPulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px #3b82f6) drop-shadow(0 0 12px #3b82f6); }
+  50%       { opacity: 0.5; filter: drop-shadow(0 0 2px #3b82f6); }
+}
+
+/* Màn hình LED blink */
+@keyframes screenBlink {
+  0%, 85%, 100% { opacity: 1; }
+  90%           { opacity: 0.15; }
+}
+
+/* Nháy mắt robot (smiley eyes) */
+@keyframes eyeBlink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  93%           { transform: scaleY(0.08); }
+}
+
+/* Đèn khẩn cấp (nút đỏ) nhấp nháy chậm */
+@keyframes emergencyBlink {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 1; filter: drop-shadow(0 0 8px #ef4444); }
+}
+
+/* Bóng đổ đất co giãn theo robot nổi */
+@keyframes shadowPulse {
+  0%, 100% { transform: scaleX(1); opacity: 0.18; }
+  50%       { transform: scaleX(0.85); opacity: 0.10; }
+}
+
+/* Vệt chuyển động (motion streak) */
+@keyframes motionStreak {
+  0%   { opacity: 0; transform: scaleX(0); }
+  30%  { opacity: 0.6; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1.2) translateX(10px); }
+}
+
+/* Vòng quét LiDAR toả ra */
+@keyframes scanRing {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Floating label badge */
+@keyframes labelBob {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+
+/* Dấu chấm lộ trình di chuyển */
+@keyframes dotMove {
+  0%   { stroke-dashoffset: 120; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Classes áp dụng */
+.robot-drive      { animation: robotDrive 0.5s ease-in-out infinite, robotFloat 6s ease-in-out infinite; }
+.wheel-spin       { animation: wheelSpin 0.8s linear infinite; }
+.lidar-spin       { animation: lidarSpin 2s linear infinite; }
+.led-pulse        { animation: ledPulse 1.8s ease-in-out infinite; }
+.screen-blink     { animation: screenBlink 4s ease-in-out infinite; }
+.eye-blink        { animation: eyeBlink 4s ease-in-out infinite; }
+.emergency-blink  { animation: emergencyBlink 2s ease-in-out infinite; }
+.shadow-pulse     { animation: shadowPulse 6s ease-in-out infinite; }
+.label-bob        { animation: labelBob 3s ease-in-out infinite; }
+.scan-ring        { animation: scanRing 2s ease-out infinite; }
+.scan-ring-2      { animation: scanRing 2s ease-out infinite; animation-delay: 0.7s; }
+.scan-ring-3      { animation: scanRing 2s ease-out infinite; animation-delay: 1.4s; }
+.dot-move         { animation: dotMove 3s linear infinite; }
 
