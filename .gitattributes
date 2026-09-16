@@ -1,0 +1,20 @@
+# Normalize line endings. Without this, files committed with CRLF show up as
+# fully modified on checkout and `git diff --check` reports every line as
+# trailing whitespace, which makes the verification step in AGENTS.md useless.
+* text=auto eol=lf
+
+# Windows-only tooling that needs CRLF.
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Binary: never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.elf  binary
+*.bin  binary
+*.hex  binary

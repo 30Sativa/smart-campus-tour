@@ -102,26 +102,175 @@ they cover (`*.test.ts(x)`).
 
 ## 3. Development Rules
 
-- All backend access goes through one API client module. No `fetch` scattered
-  through components.
 - No business rule is reimplemented in the frontend. If the dashboard needs a
   computed value (robot utilisation, ETA, wait time), the backend returns it.
 - The ops dashboard is used by campus staff with no robotics background: a
   robot state shown to them must be a plain-language label, not a raw ROS enum.
-- Server data goes through TanStack Query hooks (`useQuery`/`useMutation`),
-  never a raw `useEffect` + `fetch`/`useState` combo.
 - Any route under `/admin/*` must be wrapped by the role-checking route
   guard. A new admin page is not done until it is behind the guard — do not
   rely on "nobody will guess the URL".
-- Zustand stores are for client-only state. If you find yourself caching
-  server data in a Zustand store, it belongs in TanStack Query instead.
 - Styling is Tailwind utility classes in JSX. Avoid a separate CSS file per
   component unless Tailwind genuinely cannot express it (e.g. a keyframe
   animation).
 
 - Component structure is **folder-by-feature**: a feature owns its components,
-  hooks and query hooks under `src/features/<feature>/`. Promote something to
-  `src/components/ui/` only when a second feature actually needs it.
+  hooks and query hooks under `src/features/<feature>/`. The general rules for
+  API access, state ownership, component responsibility, effects, error
+  handling, reuse, and testing are in the section below.
+
+### Coding and maintainability
+
+These rules describe how to use the stack above. They do not change the
+architecture decisions in the Stack section.
+
+#### Simplicity / readability
+
+- Prefer the simplest implementation that satisfies the current requirement.
+- Prefer readable and explicit code over clever or overly generic code.
+- Comments should explain **why** a decision exists, not restate what obvious
+  code does.
+- Delete dead code instead of commenting it out; Git already keeps history.
+- Do not introduce abstractions for hypothetical future requirements.
+
+#### TypeScript
+
+- Use TypeScript for all application source.
+- Avoid `any`. Use explicit types or `unknown` plus narrowing at uncertain
+  boundaries. TypeScript `strict` is **not** enabled in `web/tsconfig.app.json`,
+  so this is enforced by review, not by `npm run typecheck`.
+- Use explicit types at important module boundaries: component props, API
+  request/response models, shared hooks, and public utilities.
+- Do not duplicate the same DTO/type in multiple feature folders when one
+  existing boundary type already represents the same contract.
+- Do not create generic type abstractions unless they remove real duplication
+  or protect a real boundary.
+
+#### Naming
+
+- React components use PascalCase.
+- Hooks use `useXxx`.
+- Functions and variables use camelCase.
+- Names should describe intent, not implementation details.
+- Avoid vague names such as `data`, `temp`, `handler`, `manager`, and `helper`
+  when a more meaningful name is available.
+
+#### Responsibility / SOLID
+
+Apply SOLID pragmatically where it improves readability, testability, or
+separation of responsibilities.
+
+- Prefer single-purpose components, hooks, and modules.
+- Separate presentation, server-state access, UI state, transport, and
+  reusable behavior when there is a real responsibility boundary.
+- Frontend validation is for UX only — the business rule itself stays in the
+  backend, per the first rule in this section.
+- Keep props, interfaces, and types as small as the consumer actually needs.
+- Depend on stable feature/API boundaries rather than spreading transport
+  details throughout components.
+
+Do not create interfaces, factories, services, adapters, wrappers, hooks,
+contexts, stores, or generic utilities solely to "follow SOLID". If there is
+one simple concrete implementation and no meaningful boundary, keep it
+concrete.
+
+#### React components
+
+- A component should have one clear UI responsibility.
+- Do not split trivial markup into many tiny components only to reduce line
+  count.
+- Extract a child component when it removes real complexity, has an
+  independent responsibility, or has a second real consumer.
+- Do not create arbitrary file-size or function-size limits.
+- Keep business workflow decisions out of JSX/components.
+
+#### State ownership
+
+Keep one source of truth for each piece of state:
+
+- Server state goes through TanStack Query hooks (`useQuery`/`useMutation`).
+- Cross-component client/UI state goes through Zustand when genuinely needed.
+- Component-local UI state stays in local React state.
+- Editable temporary form/draft state may remain local to the owning feature.
+
+Do not mirror the same server data into TanStack Query, Zustand, and local
+state. Prefer derived values over duplicated synchronized state. Do not use
+`useEffect` just to copy one piece of React state into another when the value
+can be derived during render.
+
+#### API / transport boundary
+
+- No direct `fetch` from React components.
+- Backend URLs must not be hard-coded in features or components.
+- HTTP access stays behind `src/api/` and feature-level query/mutation hooks.
+- SignalR transport details should not be scattered across UI components.
+- Raw transport DTOs should not leak through the whole component tree when a
+  feature-specific view model is genuinely needed.
+- Do not add mapping layers when the transport shape is already simple and
+  appropriate for the feature.
+
+#### Effects / realtime
+
+- Effects are for real external side effects: network subscriptions, timers,
+  browser APIs, SignalR handlers, and similar integrations.
+- Every subscription, timer, listener, or SignalR handler must have a clear
+  owner.
+- Clean up subscriptions, listeners, and timers when the owner unmounts.
+- Reconnect logic must not register duplicate SignalR handlers.
+- Do not suppress React Hooks dependency warnings merely to make lint pass;
+  fix the lifecycle/dependency design instead.
+- Do not block rendering or create high-frequency React state updates when a
+  lower-frequency or derived representation is sufficient.
+
+#### Error / async states
+
+When relevant to the user, explicitly handle loading, empty, error, success,
+disconnected, and stale/reconnecting realtime states.
+
+- Do not swallow errors silently.
+- Do not show raw stack traces, exception objects, HTTP payloads, or internal
+  ROS/backend enums directly to users.
+- Convert technical failures to understandable UI states and messages.
+- Do not fabricate fallback data such as fake battery percentages or fake
+  poses.
+
+#### Reuse / shared code
+
+- Keep code inside the owning feature by default.
+- Promote something to shared UI/utilities only after a second real consumer
+  exists or it represents a clear cross-feature responsibility.
+- Do not create a global utility/module merely because code "might be reused
+  later".
+- Avoid giant shared `helpers.ts`, `utils.ts`, or global Zustand stores.
+
+#### Testing
+
+- Tests should protect user-visible behavior, feature logic, and important
+  state transitions.
+- Do not test private implementation details or exact internal hook structure.
+- Refactoring internal code without changing behavior should not require
+  rewriting unrelated tests.
+- New behavior should have tests at the smallest useful level.
+- Do not create meaningless tests only to increase test count.
+
+#### Anti-over-engineering rule
+
+Prefer the simplest design that keeps responsibilities and boundaries clear.
+Do not introduce a new abstraction, interface, shared utility, store, hook,
+context, wrapper, service, factory, or framework until there is a concrete
+responsibility or real reuse case that existing code cannot express cleanly.
+
+The frontend does not require any of the following by default:
+
+- an interface for every module;
+- a service or factory pattern for every feature;
+- a custom hook for all logic;
+- an atomic design system;
+- arbitrary maximum file or function line counts;
+- mandatory `useMemo` or `useCallback`;
+- mandatory barrel exports;
+- a strict inheritance hierarchy;
+- a plugin architecture; or
+- a generic frontend repository pattern.
 
 ---
 

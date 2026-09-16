@@ -10,12 +10,18 @@ this file only covers what is specific to `backend/`.
 
 - Language / runtime: **C# / .NET 10 (LTS)**.
 - Framework: **ASP.NET Core Web API** (controller-based, not Minimal API).
-- Database: **SQL Server**.
-- ORM: **Entity Framework Core**, code-first, migrations checked into
-  `src/SmartCampus.Infrastructure/Persistence/Migrations/`.
+- Browser realtime transport: **SignalR**, matching `web/AGENTS.md`; it is not
+  implemented in the current backend scaffold. `backend/src/SmartCampus.Api/Hubs/`
+  is the intended API location when it lands.
+- Planned database: **SQL Server**.
+- Planned ORM: **Entity Framework Core**, code-first. EF Core is not installed
+  in the current scaffold; `ApplicationDbContext` and migrations are not yet
+  implemented. When persistence lands, migrations belong in
+  `backend/src/SmartCampus.Infrastructure/Persistence/Migrations/`.
 - Architecture style: **Clean Architecture**, not DDD — no aggregates, domain
   events, or value-object-heavy modelling unless a task explicitly asks for
-  it. Entities are plain, services hold behaviour.
+  it. Entities are plain; behaviour belongs in the Domain/Application
+  boundaries described below.
 - Local run: <!-- TODO(WP2): connection string source (User Secrets / appsettings.Development.json / env var), and the exact `dotnet run` / docker compose command once scaffolded. -->
 
 ---
@@ -30,23 +36,26 @@ Domain; nothing points back out to API).
 backend/
 ├── SmartCampus.slnx
 ├── src/
-│   ├── SmartCampus.Domain/          Entities/, Enums/, Exceptions/.
+│   ├── SmartCampus.Domain/          Exceptions/. Entities/ and Enums/ arrive
+│   │                                 with the first domain feature.
 │   │                                 No project reference at all.
 │   ├── SmartCampus.Application/     Common/{Abstractions,Behaviors,
-│   │                                 Exceptions,Models}/, Features/
-│   │                                 {Commands,Queries}/, DependencyInjection.cs.
+│   │                                 Exceptions,Models}/; Features/
+│   │                                 {Commands,Queries}/ (exist, empty);
+│   │                                 DependencyInjection.cs.
 │   │                                 -> Domain. MediatR + FluentValidation.
-│   ├── SmartCampus.Infrastructure/  Persistence/ (DbContext, Repositories/,
-│   │                                 Migrations/), Authentication/,
-│   │                                 Integrations/, DependencyInjection.cs.
-│   │                                 -> Application.
+│   ├── SmartCampus.Infrastructure/  Persistence/ (DbContext scaffold;
+│   │                                 Repositories/ exists, empty; Migrations/
+│   │                                 arrives with EF Core), Authentication/
+│   │                                 and Integrations/ (exist, empty),
+│   │                                 DependencyInjection.cs. -> Application.
 │   └── SmartCampus.Api/             Controllers/, Common/{Requests,Responses}/,
-│                                     ExceptionHandling/, Hubs/, Program.cs,
-│                                     appsettings. -> Application + Infrastructure.
-├── tests/                           <!-- TODO(WP2): chưa tạo -->
-│   ├── SmartCampus.Application.Tests/       unit tests, xUnit
-│   ├── SmartCampus.Api.Tests/                unit tests, xUnit
-│   └── SmartCampus.Infrastructure.IntegrationTests/  <!-- TODO(WP2): tên/tồn tại tùy quyết định integration test ở mục 4 -->
+│                                     Properties/, Program.cs, appsettings.
+│                                     ExceptionHandling/ and Hubs/ exist but are
+│                                     empty. -> Application + Infrastructure.
+├── tests/
+│   └── SmartCampus.UnitTests/       unit tests, xUnit
+├── SmartCampus.IntegrationTests/    integration-test project, xUnit
 └── scripts/verify
 ```
 
@@ -73,21 +82,24 @@ SmartCampus.Domain
 
 - `Domain` has zero project references. No EF Core, no ASP.NET, no external
   package beyond the BCL. Plain entities, enums, and domain exceptions only.
-- `Application` defines interfaces (`IFooRepository`, `IClock`, ...) and the
-  use-case/service classes that implement business logic. It must not
-  reference EF Core, ASP.NET Core, or any HTTP-specific type — only
+- `Application` defines persistence and external-boundary abstractions
+  (`IFooRepository`, `IClock`, ...), commands/queries, and their handlers. It
+  must not reference EF Core, ASP.NET Core, or any HTTP-specific type — only
   `Domain` and abstractions.
-- `Infrastructure` implements the `Application` interfaces: EF Core
-  `DbContext`, entity configurations, repository classes, external service
-  clients (email, storage, ROS bridge client, ...). Query construction lives
-  here only, never in `Application`.
+- `Infrastructure` implements the `Application` abstractions: the planned EF
+  Core `DbContext`, entity configurations, repository classes, and external
+  service clients (email, storage, ROS bridge client, ...). Query construction
+  lives here only, never in `Application`.
 - `Api` is composition + transport: controllers, DTOs, DI registration
   (`Program.cs`), model validation, HTTP status mapping. Controllers must not
-  contain business logic and must not touch `DbContext` or EF Core types
-  directly — they call into `Application` services through an interface.
-- A new feature adds a service in `Application` and, if it needs persistence,
-  an interface in `Application` + implementation in `Infrastructure`. Do not
-  reach from `Api` straight into `Infrastructure`.
+  contain business logic or touch `DbContext`/EF Core types directly. They
+  dispatch an Application command/query through MediatR; a named Application
+  capability service is valid where that is the established boundary.
+- A new feature adds one command/query and its handler for one use case. If it
+  needs persistence, use an Application repository abstraction and an
+  Infrastructure implementation. Extract an Application service only when it
+  has an independent responsibility, meaningful reuse, or a clearly named
+  capability. Do not reach from `Api` straight into `Infrastructure`.
 
 Scheduling / dispatch specifically:
 
@@ -114,8 +126,9 @@ Scheduling / dispatch specifically:
   `Application` interface such as `IFleetGateway`. `Application` code calls
   the interface, never a transport client directly.
 - **A controller must never call the bridge directly.** The path is always
-  `Api -> Application service -> IFleetGateway -> Infrastructure`, even for a
-  one-line "send this command" endpoint.
+  `Api -> Application use case -> IFleetGateway -> Infrastructure`, with a
+  named dispatch capability service where that algorithm warrants one, even
+  for a one-line "send this command" endpoint.
 
 Core invariants (implementation is deferred until the relevant feature task):
 
@@ -128,28 +141,106 @@ Core invariants (implementation is deferred until the relevant feature task):
 - stale/out-of-order robot state cannot overwrite newer state; `seq` supports
   ordering.
 
+### Coding and maintainability
+
+The layer ownership and dependency direction above are authoritative. These
+rules add practical guidance without introducing another architecture layer.
+
+- Keep controllers thin: bind/validate transport input, dispatch the
+  Application use case, and map the result. Do not duplicate a business
+  invariant in the controller, handler/service, and persistence mapping.
+- HTTP and SignalR DTOs remain transport types; do not make them Domain
+  entities. Keep Application persistence and external-boundary abstractions
+  in Application, with their implementations in Infrastructure.
+- One `ICommand<TResponse>` or `IQuery<TResponse>` represents one use case.
+  Its MediatR handler is the default orchestration entry point. Queries do not
+  mutate business state.
+- Extract an Application service only for a real independent responsibility,
+  meaningful reuse across handlers, or a clearly named business capability.
+  Do not create one service per handler merely for layering. A named dispatch
+  capability such as `DispatchService` is appropriate when its algorithm
+  genuinely deserves one.
+- The decided persistence pattern is Application-owned repository abstractions
+  implemented by Infrastructure. Concrete repositories are added per real use
+  case; none should be assumed to exist before implementation. Do not add a
+  second generic/base repository layer or repositories for data that has no
+  persistence boundary.
+- The existing `UnitOfWorkBehavior<,>` is the command persistence boundary.
+  Do not introduce a second Unit of Work abstraction or competing
+  `SaveChanges` policy without a concrete requirement.
+- `IApplicationDbContext` is the commit abstraction used by that pipeline. It
+  must not become an EF leakage point: do not expose `DbSet<T>`, `IQueryable<T>`
+  or other EF Core-specific types from it into Application.
+- FluentValidation handles input/use-case checks that can run before the
+  operation. Rules requiring current persisted state belong in the use-case
+  flow; critical invariants also need persistence protection when races allow
+  application-side checks to be bypassed.
+- Use `async`/`await` for I/O. Do not use `.Result` or `.Wait()`; propagate
+  `CancellationToken`; do not use unowned fire-and-forget for business-critical
+  work; cancellation/failure must not knowingly leave inconsistent state.
+- Use PascalCase for types/public members, camelCase for locals/parameters,
+  `Async` suffixes where appropriate, and keep nullable enabled. Do not
+  suppress warnings without understanding them; verification treats compiler
+  warnings as errors.
+- Avoid `dynamic` unless a real external/interoperability boundary requires it.
+- Avoid broad `catch (Exception)` except at an intentional boundary that
+  logs/maps unexpected failures without swallowing them.
+- Persistence is not implemented yet: the projects currently have no EF Core
+  package, `ApplicationDbContext` is only a scaffold, and there are no
+  migrations. Once EF Core lands, keep EF types in Infrastructure, use
+  no-tracking for appropriate read-only queries, avoid N+1 queries, and
+  preserve transaction/invariant semantics. Schema changes still require the
+  ADR rule in Section 9.
+- Do not swallow exceptions or expose stack traces, SQL errors, internal
+  messages, or secrets at the API boundary. Use structured operational logs
+  with useful context, no secrets/tokens, and no noisy high-frequency telemetry;
+  Section 9 owns the visitor-PII prohibition.
+- Keep API contracts explicit. Controllers do not return EF or Domain entities
+  directly; preserve `BaseResponse<T>`/`PagedResponse<T>` conventions where
+  applicable. Collection parameters are `Search`, `Sort`, `Page`, `Size`, and
+  `Expand` as defined by
+  `backend/src/SmartCampus.Api/Common/Requests/CollectionQueryParameters.cs` —
+  `Select` is not currently implemented. Contract changes visible outside this
+  backend follow Section 6: update `docs/architecture.md` in the same PR.
+- Use UTC for persisted/server timestamps and configuration for environment-
+  specific values. For state-changing operations, account for retries,
+  concurrency, stale state, and partial failure; do not add distributed
+  locking or a generic idempotency framework without a real requirement.
+- Clean Architecture and SOLID keep responsibilities and boundaries clear;
+  they do not maximize the number of layers, interfaces, or classes. Do not
+  introduce by default an interface for every class, a generic/base
+  repository, generic CRUD service, generic base controller, second Unit of
+  Work, Result/Maybe/Specification framework, AutoMapper for a few explicit
+  mappings, CQRS infrastructure beyond the existing MediatR pattern, event
+  sourcing, a generic domain-event or state-machine framework, Redis/message
+  broker, microservices, or factories/builders for trivial construction.
+
 ---
 
 ## 4. Testing Strategy
 
 - Unit test framework: **xUnit**.
-- Mock/assertion library: <!-- TODO(WP2): chưa chốt. Ứng viên: Moq + FluentAssertions, hoặc NSubstitute + FluentAssertions, hoặc xUnit thuần (Assert.*). Chốt khi bắt đầu viết test đầu tiên. -->
-- Layout: `tests/SmartCampus.Application.Tests/` covers `Application` services
-  (mock the repository interfaces, no real database). `tests/SmartCampus.Api.Tests/`
-  covers controllers/HTTP concerns (status codes, validation, routing) —
-  mock `Application` services, do not hit a real database here either.
-- Integration tests (real EF Core against real SQL Server, not mocked):
-  <!-- TODO(WP2): chưa chốt cách chạy. Ứng viên: Testcontainers (SQL Server
-  container thật, chính xác nhất nhưng cần Docker trong môi trường verify/CI)
-  vs. EF Core In-Memory provider (nhanh, không cần Docker, nhưng không bắt
-  được lỗi đặc thù SQL Server: constraint, index, raw SQL). Chốt khi biết
-  môi trường CI có Docker hay không, rồi ghi rõ project test riêng (ví dụ
-  `tests/SmartCampus.Infrastructure.IntegrationTests/`) và cách nó chạy trong
-  `backend/scripts/verify`. -->
-- No coverage threshold for now — `dotnet test` passing is the bar. Revisit
-  if/when the team wants a minimum coverage gate.
-- A new service or controller change ships with tests in the same PR. Do not
-  add "TODO: write tests" — write them or say explicitly why not.
+- Actual solution projects are `backend/tests/SmartCampus.UnitTests/` and
+  `backend/SmartCampus.IntegrationTests/` (the latter is at the backend root,
+  as listed in `backend/SmartCampus.slnx`). Both currently contain only
+  scaffold tests.
+- Unit tests cover observable Application behavior and invariants without
+  ASP.NET or real infrastructure where possible. Integration tests cover
+  persistence, SQL, transactions, mappings, and other real infrastructure
+  semantics when those implementations exist; the current integration project
+  has no EF Core/SQL package yet.
+- Add regression tests for reproducible bugs, mock meaningful external
+  boundaries rather than every owned class, and do not test private details or
+  add tests only to increase coverage. A refactor without behavior change does
+  not require unrelated test rewrites.
+- `backend/scripts/verify` restores and builds `backend/SmartCampus.slnx` with
+  `-warnaserror`, then (from `backend/`) runs `dotnet test SmartCampus.slnx
+  --no-build` when any `tests/*/*.csproj` exists. The current unit-test
+  project satisfies that gate, and the solution invocation includes
+  `SmartCampus.IntegrationTests`; it is not currently skipped. The migration
+  check runs only after migration files exist.
+- There is no coverage threshold. A behavior change should ship with tests in
+  the same change, or document why it cannot be automated.
 
 ---
 
@@ -233,10 +324,11 @@ trước khi code hai đầu. -->
 backend/scripts/verify
 ```
 
-Order: `dotnet restore` -> `dotnet build -warnaserror` -> `dotnet test` (bỏ qua
-khi `tests/` chưa có project nào) -> `dotnet ef migrations
-has-pending-model-changes` (chỉ chạy khi
-`src/SmartCampus.Infrastructure/Persistence/Migrations/` đã có migration).
+Order: `dotnet restore` -> `dotnet build -warnaserror` -> `dotnet test` (the
+script skips this only when `backend/tests/` has no test project) ->
+`dotnet ef migrations has-pending-model-changes` (only when
+`backend/src/SmartCampus.Infrastructure/Persistence/Migrations/` has a
+migration).
 
 ---
 
