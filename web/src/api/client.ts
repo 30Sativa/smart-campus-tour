@@ -24,23 +24,79 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
 }
 
+import { useAuthStore } from '../stores/auth-store.ts';
+
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
-  /** Plain object, serialized as JSON. Use `RequestInit.body` semantics elsewhere. */
   json?: unknown
 }
+
+// Queue for pending requests during token refresh
+let isRefreshing = false;
+let refreshQueue: Array<(token: string) => void> = [];
 
 export async function apiClient<T>(
   path: string,
   { json, headers, ...options }: ApiRequestOptions = {},
 ): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    headers: {
-      ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...headers,
-    },
-    body: json === undefined ? undefined : JSON.stringify(json),
-  })
+  const doRequest = async (token?: string) => {
+    // Add token from Zustand store if available.
+    const currentToken = token || useAuthStore.getState().accessToken;
+
+    const res = await fetch(apiUrl(path), {
+      ...options,
+      headers: {
+        ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {}),
+        ...headers,
+      },
+      body: json === undefined ? undefined : JSON.stringify(json),
+    });
+    return res;
+  };
+
+  let response = await doRequest();
+
+  // If unauthorized, attempt to refresh token
+  if (response.status === 401) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      
+      try {
+        const refreshResponse = await fetch(apiUrl('/api/auth/refresh'), {
+          method: 'POST',
+          // credentials: 'include' ensures the HttpOnly cookie is sent
+          credentials: 'include'
+        });
+
+        if (!refreshResponse.ok) throw new Error('Refresh failed');
+        
+        const data = await refreshResponse.json();
+        useAuthStore.getState().setAuth(data.accessToken, { 
+          userId: data.userId, 
+          username: data.username, 
+          role: data.role 
+        });
+
+        // Resolve queued requests
+        refreshQueue.forEach(cb => cb(data.accessToken));
+        refreshQueue = [];
+        
+        // Retry original request
+        response = await doRequest(data.accessToken);
+      } catch {
+        useAuthStore.getState().logout();
+        refreshQueue = []; // clear queue
+      } finally {
+        isRefreshing = false;
+      }
+    } else {
+      // Wait for refresh to complete
+      const newToken = await new Promise<string>(resolve => {
+        refreshQueue.push(resolve);
+      });
+      response = await doRequest(newToken);
+    }
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, await response.text().catch(() => ''))
@@ -50,5 +106,7 @@ export async function apiClient<T>(
     return undefined as T
   }
 
-  return (await response.json()) as T
+  const body = await response.text()
+  return body.trim() ? JSON.parse(body) as T : undefined as T
 }
+

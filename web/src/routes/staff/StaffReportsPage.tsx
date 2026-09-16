@@ -1,0 +1,14 @@
+import { useState } from 'react'
+import { ChartNoAxesCombined, Star } from 'lucide-react'
+import { useFeedbackReports } from '../../api/staff-hooks'
+import { ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusPill } from '../../components/staff/StaffUi'
+import { formatDateTime } from '../../components/staff/StaffFormatters'
+
+export default function StaffReportsPage() {
+  const [rating, setRating] = useState('')
+  const reports = useFeedbackReports({ rating: rating || undefined })
+  return <div className="min-h-full bg-[#f1f6fe] px-4 py-5 sm:px-6 lg:px-8 lg:py-7"><div className="mx-auto w-full max-w-[1500px]">
+    <PageHeader icon={<ChartNoAxesCombined size={14} />} title="Phản hồi sau tour" description="Dữ liệu chỉ đọc để nhân viên theo dõi chất lượng vận hành. Nhân viên không thể sửa hoặc xóa phản hồi của khách tham quan." action={<label className="flex min-h-10 items-center gap-2 rounded-xl border border-[#cce1ff] bg-white px-3 text-xs font-bold text-[#4f7fca]"><Star size={14} />Điểm<select value={rating} onChange={(event) => setRating(event.target.value)} className="bg-transparent text-xs outline-none"><option value="">Tất cả</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={String(value)}>{value} sao</option>)}</select></label>} />
+    <section className={panelClass}>{reports.isPending ? <div className="p-5"><LoadingPanel /></div> : reports.isError ? <div className="p-5"><ErrorPanel error={reports.error} /></div> : reports.data.length === 0 ? <p className="p-12 text-center text-sm font-medium text-[#71819a]">Không có phản hồi khớp bộ lọc.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-[#edf2fa] bg-[#f8fbff] text-[11px] font-bold text-[#71819a]"><tr><th className="px-5 py-4">Ngày tour</th><th className="px-4 py-4">Tuyến</th><th className="px-4 py-4">Trạng thái booking</th><th className="px-4 py-4">Đánh giá</th><th className="px-5 py-4">Nội dung</th></tr></thead><tbody className="divide-y divide-[#edf2fa]">{reports.data.map((report) => <tr key={report.bookingId} className="align-top hover:bg-[#f8fbff]"><td className="px-5 py-4 text-xs font-semibold text-[#647793]">{formatDateTime(report.tourDate)}</td><td className="px-4 py-4 font-semibold text-[#40546f]">{report.routeName}</td><td className="px-4 py-4"><StatusPill value={report.bookingStatus} /></td><td className="px-4 py-4">{report.rating ? <span className="inline-flex items-center gap-1 font-bold text-[#a96d0b]"><Star size={15} fill="currentColor" />{report.rating}/5</span> : <span className="text-xs text-[#8a98ac]">Chưa có</span>}</td><td className="max-w-lg px-5 py-4 text-sm leading-6 text-[#647793]">{report.comment || 'Không có nhận xét.'}</td></tr>)}</tbody></table></div>}</section>
+  </div></div>
+}

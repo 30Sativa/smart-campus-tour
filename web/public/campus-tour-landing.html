@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CampusTour DT-AMR — Robot dẫn tour thông minh</title>
+  <meta name="description" content="Hệ thống tham quan khuôn viên đại học bằng robot tự hành AMR kết hợp AI trợ lý đa ngôn ngữ và Digital Twin thời gian thực." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+  <style>﻿*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--black:#0a0a0a;--dark:#111;--surface:#1e1e1e;--border:rgba(255,255,255,0.08);--white:#f5f5f0;--accent:#00d4aa;--accent2:#4f9eff;--muted:rgba(245,245,240,0.45);--secondary:rgba(245,245,240,0.68);--r-sm:8px;--r-md:16px;--r-lg:24px;--cw:1300px}
+html{overflow:auto}body{overflow-x:hidden}
+body{font-family:"Mona Sans","Inter",-apple-system,sans-serif;background:var(--black);color:var(--white);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{text-decoration:none;color:inherit}
+img{display:block;width:100%;object-fit:cover}
+.ctn{max-width:var(--cw);margin:0 auto;padding:0 40px}
+.sub{font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.h1-hero{font-size:clamp(4.5rem,11vw,10rem);font-weight:700;line-height:.88;letter-spacing:-.04em;text-transform:uppercase}
+.sec-title{font-size:clamp(1.9rem,3.8vw,3.2rem);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.h6{font-size:13px;font-weight:600;letter-spacing:.04em}
+.ucase{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+p{font-size:15px;line-height:1.7;color:var(--secondary)}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 28px;border-radius:9999px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-dark{background:var(--white);color:var(--black)}
+.btn-dark:hover{background:var(--accent);transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,212,170,.3)}
+.btn-ghost{background:transparent;color:var(--white);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--accent);background:rgba(0,212,170,.06)}
+.btn-arrow{width:28px;height:28px;background:var(--black);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.sec{padding:120px 0}
+.flex-sb{display:flex;align-items:flex-start;justify-content:space-between;gap:40px}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:0 40px;background:rgba(10,10,10,.7);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);transition:background .3s}
+.nav-inner{max-width:var(--cw);margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:72px}
+.nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+.logo-box{width:36px;height:36px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.logo-box svg{width:20px;height:20px;color:var(--black)}
+.nav-links{display:flex;align-items:center;gap:34px}
+.nav-link{font-size:13px;font-weight:500;color:var(--secondary);transition:color .2s;position:relative}
+.nav-link::after{content:"";position:absolute;bottom:-2px;left:0;width:0;height:1px;background:var(--accent);transition:width .2s}
+.nav-link:hover{color:var(--white)}.nav-link:hover::after{width:100%}
+.burger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:8px}
+.burger span{display:block;width:22px;height:2px;background:var(--white);border-radius:2px}
+.hero{position:relative;width:100%;min-height:100vh;overflow:hidden}
+.hero-img{position:absolute;inset:0}
+.hero-img img{width:100%;height:100%;object-fit:cover;transform-origin:center}
+.hero-ov{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(10,10,10,.45) 0%,rgba(10,10,10,.28) 50%,rgba(10,10,10,.88) 100%)}
+.hero-body{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;justify-content:space-between;padding:120px 0 60px}
+.hero-titles{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:24px}
+.hero-t2{text-align:right;margin-top:8px}
+.hero-btm{display:flex;align-items:flex-end;justify-content:space-between;width:100%}
+.hero-tags{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.scroll-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.scroll-lbl{font-size:10px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.scroll-ln{height:50px;width:1px;background:rgba(255,255,255,.15);position:relative;overflow:hidden}
+.scroll-ln::after{content:"";position:absolute;top:0;left:0;width:100%;height:100%;background:var(--white);animation:sdown 1.6s ease-in-out infinite}
+@keyframes sdown{0%{transform:translateY(-100%)}100%{transform:translateY(220%)}}
+.showcase{background:#f0ede8;color:#111;padding:120px 0;position:relative;overflow:hidden}
+.showcase-wrap{position:relative;display:flex;flex-direction:column;gap:60px}
+.sc-main{position:relative;z-index:2;width:55%;margin:0 auto}
+.sc-main img{border-radius:var(--r-lg);aspect-ratio:16/9}
+.sc-title-w{text-align:center;position:relative;z-index:2}
+.sc-title{font-size:clamp(1.5rem,3.2vw,2.6rem);font-weight:600;letter-spacing:-.025em;color:#111;line-height:1.2;max-width:680px;margin:0 auto}
+.sc-floats{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:1}
+.sc-fi{position:absolute;width:150px;border-radius:var(--r-sm);overflow:hidden}
+.sc-fi img{border-radius:var(--r-sm)}
+.proc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px}
+.proc-card{position:relative;overflow:hidden;border-radius:var(--r-lg);aspect-ratio:3/4;cursor:pointer}
+.proc-img{position:absolute;inset:0}
+.proc-img img{width:100%;height:100%;object-fit:cover;transform:scale(1.2);transition:transform .9s cubic-bezier(.22,1,.36,1)}
+.proc-card:hover .proc-img img,.proc-card[data-a="1"] .proc-img img{transform:scale(1)}
+.proc-dark{position:absolute;inset:0;background:rgba(10,10,10,.62);transition:opacity .4s}
+.proc-card[data-a="1"] .proc-dark{opacity:0}
+.proc-ov{position:absolute;inset:0;padding:28px;display:flex;flex-direction:column;justify-content:space-between;z-index:2;background:linear-gradient(to top,rgba(10,10,10,.8) 0%,transparent 60%)}
+.proc-card[data-a="1"] .proc-ov{background:none}
+.proc-lbl{position:absolute;bottom:28px;left:28px;right:28px;z-index:3;opacity:0;transition:opacity .3s}
+.proc-card[data-a="1"] .proc-lbl{opacity:1}
+.proc-icon{width:44px;height:44px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center}
+.proc-icon svg{width:22px;height:22px;color:var(--black)}
+.mqw{padding:44px 0;overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.mq-track{display:flex;white-space:nowrap}
+.mq-item{display:inline-flex;align-items:center;gap:22px;padding:0 30px;flex-shrink:0}
+.mq-text{font-size:clamp(1.3rem,2.8vw,2.2rem);font-weight:700;letter-spacing:-.02em;color:var(--muted)}
+.mq-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.svc-layout{display:flex;gap:60px;align-items:flex-start}
+.svc-left{flex:0 0 340px;position:sticky;top:100px;display:flex;flex-direction:column;gap:28px}
+.svc-stack{position:relative;aspect-ratio:3/4;border-radius:var(--r-lg);overflow:hidden}
+.svc-img{position:absolute;inset:0;opacity:0;transition:opacity .7s cubic-bezier(.22,1,.36,1)}
+.svc-img.on{opacity:1}
+.svc-img img{width:100%;height:100%;object-fit:cover}
+.svc-right{flex:1}
+.svc-item{padding:26px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:padding-left .3s}
+.svc-item:hover{padding-left:6px}
+.svc-item.on{padding-left:0}
+.svc-row{display:flex;align-items:center;justify-content:space-between}
+.svc-name{font-size:clamp(1rem,1.9vw,1.45rem);font-weight:700;letter-spacing:-.02em;transition:color .3s}
+.svc-item:hover .svc-name,.svc-item.on .svc-name{color:var(--accent)}
+.svc-num{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--muted)}
+.svc-desc{font-size:14px;color:var(--secondary);line-height:1.6;margin-top:10px;max-height:0;overflow:hidden;transition:max-height .4s,opacity .4s;opacity:0}
+.svc-item.on .svc-desc{max-height:110px;opacity:1}
+.stats-sec{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:72px 0}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+.stat-box{background:var(--surface);padding:44px 32px;display:flex;flex-direction:column;gap:8px}
+.stat-n{font-size:clamp(2.2rem,3.8vw,3.4rem);font-weight:700;letter-spacing:-.04em}
+.stat-n .ac{color:var(--accent)}
+.stat-lbl{font-size:13px;color:var(--muted);font-weight:500}
+.stat-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+.how-sec{padding:120px 0;overflow:hidden;background:var(--dark)}
+.how-slides{overflow:hidden;padding:0 40px;margin-top:48px}
+.how-track{display:flex;gap:18px;cursor:grab}
+.how-slide{flex:0 0 320px;aspect-ratio:3/4;border-radius:var(--r-lg);overflow:hidden;position:relative;transform:scale(.72);opacity:.4;transition:transform .6s cubic-bezier(.22,1,.36,1),opacity .6s}
+.how-slide.on{transform:scale(1);opacity:1}
+.how-slide img{width:100%;height:100%;object-fit:cover}
+.how-cnt{position:absolute;bottom:0;left:0;right:0;padding:26px;background:linear-gradient(transparent,rgba(10,10,10,.9));opacity:0;transition:opacity .4s}
+.how-slide.on .how-cnt{opacity:1}
+.how-num{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+.how-ttl{font-size:1rem;font-weight:700}
+.how-dsc{font-size:13px;color:var(--secondary);margin-top:5px;line-height:1.5}
+.how-nav{display:flex;gap:12px}
+.how-btn{width:46px;height:46px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,background .2s}
+.how-btn:hover{border-color:var(--accent);background:rgba(0,212,170,.1)}
+.tech-sec{padding:120px 0;background:var(--dark)}
+.tech-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);margin-top:56px}
+.tech-card{background:var(--dark);padding:38px;position:relative;overflow:hidden;cursor:pointer}
+.tech-curtain{position:absolute;inset:0;background:var(--accent);transform:translateY(100%);z-index:0}
+.tech-body{position:relative;z-index:1}
+.tech-tag{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.tech-ttl{font-size:1.1rem;font-weight:700;letter-spacing:-.02em;margin-bottom:7px}
+.tech-sub{font-size:13px;color:var(--muted)}
+.cta-sec{padding:120px 0;background:var(--black);text-align:center}
+.cta-box{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:96px 56px;overflow:hidden}
+.cta-glow{position:absolute;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,170,.14),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.cta-t{font-size:clamp(2.2rem,4.8vw,4.2rem);font-weight:700;letter-spacing:-.04em;line-height:1;margin-bottom:22px;position:relative;z-index:1}
+.cta-p{max-width:500px;margin:0 auto 44px;position:relative;z-index:1}
+.cta-btns{display:flex;gap:14px;justify-content:center;position:relative;z-index:1}
+.footer{background:var(--dark);border-top:1px solid var(--border);padding:76px 0 36px}
+.footer-top{display:flex;justify-content:space-between;align-items:flex-start;gap:56px;padding-bottom:56px;border-bottom:1px solid var(--border)}
+.footer-brand{flex:0 0 280px}
+.footer-tag{font-size:14px;color:var(--muted);margin-top:14px;line-height:1.6}
+.footer-cols{display:flex;gap:72px}
+.fc-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px}
+.fc a{display:block;font-size:14px;color:var(--secondary);margin-bottom:9px;transition:color .2s}
+.fc a:hover{color:var(--white)}
+.footer-bot{display:flex;justify-content:space-between;align-items:center;padding-top:28px}
+.footer-copy{font-size:13px;color:var(--muted)}
+.soc{display:flex;gap:14px}
+.soc-a{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-weight:700;transition:border-color .2s,color .2s}
+.soc-a:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:991px){.ctn{padding:0 24px}.nav{padding:0 24px}.nav-links{display:none}.burger{display:flex}.h1-hero{font-size:clamp(3rem,12vw,6rem)}.proc-grid{grid-template-columns:1fr}.proc-card{aspect-ratio:4/3}.svc-layout{flex-direction:column}.svc-left{position:static;flex:none;width:100%}.stats-grid{grid-template-columns:repeat(2,1fr)}.tech-grid{grid-template-columns:1fr}.footer-top{flex-direction:column;gap:36px}.footer-cols{flex-wrap:wrap;gap:36px}.flex-sb{flex-direction:column}.cta-btns{flex-direction:column;align-items:center}}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr}.h1-hero{font-size:clamp(2.5rem,14vw,4.5rem)}.sec{padding:72px 0}.sc-main{width:88%}}
+</style>
+</head>
+<body>
+﻿<nav class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo"><div class="logo-box"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C16.81 13.47 18 11.38 18 9c0-3.87-3.13-7-6-7z" fill="currentColor"/><path d="M9 21h6v-1H9v1z" fill="currentColor" opacity=".6"/><circle cx="12" cy="9" r="2" fill="black"/></svg></div>CampusTour</a>
+    <div class="nav-links" id="nav-links">
+      <a href="#gioi-thieu" class="nav-link">Giới thiệu</a>
+      <a href="#tinh-nang" class="nav-link">Tính năng</a>
+      <a href="#quy-trinh" class="nav-link">Quy trình</a>
+      <a href="#robot" class="nav-link">Robot AMR</a>
+      <a href="#lien-he" class="nav-link">Liên hệ</a>
+    </div>
+    <a href="#dat-tour" class="btn btn-dark" id="nav-cta">Đặt Tour <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a>
+    <div class="burger" id="burger"><span></span><span></span><span></span></div>
+  </div>
+</nav>
+<div style="position:relative">
+  <div style="position:sticky;top:0">
+    <section class="hero" id="hero">
+      <div class="hero-img" id="hero-img"><img src="images/hero-campus.jpg" alt="Robot AMR"/></div>
+      <div class="hero-ov"></div>
+      <div class="hero-body ctn">
+        <div class="hero-titles"><h1 class="h1-hero" id="ht1">CAMPUS</h1><div class="hero-t2"><div class="h1-hero" id="ht2">TOUR</div></div></div>
+        <div class="hero-btm">
+          <div class="hero-tags" id="htags"><span class="dot"></span><span class="h6" style="color:rgba(255,255,255,.6)">Robot AMR</span><span class="h6" style="color:rgba(255,255,255,.3)">|</span><span class="h6" style="color:rgba(255,255,255,.6)">AI Assistant</span><span class="h6" style="color:rgba(255,255,255,.3)">|</span><span class="h6" style="color:rgba(255,255,255,.6)">2026</span></div>
+          <div class="scroll-wrap" id="hscroll"><span class="scroll-lbl">scroll</span><div class="scroll-ln"></div></div>
+          <div class="h6" id="hstat" style="color:var(--secondary);flex-shrink:0">Tham quan thông minh — 24/7 tự động</div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <section class="showcase" id="gioi-thieu">
+    <div class="ctn"><div class="showcase-wrap">
+      <div class="sc-main"><img src="images/digital-twin.jpg" alt="Digital Twin"/></div>
+      <div class="sc-title-w"><h2 class="sc-title">Trải nghiệm tham quan khuôn viên đại học thông minh, tự động và được cá nhân hóa bởi AI</h2></div>
+      <div class="sc-floats">
+        <div class="sc-fi" style="left:3%;top:10%"><img src="images/booking-app.jpg" alt="App đặt tour"/></div>
+        <div class="sc-fi" style="right:3%;top:18%"><img src="images/ai-assistant.jpg" alt="AI trợ lý"/></div>
+        <div class="sc-fi" style="left:7%;bottom:14%"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+        <div class="sc-fi" style="right:7%;bottom:10%"><img src="images/digital-twin.jpg" alt="Digital twin"/></div>
+      </div>
+    </div></div>
+  </section>
+</div>
+<section class="sec" id="quy-trinh" style="background:var(--black)">
+  <div class="ctn">
+    <div class="flex-sb">
+      <div style="flex:0 0 38%;max-width:38%"><div class="sub">// &nbsp; Quy trình hoạt động</div><h2 class="sec-title">Hành trình trong mỗi chuyến tour</h2></div>
+      <div style="flex:0 0 28%;max-width:28%"><p>Hành trình tham quan thông minh kết hợp robot tự hành, AI đa ngôn ngữ và giám sát song song thời gian thực.</p></div>
+    </div>
+    <div class="proc-grid" id="proc-grid">
+      <div class="proc-card" data-a="0">
+        <div class="proc-img"><img src="images/booking-app.jpg" alt="Đặt lịch"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">01 — Đặt lịch</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M8 2v3M16 2v3M3 9h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">Đặt lịch trực tuyến</div><p style="font-size:13px;margin-top:6px">Chọn lộ trình, giờ đến và số người — hệ thống tự phân bổ robot phù hợp</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">Đặt lịch trực tuyến →</div></div>
+      </div>
+      <div class="proc-card" data-a="1">
+        <div class="proc-img"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">02 — Dẫn đường</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">Robot tự hành AMR</div><p style="font-size:13px;margin-top:6px">Robot điều hướng chính xác, tránh vật cản, dẫn đến từng điểm tham quan</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">Robot AMR dẫn đường →</div></div>
+      </div>
+      <div class="proc-card" data-a="0">
+        <div class="proc-img"><img src="images/ai-assistant.jpg" alt="AI"/></div>
+        <div class="proc-dark"></div>
+        <div class="proc-ov"><div class="ucase">03 — Khám phá</div><div><div class="proc-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2z" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="h6" style="margin-top:8px;color:var(--white)">AI hướng dẫn đa ngôn ngữ</div><p style="font-size:13px;margin-top:6px">AI thuyết minh, trả lời câu hỏi bằng tiếng Việt, Anh và nhiều ngôn ngữ</p></div></div>
+        <div class="proc-lbl"><div class="h6" style="color:var(--accent)">AI đa ngôn ngữ →</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="mqw"><div class="mq-track" id="mq">
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Robot AMR tự hành</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">AI đa ngôn ngữ</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Digital Twin thời gian thực</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">Đặt tour trực tuyến</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">Giám sát đội robot</span></div>
+  <div class="mq-item"><div class="mq-dot" style="background:var(--accent2)"></div><span class="mq-text">Navigation ROS 2</span></div>
+  <div class="mq-item"><div class="mq-dot"></div><span class="mq-text">LiDAR &amp; Camera</span></div>
+</div></div>
+<section class="sec" id="tinh-nang" style="background:var(--black);padding-bottom:120px">
+  <div class="ctn">
+    <div style="text-align:center;margin-bottom:56px"><div class="sub">// &nbsp; Tính năng hệ thống</div><h2 class="sec-title">Thiết kế với mục đích rõ ràng</h2></div>
+    <div class="svc-layout">
+      <div class="svc-left">
+        <div class="svc-stack">
+          <div class="svc-img on"><img src="images/hero-campus.jpg" alt="Robot"/></div>
+          <div class="svc-img"><img src="images/booking-app.jpg" alt="Booking"/></div>
+          <div class="svc-img"><img src="images/ai-assistant.jpg" alt="AI"/></div>
+          <div class="svc-img"><img src="images/digital-twin.jpg" alt="Digital twin"/></div>
+          <div class="svc-img"><img src="images/hero-campus.jpg" alt="Dashboard"/></div>
+        </div>
+        <div style="text-align:center"><p style="margin-bottom:22px">Từ đặt lịch đến khám phá — giải pháp tham quan toàn diện, tự động và thông minh.</p><a href="#dat-tour" class="btn btn-dark" style="margin:0 auto">Khám phá thêm <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a></div>
+      </div>
+      <div class="svc-right" id="svc-right">
+        <div class="svc-item on" data-i="0"><div class="svc-row"><div class="svc-name">Robot tự hành AMR</div><div class="svc-num">01</div></div><div class="svc-desc">Robot di động tự hành sử dụng ROS 2, LiDAR và camera RGB-D để điều hướng an toàn trên khuôn viên. Tự tránh vật cản, tuân thủ lộ trình và quay về trạm sạc tự động.</div></div>
+        <div class="svc-item" data-i="1"><div class="svc-row"><div class="svc-name">Đặt lịch &amp; Lên lộ trình</div><div class="svc-num">02</div></div><div class="svc-desc">Khách tham quan đặt tour qua web app. Hệ thống backend tự động lên lịch, phân bổ robot phù hợp và gửi thông báo thời gian thực về trạng thái chuyến tour.</div></div>
+        <div class="svc-item" data-i="2"><div class="svc-row"><div class="svc-name">AI Trợ lý đa ngôn ngữ</div><div class="svc-num">03</div></div><div class="svc-desc">Trợ lý AI tích hợp STT, LLM và TTS hỗ trợ tiếng Việt, tiếng Anh và nhiều ngôn ngữ. Thuyết minh điểm tham quan, trả lời câu hỏi tức thì bằng giọng nói.</div></div>
+        <div class="svc-item" data-i="3"><div class="svc-row"><div class="svc-name">Digital Twin thời gian thực</div><div class="svc-num">04</div></div><div class="svc-desc">Bản sao kỹ thuật số của khuôn viên đồng bộ theo thời gian thực với vị trí robot. Đội vận hành theo dõi toàn bộ đội robot, quản lý lịch trình và phát hiện sự cố tức thì.</div></div>
+        <div class="svc-item" data-i="4"><div class="svc-row"><div class="svc-name">Bảng điều khiển vận hành</div><div class="svc-num">05</div></div><div class="svc-desc">Dashboard trực quan: theo dõi trạng thái pin, lịch tour, cảnh báo sự cố và số liệu hiệu suất — tất cả trong một giao diện duy nhất.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="stats-sec"><div class="ctn"><div class="stats-grid">
+  <div class="stat-box"><div class="stat-n"><span id="s1">500</span>+</div><div class="stat-lbl">Lượt tham quan / tháng</div><div class="stat-sub">Robot phục vụ không gián đoạn 24/7</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s2">15</span>+</div><div class="stat-lbl">Điểm tham quan</div><div class="stat-sub">Tòa nhà, phòng lab, thư viện, công viên</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s3">5</span></div><div class="stat-lbl">Ngôn ngữ hỗ trợ</div><div class="stat-sub">Việt, Anh, Pháp, Nhật, Hàn</div></div>
+  <div class="stat-box"><div class="stat-n"><span id="s4">99</span><span class="ac">%</span></div><div class="stat-lbl">Uptime hệ thống</div><div class="stat-sub">Giám sát và phục hồi tự động</div></div>
+</div></div></div>
+<section class="how-sec" id="robot">
+  <div class="ctn"><div class="flex-sb" style="align-items:flex-end">
+    <div><div class="sub">// &nbsp; Hệ thống robot</div><h2 class="sec-title">Công nghệ trong từng bước đi</h2></div>
+    <div class="how-nav"><button class="how-btn" id="how-prev"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button class="how-btn" id="how-next"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+  </div></div>
+  <div class="how-slides" id="how-slides"><div class="how-track" id="how-track">
+    <div class="how-slide on"><img src="images/hero-campus.jpg" alt="Nav"/><div class="how-cnt"><div class="how-num">01 — NAVIGATION</div><div class="how-ttl">Điều hướng tự hành ROS 2</div><div class="how-dsc">SLAM, Nav2, costmap — robot tự tạo bản đồ và lên kế hoạch đường đi tối ưu</div></div></div>
+    <div class="how-slide"><img src="images/digital-twin.jpg" alt="DT"/><div class="how-cnt"><div class="how-num">02 — DIGITAL TWIN</div><div class="how-ttl">Bản sao kỹ thuật số</div><div class="how-dsc">Đồng bộ trạng thái robot và môi trường theo thời gian thực qua ROS Bridge</div></div></div>
+    <div class="how-slide"><img src="images/ai-assistant.jpg" alt="AI"/><div class="how-cnt"><div class="how-num">03 — AI ASSISTANT</div><div class="how-ttl">STT · LLM · TTS Pipeline</div><div class="how-dsc">Whisper STT → LLM dialogue → TTS engine — hội thoại tự nhiên đa ngôn ngữ</div></div></div>
+    <div class="how-slide"><img src="images/booking-app.jpg" alt="Book"/><div class="how-cnt"><div class="how-num">04 — BOOKING</div><div class="how-ttl">API Đặt lịch &amp; Điều phối</div><div class="how-dsc">FastAPI phân bổ tour, điều phối đội robot và quản lý hàng đợi tự động</div></div></div>
+    <div class="how-slide"><img src="images/hero-campus.jpg" alt="Ops"/><div class="how-cnt"><div class="how-num">05 — OPERATIONS</div><div class="how-ttl">Dashboard vận hành đội robot</div><div class="how-dsc">Theo dõi pin, cảnh báo, metrics — quản lý toàn bộ fleet từ một nơi duy nhất</div></div></div>
+  </div></div>
+</section>
+<section class="tech-sec">
+  <div class="ctn">
+    <div class="flex-sb">
+      <div style="flex:0 0 38%;max-width:38%"><div class="sub">// &nbsp; Nghiên cứu &amp; phát triển</div><h2 class="sec-title">Được xây dựng trên nền tảng vững chắc</h2></div>
+      <div style="flex:0 0 28%;max-width:28%"><p>Hệ thống tích hợp các công nghệ robotics, AI và IoT tiên tiến nhất, phát triển theo phương pháp Agile với kiểm thử liên tục.</p></div>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">ROS 2 HUMBLE</div><div class="tech-ttl">Navigation Stack</div><div class="tech-sub">Nav2 · SLAM Toolbox · MoveIt 2</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">AI STACK</div><div class="tech-ttl">Multilingual Pipeline</div><div class="tech-sub">Whisper STT · GPT-4o · Coqui TTS</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">BACKEND</div><div class="tech-ttl">Booking &amp; Dispatch API</div><div class="tech-sub">FastAPI · PostgreSQL · Redis · AWS EC2</div></div></div>
+      <div class="tech-card"><div class="tech-curtain"></div><div class="tech-body"><div class="tech-tag">FRONTEND</div><div class="tech-ttl">Visitor App &amp; Dashboard</div><div class="tech-sub">React · TypeScript · Vite · Three.js</div></div></div>
+    </div>
+  </div>
+</section>
+<section class="cta-sec" id="dat-tour"><div class="ctn"><div class="cta-box">
+  <div class="cta-glow"></div>
+  <div class="sub" style="color:var(--accent);position:relative;z-index:1">// &nbsp; Bắt đầu ngay hôm nay</div>
+  <h2 class="cta-t">Trải nghiệm<br/>khuôn viên theo<br/>cách mới</h2>
+  <p class="cta-p">Đặt lịch tour với robot AMR — nhanh chóng, thông minh và hoàn toàn tự động. Khám phá đại học theo cách chưa từng có.</p>
+  <div class="cta-btns">
+    <a href="#" class="btn btn-dark">Đặt Tour Ngay <span class="btn-arrow"><svg width="11" height="8" viewBox="0 0 12 8" fill="none"><path d="M11.5 3.89L6.5 7.77V4.39H0V3.39H6.5V0L11.5 3.89Z" fill="currentColor"/></svg></span></a>
+    <a href="#" class="btn btn-ghost">Xem demo hệ thống</a>
+  </div>
+</div></div></section>
+<footer class="footer" id="lien-he"><div class="ctn">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo" style="font-size:17px"><div class="logo-box"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26C16.81 13.47 18 11.38 18 9c0-3.87-3.13-7-6-7z" fill="currentColor"/><path d="M9 21h6v-1H9v1z" fill="currentColor" opacity=".6"/><circle cx="12" cy="9" r="2" fill="black"/></svg></div>CampusTour DT-AMR</a>
+      <p class="footer-tag">Hệ thống tham quan khuôn viên đại học bằng robot tự hành AMR kết hợp AI trợ lý đa ngôn ngữ và Digital Twin theo thời gian thực.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="fc"><div class="fc-title">Hệ thống</div><a href="#">Robot AMR</a><a href="#">AI Assistant</a><a href="#">Digital Twin</a><a href="#">Booking API</a><a href="#">Dashboard</a></div>
+      <div class="fc"><div class="fc-title">Thông tin</div><a href="#">Về dự án</a><a href="#">Kiến trúc hệ thống</a><a href="#">Tài liệu kỹ thuật</a><a href="#">Nhóm phát triển</a></div>
+      <div class="fc"><div class="fc-title">Liên hệ</div><a href="#">GitHub Repository</a><a href="#">Báo lỗi</a><a href="#">Đóng góp</a><a href="#">Email nhóm</a></div>
+    </div>
+  </div>
+  <div class="footer-bot">
+    <div class="footer-copy">© 2026 CampusTour DT-AMR. Dự án nghiên cứu &amp; phát triển.</div>
+    <div class="soc"><a href="#" class="soc-a">GH</a><a href="#" class="soc-a">FB</a><a href="#" class="soc-a">YT</a></div>
+  </div>
+</div></footer>
+
+<script>﻿// Lenis smooth scroll - chỉ dùng gsap.ticker, không dùng RAF riêng
+const lenis = new Lenis({
+  duration: 1.2,
+  easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+  smoothWheel: true,
+  wheelMultiplier: 1,
+  touchMultiplier: 2
+});
+gsap.ticker.add(time => lenis.raf(time * 1000));
+gsap.ticker.lagSmoothing(0);
+lenis.on("scroll", ScrollTrigger.update);
+
+gsap.registerPlugin(ScrollTrigger);
+(function(){
+  const img=document.querySelector("#hero-img img");
+  const t1=document.getElementById("ht1"),t2=document.getElementById("ht2");
+  const tags=document.getElementById("htags"),scrl=document.getElementById("hscroll"),stat=document.getElementById("hstat");
+  function split(el){if(!el)return[];const txt=el.textContent.trim();el.textContent="";const ls=[];[...txt].forEach(c=>{const s=document.createElement("span");s.textContent=c;s.style.cssText="display:inline-block;will-change:transform,opacity,filter";el.appendChild(s);ls.push(s);});return ls;}
+  const l1=split(t1),l2=split(t2);
+  gsap.set(img,{scale:1.15,filter:"blur(20px)",opacity:0});
+  gsap.set([...l1,...l2],{opacity:0,filter:"blur(14px)",y:36});
+  gsap.set([tags,scrl,stat],{opacity:0,y:18});
+  const tl=gsap.timeline({defaults:{ease:"power3.out"}});
+  tl.to(img,{scale:1.05,filter:"blur(0px)",opacity:1,duration:2.2,ease:"power2.out"})
+    .to(l1,{opacity:1,filter:"blur(0px)",y:0,duration:1.1,stagger:.06},"-=1.8")
+    .to(l2,{opacity:1,filter:"blur(0px)",y:0,duration:1.1,stagger:.06},"-=0.7")
+    .to([tags,stat],{opacity:1,y:0,duration:.8,stagger:.1},"-=0.4")
+    .to(scrl,{opacity:1,y:0,duration:.6},"-=0.2");
+  tl.call(()=>gsap.to(img,{scale:1.12,duration:10,ease:"sine.inOut",yoyo:true,repeat:-1}));
+  ScrollTrigger.create({trigger:"#hero",start:"top top",end:"bottom top",onUpdate:s=>gsap.set(img,{y:s.progress*160})});
+})();
+ScrollTrigger.create({start:"top -80",onToggle:s=>{document.getElementById("nav").style.background=s.isActive?"rgba(10,10,10,.95)":"rgba(10,10,10,.7)";}});
+document.querySelectorAll(".sc-fi").forEach(fi=>{
+  const d=gsap.utils.random(160,300),dur=gsap.utils.random(3,5),st={y:gsap.utils.random(0,d)};
+  gsap.to(st,{y:"+="+d,duration:dur,ease:"none",repeat:-1,modifiers:{y:gsap.utils.unitize(y=>parseFloat(y)%d)},
+  onUpdate:()=>{const p=st.y/d,posY=p*d-d/2,fade=Math.sin(p*Math.PI);gsap.set(fi,{y:-posY,opacity:fade*.85,scale:.8+fade*.2});}});
+});
+(function(){
+  const cards=[...document.querySelectorAll(".proc-card")];
+  let active=cards.find(c=>c.dataset.a==="1")||cards[1];
+  function setA(n){if(n===active)return;active.dataset.a="0";n.dataset.a="1";active=n;}
+  cards.forEach(c=>c.addEventListener("mouseenter",()=>setA(c)));
+  gsap.from(cards,{rotationY:i=>i%2?-90:90,rotationX:4,scale:.94,opacity:0,duration:1.15,stagger:.14,ease:"expo.out",scrollTrigger:{trigger:"#proc-grid",start:"top 82%",once:true}});
+})();
+(function(){const t=document.getElementById("mq");if(!t)return;t.innerHTML+=t.innerHTML;const w=t.scrollWidth/2;gsap.to(t,{x:"-="+w,duration:32,ease:"none",repeat:-1,modifiers:{x:gsap.utils.unitize(x=>parseFloat(x)%w)}});})();
+(function(){
+  const items=[...document.querySelectorAll(".svc-item")];
+  const imgs=[...document.querySelectorAll(".svc-img")];
+  let active=0,timer;
+  function set(i){if(i===active)return;items[active].classList.remove("on");imgs[active].classList.remove("on");active=i;items[i].classList.add("on");imgs[i].classList.add("on");}
+  items.forEach((it,i)=>it.addEventListener("mouseenter",()=>{clearTimeout(timer);set(i);timer=setTimeout(loop,3500);}));
+  function loop(){set((active+1)%items.length);timer=setTimeout(loop,3500);}timer=setTimeout(loop,3500);
+})();
+[{id:"s1",v:500},{id:"s2",v:15},{id:"s3",v:5},{id:"s4",v:99}].forEach(({id,v})=>{
+  const el=document.getElementById(id);
+  ScrollTrigger.create({trigger:el,start:"top 88%",once:true,onEnter:()=>{const obj={n:0};gsap.to(obj,{n:v,duration:1.5,ease:"power2.out",onUpdate:()=>{el.textContent=Math.round(obj.n);}});}});
+});
+(function(){
+  const slides=[...document.querySelectorAll(".how-slide")];
+  const track=document.getElementById("how-track");
+  let cur=0,busy=false,auto;
+  function center(i,anim=true){const vw=window.innerWidth,sl=slides[i],off=vw/2-(sl.offsetLeft+sl.offsetWidth/2);gsap.to(track,{x:off,duration:anim?.8:0,ease:"power3.inOut",overwrite:true});slides.forEach((s,j)=>s.classList.toggle("on",j===i));}
+  function go(d){if(busy)return;busy=true;cur=Math.max(0,Math.min(slides.length-1,cur+d));center(cur);setTimeout(()=>{busy=false;},850);}
+  document.getElementById("how-prev").addEventListener("click",()=>go(-1));
+  document.getElementById("how-next").addEventListener("click",()=>go(1));
+  requestAnimationFrame(()=>center(cur,false));
+  window.addEventListener("resize",()=>center(cur,false));
+  auto=setInterval(()=>go(cur<slides.length-1?1:-(slides.length-1)),3800);
+  const wrap=document.getElementById("how-slides");
+  wrap.addEventListener("mouseenter",()=>clearInterval(auto));
+  wrap.addEventListener("mouseleave",()=>{auto=setInterval(()=>go(cur<slides.length-1?1:-(slides.length-1)),3800);});
+})();
+document.querySelectorAll(".tech-card").forEach(card=>{
+  const curtain=card.querySelector(".tech-curtain");const body=card.querySelector(".tech-body");
+  card.addEventListener("mouseenter",()=>{gsap.to(curtain,{y:0,duration:.45,ease:"power3.out"});gsap.to(body.querySelectorAll("*"),{color:"#0a0a0a",duration:.2});});
+  card.addEventListener("mouseleave",()=>{gsap.to(curtain,{y:"100%",duration:.38,ease:"power2.in"});gsap.to(body.querySelectorAll("*"),{color:"",duration:.2});});
+});
+document.getElementById("burger").addEventListener("click",()=>{
+  const nl=document.getElementById("nav-links");const open=nl.style.display==="flex"&&nl.style.position==="fixed";
+  if(open){nl.style.display="none";}else{Object.assign(nl.style,{display:"flex",flexDirection:"column",position:"fixed",top:"72px",left:"0",right:"0",background:"rgba(10,10,10,.97)",padding:"24px 40px",gap:"18px",backdropFilter:"blur(20px)",zIndex:"99"});}
+});
+document.querySelectorAll("a[href^='#']").forEach(a=>{
+  a.addEventListener("click",e=>{const id=a.getAttribute("href");if(id==="#")return;const t=document.querySelector(id);if(t){e.preventDefault();lenis.scrollTo(t,{offset:-80,duration:1.4});}});
+});</script>
+</body>
+</html>
