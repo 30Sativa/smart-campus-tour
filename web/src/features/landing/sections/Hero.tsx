@@ -7,9 +7,10 @@ import { EXPERIENCE_HREF } from '../landing-content'
 /**
  * Asymmetric split over full-bleed campus footage.
  *
- * Four text elements at most, and the supporting line has one job: say what the
- * product actually does before the visitor scrolls. A staff member who is
- * already signed in gets the operations door instead of the visitor one.
+ * Three text elements: a headline that balances onto two lines, one supporting
+ * sentence, and the two actions. The copy is deliberately short here, because a
+ * visitor decides whether this page is for them before reading a paragraph. A
+ * staff member who is already signed in gets the operations door instead.
  */
 export function Hero() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -34,11 +35,10 @@ export function Hero() {
       <div className="lp-hero__body lp-ctn">
         <div className="lp-hero__copy">
           <h1 className="lp-display" id="hero-title">
-            Tham quan khuôn viên cùng robot tự hành.
+            Khám phá khuôn viên cùng robot tự hành
           </h1>
           <p className="lp-lead" id="hero-lead">
-            Robot AMR tự động dẫn đường, thuyết minh và đồng hành cùng bạn khám phá khuôn viên
-            theo lộ trình có sẵn.
+            Robot AMR dẫn đường, thuyết minh và đồng hành cùng bạn theo lộ trình có sẵn.
           </p>
           <div className="lp-hero__cta" id="hero-cta">
             {isAuthenticated && isStaff ? (
