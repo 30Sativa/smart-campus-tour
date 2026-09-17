@@ -1,37 +1,62 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
-import LoginPage from './LoginPage';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
+import { describe, expect, it } from 'vitest'
+import LoginPage from './LoginPage'
 
 describe('LoginPage', () => {
-  const renderPage = () => render(
-    <MemoryRouter>
-      <LoginPage />
-    </MemoryRouter>,
-  );
+  const renderPage = () =>
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    )
 
   it('renders the staff sign-in form and toggles password visibility', () => {
-    renderPage();
+    renderPage()
 
-    expect(screen.getByRole('heading', { name: 'Đăng nhập CampusTour' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Chào mừng bạn trở lại' })).toBeInTheDocument()
 
-    const password = screen.getByPlaceholderText('Nhập mật khẩu');
-    expect(password).toHaveAttribute('type', 'password');
-    fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }));
-    expect(password).toHaveAttribute('type', 'text');
-    expect(screen.getByRole('button', { name: 'Ẩn mật khẩu' })).toBeInTheDocument();
-  });
+    const password = screen.getByLabelText('Mật khẩu')
+    expect(password).toHaveAttribute('type', 'password')
+    fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }))
+    expect(password).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Ẩn mật khẩu' })).toBeInTheDocument()
+  })
 
-  it('says that sign-in is running on mock data instead of presenting it as real auth', () => {
-    renderPage();
+  it('labels every field, so no input relies on its placeholder', () => {
+    renderPage()
 
-    expect(screen.getByText(/đăng nhập mẫu/i)).toBeInTheDocument();
-  });
+    expect(screen.getByLabelText('Tên đăng nhập')).toHaveAttribute('autocomplete', 'username')
+    expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('autocomplete', 'current-password')
+  })
 
-  it('no longer offers self-registration, which has no backend and no visitor app', () => {
-    renderPage();
+  it('ties a validation message to the field it belongs to', async () => {
+    renderPage()
 
-    expect(screen.queryByRole('button', { name: 'Tạo tài khoản' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Đăng ký ngay' })).not.toBeInTheDocument();
-  });
-});
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    const username = await screen.findByLabelText('Tên đăng nhập')
+    await waitFor(() => expect(username).toHaveAttribute('aria-invalid', 'true'))
+
+    const describedBy = username.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy as string)).toHaveTextContent('Vui lòng nhập tên đăng nhập')
+  })
+
+  it('keeps build state out of the sign-in composition', () => {
+    const { container } = renderPage()
+
+    // Mock mode is still disclosed, but never inside the form a visitor reads.
+    // The page owns no build state at all now; the dev badge belongs to
+    // AuthLayout and is covered by AuthLayout.test.tsx.
+    const form = container.querySelector('form') as HTMLElement
+    expect(within(form).queryByText(/mẫu/i)).toBeNull()
+    expect(container.querySelector('[data-dev-only]')).toBeNull()
+  })
+
+  it('offers the sign-up route now that the register screen exists', () => {
+    renderPage()
+
+    expect(screen.getByRole('link', { name: 'Đăng ký' })).toHaveAttribute('href', '/register')
+  })
+})

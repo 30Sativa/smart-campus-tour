@@ -23,6 +23,27 @@ export const MOCK_ACCOUNTS_HINT = 'Tài khoản mẫu: admin/admin, staff/staff,
 
 export class MockAuthError extends Error {}
 
+/**
+ * Mock sign-up. Registration has no backend endpoint, so this validates the
+ * form and issues the same fake token `mockLogin` does, with the `Visitor`
+ * role. It creates nothing: the account does not survive a reload, and the
+ * screen says so. Replace this call with `POST /api/auth/register` once the
+ * endpoint exists; the page needs no other change.
+ */
+export async function mockRegister(username: string, password: string): Promise<AuthResponse> {
+  const normalized = username.trim().toLowerCase()
+  if (MOCK_ACCOUNTS.some((item) => item.username === normalized)) {
+    throw new MockAuthError('Tên đăng nhập này đã được dùng cho một tài khoản mẫu.')
+  }
+  if (password.length < 6) throw new MockAuthError('Mật khẩu cần ít nhất 6 ký tự.')
+  return mockDelay({
+    accessToken: `mock-access-token.mock-user-${normalized}`,
+    userId: `mock-user-${normalized}`,
+    username: normalized,
+    role: 'Visitor',
+  })
+}
+
 export async function mockLogin(username: string, password: string): Promise<AuthResponse> {
   const account = MOCK_ACCOUNTS.find((item) => item.username === username.trim().toLowerCase() && item.password === password)
   if (!account) throw new MockAuthError('Sai tên đăng nhập hoặc mật khẩu mẫu.')

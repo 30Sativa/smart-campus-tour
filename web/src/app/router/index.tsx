@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import PublicHomePage from '../../routes/public/PublicHomePage'
 import LoginPage from '../../auth/LoginPage'
+import RegisterPage from '../../auth/RegisterPage'
+import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { isStaffRole } from '../../auth/roles'
 
@@ -51,7 +53,15 @@ function AdminLayout() {
 
 export const router = createBrowserRouter([
   { path: '/', element: <PublicHomePage /> },
-  { path: '/login', element: <LoginPage /> },
+  // One layout, two children: the photograph and the brand stay mounted while
+  // the form swaps, which is what the sign-in/sign-up crossfade animates.
+  {
+    element: <AuthLayout />,
+    children: [
+      { path: '/login', element: <LoginPage /> },
+      { path: '/register', element: <RegisterPage /> },
+    ],
+  },
   {
     path: '/admin',
     element: <AdminLayout />,

@@ -455,3 +455,6 @@ _to_delete/
 # Repository-owned Gazebo campus model assets (not Visual Studio build output).
 !robot/ros2_ws/src/simulation/models/campus_map/model.sdf
 !robot/ros2_ws/src/simulation/models/campus_map/meshes/map.obj
+
+# Thu muc do Claude desktop tao khi gui file ve may. Khong thuoc source.
+Claude outputs/

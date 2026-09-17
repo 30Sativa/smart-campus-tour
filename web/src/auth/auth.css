@@ -1,0 +1,743 @@
+/* ============================================================================
+   CampusTour DT-AMR - authentication design layer
+   ----------------------------------------------------------------------------
+   Auth is not a separate product, so it does not get a separate design system.
+   Both auth pages carry `.lp` on their root, which is what defines the palette
+   (--lp-bg / --lp-ink / --lp-accent), the font and the theme switch.
+   landing.css is already in the main bundle, so reusing `.lp` costs nothing and
+   keeps the two surfaces from drifting apart.
+
+   Composition rule for this surface, stated once:
+   the panel holds exactly ONE column. Brand, heading, supporting line, fields,
+   call to action and the account switch are a single vertical group on one
+   measure, centred as a whole. Nothing floats in a corner on its own.
+
+   Shape: auth form controls share one radius, --auth-r, so the input and the
+   button read as one family. This is the one place that departs from the
+   landing page's full-round pills, because a pill button above square inputs
+   makes a form look assembled from two kits.
+   ========================================================================== */
+
+/* Motion tokens.
+   One easing for the whole surface so it moves with a single hand, and a short
+   scale of durations: state feedback is faster than arrival. `--auth-ease` is a
+   soft ease-out with no overshoot, because nothing on a sign-in screen should
+   bounce.
+   These sit on :root rather than on .auth because the ::view-transition-*
+   pseudo-elements are children of the document root and cannot read a variable
+   scoped to the page. */
+:root {
+  --auth-ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+  --auth-fast: 150ms;   /* hover, focus, colour */
+  --auth-base: 200ms;   /* messages, small state changes */
+  --auth-enter: 400ms;  /* the column arriving */
+  --auth-media: 600ms;  /* the photograph settling */
+  --auth-exit: 160ms;   /* the outgoing form on a route switch */
+}
+
+.auth {
+  /* A panel ground barely off the field colour: enough to seat the inputs
+     without a card, shadow or gradient doing the work. */
+  --auth-panel-bg: #f8fafb;
+  --auth-field-bg: #ffffff;
+  --auth-field-line: rgba(11, 21, 25, 0.15);
+  --auth-r: 12px;
+  --auth-col: 460px;
+
+
+  --lp-danger-ink: #a42618;
+  --lp-danger-line: #c0483c;
+  --lp-danger-soft: rgba(164, 38, 24, 0.07);
+}
+
+html.dark .auth {
+  --auth-panel-bg: #081014;
+  /* Raised, not sunken: the field sits above the panel in dark too. */
+  --auth-field-bg: #101c22;
+  --auth-field-line: rgba(238, 244, 246, 0.17);
+
+  --lp-danger-ink: #ffa39a;
+  --lp-danger-line: rgba(255, 163, 154, 0.5);
+  --lp-danger-soft: rgba(255, 163, 154, 0.1);
+}
+
+.auth {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--auth-panel-bg);
+}
+
+@media (min-width: 1024px) {
+  .auth {
+    grid-template-columns: 52fr 48fr;
+  }
+}
+
+/* ── Visual panel ────────────────────────────────────────────────────────── */
+
+.auth-visual {
+  position: relative;
+  display: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  .auth-visual {
+    display: block;
+  }
+}
+
+.auth-visual__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 58%;
+}
+
+/* Enough to carry text, not enough to flatten the photograph. */
+.auth-visual__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(4, 13, 17, 0.34) 0%,
+    rgba(4, 13, 17, 0.12) 30%,
+    rgba(4, 13, 17, 0.74) 100%
+  );
+}
+
+.auth-visual__inner {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: clamp(40px, 4vw, 64px);
+  /* The copy holds off the bottom edge instead of sitting on it. */
+  padding-bottom: clamp(56px, 6vw, 84px);
+  color: var(--lp-ink-on-media);
+}
+
+.auth-visual__title {
+  margin: 0;
+  font-size: clamp(2rem, 2.4vw, 2.375rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+
+.auth .auth-visual__lead {
+  margin: 14px 0 0;
+  max-width: 36ch;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--lp-ink-on-media-2);
+}
+
+/* ── Form panel ──────────────────────────────────────────────────────────── */
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--auth-panel-bg);
+  padding: 40px 22px 48px;
+}
+
+@media (min-width: 640px) {
+  .auth-panel {
+    padding: 48px clamp(32px, 5vw, 64px);
+  }
+}
+
+/* The single column. Everything in the panel lives inside it. */
+.auth-col {
+  width: 100%;
+  max-width: var(--auth-col);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+/* Arrival.
+   The stagger is carried by the layout's `data-entrance` flag rather than by
+   the elements themselves, so it plays once on reaching auth and never again
+   when the form swaps: the route switch is the view transition's job, and the
+   two must not run at the same time.
+   Order is reading order, and the whole sequence is under a quarter second of
+   offset, which registers as one settling gesture rather than three events. */
+.auth[data-entrance='on'] .auth-brand {
+  animation: auth-rise var(--auth-enter) var(--auth-ease) both;
+}
+
+.auth[data-entrance='on'] .auth-title,
+.auth[data-entrance='on'] .auth-lead {
+  animation: auth-rise var(--auth-enter) var(--auth-ease) 40ms both;
+}
+
+.auth[data-entrance='on'] .auth-form,
+.auth[data-entrance='on'] .auth-alert,
+.auth[data-entrance='on'] .auth-switch {
+  animation: auth-rise var(--auth-enter) var(--auth-ease) 80ms both;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The photograph settles rather than arrives: it is context, and it must not
+   compete with the form for attention. */
+.auth[data-entrance='on'] .auth-visual__img {
+  animation: auth-settle var(--auth-media) var(--auth-ease) both;
+}
+
+.auth[data-entrance='on'] .auth-visual__inner {
+  animation: auth-rise 460ms var(--auth-ease) 180ms both;
+}
+
+@keyframes auth-settle {
+  from {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+} /* end prefers-reduced-motion: no-preference */
+
+/* ── Brand, at the head of the column ────────────────────────────────────── */
+
+.auth-brand {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: -0.015em;
+  color: var(--lp-ink);
+}
+
+.auth-brand__mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  flex: none;
+}
+
+/* ── Type ────────────────────────────────────────────────────────────────
+
+   landing.css resets `.lp h1` and `.lp p` to `margin: 0`, and an element plus
+   class beats a bare class, so every vertical margin below is written as
+   `.auth .x` to outrank it. Without the extra class the whole column collapses
+   to zero gaps: measured, not guessed. ────────────────────────────────────── */
+
+.auth .auth-body {
+  margin-top: 40px;
+}
+
+.auth .auth-title {
+  margin: 0;
+  font-size: clamp(1.875rem, 2.6vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  color: var(--lp-ink);
+}
+
+.auth .auth-lead {
+  margin: 12px 0 0;
+  /* One short sentence: let it hold a line rather than balance into two. */
+  max-width: 46ch;
+  font-size: 1rem;
+  line-height: 1.6;
+  /* Holds one line where it fits, and never leaves a single word stranded. */
+  text-wrap: pretty;
+  color: var(--lp-ink-2);
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+
+.auth-form {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-label {
+  margin-bottom: 8px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--lp-ink);
+}
+
+.auth-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-input {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--auth-field-line);
+  border-radius: var(--auth-r);
+  background: var(--auth-field-bg);
+  color: var(--lp-ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  transition: border-color var(--auth-fast) var(--auth-ease),
+    box-shadow var(--auth-fast) var(--auth-ease);
+}
+
+.auth-input::placeholder {
+  color: var(--lp-ink-3);
+}
+
+.auth-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--lp-line-strong);
+}
+
+/* A ring, not a glow. */
+.auth-input:focus {
+  outline: none;
+  border-color: var(--lp-accent);
+  box-shadow: 0 0 0 3px var(--lp-accent-soft);
+}
+
+.auth-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.auth-input[aria-invalid='true'] {
+  border-color: var(--lp-danger-line);
+}
+
+.auth-input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px var(--lp-danger-soft);
+}
+
+.auth-input--with-toggle {
+  padding-right: 52px;
+}
+
+/* Browser autofill repaints the field. Freeze the inset fill to the token so
+   the surface and the ink survive it. */
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--lp-ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-field-bg) inset;
+  box-shadow: 0 0 0 1000px var(--auth-field-bg) inset;
+  caret-color: var(--lp-ink);
+  transition: background-color 600000s 0s;
+}
+
+.auth-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-field-bg) inset,
+    0 0 0 3px var(--lp-accent-soft);
+  box-shadow: 0 0 0 1000px var(--auth-field-bg) inset,
+    0 0 0 3px var(--lp-accent-soft);
+}
+
+/* ── Password visibility toggle ──────────────────────────────────────────── */
+
+.auth-reveal {
+  position: absolute;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lp-ink-3);
+  cursor: pointer;
+  transition: color var(--auth-fast) var(--auth-ease),
+    background-color var(--auth-fast) var(--auth-ease);
+}
+
+/* React swaps the eye and eye-off glyphs, so this replays on every toggle
+   without any state plumbing. Scale only, and barely. */
+.auth-reveal svg {
+  animation: auth-pop 130ms var(--auth-ease) both;
+}
+
+@keyframes auth-pop {
+  from {
+    opacity: 0.4;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.auth-reveal:hover {
+  color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+/* ── Field message ───────────────────────────────────────────────────────── */
+
+/* Reserved, so a message appearing on blur never shoves the form. */
+.auth-error-slot {
+  /* The slot IS the gap between fields, and it holds its height whether or not
+     a message is in it, so nothing moves on blur. 5px above the message and
+     about 7px below keeps it attached to its own input instead of drifting onto
+     the next label. */
+  min-height: 30px;
+  padding-top: 5px;
+}
+
+/* The slot already holds the height, so this fades in place and moves nothing
+   around it. */
+.auth-error {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.38;
+  color: var(--lp-danger-ink);
+  animation: auth-message var(--auth-base) var(--auth-ease) both;
+}
+
+.auth-alert {
+  animation: auth-message var(--auth-base) var(--auth-ease) both;
+}
+
+@keyframes auth-message {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Form level alert ────────────────────────────────────────────────────── */
+
+.auth-alert {
+  margin-top: 24px;
+  padding: 13px 16px;
+  border: 1px solid var(--lp-danger-line);
+  border-radius: var(--auth-r);
+  background: var(--lp-danger-soft);
+  color: var(--lp-danger-ink);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.auth-alert:focus-visible {
+  outline: 2px solid var(--lp-accent);
+  outline-offset: 3px;
+}
+
+/* ── Call to action ──────────────────────────────────────────────────────── */
+
+.auth-submit {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 52px;
+  padding-inline: 20px;
+  border: 0;
+  border-radius: var(--auth-r);
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 2px -1px var(--lp-accent-shadow);
+  transition: filter var(--auth-fast) var(--auth-ease),
+    transform var(--auth-fast) var(--auth-ease),
+    box-shadow var(--auth-fast) var(--auth-ease);
+}
+
+/* One pixel of lift and a shadow that follows it. The button keeps its box, so
+   nothing around it moves. */
+.auth-submit:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -8px var(--lp-accent-shadow);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.96);
+  box-shadow: 0 1px 2px -1px var(--lp-accent-shadow);
+  transition-duration: 80ms;
+}
+
+.auth-submit:disabled {
+  opacity: 0.62;
+  cursor: progress;
+}
+
+.auth-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth-spinner {
+    animation: auth-spin 0.7s linear infinite;
+  }
+}
+
+/* The label swap keeps the button's box: same height, same width, so a submit
+   never nudges the switch line below it. */
+.auth-submit > span,
+.auth-submit {
+  white-space: nowrap;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Account switch ──────────────────────────────────────────────────────── */
+
+.auth .auth-switch {
+  margin: 24px 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--lp-ink-2);
+  text-align: center;
+}
+
+/* The rule is always there and starts transparent, so the underline fades in
+   and drops a pixel instead of snapping on. */
+.auth-switch a {
+  color: var(--lp-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color var(--auth-fast) var(--auth-ease),
+    text-decoration-color var(--auth-fast) var(--auth-ease),
+    text-underline-offset var(--auth-fast) var(--auth-ease);
+}
+
+.auth-switch a:hover {
+  text-decoration-color: currentColor;
+  text-underline-offset: 4px;
+}
+
+/* ── Development badge ───────────────────────────────────────────────────── */
+
+/* Not part of the auth composition. It is pinned to the viewport, outside the
+   column, and only ever rendered by a development build. */
+.auth-devbadge {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 40;
+  max-width: 300px;
+  padding: 9px 12px;
+  border: 1px solid var(--lp-line-strong);
+  border-radius: 10px;
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+/* ── Sign-in to sign-up ──────────────────────────────────────────────────────
+
+   The two screens are one auth flow, so the switch changes the content of a
+   screen rather than replacing the screen. The route layout already keeps the
+   photograph, the panel and the brand mounted; the View Transitions API (native,
+   no library) supplies the one thing React Router cannot: an exit for the form
+   that is leaving.
+
+   Only three things are named. The brand and the page ground do not move at
+   all, the copy over the photograph crossfades because it differs per route,
+   and the form crossfades with a few pixels of travel. Browsers without the API
+   (Firefox today) simply swap instantly, which is a correct fallback rather
+   than a broken one. */
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth-brand {
+    view-transition-name: auth-brand;
+  }
+
+  .auth-visual__inner {
+    view-transition-name: auth-visual-copy;
+  }
+
+  .auth-body {
+    view-transition-name: auth-body;
+  }
+}
+
+/* Nothing in the page ground changes between the two routes, so animating it
+   would only risk a flash. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* The brand is identical on both routes but not in the same place: the column
+   is vertically centred and the sign-up form is taller, so the mark sits 67px
+   higher there. Crossfading identical pixels would do nothing, so the pair is
+   left alone and the group carries it, which turns a 67px cut into a glide in
+   step with the form. */
+::view-transition-old(auth-brand),
+::view-transition-new(auth-brand) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(auth-brand),
+::view-transition-group(auth-body) {
+  animation-duration: 280ms;
+  animation-timing-function: var(--auth-ease);
+}
+
+/* The two forms are different heights. Left to stretch to their group the
+   snapshots would warp the text, so each keeps its own height and is pinned to
+   the top of the group while the group resizes under them. */
+::view-transition-old(auth-body),
+::view-transition-new(auth-body) {
+  height: auto;
+  object-fit: none;
+  object-position: top center;
+}
+
+::view-transition-old(auth-body) {
+  animation: auth-vt-out var(--auth-exit) var(--auth-ease) both;
+}
+
+::view-transition-new(auth-body) {
+  animation: auth-vt-in 260ms var(--auth-ease) 80ms both;
+}
+
+::view-transition-old(auth-visual-copy) {
+  animation: auth-vt-out 180ms var(--auth-ease) both;
+}
+
+::view-transition-new(auth-visual-copy) {
+  animation: auth-vt-in 240ms var(--auth-ease) 60ms both;
+}
+
+@keyframes auth-vt-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes auth-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────────
+   No photograph to settle, a shorter column, and a visitor who is more likely
+   to be in a hurry: less travel, less time, almost no stagger. */
+
+@media (max-width: 768px) {
+  .auth[data-entrance='on'] .auth-title,
+  .auth[data-entrance='on'] .auth-lead {
+    animation-delay: 30ms;
+  }
+
+  .auth[data-entrance='on'] .auth-form,
+  .auth[data-entrance='on'] .auth-alert,
+  .auth[data-entrance='on'] .auth-switch {
+    animation-delay: 60ms;
+  }
+
+  .auth[data-entrance='on'] .auth-brand,
+  .auth[data-entrance='on'] .auth-title,
+  .auth[data-entrance='on'] .auth-lead,
+  .auth[data-entrance='on'] .auth-form,
+  .auth[data-entrance='on'] .auth-alert,
+  .auth[data-entrance='on'] .auth-switch {
+    animation-duration: 320ms;
+    animation-name: auth-rise-short;
+  }
+
+  @keyframes auth-rise-short {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────
+   A visitor who asked for less motion gets none of it: no entrance, no
+   settling, no route crossfade, no spinner rotation. Every element is simply
+   where it belongs, with full opacity, and the screen stays completely usable.
+   The transitions are neutralised rather than removed so state changes still
+   register instantly. */
+
+@media (prefers-reduced-motion: reduce) {
+  .auth *,
+  .auth *::before,
+  .auth *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
