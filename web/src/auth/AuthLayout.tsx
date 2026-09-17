@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
-import { Bot } from 'lucide-react'
+import { ArrowLeft, Bot } from 'lucide-react'
 import { MOCK_ACCOUNTS_HINT } from '../mocks/auth-mock'
 import { USE_MOCK_API } from '../mocks/mock-mode'
 import '../features/landing/landing.css'
@@ -30,6 +30,11 @@ const ENTRANCE_MS = 700
  * than two pages replacing each other, and it is the only reason the routing
  * shape changed.
  *
+ * The two routes sit on opposite sides: signing in puts the form on the right,
+ * signing up puts it on the left. `data-side` is the only thing that says so;
+ * the grid reads it, and the view transition turns the reordering into a slide
+ * instead of a jump.
+ *
  * The root carries `.lp`, which is where the palette, the font and the
  * light/dark switch come from: auth reads the landing page's language rather
  * than hard-coding a second one.
@@ -40,7 +45,8 @@ const ENTRANCE_MS = 700
  */
 export function AuthLayout() {
   const { pathname } = useLocation()
-  const visual = pathname === '/register' ? VISUAL['/register'] : VISUAL.default
+  const onRegister = pathname === '/register'
+  const visual = onRegister ? VISUAL['/register'] : VISUAL.default
 
   /**
    * The staggered entrance belongs to arriving at auth, not to every route
@@ -54,7 +60,11 @@ export function AuthLayout() {
   }, [])
 
   return (
-    <main className="lp auth" data-entrance={entering ? 'on' : 'off'}>
+    <main
+      className="lp auth"
+      data-entrance={entering ? 'on' : 'off'}
+      data-side={onRegister ? 'form-left' : 'form-right'}
+    >
       <section className="auth-visual" aria-hidden="true">
         <img src="/images/hero-campus.jpg" alt="" className="auth-visual__img" />
         <div className="auth-visual__scrim" />
@@ -77,6 +87,10 @@ export function AuthLayout() {
           <div className="auth-body">
             <Outlet />
           </div>
+          <Link to="/" className="auth-back">
+            <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
+            Về trang chủ
+          </Link>
         </div>
       </div>
 

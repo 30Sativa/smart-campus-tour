@@ -33,6 +33,7 @@
   --auth-enter: 400ms;  /* the column arriving */
   --auth-media: 600ms;  /* the photograph settling */
   --auth-exit: 160ms;   /* the outgoing form on a route switch */
+  --auth-swap: 520ms;   /* the panels changing sides */
 }
 
 .auth {
@@ -68,9 +69,26 @@ html.dark .auth {
   background: var(--auth-panel-bg);
 }
 
+/* Sign-in keeps the form on the right, sign-up moves it to the left. The
+   photograph holds the larger share either way, so only the order changes, not
+   the proportions. Below 1024px there is one column and nothing to swap. */
 @media (min-width: 1024px) {
   .auth {
     grid-template-columns: 52fr 48fr;
+  }
+
+  .auth[data-side='form-left'] {
+    grid-template-columns: 48fr 52fr;
+  }
+
+  .auth[data-side='form-left'] .auth-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .auth[data-side='form-left'] .auth-visual {
+    grid-column: 2;
+    grid-row: 1;
   }
 }
 
@@ -182,7 +200,8 @@ html.dark .auth {
 
 .auth[data-entrance='on'] .auth-form,
 .auth[data-entrance='on'] .auth-alert,
-.auth[data-entrance='on'] .auth-switch {
+.auth[data-entrance='on'] .auth-switch,
+.auth[data-entrance='on'] .auth-back {
   animation: auth-rise var(--auth-enter) var(--auth-ease) 80ms both;
 }
 
@@ -567,6 +586,35 @@ html.dark .auth {
   text-underline-offset: 4px;
 }
 
+/* ── Back to the public site ─────────────────────────────────────────────── */
+
+/* Quieter than the account switch above it: this is the way out, not the next
+   step. The brand mark links home too; this says so in words. */
+.auth .auth-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 22px 0 0;
+  font-size: 0.875rem;
+  color: var(--lp-ink-3);
+  text-decoration: none;
+  transition: color var(--auth-fast) var(--auth-ease);
+}
+
+.auth .auth-back:hover {
+  color: var(--lp-accent);
+}
+
+.auth .auth-back svg {
+  flex: none;
+  transition: transform var(--auth-fast) var(--auth-ease);
+}
+
+.auth .auth-back:hover svg {
+  transform: translateX(-2px);
+}
+
 /* ── Development badge ───────────────────────────────────────────────────── */
 
 /* Not part of the auth composition. It is pinned to the viewport, outside the
@@ -589,29 +637,31 @@ html.dark .auth {
 
 /* ── Sign-in to sign-up ──────────────────────────────────────────────────────
 
-   The two screens are one auth flow, so the switch changes the content of a
-   screen rather than replacing the screen. The route layout already keeps the
-   photograph, the panel and the brand mounted; the View Transitions API (native,
-   no library) supplies the one thing React Router cannot: an exit for the form
-   that is leaving.
+   The two screens are one auth flow on two sides. The route layout keeps the
+   photograph, the brand and the panel mounted; `data-side` reorders the grid;
+   and the View Transitions API (native, no library) turns that reorder into a
+   slide and gives the outgoing form the exit React Router cannot.
 
-   Only three things are named. The brand and the page ground do not move at
-   all, the copy over the photograph crossfades because it differs per route,
-   and the form crossfades with a few pixels of travel. Browsers without the API
-   (Firefox today) simply swap instantly, which is a correct fallback rather
-   than a broken one. */
+   Four things are named, and none of them is nested inside another, which is
+   what keeps the snapshots from being drawn twice. The page ground does not
+   move at all. Browsers without the API (Firefox today) swap sides instantly,
+   which is a correct fallback rather than a broken one. */
 
 @media (prefers-reduced-motion: no-preference) {
+  .auth-visual {
+    view-transition-name: auth-visual;
+  }
+
   .auth-brand {
     view-transition-name: auth-brand;
   }
 
-  .auth-visual__inner {
-    view-transition-name: auth-visual-copy;
-  }
-
   .auth-body {
     view-transition-name: auth-body;
+  }
+
+  .auth-back {
+    view-transition-name: auth-back;
   }
 }
 
@@ -622,26 +672,30 @@ html.dark .auth {
   animation: none;
 }
 
-/* The brand is identical on both routes but not in the same place: the column
-   is vertically centred and the sign-up form is taller, so the mark sits 67px
-   higher there. Crossfading identical pixels would do nothing, so the pair is
-   left alone and the group carries it, which turns a 67px cut into a glide in
-   step with the form. */
+/* The groups carry the movement. Crossing the full width of the screen needs
+   longer than an in-place change, and everything crosses together so the screen
+   reads as one object turning over rather than four parts rearranging. */
+::view-transition-group(auth-visual),
+::view-transition-group(auth-body),
+::view-transition-group(auth-brand),
+::view-transition-group(auth-back) {
+  animation-duration: var(--auth-swap);
+  animation-timing-function: var(--auth-ease);
+}
+
+/* The brand and the back link are identical on both routes, so there is nothing
+   to crossfade: leaving the pair alone lets the group move clean pixels. */
 ::view-transition-old(auth-brand),
-::view-transition-new(auth-brand) {
+::view-transition-new(auth-brand),
+::view-transition-old(auth-back),
+::view-transition-new(auth-back) {
   animation: none;
   mix-blend-mode: normal;
 }
 
-::view-transition-group(auth-brand),
-::view-transition-group(auth-body) {
-  animation-duration: 280ms;
-  animation-timing-function: var(--auth-ease);
-}
-
-/* The two forms are different heights. Left to stretch to their group the
-   snapshots would warp the text, so each keeps its own height and is pinned to
-   the top of the group while the group resizes under them. */
+/* The two forms are different heights, and the panel changes width as it
+   crosses. Left to stretch to their group the snapshots would warp the text, so
+   each keeps its own size and is pinned to the top of the group. */
 ::view-transition-old(auth-body),
 ::view-transition-new(auth-body) {
   height: auto;
@@ -654,15 +708,21 @@ html.dark .auth {
 }
 
 ::view-transition-new(auth-body) {
-  animation: auth-vt-in 260ms var(--auth-ease) 80ms both;
+  animation: auth-vt-in 300ms var(--auth-ease) 140ms both;
 }
 
-::view-transition-old(auth-visual-copy) {
-  animation: auth-vt-out 180ms var(--auth-ease) both;
+/* The photograph is the same picture on both sides, so crossfading it is worth
+   nothing and costs everything: fading the old one out before the new one
+   arrives empties the panel mid-slide and the screen goes blank. Measured at
+   170ms into the swap. So the outgoing photograph holds full opacity for the
+   whole slide, and the incoming one fades in on top of it. The only thing that
+   visibly changes is the line of copy, and the panel is never empty. */
+::view-transition-old(auth-visual) {
+  animation: none;
 }
 
-::view-transition-new(auth-visual-copy) {
-  animation: auth-vt-in 240ms var(--auth-ease) 60ms both;
+::view-transition-new(auth-visual) {
+  animation: auth-vt-fade 280ms var(--auth-ease) reverse both;
 }
 
 @keyframes auth-vt-out {
@@ -679,6 +739,12 @@ html.dark .auth {
   }
 }
 
+@keyframes auth-vt-fade {
+  to {
+    opacity: 0;
+  }
+}
+
 /* ── Mobile ──────────────────────────────────────────────────────────────────
    No photograph to settle, a shorter column, and a visitor who is more likely
    to be in a hurry: less travel, less time, almost no stagger. */
@@ -691,7 +757,8 @@ html.dark .auth {
 
   .auth[data-entrance='on'] .auth-form,
   .auth[data-entrance='on'] .auth-alert,
-  .auth[data-entrance='on'] .auth-switch {
+  .auth[data-entrance='on'] .auth-switch,
+  .auth[data-entrance='on'] .auth-back {
     animation-delay: 60ms;
   }
 
@@ -700,7 +767,8 @@ html.dark .auth {
   .auth[data-entrance='on'] .auth-lead,
   .auth[data-entrance='on'] .auth-form,
   .auth[data-entrance='on'] .auth-alert,
-  .auth[data-entrance='on'] .auth-switch {
+  .auth[data-entrance='on'] .auth-switch,
+  .auth[data-entrance='on'] .auth-back {
     animation-duration: 320ms;
     animation-name: auth-rise-short;
   }
