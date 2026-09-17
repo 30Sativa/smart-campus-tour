@@ -46,9 +46,10 @@
   --lp-r-sm: 10px;
 
   /* rhythm */
-  --lp-maxw: 1280px;
-  --lp-gut: clamp(20px, 4.2vw, 48px);
-  --lp-sec: clamp(80px, 7.5vw, 124px);
+  --lp-maxw: 1180px;
+  --lp-gut: clamp(20px, 4.2vw, 44px);
+  --lp-sec: clamp(72px, 8vw, 116px);
+  --lp-sec-compact: clamp(56px, 6vw, 84px);
 
   background: var(--lp-bg);
   color: var(--lp-ink);
@@ -126,6 +127,11 @@ html.dark .lp {
   padding-block: var(--lp-sec);
 }
 
+/* For bands that support the section above rather than opening a new idea. */
+.lp-sec--compact {
+  padding-block: var(--lp-sec-compact);
+}
+
 .lp-sunk {
   background: var(--lp-bg-sunk);
 }
@@ -165,7 +171,7 @@ html.dark .lp {
 
 .lp-h3 {
   font-size: clamp(1.1rem, 1.6vw, 1.4rem);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.02em;
   margin: 0;
@@ -173,7 +179,7 @@ html.dark .lp {
 
 .lp-lead {
   font-size: clamp(1rem, 1.25vw, 1.125rem);
-  line-height: 1.68;
+  line-height: 1.58;
   color: var(--lp-ink-2);
   max-width: 56ch;
   margin: 0;
@@ -181,21 +187,27 @@ html.dark .lp {
 
 .lp-body {
   font-size: 0.9375rem;
-  line-height: 1.72;
+  line-height: 1.62;
   color: var(--lp-ink-2);
   max-width: 62ch;
   margin: 0;
 }
 
 .lp-meta {
-  font-size: 0.8125rem;
-  line-height: 1.55;
+  font-size: 0.875rem;
+  line-height: 1.6;
   color: var(--lp-ink-3);
   margin: 0;
 }
 
 .lp-stack > * + * {
   margin-top: 20px;
+}
+
+/* One rule instead of an inline margin on every section intro. */
+.lp-h2 + .lp-body,
+.lp-h2 + .lp-lead {
+  margin-top: 16px;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
@@ -273,6 +285,13 @@ html.dark .lp {
 .lp-btn--sm {
   padding: 9px 16px;
   font-size: 0.8125rem;
+}
+
+/* Primary actions on the hero and the closing band. Size is what separates
+   them from the secondary, since both sit on photography. */
+.lp-btn--lg {
+  padding: 15px 28px;
+  font-size: 0.9375rem;
 }
 
 /* Icon-only circular control (rail arrows, back to top). */
@@ -485,8 +504,21 @@ html.dark .lp {
   font-family: inherit;
 }
 
-.lp-sheet__cta {
+/* The sheet's own primary action, styled here rather than by borrowing
+   .lp-btn, which the `.lp-sheet a` rules would partly override anyway. */
+.lp-sheet a.lp-sheet__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
   margin-top: 18px;
+  padding-block: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  font-weight: 600;
+  text-align: center;
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -558,7 +590,7 @@ html.dark .lp {
 .lp-hero__copy .lp-lead {
   color: rgba(255, 255, 255, 0.82);
   margin-top: 22px;
-  max-width: 44ch;
+  max-width: 54ch;
 }
 
 .lp-hero__cta {
@@ -621,108 +653,84 @@ html.dark .lp {
   margin: 0;
 }
 
-/* ── Journey: asymmetric three-cell bento ────────────────────────────────── */
+/* ── Journey: four steps on a shared track ───────────────────────────────
+   The numbered tick sits on a rule that runs across the top of every card, so
+   the row reads as a sequence at a glance. Captions live under the photograph
+   because three of the four images already carry UI of their own.            */
 
 .lp-jrn__head {
   max-width: 46rem;
-  margin-bottom: clamp(36px, 4vw, 56px);
+  margin-bottom: clamp(32px, 3.6vw, 52px);
 }
 
 .lp-jrn__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: 1.28fr 1fr;
-  grid-template-rows: repeat(2, minmax(212px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
 }
 
 .lp-step {
-  position: relative;
-  border-radius: var(--lp-r);
-  overflow: hidden;
-  isolation: isolate;
-  min-height: 212px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: clamp(22px, 2.4vw, 32px);
-  color: #ffffff;
 }
 
-.lp-step:first-child {
-  grid-row: span 2;
+.lp-step__num {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--lp-accent);
+  border-top: 1px solid var(--lp-line-strong);
+  padding-top: 12px;
+  margin-bottom: 18px;
 }
 
 .lp-step__img {
-  position: absolute;
-  inset: 0;
-  z-index: -2;
+  border-radius: var(--lp-r);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--lp-bg-sunk);
 }
 
 .lp-step__img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(1.06);
-  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lp-step:hover .lp-step__img img {
-  transform: scale(1);
-}
-
-/* The booking shot is a phone UI: frame its header, keep its own type out of
-   the caption area. */
-.lp-step:first-child .lp-step__img img {
-  object-position: 50% 16%;
-}
-
-.lp-step__scrim {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(
-    to top,
-    rgba(3, 9, 12, 0.96) 0%,
-    rgba(3, 9, 12, 0.84) 32%,
-    rgba(3, 9, 12, 0.46) 64%,
-    rgba(3, 9, 12, 0.24) 100%
-  );
-}
-
-.lp-step__icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  color: #ffffff;
-  margin-bottom: 18px;
+  transform: scale(1.04);
 }
 
 .lp-step__title {
-  font-size: clamp(1.05rem, 1.5vw, 1.3rem);
-  font-weight: 650;
+  font-size: 1.0625rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.25;
-  margin: 0;
+  line-height: 1.3;
+  margin-top: 18px;
 }
 
 .lp-step__body {
   font-size: 0.875rem;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.78);
-  margin: 8px 0 0;
-  max-width: 34ch;
+  color: var(--lp-ink-2);
+  margin-top: 8px;
+}
+
+@media (min-width: 640px) {
+  .lp-step__title {
+    min-height: 2.6em;
+  }
 }
 
 /* ── Marquee (exactly one on the page) ───────────────────────────────────── */
 
 .lp-mq {
   overflow: hidden;
-  padding-block: clamp(26px, 3vw, 40px);
+  padding-block: clamp(20px, 2.4vw, 30px);
   border-top: 1px solid var(--lp-line);
   border-bottom: 1px solid var(--lp-line);
 }
@@ -739,9 +747,9 @@ html.dark .lp {
   gap: clamp(22px, 3vw, 44px);
   padding-right: clamp(22px, 3vw, 44px);
   flex: none;
-  font-size: clamp(1.25rem, 2.6vw, 2.1rem);
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: clamp(1rem, 1.9vw, 1.45rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--lp-ink-3);
   white-space: nowrap;
 }
@@ -799,41 +807,59 @@ html.dark .lp {
 
 .lp-cap__tab {
   position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  align-items: start;
   width: 100%;
   text-align: left;
   font-family: inherit;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--lp-line);
-  padding: 24px 0 24px 0;
+  padding: 22px 0 22px 16px;
   cursor: pointer;
   color: var(--lp-ink);
-  transition: padding-left 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The marker holds its place whether or not the row is open, so selecting an
+   item never shifts the rows under the pointer. */
 .lp-cap__tab::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 26px;
+  top: 25px;
   width: 2px;
   height: 0;
   background: var(--lp-accent);
-  transition: height 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.lp-cap__tab[data-on="true"] {
-  padding-left: 20px;
+  transition: height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .lp-cap__tab[data-on="true"]::before {
-  height: 22px;
+  height: 20px;
+}
+
+.lp-cap__num {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--lp-ink-3);
+  padding-top: 0.35em;
+  transition: color 0.25s ease;
+}
+
+.lp-cap__tab[data-on="true"] .lp-cap__num {
+  color: var(--lp-accent);
+}
+
+.lp-cap__body {
+  display: block;
+  min-width: 0;
 }
 
 .lp-cap__name {
-  font-size: clamp(1.05rem, 1.7vw, 1.4rem);
-  font-weight: 650;
+  display: block;
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-weight: 600;
   letter-spacing: -0.022em;
   line-height: 1.3;
   transition: color 0.25s ease;
@@ -861,9 +887,9 @@ html.dark .lp {
   overflow: hidden;
   display: block;
   font-size: 0.9375rem;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--lp-ink-2);
-  max-width: 58ch;
+  max-width: 56ch;
 }
 
 .lp-cap__desc > span > span {
@@ -874,13 +900,14 @@ html.dark .lp {
 /* ── Metrics rail ────────────────────────────────────────────────────────── */
 
 .lp-met__grid {
+  margin-top: 36px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--lp-line);
 }
 
 .lp-met__cell {
-  padding: clamp(28px, 3vw, 40px) clamp(18px, 2vw, 32px);
+  padding: clamp(24px, 2.6vw, 34px) clamp(16px, 1.8vw, 28px);
   border-bottom: 1px solid var(--lp-line);
   border-right: 1px solid var(--lp-line);
 }
@@ -903,17 +930,24 @@ html.dark .lp {
 }
 
 .lp-met__lbl {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+  line-height: 1.35;
   margin-top: 12px;
 }
 
+@media (min-width: 480px) {
+  .lp-met__lbl {
+    min-height: 2.7em;
+  }
+}
+
 .lp-met__sub {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.55;
   color: var(--lp-ink-3);
-  margin: 6px 0 0;
-  max-width: 26ch;
+  margin: 8px 0 0;
+  max-width: 28ch;
 }
 
 /* ── Robot rail: native scroll-snap ──────────────────────────────────────── */
@@ -952,7 +986,7 @@ html.dark .lp {
 }
 
 .lp-rail__card {
-  flex: 0 0 clamp(248px, 26vw, 330px);
+  flex: 0 0 clamp(268px, 30vw, 372px);
   scroll-snap-align: start;
   position: relative;
   border-radius: var(--lp-r);
@@ -987,32 +1021,36 @@ html.dark .lp {
   z-index: -1;
   background: linear-gradient(
     to top,
-    rgba(3, 9, 12, 0.92) 0%,
-    rgba(3, 9, 12, 0.5) 44%,
-    rgba(3, 9, 12, 0.18) 100%
+    rgba(3, 9, 12, 0.94) 0%,
+    rgba(3, 9, 12, 0.62) 40%,
+    rgba(3, 9, 12, 0.12) 78%,
+    rgba(3, 9, 12, 0.06) 100%
   );
 }
 
 .lp-rail__title {
-  font-size: 1.0625rem;
-  font-weight: 650;
+  font-size: 1.125rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
   margin: 0;
 }
 
 .lp-rail__body {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.76);
+  color: rgba(255, 255, 255, 0.82);
   margin: 8px 0 0;
 }
 
-/* ── Platform: 2x2 hairline grid with a CSS curtain ──────────────────────── */
+/* ── Platform: 2x2 hairline grid, benefit above stack ────────────────────
+   Each cell reads in one order: what it is, what it buys you, what runs it. A
+   reader who does not know Nav2 still gets the middle line. Hover is a tint,
+   not a colour flood, so all three text levels keep their contrast.          */
 
 .lp-plat__head {
   max-width: 44rem;
-  margin-bottom: clamp(36px, 4vw, 56px);
+  margin-bottom: clamp(32px, 3.6vw, 52px);
 }
 
 .lp-plat__grid {
@@ -1024,61 +1062,71 @@ html.dark .lp {
 
 .lp-plat__cell {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  padding: clamp(28px, 3vw, 44px);
+  padding: clamp(26px, 2.8vw, 40px);
   border-right: 1px solid var(--lp-line);
   border-bottom: 1px solid var(--lp-line);
-}
-
-.lp-plat__cell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--lp-accent);
-  transform: translateY(100%);
-  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.lp-plat__cell:hover::before,
-.lp-plat__cell:focus-within::before {
-  transform: translateY(0);
+  transition: background-color 0.25s ease;
 }
 
 .lp-plat__cell:hover,
 .lp-plat__cell:focus-within {
-  color: var(--lp-accent-ink);
+  background: var(--lp-accent-soft);
 }
 
 .lp-plat__icon {
+  display: inline-flex;
   color: var(--lp-accent);
-  transition: color 0.42s ease;
-}
-
-.lp-plat__cell:hover .lp-plat__icon,
-.lp-plat__cell:focus-within .lp-plat__icon {
-  color: var(--lp-accent-ink);
 }
 
 .lp-plat__title {
-  font-size: 1.125rem;
-  font-weight: 650;
+  font-size: 1.0625rem;
+  font-weight: 600;
   letter-spacing: -0.02em;
-  margin: 18px 0 0;
+  margin: 16px 0 0;
 }
 
-.lp-plat__sub {
-  font-size: 0.875rem;
+.lp-plat__benefit {
+  font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--lp-ink-2);
   margin: 8px 0 0;
-  transition: color 0.42s ease;
+  max-width: 36ch;
 }
 
-.lp-plat__cell:hover .lp-plat__sub,
-.lp-plat__cell:focus-within .lp-plat__sub {
-  color: var(--lp-accent-ink);
+.lp-plat__stack {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.lp-plat__stack li {
+  position: relative;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--lp-ink-3);
+  padding-left: 15px;
+}
+
+/* A hairline between entries instead of a run of middle dots. */
+.lp-plat__stack li::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 0.3em;
+  bottom: 0.3em;
+  width: 1px;
+  background: var(--lp-line-strong);
+}
+
+.lp-plat__stack li:first-child {
+  padding-left: 0;
+}
+
+.lp-plat__stack li:first-child::before {
+  display: none;
 }
 
 /* ── Closing CTA band ────────────────────────────────────────────────────── */
@@ -1159,10 +1207,19 @@ html.dark .lp {
   gap: 32px;
 }
 
+.lp-foot__tag {
+  margin-top: 18px;
+  max-width: 38ch;
+}
+
+.lp-foot__contact {
+  max-width: 26ch;
+}
+
 .lp-foot__ctitle {
-  font-size: 0.8125rem;
-  font-weight: 650;
-  margin-bottom: 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 12px;
 }
 
 .lp-foot__cols a {
@@ -1207,7 +1264,17 @@ html.dark .lp {
   }
 }
 
-/* ── Responsive ──────────────────────────────────────────────────────────── */
+/* ── Responsive ──────────────────────────────────────────────────────────
+   Checked at 375, 430, 768, 1024 and 1440. Nothing below relies on a layout
+   holding together by luck: every multi-column block states its own collapse. */
+
+/* Laptop and below: the nav condenses, the four-step track halves. */
+@media (max-width: 1119px) {
+  .lp-jrn__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 28px 24px;
+  }
+}
 
 @media (max-width: 1023px) {
   .lp-navlinks {
@@ -1224,7 +1291,7 @@ html.dark .lp {
   }
 
   .lp-cap__grid {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 290px 1fr;
     gap: 40px;
   }
 
@@ -1235,8 +1302,22 @@ html.dark .lp {
   .lp-met__cell:nth-child(2n) {
     border-right: 0;
   }
+
+  .lp-plat__benefit,
+  .lp-plat__stack {
+    max-width: none;
+  }
 }
 
+/* Narrow phones: the auth control moves into the sheet so the burger always
+   has room. Keeping it in the bar pushed the burger off screen at 375px. */
+@media (max-width: 559px) {
+  .lp-actions .lp-btn {
+    display: none;
+  }
+}
+
+/* Phone and small tablet. */
 @media (max-width: 767px) {
   .lp-nav__inner {
     height: 62px;
@@ -1248,6 +1329,31 @@ html.dark .lp {
 
   .lp-brand__sub {
     display: none;
+  }
+
+  /* Touch targets: 44px minimum for anything a thumb has to find. */
+  .lp-btn {
+    min-height: 46px;
+  }
+
+  .lp-btn--sm {
+    min-height: 44px;
+    padding-inline: 18px;
+  }
+
+  .lp-themebtn,
+  .lp-burger {
+    width: 44px;
+    height: 44px;
+  }
+
+  .lp-icobtn {
+    width: 46px;
+    height: 46px;
+  }
+
+  .lp-foot__cols a {
+    padding-block: 10px;
   }
 
   .lp-hero {
@@ -1278,27 +1384,29 @@ html.dark .lp {
 
   .lp-jrn__grid {
     grid-template-columns: 1fr;
-    grid-template-rows: none;
+    gap: 36px;
   }
 
-  .lp-step:first-child {
-    grid-row: auto;
+  .lp-step__img {
+    aspect-ratio: 16 / 10;
   }
 
-  .lp-step {
-    aspect-ratio: 4 / 3;
-    min-height: 0;
-  }
-
+  /* The picture stays under the header while the list scrolls, otherwise
+     tapping a row would change something that has left the screen. */
   .lp-cap__grid {
-    grid-template-columns: 1fr;
-    gap: 28px;
+    display: block;
   }
 
   .lp-cap__media {
-    position: relative;
-    top: auto;
-    aspect-ratio: 4 / 3;
+    position: sticky;
+    top: 74px;
+    aspect-ratio: 16 / 10;
+    margin-bottom: 26px;
+  }
+
+  .lp-cap__tab {
+    grid-template-columns: 2.25rem 1fr;
+    padding-block: 18px;
   }
 
   .lp-plat__grid {

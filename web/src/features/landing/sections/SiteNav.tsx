@@ -121,10 +121,14 @@ export function SiteNav({ onLockScroll }: Props) {
               {item.label}
             </a>
           ))}
-          {isAuthenticated && (
+          {isAuthenticated ? (
             <button type="button" onClick={logout}>
               Đăng xuất
             </button>
+          ) : (
+            <Link to="/login" className="lp-sheet__cta" onClick={closeMenu}>
+              Đăng nhập
+            </Link>
           )}
         </div>
       )}

@@ -39,7 +39,7 @@ export function SiteFooter() {
           <div className="lp-foot__cols">
             {columns.map((column) => (
               <div key={column.title}>
-                <p className="lp-foot__ctitle">{column.title}</p>
+                <h2 className="lp-foot__ctitle">{column.title}</h2>
                 {column.links.map((link) => (
                   <a key={link.href} href={link.href}>
                     {link.label}
@@ -48,7 +48,7 @@ export function SiteFooter() {
               </div>
             ))}
             <div>
-              <p className="lp-foot__ctitle">Liên hệ</p>
+              <h2 className="lp-foot__ctitle">Liên hệ</h2>
               {/*
                 TODO: thay bằng địa chỉ thật của nhóm khi có.
                 Ví dụ: https://github.com/<tổ chức>/fleet-management-system
