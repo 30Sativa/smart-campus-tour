@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
-import { isStaffRole } from '../../../auth/roles'
+import { homePathForRole, isAdminRole, isStaffRole } from '../../../auth/roles'
 import { EXPERIENCE_HREF } from '../landing-content'
 
 /**
@@ -42,8 +42,8 @@ export function Hero() {
           </p>
           <div className="lp-hero__cta" id="hero-cta">
             {isAuthenticated && isStaff ? (
-              <Link to="/admin" className="lp-btn lp-btn--solid lp-btn--lg">
-                Vào trang điều hành
+              <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--lg">
+                {isAdminRole(user?.role) ? 'Vào trang quản trị' : 'Vào trang điều hành'}
                 <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
               </Link>
             ) : (

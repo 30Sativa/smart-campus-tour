@@ -18,7 +18,7 @@
 export const EXPERIENCE_HREF = '/login'
 
 /** Live operations view behind the staff guard. */
-export const OPERATIONS_DEMO_HREF = '/admin/digital-twin'
+export const OPERATIONS_DEMO_HREF = '/staff/digital-twin'
 
 export type JourneyStep = {
   id: string

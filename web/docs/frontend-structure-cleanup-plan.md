@@ -1,14 +1,34 @@
 # Kế hoạch làm sạch cấu trúc frontend
 
-> **Trạng thái 2026-09-16.** Đợt cắt gọn đầu tiên đã chạy: FE thu về đúng hai lối
-> vào — landing page `/` và dashboard vận hành `/admin/*`. Đã xử lý P0 #1 (một cây
-> `/admin/*` + redirect `/staff/*`), #2 (bỏ `persist`, token chỉ trong memory),
-> #3 (lazy cả shell lẫn page), #4 (một cách hiểu role duy nhất qua `isStaffRole`),
-> #5 (gỡ E-Stop khỏi browser), #7 (một `useLogout` dùng chung), #8 (refresh
-> single-flight reject mọi request đang chờ); P1 #1, #2, #4, #6, #7 và phần lớn
-> P2. Backend đã bị gỡ nên mọi endpoint được thay bằng lớp mock có nhãn trong
-> `src/mocks/` (xem `web/AGENTS.md` §2). Còn lại: P1 lifecycle/CSS của landing
-> (mục 3 bên dưới) và Phase 5 realtime/Digital Twin.
+> **Trạng thái 2026-09-17 — tách ba khu vực.** FE hiện có **ba** lối vào:
+> landing `/`, vận hành `/staff/*` (CampusStaff, TourOperator, Admin) và quản trị
+> `/admin/*` (chỉ Admin). Dashboard vận hành trước đây nằm ở `/admin/*`; đó là
+> tên gọi tạm của giai đoạn chỉ có một khu vực đăng nhập, nay đã đổi. Các URL
+> vận hành cũ (`/admin/schedule`, `/admin/amr`, `/admin/alerts`,
+> `/admin/digital-twin`, `/admin/reports`, `/admin/tours/:id`) redirect sang
+> `/staff/*`; riêng `/admin` **không** redirect vì đó là trang tổng quan quản
+> trị. Các redirect này là giàn giáo di trú, xoá khi không còn link cũ.
+>
+> Quy tắc ai vào được khu vực nào nằm đúng một chỗ: `src/auth/access.ts`. Route
+> guard và màn "Vai trò & quyền" gọi chung một hàm nên không thể lệch nhau.
+>
+> Namespace route của FE và namespace API của BE độc lập với nhau: màn ở
+> `/staff/*` vẫn gọi `/api/staff/*`, không đổi contract.
+>
+> Quản trị hiện chỉ có hai mục — Tổng quan hệ thống và Vai trò & quyền — vì đó
+> là tất cả những gì contract hiện tại dựng được một cách trung thực. Người
+> dùng, nhân viên, thiết bị, tour/tuyến/POI, cấu hình và nhật ký còn chờ
+> endpoint; chúng được liệt kê một lần trong panel "Chưa khả dụng" trên trang
+> tổng quan, không đưa vào điều hướng để tránh menu dẫn tới trang rỗng.
+>
+> **Trạng thái 2026-09-16.** Đợt cắt gọn đầu tiên đã chạy. Đã xử lý P0 #1 (một
+> cây route + redirect), #2 (bỏ `persist`, token chỉ trong memory), #3 (lazy cả
+> shell lẫn page), #4 (một cách hiểu role duy nhất), #5 (gỡ E-Stop khỏi
+> browser), #7 (một `useLogout` dùng chung), #8 (refresh single-flight reject
+> mọi request đang chờ); P1 #1, #2, #4, #6, #7 và phần lớn P2. Backend đã bị gỡ
+> nên mọi endpoint được thay bằng lớp mock có nhãn trong `src/mocks/` (xem
+> `web/AGENTS.md` §2). Còn lại: P1 lifecycle/CSS của landing (mục 3 bên dưới) và
+> Phase 5 realtime/Digital Twin.
 >
 > File bị loại nằm ở `_to_delete/web-fe-cleanup-2026-09-16/`, chưa xoá hẳn.
 
@@ -21,7 +41,7 @@ không thay đổi sản phẩm theo cảm tính.
 Mục tiêu cuối:
 
 - một React + Vite app duy nhất;
-- visitor ở các public route, staff/ops ở duy nhất `/admin/*`;
+- visitor ở các public route, staff/ops ở `/staff/*`, quản trị ở `/admin/*`;
 - route chỉ ghép layout và page, nghiệp vụ nằm trong feature;
 - server state dùng TanStack Query, UI state dùng Zustand khi thật sự cần;
 - HTTP đi qua một client chung, SignalR có một owner rõ ràng;
@@ -40,6 +60,9 @@ hiện hữu. Tài liệu này là kế hoạch thực thi.
 
 1. Router đang tách hai dashboard `/admin/*` và `/staff/*`, trong khi harness quy
    định một cây `/admin/*` được bảo vệ bằng role.
+   (Ghi chú 2026-09-17: vấn đề khi đó là hai cây **trùng nội dung**. Việc tách
+   `/staff/*` và `/admin/*` hiện nay là tách theo **vai trò và mục đích**, không
+   phải nhân bản cây route.)
 2. `src/stores/auth-store.ts` dùng Zustand `persist`, làm access token được lưu
    vào browser storage. Điều này trái contract token-in-memory.
 3. `src/app/router/index.tsx` lazy-load page nhưng import eager `AdminSidebar`,
@@ -186,6 +209,11 @@ Exit: verify pass và có test khóa các đường đi auth/route quan trọng.
 - Gỡ toàn bộ browser E-Stop. Chỉ giữ assign/reassign/cancel khi contract BE có,
   và mỗi action phải có confirmation rõ ràng.
 
+> **Đã thay thế 2026-09-17.** Quyết định gộp ở trên đúng cho giai đoạn chỉ có
+> một khu vực đăng nhập. Nay vận hành nằm ở `/staff/*`, quản trị ở `/admin/*`,
+> mỗi bên một shell và một guard riêng. Đừng gộp lại.
+
+
 Exit: không còn access token trong storage, không còn UI E-Stop, role guard có
 test cho visitor/staff/ops/unauthenticated, và public entry không import admin
 shell.
@@ -264,6 +292,8 @@ change và giữ review có thể kiểm chứng.
 ## 6. Definition of Done cho đợt cleanup
 
 - `web/scripts/verify` exit 0.
+- (2026-09-17: câu dưới mô tả trạng thái cũ. Hiện cả `/staff/*` và `/admin/*`
+  đều có guard thực và lazy boundary riêng.)
 - `/admin/*` có route guard thực và lazy boundary; `/staff/*` chỉ còn redirect
   tương thích trong thời gian đã định.
 - Không có access token trong localStorage/sessionStorage.

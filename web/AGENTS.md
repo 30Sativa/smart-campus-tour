@@ -16,17 +16,29 @@ file only covers what is specific to `web/`.
   **Zustand**. Do not put server data (bookings, robot status, ...) in
   Zustand — that belongs to TanStack Query's cache.
 - Package manager: **npm** (no workspaces needed — see below).
-- Codebase shape: **one app, one deploy**. Visitor booking (public) and ops
-  dashboard (staff-only) live in the same React app, same Vercel project,
-  same domain. They are split by route + role, not by separate apps:
-  - `/` and public routes: visitor booking flow, no login required.
-  - `/admin/*`: ops dashboard, behind auth. A route guard checks the logged-in
-    user's role and redirects to login (or a 403 page) if they lack the
-    `staff`/`ops` role. Never hide `/admin/*` by UI alone (e.g. just not
-    showing a nav link) — the guard must actually block navigation.
-  - `/admin/*` is **lazy-loaded** (`React.lazy` + route-based code splitting)
-    so a visitor loading `/` never downloads dashboard code, and vice versa
-    for a staff member going straight to `/admin`.
+- Codebase shape: **one app, one deploy, three areas**. Public, operations and
+  administration live in the same React app, same Vercel project, same domain.
+  They are split by route + role, not by separate apps:
+  - `/` and public routes: visitor-facing, no login required.
+  - `/staff/*`: tour operations, for `CampusStaff`, `TourOperator` and `Admin`.
+    What an operator does during a shift: today's tours, the AMR fleet, alerts,
+    the digital twin, feedback reports.
+  - `/admin/*`: administration, `Admin` only. System-level: what the product
+    consists of and who may enter which area. It is NOT the operations
+    dashboard with a different title, and it must not grow one.
+  - Both signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
+    splitting), shell included, so a visitor loading `/` downloads neither and
+    an operator never downloads administration.
+  - **Renamed on 2026-09-17.** Operations used to live at `/admin/*` back when
+    there was only one signed-in area. The old operations URLs
+    (`/admin/schedule`, `/admin/amr`, `/admin/alerts`, `/admin/digital-twin`,
+    `/admin/reports`, `/admin/tours/:id`) now redirect to their `/staff/*`
+    equivalent. `/admin` itself is NOT redirected: it is the administration
+    overview. Those redirects are migration scaffolding — delete them once the
+    old links are gone.
+  - The **frontend route namespace and the backend API namespace are
+    independent**. Operations screens at `/staff/*` call `/api/staff/*`, and
+    that is fine. Do not rename an API because a route moved.
 - Local run: `cd web && npm install && npm run dev` (Vite, port 5173).
 - Backend base URL: **`VITE_API_BASE_URL`** (see `.env.example`, e.g.
   `http://localhost:5000`). Read it only through `src/api/client.ts` — never
@@ -38,7 +50,7 @@ file only covers what is specific to `web/`.
 - Auth mechanism: **JWT access token + refresh token in an HttpOnly cookie**.
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
     on every API request. Carries the user's role (`staff`/`ops`/etc.) as a
-    claim — the `/admin/*` route guard reads the role from the decoded token,
+    claim — the area route guard reads the role from the decoded token,
     not from a separate call.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
@@ -83,11 +95,14 @@ web/
     │   └── router/       index.tsx — routes, RequireStaff guard, lazy boundaries
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
-    │   └── admin/        thin ops pages ("/admin/*"), all lazy-loaded
+    │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
+    │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
     │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
     │   │                 sections/ (one component per landing section)
-    │   └── operations/   ops shell, shared ops UI, formatters, query hooks
+    │   ├── operations/   StaffShell, staff-nav, shared ops UI, status
+    │   │                 vocabulary, formatters, query hooks
+    │   └── administration/ AdminShell, admin-nav
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
     ├── auth/             LoginPage.tsx, roles.ts, use-logout.ts
@@ -97,11 +112,19 @@ web/
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-There are exactly two entry points: `/` (public landing page) and `/admin/*`
-(operations dashboard, behind the role guard). The visitor booking/tour flow and
-the second, duplicate ops tree at `/staff/*` were removed on 2026-09-16 — the
-files are kept in `_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms
-the deletion. `/staff/*` still redirects to `/admin` so old bookmarks work.
+There are three entry points: `/` (public landing page), `/staff/*` (operations,
+behind the staff guard) and `/admin/*` (administration, behind the admin guard).
+
+**Who may enter what is written in exactly one place: `src/auth/access.ts`.**
+The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
+"Vai trò & quyền" screen renders its matrix by calling the same function, so the
+screen cannot drift from the guard. Change a rule there, not at a call site.
+`src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
+`homePathForRole()`, which is what decides where a fresh sign-in lands.
+
+The visitor booking/tour flow was removed on 2026-09-16; the files are kept in
+`_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms the deletion. A
+visitor account therefore has the public site only.
 
 `src/components/` currently holds nothing: the landing page redesign on
 2026-09-17 gave the theme control its own landing-token styling inside
@@ -121,10 +144,14 @@ runs on the labelled fixtures in `src/mocks/`:
 - `mocks/operations-mock.ts` implements the same `OperationsApi` contract as the
   HTTP client, so feature code is identical in both modes and the switch is made
   once, in `features/operations/operations-hooks.ts`;
-- `mocks/auth-mock.ts` issues a fake token so the `/admin/*` guard can be
-  exercised. It is not authentication and grants nothing server-side;
-- every screen on mock data says so (banner in the ops shell, note on the login
-  page).
+- `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised
+  (`admin/admin` is an Admin, `staff/staff` and `operator/operator` are not). It
+  is not authentication and grants nothing server-side;
+- mock mode is disclosed, but out of the way: a one-line badge in each shell and
+  on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
+  `console.warn` from `mocks/mock-mode.ts` that also fires in a production build
+  still running on mocks. Do not put build state back into the middle of a
+  screen someone works in all day.
 
 This is a **mode, not a fallback**. Mock data must never replace a failed
 request: with the flag off, a transport error stays an error. Delete `src/mocks/`
@@ -136,9 +163,20 @@ and the flag once the backend lands.
   computed value (robot utilisation, ETA, wait time), the backend returns it.
 - The ops dashboard is used by campus staff with no robotics background: a
   robot state shown to them must be a plain-language label, not a raw ROS enum.
-- Any route under `/admin/*` must be wrapped by the role-checking route
-  guard. A new admin page is not done until it is behind the guard — do not
-  rely on "nobody will guess the URL".
+- Any route under `/staff/*` or `/admin/*` must be wrapped by `RequireArea`.
+  A new page is not done until it is behind the guard — do not rely on "nobody
+  will guess the URL", and never rely on simply not rendering a nav link.
+- **No dead navigation.** A nav item must open a page that does something with
+  real data. Administration ships two entries today because two are all the
+  current contracts support; the rest are listed once, as prose, in the
+  "Chưa khả dụng" panel on the admin overview. When an endpoint lands, move its
+  item out of that list and into `features/administration/admin-nav.ts`.
+- **No backend enum reaches a screen.** The API speaks `InProgress`, `Live`,
+  `Critical`; people read Vietnamese. Everything a person sees goes through
+  `features/operations/status.ts`, which also assigns the tone (ok / info /
+  warn / danger / muted) that is the whole status colour system. Filter values
+  sent to the API stay the English enum; only the label is translated. Colour is
+  never the only carrier — `StatusBadge` always prints the label.
 - Styling is Tailwind utility classes in JSX. Avoid a separate CSS file per
   component unless Tailwind genuinely cannot express it (e.g. a keyframe
   animation).
@@ -356,7 +394,7 @@ can still fail at build time. `npm test` is `vitest run` (single run, no watch)
 so it exits and is CI-safe.
 
 Tests run in jsdom. Do not try to assert on WebGL/Canvas output there — the R3F
-setup is checked by rendering `/admin/digital-twin` in a browser.
+setup is checked by rendering `/staff/digital-twin` in a browser.
 
 ---
 

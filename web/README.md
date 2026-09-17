@@ -1,6 +1,6 @@
 # web/ — CampusTour DT-AMR
 
-Visitor booking app (`/`) and operations dashboard (`/admin/*`), one Vite +
+Public site (`/`), tour operations (`/staff/*`) and administration (`/admin/*`), one Vite +
 React + TypeScript app, one deploy. See `AGENTS.md` for the decisions and
 rules that apply here.
 

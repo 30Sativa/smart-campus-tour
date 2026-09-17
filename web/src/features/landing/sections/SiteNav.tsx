@@ -4,7 +4,7 @@ import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { useThemeStore } from '../../../stores/theme-store'
 import { useLogout } from '../../../auth/use-logout'
-import { isStaffRole } from '../../../auth/roles'
+import { homePathForRole, isAdminRole, isStaffRole } from '../../../auth/roles'
 import { navLinks } from '../landing-content'
 
 type Props = {
@@ -86,8 +86,8 @@ export function SiteNav({ onLockScroll }: Props) {
               <>
                 <span className="lp-user">{user?.username}</span>
                 {isStaff && (
-                  <Link to="/admin" className="lp-btn lp-btn--solid lp-btn--sm">
-                    Ops Admin
+                  <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
+                    {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
                   </Link>
                 )}
                 <button type="button" onClick={logout} className="lp-btn lp-btn--ghost lp-btn--sm">

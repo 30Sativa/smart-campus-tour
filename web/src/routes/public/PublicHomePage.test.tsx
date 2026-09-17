@@ -28,7 +28,21 @@ describe('PublicHomePage', () => {
     expect(screen.queryAllByRole('link').some((link) => ['/tours', '/my-bookings', '/register'].includes(link.getAttribute('href') ?? ''))).toBe(false)
   })
 
-  it('offers the operations dashboard to a staff account', () => {
+  it('sends an operator to operations, not to administration', () => {
+    useAuthStore.setState({
+      accessToken: 'mock-token',
+      isAuthenticated: true,
+      user: { userId: 'user-2', username: 'operator', role: 'TourOperator' },
+    })
+
+    renderPage()
+
+    expect(screen.getAllByRole('link', { name: /^Điều hành$/ })[0]).toHaveAttribute('href', '/staff')
+    expect(screen.getByRole('link', { name: /Vào trang điều hành/i })).toHaveAttribute('href', '/staff')
+    expect(screen.queryByRole('link', { name: /^Quản trị$/ })).toBeNull()
+  })
+
+  it('sends an admin to administration', () => {
     useAuthStore.setState({
       accessToken: 'mock-token',
       isAuthenticated: true,
@@ -37,8 +51,8 @@ describe('PublicHomePage', () => {
 
     renderPage()
 
-    expect(screen.getAllByRole('link', { name: /Ops Admin|^Admin$/ })[0]).toHaveAttribute('href', '/admin')
-    expect(screen.getByRole('link', { name: /Vào trang điều hành/i })).toHaveAttribute('href', '/admin')
+    expect(screen.getAllByRole('link', { name: /^Quản trị$/ })[0]).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('link', { name: /Vào trang quản trị/i })).toHaveAttribute('href', '/admin')
   })
 
   it('keeps the section anchors the navigation points at', () => {

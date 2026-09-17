@@ -1,54 +1,91 @@
 import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
-import { Navigate, createBrowserRouter, useLocation } from 'react-router'
+import { Navigate, createBrowserRouter, useLocation, useParams } from 'react-router'
 import PublicHomePage from '../../routes/public/PublicHomePage'
 import LoginPage from '../../auth/LoginPage'
 import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
-import { isStaffRole } from '../../auth/roles'
+import { areaById, type AreaId } from '../../auth/access'
+import { homePathForRole } from '../../auth/roles'
 
 /**
- * Two entries: the public landing page and the staff operations dashboard.
+ * Three areas, three audiences:
  *
- * Everything under `/admin/*` is lazy — the shell as well as the pages — so a
- * visitor loading `/` never downloads dashboard code.
+ *   `/`        public  visitors, no account
+ *   `/staff/*` staff   tour operations, for CampusStaff / TourOperator / Admin
+ *   `/admin/*` admin   administration, Admin only
+ *
+ * Both signed-in areas are lazy, shell included, so a visitor loading `/` never
+ * downloads either one, and an operator never downloads administration.
+ *
+ * `/staff/*` used to live at `/admin/*` while the product had only one
+ * signed-in area. It does not any more: `/admin/*` is administration now, and
+ * the old operations URLs redirect (see the bottom of the table).
  */
-const OperationsShell = lazy(() => import('../../features/operations/OperationsShell'))
-const DashboardPage = lazy(() => import('../../routes/admin/DashboardPage'))
-const SchedulePage = lazy(() => import('../../routes/admin/SchedulePage'))
-const SessionDetailPage = lazy(() => import('../../routes/admin/SessionDetailPage'))
-const AmrPage = lazy(() => import('../../routes/admin/AmrPage'))
-const AlertsPage = lazy(() => import('../../routes/admin/AlertsPage'))
-const DigitalTwinPage = lazy(() => import('../../routes/admin/DigitalTwinPage'))
-const ReportsPage = lazy(() => import('../../routes/admin/ReportsPage'))
+const StaffShell = lazy(() => import('../../features/operations/StaffShell'))
+const OperationsOverviewPage = lazy(() => import('../../routes/staff/OperationsOverviewPage'))
+const SchedulePage = lazy(() => import('../../routes/staff/SchedulePage'))
+const SessionDetailPage = lazy(() => import('../../routes/staff/SessionDetailPage'))
+const AmrPage = lazy(() => import('../../routes/staff/AmrPage'))
+const AlertsPage = lazy(() => import('../../routes/staff/AlertsPage'))
+const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
+const ReportsPage = lazy(() => import('../../routes/staff/ReportsPage'))
 
-function ShellFallback() {
-  return <div className="min-h-[100dvh] bg-[#f1f6fe]" aria-busy="true" aria-label="Đang tải khu vực vận hành" />
+const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
+const SystemOverviewPage = lazy(() => import('../../routes/admin/SystemOverviewPage'))
+const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
+
+function ShellFallback({ background }: { background: string }) {
+  return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
 }
 
 /**
- * Real navigation block, not a hidden nav link: an unauthenticated visitor is
- * sent to sign in, and an account without a staff role never renders the shell.
+ * Real navigation block, not a hidden nav link.
+ *
+ * An unauthenticated visitor is sent to sign in, remembering where they were
+ * going. A signed-in account without the area's role is sent to its own home
+ * rather than to `/`, so an operator typing `/admin` lands on `/staff` instead
+ * of being dumped on the marketing page.
+ *
+ * The rule itself lives in `auth/access.ts`, which is also what the "Vai trò &
+ * quyền" screen reads, so the guard and its documentation cannot drift apart.
+ * The server remains the real enforcement.
  */
-function RequireStaff({ children }: { children: ReactNode }) {
+function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const role = useAuthStore((state) => state.user?.role)
   const location = useLocation()
 
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  if (!isStaffRole(role)) return <Navigate to="/" replace />
+  if (!areaById(area).allows(role)) return <Navigate to={homePathForRole(role)} replace />
   return <>{children}</>
 }
 
-function AdminLayout() {
+function StaffArea() {
   return (
-    <RequireStaff>
-      <Suspense fallback={<ShellFallback />}>
-        <OperationsShell />
+    <RequireArea area="staff">
+      <Suspense fallback={<ShellFallback background="#f1f6fe" />}>
+        <StaffShell />
       </Suspense>
-    </RequireStaff>
+    </RequireArea>
   )
+}
+
+function AdminArea() {
+  return (
+    <RequireArea area="admin">
+      <Suspense fallback={<ShellFallback background="#f4f6fa" />}>
+        <AdminShell />
+      </Suspense>
+    </RequireArea>
+  )
+}
+
+/** Legacy `/admin/tours/:sessionId` kept its parameter, so carry it across. */
+function LegacySessionRedirect() {
+  const { sessionId } = useParams()
+  return <Navigate to={`/staff/tours/${sessionId ?? ''}`} replace />
 }
 
 export const router = createBrowserRouter([
@@ -63,10 +100,10 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    path: '/admin',
-    element: <AdminLayout />,
+    path: '/staff',
+    element: <StaffArea />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <OperationsOverviewPage /> },
       { path: 'schedule', element: <SchedulePage /> },
       { path: 'tours/:sessionId', element: <SessionDetailPage /> },
       { path: 'amr', element: <AmrPage /> },
@@ -75,7 +112,23 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <ReportsPage /> },
     ],
   },
-  // The ops dashboard used to live at /staff/*; keep old bookmarks working.
-  { path: '/staff/*', element: <Navigate to="/admin" replace /> },
+  {
+    path: '/admin',
+    element: <AdminArea />,
+    children: [
+      { index: true, element: <SystemOverviewPage /> },
+      { path: 'roles', element: <RolesPage /> },
+    ],
+  },
+  // Migration only: the operations pages that used to sit under `/admin`.
+  // `/admin` itself is NOT redirected — it is the administration overview now,
+  // and an Admin route always wins over a legacy path. Drop these once the old
+  // links are gone.
+  { path: '/admin/schedule', element: <Navigate to="/staff/schedule" replace /> },
+  { path: '/admin/amr', element: <Navigate to="/staff/amr" replace /> },
+  { path: '/admin/alerts', element: <Navigate to="/staff/alerts" replace /> },
+  { path: '/admin/digital-twin', element: <Navigate to="/staff/digital-twin" replace /> },
+  { path: '/admin/reports', element: <Navigate to="/staff/reports" replace /> },
+  { path: '/admin/tours/:sessionId', element: <LegacySessionRedirect /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ])
