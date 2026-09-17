@@ -59,12 +59,75 @@ const assignments: Record<string, Assignment[]> = {
   'mock-tour-completed': [{ id: 'mock-assignment-003', amrUnitId: 'mock-amr-02', amrName: 'AMR Lotus-02', status: 'Closed', assignedBy: 'Nguyễn Minh Anh', reason: 'Điều phối theo lịch tour', assignedAt: minutesAgo(150) }],
 }
 
-const feedback: FeedbackReport[] = [
-  { bookingId: 'mock-booking-003', routeName: 'Dấu ấn lịch sử đại học', tourDate: minutesAgo(85), bookingStatus: 'Completed', rating: 5, comment: 'Lộ trình rõ ràng, robot hướng dẫn dễ theo dõi.' },
-  { bookingId: 'mock-booking-005', routeName: 'Khám phá khuôn viên trọng điểm', tourDate: minutesAgo(320), bookingStatus: 'Completed', rating: 4, comment: 'Trải nghiệm tốt, cần thêm thời gian ở khu thư viện.' },
-  { bookingId: 'mock-booking-006', routeName: 'Hành trình đổi mới sáng tạo', tourDate: minutesAgo(750), bookingStatus: 'Completed', rating: 3, comment: 'Có lúc âm thanh hướng dẫn hơi nhỏ.' },
-  { bookingId: 'mock-booking-007', routeName: 'Không gian nghiên cứu mở', tourDate: minutesAgo(1140), bookingStatus: 'Completed', rating: null, comment: null },
+const routeNames = [
+  'Dấu ấn lịch sử đại học',
+  'Khám phá khuôn viên trọng điểm',
+  'Hành trình đổi mới sáng tạo',
+  'Không gian nghiên cứu mở',
 ]
+
+/**
+ * Post-tour reports across the last two weeks.
+ *
+ * `FeedbackFilters` declares `from`/`to` and `FeedbackReport` carries `tourDate`
+ * and `bookingStatus`, so a date range is part of the contract. The earlier
+ * fixture only held four rows on four scattered days, which made a range
+ * query look empty. The spread below is generated from a fixed table rather than
+ * from Math.random, so the same request returns the same rows and a chart does
+ * not reshuffle itself on every refetch.
+ *
+ * Openly fake, like everything else in this file, and only ever served while
+ * USE_MOCK_API is on.
+ */
+const feedbackShape: Array<{ completed: number; cancelled: number; ratings: number[] }> = [
+  { completed: 4, cancelled: 1, ratings: [5, 4, 4, 5] },
+  { completed: 6, cancelled: 0, ratings: [5, 5, 4, 3, 5, 4] },
+  { completed: 3, cancelled: 2, ratings: [4, 3, 5] },
+  { completed: 7, cancelled: 1, ratings: [5, 4, 5, 5, 4, 4, 3] },
+  { completed: 5, cancelled: 0, ratings: [4, 5, 5, 4] },
+  { completed: 2, cancelled: 1, ratings: [3, 4] },
+  { completed: 6, cancelled: 1, ratings: [5, 5, 4, 4, 5] },
+  { completed: 4, cancelled: 0, ratings: [4, 4, 5, 5] },
+  { completed: 5, cancelled: 2, ratings: [3, 4, 4, 5, 5] },
+  { completed: 3, cancelled: 0, ratings: [5, 4, 4] },
+  { completed: 6, cancelled: 1, ratings: [4, 5, 5, 4, 4, 5] },
+  { completed: 4, cancelled: 1, ratings: [5, 3, 4, 5] },
+  { completed: 5, cancelled: 0, ratings: [4, 4, 5, 5, 5] },
+  { completed: 3, cancelled: 1, ratings: [4, 5] },
+]
+
+const feedback: FeedbackReport[] = feedbackShape.flatMap((day, index) => {
+  // index 0 is the oldest day in the window, the last entry is today.
+  const daysAgo = feedbackShape.length - 1 - index
+  const at = (slot: number) => {
+    const when = new Date()
+    when.setDate(when.getDate() - daysAgo)
+    when.setHours(9 + slot, 15, 0, 0)
+    return when.toISOString()
+  }
+  const rows: FeedbackReport[] = []
+  for (let i = 0; i < day.completed; i += 1) {
+    rows.push({
+      bookingId: `mock-booking-d${daysAgo}-c${i}`,
+      routeName: routeNames[(index + i) % routeNames.length],
+      tourDate: at(i),
+      bookingStatus: 'Completed',
+      rating: day.ratings[i] ?? null,
+      comment: day.ratings[i] ? 'Phản hồi mẫu từ khách tham quan.' : null,
+    })
+  }
+  for (let i = 0; i < day.cancelled; i += 1) {
+    rows.push({
+      bookingId: `mock-booking-d${daysAgo}-x${i}`,
+      routeName: routeNames[(index + i + 2) % routeNames.length],
+      tourDate: at(day.completed + i),
+      bookingStatus: 'Cancelled',
+      rating: null,
+      comment: null,
+    })
+  }
+  return rows
+})
 
 const timelineFor = (item: OpsScheduleItem) => [
   { id: `${item.sessionId}-event-01`, type: 'TourScheduled', detail: 'Phiên tour được tạo từ lịch đặt tour.', occurredAt: minutesAgo(90) },
@@ -182,6 +245,21 @@ export const mockOperationsApi: OperationsApi = {
     return mockDelay(mission)
   },
 
-  feedbackReports: (filters: FeedbackFilters = {}) =>
-    mockDelay(feedback.filter((report) => !filters.rating || String(report.rating) === filters.rating)),
+  feedbackReports: (filters: FeedbackFilters = {}) => {
+    // `from`/`to` are inclusive calendar days, matching how the HTTP client
+    // sends them. Honouring them here keeps the mock a faithful stand-in for the
+    // contract rather than a list that ignores half of it.
+    const after = filters.from ? new Date(`${filters.from}T00:00:00`).getTime() : null
+    const before = filters.to ? new Date(`${filters.to}T23:59:59.999`).getTime() : null
+    return mockDelay(
+      feedback.filter((report) => {
+        const at = new Date(report.tourDate).getTime()
+        if (after != null && at < after) return false
+        if (before != null && at > before) return false
+        if (filters.status && report.bookingStatus !== filters.status) return false
+        if (filters.rating && String(report.rating) !== filters.rating) return false
+        return true
+      }),
+    )
+  },
 }

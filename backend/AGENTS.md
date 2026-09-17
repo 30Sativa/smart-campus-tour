@@ -54,8 +54,8 @@ backend/
 │                                     ExceptionHandling/ and Hubs/ exist but are
 │                                     empty. -> Application + Infrastructure.
 ├── tests/
-│   └── SmartCampus.UnitTests/       unit tests, xUnit
-├── SmartCampus.IntegrationTests/    integration-test project, xUnit
+│   ├── SmartCampus.UnitTests/       unit tests, xUnit
+│   └── SmartCampus.IntegrationTests/ integration tests, xUnit
 └── scripts/verify
 ```
 
@@ -221,8 +221,7 @@ rules add practical guidance without introducing another architecture layer.
 
 - Unit test framework: **xUnit**.
 - Actual solution projects are `backend/tests/SmartCampus.UnitTests/` and
-  `backend/SmartCampus.IntegrationTests/` (the latter is at the backend root,
-  as listed in `backend/SmartCampus.slnx`). Both currently contain only
+  `backend/tests/SmartCampus.IntegrationTests/`. Both currently contain only
   scaffold tests.
 - Unit tests cover observable Application behavior and invariants without
   ASP.NET or real infrastructure where possible. Integration tests cover

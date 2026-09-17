@@ -13,7 +13,7 @@ import { homePathForRole } from '../../auth/roles'
  * Three areas, three audiences:
  *
  *   `/`        public  visitors, no account
- *   `/staff/*` staff   tour operations, for CampusStaff / TourOperator / Admin
+ *   `/staff/*` staff   tour operations, for Staff and Admin
  *   `/admin/*` admin   administration, Admin only
  *
  * Both signed-in areas are lazy, shell included, so a visitor loading `/` never

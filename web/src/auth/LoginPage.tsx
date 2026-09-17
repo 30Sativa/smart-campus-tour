@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { apiClient, ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
-import { homePathForRole } from './roles'
+import { landingPathAfterLogin } from './access'
 import { MockAuthError, mockLogin, type AuthResponse } from '../mocks/auth-mock'
 import { USE_MOCK_API } from '../mocks/mock-mode'
 import { AuthField, AuthPasswordField } from './AuthFields'
@@ -51,10 +51,10 @@ export default function LoginPage() {
         role: response.role,
       })
 
-      // A blocked navigation remembers where it was going; otherwise the role
-      // decides the landing area (see `homePathForRole`).
-      const destination = (location.state as { from?: string })?.from
-      navigate(destination ?? homePathForRole(response.role), { replace: true })
+      // The role decides the console; a remembered destination only wins when
+      // it is inside that same area (see `landingPathAfterLogin`).
+      const from = (location.state as { from?: string })?.from
+      navigate(landingPathAfterLogin(response.role, from), { replace: true })
     } catch (error) {
       if (error instanceof MockAuthError) setApiError(error.message)
       else if (error instanceof ApiError && error.status === 401) setApiError('Sai tên đăng nhập hoặc mật khẩu.')

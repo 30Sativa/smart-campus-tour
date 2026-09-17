@@ -13,13 +13,13 @@ export type AuthResponse = {
   role: string
 }
 
+/** One account per role, so signing in as each one is a two-word test. */
 export const MOCK_ACCOUNTS = [
   { username: 'admin', password: 'admin', role: 'Admin', userId: 'mock-user-admin' },
-  { username: 'staff', password: 'staff', role: 'CampusStaff', userId: 'mock-user-staff' },
-  { username: 'operator', password: 'operator', role: 'TourOperator', userId: 'mock-user-operator' },
+  { username: 'staff', password: 'staff', role: 'Staff', userId: 'mock-user-staff' },
 ] as const
 
-export const MOCK_ACCOUNTS_HINT = 'Tài khoản mẫu: admin/admin, staff/staff, operator/operator'
+export const MOCK_ACCOUNTS_HINT = 'Tài khoản mẫu: admin/admin (quản trị), staff/staff (vận hành)'
 
 export class MockAuthError extends Error {}
 

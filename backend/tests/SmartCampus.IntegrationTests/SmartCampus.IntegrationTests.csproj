@@ -15,9 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\SmartCampus.Api\SmartCampus.Api.csproj" />
-    <ProjectReference Include="..\src\SmartCampus.Application\SmartCampus.Application.csproj" />
-    <ProjectReference Include="..\src\SmartCampus.Infrastructure\SmartCampus.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SmartCampus.Api\SmartCampus.Api.csproj" />
+    <ProjectReference Include="..\..\src\SmartCampus.Application\SmartCampus.Application.csproj" />
+    <ProjectReference Include="..\..\src\SmartCampus.Infrastructure\SmartCampus.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

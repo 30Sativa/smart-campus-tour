@@ -7,7 +7,7 @@ cần mở STM32CubeIDE.
 
 ```
 scripts/nap.bat
-  ├─ [1/2] make -C Debug all       (toolchain lấy từ CubeIDE)
+  ├─ [1/2] make all                (build vào build/, toolchain lấy từ CubeIDE)
   └─ [2/2] openocd -f scripts/stlink.cfg → program + verify + reset
 ```
 

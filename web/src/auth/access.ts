@@ -1,4 +1,4 @@
-import { isAdminRole, isStaffRole, normalizeRole, roleLabel, STAFF_ROLES } from './roles'
+import { ALL_ROLES, homePathForRole, isAdminRole, isStaffRole, normalizeRole, roleLabel } from './roles'
 
 /**
  * The three areas of the product, and who may enter each one.
@@ -54,8 +54,30 @@ export function areaById(id: AreaId): Area {
   return area
 }
 
-/** Every role the app can see, visitor included, for the access matrix. */
-export const ALL_ROLES = ['Visitor', ...STAFF_ROLES] as const
+/** Re-exported so the access matrix has one import for everything it draws. */
+export { ALL_ROLES }
+
+/** Which area a path belongs to, by prefix. */
+function areaOfPath(path: string): AreaId {
+  if (path.startsWith('/admin')) return 'admin'
+  if (path.startsWith('/staff')) return 'staff'
+  return 'public'
+}
+
+/**
+ * Where a completed sign-in lands.
+ *
+ * A blocked navigation remembers where it was going, and that memory is honored
+ * only when it points into the area this role calls home. Without that test an
+ * administrator who had been bounced off `/staff` would sign in and land back on
+ * the operations console: Admin is allowed there, so nothing would send them on
+ * to `/admin`, and the administration dashboard would look missing.
+ */
+export function landingPathAfterLogin(role: string | null | undefined, from?: string | null): string {
+  const home = homePathForRole(role)
+  if (!from || !from.startsWith('/')) return home
+  return areaOfPath(from) === areaOfPath(home) ? from : home
+}
 
 export function roleRow(role: string) {
   return {

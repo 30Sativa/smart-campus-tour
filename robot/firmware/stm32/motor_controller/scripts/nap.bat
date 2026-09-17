@@ -13,10 +13,17 @@ set "PATH=%MAKE%;%GCC%;%PATH%"
 echo ================================================
 echo   [1/2] Build
 echo ================================================
-make -C Debug all -j8
+"%MAKE%\make.exe" all -j8
 if errorlevel 1 (
   echo.
   echo [LOI] Build that bai - sua code truoc da.
+  pause
+  exit /b 1
+)
+
+if not exist "build\MotorController_G431.elf" (
+  echo.
+  echo [LOI] Build xong nhung khong tim thay build\MotorController_G431.elf.
   pause
   exit /b 1
 )
@@ -25,13 +32,13 @@ echo.
 echo ================================================
 echo   [2/2] Nap qua ST-Link
 echo ================================================
-"%OCD_BIN%\openocd.exe" -s "%OCD_SCR%" -f scripts\stlink.cfg -c "program Debug/motor_controller.elf verify reset exit"
+"%OCD_BIN%\openocd.exe" -s "%OCD_SCR%" -f scripts\stlink.cfg -c "program build/MotorController_G431.elf verify reset exit"
 if errorlevel 1 (
   echo.
   echo [LOI] Nap that bai. Kiem tra theo thu tu:
   echo   1. Dong STM32CubeIDE va STM32CubeProgrammer
   echo   2. Du 5 day: 3.3V, GND, SWCLK-^>CLK, SWDIO-^>DIO, RST-^>NRST
-  echo   3. Thao tai khoi board (motor driver, contactor, sonar, IMU)
+  echo   3. Thao tai khoi board ^(motor driver, contactor, sonar, IMU^)
   echo   4. Ha toc do: sua CLOCK_FREQ trong scripts\stlink.cfg xuong 100
   echo.
   echo Chi tiet: docs\FLASHING.md
@@ -41,6 +48,6 @@ if errorlevel 1 (
 
 echo.
 echo ================================================
-echo   XONG - firmware da chay tren board
+echo   [OK] NAP THANH CONG - firmware da chay tren board
 echo ================================================
 pause
