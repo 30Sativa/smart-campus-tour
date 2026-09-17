@@ -59,7 +59,7 @@ export function SiteNav({ onLockScroll }: Props) {
       <header className="lp-nav" data-stuck={stuck || menuOpen} id="nav">
         <div className="lp-nav__inner">
           <a href="#top" className="lp-brand" onClick={closeMenu}>
-            <img className="lp-brand__mark" src="/images/logo-mark.png" alt="" width={34} height={34} />
+            <img className="lp-brand__mark" src="/images/logo.png" alt="" width={56} height={56} />
             <span>CampusTour</span>
             <span className="lp-brand__sub">DT-AMR</span>
           </a>
