@@ -134,6 +134,7 @@ html.dark .lp {
 .lp-ctn {
   width: 100%;
   max-width: var(--lp-maxw);
+  min-width: 0;
   margin-inline: auto;
   padding-inline: var(--lp-gut);
 }
@@ -362,6 +363,7 @@ html.dark .lp {
   max-width: var(--lp-maxw);
   margin-inline: auto;
   padding-inline: var(--lp-gut);
+  min-width: 0;
   height: 68px;
   display: flex;
   align-items: center;
@@ -378,32 +380,31 @@ html.dark .lp {
 .lp-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
   flex: none;
   white-space: nowrap;
-  font-weight: 700;
-  font-size: 0.9375rem;
-  letter-spacing: -0.02em;
+  font-weight: 750;
+  font-size: 1.0625rem;
+  letter-spacing: -0.025em;
   color: var(--lp-ink);
 }
 
 .lp-brand__mark {
-  width: 34px;
-  height: 34px;
+  width: 56px;
+  height: 56px;
   flex: none;
-  border-radius: var(--lp-r-sm);
   object-fit: contain;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 2px;
+  padding: 0;
 }
 
 .lp-brand__sub {
   font-weight: 500;
-  font-size: 0.6875rem;
-  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
   color: var(--lp-ink-2);
   border-left: 1px solid var(--lp-line-strong);
-  padding-left: 9px;
+  padding-left: 11px;
   margin-left: 1px;
 }
 
@@ -590,9 +591,9 @@ html.dark .lp {
     ),
     linear-gradient(
       to right,
-      rgba(3, 9, 12, 0.78) 0%,
-      rgba(3, 9, 12, 0.24) 52%,
-      transparent 78%
+      rgba(3, 9, 12, 0.88) 0%,
+      rgba(3, 9, 12, 0.42) 52%,
+      rgba(3, 9, 12, 0.08) 78%
     );
 }
 
@@ -604,6 +605,7 @@ html.dark .lp {
 
 .lp-hero__copy {
   max-width: 52rem;
+  min-width: 0;
   color: #ffffff;
 }
 
@@ -619,12 +621,14 @@ html.dark .lp {
 
 .lp-hero__copy .lp-display {
   color: #ffffff;
+  text-shadow: 0 3px 24px rgba(0, 0, 0, 0.48);
 }
 
 .lp-hero__copy .lp-lead {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.92);
   font-size: clamp(1rem, 1.1vw, 1.0625rem);
   line-height: 1.6;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   /* Narrower than the headline so the block reads as two settled lines
      rather than a paragraph. */
   max-width: 44ch;
@@ -645,6 +649,16 @@ html.dark .lp {
   grid-template-columns: 5.5fr 6.5fr;
   gap: clamp(32px, 5vw, 76px);
   align-items: center;
+}
+
+.lp-ov__grid > *,
+.lp-jrn__grid > *,
+.lp-cap__grid > *,
+.lp-met__grid > *,
+.lp-plat__grid > *,
+.lp-foot__top > *,
+.lp-foot__cols > * {
+  min-width: 0;
 }
 
 .lp-ov__media {
@@ -743,19 +757,19 @@ html.dark .lp {
   transform: scale(1.04);
 }
 
-.lp-step__title {
+.lp .lp-step__title {
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
-  margin-top: 18px;
+  margin-top: 28px;
 }
 
 .lp-step__body {
   font-size: 0.875rem;
   line-height: 1.6;
   color: var(--lp-ink-2);
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 @media (min-width: 640px) {
@@ -849,6 +863,7 @@ html.dark .lp {
   grid-template-columns: 2.75rem 1fr;
   align-items: start;
   width: 100%;
+  min-width: 0;
   text-align: left;
   font-family: inherit;
   background: transparent;
@@ -998,6 +1013,10 @@ html.dark .lp {
   margin-bottom: clamp(32px, 4vw, 52px);
 }
 
+.lp-rail__head > :first-child {
+  min-width: 0;
+}
+
 .lp-rail__nav {
   display: flex;
   gap: 10px;
@@ -1017,6 +1036,10 @@ html.dark .lp {
   padding-bottom: 8px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.lp-rail__scroller[data-auto="true"] {
+  scroll-snap-type: none;
 }
 
 .lp-rail__scroller::-webkit-scrollbar {
@@ -1233,7 +1256,7 @@ html.dark .lp {
 
 .lp-foot__top {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 2.45fr);
   gap: clamp(36px, 5vw, 72px);
   padding-bottom: 48px;
   border-bottom: 1px solid var(--lp-line);
@@ -1241,8 +1264,13 @@ html.dark .lp {
 
 .lp-foot__cols {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(220px, 1.6fr);
+  gap: clamp(20px, 2.6vw, 36px);
+  align-items: start;
+}
+
+.lp-foot__identity {
+  min-width: 0;
 }
 
 .lp-foot__tag {
@@ -1254,6 +1282,23 @@ html.dark .lp {
   max-width: 26ch;
 }
 
+.lp-foot__eyebrow {
+  margin-top: 34px;
+  color: var(--lp-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.lp-foot__institution {
+  margin-top: 7px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .lp-foot__ctitle {
   font-size: 0.875rem;
   font-weight: 600;
@@ -1261,7 +1306,11 @@ html.dark .lp {
 }
 
 .lp-foot__cols a {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
   font-size: 0.875rem;
   line-height: 1.5;
   color: var(--lp-ink-2);
@@ -1273,12 +1322,76 @@ html.dark .lp {
   color: var(--lp-accent);
 }
 
+.lp-foot__cols a svg {
+  flex: none;
+}
+
+.lp-foot__cols a:not(.lp-foot__contact-link) {
+  overflow-wrap: anywhere;
+}
+
+.lp-foot__address {
+  min-width: 0;
+  max-width: 34ch;
+  font-style: normal;
+}
+
+.lp-foot__cols .lp-foot__contact-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  margin-top: 12px;
+  color: var(--lp-ink-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.lp-foot__contact-link:hover {
+  color: var(--lp-accent);
+}
+
+.lp-foot__cols .lp-foot__contact-link svg {
+  flex: none;
+  margin-top: 0.2em;
+  color: var(--lp-accent);
+}
+
 .lp-foot__bot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding-top: 26px;
+}
+
+.lp-foot__topbtn {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex: none;
+  border: 1px solid var(--lp-line-strong);
+  border-radius: 999px;
+  color: var(--lp-ink);
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.12s ease;
+}
+
+.lp-foot__topbtn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lp-foot__topbtn:hover {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+.lp-foot__topbtn:active {
+  transform: translateY(1px);
 }
 
 /* ── Scroll reveal: only armed when motion is allowed ────────────────────── */
@@ -1347,6 +1460,10 @@ html.dark .lp {
     gap: 36px;
   }
 
+  .lp-foot__cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .lp-plat__benefit,
   .lp-plat__stack {
     max-width: none;
@@ -1393,9 +1510,9 @@ html.dark .lp {
   }
 }
 
-/* Narrow phones: the auth control moves into the sheet so the burger always
-   has room. Keeping it in the bar pushed the burger off screen at 375px. */
-@media (max-width: 559px) {
+/* Keep the header stable on narrow tablet widths too. Auth actions remain
+   available from the sheet, while the theme and menu controls stay visible. */
+@media (max-width: 767px) {
   .lp-actions .lp-btn {
     display: none;
   }

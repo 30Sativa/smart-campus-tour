@@ -21,7 +21,7 @@ export function Hero() {
     <section className="lp-hero" id="hero">
       <div className="lp-hero__media" id="hero-media">
         <video
-          src="/videos/campus-tour-hero.mp4"
+          src="/videos/home.mp4"
           poster="/images/hero-campus.jpg"
           autoPlay
           muted

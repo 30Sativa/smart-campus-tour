@@ -3,23 +3,23 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { railItems } from '../landing-content'
 import { prefersReducedMotion } from '../landing-motion'
 
-/** One slide every 4.5s: long enough to read a card, short enough to notice. */
-const AUTOPLAY_MS = 4500
+/** Continuous movement speed in CSS pixels per second. */
+const AUTOPLAY_SPEED = 28
 
 /**
  * Native scroll-snap rail with a gentle autoplay.
  *
  * The track is a real scroll container, so touch swipe, trackpad and keyboard
- * all work without a carousel library. Autoplay ping-pongs between the ends
- * rather than rewinding, which avoids the long sweep back that a looping
- * carousel shows when it wraps. It pauses while the pointer is over the
- * section, while focus is inside it, while a finger is down and while the tab
- * is hidden, and it never starts at all under prefers-reduced-motion.
+ * all work without a carousel library. Autoplay advances left through the
+ * cards and restarts at the beginning after the last card. It pauses while
+ * the pointer is over the section, while focus is inside it, while a finger
+ * is down and while the tab is hidden, and it never starts at all under
+ * prefers-reduced-motion.
  */
 export function RobotRail() {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(false)
-  const directionRef = useRef<1 | -1>(1)
+  const animationRef = useRef<number | null>(null)
   const [atStart, setAtStart] = useState(true)
   const [atEnd, setAtEnd] = useState(false)
 
@@ -46,24 +46,29 @@ export function RobotRail() {
     syncEdges()
     if (prefersReducedMotion()) return
 
-    const id = window.setInterval(() => {
+    let previousTime = 0
+    const animate = (time: number) => {
       const node = scrollerRef.current
-      if (!node || pausedRef.current || document.hidden) return
-      const max = node.scrollWidth - node.clientWidth
-      if (max <= 4) return
+      if (node && !pausedRef.current && !document.hidden) {
+        const max = node.scrollWidth - node.clientWidth
+        if (max > 4) {
+          const elapsed = previousTime ? Math.min(time - previousTime, 50) : 0
+          if (node.scrollLeft >= max - 1) node.scrollTo({ left: 0, behavior: 'auto' })
+          else node.scrollLeft += (AUTOPLAY_SPEED * elapsed) / 1000
+        }
+      }
 
-      if (directionRef.current === 1 && node.scrollLeft >= max - 4) directionRef.current = -1
-      else if (directionRef.current === -1 && node.scrollLeft <= 4) directionRef.current = 1
+      previousTime = time
+      animationRef.current = window.requestAnimationFrame(animate)
+    }
 
-      scrollByCard(directionRef.current)
-    }, AUTOPLAY_MS)
+    animationRef.current = window.requestAnimationFrame(animate)
+    return () => {
+      if (animationRef.current !== null) window.cancelAnimationFrame(animationRef.current)
+    }
+  }, [syncEdges])
 
-    return () => window.clearInterval(id)
-  }, [scrollByCard, syncEdges])
-
-  /** A manual move sets the direction autoplay continues in. */
   const step = (direction: 1 | -1) => {
-    directionRef.current = direction
     scrollByCard(direction)
   }
 
@@ -122,6 +127,7 @@ export function RobotRail() {
       <div
         className="lp-rail__scroller"
         ref={scrollerRef}
+        data-auto="true"
         onScroll={syncEdges}
         tabIndex={0}
         aria-label="Các khối kỹ thuật"
