@@ -4,7 +4,7 @@
 # khởi động gì cả. Đó là chủ ý: trên VMware không thể vô tình start service
 # hardware và gặp lỗi "/dev/ttyACM0: no such file or directory".
 #
-#   miniPC (phần cứng thật): docker compose --profile hardware up -d
+#   miniPC (phần cứng thật): docker compose --profile hardware pull && docker compose --profile hardware up -d --force-recreate
 #   VMware (RViz2 / debug) : docker compose --profile debug    up -d
 #   VMware (Gazebo / RViz2): docker compose --profile sim      up -d
 #
@@ -23,6 +23,8 @@ services:
   # Chạy phần cứng thật: STM32, RPLiDAR, gamepad.
   robot-ros2:
     profiles: [hardware]
+    # Image-only deployment: pull the published image before `up`. `--build`
+    # does not rebuild this service because it intentionally has no `build:`.
     image: ${DOCKER_IMAGE:-307sativa/robot-ros2:latest}
     container_name: robot-ros2
     network_mode: host

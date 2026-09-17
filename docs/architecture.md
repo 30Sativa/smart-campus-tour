@@ -329,7 +329,7 @@ and offline fallback remain TBD.
 
 | Unit | Built by | Deployed how | Target |
 |---|---|---|---|
-| `robot/` ROS 2 | GitHub Actions -> DockerHub | `docker compose pull && up -d` | robot miniPC |
+| `robot/` ROS 2 | GitHub Actions -> DockerHub | `docker compose --profile hardware pull robot-ros2 && docker compose --profile hardware up -d --force-recreate robot-ros2` | robot miniPC |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP3) --> | service/container | simulation workstation/server |
 | `backend/` | <!-- TODO(WP2) --> | <!-- TODO(WP2): docker image? dotnet publish? --> | AWS EC2 |

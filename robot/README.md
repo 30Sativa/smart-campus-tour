@@ -161,10 +161,15 @@ docker compose --profile hardware config | grep -E 'ROS_DOMAIN_ID|ROS_DISCOVERY_
 ```bash
 cd robot
 cp .env.minipc.example .env
-docker compose --profile hardware pull
-docker compose --profile hardware up -d
+docker compose --profile hardware pull robot-ros2
+docker compose --profile hardware up -d --force-recreate robot-ros2
 docker exec -it robot-ros2 bash
 ```
+
+`hardware` chạy image đã build và push lên DockerHub; service này cố ý không có
+`build:`. Vì vậy `--build` không cập nhật được image hardware. Mỗi lần update
+phải `pull` trước khi recreate container. Không dùng `pull_policy: always` để
+việc startup khi miniPC mất mạng vẫn dùng được image đã cache.
 
 Trong container:
 
@@ -371,9 +376,12 @@ ROS_DISCOVERY_SERVER=127.0.0.1:11811
 Start or update the robot runtime:
 
 ```bash
-docker compose --profile hardware pull
-docker compose --profile hardware up -d
+docker compose --profile hardware pull robot-ros2
+docker compose --profile hardware up -d --force-recreate robot-ros2
 ```
+
+Không thêm `--build` vào flow `hardware`: service `robot-ros2` là image-only
+theo ADR-0003, nên `--build` không rebuild hoặc cập nhật image DockerHub.
 
 When GitHub Actions publishes a new image, update `.env` to the new commit SHA
 on both the miniPC and VMware before comparing results. Use `git pull` only when

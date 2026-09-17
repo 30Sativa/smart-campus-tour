@@ -19,7 +19,17 @@ The deployment artifact is a Docker image.
 3. GitHub Actions builds the ROS 2 image (build context `robot/`).
 4. Pull requests build only. Pushes to `main`/`master` push `latest` and a
    short-SHA tag to DockerHub.
-5. The miniPC runs `docker compose pull && docker compose up -d`.
+5. The miniPC explicitly pulls the published image before recreating the
+   hardware service:
+
+   ```bash
+   docker compose --profile hardware pull robot-ros2
+   docker compose --profile hardware up -d --force-recreate robot-ros2
+   ```
+
+   The hardware service has no `build:`; `--build` therefore does not update
+   the deployed image. We do not use `pull_policy: always`, so startup can
+   still use a cached image when the miniPC is temporarily offline.
 
 There is no "git pull and colcon build on the robot" path.
 
