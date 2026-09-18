@@ -6,11 +6,13 @@
  * a signed-in account out of an area it has no business in, including by direct
  * URL, and it decides where a fresh sign-in lands.
  *
- * Three roles, three areas, and they line up one to one:
+ * Three roles, three signed-in areas, and they line up one to one:
  *
- *   Visitor  public pages, no account needed
+ *   Visitor  `/visit/*`, the visitor app: explore, book a robot, walk a tour
  *   Staff    `/staff/*`, tour operations
  *   Admin    `/admin/*`, administration, and `/staff/*` as well
+ *
+ * The public pages at `/` need no account at all and are open to every role.
  *
  * Admin is deliberately allowed into `/staff/*`: an administrator can look at
  * the operations console. The reverse is not true, and Admin still *lands* on
@@ -30,6 +32,15 @@ export const STAFF_ROLES = [STAFF_ROLE, ADMIN_ROLE] as const
 
 /** Every role the app can see, visitor included. */
 export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
+
+/**
+ * Home of the visitor app.
+ *
+ * A visitor used to land on `/` after signing in, because the account had nothing
+ * else. It has this area now, so signing in ends somewhere that belongs to the
+ * account rather than back on the page they signed in from.
+ */
+export const VISITOR_HOME = '/visit'
 
 export type StaffRole = (typeof STAFF_ROLES)[number]
 export type AppRole = (typeof ALL_ROLES)[number]
@@ -72,6 +83,17 @@ export function isAdminRole(role?: string | null): boolean {
   return normalizeRole(role) === ADMIN_ROLE
 }
 
+/**
+ * May open `/visit/*`.
+ *
+ * Every signed-in account can: a staff member checking what a visitor sees is a
+ * normal thing to do, and the area holds nothing operational. What decides where
+ * a role *lands* is `homePathForRole`, not this.
+ */
+export function isVisitorAreaRole(role?: string | null): boolean {
+  return ALL_ROLES.includes(normalizeRole(role))
+}
+
 /** Vietnamese name for a role, for anything a person reads. */
 export function roleLabel(role?: string | null): string {
   switch (normalizeRole(role)) {
@@ -92,5 +114,6 @@ export function roleLabel(role?: string | null): string {
 export function homePathForRole(role?: string | null): string {
   if (isAdminRole(role)) return '/admin'
   if (isStaffRole(role)) return '/staff'
-  return '/'
+  return VISITOR_HOME
 }
+

@@ -5,21 +5,11 @@ import { useOpsDashboard } from '../../features/operations/operations-hooks'
 import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, panelClass, StatusBadge } from '../../features/operations/OperationsUi'
 import { severityRank } from '../../features/operations/status'
 import { formatBattery, formatDateTime, formatTime } from '../../features/operations/formatters'
+import { OverviewCharts } from '../../features/operations/OverviewCharts'
 
 const shell = 'min-h-full bg-[#f1f6fe] px-4 py-5 font-sans sm:px-6 lg:px-8 lg:py-7'
 
-/**
- * Staff operations overview.
- *
- * The page answers one question: what needs my attention right now. Everything
- * is ordered by that and nothing else.
- *
- * The nine equal metric cards this replaced could not answer it. Nine numbers at
- * one weight is not a summary, it is an inventory, and an operator had to read
- * all of them to find the two that mattered. Four now carry the shift, the rest
- * moved to a secondary line where a count is enough. The number is the dominant
- * element in each tile; the icon supports it.
- */
+/** Material-style overview, using the existing operations dashboard contract. */
 export default function OperationsOverviewPage() {
   const dashboard = useOpsDashboard()
 
@@ -52,21 +42,20 @@ export default function OperationsOverviewPage() {
     <div className={shell}>
       <div className="mx-auto w-full max-w-[1500px]">
         <PageHeader
-          eyebrow="Vận hành tour"
+          eyebrow="Tổng quan hôm nay"
           title="Tình hình điều hành"
           description="Theo dõi tour, đội AMR và cảnh báo vận hành."
           action={<Link to="/staff/schedule" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#5b91ed] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(79,141,247,0.24)] hover:bg-[#407bd8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] focus-visible:ring-offset-2">Xem lịch tour</Link>}
         />
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tóm tắt ca trực">
+        <section className="grid gap-5 pt-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Tóm tắt ca trực">
           {primary.map(({ label, value, hint, icon: Icon, tone }) => (
-            <div key={label} className={`${panelClass} p-4`}>
-              <div className="flex items-start justify-between gap-3">
-                <p className={`text-[34px] leading-none font-extrabold tracking-[-0.05em] ${accent[tone]}`}>{value}</p>
-                <Icon size={18} className="mt-1 shrink-0 text-[#a8b6c9]" aria-hidden="true" />
+            <div key={label} className={panelClass}>
+              <div className="flex items-start justify-between gap-3 p-4">
+                <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-gradient-to-tr from-[#407bd8] to-[#5b91ed] text-white shadow-lg shadow-[#4f8df7]/20"><Icon size={23} strokeWidth={1.7} aria-hidden="true" /></span>
+                <div className="text-right"><p className="text-xs leading-5 text-[#647793]">{label}</p><p className="mt-1 text-[28px] leading-none font-bold tracking-tight text-[#1f314d]">{value}</p></div>
               </div>
-              <p className="mt-3 text-sm font-bold text-[#40546f]">{label}</p>
-              <p className="mt-0.5 text-xs text-[#8a98ac]">{hint}</p>
+              <p className={`border-t border-[#edf2fa] px-4 py-3 text-xs font-medium ${accent[tone]}`}>{hint}</p>
             </div>
           ))}
         </section>
@@ -78,12 +67,14 @@ export default function OperationsOverviewPage() {
           <span>AMR mất kết nối: <strong className="font-bold text-[#40546f]">{data.offlineAmrs}</strong></span>
         </p>
 
-        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.8fr)]">
+        <OverviewCharts dashboard={data} updatedAt={dashboard.dataUpdatedAt} />
+
+        <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]">
           <section className={panelClass} aria-label="Lịch tour hôm nay">
             <div className="flex items-center justify-between gap-3 border-b border-[#edf2fa] px-5 py-4">
               <div>
                 <h2 className="font-bold text-[#40546f]">Lịch tour hôm nay</h2>
-                <p className="mt-0.5 text-xs text-[#8a98ac]">Phiên tour theo lịch đã đặt</p>
+                <p className="mt-0.5 text-xs text-[#71819a]">Phiên tour theo lịch đã đặt</p>
               </div>
               <Link to="/staff/schedule" className="shrink-0 text-xs font-bold text-[#2f62b8] hover:underline">Mở lịch</Link>
             </div>
@@ -124,10 +115,10 @@ export default function OperationsOverviewPage() {
                       <Link to={`/staff/tours/${tour.sessionId}`} className="flex items-start justify-between gap-3 p-4 hover:bg-[#f8fbff]">
                         <div className="min-w-0">
                           <p className="font-bold text-[#40546f]">{formatTime(tour.startTime)} · {tour.routeName}</p>
-                          <p className="mt-1 text-xs text-[#8a98ac]">{tour.visitorName || 'Không công khai'} · {tour.amrName || 'Chưa gán AMR'}</p>
+                          <p className="mt-1 text-xs text-[#71819a]">{tour.visitorName || 'Không công khai'} · {tour.amrName || 'Chưa gán AMR'}</p>
                           <div className="mt-2"><StatusBadge value={tour.status} /></div>
                         </div>
-                        <ChevronRight size={16} className="mt-1 shrink-0 text-[#a8b6c9]" aria-hidden="true" />
+                        <ChevronRight size={16} className="mt-1 shrink-0 text-[#8a98ac]" aria-hidden="true" />
                       </Link>
                     </li>
                   ))}
@@ -140,7 +131,7 @@ export default function OperationsOverviewPage() {
             <div className="flex items-center justify-between gap-3 border-b border-[#edf2fa] px-5 py-4">
               <div>
                 <h2 className="font-bold text-[#40546f]">Cảnh báo cần xử lý</h2>
-                <p className="mt-0.5 text-xs text-[#8a98ac]">Nghiêm trọng trước, chưa xác nhận</p>
+                <p className="mt-0.5 text-xs text-[#71819a]">Nghiêm trọng trước, chưa xác nhận</p>
               </div>
               <Link to="/staff/alerts" className="shrink-0 text-xs font-bold text-[#2f62b8] hover:underline">Xem tất cả</Link>
             </div>
@@ -156,7 +147,7 @@ export default function OperationsOverviewPage() {
                         <p className="text-sm font-semibold text-[#40546f]">{alert.message}</p>
                         <StatusBadge value={alert.severity} className="shrink-0" />
                       </div>
-                      <p className="mt-2 text-xs text-[#8a98ac]">{alert.amrName || 'Hệ thống'} · {formatDateTime(alert.createdAt)}</p>
+                      <p className="mt-2 text-xs text-[#71819a]">{alert.amrName || 'Hệ thống'} · {formatDateTime(alert.createdAt)}</p>
                     </Link>
                   </li>
                 ))}
@@ -169,7 +160,7 @@ export default function OperationsOverviewPage() {
           <div className="flex items-center justify-between gap-3 border-b border-[#edf2fa] px-5 py-4">
             <div>
               <h2 className="font-bold text-[#40546f]">Đội AMR</h2>
-              <p className="mt-0.5 text-xs text-[#8a98ac]">Trực tuyến, dữ liệu chậm và mất kết nối không được gộp thành một trạng thái khỏe mạnh.</p>
+              <p className="mt-0.5 text-xs text-[#71819a]">Trực tuyến, dữ liệu chậm và mất kết nối không được gộp thành một trạng thái khỏe mạnh.</p>
             </div>
             <Link to="/staff/amr" className="shrink-0 text-xs font-bold text-[#2f62b8] hover:underline">Theo dõi AMR</Link>
           </div>
@@ -188,12 +179,12 @@ export default function OperationsOverviewPage() {
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <StatusBadge value={amr.operationalState} />
-                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${low ? 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' : 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]'}`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${low ? 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' : 'border-[#dce9fb] bg-[#f6f9fd] text-[#5d7085]'}`}>
                         {low && <BatteryLow size={12} aria-hidden="true" />}
                         {amr.batteryPercent == null ? 'Chưa có số liệu pin' : `Pin ${formatBattery(amr.batteryPercent)}`}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-[#8a98ac]">{amr.currentPoi || 'Chưa có vị trí'}</p>
+                    <p className="mt-2 text-xs text-[#71819a]">{amr.currentPoi || 'Chưa có vị trí'}</p>
                   </li>
                 )
               })}

@@ -10,24 +10,36 @@
  */
 
 /**
- * Chart colours, taken from the status tones the rest of the dashboard uses so
- * a completed tour is the same green here as in a `StatusBadge`.
+ * Chart colours.
+ *
+ * Two groups, and the difference matters. The first four are the dashboard's
+ * *status* vocabulary: a completed tour is the same green here as in a
+ * `StatusBadge`, so those never move with a visual refresh. The rest is chrome —
+ * grid, axis, ink, the neutral series and the hover cursor — and that is the
+ * console's own palette, shared with operations since administration moved onto
+ * it on 2026-09-18.
  */
 export const CHART_COLORS = {
+  // Status. Bound to features/operations/status.ts, not to the chrome.
   completed: '#2f8f6b',
   cancelled: '#c0554a',
   other: '#9aa6b8',
-  neutral: '#4f7fca',
   critical: '#c0554a',
-  grid: '#e7ecf4',
-  axis: '#8792a5',
+
+  // Chrome. The operations palette.
+  neutral: '#5b91ed',
+  grid: '#edf2fa',
+  axis: '#71819a',
+  ink: '#40546f',
+  inkMuted: '#71819a',
+  cursor: 'rgba(91,145,237,0.07)',
 } as const
 
 /** Shared class for the honest "no data" body inside a chart card. */
-export const chartEmptyClass = 'flex min-h-40 items-center justify-center px-5 py-8 text-center text-sm font-medium text-[#8792a5]'
+export const chartEmptyClass = 'flex min-h-40 items-center justify-center px-5 py-8 text-center text-sm font-medium text-[#71819a]'
 
 /** Shared class for the small caption under a chart. */
-export const chartLegendClass = 'flex flex-wrap items-center gap-x-4 gap-y-1 px-5 pb-4 text-xs text-[#6b7688]'
+export const chartLegendClass = 'flex flex-wrap items-center gap-x-4 gap-y-1 px-5 pb-4 text-xs text-[#647793]'
 
 /**
  * Tooltip chrome shared by the three charts, so a hovered value looks the same
@@ -41,7 +53,7 @@ export const tooltipStyle = {
     fontSize: 12,
     padding: '8px 12px',
   },
-  labelStyle: { fontWeight: 700, color: '#3c4657', marginBottom: 2 },
+  labelStyle: { fontWeight: 700, color: '#1f314d', marginBottom: 2 },
   itemStyle: { padding: 0 },
 } as const
 

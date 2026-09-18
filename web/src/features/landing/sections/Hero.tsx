@@ -10,12 +10,11 @@ import { EXPERIENCE_HREF } from '../landing-content'
  * Three text elements: a headline that balances onto two lines, one supporting
  * sentence, and the two actions. The copy is deliberately short here, because a
  * visitor decides whether this page is for them before reading a paragraph. A
- * staff member who is already signed in gets the operations door instead.
+ * someone who is already signed in gets the door into their own area instead.
  */
 export function Hero() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const user = useAuthStore((state) => state.user)
-  const isStaff = isStaffRole(user?.role)
 
   return (
     <section className="lp-hero" id="hero">
@@ -41,9 +40,16 @@ export function Hero() {
             Robot AMR dẫn đường, thuyết minh và đồng hành cùng bạn theo lộ trình có sẵn.
           </p>
           <div className="lp-hero__cta" id="hero-cta">
-            {isAuthenticated && isStaff ? (
+            {/* A signed-in account goes to its own area. Before `/visit` shipped
+                only staff had one, so a visitor was sent back to sign in from
+                here; now every role has somewhere to land. */}
+            {isAuthenticated ? (
               <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--lg">
-                {isAdminRole(user?.role) ? 'Vào trang quản trị' : 'Vào trang điều hành'}
+                {isAdminRole(user?.role)
+                  ? 'Vào trang quản trị'
+                  : isStaffRole(user?.role)
+                    ? 'Vào trang điều hành'
+                    : 'Tiếp tục hành trình'}
                 <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
               </Link>
             ) : (

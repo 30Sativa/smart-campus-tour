@@ -1,7 +1,7 @@
-import { ALL_ROLES, homePathForRole, isAdminRole, isStaffRole, normalizeRole, roleLabel } from './roles'
+import { ALL_ROLES, VISITOR_HOME, homePathForRole, isAdminRole, isStaffRole, isVisitorAreaRole, normalizeRole, roleLabel } from './roles'
 
 /**
- * The three areas of the product, and who may enter each one.
+ * The four areas of the product, and who may enter each one.
  *
  * This is deliberately the ONLY place the answer is written down. The router's
  * guard asks `allows()` before rendering an area, and the "Vai trò & quyền"
@@ -13,7 +13,7 @@ import { ALL_ROLES, homePathForRole, isAdminRole, isStaffRole, normalizeRole, ro
  * account from opening the wrong area by typing the URL, and it is what decides
  * what an account is shown.
  */
-export type AreaId = 'public' | 'staff' | 'admin'
+export type AreaId = 'public' | 'visitor' | 'staff' | 'admin'
 
 export type Area = {
   id: AreaId
@@ -31,6 +31,13 @@ export const AREAS: Area[] = [
     path: '/',
     purpose: 'Giới thiệu và trải nghiệm tour. Không cần đăng nhập.',
     allows: () => true,
+  },
+  {
+    id: 'visitor',
+    label: 'Ứng dụng khách tham quan',
+    path: VISITOR_HOME,
+    purpose: 'Khám phá khuôn viên, đặt robot và theo dõi tour của chính mình. Cần đăng nhập.',
+    allows: isVisitorAreaRole,
   },
   {
     id: 'staff',
@@ -61,6 +68,7 @@ export { ALL_ROLES }
 function areaOfPath(path: string): AreaId {
   if (path.startsWith('/admin')) return 'admin'
   if (path.startsWith('/staff')) return 'staff'
+  if (path.startsWith(VISITOR_HOME)) return 'visitor'
   return 'public'
 }
 

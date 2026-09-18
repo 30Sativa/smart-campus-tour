@@ -17,9 +17,14 @@ export type AuthResponse = {
 export const MOCK_ACCOUNTS = [
   { username: 'admin', password: 'admin', role: 'Admin', userId: 'mock-user-admin' },
   { username: 'staff', password: 'staff', role: 'Staff', userId: 'mock-user-staff' },
+  // Added when `/visit` shipped. Without it the visitor app could only be reached
+  // by registering, and a freshly registered name is not one the visitor
+  // fixtures know anything about.
+  { username: 'visitor', password: 'visitor', role: 'Visitor', userId: 'mock-user-visitor' },
 ] as const
 
-export const MOCK_ACCOUNTS_HINT = 'Tài khoản mẫu: admin/admin (quản trị), staff/staff (vận hành)'
+export const MOCK_ACCOUNTS_HINT =
+  'Tài khoản mẫu: visitor/visitor (khách), staff/staff (vận hành), admin/admin (quản trị)'
 
 export class MockAuthError extends Error {}
 

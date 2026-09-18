@@ -38,10 +38,10 @@ export function RobotUtilizationChart({ data, emptyLabel }: { data: RobotUtilisa
           <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 34, left: 4, bottom: 4 }} barCategoryGap="28%" accessibilityLayer>
             <CartesianGrid horizontal={false} stroke={CHART_COLORS.grid} />
             <XAxis type="number" domain={[0, 100]} unit="%" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: CHART_COLORS.axis }} />
-            <YAxis type="category" dataKey="amrName" width={96} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#3c4657' }} />
-            <Tooltip cursor={{ fill: 'rgba(79,127,202,0.06)' }} {...tooltipStyle} />
+            <YAxis type="category" dataKey="amrName" width={96} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: CHART_COLORS.ink }} />
+            <Tooltip cursor={{ fill: CHART_COLORS.cursor }} {...tooltipStyle} />
             <Bar dataKey="percent" name="Mức sử dụng" fill={CHART_COLORS.neutral} radius={[0, 4, 4, 0]} isAnimationActive={false}>
-              <LabelList dataKey="label" position="right" offset={8} fontSize={11} fontWeight={700} fill="#6b7688" />
+              <LabelList dataKey="label" position="right" offset={8} fontSize={11} fontWeight={700} fill={CHART_COLORS.inkMuted} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

@@ -45,6 +45,29 @@
   --lp-r: 14px;
   --lp-r-sm: 10px;
 
+  /* Form controls.
+     These live here rather than in auth.css because more than one surface now
+     carries `.lp` and reuses `.auth-input` / `.auth-submit`: the two auth pages
+     and the signed-in visitor app. Declaring them once on the shared root is
+     what keeps a text field the same text field everywhere, instead of the same
+     four values copied into each surface's own file and drifting apart.
+
+     `--auth-r` is deliberately 12px against the page's 14px panels and its
+     full-round pills: a pill button above square inputs makes a form look
+     assembled from two kits, so form controls share one radius of their own.
+     A panel ground barely off the field colour, enough to seat an input without
+     a card, a shadow or a gradient doing the work. */
+  --auth-panel-bg: #f8fafb;
+  --auth-field-bg: #ffffff;
+  --auth-field-line: rgba(11, 21, 25, 0.15);
+  --auth-r: 12px;
+
+  /* The one non-accent hue on the whole product: a form-level error. Used by
+     `.auth-alert`, an invalid field's ring, and the visitor app's danger badge. */
+  --lp-danger-ink: #a42618;
+  --lp-danger-line: #c0483c;
+  --lp-danger-soft: rgba(164, 38, 24, 0.07);
+
   /* rhythm */
   --lp-maxw: 1180px;
   --lp-gut: clamp(20px, 4.2vw, 44px);
@@ -93,6 +116,15 @@ html.dark .lp {
 
   --lp-nav-bg: rgba(6, 13, 17, 0.78);
   --lp-shadow: 0 18px 50px -24px rgba(0, 0, 0, 0.7);
+
+  /* Raised, not sunken: the field sits above the panel in dark too. */
+  --auth-panel-bg: #081014;
+  --auth-field-bg: #101c22;
+  --auth-field-line: rgba(238, 244, 246, 0.17);
+
+  --lp-danger-ink: #ffa39a;
+  --lp-danger-line: rgba(255, 163, 154, 0.5);
+  --lp-danger-soft: rgba(255, 163, 154, 0.1);
 }
 
 .lp *,
@@ -442,6 +474,20 @@ html.dark .lp {
 
 .lp-navlink:hover::after {
   width: 100%;
+}
+
+/* The current page, for the signed-in areas that reuse this nav on real routes.
+   The public page's links are in-page anchors and never carry it, so adding the
+   state here costs that page nothing and keeps one nav link component instead
+   of a second one. The underline is held open rather than animated in, because
+   it is a location, not a hover. */
+.lp-navlink[aria-current='page'] {
+  color: var(--lp-ink);
+}
+
+.lp-navlink[aria-current='page']::after {
+  width: 100%;
+  background: var(--lp-accent);
 }
 
 .lp-actions {

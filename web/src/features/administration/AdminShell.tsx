@@ -1,6 +1,17 @@
-import { Suspense, useState } from 'react'
-import { LogOut, Menu, Radio, ShieldCheck, X } from 'lucide-react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import {
+  Bot,
+  ChevronRight,
+  Home,
+  LogOut,
+  Menu,
+  Radio,
+  Search,
+  ShieldCheck,
+  X,
+} from 'lucide-react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
+
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
@@ -11,89 +22,401 @@ import { ADMIN_NAV } from './admin-nav'
 /**
  * The administration shell.
  *
- * Deliberately not the staff shell with a different title. It is a darker,
- * quieter chrome because administration is a place you visit to check and to
- * configure, not a console you watch all day; there is no alert bell, no live
- * badge and nothing that pulls for attention. It shares the brand, the type and
- * the panel language with operations, and diverges on density and priority.
+ * It is the operations shell's chrome, and deliberately so as of 2026-09-18.
+ * The two consoles used to run different palettes — administration on slate,
+ * operations on blue — on the theory that administration should feel quieter.
+ * In practice the only account that can open both is an Admin, so the only
+ * person who ever saw the distinction was the one person guaranteed to cross it,
+ * and crossing it looked like leaving the product. One palette now, from
+ * `features/operations`.
+ *
+ * What still separates the two is priority, not colour, and that part is kept:
+ * there is no alert bell here and no live badge, because administration is a
+ * place you visit to check and to configure, not a console you watch all day.
+ * Nothing on this chrome pulls for attention.
  */
 export default function AdminShell() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+
   const location = useLocation()
+  const navigate = useNavigate()
+
   const user = useAuthStore((state) => state.user)
   const handleLogout = useLogout()
 
-  const active = (path: string) => (path === '/admin' ? location.pathname === path : location.pathname.startsWith(path))
+  const active = (path: string) =>
+    path === '/admin'
+      ? location.pathname === path
+      : location.pathname.startsWith(path)
+
+  const currentPage =
+    ADMIN_NAV.find(({ path }) => active(path))?.label ??
+    'Quản trị hệ thống'
+
+  const results = ADMIN_NAV.filter(({ label }) =>
+    label
+      .toLocaleLowerCase('vi')
+      .includes(search.trim().toLocaleLowerCase('vi')),
+  )
+
+  const closeMenu = () => {
+    setMenuOpen(false)
+    menuButton.current?.focus()
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    closeButton.current?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        menuButton.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuOpen])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f4f6fa] text-[#1f2937]">
-      <button type="button" onClick={() => setMenuOpen(true)} className="fixed right-5 bottom-5 z-30 grid h-12 w-12 place-items-center rounded-full bg-[#33415c] text-white shadow-[0_10px_28px_rgba(51,65,92,0.32)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c] focus-visible:ring-offset-2 lg:hidden" aria-label="Mở điều hướng quản trị">
-        <Menu size={22} aria-hidden="true" />
-      </button>
-      {menuOpen && <button type="button" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-30 cursor-default bg-[#1f2937]/25 backdrop-blur-[2px] lg:hidden" aria-label="Đóng điều hướng quản trị" />}
+    <div className="min-h-dvh bg-[#f1f6fe] text-[#1f314d]">
+      {/* Skip to content */}
+      <a
+        href="#admin-content"
+        className="sr-only z-50 rounded-lg bg-white p-3 text-sm focus:not-sr-only focus:fixed focus:top-4 focus:left-4"
+      >
+        Đến nội dung chính
+      </a>
 
-      <aside className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-[#dfe4ec] bg-white transition-transform duration-200 lg:sticky lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex h-16 items-center border-b border-[#ecf0f5] px-4">
-          <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex min-w-0 flex-1 items-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c]">
-            <img className="h-9 w-9 shrink-0 translate-x-1 -translate-y-1 scale-125 object-contain" src="/images/logo.png" alt="" width={36} height={36} />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-extrabold tracking-[-0.02em] text-[#1f2937]">CampusTour</span>
-              <span className="block text-[10px] font-semibold text-[#8792a5]">Quản trị hệ thống</span>
+      {/* Mobile overlay */}
+      {menuOpen && (
+        <button
+          type="button"
+          onClick={closeMenu}
+          className="fixed inset-0 z-30 bg-[#1f314d]/20 backdrop-blur-[2px] lg:hidden"
+          aria-label="Đóng điều hướng quản trị"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        id="admin-navigation"
+        className={`fixed inset-y-4 left-4 z-40 flex w-[264px] flex-col rounded-xl border border-white bg-white shadow-[0_10px_30px_-12px_#4570a726] transition-[transform,visibility] duration-200 lg:visible lg:translate-x-0 ${
+          menuOpen
+            ? 'visible translate-x-0'
+            : 'invisible -translate-x-[calc(100%+1rem)]'
+        }`}
+      >
+        {/* Logo */}
+        <div className="mx-5 flex min-h-20 items-center gap-3 border-b border-[#e9f1fc]">
+          <Link
+            to="/admin"
+            onClick={() => setMenuOpen(false)}
+            className="flex flex-1 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#4f8df7]"
+          >
+            <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-tr from-[#407bd8] to-[#5b91ed] text-white shadow-md">
+              <Bot size={23} aria-hidden="true" />
+            </span>
+
+            <span>
+              <span className="block text-sm font-bold">
+                CampusTour
+              </span>
+
+              <span className="mt-0.5 block text-[11px] text-[#71819a]">
+                Quản trị hệ thống
             </span>
           </Link>
-          <button type="button" onClick={() => setMenuOpen(false)} className="grid h-9 w-9 place-items-center rounded-xl text-[#8792a5] hover:bg-[#f4f6fa] lg:hidden" aria-label="Đóng menu"><X size={19} /></button>
+
+          <button
+            ref={closeButton}
+            type="button"
+            onClick={closeMenu}
+            className="grid size-8 place-items-center rounded-lg text-[#8a98ac] hover:bg-[#eaf4ff] lg:hidden"
+            aria-label="Đóng menu"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Điều hướng quản trị">
-          <div className="space-y-1">
+        {/* User info */}
+        <div className="mx-5 flex items-center gap-3 border-b border-[#e9f1fc] py-5">
+          <span
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-[#edf2fa] text-sm font-semibold text-[#2f62b8]"
+            aria-hidden="true"
+          >
+            {user?.username?.slice(0, 2).toLocaleUpperCase('vi') || 'QT'}
+          </span>
+
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">
+              {user?.username || 'Quản trị viên'}
+            </p>
+
+            <p className="mt-1 text-xs text-[#71819a]">
+              {roleLabel(user?.role)}
+            </p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav
+          className="flex-1 overflow-y-auto p-4"
+          aria-label="Điều hướng quản trị"
+        >
+          <p className="px-3 pt-2 pb-3 text-[10px] font-bold tracking-[0.13em] text-[#8a98ac] uppercase">
+            Quản trị
+          </p>
+
+          <div className="space-y-1.5">
             {ADMIN_NAV.map(({ label, path, icon: Icon }) => (
               <Link
                 key={path}
                 to={path}
                 onClick={() => setMenuOpen(false)}
                 aria-current={active(path) ? 'page' : undefined}
-                className={`flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c] ${active(path) ? 'bg-[#eceff5] text-[#1f2937]' : 'text-[#6b7688] hover:bg-[#f4f6fa] hover:text-[#1f2937]'}`}
+                className={`flex min-h-12 items-center gap-3 rounded-lg px-4 text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4f8df7] ${
+                  active(path)
+                    ? 'bg-gradient-to-tr from-[#eaf4ff] to-[#dce9fb] font-semibold text-[#2f62b8] shadow-md shadow-[#4f8df7]/20'
+                    : 'font-medium text-[#6e8096] hover:bg-[#f1f6fe] hover:text-[#1f314d]'
+                }`}
               >
-                <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
+                <Icon
+                  size={19}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+
                 {label}
               </Link>
             ))}
           </div>
 
-          <div className="mt-6 border-t border-[#ecf0f5] pt-5">
-            <Link to="/staff" onClick={() => setMenuOpen(false)} className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[#6b7688] transition-colors hover:bg-[#f4f6fa] hover:text-[#1f2937] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c]">
-              <Radio size={17} strokeWidth={1.9} aria-hidden="true" />
+          {/* Link sang khu vực vận hành */}
+          <div className="mt-5 border-t border-[#e9f1fc] pt-5">
+            <Link
+              to="/staff"
+              onClick={() => setMenuOpen(false)}
+              className="flex min-h-12 items-center gap-3 rounded-lg px-4 text-[13px] font-medium text-[#6e8096] hover:bg-[#f1f6fe] hover:text-[#1f314d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4f8df7]"
+            >
+              <Radio
+                size={19}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+
               Khu vực vận hành
             </Link>
           </div>
         </nav>
 
-        <div className="border-t border-[#ecf0f5] p-3">
-          <div className="mb-2 flex items-center gap-2.5 rounded-xl bg-[#f4f6fa] px-3 py-2.5">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-[#33415c] shadow-sm"><ShieldCheck size={15} aria-hidden="true" /></span>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-bold text-[#3c4657]">{user?.username || 'Quản trị viên'}</p>
-              <p className="truncate text-[10px] text-[#8792a5]">{roleLabel(user?.role)}</p>
-            </div>
-          </div>
-          <button type="button" onClick={handleLogout} className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[#6b7688] hover:bg-[#eceff5] hover:text-[#1f2937] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c]">
-            <LogOut size={17} aria-hidden="true" />Đăng xuất
+        {/* Bottom sidebar */}
+        <div className="m-4 mt-0 border-t border-[#e9f1fc] pt-3">
+          <Link
+            to="/"
+            className="flex min-h-10 items-center gap-3 rounded-lg px-4 text-xs font-medium text-[#71819a] hover:bg-[#f1f6fe]"
+          >
+            <Home size={17} aria-hidden="true" />
+
+            Trang chủ CampusTour
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex min-h-10 w-full items-center gap-3 rounded-lg px-4 text-xs font-semibold text-[#6e8096] hover:bg-[#eaf4ff]"
+          >
+            <LogOut size={17} aria-hidden="true" />
+
+            Đăng xuất
           </button>
         </div>
       </aside>
 
-      <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center border-b border-[#dfe4ec] bg-white/90 px-5 backdrop-blur-md lg:px-8">
-          <p className="text-sm font-bold tracking-[-0.01em] text-[#1f2937] lg:hidden">{ADMIN_NAV.find(({ path }) => active(path))?.label ?? 'Quản trị hệ thống'}</p>
+      {/* Main area */}
+      <div className="flex min-h-dvh min-w-0 flex-col lg:ml-[296px]">
+        {/* Header */}
+        <header className="relative z-20 flex min-h-24 flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            {/* Mobile menu */}
+            <button
+              ref={menuButton}
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-expanded={menuOpen}
+              aria-controls="admin-navigation"
+              className="grid size-10 place-items-center rounded-lg bg-white text-[#2f62b8] shadow-sm lg:hidden"
+              aria-label="Mở điều hướng quản trị"
+            >
+              <Menu size={21} />
+            </button>
+
+            {/* Breadcrumb */}
+            <nav
+              aria-label="Đường dẫn trang"
+              className="min-w-0"
+            >
+              <ol className="flex items-center gap-2 text-xs text-[#71819a]">
+                <li>
+                  <Link
+                    to="/"
+                    aria-label="Trang chủ"
+                    className="hover:text-[#2f62b8]"
+                  >
+                    <Home size={14} />
+                  </Link>
+                </li>
+
+                <li aria-hidden="true">/</li>
+
+                <li>Admin</li>
+
+                <li aria-hidden="true">/</li>
+
+                <li
+                  className="text-[#2f62b8]"
+                  aria-current="page"
+                >
+                  {currentPage}
+                </li>
+              </ol>
+
+              <p className="mt-2 text-sm font-semibold text-[#1f314d]">
+                Quản trị hệ thống
+              </p>
+            </nav>
+          </div>
+
+          {/* Header actions */}
+          <div className="flex items-center gap-2 max-sm:w-full sm:gap-4">
+            {/* Search */}
+            <form
+              role="search"
+              className="relative min-w-0 flex-1 sm:w-56"
+              onSubmit={(event) => {
+                event.preventDefault()
+
+                if (search.trim() && results[0]) {
+                  navigate(results[0].path)
+                  setSearch('')
+                }
+              }}
+            >
+              <label className="flex h-10 items-center gap-2 rounded-lg border border-[#dce9fb] bg-transparent px-3 focus-within:border-[#4f8df7] focus-within:ring-1 focus-within:ring-[#4f8df7]">
+                <Search
+                  size={16}
+                  className="shrink-0 text-[#71819a]"
+                  aria-hidden="true"
+                />
+
+                <span className="sr-only">
+                  Tìm trang quản trị
+                </span>
+
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setSearch('')
+                    }
+                  }}
+                  placeholder="Tìm trang quản trị…"
+                  className="w-full bg-transparent text-xs text-[#2f62b8] outline-none placeholder:text-[#71819a]"
+                />
+              </label>
+
+              {/* Search results */}
+              {search.trim() && (
+                <div className="absolute top-12 right-0 left-0 rounded-xl border border-[#dce9fb] bg-white p-2 shadow-lg">
+                  <ul aria-label="Kết quả tìm trang">
+                    {results.map(({ path, label }) => (
+                      <li key={path}>
+                        <Link
+                          to={path}
+                          onClick={() => setSearch('')}
+                          className="flex items-center justify-between rounded-lg px-3 py-3 text-xs text-[#2f62b8] hover:bg-[#eaf4ff] focus:bg-[#eaf4ff]"
+                        >
+                          {label}
+
+                          <ChevronRight size={13} />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {results.length === 0 && (
+                    <p
+                      role="status"
+                      className="p-3 text-xs text-[#71819a]"
+                    >
+                      Không tìm thấy trang phù hợp.
+                    </p>
+                  )}
+                </div>
+              )}
+            </form>
+
+            {/* Role */}
+            <span className="hidden items-center gap-1.5 border-l border-[#dce9fb] pl-4 text-xs font-medium text-[#647793] xl:flex">
+              <ShieldCheck
+                size={15}
+                className="text-[#8a98ac]"
+                aria-hidden="true"
+              />
+
+              {roleLabel(user?.role)}
+            </span>
+          </div>
         </header>
 
+        {/* Mock API warning */}
         {import.meta.env.DEV && USE_MOCK_API && (
-          <p role="status" data-dev-only="true" className="border-b border-[#e6dcc0] bg-[#faf6ea] px-5 py-1.5 text-[11px] font-semibold text-[#7a5f14] lg:px-8">
+          <p
+            role="status"
+            data-dev-only="true"
+            className="px-4 pb-1 text-[10px] font-medium text-[#8a6d3b] sm:px-6 lg:px-8"
+          >
             DEV · Dữ liệu hiển thị là dữ liệu mẫu.
           </p>
         )}
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
+        {/* Page content */}
+        <main
+          id="admin-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 outline-none"
+        >
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </main>
+
+        {/* Footer */}
+        <footer className="flex flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-[#71819a] sm:px-6 lg:px-8">
+          <p>
+            © {new Date().getFullYear()}{' '}
+            <span className="font-semibold text-[#2f62b8]">
+              CampusTour
+            </span>
+          </p>
+
+          <span>
+            Quản trị hệ thống & phân quyền truy cập
+          </span>
+        </footer>
       </div>
     </div>
   )

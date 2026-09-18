@@ -1,0 +1,2270 @@
+/* ============================================================================
+   CampusTour DT-AMR - signed-in visitor app design layer
+   ----------------------------------------------------------------------------
+   This file adds NO design system. It is the landing page's design system at
+   application density.
+
+   Every colour, every radius, every shadow and the type scale come from the
+   `--lp-*` tokens defined in `features/landing/landing.css`, which is why the
+   visitor root carries `.lp` as well as `.vs`. The form controls are the auth
+   surface's controls: `.auth-input`, `.auth-label`, `.auth-error-slot` and
+   `.auth-submit` from `auth/auth.css`, reused as-is — the tokens they read sit
+   on `.lp` too, so there is nothing to restate here. Nothing is re-picked.
+
+   What this file is allowed to contain:
+   - the app shell (a sticky header instead of the landing page's fixed one),
+   - the density step: the landing page's section rhythm is marketing-sized, and
+     a visitor who is booking a robot needs more on one screen,
+   - the handful of patterns the landing page has no equivalent for at all:
+     a badge, a filter pill, a tab row, a stepper, a chat column, a map plane.
+
+   Locked rules inherited from the landing page, and kept here:
+   - ONE accent. `--lp-accent` is the only chromatic colour in the UI layer.
+     The status badge is the single documented exception, and it borrows the
+     operations tone scale rather than inventing colours.
+   - ONE radius system: media + panels = `--lp-r` (14px), small inner shapes =
+     `--lp-r-sm` (10px), interactive pills = full round. Forms use `--auth-r`
+     (12px), the same departure auth already made, for the same reason.
+   - Structure comes from hairlines and negative space, not from boxes. A card
+     is a 1px `--lp-line` and a radius. `--lp-shadow` is for things that float
+     over the page (the header's sheet, a menu), never for a card sitting in the
+     flow.
+   - ONE theme at a time: every surface reads its ground from `--lp-bg`.
+   ========================================================================== */
+
+.vs {
+  /* The form-control tokens `.auth-input` and `.auth-submit` read
+     (--auth-field-bg, --auth-field-line, --auth-r) and the danger tokens the
+     alert reads come from `.lp` in landing.css, which this root also carries.
+     Nothing about a text field is re-decided here.
+
+     Status tones. The operations dashboard's scale
+     (features/operations/status.ts), re-expressed as tokens so it can follow
+     the light/dark switch, which the hard-coded Tailwind hex values there
+     cannot. Used by exactly one component: `.vs-badge`. */
+  --vs-ok-ink: #1f7a55;
+  --vs-ok-line: #cde9dc;
+  --vs-ok-bg: #effbf5;
+  --vs-warn-ink: #8a5a06;
+  --vs-warn-line: #f0d89f;
+  --vs-warn-bg: #fff8e6;
+  --vs-danger-ink: #b23e31;
+  --vs-danger-line: #f5c8c2;
+  --vs-danger-bg: #fff1ef;
+
+  /* Density step. The landing page opens ideas with 96-116px of air; an app
+     screen answers questions, so the same rhythm is taken one step down. The
+     gutter and the container width are NOT changed: a visitor moving from the
+     landing page to here must see the content start on the same line. */
+  --vs-sec: 28px;
+  --vs-gap: 20px;
+
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--lp-bg);
+  color: var(--lp-ink);
+}
+
+@media (min-width: 768px) {
+  .vs {
+    --vs-sec: 36px;
+    --vs-gap: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .vs {
+    --vs-sec: 44px;
+  }
+}
+
+html.dark .vs {
+  --vs-ok-ink: #6fe0b0;
+  --vs-ok-line: rgba(111, 224, 176, 0.32);
+  --vs-ok-bg: rgba(111, 224, 176, 0.1);
+  --vs-warn-ink: #f1c266;
+  --vs-warn-line: rgba(241, 194, 102, 0.34);
+  --vs-warn-bg: rgba(241, 194, 102, 0.1);
+  --vs-danger-ink: #ffa39a;
+  --vs-danger-line: rgba(255, 163, 154, 0.36);
+  --vs-danger-bg: rgba(255, 163, 154, 0.1);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────────
+   The landing page's header, with two differences and no third: it is sticky
+   rather than fixed over footage, so it always carries its frosted ground, and
+   it never has a transparent state because there is no hero video under it.
+   Height, gutters, max width, the brand, the links, the pill buttons and the
+   mobile sheet are the landing page's own classes, reused from landing.css. */
+
+.vs-nav {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--lp-nav-bg);
+  border-bottom: 1px solid var(--lp-line);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vs-nav {
+    background: var(--lp-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* The header's own sheet sits under a sticky bar rather than a fixed one, so it
+   is positioned in the flow instead of being pinned to the viewport. */
+.vs-sheet {
+  position: absolute;
+  inset: 100% 0 auto 0;
+  z-index: 59;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px var(--lp-gut) 22px;
+  background: var(--lp-bg);
+  border-bottom: 1px solid var(--lp-line);
+  box-shadow: var(--lp-shadow);
+}
+
+.vs-sheet a,
+.vs-sheet button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--lp-ink);
+  padding-block: 13px;
+  border: 0;
+  border-bottom: 1px solid var(--lp-line);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.vs-sheet a[aria-current='page'] {
+  color: var(--lp-accent);
+}
+
+.vs-sheet svg {
+  flex: none;
+  color: var(--lp-ink-3);
+}
+
+.vs-sheet a[aria-current='page'] svg {
+  color: var(--lp-accent);
+}
+
+/* ── Header actions: bell and account ────────────────────────────────────── */
+
+/* Same 40px round control as `.lp-themebtn`, which it sits beside. */
+.vs-iconbtn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--lp-ink-2);
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.vs-iconbtn:hover {
+  color: var(--lp-ink);
+  background: var(--lp-accent-soft);
+}
+
+.vs-iconbtn svg {
+  display: block;
+}
+
+/* Unread marker. The count is in the control's accessible name as well, so the
+   dot is never the only carrier. */
+.vs-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  min-width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  box-shadow: 0 0 0 2px var(--lp-bg);
+}
+
+.vs-account {
+  position: relative;
+  flex: none;
+}
+
+.vs-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.vs-avatar--lg {
+  width: 72px;
+  height: 72px;
+  font-size: 1.375rem;
+}
+
+button.vs-avatar:hover {
+  border-color: var(--lp-accent);
+}
+
+.vs-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 70;
+  min-width: 232px;
+  padding: 8px;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r);
+  background: var(--lp-surface);
+  box-shadow: var(--lp-shadow);
+}
+
+.vs-menu__head {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--lp-line);
+  margin-bottom: 6px;
+}
+
+.vs-menu__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* `.vs` prefixed: landing.css resets `.lp p` to margin 0 at (0,1,1), which
+   outranks a bare class, so without it this margin silently does nothing. Same
+   reason auth.css writes `.auth .auth-lead`. */
+.vs .vs-menu__role {
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--lp-ink-3);
+}
+
+.vs-menu a,
+.vs-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--lp-r-sm);
+  background: transparent;
+  color: var(--lp-ink-2);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.vs-menu a:hover,
+.vs-menu button:hover {
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.vs-menu svg {
+  flex: none;
+}
+
+/* ── Small utilities ─────────────────────────────────────────────────────────
+   Four shapes that came up often enough that repeating them inline would be how
+   the spacing starts to drift by a pixel or two per page. */
+
+/* Visually hidden, still read aloud. For a label whose text the placeholder or
+   the icon already carries visually. */
+.vs .vs-sr,
+.vs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A lucide glyph sitting in a line of text: on the text baseline, one gap after. */
+.vs-ico {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 6px;
+}
+
+/* Title on the left, status on the right, wrapping to two lines on a phone. */
+.vs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.vs-row--center {
+  align-items: center;
+}
+
+/* One column of cards at the page's own vertical rhythm. */
+.vs-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-gap);
+  min-width: 0;
+}
+
+/* Keeps a flex or grid child from being forced wider than its content. */
+.vs-min {
+  min-width: 0;
+}
+
+/* ── Page frame ──────────────────────────────────────────────────────────── */
+
+.vs-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-page {
+  width: 100%;
+  max-width: var(--lp-maxw);
+  min-width: 0;
+  margin-inline: auto;
+  padding-inline: var(--lp-gut);
+  padding-block: var(--vs-sec) calc(var(--vs-sec) * 1.6);
+}
+
+/* A page whose first element is full-bleed media opens on the media, not on air. */
+.vs-page--flush {
+  padding-top: 0;
+}
+
+.vs-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-sec);
+  min-width: 0;
+}
+
+/* ── Page heading ────────────────────────────────────────────────────────────
+   Eyebrow, title, one supporting line. The type comes from the landing scale;
+   only the display size steps down, because a page title inside an app is not a
+   section opening on a marketing page. */
+
+.vs-head {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .vs-head {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+}
+
+.vs-head__text {
+  min-width: 0;
+}
+
+.vs-eyebrow {
+  margin: 0;
+  color: var(--lp-accent);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.vs .vs-title {
+  margin: 8px 0 0;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.vs .vs-lead {
+  margin: 10px 0 0;
+  max-width: 62ch;
+  font-size: 0.9375rem;
+  line-height: 1.62;
+  color: var(--lp-ink-2);
+}
+
+.vs-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: none;
+}
+
+/* Section heading inside a page, one step under the page title. */
+.vs .vs-h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.vs-secnav {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────────
+   A hairline and a radius. No shadow: the landing page keeps `--lp-shadow` for
+   things that float over the page, and a card in the flow does not float. */
+
+.vs-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r);
+  background: var(--lp-surface);
+  overflow: hidden;
+}
+
+.vs-card--pad {
+  padding: clamp(18px, 2vw, 24px);
+}
+
+/* The hover tint is `.lp-plat__cell`'s: a tint, not a colour flood, so all three
+   ink levels keep their contrast. */
+.vs-card--link {
+  transition: border-color 0.22s ease, background-color 0.22s ease, transform 0.18s ease;
+}
+
+.vs-card--link:hover,
+.vs-card--link:focus-within {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+@media (hover: hover) {
+  .vs-card--link:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.vs-card__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--lp-bg-sunk);
+  overflow: hidden;
+  flex: none;
+}
+
+.vs-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vs-card--link:hover .vs-card__media img {
+  transform: scale(1.04);
+}
+
+/* Category, on the photograph. Same treatment as `.lp-btn--onmedia`. */
+.vs-card__tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(10, 18, 22, 0.52);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vs-card__tag {
+    background: rgba(10, 18, 22, 0.9);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.vs-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 18px;
+}
+
+.vs-card__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.vs .vs-card__meta {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--lp-ink-3);
+}
+
+.vs .vs-card__text {
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--lp-ink-2);
+}
+
+/* Actions sit on the card's own baseline, so a row of cards lines up whatever
+   the length of the copy above. */
+.vs-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+/* A whole-card link that leaves the buttons inside it clickable. */
+.vs-card__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--lp-r);
+}
+
+.vs-card__foot {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Grids ───────────────────────────────────────────────────────────────── */
+
+.vs-grid {
+  display: grid;
+  gap: var(--vs-gap);
+  min-width: 0;
+}
+
+.vs-grid > * {
+  min-width: 0;
+}
+
+.vs-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vs-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.vs-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* The page's own two-column split: content and a rail beside it. */
+.vs-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--vs-gap);
+  align-items: start;
+  min-width: 0;
+}
+
+.vs-split > * {
+  min-width: 0;
+}
+
+.vs-rail {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vs-gap);
+}
+
+/* ── Status badge ────────────────────────────────────────────────────────── */
+
+.vs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--lp-line);
+  border-radius: 999px;
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.vs-badge svg {
+  flex: none;
+}
+
+.vs-badge--ok {
+  border-color: var(--vs-ok-line);
+  background: var(--vs-ok-bg);
+  color: var(--vs-ok-ink);
+}
+
+.vs-badge--info {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.vs-badge--warn {
+  border-color: var(--vs-warn-line);
+  background: var(--vs-warn-bg);
+  color: var(--vs-warn-ink);
+}
+
+.vs-badge--danger {
+  border-color: var(--vs-danger-line);
+  background: var(--vs-danger-bg);
+  color: var(--vs-danger-ink);
+}
+
+/* `muted` is the base style: the tokens above are what the scale adds to it. */
+
+/* A key/value line, used wherever a card lists facts. Built from `.lp-fact`'s
+   idea: a hairline between rows, the key in accent, the value in ink-2. */
+.vs-facts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--lp-line);
+}
+
+.vs-fact {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 16px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--lp-line);
+  align-items: baseline;
+}
+
+.vs-fact__k {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--lp-ink-3);
+}
+
+.vs-fact__v {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--lp-ink);
+  overflow-wrap: anywhere;
+}
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
+
+.vs-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.vs-search svg {
+  position: absolute;
+  left: 16px;
+  color: var(--lp-ink-3);
+  pointer-events: none;
+}
+
+/* The auth input, with room for the leading icon. Height, border, radius, focus
+   ring and autofill handling all come from `.auth-input`. */
+.vs-search .auth-input {
+  padding-left: 46px;
+}
+
+.vs-search__clear {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--lp-r-sm);
+  background: transparent;
+  color: var(--lp-ink-3);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.vs-search__clear:hover {
+  color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+.vs-search__clear svg {
+  position: static;
+  color: inherit;
+}
+
+/* ── Filter pills ────────────────────────────────────────────────────────────
+   The landing page's pill geometry (`.lp-btn`: full round, 1px line, 0.875rem
+   semibold) in a scrolling row, with an on state. */
+
+.vs-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.vs-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.vs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 9px 16px;
+  border: 1px solid var(--lp-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lp-ink-2);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.vs-pill svg {
+  flex: none;
+}
+
+.vs-pill:hover {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.vs-pill[aria-pressed='true'],
+.vs-pill[data-on='true'] {
+  border-color: transparent;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────────
+   A hairline row with a 2px accent marker, which is the same device
+   `.lp-cap__tab` uses to mark the open row. */
+
+.vs-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--lp-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vs-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vs-tab {
+  position: relative;
+  flex: none;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--lp-ink-3);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.vs-tab::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  background: transparent;
+  transition: background-color 0.22s ease;
+}
+
+.vs-tab:hover {
+  color: var(--lp-ink);
+}
+
+.vs-tab[aria-selected='true'] {
+  color: var(--lp-accent);
+}
+
+.vs-tab[aria-selected='true']::after {
+  background: var(--lp-accent);
+}
+
+.vs-tab__count {
+  margin-left: 7px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--lp-ink-3);
+}
+
+/* ── Selectable choice (radio card) ──────────────────────────────────────────
+   A card that is also a radio. The checked state is the same accent line plus
+   tint every other selected thing on this surface uses. */
+
+.vs-choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r);
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.vs-choice:hover {
+  border-color: var(--lp-line-strong);
+  background: var(--lp-accent-soft);
+}
+
+.vs-choice[aria-checked='true'],
+.vs-choice[data-on='true'] {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+.vs-choice__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--lp-r-sm);
+  border: 1px solid var(--lp-line);
+  background: var(--lp-bg);
+  color: var(--lp-ink-3);
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.vs-choice[aria-checked='true'] .vs-choice__icon,
+.vs-choice[data-on='true'] .vs-choice__icon {
+  border-color: var(--lp-accent);
+  color: var(--lp-accent);
+}
+
+.vs-choice__title {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.vs-choice__desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--lp-ink-2);
+}
+
+.vs-choice__check {
+  margin-left: auto;
+  flex: none;
+  color: var(--lp-accent);
+}
+
+/* ── Stepper ─────────────────────────────────────────────────────────────────
+   The numbered tick on a hairline track, exactly as `.lp-step__num` does it on
+   the landing page's journey row. */
+
+.vs-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vs-step {
+  min-width: 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--lp-line);
+  transition: border-color 0.22s ease;
+}
+
+.vs-step[data-state='current'],
+.vs-step[data-state='done'] {
+  border-top-color: var(--lp-accent);
+}
+
+.vs-step__n {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--lp-ink-3);
+}
+
+.vs-step[data-state='current'] .vs-step__n,
+.vs-step[data-state='done'] .vs-step__n {
+  color: var(--lp-accent);
+}
+
+.vs-step__label {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--lp-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.vs-step[data-state='current'] .vs-step__label {
+  color: var(--lp-ink);
+}
+
+/* ── Time slots ──────────────────────────────────────────────────────────── */
+
+.vs-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.vs-slot {
+  padding: 12px 8px;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r-sm);
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.vs-slot:hover:not(:disabled) {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.vs-slot[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+}
+
+.vs-slot:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.vs-slot__sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--lp-ink-3);
+}
+
+.vs-slot[aria-pressed='true'] .vs-slot__sub {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* ── Meter (battery, progress) ───────────────────────────────────────────── */
+
+.vs-meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--lp-bg-sunk);
+  overflow: hidden;
+}
+
+.vs-meter__fill {
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vs-meter__fill[data-tone='warn'] {
+  background: var(--vs-warn-ink);
+}
+
+.vs-meter__fill[data-tone='danger'] {
+  background: var(--vs-danger-ink);
+}
+
+/* ── Timeline of stops ───────────────────────────────────────────────────── */
+
+.vs-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vs-tl {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 14px;
+  padding-bottom: 20px;
+}
+
+.vs-tl:last-child {
+  padding-bottom: 0;
+}
+
+/* The connector, drawn behind the marker rather than between the rows, so a
+   list of any length needs no per-row arithmetic. */
+.vs-tl:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 20px;
+  bottom: 0;
+  width: 1px;
+  background: var(--lp-line-strong);
+}
+
+.vs-tl__mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+  background: var(--lp-bg);
+  color: var(--lp-ink-3);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.vs-tl[data-state='done'] .vs-tl__mark {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+}
+
+.vs-tl[data-state='current'] .vs-tl__mark {
+  border-color: var(--lp-accent);
+  color: var(--lp-accent);
+  box-shadow: 0 0 0 3px var(--lp-accent-soft);
+}
+
+.vs-tl__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vs-tl[data-state='todo'] .vs-tl__name {
+  color: var(--lp-ink-3);
+  font-weight: 500;
+}
+
+.vs .vs-tl__meta {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--lp-ink-3);
+}
+
+/* ── Campus map plane ────────────────────────────────────────────────────────
+   A placeholder until a map service is wired in, and it says so on the surface.
+   It is a plane with percentage-positioned pins, so swapping the ground for a
+   real tile layer later changes this block and nothing else: the pins already
+   read `mapX`/`mapY` from the API.
+
+   The plane lives inside a `.vs-card`, so the map is framed by the same hairline
+   and radius as every other panel on this surface. */
+
+.vs-map {
+  position: relative;
+  aspect-ratio: 16 / 11;
+  min-height: 300px;
+  background:
+    radial-gradient(circle at 22% 84%, var(--lp-accent-soft), transparent 42%),
+    var(--lp-bg-sunk);
+  overflow: hidden;
+}
+
+/* The grid is the only decoration: it reads as a plan, not as a texture. */
+.vs-map__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--lp-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lp-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.7;
+}
+
+.vs-map__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.vs-map__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--lp-line);
+  background: var(--lp-surface);
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.vs-map__note svg {
+  flex: none;
+  color: var(--lp-ink-3);
+}
+
+.vs-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lp-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.vs-pin__dot {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+  background: var(--lp-surface);
+  color: var(--lp-ink-2);
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.vs-pin:hover .vs-pin__dot,
+.vs-pin[data-on='true'] .vs-pin__dot {
+  border-color: var(--lp-accent);
+  color: var(--lp-accent);
+  transform: scale(1.08);
+}
+
+.vs-pin__label {
+  max-width: 120px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-surface);
+  color: var(--lp-ink-2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-pin[data-role='robot'] .vs-pin__dot {
+  border-color: transparent;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+}
+
+.vs-pin[data-role='you'] .vs-pin__dot {
+  border-color: var(--lp-ink);
+  color: var(--lp-ink);
+}
+
+.vs-pin[data-role='destination'] .vs-pin__dot {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+/* The robot's own halo, so it is findable at a glance on a busy plan. */
+.vs-pin[data-role='robot'] .vs-pin__dot::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-pin[data-role='robot'] .vs-pin__dot::after {
+    animation: vs-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+}
+
+@keyframes vs-ping {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.vs-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--lp-line);
+}
+
+.vs-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8125rem;
+  color: var(--lp-ink-2);
+}
+
+.vs-legend i {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+}
+
+.vs-legend i[data-role='robot'] {
+  border-color: transparent;
+  background: var(--lp-accent);
+}
+
+.vs-legend i[data-role='you'] {
+  border-color: var(--lp-ink);
+  background: var(--lp-ink);
+}
+
+.vs-legend i[data-role='destination'] {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+/* ── Chat ────────────────────────────────────────────────────────────────── */
+
+.vs-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 300px;
+  padding: clamp(18px, 2vw, 24px);
+}
+
+.vs-turn {
+  display: flex;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.vs-turn--me {
+  flex-direction: row-reverse;
+}
+
+.vs-turn__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-3);
+}
+
+.vs-turn--bot .vs-turn__mark {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+/* The bubble radius is the form radius, not the panel radius: it belongs to the
+   same family as the input it is answering. */
+.vs-bubble {
+  max-width: 44rem;
+  min-width: 0;
+  padding: 13px 16px;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--auth-r);
+  background: var(--lp-surface);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--lp-ink);
+  overflow-wrap: anywhere;
+}
+
+.vs-turn--me .vs-bubble {
+  border-color: transparent;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+}
+
+.vs-bubble p {
+  margin: 0;
+}
+
+.vs-bubble p + p {
+  margin-top: 8px;
+}
+
+.vs-typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.vs-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--lp-ink-3);
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-typing i {
+    animation: vs-blink 1.1s ease-in-out infinite;
+  }
+
+  .vs-typing i:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+
+  .vs-typing i:nth-child(3) {
+    animation-delay: 0.32s;
+  }
+}
+
+@keyframes vs-blink {
+  0%, 60%, 100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+.vs-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 14px clamp(18px, 2vw, 24px);
+  border-top: 1px solid var(--lp-line);
+  background: var(--lp-surface);
+}
+
+.vs-composer .auth-input {
+  flex: 1;
+}
+
+/* ── Empty and loading states ────────────────────────────────────────────── */
+
+.vs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: clamp(40px, 6vw, 64px) 24px;
+  text-align: center;
+}
+
+.vs-empty__mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-3);
+}
+
+.vs-empty__title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.vs .vs-empty__text {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--lp-ink-2);
+}
+
+.vs-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.vs-skel {
+  border-radius: var(--lp-r);
+  background: var(--lp-bg-sunk);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-skel {
+    animation: vs-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes vs-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ── Visitor hero ────────────────────────────────────────────────────────────
+   The landing page's hero language, shortened: the same footage, the same
+   scrim recipe, white copy, the same pill buttons. It is not a second hero
+   design — it is the first one at a height that leaves room for the page under
+   it. Full-bleed, because the landing hero is full-bleed. */
+
+.vs-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  min-height: 340px;
+  color: #ffffff;
+}
+
+/* The photograph used to stop dead on a hard horizontal line where the page
+   ground began. This fades the last few pixels into `--lp-bg`, so the hero
+   settles into the page instead of being cropped out of it. Same z-index as the
+   scrim and later in paint order, which puts it over the scrim and still under
+   the copy. */
+.vs-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: -1;
+  height: 72px;
+  background: linear-gradient(to bottom, transparent, var(--lp-bg));
+  pointer-events: none;
+}
+
+.vs-hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.vs-hero__media img,
+.vs-hero__media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  display: block;
+}
+
+/* Enough to carry white text over the lower left, and nothing beyond that.
+   The previous recipe darkened the whole frame from two directions at once and
+   turned the subject — students walking with the robot, which is the product's
+   entire story — into a silhouette. Contrast is now bought where the words
+   actually sit, and the top of the frame is left alone. */
+.vs-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      to top,
+      rgba(3, 9, 12, 0.86) 0%,
+      rgba(3, 9, 12, 0.52) 32%,
+      rgba(3, 9, 12, 0.14) 64%,
+      rgba(3, 9, 12, 0) 100%
+    ),
+    linear-gradient(
+      to right,
+      rgba(3, 9, 12, 0.68) 0%,
+      rgba(3, 9, 12, 0.26) 46%,
+      rgba(3, 9, 12, 0) 76%
+    );
+}
+
+.vs-hero__body {
+  width: 100%;
+  max-width: var(--lp-maxw);
+  margin-inline: auto;
+  /* Was top-heavy: 92px above and 40px below glued the block to the bottom
+     edge. The block now sits in the lower third rather than on the floor. */
+  padding: clamp(52px, 6.5vw, 76px) var(--lp-gut) clamp(34px, 4vw, 52px);
+}
+
+.vs-hero__copy {
+  max-width: 40rem;
+  min-width: 0;
+}
+
+.vs-hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* A short rule instead of the accent dot the page uses elsewhere: on
+   photography the teal accent goes muddy, so the mark is drawn in the ink. */
+.vs-hero__eyebrow::before {
+  content: '';
+  width: 26px;
+  height: 1px;
+  flex: none;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* Between the landing display size and the app page title: this is a greeting
+   on a photograph, so it needs the weight, not the marketing scale. It was
+   reaching 44px, which made a two-word greeting the loudest thing on a page
+   whose section headings are 17px — the hierarchy read as a landing page that
+   had lost its content. */
+.vs .vs-hero__title {
+  margin: 14px 0 0;
+  font-size: clamp(1.625rem, 2.7vw, 2.375rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+  color: #ffffff;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* 42ch breaks this sentence into two even lines at desktop instead of leaving
+   "locations," stranded at the start of the second. */
+.vs .vs-hero__lead {
+  margin: 12px 0 0;
+  max-width: 42ch;
+  font-size: clamp(0.9375rem, 1vw, 1rem);
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+}
+
+.vs-hero__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: clamp(20px, 2.2vw, 26px);
+}
+
+/* ── Live tour strip ─────────────────────────────────────────────────────────
+   Shown on Home only while a tour is running, and it has to outrank every card
+   under it without being mistaken for one.
+
+   It used to do that by flooding the whole strip with `--lp-accent-soft`, which
+   at 1180px wide is a very large, very flat pale rectangle — the loudest and
+   least refined shape on the page. The accent now arrives as a wash that dies
+   out before the halfway mark, plus three small marks: the filled robot tile,
+   the live dot and the button. Less accent, more emphasis. */
+
+.vs-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: clamp(16px, 1.8vw, 20px) clamp(18px, 2vw, 24px);
+  border: 1px solid var(--lp-accent);
+  border-radius: var(--lp-r);
+  background:
+    linear-gradient(100deg, var(--lp-accent-soft), transparent 58%),
+    var(--lp-surface);
+}
+
+/* The one thing on this surface that is allowed to move on its own, because it
+   is reporting something that is genuinely still moving. */
+.vs-live__dot {
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  margin-right: 9px;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  vertical-align: 1px;
+}
+
+.vs-live__dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--lp-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-live__dot::after {
+    animation: vs-ping 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+}
+
+.vs-live__body {
+  flex: 1;
+  min-width: 180px;
+}
+
+.vs-live__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.vs .vs-live__text {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--lp-ink-2);
+}
+
+.vs-live__mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  box-shadow: 0 0 0 5px var(--lp-accent-soft);
+}
+
+/* ── Notification row ────────────────────────────────────────────────────── */
+
+.vs-note {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--lp-line);
+  transition: background-color 0.18s ease;
+}
+
+.vs-note:last-child {
+  border-bottom: 0;
+}
+
+.vs-note:hover {
+  background: var(--lp-accent-soft);
+}
+
+.vs-note__mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-3);
+}
+
+.vs-note[data-unread='true'] .vs-note__mark {
+  border-color: var(--lp-accent);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+
+.vs-note__title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vs-note[data-unread='true'] .vs-note__title::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: var(--lp-accent);
+  vertical-align: middle;
+}
+
+.vs .vs-note__text {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--lp-ink-2);
+}
+
+.vs .vs-note__time {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: var(--lp-ink-3);
+}
+
+/* ── Toggle row (profile notification settings) ──────────────────────────── */
+
+.vs-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--lp-line);
+  background: transparent;
+  color: var(--lp-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-toggle:last-of-type {
+  border-bottom: 0;
+}
+
+.vs-toggle__label {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.vs-toggle__desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--lp-ink-3);
+}
+
+.vs-switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+  background: var(--lp-bg-sunk);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.vs-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--lp-ink-3);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease;
+}
+
+.vs-toggle[aria-checked='true'] .vs-switch {
+  border-color: transparent;
+  background: var(--lp-accent);
+}
+
+.vs-toggle[aria-checked='true'] .vs-switch::after {
+  transform: translateX(18px);
+  background: var(--lp-accent-ink);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────────
+   One line. The public footer's four columns are for someone deciding whether
+   to visit; a signed-in visitor already decided, so the app keeps the ground,
+   the hairline and the type and drops the columns. */
+
+.vs-foot {
+  border-top: 1px solid var(--lp-line);
+  background: var(--lp-bg-sunk);
+  padding-block: 22px;
+}
+
+.vs-foot__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  width: 100%;
+  max-width: var(--lp-maxw);
+  margin-inline: auto;
+  padding-inline: var(--lp-gut);
+}
+
+.vs-foot__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.vs-foot__links a {
+  color: var(--lp-ink-3);
+  font-size: 0.8125rem;
+  transition: color 0.18s ease;
+}
+
+.vs-foot__links a:hover {
+  color: var(--lp-accent);
+}
+
+/* ── Development badge ───────────────────────────────────────────────────────
+   Not part of the composition, and only ever rendered by a development build.
+   Same treatment as `.auth-devbadge`, for the same reason. */
+
+.vs-devbadge {
+  align-self: flex-start;
+  margin: 0 var(--lp-gut) 16px;
+  max-width: 300px;
+  padding: 9px 12px;
+  border: 1px solid var(--lp-line-strong);
+  border-radius: var(--lp-r-sm);
+  background: var(--lp-bg-sunk);
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  opacity: 0.85;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────────
+   Breakpoints for phone, tablet and desktop. Same principle as the landing page:
+   every multi-column block states its own collapse, and the mobile layout is
+   this design system at one column, not a second design system. */
+
+@media (max-width: 1023px) {
+  .vs-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vs-rail {
+    position: static;
+  }
+
+  .vs-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+  }
+}
+
+/* Touch targets, keyed to a coarse pointer as well as to width — a tablet is
+   tapped, not clicked. Mirrors the landing page's rule. */
+@media (pointer: coarse), (max-width: 1023px) {
+  .vs-pill,
+  .vs-tab {
+    min-height: 44px;
+  }
+
+  .vs-iconbtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .vs-menu a,
+  .vs-menu button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 767px) {
+  .vs-grid--2,
+  .vs-grid--3,
+  .vs-grid--4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vs-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-hero {
+    min-height: 260px;
+  }
+
+  .vs-hero__cta .lp-btn {
+    flex: 1 1 auto;
+  }
+
+  .vs-fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  /* A full-width action is easier to hit than a right-aligned pill. */
+  .vs-head__actions .lp-btn {
+    flex: 1 1 auto;
+  }
+
+  .vs-card__foot .lp-btn {
+    flex: 1 1 auto;
+  }
+
+  .vs-legend {
+    gap: 8px 14px;
+  }
+
+  .vs-turn__mark {
+    display: none;
+  }
+}
+
+/* Application refinements use the landing surface's existing tokens. */
+.vs :is(h1, h2)[tabindex='-1']:focus { outline: none; }
+.vs :is(button, input):disabled { cursor: not-allowed; }
+.vs .lp-btn:disabled { opacity: 0.45; transform: none; }
+.vs-badge { max-width: 100%; white-space: normal; }
+.vs :is(.vs-head, .vs-secnav, .vs-live) { overflow-wrap: anywhere; }
+.vs-secnav { flex-wrap: wrap; margin-bottom: 20px; }
+.vs-secnav .vs-h3 { font-size: 1.1875rem; letter-spacing: -0.024em; }
+.vs-skip {
+  position: fixed;
+  top: 8px;
+  left: var(--lp-gut);
+  z-index: 100;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-accent);
+  transform: translateY(-150%);
+}
+.vs-skip:focus { transform: none; }
+.vs-sheet { max-height: calc(100dvh - 68px); overflow-y: auto; overscroll-behavior: contain; }
+.vs .lp-navlink[aria-current='page'] { color: var(--lp-accent); }
+.vs .lp-navlink[aria-current='page']::after { transform: scaleX(1); }
+.vs-card__tag { z-index: 2; pointer-events: none; }
+.vs-arrow, .vs-quick__arrow { transition: transform 220ms ease; }
+.vs-location .vs-card__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+/* Four doors, not a sequence.
+   These carried 01-04 in the corner and an accent tint on the third card. The
+   numbers implied an order a visitor is supposed to follow, and there is none —
+   the landing page numbers its Journey steps because those genuinely happen in
+   order, and borrowing the device here made four equal choices look like a
+   four-step process. The tint made one card look permanently hovered. Both are
+   gone; the arrow is the only affordance the card needs. */
+.vs-quick { gap: 0; }
+.vs-quick .vs-card__text { flex: 1; }
+.vs-quick .vs-choice__icon {
+  border-color: transparent;
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+.vs-quick__arrow {
+  margin-top: 16px;
+  align-self: flex-end;
+  color: var(--lp-ink-3);
+  transition: transform 220ms ease, color 220ms ease;
+}
+.vs-card--link:hover .vs-quick__arrow { color: var(--lp-accent); }
+.vs-upcoming { flex-direction: row; align-items: center; gap: 24px; }
+.vs-date-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 84px;
+  min-height: 100px;
+  background: var(--lp-accent-soft);
+  border-radius: var(--lp-r-sm);
+  color: var(--lp-accent);
+}
+.vs-date-tile span { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.vs-date-tile strong { font-size: 2.25rem; line-height: 1.2; font-weight: 600; }
+.vs-upcoming__body { flex: 1; }
+.vs-upcoming__actions { display: flex; flex-direction: column; align-items: flex-end; gap: 18px; }
+.vs-filterbar { display: flex; flex-direction: column; gap: 16px; }
+.vs .vs-feedback { padding: 14px 18px; border: 1px solid var(--lp-accent); border-radius: var(--lp-r-sm); color: var(--lp-accent); background: var(--lp-accent-soft); font-size: 0.875rem; }
+.vs-tour-details { margin-top: 18px; border-top: 1px solid var(--lp-line); }
+.vs-tour-details summary {
+  padding-block: 14px;
+  color: var(--lp-ink-2);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.vs-tour-details summary:hover { color: var(--lp-accent); }
+.vs-booking { border-top: 2px solid var(--lp-line-strong); }
+.vs-booking[data-status='Confirmed'], .vs-booking[data-status='InProgress'] { border-top-color: var(--lp-accent); }
+.vs-booking-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--vs-gap); align-items: start; }
+.vs-booking-form { min-height: 370px; }
+.vs-step-content { flex: 1; }
+.vs-booking-summary { position: sticky; top: 92px; gap: 18px; }
+.vs-booking-summary .vs-fact { grid-template-columns: 1fr; gap: 4px; }
+.vs-booking-success { max-width: 800px; }
+.vs-success-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent);
+}
+.vs-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  margin: auto;
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid var(--lp-line-strong);
+  border-radius: var(--lp-r);
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  box-shadow: var(--lp-shadow);
+}
+.vs-dialog::backdrop { background: color-mix(in srgb, var(--lp-bg-sunk) 65%, transparent); backdrop-filter: blur(4px); }
+.vs-dialog .vs-row { flex-wrap: nowrap; margin-bottom: 14px; }
+.vs-dialog .vs-card__foot { padding-top: 24px; justify-content: flex-end; }
+.vs-dialog .auth-alert { margin-top: 16px; }
+.vs-map-workspace { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--vs-gap); align-items: start; }
+.vs-map-directory { gap: 20px; padding: 20px; }
+.vs-map-directory .vs-pills { gap: 6px; }
+.vs-map-directory .vs-pill { font-size: 0.75rem; padding-inline: 12px; }
+.vs-map-results { display: flex; flex-direction: column; gap: 4px; max-height: 480px; overflow-y: auto; overscroll-behavior: contain; }
+.vs-map-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  font: inherit;
+  border: 1px solid transparent;
+  border-radius: var(--lp-r-sm);
+  background: transparent;
+  color: var(--lp-ink);
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+.vs-map-result:hover, .vs-map-result[aria-pressed='true'] { background: var(--lp-accent-soft); border-color: var(--lp-line-strong); }
+.vs-map-result[aria-pressed='true'] { border-color: var(--lp-accent); }
+.vs-map-result img { object-fit: cover; border-radius: var(--lp-r-sm); flex: none; }
+.vs-map-result > span { flex: 1; }
+.vs-map-result strong { display: block; font-size: 0.8125rem; font-weight: 600; line-height: 1.4; }
+.vs-map-result span span { display: block; margin-top: 4px; font-size: 0.6875rem; color: var(--lp-ink-3); }
+.vs-map-result > svg { flex: none; color: var(--lp-accent); }
+.vs-map-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: var(--vs-gap); }
+.vs-destination__image { width: 100%; height: 130px; object-fit: cover; border-radius: var(--lp-r-sm); margin-top: 16px; }
+.vs-pin { min-width: 44px; min-height: 44px; justify-content: flex-end; }
+.vs-pin:hover, .vs-pin:focus-visible, .vs-pin[data-on='true'] { z-index: 5; }
+.vs-pin[data-on='true'] .vs-pin__label { border-color: var(--lp-accent); color: var(--lp-accent); }
+.vs-assistant-page { max-width: 1040px; }
+.vs-assistant__head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; border-bottom: 1px solid var(--lp-line); }
+.vs-assistant .vs-chat { height: clamp(300px, 46dvh, 520px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--lp-bg); }
+.vs-turn > .vs-min { max-width: 88%; }
+.vs-suggestions { padding: 16px 24px; border-top: 1px solid var(--lp-line); }
+.vs-suggestions .vs-pill { white-space: normal; text-align: left; }
+.vs-chat-place-image { width: 100%; height: 100px; object-fit: cover; border-radius: var(--lp-r-sm); margin-bottom: 12px; }
+.vs-composer { align-items: center; }
+.vs-composer .auth-input { min-width: 0; }
+.vs .vs-assistant__hint { padding: 0 24px 14px; font-size: 0.75rem; color: var(--lp-ink-3); }
+.vs-profile-welcome { display: flex; align-items: center; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid var(--lp-line); overflow-wrap: anywhere; }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .vs-card--link:hover .vs-arrow, .vs-card--link:hover .vs-quick__arrow { transform: translateX(3px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vs-route, .vs-step-content { animation: vs-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .vs-menu, .vs-sheet, .vs-turn { animation: vs-enter 220ms ease both; }
+  .vs-dialog[open] { animation: vs-dialog-enter 220ms ease both; }
+  [data-visitor-reveal] { transition: opacity 400ms ease, transform 400ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .vs-reveal-pending:not(:focus-within) { opacity: 0; transform: translateY(14px); }
+}
+@keyframes vs-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes vs-dialog-enter { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 1119px) {
+  .vs .lp-navlinks { display: none; }
+  .vs .lp-burger { display: inline-flex; }
+  .vs-booking-layout { grid-template-columns: minmax(0, 1fr) 260px; }
+  .vs-map-workspace { grid-template-columns: 280px minmax(0, 1fr); }
+}
+@media (max-width: 1023px) {
+  .vs-booking-layout { grid-template-columns: minmax(0, 1fr); }
+  .vs-booking-summary { position: static; }
+  .vs-booking-summary .vs-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+}
+@media (max-width: 767px) {
+  .vs .lp-nav__inner { gap: 8px; }
+  .vs .lp-brand { gap: 6px; font-size: 0.9375rem; }
+  .vs .lp-brand__mark { width: 34px; height: 34px; }
+  .vs .lp-actions { gap: 2px; }
+  .vs-account > .vs-avatar { width: 44px; height: 44px; }
+  .vs-sheet { max-height: calc(100dvh - 62px); }
+  .vs .auth-input { font-size: 1rem; }
+  .vs-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .vs-quick { padding: 16px; }
+  .vs-quick .vs-card__title { font-size: 0.9375rem; }
+  .vs-quick .vs-card__text { font-size: 0.8125rem; }
+  .vs-upcoming { flex-wrap: wrap; gap: 16px; }
+  .vs-date-tile { width: 64px; min-height: 84px; }
+  .vs-upcoming__actions { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 12px; }
+  .vs-booking-summary .vs-facts { grid-template-columns: 1fr; gap: 0; }
+  .vs-map-workspace { display: flex; flex-direction: column; }
+  .vs-map-content { order: -1; width: 100%; }
+  .vs-map-directory { width: 100%; }
+  .vs-map-results { max-height: 320px; }
+  .vs-map-directory .vs-pills { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
+  .vs-map-directory .vs-pill { flex: none; }
+  .vs-pin__label { max-width: 88px; }
+  .vs-pin:not([data-on='true']):not([data-role='robot']):not(:focus-visible):not(:hover) .vs-pin__label { display: none; }
+  .vs-assistant__head { padding: 18px; }
+  .vs-suggestions { padding: 14px 18px; }
+  .vs-composer { flex-wrap: wrap; }
+  .vs-composer .auth-input { flex-basis: 100%; }
+  .vs-composer button:last-child { flex: 1; }
+  .vs .vs-assistant__hint { padding-inline: 18px; }
+  .vs-turn > .vs-min { max-width: 94%; }
+  .vs-profile-welcome { gap: 14px; }
+}
+@media (max-width: 389px) {
+  .vs .lp-brand > span { display: none; }
+  .vs .lp-brand { min-width: 44px; min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-card--link:hover, .vs-card--link:hover .vs-card__media img { transform: none; }
+  .vs *,
+  .vs *::before,
+  .vs *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
