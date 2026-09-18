@@ -1,5 +1,5 @@
 import { Suspense, useState } from 'react'
-import { Bot, LogOut, Menu, Radio, ShieldCheck, X } from 'lucide-react'
+import { LogOut, Menu, Radio, ShieldCheck, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
@@ -35,7 +35,7 @@ export default function AdminShell() {
       <aside className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-[#dfe4ec] bg-white transition-transform duration-200 lg:sticky lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-16 items-center border-b border-[#ecf0f5] px-4">
           <Link to="/admin" onClick={() => setMenuOpen(false)} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#33415c]">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#33415c] text-white shadow-sm"><Bot size={20} aria-hidden="true" /></span>
+            <img className="h-9 w-9 shrink-0 object-contain" src="/images/logo.png" alt="" width={36} height={36} />
             <span className="min-w-0">
               <span className="block truncate text-sm font-extrabold tracking-[-0.02em] text-[#1f2937]">CampusTour</span>
               <span className="block text-[10px] font-semibold text-[#8792a5]">Quản trị hệ thống</span>

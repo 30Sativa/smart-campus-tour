@@ -11,14 +11,11 @@ const AUTOPLAY_SPEED = 28
  *
  * The track is a real scroll container, so touch swipe, trackpad and keyboard
  * all work without a carousel library. Autoplay advances left through the
- * cards and restarts at the beginning after the last card. It pauses while
- * the pointer is over the section, while focus is inside it, while a finger
- * is down and while the tab is hidden, and it never starts at all under
- * prefers-reduced-motion.
+ * cards and restarts at the beginning after the last card. It continues while
+ * the rail is hovered or focused so the content never gets stuck.
  */
 export function RobotRail() {
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const pausedRef = useRef(false)
   const animationRef = useRef<number | null>(null)
   const [atStart, setAtStart] = useState(true)
   const [atEnd, setAtEnd] = useState(false)
@@ -44,12 +41,11 @@ export function RobotRail() {
 
   useEffect(() => {
     syncEdges()
-    if (prefersReducedMotion()) return
 
     let previousTime = 0
     const animate = (time: number) => {
       const node = scrollerRef.current
-      if (node && !pausedRef.current && !document.hidden) {
+      if (node && !document.hidden) {
         const max = node.scrollWidth - node.clientWidth
         if (max > 4) {
           const elapsed = previousTime ? Math.min(time - previousTime, 50) : 0
@@ -72,24 +68,10 @@ export function RobotRail() {
     scrollByCard(direction)
   }
 
-  const pause = () => {
-    pausedRef.current = true
-  }
-  const resume = () => {
-    pausedRef.current = false
-  }
-
   return (
     <section
       className="lp-sec"
       id="robot"
-      onMouseEnter={pause}
-      onMouseLeave={resume}
-      onFocusCapture={pause}
-      onBlurCapture={resume}
-      onTouchStart={pause}
-      onTouchEnd={resume}
-      onTouchCancel={resume}
     >
       <div className="lp-ctn">
         <div className="lp-rail__head">
