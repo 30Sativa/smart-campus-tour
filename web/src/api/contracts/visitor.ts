@@ -1,7 +1,7 @@
 /**
  * Visitor-facing endpoint DTOs and the one HTTP implementation of them.
  *
- * Shape and conventions are copied from `contracts/operations.ts` on purpose:
+ * Shape and conventions are copied from `contracts/staff.ts` on purpose:
  * one `VisitorApi` type that both this HTTP client and the labelled fixtures in
  * `src/mocks/visitor-mock.ts` satisfy, so no screen ever learns which one it is
  * talking to and the switch is made exactly once, in

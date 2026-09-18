@@ -1,5 +1,7 @@
 import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
+import { useAuthStore } from '../../../stores/auth-store'
+import { isStaffRole } from '../../../auth/roles'
 import { EXPERIENCE_HREF, OPERATIONS_DEMO_HREF } from '../landing-content'
 
 /**
@@ -7,8 +9,19 @@ import { EXPERIENCE_HREF, OPERATIONS_DEMO_HREF } from '../landing-content'
  * centred card. Same primary action as the hero, because a page has one
  * conversion, but the promise is stated in terms of what the reader has just
  * scrolled past instead of repeating the opening line.
+ *
+ * The secondary action is role-aware. `OPERATIONS_DEMO_HREF` points inside
+ * `/staff/*`, which is guarded, so offering it to a signed-out visitor is a
+ * button that bounces them to sign-in with no explanation. Only an account that
+ * can actually open the operations console is given the link to it; everyone
+ * else is taken to the section of this page that shows what operations covers,
+ * which is the honest answer to the same question.
  */
 export function CtaBand() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const user = useAuthStore((state) => state.user)
+  const canOpenOperations = isAuthenticated && isStaffRole(user?.role)
+
   return (
     <section className="lp-cta" id="dat-tour">
       <div className="lp-cta__media" aria-hidden="true">
@@ -29,9 +42,15 @@ export function CtaBand() {
               Trải nghiệm Campus Tour
               <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
             </Link>
-            <Link to={OPERATIONS_DEMO_HREF} className="lp-btn lp-btn--onmedia">
-              Xem hệ thống vận hành
-            </Link>
+            {canOpenOperations ? (
+              <Link to={OPERATIONS_DEMO_HREF} className="lp-btn lp-btn--onmedia">
+                Xem hệ thống vận hành
+              </Link>
+            ) : (
+              <a href="#nen-tang" className="lp-btn lp-btn--onmedia">
+                Xem hệ thống vận hành
+              </a>
+            )}
           </div>
         </div>
       </div>

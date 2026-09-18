@@ -18,7 +18,21 @@ npm run dev               # http://localhost:5173
 |---|---|---|
 | `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `http://localhost:5000` |
 
-`VITE_*` values ship to the browser — never put a secret in one.
+The auth and operations endpoints do not exist yet, so **every screen runs on the
+labelled fixtures in `src/mocks/`**. There is no flag: the switch was removed on
+2026-09-18 because it only ever had one working position. `VITE_API_BASE_URL` is
+still read by `src/api/client.ts` and the SignalR hub factory, so set it once the
+backend exists. Turning the real path back on is one binding in
+`src/features/staff/staff-hooks.ts` plus the auth calls - see
+`src/mocks/mock-mode.ts`.
+
+Fixtures are a data source, not a fallback: nothing here is served in response to
+a failed request.
+
+Sample accounts, mock mode only: `admin/admin` lands on `/admin`, `staff/staff`
+lands on `/staff`. Sign-up mints a Visitor and lands on `/`.
+
+`VITE_*` values ship to the browser, so never put a secret in one.
 
 ## Scripts
 

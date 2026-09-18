@@ -46,8 +46,11 @@ export function SiteFooter() {
           <div className="lp-foot__identity">
             <a href="#top" className="lp-brand">
               <img className="lp-brand__mark" src="/images/logo.png" alt="" width={56} height={56} />
-              <span>CampusTour</span>
-              <span className="lp-brand__sub">DT-AMR</span>
+              <span className="lp-brand__lockup">
+                <span className="lp-brand__name">CampusTour</span>
+                <span className="lp-brand__rule" aria-hidden="true" />
+                <span className="lp-brand__sub">DT-AMR</span>
+              </span>
             </a>
             <p className="lp-body lp-foot__tag">
               Hệ thống tham quan khuôn viên đại học bằng robot tự hành, trợ lý AI đa ngôn ngữ

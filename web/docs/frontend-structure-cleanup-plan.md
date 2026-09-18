@@ -30,7 +30,8 @@
 > `web/AGENTS.md` §2). Còn lại: P1 lifecycle/CSS của landing (mục 3 bên dưới) và
 > Phase 5 realtime/Digital Twin.
 >
-> File bị loại nằm ở `_to_delete/web-fe-cleanup-2026-09-16/`, chưa xoá hẳn.
+> File bị loại từng nằm ở `_to_delete/`; thư mục này đã xoá hẳn ngày
+> 2026-09-18. Muốn lấy lại thì dùng git history, không còn bản sao trên đĩa.
 
 ## 1. Mục tiêu và phạm vi
 
@@ -197,9 +198,13 @@ Exit: verify pass và có test khóa các đường đi auth/route quan trọng.
 
 ### Phase 1: sửa boundary auth, router và safety
 
-- Gộp staff/ops/admin vào `/admin/*` với một `RequireRole` duy nhất.
-- Giữ redirect tạm từ `/staff/*` sang route `/admin/*` tương ứng để không làm
-  hỏng bookmark trong giai đoạn chuyển đổi.
+- Tách theo khu vực, không gộp: vận hành ở `/staff/*` với `RequireArea('staff')`,
+  quản trị ở `/admin/*` với `RequireArea('admin')`. Quy tắc cho phép nằm duy
+  nhất ở `src/auth/access.ts`.
+- Giữ redirect tạm từ các URL vận hành cũ dưới `/admin/*` (`/admin/schedule`,
+  `/admin/amr`, `/admin/alerts`, `/admin/digital-twin`, `/admin/reports`,
+  `/admin/tours/:id`) sang `/staff/*` tương ứng để không hỏng bookmark. Riêng
+  `/admin` KHÔNG redirect: đó là trang tổng quan quản trị thật.
 - Lazy-load cả admin layout/shell và mọi child route, không chỉ lazy page.
 - Bỏ `persist` khỏi auth store. Khi reload, `AuthBootstrap` gọi refresh bằng
   HttpOnly cookie rồi mới quyết định route.
@@ -209,9 +214,10 @@ Exit: verify pass và có test khóa các đường đi auth/route quan trọng.
 - Gỡ toàn bộ browser E-Stop. Chỉ giữ assign/reassign/cancel khi contract BE có,
   và mỗi action phải có confirmation rõ ràng.
 
-> **Đã thay thế 2026-09-17.** Quyết định gộp ở trên đúng cho giai đoạn chỉ có
-> một khu vực đăng nhập. Nay vận hành nằm ở `/staff/*`, quản trị ở `/admin/*`,
-> mỗi bên một shell và một guard riêng. Đừng gộp lại.
+> **Lịch sử.** Bản kế hoạch đầu tiên (trước 2026-09-17) yêu cầu gộp
+> staff/ops/admin vào một cây `/admin/*` duy nhất. Quyết định đó chỉ đúng khi
+> sản phẩm còn một khu vực đăng nhập. Nó đã bị thay thế và hai gạch đầu dòng ở
+> trên là trạng thái hiện hành. Đừng gộp lại.
 
 
 Exit: không còn access token trong storage, không còn UI E-Stop, role guard có
@@ -223,11 +229,12 @@ shell.
 - Chuyển booking widget, booking queries/mutations và booking view state vào
   `features/bookings`.
 - Chuyển tour list/detail query hooks vào `features/tours`.
-- Hợp nhất hai implementation ops thành `features/operations`; chọn một shell,
+- Hợp nhất hai implementation ops thành `features/staff` (đổi tên từ
+  `features/operations` ngày 2026-09-18); chọn một shell,
   một status mapping và một bộ route.
 - Chuyển staff hooks ra khỏi `src/api`. `src/api` chỉ giữ transport/client và
   contract đã chốt.
-- Đưa demo fixtures vào `features/operations/dev` hoặc test fixtures, chỉ được
+- Đưa demo fixtures vào `features/staff/dev` hoặc test fixtures, chỉ được
   bật bằng development flag rõ ràng.
 - Giữ route component mỏng: đọc params, ghép feature, chọn page-level state.
 - Chỉ promote primitive lên `components/ui` sau consumer thứ hai.
@@ -280,7 +287,8 @@ Digital Twin render đúng với battery nullable.
 ## 5. Cách chia PR đề xuất
 
 1. `fe-baseline-auth-router`: baseline tests, token memory, refresh/logout,
-   `/admin/*`, redirect `/staff/*`, bỏ E-Stop.
+   tách `/staff/*` và `/admin/*`, redirect các URL vận hành cũ dưới `/admin/*`,
+   bỏ E-Stop.
 2. `fe-feature-boundaries`: tours, bookings, auth và operations về đúng owner.
 3. `fe-landing-cleanup`: lifecycle, CSS scope, section composition, visual QA.
 4. `fe-dead-code-assets`: prototype, orphan modules, dependency/asset cleanup.
@@ -292,10 +300,12 @@ change và giữ review có thể kiểm chứng.
 ## 6. Definition of Done cho đợt cleanup
 
 - `web/scripts/verify` exit 0.
-- (2026-09-17: câu dưới mô tả trạng thái cũ. Hiện cả `/staff/*` và `/admin/*`
-  đều có guard thực và lazy boundary riêng.)
-- `/admin/*` có route guard thực và lazy boundary; `/staff/*` chỉ còn redirect
-  tương thích trong thời gian đã định.
+- Cả `/staff/*` và `/admin/*` đều có route guard thực (`RequireArea`) và lazy
+  boundary riêng, kể cả shell. Dưới `/admin/*` chỉ còn các URL vận hành cũ là
+  redirect tương thích; `/admin` và `/admin/roles` là route thật.
+- `src/app/router/router.test.tsx` khóa được: guard theo vai trò, điểm đến sau
+  đăng nhập, các redirect legacy, và việc route `/admin` thật luôn thắng
+  redirect legacy.
 - Không có access token trong localStorage/sessionStorage.
 - Không có direct `fetch` ngoài `src/api/client.ts`.
 - Không có endpoint call hoặc query hook trong presentation component chung.

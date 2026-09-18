@@ -7,7 +7,7 @@
  * library implementation without touching this file.
  *
  * What an administrator may be shown is limited by what the contract in
- * `api/contracts/operations.ts` actually carries. Three levels, stated once here
+ * `api/contracts/staff.ts` actually carries. Three levels, stated once here
  * so the page can be honest on screen:
  *
  *   available          the endpoint exists and returns the field
@@ -17,8 +17,8 @@
  * Nothing in this module invents a value. A metric with no source returns null
  * and the screen says so.
  */
-import type { AmrStatus, FeedbackReport, OpsAlert } from '../../api/contracts/operations'
-import { statusInfo } from '../operations/status'
+import type { AmrStatus, FeedbackReport, StaffAlert } from '../../api/contracts/staff'
+import { statusInfo } from '../staff/status'
 
 export type MetricAvailability = 'available' | 'contract-pending' | 'blocked'
 
@@ -173,7 +173,7 @@ export type IncidentRow = {
  * This is a count of real records, not a derived reliability score: the moment a
  * TourEvent/FAILED aggregate exists, this should read that instead.
  */
-export function buildIncidentsByRobot(alerts: OpsAlert[], fleet: AmrStatus[] = []): IncidentRow[] {
+export function buildIncidentsByRobot(alerts: StaffAlert[], fleet: AmrStatus[] = []): IncidentRow[] {
   const rows = new Map<string, IncidentRow>()
 
   // Every registered robot appears, so a robot with no incidents reads as zero
@@ -196,8 +196,8 @@ export function buildIncidentsByRobot(alerts: OpsAlert[], fleet: AmrStatus[] = [
 export type RobotUtilisation = { amrName: string; percent: number }
 
 /**
- * Utilisation has no field in `api/contracts/operations.ts`: not on `AmrStatus`,
- * not on `OpsDashboard`, not in any reporting call. Connection state answers
+ * Utilisation has no field in `api/contracts/staff.ts`: not on `AmrStatus`,
+ * not on `StaffDashboard`, not in any reporting call. Connection state answers
  * "is it reachable", which is a different question, so it is not reused here.
  *
  * Returns null until a reporting contract carries the metric. The chart renders

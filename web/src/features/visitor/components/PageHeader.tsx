@@ -10,7 +10,8 @@ import type { ReactNode } from 'react'
  * The shape is the reference's section opener — a rule, an accent eyebrow, a
  * large display title, and the supporting line set on its own measure beside it
  * rather than underneath. The header above names the product and the current
- * section, so this must not repeat either: each line says something new.
+ * section, so this must not repeat either: each line says something new. The
+ * same rule also applies to `features/staff/StaffUi.tsx`'s PageHeader.
  */
 export function PageHeader({
   eyebrow,

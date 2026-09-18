@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { Link } from 'react-router'
 import { Activity, BatteryMedium, Bot, ChevronRight, Clock, ShieldCheck, Star, TrendingUp } from 'lucide-react'
-import { useOpsAlerts, useOpsAmrs, useFeedbackReports } from '../../features/operations/operations-hooks'
+import { useStaffAlerts, useStaffAmrs, useFeedbackReports } from '../../features/staff/staff-hooks'
 import {
   CellIcon,
   ErrorPanel,
@@ -11,9 +11,9 @@ import {
   StatusBadge,
   SummaryTile,
   panelClass,
-} from '../../features/operations/OperationsUi'
-import { statusInfo } from '../../features/operations/status'
-import { formatBattery, formatDateTime } from '../../features/operations/formatters'
+} from '../../features/staff/StaffUi'
+import { statusInfo } from '../../features/staff/status'
+import { formatBattery, formatDateTime } from '../../features/staff/formatters'
 import { ADMIN_BLOCKED_ON_BACKEND } from '../../features/administration/admin-nav'
 import {
   analyticsRange,
@@ -24,15 +24,26 @@ import {
   summariseRatings,
   summariseTours,
 } from '../../features/administration/admin-analytics'
-import { TourActivityChart } from '../../features/administration/charts/TourActivityChart'
-import { RobotUtilizationChart } from '../../features/administration/charts/RobotUtilizationChart'
-import { IncidentByRobotChart } from '../../features/administration/charts/IncidentByRobotChart'
 import { ALL_ROLES, AREAS } from '../../auth/access'
+
+const TourActivityChart = lazy(() =>
+  import('../../features/administration/charts/TourActivityChart').then((module) => ({ default: module.TourActivityChart })),
+)
+const RobotUtilizationChart = lazy(() =>
+  import('../../features/administration/charts/RobotUtilizationChart').then((module) => ({ default: module.RobotUtilizationChart })),
+)
+const IncidentByRobotChart = lazy(() =>
+  import('../../features/administration/charts/IncidentByRobotChart').then((module) => ({ default: module.IncidentByRobotChart })),
+)
 
 const shell = 'min-h-full bg-[#f1f6fe] px-4 py-5 font-sans sm:px-6 lg:px-8 lg:py-7'
 
 /** A small link in a panel head. One spelling, used by every panel here. */
 const headLink = 'text-xs font-bold text-[#2f62b8] hover:underline'
+
+function ChartFallback() {
+  return <p className="px-5 py-14 text-center text-sm font-medium text-[#71819a]" aria-busy="true">Đang tải biểu đồ…</p>
+}
 
 /**
  * Administration overview.
@@ -43,7 +54,7 @@ const headLink = 'text-xs font-bold text-[#2f62b8] hover:underline'
  * no alert queue to work, and no dispatch action anywhere on the page. An
  * administrator reads; an operator acts, one area over.
  *
- * Every number is traced to `api/contracts/operations.ts`. Where the contract
+ * Every number is traced to `api/contracts/staff.ts`. Where the contract
  * carries nothing, the panel says so instead of showing a plausible figure:
  * robot utilisation has no field in any DTO, so its card renders empty rather
  * than reusing connection state as a stand-in.
@@ -51,8 +62,8 @@ const headLink = 'text-xs font-bold text-[#2f62b8] hover:underline'
 export default function SystemOverviewPage() {
   const range = useMemo(() => analyticsRange(7), [])
   const reports = useFeedbackReports({ from: range.from, to: range.to })
-  const amrs = useOpsAmrs()
-  const alerts = useOpsAlerts()
+  const amrs = useStaffAmrs()
+  const alerts = useStaffAlerts()
 
   const analytics = useMemo(() => {
     const reportRows = reports.data ?? []
@@ -78,7 +89,7 @@ export default function SystemOverviewPage() {
   // The fleet query is the page's backbone: without it there is no inventory and
   // no health. Reports and alerts degrade per panel instead of blanking the page.
   if (amrs.isPending) return <div className={shell}><LoadingPanel label="Đang tải dữ liệu hệ thống…" /></div>
-  if (amrs.isError) return <div className={shell}><ErrorPanel error={amrs.error} /></div>
+  if (amrs.isError) return <div className={shell}><ErrorPanel error={amrs.error} onRetry={amrs.refetch} /></div>
 
   const { tours, ratings, health } = analytics
 
@@ -151,18 +162,22 @@ export default function SystemOverviewPage() {
             {reports.isPending ? (
               <p className="px-5 py-14 text-center text-sm font-medium text-[#71819a]" aria-busy="true">Đang tải báo cáo tour…</p>
             ) : reports.isError ? (
-              <ErrorPanel error={reports.error} />
+              <ErrorPanel error={reports.error} onRetry={reports.refetch} />
             ) : (
-              <TourActivityChart days={analytics.activity} emptyLabel={`Chưa có tour nào trong ${range.days} ngày gần đây.`} />
+              <Suspense fallback={<ChartFallback />}>
+                <TourActivityChart days={analytics.activity} emptyLabel={`Chưa có tour nào trong ${range.days} ngày gần đây.`} />
+              </Suspense>
             )}
           </section>
 
           <section className={panelClass} aria-label="Mức sử dụng AMR">
             <PanelHead title="Mức sử dụng AMR" description="Tỷ lệ thời gian mỗi robot thực sự phục vụ tour." />
-            <RobotUtilizationChart
-              data={analytics.utilisation}
-              emptyLabel="Chưa có dữ liệu mức sử dụng AMR. Hợp đồng dữ liệu hiện tại chỉ cho biết robot có kết nối hay không, đó là thông tin khác."
-            />
+            <Suspense fallback={<ChartFallback />}>
+              <RobotUtilizationChart
+                data={analytics.utilisation}
+                emptyLabel="Chưa có dữ liệu mức sử dụng AMR. Hợp đồng dữ liệu hiện tại chỉ cho biết robot có kết nối hay không, đó là thông tin khác."
+              />
+            </Suspense>
           </section>
         </div>
 
@@ -173,9 +188,11 @@ export default function SystemOverviewPage() {
             {alerts.isPending ? (
               <p className="px-5 py-14 text-center text-sm font-medium text-[#71819a]" aria-busy="true">Đang tải sự cố…</p>
             ) : alerts.isError ? (
-              <ErrorPanel error={alerts.error} />
+              <ErrorPanel error={alerts.error} onRetry={alerts.refetch} />
             ) : (
-              <IncidentByRobotChart rows={analytics.incidents} emptyLabel="Chưa có thiết bị nào để thống kê sự cố." />
+              <Suspense fallback={<ChartFallback />}>
+                <IncidentByRobotChart rows={analytics.incidents} emptyLabel="Chưa có thiết bị nào để thống kê sự cố." />
+              </Suspense>
             )}
           </section>
 
@@ -217,7 +234,7 @@ export default function SystemOverviewPage() {
               action={<Link to="/staff/alerts" className={headLink}>Xem toàn bộ</Link>}
             />
             {alerts.isError ? (
-              <ErrorPanel error={alerts.error} />
+              <ErrorPanel error={alerts.error} onRetry={alerts.refetch} />
             ) : analytics.recent.length === 0 ? (
               <p className="p-10 text-center text-sm font-medium text-[#71819a]">Chưa ghi nhận sự cố nào.</p>
             ) : (

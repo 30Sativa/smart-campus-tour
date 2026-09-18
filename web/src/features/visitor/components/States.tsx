@@ -8,7 +8,7 @@ import { ApiError } from '../../../api/client'
  * the same hairline and radius as the content they stand in for, so the page
  * does not change shape when the data arrives.
  *
- * Mirrors `features/operations/OperationsUi.tsx`: an error says what went wrong
+ * Mirrors `features/staff/StaffUi.tsx`: an error says what went wrong
  * rather than showing fixtures, and an empty list is never dressed up as an
  * error.
  */

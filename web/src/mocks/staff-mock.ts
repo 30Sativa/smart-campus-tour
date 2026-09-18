@@ -1,8 +1,8 @@
 /**
- * Labelled fixtures for the operations dashboard, used only while
- * `USE_MOCK_API` is on (see `mock-mode.ts`). They implement the same
- * `OperationsApi` contract as the HTTP client, so the feature code is identical
- * in both modes.
+ * Labelled fixtures for the operations dashboard: the app's only data source
+ * while the ops backend is missing (see `mock-mode.ts`). They implement the
+ * `StaffApi` contract, the same type `staffApi` implements over HTTP,
+ * so swapping the two is one binding in `staff-hooks.ts`.
  *
  * Every value here is openly fake and the dashboard header says so. Nothing in
  * this file is used to paper over a failed request.
@@ -13,13 +13,13 @@ import type {
   FeedbackFilters,
   FeedbackReport,
   Mission,
-  OperationsApi,
-  OpsAlert,
-  OpsDashboard,
-  OpsScheduleItem,
+  StaffApi,
+  StaffAlert,
+  StaffDashboard,
+  StaffScheduleItem,
   ScheduleFilters,
   TourSessionDetail,
-} from '../api/contracts/operations'
+} from '../api/contracts/staff'
 import { mockDelay } from './mock-mode'
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
@@ -33,13 +33,13 @@ const amrs: AmrStatus[] = [
   { id: 'mock-amr-04', name: 'AMR Lotus-04', operationalState: 'Offline', connectionState: 'Disconnected', batteryPercent: null, lastSeenAt: minutesAgo(23), telemetryAgeSeconds: 1382, sensorHealth: 'Unknown', currentPoi: null },
 ]
 
-const alerts: OpsAlert[] = [
+const alerts: StaffAlert[] = [
   { id: 'mock-alert-01', type: 'ObstacleDetected', severity: 'Critical', message: 'AMR Lotus-03 phát hiện vật cản kéo dài tại Khu thí nghiệm.', amrUnitId: 'mock-amr-03', amrName: 'AMR Lotus-03', tourSessionId: 'mock-tour-paused', createdAt: minutesAgo(5) },
   { id: 'mock-alert-02', type: 'LowBattery', severity: 'Warning', message: 'AMR Lotus-04 mất kết nối, không còn số liệu pin.', amrUnitId: 'mock-amr-04', amrName: 'AMR Lotus-04', createdAt: minutesAgo(19) },
   { id: 'mock-alert-03', type: 'MissionProgress', severity: 'Information', message: 'AMR Lotus-01 đã hoàn thành điểm dừng Thư viện trung tâm.', amrUnitId: 'mock-amr-01', amrName: 'AMR Lotus-01', tourSessionId: 'mock-tour-active', createdAt: minutesAgo(12), acknowledgedAt: minutesAgo(7), acknowledgedBy: 'Nguyễn Minh Anh', resolutionNote: 'Đã theo dõi, mission tiếp tục bình thường.' },
 ]
 
-const schedule: OpsScheduleItem[] = [
+const schedule: StaffScheduleItem[] = [
   { sessionId: 'mock-tour-active', bookingId: 'mock-booking-001', startTime: minutesAgo(26), endTime: minutesFromNow(34), routeName: 'Khám phá khuôn viên trọng điểm', visitorName: 'Trần Gia Hân', status: 'InProgress', amrName: 'AMR Lotus-01' },
   { sessionId: 'mock-tour-scheduled', bookingId: 'mock-booking-002', startTime: minutesFromNow(45), endTime: minutesFromNow(105), routeName: 'Hành trình đổi mới sáng tạo', visitorName: 'Lê Quốc Bảo', status: 'Scheduled', amrName: null },
   { sessionId: 'mock-tour-completed', bookingId: 'mock-booking-003', startTime: minutesAgo(145), endTime: minutesAgo(85), routeName: 'Dấu ấn lịch sử đại học', visitorName: 'Phạm Khánh Linh', status: 'Completed', amrName: 'AMR Lotus-02' },
@@ -76,8 +76,7 @@ const routeNames = [
  * from Math.random, so the same request returns the same rows and a chart does
  * not reshuffle itself on every refetch.
  *
- * Openly fake, like everything else in this file, and only ever served while
- * USE_MOCK_API is on.
+ * Openly fake, like everything else in this file.
  */
 const feedbackShape: Array<{ completed: number; cancelled: number; ratings: number[] }> = [
   { completed: 4, cancelled: 1, ratings: [5, 4, 4, 5] },
@@ -129,7 +128,7 @@ const feedback: FeedbackReport[] = feedbackShape.flatMap((day, index) => {
   return rows
 })
 
-const timelineFor = (item: OpsScheduleItem) => [
+const timelineFor = (item: StaffScheduleItem) => [
   { id: `${item.sessionId}-event-01`, type: 'TourScheduled', detail: 'Phiên tour được tạo từ lịch đặt tour.', occurredAt: minutesAgo(90) },
   { id: `${item.sessionId}-event-02`, type: item.amrName ? 'AMRAssigned' : 'WaitingForAssignment', detail: item.amrName ? `Đã gán ${item.amrName}.` : 'Đang chờ nhân viên điều phối AMR.', occurredAt: minutesAgo(35) },
   ...(item.status === 'InProgress' ? [{ id: `${item.sessionId}-event-03`, type: 'MissionStarted', detail: 'AMR bắt đầu dẫn đoàn theo lộ trình.', occurredAt: minutesAgo(24) }] : []),
@@ -139,7 +138,7 @@ function findAmr(amrUnitId: string) {
   return amrs.find((amr) => amr.id === amrUnitId)
 }
 
-function buildSession(item: OpsScheduleItem): TourSessionDetail {
+function buildSession(item: StaffScheduleItem): TourSessionDetail {
   return {
     id: item.sessionId,
     bookingId: item.bookingId,
@@ -156,7 +155,7 @@ function buildSession(item: OpsScheduleItem): TourSessionDetail {
   }
 }
 
-export const mockOperationsApi: OperationsApi = {
+export const mockStaffApi: StaffApi = {
   dashboard: () => {
     const open = alerts.filter((alert) => !alert.acknowledgedAt)
     return mockDelay({
@@ -183,7 +182,7 @@ export const mockOperationsApi: OperationsApi = {
           missionState: missions[item.sessionId]?.state ?? null,
           progressPercent: missions[item.sessionId]?.progressPercent ?? null,
         })),
-    } satisfies OpsDashboard)
+    } satisfies StaffDashboard)
   },
 
   schedule: (filters: ScheduleFilters = {}) =>

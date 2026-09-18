@@ -1,8 +1,8 @@
 # AGENTS.md — `web/`
 
-Visitor booking app and operations dashboard for CampusTour DT-AMR (Work
-Package 5). Read the repo-root `AGENTS.md` first for the shared rules; this
-file only covers what is specific to `web/`.
+Public site, visitor app, tour operations console and administration for
+CampusTour DT-AMR (Work Package 5). Read the repo-root `AGENTS.md` first for the
+shared rules; this file only covers what is specific to `web/`.
 
 ---
 
@@ -20,16 +20,12 @@ file only covers what is specific to `web/`.
   operations and administration live in the same React app, same Vercel project,
   same domain. They are split by route + role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
-  - `/visit/*`: the signed-in visitor app, for `Visitor` — and for `Staff` and
-    `Admin` too, since looking at what a visitor sees is a normal thing to do and
-    the area holds nothing operational. What a visitor does with an account:
-    explore campus locations, the campus map, book a robot, their bookings and
-    tours, the tour that is running right now, the campus assistant,
-    notifications, profile. Added 2026-09-18; `homePathForRole('Visitor')` points
-    here, so a visitor signing in no longer lands back on the marketing page.
-  - `/staff/*`: tour operations, for `CampusStaff`, `TourOperator` and `Admin`.
-    What an operator does during a shift: today's tours, the AMR fleet, alerts,
-    the digital twin, feedback reports.
+  - `/staff/*`: tour operations, for `Staff` and `Admin`. What an operator does
+    during a shift: today's tours, the AMR fleet, alerts, the digital twin,
+    feedback reports. `CampusStaff` and `TourOperator` were merged into the one
+    `Staff` role - they never diverged in permissions or in UI. Both spellings,
+    and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
+    token minted before the merge is not locked out.
   - `/admin/*`: administration, `Admin` only. System-level: what the product
     consists of and who may enter which area. It is NOT the operations
     dashboard with a different title, and it must not grow one.
@@ -56,9 +52,10 @@ file only covers what is specific to `web/`.
   in `src/components/`.
 - Auth mechanism: **JWT access token + refresh token in an HttpOnly cookie**.
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
-    on every API request. Carries the user's role (`staff`/`ops`/etc.) as a
-    claim — the area route guard reads the role from the decoded token,
-    not from a separate call.
+    on every API request. Carries the user's role (`Visitor`, `Staff`,
+    `Admin`) as a claim; the area route guard reads the role from the decoded
+    token, not from a separate call. `auth/roles.ts` normalises whatever
+    spelling arrives onto those three.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
     access token when the old one expires, without forcing re-login.
@@ -99,7 +96,9 @@ web/
     ├── vite-env.d.ts     typing for VITE_* env vars
     ├── app/
     │   ├── providers/    query-provider.tsx, theme-provider.tsx
-    │   └── router/       index.tsx — routes, RequireStaff guard, lazy boundaries
+    │   └── router/       index.tsx: `routes` + `router`, the
+    │                     RequireArea guard, lazy boundaries. router.test.tsx
+    │                     asserts guards, legacy redirects and /admin precedence
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
     │   ├── visitor/      visitor pages ("/visit/*"), all lazy-loaded
@@ -108,15 +107,16 @@ web/
     ├── features/
     │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
     │   │                 sections/ (one component per landing section)
-    │   ├── visitor/      VisitorShell, visitor.css, visitor-content.ts,
-    │   │                 visitor-hooks.ts, visitor-status.ts,
-    │   │                 visitor-format.ts, components/ (shared visitor UI)
-    │   ├── operations/   StaffShell, staff-nav, shared ops UI, status
-    │   │                 vocabulary, formatters, query hooks
-    │   └── administration/ AdminShell, admin-nav, admin-analytics, charts/
+    │   ├── staff/        StaffShell, staff-nav, use-mobile-nav, StaffUi
+    │   │                 (shared chrome), status/type vocabulary, formatters,
+    │   │                 attention (the "needs me now" queue + fleet bands),
+    │   │                 staff-hooks (query layer)
+    │   └── administration/ AdminShell, admin-nav, admin-analytics (pure DTO to
+    │                     chart rows), charts/ (Recharts, admin only)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
-    ├── auth/             LoginPage.tsx, roles.ts, use-logout.ts
+    ├── auth/             AuthLayout + LoginPage/RegisterPage/AuthFields,
+    │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
     ├── three/            DigitalTwinCanvas.tsx (R3F canvas)
@@ -134,47 +134,58 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
-The old visitor booking/tour flow was removed on 2026-09-16 and its files are
-kept in `_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms the
-deletion. **It was replaced on 2026-09-18 by `/visit/*`** — a fresh
-implementation, not a restore: nothing was brought back out of `_to_delete/`.
-A visitor account is no longer limited to the public site.
+The visitor booking/tour flow was removed on 2026-09-16 and came back on
+2026-09-18 as its own area at `/visit/*`, with its own shell, routes, contract
+and English surface. A visitor account is therefore a real account with a real
+app, not a public-site-only account. The 2026-09-18 note that said otherwise was
+written while the flow was gone; do not restore it.
+
+The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
+the only copy of anything that was in it.
 
 `src/components/` currently holds nothing: the landing page redesign on
 2026-09-17 gave the theme control its own landing-token styling inside
 `features/landing/sections/SiteNav.tsx`, which left `components/ui/ThemeToggle.tsx`
-with no consumer. It moved to `_to_delete/web-fe-cleanup-2026-09-16/` under the
-same rule as above. Re-create `src/components/` only when a component genuinely
-has more than one consumer.
+with no consumer, and it was deleted with the rest of `_to_delete/` on
+2026-09-18. Re-create `src/components/` only when a component genuinely has more
+than one consumer.
 
 Tests live next to the code they cover (`*.test.ts(x)`).
 
 ### Mock backend mode
 
 The auth/booking/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
-`/api/staff/*` do not exist. While `VITE_USE_MOCK_API` is not `"false"`, the app
-runs on the labelled fixtures in `src/mocks/`:
+`/api/staff/*` do not exist. The app runs on the labelled fixtures in
+`src/mocks/`. There is no toggle: `VITE_USE_MOCK_API` and every
+`USE_MOCK_API ? mock : http` ternary were removed on 2026-09-18, because with no
+backend to point it at the switch only ever had one position and the other
+branch was never exercised.
 
-- `mocks/operations-mock.ts` implements the same `OperationsApi` contract as the
-  HTTP client, so feature code is identical in both modes and the switch is made
-  once, in `features/operations/operations-hooks.ts`;
-- `mocks/visitor-mock.ts` does the same for `VisitorApi`
-  (`api/contracts/visitor.ts`), selected once in
-  `features/visitor/visitor-hooks.ts`. Its writes mutate module-level arrays, so
-  a booking made in one screen appears in another and is gone on reload — the
-  honest behaviour for a mock;
-- `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised
-  (`visitor/visitor` is a Visitor, `staff/staff` is Staff, `admin/admin` is an
-  Admin). It is not authentication and grants nothing server-side;
-- mock mode is disclosed, but out of the way: a one-line badge in each shell and
+- `mocks/staff-mock.ts` implements the `StaffApi` contract, the same
+  type `api/contracts/staff.ts` implements over HTTP, so feature code does
+  not know which one it has. The binding is named once, in
+  `features/staff/staff-hooks.ts`;
+- `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised.
+  There are exactly two accounts, one per signed-in role: `admin/admin` is an
+  `Admin`, `staff/staff` is a `Staff`. Sign-up mints a `Visitor`. It is not
+  authentication and grants nothing server-side;
+- mock data is disclosed, but out of the way: a one-line badge in each shell and
   on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
-  `console.warn` from `mocks/mock-mode.ts` that also fires in a production build
-  still running on mocks. Do not put build state back into the middle of a
-  screen someone works in all day.
+  `console.warn` from `mocks/mock-mode.ts` that fires in every build. Do not put
+  build state back into the middle of a screen someone works in all day.
 
-This is a **mode, not a fallback**. Mock data must never replace a failed
-request: with the flag off, a transport error stays an error. Delete `src/mocks/`
-and the flag once the backend lands.
+This is a **data source, not a fallback**. Mock data must never be served in
+response to a failed request, and no screen may branch on where its rows came
+from.
+
+`src/api/` stays: `client.ts` (HTTP client, token refresh, `ApiError`, `apiUrl`),
+`signalr.ts` (hub factory) and the `staffApi` implementation in
+`contracts/staff.ts` are the written record of the endpoints this frontend
+expects. They are **deliberately unwired**, not dead code, and an import sweep
+will say otherwise - do not delete them. When the backend lands: bind
+`staffApi` in `staff-hooks.ts`, restore the `/api/auth/*` calls in
+`LoginPage`/`RegisterPage`/`use-logout` (the logout call is a security
+requirement, not a nicety - see §1), then delete `src/mocks/`.
 
 ## 3. Development Rules
 
@@ -192,7 +203,7 @@ and the flag once the backend lands.
   item out of that list and into `features/administration/admin-nav.ts`.
 - **No backend enum reaches a screen.** The API speaks `InProgress`, `Live`,
   `Critical`; people read Vietnamese. Everything a person sees goes through
-  `features/operations/status.ts`, which also assigns the tone (ok / info /
+  `features/staff/status.ts`, which also assigns the tone (ok / info /
   warn / danger / muted) that is the whole status colour system. Filter values
   sent to the API stay the English enum; only the label is translated. Colour is
   never the only carrier — `StatusBadge` always prints the label.
@@ -230,13 +241,13 @@ and the flag once the backend lands.
   the difference was the one guaranteed to cross it. The two still differ in
   *priority* — administration has no alert bell and no live badge — which is the
   right axis to diverge on.
-  - Shared chrome lives in `features/operations/OperationsUi.tsx` and is used by
+  - Shared chrome lives in `features/staff/StaffUi.tsx` and is used by
     both areas: `panelClass`, `PageHeader`, `PanelHead`, `SummaryTile`,
     `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`, `PageSkeleton`.
     Build a page out of those before writing new markup.
   - **One accent.** `SummaryTile` never tints itself by meaning, because colour
     on these screens already means severity on a `StatusBadge`. The exceptions
-    are deliberate and few: `StatusBadge` tones (`features/operations/status.ts`),
+    are deliberate and few: `StatusBadge` tones (`features/staff/status.ts`),
     the fleet-health counts, the access matrix's yes/no, and the chart *series*
     colours in `features/administration/charts/chart-utils.ts` — where a bar IS a
     status. Everything else is blue.
@@ -246,7 +257,7 @@ and the flag once the backend lands.
 - **The visitor area is an English surface.** The public, staff and admin areas
   are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
   its status vocabulary in `features/visitor/visitor-status.ts`, which is the
-  same tone scale as `features/operations/status.ts` with English labels and
+  same tone scale as `features/staff/status.ts` with English labels and
   tone *tokens* rather than Tailwind classes, so the badge can follow the
   light/dark switch. The `Intl` locale is `en-GB` in
   `features/visitor/visitor-format.ts`. Same hard rule as everywhere else: no

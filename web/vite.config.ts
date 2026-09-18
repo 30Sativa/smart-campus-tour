@@ -10,5 +10,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // A cold Vite transform on Windows/OneDrive can block the event loop while
+    // lazy admin/chart chunks compile. Keep behavioral query timeouts unchanged,
+    // but do not terminate the whole test while that transform is in flight.
+    testTimeout: 30_000,
   },
 })

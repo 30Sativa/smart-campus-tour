@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { apiClient, ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
-import { MockAuthError, mockRegister, type AuthResponse } from '../mocks/auth-mock'
-import { USE_MOCK_API } from '../mocks/mock-mode'
+import { homePathForRole } from './roles'
+import { MockAuthError, mockRegister } from '../mocks/auth-mock'
 import { AuthField, AuthPasswordField } from './AuthFields'
 
 type RegisterFormInputs = {
@@ -16,8 +15,8 @@ type RegisterFormInputs = {
 /**
  * Sign-up screen.
  *
- * There is no `/api/auth/register` yet, so with `USE_MOCK_API` on this runs the
- * labelled mock and the page says plainly that no account is being created. The
+ * There is no `/api/auth/register` yet, so this runs the labelled mock and the
+ * page says plainly that no account is being created. The
  * fields are the ones the mock and the login contract already use, `username`
  * and `password`; `confirmPassword` is a client-side check and is never sent.
  */
@@ -42,24 +41,20 @@ export default function RegisterPage() {
   const onSubmit = async ({ username, password }: RegisterFormInputs) => {
     try {
       setApiError('')
-      const response = USE_MOCK_API
-        ? await mockRegister(username, password)
-        : await apiClient<AuthResponse>('/api/auth/register', {
-            method: 'POST',
-            json: { username, password },
-            credentials: 'include',
-          })
+      const response = await mockRegister(username, password)
 
       setAuth(response.accessToken, {
         userId: response.userId,
         username: response.username,
         role: response.role,
       })
-      navigate('/', { replace: true })
+      // Sign-up issues a Visitor today, so this is `/`. It reads the role
+      // anyway, so the day registration can mint a staff account the landing
+      // rule does not have to be rediscovered here.
+      navigate(homePathForRole(response.role), { replace: true })
     } catch (error) {
       if (error instanceof MockAuthError) setApiError(error.message)
-      else if (error instanceof ApiError && error.status === 409) setApiError('Tên đăng nhập này đã có người dùng.')
-      else setApiError('Không tạo được tài khoản. Kiểm tra kết nối tới máy chủ rồi thử lại.')
+      else setApiError('Không tạo được tài khoản. Thử lại sau ít phút.')
     }
   }
 

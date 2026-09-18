@@ -81,6 +81,36 @@ export function statusLabel(value?: string | null): string {
   return statusInfo(value).label
 }
 
+/**
+ * Event and alert *types*, which are a different vocabulary from status.
+ *
+ * `StaffAlert.type` and `TourTimelineEvent.type` are `string` in the contract, so
+ * they were being passed through `statusLabel`, which has never held a type and
+ * therefore echoed the raw `ObstacleDetected` / `AMRAssigned` back onto a
+ * Vietnamese screen. They get their own table.
+ *
+ * Only the values the contract and its fixtures actually produce are listed. An
+ * unlisted type still prints as it arrived, deliberately: an untranslated type
+ * is a gap to notice when the backend lands, not something to hide behind a
+ * guessed Vietnamese phrase.
+ */
+const EVENT_TYPES: Record<string, string> = {
+  // Alert types
+  obstacledetected: 'Phát hiện vật cản',
+  lowbattery: 'Pin yếu',
+  missionprogress: 'Tiến độ nhiệm vụ',
+  // Tour timeline types
+  tourscheduled: 'Đã tạo phiên tour',
+  amrassigned: 'Đã gán AMR',
+  waitingforassignment: 'Chờ điều phối AMR',
+  missionstarted: 'Bắt đầu nhiệm vụ',
+}
+
+export function eventTypeLabel(value?: string | null): string {
+  if (!value) return 'Không rõ'
+  return EVENT_TYPES[value.trim().toLowerCase()] ?? value
+}
+
 /** Severity order for sorting an alert list: the worst thing first. */
 export function severityRank(value?: string | null): number {
   switch (value?.trim().toLowerCase()) {

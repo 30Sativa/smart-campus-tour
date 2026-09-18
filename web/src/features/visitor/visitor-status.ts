@@ -1,7 +1,7 @@
 /**
  * Backend vocabulary for the visitor app, translated once.
  *
- * Same rule as `features/operations/status.ts`, same `StatusTone` scale, one
+ * Same rule as `features/staff/status.ts`, same `StatusTone` scale, one
  * difference: the words are English, because the visitor area is an English
  * surface, and the tone is returned as a token name rather than a Tailwind class
  * string. The operations table hard-codes light-theme hex values, which cannot

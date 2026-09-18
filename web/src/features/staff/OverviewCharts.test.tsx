@@ -1,10 +1,10 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
-import type { OpsDashboard } from '../../api/contracts/operations'
+import type { StaffDashboard } from '../../api/contracts/staff'
 import { OverviewCharts } from './OverviewCharts'
 
-const dashboard: OpsDashboard = {
+const dashboard: StaffDashboard = {
   todayTours: 0, upcomingTours: 0, activeTours: 0, completedTours: 0, pendingTours: 0,
   activeAmrs: 0, offlineAmrs: 0, activeAlerts: 0, criticalAlerts: 0,
   todaySchedule: [], activeAmrsList: [], recentAlerts: [], activeSessions: [],
@@ -21,7 +21,7 @@ describe('OverviewCharts', () => {
   })
 
   it('distinguishes missing readings from zero and labels stale battery data', () => {
-    const readings: OpsDashboard = {
+    const readings: StaffDashboard = {
       ...dashboard,
       activeAmrsList: [
         { id: 'a', name: 'Robot A', connectionState: 'Live', operationalState: 'Idle', sensorHealth: 'Healthy', batteryPercent: 0 },

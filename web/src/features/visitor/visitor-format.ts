@@ -1,7 +1,7 @@
 /**
  * Display formatting for the visitor app.
  *
- * Same job as `features/operations/formatters.ts`, one difference: the locale is
+ * Same job as `features/staff/formatters.ts`, one difference: the locale is
  * `en-GB` rather than `vi-VN`, because this surface is English. The rule that
  * matters is shared with that file and with the operations dashboard — a missing
  * reading prints as missing. Nothing here invents a value the API did not send.

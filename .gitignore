@@ -456,9 +456,10 @@ _to_delete/
 # connection strings out of Git; production settings come from environment variables.
 /backend/src/SmartCampus.Api/appsettings.Development.json
 
-# Repository-owned Gazebo campus model assets (not Visual Studio build output).
+# Repository-owned campus model assets (not Visual Studio build output).
 !robot/ros2_ws/src/simulation/models/campus_map/model.sdf
 !robot/ros2_ws/src/simulation/models/campus_map/meshes/map.obj
+!web/public/models/campus/campus.obj
 
 # Thu muc do Claude desktop tao khi gui file ve may. Khong thuoc source.
 Claude outputs/
