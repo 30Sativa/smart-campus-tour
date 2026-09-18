@@ -96,7 +96,7 @@ export default function ActiveTourPage() {
       />
       {notice && <p role="status" className="vs-feedback">{notice}</p>}
 
-      <div className="vs-split">
+      <div className="vs-split" data-visitor-reveal>
         <CampusMap
           pins={[
             ...active.stops.map((stop) => ({

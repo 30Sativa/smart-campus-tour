@@ -33,12 +33,61 @@
    ========================================================================== */
 
 .vs {
-  /* The form-control tokens `.auth-input` and `.auth-submit` read
-     (--auth-field-bg, --auth-field-line, --auth-r) and the danger tokens the
-     alert reads come from `.lp` in landing.css, which this root also carries.
-     Nothing about a text field is re-decided here.
+  /* ══ Haven tokens ════════════════════════════════════════════════════════
+     The visitor app is tuned to the "Haven" reference design. The whole
+     retune happens here, by redeclaring the `--lp-*` tokens inside this root:
+     every component on this surface — `.lp-btn`, `.vs-card`, `.auth-input`,
+     the badge, the map — already reads those tokens, so the language changes
+     without a single class being rewritten. Outside `.vs` nothing moves, so
+     the landing page and the auth pages are untouched.
 
-     Status tones. The operations dashboard's scale
+     What was taken from Haven:
+     - a WARM neutral ground instead of a cool one,
+     - near-black ink over the Untitled-UI grey ramp it pairs with,
+     - hairline borders and no shadows in the flow,
+     - a 16px panel radius,
+     - a much tighter track and a wider type scale (see Type below),
+     - considerably more air between sections.
+
+     What was NOT taken: Haven is achromatic — its accent is the near-black.
+     This product has a brand, so `--lp-accent` stays the teal from
+     landing.css and remains the only chromatic colour on the surface. That is
+     also what keeps a visitor arriving from the landing page on the same
+     product rather than a second one. */
+
+  /* ── Ground. Haven #f8f6f4; the sunk step derived at the same warmth. ── */
+  --lp-bg: #f8f6f4;
+  --lp-bg-sunk: #f1eeea;
+  --lp-surface: #ffffff;
+
+  /* ── Ink. Haven's near-black, then the grey ramp it uses underneath. ── */
+  --lp-ink: #121212;
+  --lp-ink-2: #667085;
+  --lp-ink-3: #98a2b3;
+
+  /* ── Hairlines. Structure comes from these, never from a shadow. ── */
+  --lp-line: #e4e7ec;
+  --lp-line-strong: #d0d5dd;
+
+  /* ── Shape. 16px panels, 12px inner shapes, pills stay fully round. ── */
+  --lp-r: 16px;
+  --lp-r-sm: 12px;
+  --auth-r: 12px;
+
+  /* ── Elevation. Haven floats almost nothing; what floats gets a ring and
+         the faintest lift, never a drop shadow doing the structural work. ── */
+  --lp-shadow: 0 16px 40px -24px rgba(18, 18, 18, 0.26);
+
+  /* ── Form controls, re-warmed to sit on the new ground. ── */
+  --auth-field-bg: #ffffff;
+  --auth-field-line: #d0d5dd;
+
+  /* ── Motion. Haven's single easing and duration, used by every transition
+         and reveal on this surface so the whole thing moves with one hand. ── */
+  --vs-ease: cubic-bezier(0.44, 0, 0.56, 1);
+  --vs-dur: 0.4s;
+
+  /* Status tones. The operations dashboard's scale
      (features/operations/status.ts), re-expressed as tokens so it can follow
      the light/dark switch, which the hard-coded Tailwind hex values there
      cannot. Used by exactly one component: `.vs-badge`. */
@@ -52,34 +101,63 @@
   --vs-danger-line: #f5c8c2;
   --vs-danger-bg: #fff1ef;
 
-  /* Density step. The landing page opens ideas with 96-116px of air; an app
-     screen answers questions, so the same rhythm is taken one step down. The
-     gutter and the container width are NOT changed: a visitor moving from the
-     landing page to here must see the content start on the same line. */
-  --vs-sec: 28px;
+  /* ── Rhythm. Haven runs 80px section padding and 64px between sections;
+         that is a brochure pace. An app that answers questions takes the same
+         proportions one step in, which is still far more air than before
+         (28 → 40 at phone, 44 → 64 at desktop). The container matches Haven's
+         1200px, within 20px of the landing page's own measure. ── */
+  --lp-maxw: 1200px;
+  --vs-sec: 40px;
   --vs-gap: 20px;
+  /* Haven separates one idea from the next with 160-200px. A screen you work
+     in cannot spend that, but 40px is a list, not a composition — so the home
+     page gets its own larger step and the working pages keep `--vs-sec`. */
+  --vs-sec-lg: 64px;
 
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--lp-bg);
   color: var(--lp-ink);
+  /* Haven sets a tight track on everything, not just on display type. */
+  letter-spacing: -0.03em;
 }
 
 @media (min-width: 768px) {
   .vs {
-    --vs-sec: 36px;
+    --vs-sec: 52px;
     --vs-gap: 24px;
+    --vs-sec-lg: 96px;
   }
 }
 
 @media (min-width: 1024px) {
   .vs {
-    --vs-sec: 44px;
+    --vs-sec: 64px;
+    --vs-gap: 28px;
+    --vs-sec-lg: 128px;
   }
 }
 
 html.dark .vs {
+  /* The warm ground inverts to a warm-neutral near-black rather than to the
+     landing page's blue-black, so the two themes stay the same design. */
+  --lp-bg: #131211;
+  --lp-bg-sunk: #0d0c0b;
+  --lp-surface: #1b1a18;
+
+  --lp-ink: #f7f5f3;
+  --lp-ink-2: #a8a29b;
+  --lp-ink-3: #837d76;
+
+  --lp-line: rgba(247, 245, 243, 0.12);
+  --lp-line-strong: rgba(247, 245, 243, 0.24);
+
+  --lp-shadow: 0 16px 40px -24px rgba(0, 0, 0, 0.8);
+
+  --auth-field-bg: #201e1c;
+  --auth-field-line: rgba(247, 245, 243, 0.18);
+
   --vs-ok-ink: #6fe0b0;
   --vs-ok-line: rgba(111, 224, 176, 0.32);
   --vs-ok-bg: rgba(111, 224, 176, 0.1);
@@ -104,8 +182,8 @@ html.dark .vs {
   z-index: 60;
   background: var(--lp-nav-bg);
   border-bottom: 1px solid var(--lp-line);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -353,6 +431,248 @@ button.vs-avatar:hover {
   min-width: 0;
 }
 
+/* ── Motion ──────────────────────────────────────────────────────────────────
+   Haven reveals a section by 40-48px over 0.4s on one symmetric easing, and it
+   does it to every section, not to two of them. The hero settles on load; the
+   media behind it holds a slow scale so the frame is never completely static.
+
+   Everything below is inside the reduced-motion guard further down the file or
+   is neutralised by it: a visitor who asked for less motion gets none of it. */
+
+/* The hero arrives rather than appearing. */
+@media (prefers-reduced-motion: no-preference) {
+  .vs-hero__copy > * {
+    animation: vs-rise 0.7s var(--vs-ease) both;
+  }
+
+  .vs-hero__eyebrow { animation-delay: 0.04s; }
+  .vs-hero__title { animation-delay: 0.1s; }
+  .vs-hero__lead { animation-delay: 0.17s; }
+  .vs-hero__cta { animation-delay: 0.24s; }
+
+  /* A very slow push on the photograph. Nothing a visitor should notice as an
+     effect; it exists so the frame is not a dead rectangle behind live copy. */
+  .vs-hero__media img {
+    animation: vs-drift 18s var(--vs-ease) both;
+  }
+}
+
+@keyframes vs-rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vs-drift {
+  from { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+
+/* ── Editorial composition (Haven) ───────────────────────────────────────────
+   The token retune alone left this surface reading as a dashboard wearing new
+   colours: same dense rhythm, same small headings, same equal-weight boxes.
+   Haven's character is not in its palette, it is in the composition — very
+   large display type, an eyebrow above every section, and a great deal of air
+   between one idea and the next. These are the pieces that carry that. */
+
+/* A page laid out as a composition rather than as a list of panels. */
+.vs-stack--editorial {
+  gap: var(--vs-sec-lg);
+}
+
+/* The section opener: a hairline, an eyebrow, a large heading, and the action
+   pushed to the far side. Haven puts the rule above the eyebrow, which is what
+   makes a section feel like a new chapter rather than the next row down. */
+.vs-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 32px;
+  margin-bottom: clamp(28px, 3.4vw, 48px);
+  padding-top: clamp(20px, 2.4vw, 32px);
+  border-top: 1px solid var(--lp-line-strong);
+}
+
+.vs-open__text {
+  min-width: 0;
+  max-width: 34ch;
+}
+
+.vs-open .vs-eyebrow {
+  color: var(--lp-accent);
+}
+
+/* Haven's section heading is 48px at desktop. This is the single biggest
+   reason the page reads as editorial rather than as an admin screen. */
+.vs .vs-open__title {
+  margin: 14px 0 0;
+  font-size: clamp(1.75rem, 3.6vw, 3rem);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+.vs .vs-open__lead {
+  margin: 14px 0 0;
+  max-width: 46ch;
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: -0.03em;
+  color: var(--lp-ink-2);
+}
+
+/* ── Action list ─────────────────────────────────────────────────────────────
+   Haven's feature section is a numbered list on hairlines, not a row of equal
+   boxes. Four small cards in a row is the most generic thing an app can do;
+   this is the same four destinations given the reference's own device. */
+
+.vs-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--lp-line);
+}
+
+.vs-action {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(16px, 2.4vw, 40px);
+  padding: clamp(22px, 2.6vw, 34px) 4px;
+  border-bottom: 1px solid var(--lp-line);
+  transition: background-color var(--vs-dur) var(--vs-ease),
+    padding-inline var(--vs-dur) var(--vs-ease);
+}
+
+.vs-action:hover {
+  background: var(--lp-bg-sunk);
+  padding-inline: clamp(8px, 1.4vw, 20px) clamp(8px, 1.4vw, 20px);
+}
+
+.vs-action__n {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--lp-ink-3);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--vs-dur) var(--vs-ease);
+}
+
+.vs-action:hover .vs-action__n {
+  color: var(--lp-accent);
+}
+
+.vs-action__body {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.8vw, 24px);
+  min-width: 0;
+}
+
+.vs-action__title {
+  margin: 0;
+  font-size: clamp(1.125rem, 2vw, 1.625rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+.vs .vs-action__text {
+  margin: 6px 0 0;
+  max-width: 48ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  letter-spacing: -0.03em;
+  color: var(--lp-ink-2);
+}
+
+/* The arrow is the affordance. It sits still until the row is hovered. */
+.vs-action__go {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--lp-line-strong);
+  color: var(--lp-ink-3);
+  transition: transform var(--vs-dur) var(--vs-ease),
+    border-color var(--vs-dur) var(--vs-ease), background-color var(--vs-dur) var(--vs-ease),
+    color var(--vs-dur) var(--vs-ease);
+}
+
+.vs-action:hover .vs-action__go {
+  border-color: transparent;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  transform: translateX(4px);
+}
+
+@media (max-width: 767px) {
+  .vs-action {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+
+  .vs-action__body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .vs-action__go {
+    display: none;
+  }
+}
+
+/* ── Haven component tuning ──────────────────────────────────────────────────
+   The landing page's own components are reused unchanged; these are the few
+   places where Haven's proportions differ from the marketing surface's and the
+   difference is worth carrying. Scoped to `.vs`, so the landing page and the
+   auth pages keep their own sizing. */
+
+/* Haven's controls are 16px type in a generous pill. The landing page runs
+   14px, which is right over hero footage and slightly undersized as the main
+   control of an application. */
+.vs .lp-btn {
+  padding: 14px 26px;
+  font-size: 0.9375rem;
+  letter-spacing: -0.02em;
+  transition: background-color var(--vs-dur) var(--vs-ease),
+    border-color var(--vs-dur) var(--vs-ease), color var(--vs-dur) var(--vs-ease),
+    transform 0.16s var(--vs-ease), box-shadow var(--vs-dur) var(--vs-ease);
+}
+
+.vs .lp-btn--sm {
+  padding: 10px 18px;
+  font-size: 0.875rem;
+}
+
+.vs .lp-btn--lg {
+  padding: 17px 32px;
+  font-size: 1rem;
+}
+
+/* Haven's solid control is a flat near-black pill with no glow under it. The
+   teal keeps the brand, the flatness keeps the reference. */
+.vs .lp-btn--solid {
+  box-shadow: none;
+}
+
+.vs .lp-btn--solid:hover {
+  box-shadow: none;
+  filter: brightness(1.08);
+}
+
+/* Section heading, at Haven's step. */
+.vs .vs-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+
 /* ── Page frame ──────────────────────────────────────────────────────────── */
 
 .vs-main {
@@ -386,11 +706,15 @@ button.vs-avatar:hover {
    only the display size steps down, because a page title inside an app is not a
    section opening on a marketing page. */
 
+/* The page masthead. A rule over it, generous air under it, and the supporting
+   line held on a short measure in the far column — the reference's opener,
+   applied to every page through `PageHeader`. */
 .vs-head {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
+  padding-top: clamp(4px, 1.6vw, 20px);
 }
 
 @media (min-width: 768px) {
@@ -398,12 +722,35 @@ button.vs-avatar:hover {
     flex-direction: row;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 24px;
+    gap: 40px;
+    padding-bottom: clamp(8px, 1.2vw, 16px);
+  }
+
+  .vs-head__side {
+    max-width: 38ch;
+    text-align: right;
+  }
+
+  .vs-head__side .vs-lead {
+    margin-left: auto;
+  }
+
+  .vs-head__actions {
+    justify-content: flex-end;
   }
 }
 
 .vs-head__text {
   min-width: 0;
+  max-width: 22ch;
+}
+
+.vs-head__side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  flex: none;
 }
 
 .vs-eyebrow {
@@ -416,20 +763,25 @@ button.vs-avatar:hover {
   text-transform: uppercase;
 }
 
+/* Haven's page-level heading: 36-42px, weight 700, track -.05em. The wider
+   scale and the tighter track are the two things that most make this read as
+   Haven rather than as a dashboard. */
 .vs .vs-title {
-  margin: 8px 0 0;
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  margin: 12px 0 0;
+  font-size: clamp(2rem, 4.4vw, 3.5rem);
   font-weight: 700;
-  line-height: 1.16;
-  letter-spacing: -0.03em;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
   text-wrap: balance;
 }
 
+/* Haven body: 18px, 150% line-height, track -.03em. */
 .vs .vs-lead {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   max-width: 62ch;
-  font-size: 0.9375rem;
-  line-height: 1.62;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  letter-spacing: -0.03em;
   color: var(--lp-ink-2);
 }
 
@@ -441,12 +793,24 @@ button.vs-avatar:hover {
 }
 
 /* Section heading inside a page, one step under the page title. */
+/* Standalone section heading. */
 .vs .vs-h3 {
   margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+/* The same heading inside a panel is a level down, not a section opener: a
+   booking step or a profile block is a part of the page, not a new chapter of
+   it. Without this the working screens read as six competing headlines. */
+.vs .vs-card .vs-h3,
+.vs .vs-map-directory .vs-h3,
+.vs .vs-assistant__head .vs-h3,
+.vs .vs-profile-welcome .vs-h3 {
+  font-size: 1.1875rem;
+  letter-spacing: -0.035em;
 }
 
 .vs-secnav {
@@ -495,9 +859,11 @@ button.vs-avatar:hover {
   }
 }
 
+/* Haven's listing card is mostly photograph: a tall frame, the name and its
+   meta underneath, and no chrome competing with the image. */
 .vs-card__media {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 4 / 3;
   background: var(--lp-bg-sunk);
   overflow: hidden;
   flex: none;
@@ -508,7 +874,7 @@ button.vs-avatar:hover {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.6s var(--vs-ease);
 }
 
 .vs-card--link:hover .vs-card__media img {
@@ -555,24 +921,26 @@ button.vs-avatar:hover {
 
 .vs-card__title {
   margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  font-size: 1.1875rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
   text-wrap: balance;
 }
 
 .vs .vs-card__meta {
-  margin: 6px 0 0;
-  font-size: 0.8125rem;
+  margin: 8px 0 0;
+  font-size: 0.875rem;
   line-height: 1.5;
+  letter-spacing: -0.02em;
   color: var(--lp-ink-3);
 }
 
 .vs .vs-card__text {
   margin: 10px 0 0;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  letter-spacing: -0.03em;
   color: var(--lp-ink-2);
 }
 
@@ -1077,7 +1445,7 @@ button.vs-avatar:hover {
   transform-origin: left;
   border-radius: 999px;
   background: var(--lp-accent);
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.5s var(--vs-ease);
 }
 
 .vs-meter__fill[data-tone='warn'] {
@@ -1297,7 +1665,7 @@ button.vs-avatar:hover {
 
 @media (prefers-reduced-motion: no-preference) {
   .vs-pin[data-role='robot'] .vs-pin__dot::after {
-    animation: vs-ping 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    animation: vs-ping 2.4s var(--vs-ease) infinite;
   }
 }
 
@@ -1544,7 +1912,7 @@ button.vs-avatar:hover {
   overflow: hidden;
   display: flex;
   align-items: flex-end;
-  min-height: 340px;
+  min-height: min(76vh, 660px);
   color: #ffffff;
 }
 
@@ -1609,11 +1977,11 @@ button.vs-avatar:hover {
   margin-inline: auto;
   /* Was top-heavy: 92px above and 40px below glued the block to the bottom
      edge. The block now sits in the lower third rather than on the floor. */
-  padding: clamp(52px, 6.5vw, 76px) var(--lp-gut) clamp(34px, 4vw, 52px);
+  padding: clamp(96px, 14vw, 200px) var(--lp-gut) clamp(56px, 7vw, 88px);
 }
 
 .vs-hero__copy {
-  max-width: 40rem;
+  max-width: 46rem;
   min-width: 0;
 }
 
@@ -1645,12 +2013,15 @@ button.vs-avatar:hover {
    reaching 44px, which made a two-word greeting the loudest thing on a page
    whose section headings are 17px — the hierarchy read as a landing page that
    had lost its content. */
+/* Haven's display setting: large, weight 700, track -.05em. The line-height
+   stays at 1.08 rather than Haven's tighter figure because Vietnamese stacks
+   diacritics above the cap height and anything lower clips ế, ộ and ỹ. */
 .vs .vs-hero__title {
-  margin: 14px 0 0;
-  font-size: clamp(1.625rem, 2.7vw, 2.375rem);
+  margin: 16px 0 0;
+  font-size: clamp(2.5rem, 6.4vw, 4.6875rem);
   font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -0.028em;
+  line-height: 1.04;
+  letter-spacing: -0.05em;
   text-wrap: balance;
   color: #ffffff;
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
@@ -1659,10 +2030,11 @@ button.vs-avatar:hover {
 /* 42ch breaks this sentence into two even lines at desktop instead of leaving
    "locations," stranded at the start of the second. */
 .vs .vs-hero__lead {
-  margin: 12px 0 0;
-  max-width: 42ch;
-  font-size: clamp(0.9375rem, 1vw, 1rem);
-  line-height: 1.6;
+  margin: 16px 0 0;
+  max-width: 46ch;
+  font-size: clamp(1.0625rem, 1.3vw, 1.25rem);
+  line-height: 1.5;
+  letter-spacing: -0.03em;
   color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
 }
@@ -1721,7 +2093,7 @@ button.vs-avatar:hover {
 
 @media (prefers-reduced-motion: no-preference) {
   .vs-live__dot::after {
-    animation: vs-ping 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    animation: vs-ping 2.2s var(--vs-ease) infinite;
   }
 }
 
@@ -1880,7 +2252,7 @@ button.vs-avatar:hover {
   height: 18px;
   border-radius: 999px;
   background: var(--lp-ink-3);
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease;
+  transition: transform 0.2s var(--vs-ease), background-color 0.2s ease;
 }
 
 .vs-toggle[aria-checked='true'] .vs-switch {
@@ -1930,6 +2302,173 @@ button.vs-avatar:hover {
 
 .vs-foot__links a:hover {
   color: var(--lp-accent);
+}
+
+/* ── Phone tab bar ───────────────────────────────────────────────────────────
+   Five slots, thumb height, and only on a phone. Above 768px the header's own
+   link row is visible and this would be a second copy of it. */
+
+.vs-tabbar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .vs-tabbar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 58;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    background: var(--lp-nav-bg);
+    border-top: 1px solid var(--lp-line);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .vs-tabbar {
+      background: var(--lp-bg);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
+  .vs-tabbar__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-height: 52px;
+    padding: 6px 2px;
+    border-radius: var(--lp-r-sm);
+    color: var(--lp-ink-3);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-align: center;
+    transition: color var(--vs-dur) var(--vs-ease);
+  }
+
+  .vs-tabbar__icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 26px;
+    border-radius: 999px;
+    transition: background-color var(--vs-dur) var(--vs-ease);
+  }
+
+  /* The pill behind the icon is the whole active state: no underline, no dot,
+     nothing that moves the label. */
+  .vs-tabbar__item[aria-current='page'] {
+    color: var(--lp-accent);
+  }
+
+  .vs-tabbar__item[aria-current='page'] .vs-tabbar__icon {
+    background: var(--lp-accent-soft);
+  }
+
+  /* The bar floats over the page, so the page has to end above it. */
+  .vs-page {
+    padding-bottom: calc(var(--vs-sec) * 1.6 + 76px);
+  }
+
+  .vs-foot {
+    padding-bottom: calc(22px + 76px);
+  }
+}
+
+/* ── How-it-works row (Help) ─────────────────────────────────────────────────
+   The landing page's Journey device: a numbered tick on a hairline track, which
+   is how this product already draws a sequence. */
+
+.vs-howto {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vs-howto__step {
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--lp-line-strong);
+}
+
+.vs-howto__n {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--lp-accent);
+}
+
+.vs-howto .vs-card__title {
+  margin-top: 16px;
+}
+
+/* ── FAQ ─────────────────────────────────────────────────────────────────────
+   Native <details>: keyboard accessible and findable by the browser's own
+   find-in-page, with no JavaScript and no ARIA to get wrong. */
+
+.vs-faq {
+  border-bottom: 1px solid var(--lp-line);
+}
+
+.vs-faq:last-child {
+  border-bottom: 0;
+}
+
+.vs-faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(18px, 2vw, 24px);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  list-style: none;
+}
+
+.vs-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.vs-faq summary::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-right: 1.5px solid var(--lp-ink-3);
+  border-bottom: 1.5px solid var(--lp-ink-3);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--vs-dur) var(--vs-ease);
+}
+
+.vs-faq[open] summary::after {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+
+.vs-faq summary:hover {
+  color: var(--lp-accent);
+}
+
+.vs-faq summary:hover::after {
+  border-color: var(--lp-accent);
+}
+
+.vs .vs-faq p {
+  margin: 0;
+  padding: 0 clamp(18px, 2vw, 24px) 20px;
+  max-width: 68ch;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  letter-spacing: -0.03em;
+  color: var(--lp-ink-2);
 }
 
 /* ── Development badge ───────────────────────────────────────────────────────
@@ -2045,8 +2584,9 @@ button.vs-avatar:hover {
 .vs .lp-btn:disabled { opacity: 0.45; transform: none; }
 .vs-badge { max-width: 100%; white-space: normal; }
 .vs :is(.vs-head, .vs-secnav, .vs-live) { overflow-wrap: anywhere; }
-.vs-secnav { flex-wrap: wrap; margin-bottom: 20px; }
-.vs-secnav .vs-h3 { font-size: 1.1875rem; letter-spacing: -0.024em; }
+/* Haven puts real air under a section heading. The size itself now comes from
+   `.vs-h3`, which carries the Haven scale, so nothing is restated here. */
+.vs-secnav { flex-wrap: wrap; margin-bottom: 24px; }
 .vs-skip {
   position: fixed;
   top: 8px;
@@ -2180,10 +2720,48 @@ button.vs-avatar:hover {
 .vs-map-result span span { display: block; margin-top: 4px; font-size: 0.6875rem; color: var(--lp-ink-3); }
 .vs-map-result > svg { flex: none; color: var(--lp-accent); }
 .vs-map-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: var(--vs-gap); }
+/* The selected place on the map, as a panel in the rail. */
+.vs-destination { gap: 4px; }
 .vs-destination__image { width: 100%; height: 130px; object-fit: cover; border-radius: var(--lp-r-sm); margin-top: 16px; }
 .vs-pin { min-width: 44px; min-height: 44px; justify-content: flex-end; }
 .vs-pin:hover, .vs-pin:focus-visible, .vs-pin[data-on='true'] { z-index: 5; }
 .vs-pin[data-on='true'] .vs-pin__label { border-color: var(--lp-accent); color: var(--lp-accent); }
+/* 3D map: controls stay in the page, independent of the WebGL render loop. */
+.vs-model { isolation: isolate; }
+.vs-model__toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--lp-line); }
+.vs-model__title { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; font-weight: 600; }
+.vs-model__title svg { color: var(--lp-accent); }
+.vs-model__views { display: flex; gap: 6px; }
+.vs-model__views .vs-pill { min-height: 36px; padding: 7px 12px; font-size: 0.75rem; }
+.vs-model__viewport { position: relative; height: clamp(400px, 62dvh, 660px); background: var(--lp-bg-sunk); }
+.vs-model__viewport canvas { display: block; touch-action: none; }
+.vs-model__controls { position: absolute; z-index: 30; top: 18px; right: 16px; display: flex; flex-direction: column; gap: 4px; padding: 5px; border: 1px solid var(--lp-line); border-radius: var(--lp-r-sm); background: var(--lp-surface); box-shadow: var(--lp-shadow); }
+.vs-model__controls .vs-iconbtn { width: 40px; height: 40px; border-radius: var(--lp-r-sm); }
+.vs-model__controls button[aria-pressed='true'] { color: var(--lp-accent); background: var(--lp-accent-soft); }
+.vs-model button:disabled { opacity: 0.38; }
+.vs .vs-model__gesture { position: absolute; left: 18px; bottom: 16px; z-index: 30; max-width: calc(100% - 36px); padding: 9px 12px; font-size: 0.6875rem; line-height: 1.6; background: var(--lp-surface); color: var(--lp-ink-2); border: 1px solid var(--lp-line); border-radius: var(--lp-r-sm); pointer-events: none; }
+.vs-model__gesture span { display: block; }
+.vs-model__caption { display: flex; align-items: flex-start; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--lp-line); color: var(--lp-ink-2); font-size: 0.75rem; line-height: 1.65; }
+.vs-model__caption-icon { flex: none; padding-top: 2px; color: var(--lp-accent); }
+.vs-model-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 100%; padding: 48px 80px 48px 28px; text-align: center; color: var(--lp-ink-2); }
+.vs-model-state > svg { color: var(--lp-accent); }
+.vs-model-state p { max-width: 40ch; font-size: 0.875rem; line-height: 1.7; }
+.vs-model-loading { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border: 1px solid var(--lp-line); border-radius: var(--lp-r-sm); background: var(--lp-surface); color: var(--lp-ink); white-space: nowrap; font-size: 0.8125rem; }
+.vs-model-pin { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 0; padding: 4px; background: transparent; color: var(--lp-ink); font: inherit; cursor: pointer; }
+.vs-model-pin > span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--lp-line-strong); background: var(--lp-surface); color: var(--lp-accent); box-shadow: var(--lp-shadow); }
+.vs-model-pin strong { max-width: 150px; padding: 5px 10px; border: 1px solid var(--lp-line); border-radius: 999px; background: var(--lp-surface); font-size: 0.6875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-model-pin[data-on='true'] > span, .vs-model-pin[data-role='robot'] > span { color: var(--lp-accent-ink); background: var(--lp-accent); border-color: var(--lp-accent); }
+.vs-model-pin[data-on='true'] strong { color: var(--lp-accent); border-color: var(--lp-accent); }
+@media (max-width: 767px) {
+  .vs-model__toolbar { padding: 14px; }
+  .vs-model__viewport { height: 440px; }
+  .vs-model__controls { top: 12px; right: 10px; }
+  .vs-model__controls .vs-iconbtn { width: 44px; height: 44px; }
+  .vs-model__views .vs-pill { min-height: 44px; }
+  .vs-model__gesture { left: 12px; bottom: 12px; }
+  .vs-model__caption { padding: 14px; }
+  .vs-model-pin > span { width: 44px; height: 44px; }
+}
 .vs-assistant-page { max-width: 1040px; }
 .vs-assistant__head { display: flex; align-items: center; gap: 14px; padding: 20px 24px; border-bottom: 1px solid var(--lp-line); }
 .vs-assistant .vs-chat { height: clamp(300px, 46dvh, 520px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--lp-bg); }
@@ -2200,13 +2778,15 @@ button.vs-avatar:hover {
   .vs-card--link:hover .vs-arrow, .vs-card--link:hover .vs-quick__arrow { transform: translateX(3px); }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .vs-route, .vs-step-content { animation: vs-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  .vs-menu, .vs-sheet, .vs-turn { animation: vs-enter 220ms ease both; }
-  .vs-dialog[open] { animation: vs-dialog-enter 220ms ease both; }
-  [data-visitor-reveal] { transition: opacity 400ms ease, transform 400ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .vs-reveal-pending:not(:focus-within) { opacity: 0; transform: translateY(14px); }
+  .vs-route, .vs-step-content { animation: vs-enter 280ms var(--vs-ease) both; }
+  .vs-menu, .vs-sheet, .vs-turn { animation: vs-enter 260ms var(--vs-ease) both; }
+  .vs-dialog[open] { animation: vs-dialog-enter 260ms var(--vs-ease) both; }
+  /* Haven reveals a section by 40-48px at 0.4s on a single symmetric easing.
+     The travel was 14px, which reads as a twitch rather than as arrival. */
+  [data-visitor-reveal] { transition: opacity var(--vs-dur) ease-out, transform var(--vs-dur) var(--vs-ease); }
+  .vs-reveal-pending:not(:focus-within) { opacity: 0; transform: translateY(40px); }
 }
-@keyframes vs-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes vs-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes vs-dialog-enter { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 1119px) {

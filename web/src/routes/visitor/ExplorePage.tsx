@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { Compass, MapPin } from 'lucide-react'
 import type { LocationCategory } from '../../api/contracts/visitor'
 import { PageHeader } from '../../features/visitor/components/PageHeader'
+import { SectionOpen } from '../../features/visitor/components/SectionOpen'
 import { SearchBar } from '../../features/visitor/components/SearchBar'
 import { LocationCard } from '../../features/visitor/components/LocationCard'
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../features/visitor/components/States'
@@ -28,7 +29,7 @@ export default function ExplorePage() {
   const isFiltered = Boolean(filters.search || filters.category)
 
   return (
-    <div className="vs-page vs-stack">
+    <div className="vs-page vs-stack vs-stack--editorial">
       <PageHeader
         eyebrow="Explore"
         title="Explore campus"
@@ -64,7 +65,7 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      <section aria-label="Campus locations">
+      <section aria-label="Campus locations" data-visitor-reveal>
         {locations.isPending ? (
           <LoadingSkeleton rows={6} media />
         ) : locations.isError ? (
@@ -95,10 +96,16 @@ export default function ExplorePage() {
           />
         ) : (
           <>
-            <div className="vs-secnav"><h2 className="vs-h3">{isFiltered ? 'Your search results' : 'Find your next stop'}</h2><p className="lp-meta" role="status">
-              {locations.data.length} {locations.data.length === 1 ? 'place' : 'places'}
-              {locations.isFetching ? ' · updating' : ''}
-            </p></div>
+            <SectionOpen
+              eyebrow={isFiltered ? 'Results' : 'Campus'}
+              title={isFiltered ? 'Your search results' : 'Find your next stop'}
+              action={
+                <p className="lp-meta" role="status">
+                  {locations.data.length} {locations.data.length === 1 ? 'place' : 'places'}
+                  {locations.isFetching ? ' · updating' : ''}
+                </p>
+              }
+            />
             <div className="vs-grid vs-grid--3">
               {locations.data.map((location) => (
                 <LocationCard

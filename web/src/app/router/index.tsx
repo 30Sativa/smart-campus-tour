@@ -37,6 +37,7 @@ const ActiveTourPage = lazy(() => import('../../routes/visitor/ActiveTourPage'))
 const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
 const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
+const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
 const StaffShell = lazy(() => import('../../features/operations/StaffShell'))
 const OperationsOverviewPage = lazy(() => import('../../routes/staff/OperationsOverviewPage'))
@@ -145,6 +146,7 @@ export const router = createBrowserRouter([
       { path: 'assistant', element: <AskRobotPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'help', element: <HelpPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/visit" replace /> },
     ],

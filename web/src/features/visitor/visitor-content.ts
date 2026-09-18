@@ -55,6 +55,27 @@ export const VISITOR_SECONDARY_NAV: VisitorNavItem[] = [
   { label: 'My bookings', path: '/visit/bookings', icon: CalendarCheck },
   { label: 'Ask the robot', path: '/visit/assistant', icon: MessageCircle },
   { label: 'Profile', path: '/visit/profile', icon: GraduationCap },
+  { label: 'Help', path: '/visit/help', icon: LifeBuoy },
+]
+
+/**
+ * The phone bar.
+ *
+ * Five slots, because a sixth stops being tappable at 375px, and these five are
+ * the visit itself: where am I, what is here, take me there, what have I booked,
+ * me. Everything else stays one tap away behind the account menu — the bar is
+ * for the things a visitor reaches for while walking, not for the whole map of
+ * the product.
+ *
+ * "Book" is the middle slot on purpose: it is the thumb's easiest reach on a
+ * phone held one-handed, and it is the action the product exists for.
+ */
+export const VISITOR_BOTTOM_NAV: VisitorNavItem[] = [
+  { label: 'Home', path: '/visit', icon: House, end: true },
+  { label: 'Explore', path: '/visit/explore', icon: Compass },
+  { label: 'Book', path: '/visit/book', icon: Calendar },
+  { label: 'Tours', path: '/visit/tours', icon: Route },
+  { label: 'Profile', path: '/visit/profile', icon: GraduationCap },
 ]
 
 /* ── Categories ───────────────────────────────────────────────────────────── */

@@ -59,7 +59,7 @@ export default function MyBookingsPage() {
     .sort((a, b) => tab === 'upcoming' ? `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) : `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
 
   return (
-    <div className="vs-page vs-stack">
+    <div className="vs-page vs-stack vs-stack--editorial">
       <PageHeader
         eyebrow="My bookings"
         title="My bookings"
@@ -101,7 +101,7 @@ export default function MyBookingsPage() {
         ))}
       </div>
 
-      <section role="tabpanel" id="booking-results" aria-labelledby={`booking-tab-${tab}`} tabIndex={0}>
+      <section role="tabpanel" id="booking-results" aria-labelledby={`booking-tab-${tab}`} tabIndex={0} data-visitor-reveal>
         {bookings.isPending ? (
           <LoadingSkeleton rows={2} />
         ) : bookings.isError ? (
