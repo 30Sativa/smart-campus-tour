@@ -245,7 +245,7 @@ html.dark .auth {
   display: flex;
   width: fit-content;
   align-items: center;
-  gap: 10px;
+  gap: 0;
   font-weight: 700;
   font-size: 1.0625rem;
   letter-spacing: -0.015em;
@@ -258,6 +258,7 @@ html.dark .auth {
   height: 40px;
   object-fit: contain;
   flex: none;
+  transform: translate(4px, -4px) scale(1.25);
 }
 
 .auth-brand__sub {

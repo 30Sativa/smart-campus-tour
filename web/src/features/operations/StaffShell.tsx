@@ -26,8 +26,8 @@ export default function StaffShell() {
 
       <aside className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-[#dce9fb] bg-white transition-transform duration-200 lg:sticky lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex h-16 items-center border-b border-[#e9f1fc] px-4">
-          <Link to="/staff" onClick={() => setMenuOpen(false)} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7]">
-            <img className="h-9 w-9 shrink-0 object-contain" src="/images/logo.png" alt="" width={36} height={36} />
+          <Link to="/staff" onClick={() => setMenuOpen(false)} className="flex min-w-0 flex-1 items-center gap-1 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7]">
+            <img className="h-9 w-9 shrink-0 translate-x-1 -translate-y-1 scale-125 object-contain" src="/images/logo.png" alt="" width={36} height={36} />
             <span className="min-w-0">
               <span className="block truncate text-sm font-extrabold tracking-[-0.02em] text-[#1f314d]">CampusTour</span>
               <span className="block text-[10px] font-semibold text-[#7b8fa9]">Vận hành tour</span>

@@ -380,7 +380,7 @@ html.dark .lp {
 .lp-brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   min-width: 0;
   flex: none;
   white-space: nowrap;
@@ -396,6 +396,7 @@ html.dark .lp {
   flex: none;
   object-fit: contain;
   padding: 0;
+  transform: translate(5px, -4px) scale(1.25);
 }
 
 .lp-brand__sub {
