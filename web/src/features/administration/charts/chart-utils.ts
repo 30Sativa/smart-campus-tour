@@ -20,7 +20,7 @@
  * it on 2026-09-18.
  */
 export const CHART_COLORS = {
-  // Status. Bound to features/operations/status.ts, not to the chrome.
+  // Status. Bound to features/staff/status.ts, not to the chrome.
   completed: '#2f8f6b',
   cancelled: '#c0554a',
   other: '#9aa6b8',

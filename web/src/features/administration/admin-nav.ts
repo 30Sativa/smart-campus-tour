@@ -1,5 +1,5 @@
 import { LayoutDashboard, ShieldCheck } from 'lucide-react'
-import type { NavItem } from '../operations/staff-nav'
+import type { NavItem } from '../staff/staff-nav'
 
 /**
  * Administration navigation.

@@ -6,7 +6,7 @@
  * implementation of the same contract. The choice is made once, here — no screen
  * branches on it, and no query falls back to fixtures when a request fails.
  *
- * Mirrors `features/operations/operations-hooks.ts` deliberately: same key
+ * Mirrors `features/staff/staff-hooks.ts` deliberately: same key
  * factory shape, same one-line hooks, same place for the refetch intervals.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

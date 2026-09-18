@@ -88,7 +88,7 @@
   --vs-dur: 0.4s;
 
   /* Status tones. The operations dashboard's scale
-     (features/operations/status.ts), re-expressed as tokens so it can follow
+     (features/staff/status.ts), re-expressed as tokens so it can follow
      the light/dark switch, which the hard-coded Tailwind hex values there
      cannot. Used by exactly one component: `.vs-badge`. */
   --vs-ok-ink: #1f7a55;

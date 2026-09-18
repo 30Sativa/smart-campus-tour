@@ -431,14 +431,50 @@ html.dark .lp {
   transform: translate(5px, -4px) scale(1.25);
 }
 
+/*
+ * The wordmark and its suffix, aligned on the baseline rather than on box
+ * centres.
+ *
+ * `.lp-brand` centres its children, which is right for the 56px mark but wrong
+ * for two runs of text at 17px and 11.2px: centring their boxes put the
+ * suffix's baseline 3.5px above the wordmark's, which is what reads as "not
+ * level" even though nothing looks obviously crooked.
+ *
+ * The divider is its own element for the same reason. As a `border-left` on the
+ * suffix it inherited that span's short line box and its asymmetric spacing:
+ * 13px of air before it (12px gap plus a 1px margin) against 11px after. It is
+ * now a rule of its own height, centred on the wordmark, with an equal 12px on
+ * both sides.
+ */
+.lp-brand__lockup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lp-brand__name {
+  white-space: nowrap;
+}
+
+.lp-brand__rule {
+  align-self: center;
+  flex: none;
+  width: 1px;
+  /* `em` against the lockup's inherited 17px, so the rule tracks the wordmark
+     if the brand size ever changes. */
+  height: 1.05em;
+  background: var(--lp-line-strong);
+}
+
 .lp-brand__sub {
   font-weight: 500;
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   color: var(--lp-ink-2);
-  border-left: 1px solid var(--lp-line-strong);
-  padding-left: 11px;
-  margin-left: 1px;
+  /* Letter-spacing is added after the last glyph too; pulling it back keeps the
+     optical right edge where the R ends. */
+  margin-right: -0.1em;
 }
 
 .lp-navlinks {
@@ -1575,7 +1611,8 @@ html.dark .lp {
     inset-block-start: 62px;
   }
 
-  .lp-brand__sub {
+  .lp-brand__sub,
+  .lp-brand__rule {
     display: none;
   }
 

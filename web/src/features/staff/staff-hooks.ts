@@ -1,81 +1,82 @@
 /**
- * Server state for the operations dashboard: TanStack Query owns the cache, the
- * transport lives in `src/api/contracts/operations.ts`.
+ * Server state for the operations dashboard: TanStack Query owns the cache.
  *
- * While the ops backend is missing, `USE_MOCK_API` selects the labelled mock
- * implementation of the same contract. The choice is made once, here — no screen
- * branches on it, and no query falls back to fixtures when a request fails.
+ * The ops backend does not exist, so the data source is the labelled mock
+ * implementation of the `StaffApi` contract. It is named once, here: no
+ * screen knows where its rows came from, and no query falls back to fixtures
+ * when something fails, because there is nothing to fall back from.
+ *
+ * When `/api/staff/*` lands, swap this one binding for `staffApi` from
+ * `src/api/contracts/staff.ts`, which already implements the same type.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  operationsApi,
   type AmrStatus,
   type FeedbackFilters,
   type MissionCommand,
   type ScheduleFilters,
-} from '../../api/contracts/operations'
-import { mockOperationsApi } from '../../mocks/operations-mock'
-import { USE_MOCK_API } from '../../mocks/mock-mode'
+} from '../../api/contracts/staff'
+import { mockStaffApi } from '../../mocks/staff-mock'
 
-const api = USE_MOCK_API ? mockOperationsApi : operationsApi
+const api = mockStaffApi
 
 const LIVE_REFETCH_MS = 15_000
 const DASHBOARD_REFETCH_MS = 30_000
 
-export const operationsQueryKeys = {
-  all: ['operations'] as const,
-  dashboard: (date?: string) => ['operations', 'dashboard', date] as const,
-  schedule: (filters: ScheduleFilters) => ['operations', 'schedule', filters] as const,
-  session: (id: string) => ['operations', 'session', id] as const,
-  amrs: ['operations', 'amrs'] as const,
-  twin: ['operations', 'digital-twin'] as const,
-  alerts: (acknowledged?: boolean, severity?: string) => ['operations', 'alerts', acknowledged, severity] as const,
-  feedback: (filters: FeedbackFilters) => ['operations', 'feedback', filters] as const,
+export const staffQueryKeys = {
+  all: ['staff'] as const,
+  dashboard: (date?: string) => ['staff', 'dashboard', date] as const,
+  schedule: (filters: ScheduleFilters) => ['staff', 'schedule', filters] as const,
+  session: (id: string) => ['staff', 'session', id] as const,
+  amrs: ['staff', 'amrs'] as const,
+  twin: ['staff', 'digital-twin'] as const,
+  alerts: (acknowledged?: boolean, severity?: string) => ['staff', 'alerts', acknowledged, severity] as const,
+  feedback: (filters: FeedbackFilters) => ['staff', 'feedback', filters] as const,
 }
 
-export function useOpsDashboard(date?: string) {
+export function useStaffDashboard(date?: string) {
   return useQuery({
-    queryKey: operationsQueryKeys.dashboard(date),
+    queryKey: staffQueryKeys.dashboard(date),
     queryFn: () => api.dashboard(date),
     refetchInterval: DASHBOARD_REFETCH_MS,
   })
 }
 
-export function useOpsSchedule(filters: ScheduleFilters = {}) {
+export function useStaffSchedule(filters: ScheduleFilters = {}) {
   return useQuery({
-    queryKey: operationsQueryKeys.schedule(filters),
+    queryKey: staffQueryKeys.schedule(filters),
     queryFn: () => api.schedule(filters),
   })
 }
 
 export function useTourSession(id: string) {
   return useQuery({
-    queryKey: operationsQueryKeys.session(id),
+    queryKey: staffQueryKeys.session(id),
     queryFn: () => api.tourSession(id),
     enabled: Boolean(id),
     refetchInterval: LIVE_REFETCH_MS,
   })
 }
 
-export function useOpsAmrs() {
+export function useStaffAmrs() {
   return useQuery<AmrStatus[]>({
-    queryKey: operationsQueryKeys.amrs,
+    queryKey: staffQueryKeys.amrs,
     queryFn: () => api.amrs(),
     refetchInterval: LIVE_REFETCH_MS,
   })
 }
 
-export function useOpsTwin() {
+export function useStaffTwin() {
   return useQuery<AmrStatus[]>({
-    queryKey: operationsQueryKeys.twin,
+    queryKey: staffQueryKeys.twin,
     queryFn: () => api.digitalTwin(),
     refetchInterval: LIVE_REFETCH_MS,
   })
 }
 
-export function useOpsAlerts(acknowledged?: boolean, severity?: string) {
+export function useStaffAlerts(acknowledged?: boolean, severity?: string) {
   return useQuery({
-    queryKey: operationsQueryKeys.alerts(acknowledged, severity),
+    queryKey: staffQueryKeys.alerts(acknowledged, severity),
     queryFn: () => api.alerts(acknowledged, severity),
     refetchInterval: LIVE_REFETCH_MS,
   })
@@ -83,18 +84,18 @@ export function useOpsAlerts(acknowledged?: boolean, severity?: string) {
 
 export function useFeedbackReports(filters: FeedbackFilters = {}) {
   return useQuery({
-    queryKey: operationsQueryKeys.feedback(filters),
+    queryKey: staffQueryKeys.feedback(filters),
     queryFn: () => api.feedbackReports(filters),
   })
 }
 
-function useOperationsInvalidation() {
+function useStaffInvalidation() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: operationsQueryKeys.all })
+  return () => queryClient.invalidateQueries({ queryKey: staffQueryKeys.all })
 }
 
 export function useAcknowledgeAlert() {
-  const invalidate = useOperationsInvalidation()
+  const invalidate = useStaffInvalidation()
   return useMutation({
     mutationFn: ({ id, resolutionNote }: { id: string; resolutionNote?: string }) => api.acknowledgeAlert(id, resolutionNote),
     onSuccess: invalidate,
@@ -102,7 +103,7 @@ export function useAcknowledgeAlert() {
 }
 
 export function useAssignAmr() {
-  const invalidate = useOperationsInvalidation()
+  const invalidate = useStaffInvalidation()
   return useMutation({
     mutationFn: ({ sessionId, amrUnitId, reason }: { sessionId: string; amrUnitId: string; reason?: string }) => api.assignAmr(sessionId, amrUnitId, reason),
     onSuccess: invalidate,
@@ -110,7 +111,7 @@ export function useAssignAmr() {
 }
 
 export function useReassignAmr() {
-  const invalidate = useOperationsInvalidation()
+  const invalidate = useStaffInvalidation()
   return useMutation({
     mutationFn: ({ sessionId, amrUnitId, reason }: { sessionId: string; amrUnitId: string; reason: string }) => api.reassignAmr(sessionId, amrUnitId, reason),
     onSuccess: invalidate,
@@ -118,7 +119,7 @@ export function useReassignAmr() {
 }
 
 export function useMissionCommand() {
-  const invalidate = useOperationsInvalidation()
+  const invalidate = useStaffInvalidation()
   return useMutation({
     mutationFn: ({ sessionId, command, reason }: { sessionId: string; command: MissionCommand; reason?: string }) => api.commandMission(sessionId, command, reason),
     onSuccess: invalidate,

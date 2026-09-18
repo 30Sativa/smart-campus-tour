@@ -1,27 +1,36 @@
 /**
  * Mock backend mode.
  *
- * The booking/auth/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
- * `/api/staff/*` do not exist yet. While `VITE_USE_MOCK_API` is on, the labelled
- * fixtures in this folder are the data source and every screen that uses them
- * says so.
+ * The auth/booking/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
+ * `/api/staff/*` do not exist. The app therefore runs on the labelled fixtures
+ * in this folder, and every screen that uses them says so.
  *
- * This is a mode, not a fallback: mock data never replaces a failed request.
- * With the flag off, the real client runs and a transport error stays an error
- * (web/AGENTS.md — "Do not fabricate fallback data").
+ * This used to be a runtime choice: `VITE_USE_MOCK_API` picked between these
+ * fixtures and the HTTP implementation, and every call site carried a ternary.
+ * The flag and those ternaries are gone (2026-09-18) - with no backend to point
+ * the other branch at, the switch only ever had one position, and a branch that
+ * is never taken is a branch nobody is testing.
+ *
+ * It is still a mode, not a fallback: nothing here is reached by a failed
+ * request. `src/api/` keeps the HTTP client and the endpoint contract, unwired,
+ * so restoring the real path is a re-import rather than a rewrite - see the
+ * header of `src/api/contracts/staff.ts`.
  */
-export const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API !== 'false'
-
 export const MOCK_MODE_LABEL = 'Dữ liệu mẫu · backend vận hành chưa sẵn sàng'
 
+// The local implementation intentionally runs only on fixtures. Keep the
+// selector exported so the visitor feature merged from upstream can share that
+// same mode without reintroducing a dead runtime branch elsewhere.
+export const USE_MOCK_API = true
+
 /**
- * The sign-in screens no longer print build state at the visitor, so this is
- * the channel that keeps a mocked build honest. A development build also shows
- * a badge pinned outside the form; a production build has only this line.
+ * Said once, out loud, in every build. A development build also shows a badge
+ * in each shell; a production build has only this line, which is what keeps a
+ * deployed demo from looking like it is talking to a server.
  */
-if (USE_MOCK_API && typeof console !== 'undefined') {
+if (typeof console !== 'undefined') {
   console.warn(
-    '[CampusTour] VITE_USE_MOCK_API is on: /api/auth/* and /api/staff/* are served by src/mocks, not by a backend.',
+    '[CampusTour] Running on mock data: /api/auth/* and /api/staff/* are served by src/mocks, not by a backend.',
   )
 }
 

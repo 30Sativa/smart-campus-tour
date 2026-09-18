@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AmrStatus, FeedbackReport, OpsAlert } from '../../api/contracts/operations'
+import type { AmrStatus, FeedbackReport, StaffAlert } from '../../api/contracts/staff'
 import {
   analyticsRange,
   buildIncidentsByRobot,
@@ -36,7 +36,7 @@ const amr = (over: Partial<AmrStatus>): AmrStatus => ({
   ...over,
 })
 
-const alert = (over: Partial<OpsAlert>): OpsAlert => ({
+const alert = (over: Partial<StaffAlert>): StaffAlert => ({
   id: 'x1',
   type: 'ObstacleDetected',
   severity: 'Warning',

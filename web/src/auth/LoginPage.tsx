@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { apiClient, ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
 import { landingPathAfterLogin } from './access'
-import { MockAuthError, mockLogin, type AuthResponse } from '../mocks/auth-mock'
-import { USE_MOCK_API } from '../mocks/mock-mode'
+import { MockAuthError, mockLogin } from '../mocks/auth-mock'
 import { AuthField, AuthPasswordField } from './AuthFields'
 
 type LoginFormInputs = {
@@ -36,14 +34,7 @@ export default function LoginPage() {
   const onSubmit = async ({ username, password }: LoginFormInputs) => {
     try {
       setApiError('')
-      const response = USE_MOCK_API
-        ? await mockLogin(username, password)
-        : await apiClient<AuthResponse>('/api/auth/login', {
-            method: 'POST',
-            json: { username, password },
-            // The refresh token comes back as an HttpOnly cookie.
-            credentials: 'include',
-          })
+      const response = await mockLogin(username, password)
 
       setAuth(response.accessToken, {
         userId: response.userId,
@@ -57,8 +48,7 @@ export default function LoginPage() {
       navigate(landingPathAfterLogin(response.role, from), { replace: true })
     } catch (error) {
       if (error instanceof MockAuthError) setApiError(error.message)
-      else if (error instanceof ApiError && error.status === 401) setApiError('Sai tên đăng nhập hoặc mật khẩu.')
-      else setApiError('Không đăng nhập được. Kiểm tra kết nối tới máy chủ rồi thử lại.')
+      else setApiError('Không đăng nhập được. Thử lại sau ít phút.')
     }
   }
 

@@ -27,13 +27,7 @@ export function SiteNav({ onLockScroll }: Props) {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const logout = useLogout()
-
-  /**
-   * Every signed-in account now has an area of its own — a visitor included,
-   * since `/visit` shipped — so the door is offered by role rather than only to
-   * staff. `homePathForRole` decides where it goes; this only names it.
-   */
-  const homeLabel = isAdminRole(user?.role) ? 'Quản trị' : isStaffRole(user?.role) ? 'Điều hành' : 'Vào ứng dụng'
+  const isStaff = isStaffRole(user?.role)
 
   useEffect(() => {
     const node = sentinelRef.current
@@ -66,8 +60,11 @@ export function SiteNav({ onLockScroll }: Props) {
         <div className="lp-nav__inner">
           <a href="#top" className="lp-brand" onClick={closeMenu}>
             <img className="lp-brand__mark" src="/images/logo.png" alt="" width={56} height={56} />
-            <span>CampusTour</span>
-            <span className="lp-brand__sub">DT-AMR</span>
+            <span className="lp-brand__lockup">
+              <span className="lp-brand__name">CampusTour</span>
+              <span className="lp-brand__rule" aria-hidden="true" />
+              <span className="lp-brand__sub">DT-AMR</span>
+            </span>
           </a>
 
           <nav className="lp-navlinks" aria-label="Điều hướng chính">
@@ -91,9 +88,11 @@ export function SiteNav({ onLockScroll }: Props) {
             {isAuthenticated ? (
               <>
                 <span className="lp-user">{user?.username}</span>
-                <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
-                  {homeLabel}
-                </Link>
+                {isStaff && (
+                  <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
+                    {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
+                  </Link>
+                )}
                 <button type="button" onClick={logout} className="lp-btn lp-btn--ghost lp-btn--sm">
                   Đăng xuất
                 </button>
@@ -127,9 +126,11 @@ export function SiteNav({ onLockScroll }: Props) {
           ))}
           {isAuthenticated ? (
             <>
-              <Link to={homePathForRole(user?.role)} className="lp-sheet__cta" onClick={closeMenu}>
-                {homeLabel}
-              </Link>
+              {isStaff && (
+                <Link to={homePathForRole(user?.role)} className="lp-sheet__cta" onClick={closeMenu}>
+                  {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
+                </Link>
+              )}
               <button type="button" onClick={logout}>
                 Đăng xuất
               </button>

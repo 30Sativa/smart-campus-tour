@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { MOCK_ACCOUNTS_HINT } from '../mocks/auth-mock'
-import { USE_MOCK_API } from '../mocks/mock-mode'
 import '../features/landing/landing.css'
 import './auth.css'
 
@@ -98,7 +97,7 @@ export function AuthLayout() {
           warning for a production build that still runs on mocks goes to the
           console from `mock-mode.ts`. It is deliberately outside every
           animated group: build state does not get an entrance. */}
-      {import.meta.env.DEV && USE_MOCK_API && (
+      {import.meta.env.DEV && (
         <p className="auth-devbadge" data-dev-only="true">
           DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.
         </p>

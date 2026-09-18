@@ -1,7 +1,7 @@
 import { Check, Layers, Minus, ShieldCheck, Users } from 'lucide-react'
-import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../features/operations/OperationsUi'
+import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../features/staff/StaffUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
-import { STAFF_NAV } from '../../features/operations/staff-nav'
+import { STAFF_NAV } from '../../features/staff/staff-nav'
 import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
 import { ADMIN_NAV } from '../../features/administration/admin-nav'
 

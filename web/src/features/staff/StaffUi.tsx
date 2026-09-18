@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertCircle, CircleAlert, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { AlertCircle, CircleAlert, LoaderCircle, RotateCcw, TriangleAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { statusInfo, toneClass } from './status'
@@ -10,14 +10,21 @@ export const panelClass = 'overflow-hidden rounded-[var(--ops-radius,1rem)] bord
 /**
  * The page's own heading. The shell header names the area, so this must not
  * repeat it: eyebrow, title and supporting line each say something new.
+ *
+ * `scale` is opt-in and defaults to what every page already had. The operations
+ * overview is read at a glance, across a room, by someone holding a radio, so it
+ * asks for `console`; nothing else changes size because nothing else opted in.
  */
-export function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
+export function PageHeader({ eyebrow, title, description, action, scale = 'default' }: {
+  eyebrow: string; title: string; description: string; action?: ReactNode; scale?: 'default' | 'console'
+}) {
+  const console_ = scale === 'console'
   return (
-    <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
       <div>
-        <p className="text-[11px] font-bold tracking-[0.12em] text-[var(--ops-accent,#5b91ed)] uppercase">{eyebrow}</p>
-        <h1 className="mt-1.5 text-2xl font-bold tracking-[-0.03em] text-[var(--ops-heading,#1f314d)] sm:text-[28px]">{title}</h1>
-        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--ops-muted,#71819a)]">{description}</p>
+        <p className={`font-bold tracking-[0.12em] text-[#5b91ed] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>{eyebrow}</p>
+        <h1 className={`mt-2 font-bold tracking-[-0.03em] text-[#1f314d] ${console_ ? 'text-[26px] leading-[1.15] sm:text-[30px] lg:text-[34px]' : 'text-2xl sm:text-[28px]'}`}>{title}</h1>
+        <p className={`mt-2 max-w-3xl text-[#71819a] ${console_ ? 'text-[15px] leading-7' : 'text-sm leading-6'}`}>{description}</p>
       </div>
       {action}
     </header>
@@ -28,9 +35,29 @@ export function LoadingPanel({ label = 'Đang tải dữ liệu vận hành…' 
   return <div className={`${panelClass} flex min-h-60 items-center justify-center gap-3 p-8 text-sm font-semibold text-[#647793]`} aria-busy="true"><LoaderCircle className="animate-spin text-[#5b91ed]" size={20} />{label}</div>
 }
 
-export function ErrorPanel({ error }: { error: unknown }) {
-  const detail = error instanceof ApiError && error.status === 403 ? 'Tài khoản hiện tại không có quyền xem dữ liệu này.' : error instanceof ApiError && error.status === 401 ? 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.' : 'Không tải được dữ liệu vận hành. Kiểm tra kết nối với máy chủ rồi thử lại.'
-  return <div className={`${panelClass} flex min-h-60 flex-col items-center justify-center gap-3 p-8 text-center text-[#647793]`} role="alert"><AlertCircle className="text-[#bd473a]" size={24} /><p className="font-bold text-[#40546f]">{detail}</p></div>
+/**
+ * A failed load, with a way out of it.
+ *
+ * `onRetry` is optional because two of the three cases have no retry worth
+ * offering: 401 needs a new session and 403 will fail again the same way. Where
+ * the caller can re-run the query it passes it, and the panel stops being a
+ * dead end that leaves an operator with nothing to press.
+ */
+export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const status = error instanceof ApiError ? error.status : undefined
+  const detail = status === 403 ? 'Tài khoản hiện tại không có quyền xem dữ liệu này.' : status === 401 ? 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.' : 'Không tải được dữ liệu vận hành. Kiểm tra kết nối với máy chủ rồi thử lại.'
+  const canRetry = Boolean(onRetry) && status !== 401 && status !== 403
+  return (
+    <div className={`${panelClass} flex min-h-60 flex-col items-center justify-center gap-3 p-8 text-center text-[#647793]`} role="alert">
+      <AlertCircle className="text-[#bd473a]" size={24} />
+      <p className="font-bold text-[#40546f]">{detail}</p>
+      {canRetry && (
+        <button type="button" onClick={onRetry} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dce9fb] bg-white px-4 text-sm font-bold text-[#2f62b8] hover:bg-[#eff6ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] focus-visible:ring-offset-2">
+          <RotateCcw size={15} aria-hidden="true" />Thử lại
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function EmptyPanel({ children }: { children: ReactNode }) {
@@ -43,12 +70,13 @@ export function EmptyPanel({ children }: { children: ReactNode }) {
  * The two tones that mean "act now" also carry an icon, so the badge never
  * relies on colour alone to say a robot is down or an alert is critical.
  */
-export function StatusBadge({ value, className = '' }: { value?: string | null; className?: string }) {
+export function StatusBadge({ value, className = '', size = 'sm' }: { value?: string | null; className?: string; size?: 'sm' | 'md' }) {
   const { label, tone } = statusInfo(value)
   const Icon = tone === 'danger' ? CircleAlert : tone === 'warn' ? TriangleAlert : null
+  const md = size === 'md'
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold whitespace-nowrap ${toneClass[tone]} ${className}`}>
-      {Icon && <Icon size={12} aria-hidden="true" />}
+    <span className={`inline-flex items-center gap-1.5 rounded-full border font-bold whitespace-nowrap ${md ? 'px-3 py-1 text-[13px]' : 'px-2.5 py-1 text-[11px]'} ${toneClass[tone]} ${className}`}>
+      {Icon && <Icon size={md ? 14 : 12} aria-hidden="true" />}
       {label}
     </span>
   )

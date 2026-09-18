@@ -1,8 +1,9 @@
 /**
- * Labelled mock sign-in. Active only while `USE_MOCK_API` is on — see
- * `mock-mode.ts`. It issues a fake token so the `/admin/*` route guard can be
- * exercised without a backend; it is not an authentication mechanism and grants
- * nothing server-side.
+ * Labelled mock sign-in: the app's only sign-in while `/api/auth/*` does not
+ * exist (see `mock-mode.ts`). It issues a fake token so the `/staff/*` and
+ * `/admin/*` route guards can be exercised without a backend. It is not an
+ * authentication mechanism and grants nothing server-side, so nothing behind
+ * these screens may be treated as protected until the real endpoints land.
  */
 import { mockDelay } from './mock-mode'
 

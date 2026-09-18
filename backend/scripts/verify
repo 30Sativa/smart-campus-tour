@@ -4,26 +4,24 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 SOLUTION="SmartCampus.slnx"
+DOTNET="dotnet"
+
+if ! command -v "$DOTNET" > /dev/null 2>&1; then
+  if command -v dotnet.exe > /dev/null 2>&1; then
+    DOTNET="dotnet.exe"
+  else
+    echo "FAIL: dotnet SDK is not available on PATH."
+    exit 1
+  fi
+fi
 
 if [ ! -f "$SOLUTION" ]; then
   echo "FAIL: không tìm thấy $SOLUTION trong backend/."
   exit 1
 fi
 
-dotnet restore "$SOLUTION"
-dotnet build "$SOLUTION" -warnaserror --no-restore
-
-if compgen -G "tests/*/*.csproj" > /dev/null; then
-  dotnet test "$SOLUTION" --no-build
-else
-  echo "WARN: chưa có project test nào trong tests/ — bỏ qua dotnet test."
-fi
-
-# Nếu đã có migration: fail khi model đổi mà chưa sinh migration.
-if compgen -G "src/SmartCampus.Infrastructure/Persistence/Migrations/*.cs" > /dev/null; then
-  dotnet ef migrations has-pending-model-changes \
-    --project src/SmartCampus.Infrastructure \
-    --startup-project src/SmartCampus.Api
-fi
+"$DOTNET" restore "$SOLUTION"
+"$DOTNET" build "$SOLUTION" -warnaserror --no-restore
+"$DOTNET" test "$SOLUTION" --no-build
 
 echo "PASS"

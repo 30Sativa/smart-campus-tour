@@ -1,7 +1,6 @@
 import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation, useParams } from 'react-router'
-import PublicHomePage from '../../routes/public/PublicHomePage'
 import LoginPage from '../../auth/LoginPage'
 import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
@@ -24,7 +23,13 @@ import { homePathForRole } from '../../auth/roles'
  * `/staff/*` used to live at `/admin/*` while the product had only one
  * signed-in area. It does not any more: `/admin/*` is administration now, and
  * the old operations URLs redirect (see the bottom of the table).
+ *
+ * The landing page is lazy for the same reason the two consoles are. It carries
+ * GSAP, Lenis and the whole marketing stylesheet, and while it sat in the entry
+ * chunk an operator opening `/staff` downloaded all of it before seeing a tour.
  */
+const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
+
 const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
 const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
 const ExplorePage = lazy(() => import('../../routes/visitor/ExplorePage'))
@@ -39,8 +44,8 @@ const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsP
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
 const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
-const StaffShell = lazy(() => import('../../features/operations/StaffShell'))
-const OperationsOverviewPage = lazy(() => import('../../routes/staff/OperationsOverviewPage'))
+const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
+const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
 const SchedulePage = lazy(() => import('../../routes/staff/SchedulePage'))
 const SessionDetailPage = lazy(() => import('../../routes/staff/SessionDetailPage'))
 const AmrPage = lazy(() => import('../../routes/staff/AmrPage'))
@@ -94,7 +99,7 @@ function VisitorArea() {
 function StaffArea() {
   return (
     <RequireArea area="staff">
-      <Suspense fallback={<ShellFallback background="#f1f6fe" />}>
+      <Suspense fallback={<ShellFallback background="#eef2f8" />}>
         <StaffShell />
       </Suspense>
     </RequireArea>
@@ -117,8 +122,21 @@ function LegacySessionRedirect() {
   return <Navigate to={`/staff/tours/${sessionId ?? ''}`} replace />
 }
 
-export const router = createBrowserRouter([
-  { path: '/', element: <PublicHomePage /> },
+/**
+ * The route table, separate from the browser router so it can be mounted in a
+ * memory router and asserted on. The guard, the legacy redirects and the
+ * `/admin` precedence rule are behaviour, and behaviour that is only visible by
+ * clicking through a running app is behaviour that quietly regresses.
+ */
+export const routes = [
+  {
+    path: '/',
+    element: (
+      <Suspense fallback={<ShellFallback background="#060d11" />}>
+        <PublicHomePage />
+      </Suspense>
+    ),
+  },
   // One layout, two children: the photograph and the brand stay mounted while
   // the form swaps, which is what the sign-in/sign-up crossfade animates.
   {
@@ -155,7 +173,7 @@ export const router = createBrowserRouter([
     path: '/staff',
     element: <StaffArea />,
     children: [
-      { index: true, element: <OperationsOverviewPage /> },
+      { index: true, element: <OverviewPage /> },
       { path: 'schedule', element: <SchedulePage /> },
       { path: 'tours/:sessionId', element: <SessionDetailPage /> },
       { path: 'amr', element: <AmrPage /> },
@@ -183,4 +201,6 @@ export const router = createBrowserRouter([
   { path: '/admin/reports', element: <Navigate to="/staff/reports" replace /> },
   { path: '/admin/tours/:sessionId', element: <LegacySessionRedirect /> },
   { path: '*', element: <Navigate to="/" replace /> },
-])
+]
+
+export const router = createBrowserRouter(routes)

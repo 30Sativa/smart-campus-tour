@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Re-scaffold Database First EF files without touching handwritten partials.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+cd "$BACKEND_DIR"
+
+if [[ -z "${SMARTCAMPUS_DB_CONNECTION:-}" ]]; then
+  echo "FAIL: SMARTCAMPUS_DB_CONNECTION is required for DB First scaffolding." >&2
+  exit 1
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "FAIL: dotnet is not available on PATH." >&2
+  exit 1
+fi
+
+if ! EF_VERSION="$(dotnet ef --version 2>&1)"; then
+  echo "FAIL: dotnet-ef is unavailable. Install version 10.0.12 before scaffolding." >&2
+  exit 1
+fi
+
+if [[ ! "$EF_VERSION" =~ (^|[^0-9])10\. ]]; then
+  echo "FAIL: dotnet-ef 10.x is required; found: $EF_VERSION" >&2
+  exit 1
+fi
+
+TEMP_DIR="$(mktemp -d "$BACKEND_DIR/.scaffold-db.XXXXXX")"
+
+cleanup() {
+  case "$TEMP_DIR" in
+    "$BACKEND_DIR"/.scaffold-db.*)
+      rm -rf -- "$TEMP_DIR"
+      ;;
+    *)
+      echo "WARN: refusing to remove unexpected temporary path: $TEMP_DIR" >&2
+      ;;
+  esac
+}
+
+trap cleanup EXIT
+
+TEMP_NAME="$(basename -- "$TEMP_DIR")"
+TEMP_PROJECT_PATH="../../$TEMP_NAME"
+
+dotnet ef dbcontext scaffold \
+  "$SMARTCAMPUS_DB_CONNECTION" \
+  Microsoft.EntityFrameworkCore.SqlServer \
+  --project src/SmartCampus.Infrastructure/SmartCampus.Infrastructure.csproj \
+  --startup-project src/SmartCampus.Api/SmartCampus.Api.csproj \
+  --output-dir "$TEMP_PROJECT_PATH/Entities" \
+  --context-dir "$TEMP_PROJECT_PATH/Persistence" \
+  --namespace SmartCampus.Domain.Entities \
+  --context-namespace SmartCampus.Infrastructure.Persistence \
+  --context ApplicationDbContext \
+  --no-onconfiguring
+
+GENERATED_ENTITIES_DIR="$TEMP_DIR/Entities"
+GENERATED_CONTEXT="$TEMP_DIR/Persistence/ApplicationDbContext.cs"
+DOMAIN_ENTITIES_DIR="$BACKEND_DIR/src/SmartCampus.Domain/Entities"
+PERSISTENCE_DIR="$BACKEND_DIR/src/SmartCampus.Infrastructure/Persistence"
+
+if ! compgen -G "$GENERATED_ENTITIES_DIR/*.cs" >/dev/null; then
+  echo "FAIL: EF scaffold produced no entity files." >&2
+  exit 1
+fi
+
+if [[ ! -f "$GENERATED_CONTEXT" ]]; then
+  echo "FAIL: EF scaffold did not produce ApplicationDbContext.cs." >&2
+  exit 1
+fi
+
+for generated_file in "$GENERATED_ENTITIES_DIR"/*.cs; do
+  cp -- "$generated_file" "$DOMAIN_ENTITIES_DIR/$(basename -- "$generated_file")"
+done
+
+cp -- "$GENERATED_CONTEXT" "$PERSISTENCE_DIR/ApplicationDbContext.cs"
+
+echo "DB First scaffold complete with dotnet-ef 10.x."
+echo "Review the diff and remove obsolete generated entity files manually if the schema dropped them."
+echo "Handwritten *.Behavior.cs and ApplicationDbContext.Abstractions.cs files were not touched."

@@ -7,9 +7,4 @@
     <RootNamespace>SmartCampus.Domain</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Folder Include="Entities\" />
-    <Folder Include="Enums\" />
-  </ItemGroup>
-
 </Project>

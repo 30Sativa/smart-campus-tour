@@ -1,11 +1,11 @@
 import { ArrowUpRight, Clock3 } from 'lucide-react'
 import { Link } from 'react-router'
-import type { OpsDashboard } from '../../api/contracts/operations'
-import { panelClass, StatusBadge } from './OperationsUi'
+import type { StaffDashboard } from '../../api/contracts/staff'
+import { panelClass, StatusBadge } from './StaffUi'
 import { statusLabel } from './status'
 
 /** These are current readings, not a fabricated time series. */
-export function OverviewCharts({ dashboard, updatedAt }: { dashboard: OpsDashboard; updatedAt: number }) {
+export function OverviewCharts({ dashboard, updatedAt }: { dashboard: StaffDashboard; updatedAt: number }) {
   const tourCounts = [
     { label: 'Sắp tới', value: dashboard.upcomingTours },
     { label: 'Đang chạy', value: dashboard.activeTours },

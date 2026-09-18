@@ -2,7 +2,15 @@
  * Transport contract for the operations dashboard.
  *
  * Types and endpoint calls only: no React, no query hooks, no fixtures. The
- * feature that consumes this lives in `src/features/operations/`.
+ * feature that consumes this lives in `src/features/staff/`.
+ *
+ * The TYPES here are live - the fixtures and every screen are written against
+ * them. `staffApi`, the HTTP implementation at the bottom, is NOT wired to
+ * anything: `/api/staff/*` does not exist, so `staff-hooks.ts` binds the
+ * mock implementation of this same type instead. It is kept as the written
+ * record of the endpoints this frontend expects, so agreeing the contract with
+ * the backend is a diff rather than a conversation, and turning it on is one
+ * import. Do not delete it to satisfy a dead-code sweep.
  *
  * The browser never sends an Emergency Stop (web/AGENTS.md §7). A web cancel or
  * recall is an operational request checked by the server; the physical fail-safe
@@ -10,7 +18,7 @@
  */
 import { apiClient } from '../client'
 
-export type OpsDashboard = {
+export type StaffDashboard = {
   todayTours: number
   upcomingTours: number
   activeTours: number
@@ -20,13 +28,13 @@ export type OpsDashboard = {
   offlineAmrs: number
   activeAlerts: number
   criticalAlerts: number
-  todaySchedule: OpsScheduleItem[]
+  todaySchedule: StaffScheduleItem[]
   activeAmrsList: AmrStatus[]
-  recentAlerts: OpsAlert[]
+  recentAlerts: StaffAlert[]
   activeSessions: TourSessionSummary[]
 }
 
-export type OpsScheduleItem = {
+export type StaffScheduleItem = {
   sessionId: string
   bookingId: string
   startTime: string
@@ -91,7 +99,7 @@ export type TourSessionDetail = {
   amrName?: string | null
   mission?: Mission | null
   timeline: TourTimelineEvent[]
-  alerts: OpsAlert[]
+  alerts: StaffAlert[]
   assignments: Assignment[]
 }
 
@@ -113,7 +121,7 @@ export type AmrStatus = {
   currentPoi?: string | null
 }
 
-export type OpsAlert = {
+export type StaffAlert = {
   id: string
   type: string
   severity: 'Information' | 'Warning' | 'Critical' | string
@@ -153,17 +161,17 @@ export type FeedbackReport = {
 
 /**
  * The shape the operations feature depends on. The HTTP implementation below and
- * the labelled mock in `src/mocks/operations-mock.ts` both satisfy it, so the
+ * the labelled mock in `src/mocks/staff-mock.ts` both satisfy it, so the
  * feature never learns which one it is talking to.
  */
-export type OperationsApi = {
-  dashboard(date?: string): Promise<OpsDashboard>
-  schedule(filters?: ScheduleFilters): Promise<OpsScheduleItem[]>
+export type StaffApi = {
+  dashboard(date?: string): Promise<StaffDashboard>
+  schedule(filters?: ScheduleFilters): Promise<StaffScheduleItem[]>
   tourSession(id: string): Promise<TourSessionDetail>
   amrs(): Promise<AmrStatus[]>
   digitalTwin(): Promise<AmrStatus[]>
-  alerts(acknowledged?: boolean, severity?: string): Promise<OpsAlert[]>
-  acknowledgeAlert(id: string, resolutionNote?: string): Promise<OpsAlert>
+  alerts(acknowledged?: boolean, severity?: string): Promise<StaffAlert[]>
+  acknowledgeAlert(id: string, resolutionNote?: string): Promise<StaffAlert>
   assignAmr(sessionId: string, amrUnitId: string, reason?: string): Promise<Assignment>
   reassignAmr(sessionId: string, amrUnitId: string, reason: string): Promise<Assignment>
   commandMission(sessionId: string, command: MissionCommand, reason?: string): Promise<Mission>
@@ -179,7 +187,7 @@ function queryString(values: Record<string, string | undefined>) {
   return text ? `?${text}` : ''
 }
 
-export const operationsApi: OperationsApi = {
+export const staffApi: StaffApi = {
   dashboard: (date) => apiClient(`/api/staff/dashboard${queryString({ date })}`),
   schedule: (filters = {}) => apiClient(`/api/staff/schedule${queryString(filters)}`),
   tourSession: (id) => apiClient(`/api/staff/tour-sessions/${id}`),
