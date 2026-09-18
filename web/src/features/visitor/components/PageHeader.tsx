@@ -1,11 +1,16 @@
 import type { ReactNode } from 'react'
 
 /**
- * The page's own heading: eyebrow, title, one supporting line, optional actions.
+ * The page masthead, in the reference design's language.
  *
- * The header above names the product and the current section, so this must not
- * repeat either — each of the three lines says something new. Same rule, and the
- * same three-part shape, as `features/operations/OperationsUi.tsx`'s PageHeader.
+ * Every visitor page renders this, which is why it is where the redesign is
+ * cheapest to apply: one change here moves eleven screens at once, and none of
+ * them can drift from the others because none of them draws its own heading.
+ *
+ * The shape is the reference's section opener — a rule, an accent eyebrow, a
+ * large display title, and the supporting line set on its own measure beside it
+ * rather than underneath. The header above names the product and the current
+ * section, so this must not repeat either: each line says something new.
  */
 export function PageHeader({
   eyebrow,
@@ -23,9 +28,17 @@ export function PageHeader({
       <div className="vs-head__text">
         <p className="vs-eyebrow">{eyebrow}</p>
         <h1 className="vs-title">{title}</h1>
-        {description && <p className="vs-lead">{description}</p>}
       </div>
-      {actions && <div className="vs-head__actions">{actions}</div>}
+
+      {/* The lead and the actions share the far column: on a wide screen the
+          measure stays short and the page keeps a two-column masthead; below
+          768px they stack under the title in reading order. */}
+      {(description || actions) && (
+        <div className="vs-head__side">
+          {description && <p className="vs-lead">{description}</p>}
+          {actions && <div className="vs-head__actions">{actions}</div>}
+        </div>
+      )}
     </header>
   )
 }

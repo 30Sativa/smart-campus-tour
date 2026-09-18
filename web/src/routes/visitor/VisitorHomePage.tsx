@@ -71,9 +71,9 @@ export default function VisitorHomePage() {
         </div>
       </section>
 
-      <div className="vs-page vs-stack vs-home">
+      <div className="vs-page vs-stack vs-stack--editorial">
         {activeTour && (
-          <section aria-label="Tour in progress">
+          <section aria-label="Tour in progress" data-visitor-reveal>
             <div className="vs-live">
               <span className="vs-live__mark">
                 <RobotMark size={24} />
@@ -98,34 +98,51 @@ export default function VisitorHomePage() {
           </section>
         )}
 
-        <section aria-labelledby="quick-actions">
-          <div className="vs-secnav">
-            <h2 className="vs-h3" id="quick-actions">
-              What would you like to do?
-            </h2>
+        <section aria-labelledby="quick-actions" data-visitor-reveal>
+          <div className="vs-open">
+            <div className="vs-open__text">
+              <p className="vs-eyebrow">Get started</p>
+              <h2 className="vs-open__title" id="quick-actions">
+                What would you like to do?
+              </h2>
+            </div>
+            <p className="vs-open__lead">
+              Four ways into the campus. Browse it yourself, or let a robot walk you there.
+            </p>
           </div>
-          <div className="vs-grid vs-grid--4 vs-quick-grid">
-            {QUICK_ACTIONS.map(({ to, label, text, icon: Icon }) => (
-              <article key={to} className="vs-card vs-card--link vs-card--pad vs-quick">
+
+          <ol className="vs-actions">
+            {QUICK_ACTIONS.map(({ to, label, text, icon: Icon }, index) => (
+              <li key={to} className="vs-action">
                 <Link to={to} className="vs-card__hit" aria-label={label} />
-                <span className="vs-choice__icon" aria-hidden="true">
-                  <Icon size={19} strokeWidth={1.9} />
+                <span className="vs-action__n" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
                 </span>
-                <h3 className="vs-card__title" style={{ marginTop: 16 }}>
-                  {label}
-                </h3>
-                <p className="vs-card__text">{text}</p>
-                <ArrowRight size={18} className="vs-quick__arrow" aria-hidden="true" />
-              </article>
+                <div className="vs-action__body">
+                  <span className="vs-choice__icon" aria-hidden="true">
+                    <Icon size={20} strokeWidth={1.9} />
+                  </span>
+                  <div className="vs-min">
+                    <h3 className="vs-action__title">{label}</h3>
+                    <p className="vs-action__text">{text}</p>
+                  </div>
+                </div>
+                <span className="vs-action__go" aria-hidden="true">
+                  <ArrowRight size={19} strokeWidth={2} />
+                </span>
+              </li>
             ))}
-          </div>
+          </ol>
         </section>
 
         <section aria-labelledby="next-visit" data-visitor-reveal>
-          <div className="vs-secnav">
-            <h2 className="vs-h3" id="next-visit">
-              Your next visit
-            </h2>
+          <div className="vs-open">
+            <div className="vs-open__text">
+              <p className="vs-eyebrow">Coming up</p>
+              <h2 className="vs-open__title" id="next-visit">
+                Your next visit
+              </h2>
+            </div>
             <Link to="/visit/bookings" className="lp-btn lp-btn--ghost lp-btn--sm">
               All bookings
             </Link>
@@ -167,10 +184,13 @@ export default function VisitorHomePage() {
         </section>
 
         <section aria-labelledby="worth-a-look" data-visitor-reveal>
-          <div className="vs-secnav">
-            <h2 className="vs-h3" id="worth-a-look">
-              Worth a look
-            </h2>
+          <div className="vs-open">
+            <div className="vs-open__text">
+              <p className="vs-eyebrow">Around campus</p>
+              <h2 className="vs-open__title" id="worth-a-look">
+                Worth a look
+              </h2>
+            </div>
             <Link to="/visit/explore" className="lp-btn lp-btn--ghost lp-btn--sm">
               Explore all
             </Link>

@@ -24,7 +24,7 @@ export default function NotificationsPage() {
   const unread = notifications.data?.filter((item) => !item.readAt).length ?? 0
 
   return (
-    <div className="vs-page vs-stack">
+    <div className="vs-page vs-stack vs-stack--editorial">
       <PageHeader
         eyebrow="Notifications"
         title="Notifications"

@@ -18,7 +18,7 @@ export default function MyToursPage() {
   const { data: activeTour } = useActiveTour()
 
   return (
-    <div className="vs-page vs-stack">
+    <div className="vs-page vs-stack vs-stack--editorial">
       <PageHeader
         eyebrow="My tours"
         title="My tours"
@@ -50,7 +50,7 @@ export default function MyToursPage() {
         </div>
       )}
 
-      <section aria-label="Tour history">
+      <section aria-label="Tour history" data-visitor-reveal>
         {tours.isPending ? (
           <LoadingSkeleton rows={2} />
         ) : tours.isError ? (

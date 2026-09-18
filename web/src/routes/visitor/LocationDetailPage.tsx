@@ -80,7 +80,7 @@ export default function LocationDetailPage() {
         }
       />
 
-      <div className="vs-split">
+      <div className="vs-split" data-visitor-reveal>
         <div className="vs-col">
           <div className="vs-card">
             <div className="vs-card__media" style={{ aspectRatio: '16 / 9' }}>

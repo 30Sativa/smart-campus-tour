@@ -97,7 +97,7 @@ export default function ProfilePage() {
       <PageHeader eyebrow="Profile" title="Your profile" description="Your details, the language the robot speaks to you, and what you want to hear about." />
       <div className="vs-profile-welcome"><span className="vs-avatar vs-avatar--lg" aria-hidden="true">{initials(profile.fullName)}</span><div className="vs-min"><h2 className="vs-h3">{profile.fullName}</h2><p className="vs-lead">Your campus visits, your way.</p><p className="vs-card__meta">{profile.email}</p></div></div>
 
-      <div className="vs-split">
+      <div className="vs-split" data-visitor-reveal>
         <div className="vs-col">
           <section className="vs-card vs-card--pad" aria-labelledby="your-details">
             <h2 className="vs-h3" id="your-details">

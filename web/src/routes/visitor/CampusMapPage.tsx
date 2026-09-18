@@ -4,7 +4,8 @@ import { Compass, Footprints, MapPin } from 'lucide-react'
 import type { LocationCategory } from '../../api/contracts/visitor'
 import { PageHeader } from '../../features/visitor/components/PageHeader'
 import { SearchBar } from '../../features/visitor/components/SearchBar'
-import { CampusMap, MapLegend, type MapPin as Pin } from '../../features/visitor/components/CampusMap'
+import type { MapPin as Pin } from '../../features/visitor/components/CampusMap'
+import { CampusMap3D } from '../../features/visitor/components/CampusMap3D'
 import { StatusBadge } from '../../features/visitor/components/StatusBadge'
 import { RobotMark } from '../../features/visitor/components/RobotMark'
 import { ErrorState, LoadingPanel } from '../../features/visitor/components/States'
@@ -19,10 +20,9 @@ import { formatDistance, formatWalk } from '../../features/visitor/visitor-forma
  * "Directions" button anywhere in the app lands here with the right pin already
  * selected and the link is shareable.
  *
- * The plane itself is a placeholder and says so: no map service is connected yet.
- * Everything around it — search, categories, the selected place, the robot's
- * position and the route line — is real and already reads the coordinates the API
- * returns, so connecting a tile layer later replaces the ground and nothing else.
+ * The model viewer uses separately surveyed location anchors. Existing plan
+ * percentages are only used after a plan-to-model calibration is supplied.
+ * Stop order is not a walkable path: never draw a straight line through walls.
  */
 export default function CampusMapPage() {
   const [params, setParams] = useSearchParams()
@@ -69,16 +69,6 @@ export default function CampusMapPage() {
     return list
   }, [locations.data, destination, destinationId, you, activeTour])
 
-  /** The line the robot is walking, when there is a tour to draw. */
-  const route = activeTour
-    ? [...activeTour.stops.map((stop) => ({ x: stop.mapX, y: stop.mapY }))]
-    : you && destination
-      ? [
-          { x: you.mapX, y: you.mapY },
-          { x: destination.mapX, y: destination.mapY },
-        ]
-      : undefined
-
   const selectLocation = (id: string) => {
     if (id === 'robot') {
       setRobotSelected(true)
@@ -96,8 +86,8 @@ export default function CampusMapPage() {
     <div className="vs-page vs-stack">
       <PageHeader
         eyebrow="Campus map"
-        title="Find your way around"
-        description="Search for a place, pick a category, and see where it sits on campus. If a robot is walking with you, it shows here too."
+        title="Explore campus in 3D"
+        description="Take a closer look at the campus. Rotate the model, switch to a top view, or choose a place to plan your visit."
         actions={
           <Link to="/visit/explore" className="lp-btn lp-btn--ghost lp-btn--sm">
             <Compass size={15} strokeWidth={2} aria-hidden="true" />
@@ -106,7 +96,7 @@ export default function CampusMapPage() {
         }
       />
 
-      <div className="vs-map-workspace">
+      <div className="vs-map-workspace" data-visitor-reveal>
       <section aria-label="Map filters" className="vs-card vs-card--pad vs-map-directory">
         <h2 className="vs-h3">Places on campus</h2>
         <SearchBar value={search} onChange={setSearch} label="Search a location" placeholder="Search a location..." />
@@ -132,9 +122,7 @@ export default function CampusMapPage() {
         ) : locations.isError ? (
           <ErrorState error={locations.error} onRetry={() => void locations.refetch()} />
         ) : (
-          <CampusMap pins={pins} route={route} selectedId={selected} onSelect={selectLocation}>
-            <MapLegend />
-          </CampusMap>
+          <CampusMap3D pins={pins} selectedId={selected} onSelect={selectLocation} />
         )}
 
         <aside className="vs-map-details">
@@ -194,7 +182,7 @@ export default function CampusMapPage() {
             ) : (
               <p className="vs-card__text">
                 <MapPin size={14} strokeWidth={1.9} aria-hidden="true" className="vs-ico" />
-                Tap a pin on the plan, or search above, to see where it is and how far away.
+                Choose a place from the list, or select a marker on the 3D model, to see details and plan a visit.
               </p>
             )}
           </div>

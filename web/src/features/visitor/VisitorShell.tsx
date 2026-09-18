@@ -4,6 +4,7 @@ import { MOCK_ACCOUNTS_HINT } from '../../mocks/auth-mock'
 import { USE_MOCK_API } from '../../mocks/mock-mode'
 import { VisitorNav } from './components/VisitorNav'
 import { VisitorFooter } from './components/VisitorFooter'
+import { VisitorBottomNav } from './components/VisitorBottomNav'
 import { LoadingPanel } from './components/States'
 import { VisitorRoute } from './components/VisitorRoute'
 import '../landing/landing.css'
@@ -39,6 +40,10 @@ export default function VisitorShell() {
       </main>
 
       <VisitorFooter />
+
+      {/* Phone only; it hides itself above 768px, where the header's own link
+          row is already on screen. */}
+      <VisitorBottomNav />
 
       {/* Development only. A production bundle drops this branch, so no visitor
           ever sees build state in the middle of a screen; `mock-mode.ts` warns to

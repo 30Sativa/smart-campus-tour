@@ -58,7 +58,9 @@ describe('visitor journeys', () => {
     const place = await screen.findByRole('heading', { name: 'Central Library' })
     const card = place.closest('article')!
     fireEvent.click(within(card).getByRole('link', { name: 'Directions' }))
-    expect(await screen.findByRole('button', { name: 'Show Central Library on the map' })).toHaveAttribute('aria-pressed', 'true')
+    // Selection must work even on devices without WebGL or before model anchors
+    // have been surveyed. The location list remains the accessible alternative.
+    expect(await screen.findByRole('button', { name: /Central Library.*Delta Building/ })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('link', { name: 'View details' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Central Library' })).toHaveFocus()
     expect(screen.getByRole('link', { name: 'Take me there' })).toHaveAttribute('href', '/visit/book?destination=loc-library')
