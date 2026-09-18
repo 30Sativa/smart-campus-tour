@@ -118,6 +118,7 @@ export default function StaffShell() {
 
               <span className="mt-0.5 block text-[11px] text-[#71819a]">
                 Không gian vận hành
+              </span>
             </span>
           </Link>
 
