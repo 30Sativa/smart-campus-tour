@@ -27,6 +27,49 @@ import type {
   VisitorTour,
 } from '../api/contracts/visitor'
 import { mockDelay } from './mock-mode'
+import { CORRIDOR } from '../features/visitor/campus-floorplan'
+
+/**
+ * Where the robot is, right now.
+ *
+ * The fixture used to report one frozen coordinate, which made "show the robot
+ * on the map" impossible to actually see working. It now walks the building's
+ * circulation ring — the corridor between the atrium columns and the perimeter
+ * rooms, which is where a robot would really be — and the position is derived
+ * from the clock, so every poll returns a new one and the marker moves.
+ *
+ * This is openly synthetic, like everything else in this file. It exists so the
+ * feature can be exercised without a robot on the floor; the real position will
+ * arrive on the same two fields from the telemetry endpoint.
+ */
+const LAP_MS = 180_000
+
+function robotPose(now = Date.now()): { x: number; y: number; progress: number } {
+  const loop = [...CORRIDOR, CORRIDOR[0]]
+  const spans = loop.slice(1).map((point, index) => {
+    const previous = loop[index]
+    return Math.hypot(point.x - previous.x, point.y - previous.y)
+  })
+  const total = spans.reduce((sum, span) => sum + span, 0)
+  const fraction = (now % LAP_MS) / LAP_MS
+  let travelled = fraction * total
+
+  for (let index = 0; index < spans.length; index += 1) {
+    if (travelled > spans[index]) {
+      travelled -= spans[index]
+      continue
+    }
+    const from = loop[index]
+    const to = loop[index + 1]
+    const ratio = spans[index] === 0 ? 0 : travelled / spans[index]
+    return {
+      x: Number((from.x + (to.x - from.x) * ratio).toFixed(2)),
+      y: Number((from.y + (to.y - from.y) * ratio).toFixed(2)),
+      progress: Math.round(fraction * 100),
+    }
+  }
+  return { x: CORRIDOR[0].x, y: CORRIDOR[0].y, progress: 0 }
+}
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
@@ -53,8 +96,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/images.jpg',
     distanceMeters: 180,
     walkMinutes: 3,
-    mapX: 54,
-    mapY: 38,
+    mapX: 41.5,
+    mapY: 11,
     openingHours: 'Mon - Sat, 07:30 - 21:00',
     highlights: ['Group study rooms on floor 3', 'Campus archive and thesis collection', 'Printing and scanning at the entrance'],
   },
@@ -70,8 +113,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/robot.avif',
     distanceMeters: 320,
     walkMinutes: 5,
-    mapX: 30,
-    mapY: 56,
+    mapX: 88,
+    mapY: 39,
     openingHours: 'Mon - Fri, 08:00 - 17:00',
     highlights: ['Observation window onto the test floor', 'Guided demonstrations on weekday afternoons', 'Staff escort required past the doors'],
   },
@@ -87,8 +130,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/hero-campus.jpg',
     distanceMeters: 95,
     walkMinutes: 2,
-    mapX: 42,
-    mapY: 24,
+    mapX: 70,
+    mapY: 10,
     openingHours: 'Mon - Sat, 07:00 - 20:00',
     highlights: ['300 tiered seats', 'Step-free access from the north entrance', 'Live captioning available on request'],
   },
@@ -104,8 +147,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/booking-app.avif',
     distanceMeters: 240,
     walkMinutes: 4,
-    mapX: 68,
-    mapY: 62,
+    mapX: 47,
+    mapY: 88,
     openingHours: 'Daily, 06:30 - 19:00',
     highlights: ['Hot dishes from 11:00', 'Vegetarian counter beside the noodle bar', 'Outdoor terrace facing the sports field'],
   },
@@ -121,8 +164,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/ai-assistant.avif',
     distanceMeters: 110,
     walkMinutes: 2,
-    mapX: 38,
-    mapY: 18,
+    mapX: 12,
+    mapY: 31,
     openingHours: 'Mon - Fri, 08:00 - 17:00',
     highlights: ['Ticketed queue, no appointment needed', 'International student desk at counter 4', 'Student card reprints while you wait'],
   },
@@ -138,8 +181,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/digital-twin.jpg',
     distanceMeters: 210,
     walkMinutes: 4,
-    mapX: 58,
-    mapY: 46,
+    mapX: 88,
+    mapY: 25,
     openingHours: 'Event days, 09:00 - 18:00',
     highlights: ['Student project stands during showcase weeks', 'Open workshop area for hackathons', 'Industry day talks in the side room'],
   },
@@ -155,8 +198,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/ai-fleet-management-autonomous-robot-fleet.webp',
     distanceMeters: 480,
     walkMinutes: 7,
-    mapX: 80,
-    mapY: 74,
+    mapX: 73,
+    mapY: 88,
     openingHours: 'Daily, 06:00 - 21:30',
     highlights: ['Two indoor courts and a gym', '400m outdoor running track', 'Day passes from reception'],
   },
@@ -172,8 +215,8 @@ const locations: CampusLocation[] = [
     imageUrl: '/images/hero-campus.jpg',
     distanceMeters: 0,
     walkMinutes: 0,
-    mapX: 20,
-    mapY: 86,
+    mapX: 19,
+    mapY: 72,
     openingHours: 'Open 24 hours',
     highlights: ['Covered waiting area', 'Beside the security desk', 'Seating and a water point'],
   },
@@ -295,15 +338,15 @@ let activeTour: ActiveTour | null = {
   currentLocationName: 'Central Library',
   nextDestinationName: 'Campus Canteen',
   etaMinutes: 4,
-  progressPercent: 62,
-  robotMapX: 58,
-  robotMapY: 44,
+  progressPercent: robotPose().progress,
+  robotMapX: robotPose().x,
+  robotMapY: robotPose().y,
   stops: [
-    { locationId: 'loc-main-gate', name: 'Main Gate Plaza', arrivedAt: minutesAgo(26), mapX: 20, mapY: 86, isCurrent: false },
-    { locationId: 'loc-lecture-hall', name: 'Lecture Hall A1', arrivedAt: minutesAgo(18), mapX: 42, mapY: 24, isCurrent: false },
-    { locationId: 'loc-library', name: 'Central Library', arrivedAt: minutesAgo(6), mapX: 54, mapY: 38, isCurrent: true },
-    { locationId: 'loc-canteen', name: 'Campus Canteen', arrivedAt: null, mapX: 68, mapY: 62, isCurrent: false },
-    { locationId: 'loc-sports-centre', name: 'Sports Centre', arrivedAt: null, mapX: 80, mapY: 74, isCurrent: false },
+    { locationId: 'loc-main-gate', name: 'Main Gate Plaza', arrivedAt: minutesAgo(26), mapX: 19, mapY: 72, isCurrent: false },
+    { locationId: 'loc-lecture-hall', name: 'Lecture Hall A1', arrivedAt: minutesAgo(18), mapX: 70, mapY: 10, isCurrent: false },
+    { locationId: 'loc-library', name: 'Central Library', arrivedAt: minutesAgo(6), mapX: 41.5, mapY: 11, isCurrent: true },
+    { locationId: 'loc-canteen', name: 'Campus Canteen', arrivedAt: null, mapX: 47, mapY: 88, isCurrent: false },
+    { locationId: 'loc-sports-centre', name: 'Sports Centre', arrivedAt: null, mapX: 73, mapY: 88, isCurrent: false },
   ],
 }
 
@@ -499,7 +542,13 @@ export const mockVisitorApi: VisitorApi = {
 
   tours: () => mockDelay([...tours]),
 
-  activeTour: () => mockDelay(activeTour),
+  activeTour: () => {
+    if (!activeTour) return mockDelay(null)
+    // Re-derived per read: the position a poll returns is the position now.
+    const pose = robotPose()
+    activeTour = { ...activeTour, robotMapX: pose.x, robotMapY: pose.y, progressPercent: pose.progress }
+    return mockDelay(activeTour)
+  },
 
   commandTour: (sessionId, command: TourCommand) => {
     if (!activeTour || activeTour.sessionId !== sessionId) return mockDelay(activeTour)

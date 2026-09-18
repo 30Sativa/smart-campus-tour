@@ -87,6 +87,24 @@
   --vs-ease: cubic-bezier(0.44, 0, 0.56, 1);
   --vs-dur: 0.4s;
 
+  /* ── Map. The ground keeps the surface's warmth rather than importing a
+         mapping service's grey-blue, so the plan belongs to this product. The
+         route is green and the position dot blue because those two readings are
+         near-universal on a map, and a visitor should not have to learn them. */
+  --vs-map-bg: #eceae6;
+  --vs-map-land: #f7f5f2;
+  --vs-map-room: #efece7;
+  --vs-map-hall: #f2efe9;
+  --vs-map-corridor: #fbfaf8;
+  --vs-map-edge: #d9d3cb;
+  --vs-map-wall: #b3aaa0;
+  --vs-map-column: #a49a8f;
+  --vs-map-pin: #8a8178;
+  --vs-map-pin-strong: #c0392b;
+  --vs-map-you: #2f7fe0;
+  --vs-map-you-halo: rgba(47, 127, 224, 0.22);
+  --vs-route: #2e9e5b;
+
   /* Status tones. The operations dashboard's scale
      (features/operations/status.ts), re-expressed as tokens so it can follow
      the light/dark switch, which the hard-coded Tailwind hex values there
@@ -157,6 +175,20 @@ html.dark .vs {
 
   --auth-field-bg: #201e1c;
   --auth-field-line: rgba(247, 245, 243, 0.18);
+
+  --vs-map-bg: #141312;
+  --vs-map-land: #1e1c1a;
+  --vs-map-room: #242220;
+  --vs-map-hall: #221f1d;
+  --vs-map-corridor: #2b2825;
+  --vs-map-edge: #35312d;
+  --vs-map-wall: #4a443e;
+  --vs-map-column: #554e47;
+  --vs-map-pin: #6d665f;
+  --vs-map-pin-strong: #e05c4a;
+  --vs-map-you: #5aa0f2;
+  --vs-map-you-halo: rgba(90, 160, 242, 0.24);
+  --vs-route: #4cc47c;
 
   --vs-ok-ink: #6fe0b0;
   --vs-ok-line: rgba(111, 224, 176, 0.32);
@@ -1533,34 +1565,39 @@ button.vs-avatar:hover {
   color: var(--lp-ink-3);
 }
 
-/* ── Campus map plane ────────────────────────────────────────────────────────
-   A placeholder until a map service is wired in, and it says so on the surface.
-   It is a plane with percentage-positioned pins, so swapping the ground for a
-   real tile layer later changes this block and nothing else: the pins already
-   read `mapX`/`mapY` from the API.
+/* ── Campus map ──────────────────────────────────────────────────────────────
+   A 2D wayfinding plan, in the vocabulary a person already reads on any map:
+   a light ground, a thick route with a casing under it, a teardrop pin for the
+   destination and a haloed dot for where you are.
 
-   The plane lives inside a `.vs-card`, so the map is framed by the same hairline
-   and radius as every other panel on this surface. */
+   The ground is a plan, not a survey — no streets, no footprints, because no
+   contract carries them and drawing them would be inventing the campus. The
+   markers and the route are real: they read the coordinates the API returns. */
 
 .vs-map {
   position: relative;
   aspect-ratio: 16 / 11;
-  min-height: 300px;
-  background:
-    radial-gradient(circle at 22% 84%, var(--lp-accent-soft), transparent 42%),
-    var(--lp-bg-sunk);
+  min-height: 340px;
   overflow: hidden;
+  background: var(--vs-map-bg);
+  touch-action: none;
 }
 
-/* The grid is the only decoration: it reads as a plan, not as a texture. */
-.vs-map__grid {
+.vs-map[data-pannable='true'] {
+  cursor: grab;
+}
+
+.vs-map[data-pannable='true']:active {
+  cursor: grabbing;
+}
+
+/* Ground, route and markers ride one transform so they cannot drift apart. */
+.vs-map__stage {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(to right, var(--lp-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--lp-line) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: 0.7;
+  transform-origin: center;
+  transition: transform 0.24s var(--vs-ease);
+  will-change: transform;
 }
 
 .vs-map__svg {
@@ -1570,26 +1607,107 @@ button.vs-avatar:hover {
   height: 100%;
 }
 
-.vs-map__note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--lp-line);
-  background: var(--lp-surface);
-  color: var(--lp-ink-3);
-  font-size: 0.75rem;
-  line-height: 1.45;
+/* ── Floor plan ──────────────────────────────────────────────────────────────
+   Drawn from `campus-floorplan.ts`. Every stroke uses `non-scaling-stroke` so a
+   wall stays one hairline at every zoom level instead of thickening into a
+   slab — the single thing that separates a plan from a diagram. */
+
+.vs-plan__slab {
+  fill: var(--vs-map-land);
 }
 
-.vs-map__note svg {
-  flex: none;
-  color: var(--lp-ink-3);
+.vs-plan__corridor {
+  fill: var(--vs-map-corridor);
 }
+
+.vs-plan__hall {
+  fill: var(--vs-map-hall);
+  stroke: var(--vs-map-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.vs-plan__curve {
+  fill: none;
+  stroke: var(--vs-map-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+.vs-plan__room {
+  fill: var(--vs-map-room);
+  stroke: var(--vs-map-edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.vs-plan__column {
+  fill: var(--vs-map-column);
+}
+
+.vs-plan__wall {
+  fill: none;
+  stroke: var(--vs-map-wall);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.vs-plan__atrium-edge {
+  fill: none;
+  stroke: var(--vs-map-wall);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.vs-plan__label {
+  fill: var(--lp-ink-3);
+  font-size: 2.4px;
+  font-weight: 600;
+  letter-spacing: -0.04px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+/* The casing is what makes a line read as a route. */
+.vs-map__route-casing {
+  fill: none;
+  stroke: var(--lp-surface);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.vs-map__route {
+  fill: none;
+  stroke: var(--vs-route);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-map__route {
+    stroke-dasharray: 3 2.2;
+    animation: vs-route 1.4s linear infinite;
+  }
+}
+
+@keyframes vs-route {
+  to {
+    stroke-dashoffset: -5.2;
+  }
+}
+
+/* ── Markers ─────────────────────────────────────────────────────────────── */
 
 .vs-pin {
   position: absolute;
-  transform: translate(-50%, -100%);
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1600,84 +1718,185 @@ button.vs-avatar:hover {
   color: var(--lp-ink);
   font: inherit;
   cursor: pointer;
+  /* Counter-scaled against the stage, so a marker keeps its on-screen size at
+     every zoom level, and anchored at its point rather than its centre. */
+  transform: translate(-50%, -100%) scale(var(--vs-pin-scale, 1));
+  transform-origin: bottom center;
+  transition: filter 0.18s var(--vs-ease);
 }
 
-.vs-pin__dot {
+.vs-pin__mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid var(--lp-line-strong);
-  background: var(--lp-surface);
-  color: var(--lp-ink-2);
-  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px 999px 999px 2px;
+  border: 2px solid var(--lp-surface);
+  background: var(--vs-map-pin);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(18, 18, 18, 0.28);
+  transform: rotate(45deg);
+  transition: transform 0.2s var(--vs-ease), background-color 0.2s var(--vs-ease);
 }
 
-.vs-pin:hover .vs-pin__dot,
-.vs-pin[data-on='true'] .vs-pin__dot {
-  border-color: var(--lp-accent);
-  color: var(--lp-accent);
-  transform: scale(1.08);
+/* The glyph rides back upright inside the rotated teardrop. */
+.vs-pin__mark > * {
+  transform: rotate(-45deg);
 }
 
 .vs-pin__label {
-  max-width: 120px;
-  padding: 3px 8px;
+  max-width: 132px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--lp-line);
   background: var(--lp-surface);
-  color: var(--lp-ink-2);
+  color: var(--lp-ink);
   font-size: 0.6875rem;
   font-weight: 600;
-  line-height: 1.3;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: 0 1px 3px rgba(18, 18, 18, 0.14);
 }
 
-.vs-pin[data-role='robot'] .vs-pin__dot {
-  border-color: transparent;
+.vs-pin:hover .vs-pin__mark,
+.vs-pin[data-on='true'] .vs-pin__mark {
+  transform: rotate(45deg) scale(1.16);
+}
+
+.vs-pin[data-on='true'] {
+  z-index: 4;
+}
+
+/* Destination: the one pin that is the answer to "where am I going". */
+.vs-pin[data-role='destination'] .vs-pin__mark {
+  background: var(--vs-map-pin-strong);
+}
+
+/* You: a round dot with an accuracy halo. Never a teardrop — a teardrop points
+   at a place, a dot IS a position. */
+.vs-pin[data-role='you'] {
+  transform: translate(-50%, -50%) scale(var(--vs-pin-scale, 1));
+  transform-origin: center;
+  z-index: 3;
+}
+
+.vs-pin[data-role='you'] .vs-pin__mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  transform: none;
+  background: var(--vs-map-you);
+  border-width: 3px;
+  box-shadow: 0 0 0 7px var(--vs-map-you-halo), 0 2px 6px rgba(18, 18, 18, 0.24);
+}
+
+.vs-pin[data-role='you'] .vs-pin__mark > * {
+  transform: none;
+}
+
+.vs-pin[data-role='you']:hover .vs-pin__mark {
+  transform: scale(1.08);
+}
+
+/* Robot: the accent, because it is this product's own marker. */
+/* The robot is the one marker whose position genuinely changes while the map is
+   open. Its position arrives on a 15-second poll, so the marker interpolates
+   across that whole interval rather than jumping on arrival and then sitting
+   still: a polled position animated over its own poll period is what reads as
+   continuous movement. Keep this in step with ACTIVE_TOUR_REFETCH_MS in
+   `visitor-hooks.ts`. */
+.vs-pin[data-role='robot'] {
+  z-index: 3;
+  transition: left 15s linear, top 15s linear, filter 0.18s var(--vs-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-pin[data-role='robot'] {
+    transition: none;
+  }
+}
+
+.vs-pin[data-role='robot'] .vs-pin__mark {
   background: var(--lp-accent);
   color: var(--lp-accent-ink);
 }
 
-.vs-pin[data-role='you'] .vs-pin__dot {
-  border-color: var(--lp-ink);
-  color: var(--lp-ink);
+@media (prefers-reduced-motion: no-preference) {
+  .vs-pin[data-role='robot'] .vs-pin__mark {
+    animation: vs-robot-bob 2.6s var(--vs-ease) infinite;
+  }
 }
 
-.vs-pin[data-role='destination'] .vs-pin__dot {
-  border-color: var(--lp-accent);
+@keyframes vs-robot-bob {
+  50% {
+    transform: rotate(45deg) translate(-1.5px, -1.5px);
+  }
+}
+
+/* ── Map controls ────────────────────────────────────────────────────────── */
+
+.vs-map__controls {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px;
+  border-radius: var(--lp-r-sm);
+  border: 1px solid var(--lp-line);
+  background: var(--lp-surface);
+  box-shadow: 0 2px 8px rgba(18, 18, 18, 0.1);
+}
+
+.vs-map__controls button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lp-ink-2);
+  cursor: pointer;
+  transition: background-color 0.18s var(--vs-ease), color 0.18s var(--vs-ease);
+}
+
+.vs-map__controls button:hover:not(:disabled) {
   background: var(--lp-accent-soft);
   color: var(--lp-accent);
 }
 
-/* The robot's own halo, so it is findable at a glance on a busy plan. */
-.vs-pin[data-role='robot'] .vs-pin__dot::after {
-  content: '';
+.vs-map__controls button:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.vs-map__note {
   position: absolute;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px solid var(--lp-accent);
+  bottom: 12px;
+  left: 12px;
+  right: 62px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r-sm);
+  background: var(--lp-surface);
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .vs-pin[data-role='robot'] .vs-pin__dot::after {
-    animation: vs-ping 2.4s var(--vs-ease) infinite;
-  }
-}
-
-@keyframes vs-ping {
-  from {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  to {
-    transform: scale(2.1);
-    opacity: 0;
-  }
+.vs-map__note svg {
+  flex: none;
 }
 
 .vs-legend {
@@ -1701,22 +1920,32 @@ button.vs-avatar:hover {
   height: 10px;
   flex: none;
   border-radius: 999px;
-  border: 1px solid var(--lp-line-strong);
+  background: var(--vs-map-pin);
 }
 
 .vs-legend i[data-role='robot'] {
-  border-color: transparent;
   background: var(--lp-accent);
 }
 
 .vs-legend i[data-role='you'] {
-  border-color: var(--lp-ink);
-  background: var(--lp-ink);
+  background: var(--vs-map-you);
+  box-shadow: 0 0 0 3px var(--vs-map-you-halo);
 }
 
 .vs-legend i[data-role='destination'] {
-  border-color: var(--lp-accent);
-  background: var(--lp-accent-soft);
+  background: var(--vs-map-pin-strong);
+}
+
+@media (max-width: 767px) {
+  .vs-map {
+    min-height: 300px;
+    aspect-ratio: 4 / 3;
+  }
+
+  .vs-map__note {
+    right: 12px;
+    bottom: 56px;
+  }
 }
 
 /* ── Chat ────────────────────────────────────────────────────────────────── */
