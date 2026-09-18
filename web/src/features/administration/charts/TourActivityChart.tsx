@@ -40,16 +40,16 @@ export function TourActivityChart({ days, emptyLabel }: { days: TourActivityDay[
             <CartesianGrid vertical={false} stroke={CHART_COLORS.grid} />
             <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: CHART_COLORS.axis }} tick={{ fontSize: 11, fill: CHART_COLORS.axis }} />
             <YAxis allowDecimals={false} domain={[0, max]} width={40} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: CHART_COLORS.axis }} />
-            <Tooltip cursor={{ fill: 'rgba(79,127,202,0.06)' }} {...tooltipStyle} />
+            <Tooltip cursor={{ fill: CHART_COLORS.cursor }} {...tooltipStyle} />
             <Bar dataKey="completed" stackId="tour" name="Hoàn thành" fill={CHART_COLORS.completed} isAnimationActive={false} />
             <Bar dataKey="cancelled" stackId="tour" name="Đã hủy" fill={CHART_COLORS.cancelled} isAnimationActive={false}>
               {otherTotal === 0 && (
-                <LabelList dataKey="total" position="top" offset={8} fontSize={11} fontWeight={700} fill="#3c4657" />
+                <LabelList dataKey="total" position="top" offset={8} fontSize={11} fontWeight={700} fill={CHART_COLORS.ink} />
               )}
             </Bar>
             {otherTotal > 0 && (
               <Bar dataKey="other" stackId="tour" name="Trạng thái khác" fill={CHART_COLORS.other} isAnimationActive={false}>
-                <LabelList dataKey="total" position="top" offset={8} fontSize={11} fontWeight={700} fill="#3c4657" />
+                <LabelList dataKey="total" position="top" offset={8} fontSize={11} fontWeight={700} fill={CHART_COLORS.ink} />
               </Bar>
             )}
           </BarChart>

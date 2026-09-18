@@ -3,7 +3,9 @@
    ----------------------------------------------------------------------------
    Auth is not a separate product, so it does not get a separate design system.
    Both auth pages carry `.lp` on their root, which is what defines the palette
-   (--lp-bg / --lp-ink / --lp-accent), the font and the theme switch.
+   (--lp-bg / --lp-ink / --lp-accent), the font, the theme switch and the form
+   control tokens (--auth-field-bg / --auth-r / --lp-danger-*) this file styles
+   with.
    landing.css is already in the main bundle, so reusing `.lp` costs nothing and
    keeps the two surfaces from drifting apart.
 
@@ -36,30 +38,15 @@
   --auth-swap: 520ms;   /* the panels changing sides */
 }
 
+/* The form-control tokens this file's inputs and buttons read
+   (--auth-panel-bg, --auth-field-bg, --auth-field-line, --auth-r) and the danger
+   tokens its alert reads are declared on `.lp` in landing.css, for both themes.
+   They moved there when the signed-in visitor app started reusing `.auth-input`
+   and `.auth-submit`: one declaration on the root both surfaces carry, rather
+   than the same four values in two files drifting apart. Only the column width
+   is genuinely this surface's own. */
 .auth {
-  /* A panel ground barely off the field colour: enough to seat the inputs
-     without a card, shadow or gradient doing the work. */
-  --auth-panel-bg: #f8fafb;
-  --auth-field-bg: #ffffff;
-  --auth-field-line: rgba(11, 21, 25, 0.15);
-  --auth-r: 12px;
   --auth-col: 460px;
-
-
-  --lp-danger-ink: #a42618;
-  --lp-danger-line: #c0483c;
-  --lp-danger-soft: rgba(164, 38, 24, 0.07);
-}
-
-html.dark .auth {
-  --auth-panel-bg: #081014;
-  /* Raised, not sunken: the field sits above the panel in dark too. */
-  --auth-field-bg: #101c22;
-  --auth-field-line: rgba(238, 244, 246, 0.17);
-
-  --lp-danger-ink: #ffa39a;
-  --lp-danger-line: rgba(255, 163, 154, 0.5);
-  --lp-danger-soft: rgba(255, 163, 154, 0.1);
 }
 
 .auth {

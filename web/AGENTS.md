@@ -16,10 +16,17 @@ file only covers what is specific to `web/`.
   **Zustand**. Do not put server data (bookings, robot status, ...) in
   Zustand — that belongs to TanStack Query's cache.
 - Package manager: **npm** (no workspaces needed — see below).
-- Codebase shape: **one app, one deploy, three areas**. Public, operations and
-  administration live in the same React app, same Vercel project, same domain.
-  They are split by route + role, not by separate apps:
+- Codebase shape: **one app, one deploy, four areas**. Public, the visitor app,
+  operations and administration live in the same React app, same Vercel project,
+  same domain. They are split by route + role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
+  - `/visit/*`: the signed-in visitor app, for `Visitor` — and for `Staff` and
+    `Admin` too, since looking at what a visitor sees is a normal thing to do and
+    the area holds nothing operational. What a visitor does with an account:
+    explore campus locations, the campus map, book a robot, their bookings and
+    tours, the tour that is running right now, the campus assistant,
+    notifications, profile. Added 2026-09-18; `homePathForRole('Visitor')` points
+    here, so a visitor signing in no longer lands back on the marketing page.
   - `/staff/*`: tour operations, for `CampusStaff`, `TourOperator` and `Admin`.
     What an operator does during a shift: today's tours, the AMR fleet, alerts,
     the digital twin, feedback reports.
@@ -95,14 +102,18 @@ web/
     │   └── router/       index.tsx — routes, RequireStaff guard, lazy boundaries
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
+    │   ├── visitor/      visitor pages ("/visit/*"), all lazy-loaded
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
     │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
     │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
     │   │                 sections/ (one component per landing section)
+    │   ├── visitor/      VisitorShell, visitor.css, visitor-content.ts,
+    │   │                 visitor-hooks.ts, visitor-status.ts,
+    │   │                 visitor-format.ts, components/ (shared visitor UI)
     │   ├── operations/   StaffShell, staff-nav, shared ops UI, status
     │   │                 vocabulary, formatters, query hooks
-    │   └── administration/ AdminShell, admin-nav
+    │   └── administration/ AdminShell, admin-nav, admin-analytics, charts/
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
     ├── auth/             LoginPage.tsx, roles.ts, use-logout.ts
@@ -112,8 +123,9 @@ web/
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-There are three entry points: `/` (public landing page), `/staff/*` (operations,
-behind the staff guard) and `/admin/*` (administration, behind the admin guard).
+There are four entry points: `/` (public landing page), `/visit/*` (the visitor
+app, behind the visitor guard), `/staff/*` (operations, behind the staff guard)
+and `/admin/*` (administration, behind the admin guard).
 
 **Who may enter what is written in exactly one place: `src/auth/access.ts`.**
 The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
@@ -122,9 +134,11 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
-The visitor booking/tour flow was removed on 2026-09-16; the files are kept in
-`_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms the deletion. A
-visitor account therefore has the public site only.
+The old visitor booking/tour flow was removed on 2026-09-16 and its files are
+kept in `_to_delete/web-fe-cleanup-2026-09-16/` until someone confirms the
+deletion. **It was replaced on 2026-09-18 by `/visit/*`** — a fresh
+implementation, not a restore: nothing was brought back out of `_to_delete/`.
+A visitor account is no longer limited to the public site.
 
 `src/components/` currently holds nothing: the landing page redesign on
 2026-09-17 gave the theme control its own landing-token styling inside
@@ -144,9 +158,14 @@ runs on the labelled fixtures in `src/mocks/`:
 - `mocks/operations-mock.ts` implements the same `OperationsApi` contract as the
   HTTP client, so feature code is identical in both modes and the switch is made
   once, in `features/operations/operations-hooks.ts`;
+- `mocks/visitor-mock.ts` does the same for `VisitorApi`
+  (`api/contracts/visitor.ts`), selected once in
+  `features/visitor/visitor-hooks.ts`. Its writes mutate module-level arrays, so
+  a booking made in one screen appears in another and is gone on reload — the
+  honest behaviour for a mock;
 - `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised
-  (`admin/admin` is an Admin, `staff/staff` and `operator/operator` are not). It
-  is not authentication and grants nothing server-side;
+  (`visitor/visitor` is a Visitor, `staff/staff` is Staff, `admin/admin` is an
+  Admin). It is not authentication and grants nothing server-side;
 - mock mode is disclosed, but out of the way: a one-line badge in each shell and
   on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
   `console.warn` from `mocks/mock-mode.ts` that also fires in a production build
@@ -180,11 +199,58 @@ and the flag once the backend lands.
 - Styling is Tailwind utility classes in JSX. Avoid a separate CSS file per
   component unless Tailwind genuinely cannot express it (e.g. a keyframe
   animation).
-- One documented exception: `features/landing/landing.css`. The public landing
-  page is a marketing surface with its own token set (`--lp-*`), its own type
-  and spacing scale, and scroll/hover choreography. It is scoped under the `.lp`
-  root class so nothing leaks into the ops dashboard. Admin screens stay on
-  Tailwind utilities; do not grow a second CSS file for them.
+- One documented exception, in three files that are **one design layer**, not
+  three:
+  - `features/landing/landing.css` owns it. The public landing page is a
+    marketing surface with its own token set (`--lp-*`), its own type and spacing
+    scale, and scroll/hover choreography. Scoped under the `.lp` root class so
+    nothing leaks into the ops dashboard. It also declares the form-control
+    tokens (`--auth-*`) and the danger tokens (`--lp-danger-*`), because more
+    than one surface reuses `.auth-input` and `.auth-submit` and those values
+    must be declared once.
+  - `auth/auth.css` styles the form controls. Its root carries `.lp`.
+  - `features/visitor/visitor.css` is the same system at application density: the
+    app shell, and the handful of patterns the landing page has no equivalent for
+    (badge, filter pill, tab row, stepper, chat column, map plane). Its root
+    carries `.lp` as well as `.vs`, and **every colour, radius and shadow in it
+    resolves to a `--lp-*` token** — it picks no palette of its own.
+  - The rule this exception exists under: a *visitor-facing* surface may extend
+    this layer; anything else may not. **Admin and staff screens stay on Tailwind
+    utilities — do not grow a CSS file for them.**
+  - When adding to the visitor area, reuse before you extend and extend before
+    you create: `.lp-btn`, `.lp-navlink`, `.lp-brand`, `.lp-h3`, `.lp-meta`,
+    `.auth-input`, `.auth-submit` and `AuthField` are all already there.
+- **Operations and administration share one palette and one component set.**
+  Both signed-in Vietnamese consoles are Tailwind utilities on the same values:
+  ground `#f1f6fe`, panel border `#dce9fb`, ink `#1f314d` / `#40546f` / `#647793`
+  / `#71819a` / `#8a98ac`, primary `#2f62b8`, accent `#5b91ed`, soft fills
+  `#eaf4ff` / `#edf2fa` / `#f8fbff`, focus ring `#4f8df7`. Administration ran a
+  separate slate palette until 2026-09-18; it was dropped because the only
+  account that can open both areas is an Admin, so the only person who ever saw
+  the difference was the one guaranteed to cross it. The two still differ in
+  *priority* — administration has no alert bell and no live badge — which is the
+  right axis to diverge on.
+  - Shared chrome lives in `features/operations/OperationsUi.tsx` and is used by
+    both areas: `panelClass`, `PageHeader`, `PanelHead`, `SummaryTile`,
+    `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`, `PageSkeleton`.
+    Build a page out of those before writing new markup.
+  - **One accent.** `SummaryTile` never tints itself by meaning, because colour
+    on these screens already means severity on a `StatusBadge`. The exceptions
+    are deliberate and few: `StatusBadge` tones (`features/operations/status.ts`),
+    the fleet-health counts, the access matrix's yes/no, and the chart *series*
+    colours in `features/administration/charts/chart-utils.ts` — where a bar IS a
+    status. Everything else is blue.
+  - A screen's summary row counts rows the API already returned, for the labels
+    on that same screen. That is presentation. Anything genuinely derived still
+    comes from the backend (Section 3).
+- **The visitor area is an English surface.** The public, staff and admin areas
+  are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
+  its status vocabulary in `features/visitor/visitor-status.ts`, which is the
+  same tone scale as `features/operations/status.ts` with English labels and
+  tone *tokens* rather than Tailwind classes, so the badge can follow the
+  light/dark switch. The `Intl` locale is `en-GB` in
+  `features/visitor/visitor-format.ts`. Same hard rule as everywhere else: no
+  backend enum reaches a screen.
 
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for

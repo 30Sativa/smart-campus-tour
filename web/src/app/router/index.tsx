@@ -10,19 +10,34 @@ import { areaById, type AreaId } from '../../auth/access'
 import { homePathForRole } from '../../auth/roles'
 
 /**
- * Three areas, three audiences:
+ * Four areas, four audiences:
  *
- *   `/`        public  visitors, no account
- *   `/staff/*` staff   tour operations, for Staff and Admin
- *   `/admin/*` admin   administration, Admin only
+ *   `/`        public   marketing pages, no account
+ *   `/visit/*` visitor  the visitor app: explore, book a robot, walk a tour
+ *   `/staff/*` staff    tour operations, for Staff and Admin
+ *   `/admin/*` admin    administration, Admin only
  *
- * Both signed-in areas are lazy, shell included, so a visitor loading `/` never
- * downloads either one, and an operator never downloads administration.
+ * All three signed-in areas are lazy, shell included, so a visitor loading `/`
+ * downloads none of them, a visitor never downloads operations, and an operator
+ * never downloads administration.
  *
  * `/staff/*` used to live at `/admin/*` while the product had only one
  * signed-in area. It does not any more: `/admin/*` is administration now, and
  * the old operations URLs redirect (see the bottom of the table).
  */
+const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
+const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
+const ExplorePage = lazy(() => import('../../routes/visitor/ExplorePage'))
+const LocationDetailPage = lazy(() => import('../../routes/visitor/LocationDetailPage'))
+const CampusMapPage = lazy(() => import('../../routes/visitor/CampusMapPage'))
+const BookRobotPage = lazy(() => import('../../routes/visitor/BookRobotPage'))
+const MyBookingsPage = lazy(() => import('../../routes/visitor/MyBookingsPage'))
+const MyToursPage = lazy(() => import('../../routes/visitor/MyToursPage'))
+const ActiveTourPage = lazy(() => import('../../routes/visitor/ActiveTourPage'))
+const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
+const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
+const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
+
 const StaffShell = lazy(() => import('../../features/operations/StaffShell'))
 const OperationsOverviewPage = lazy(() => import('../../routes/staff/OperationsOverviewPage'))
 const SchedulePage = lazy(() => import('../../routes/staff/SchedulePage'))
@@ -62,6 +77,19 @@ function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) 
   return <>{children}</>
 }
 
+function VisitorArea() {
+  return (
+    <RequireArea area="visitor">
+      {/* The fallback ground is the landing page's light token value, so the
+          first paint of the shell is already the right colour rather than white
+          for a frame. */}
+      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
+        <VisitorShell />
+      </Suspense>
+    </RequireArea>
+  )
+}
+
 function StaffArea() {
   return (
     <RequireArea area="staff">
@@ -97,6 +125,28 @@ export const router = createBrowserRouter([
     children: [
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
+    ],
+  },
+  {
+    path: '/visit',
+    element: <VisitorArea />,
+    children: [
+      { index: true, element: <VisitorHomePage /> },
+      { path: 'explore', element: <ExplorePage /> },
+      { path: 'explore/:locationId', element: <LocationDetailPage /> },
+      { path: 'map', element: <CampusMapPage /> },
+      { path: 'book', element: <BookRobotPage /> },
+      { path: 'bookings', element: <MyBookingsPage /> },
+      { path: 'tours', element: <MyToursPage /> },
+      // The active tour is one session at a time, so it needs no id in the URL:
+      // the API answers "the tour this account is on right now", and a link from
+      // a notification cannot go stale.
+      { path: 'tour', element: <ActiveTourPage /> },
+      { path: 'assistant', element: <AskRobotPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'profile', element: <ProfilePage /> },
+      // A mistyped path inside the area stays inside the area.
+      { path: '*', element: <Navigate to="/visit" replace /> },
     ],
   },
   {

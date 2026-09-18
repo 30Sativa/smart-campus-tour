@@ -12,7 +12,7 @@ describe('area access', () => {
     expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin'])
   })
 
-  it('keeps a visitor out of both signed-in areas', () => {
+  it('keeps a visitor out of operations and administration', () => {
     expect(areaById('staff').allows('Visitor')).toBe(false)
     expect(areaById('admin').allows('Visitor')).toBe(false)
     expect(areaById('staff').allows(undefined)).toBe(false)
@@ -23,6 +23,11 @@ describe('area access', () => {
   it('keeps staff out of administration', () => {
     expect(areaById('staff').allows('Staff')).toBe(true)
     expect(areaById('admin').allows('Staff')).toBe(false)
+  })
+
+  it('allows signed-in roles to browse the visitor area', () => {
+    for (const role of ALL_ROLES) expect(areaById('visitor').allows(role)).toBe(true)
+    expect(landingPathAfterLogin('Visitor', '/visit/map?destination=library')).toBe('/visit/map?destination=library')
   })
 
   it('lets an admin into both, which is the policy this app has always had', () => {
@@ -47,8 +52,8 @@ describe('area access', () => {
     expect(homePathForRole('Admin')).toBe('/admin')
     expect(homePathForRole('Staff')).toBe('/staff')
     expect(homePathForRole('CampusStaff')).toBe('/staff')
-    expect(homePathForRole('Visitor')).toBe('/')
-    expect(homePathForRole(undefined)).toBe('/')
+    expect(homePathForRole('Visitor')).toBe('/visit')
+    expect(homePathForRole(undefined)).toBe('/visit')
   })
 
   describe('landing after sign-in', () => {
@@ -70,7 +75,7 @@ describe('area access', () => {
 
     it('ignores a destination the role does not belong in', () => {
       expect(landingPathAfterLogin('Staff', '/admin')).toBe('/staff')
-      expect(landingPathAfterLogin('Visitor', '/staff')).toBe('/')
+      expect(landingPathAfterLogin('Visitor', '/staff')).toBe('/visit')
     })
 
     it('falls back to the role home when there is nothing remembered', () => {

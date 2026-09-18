@@ -27,7 +27,13 @@ export function SiteNav({ onLockScroll }: Props) {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const logout = useLogout()
-  const isStaff = isStaffRole(user?.role)
+
+  /**
+   * Every signed-in account now has an area of its own — a visitor included,
+   * since `/visit` shipped — so the door is offered by role rather than only to
+   * staff. `homePathForRole` decides where it goes; this only names it.
+   */
+  const homeLabel = isAdminRole(user?.role) ? 'Quản trị' : isStaffRole(user?.role) ? 'Điều hành' : 'Vào ứng dụng'
 
   useEffect(() => {
     const node = sentinelRef.current
@@ -85,11 +91,9 @@ export function SiteNav({ onLockScroll }: Props) {
             {isAuthenticated ? (
               <>
                 <span className="lp-user">{user?.username}</span>
-                {isStaff && (
-                  <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
-                    {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
-                  </Link>
-                )}
+                <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
+                  {homeLabel}
+                </Link>
                 <button type="button" onClick={logout} className="lp-btn lp-btn--ghost lp-btn--sm">
                   Đăng xuất
                 </button>
@@ -122,9 +126,14 @@ export function SiteNav({ onLockScroll }: Props) {
             </a>
           ))}
           {isAuthenticated ? (
-            <button type="button" onClick={logout}>
-              Đăng xuất
-            </button>
+            <>
+              <Link to={homePathForRole(user?.role)} className="lp-sheet__cta" onClick={closeMenu}>
+                {homeLabel}
+              </Link>
+              <button type="button" onClick={logout}>
+                Đăng xuất
+              </button>
+            </>
           ) : (
             <Link to="/login" className="lp-sheet__cta" onClick={closeMenu}>
               Đăng nhập
