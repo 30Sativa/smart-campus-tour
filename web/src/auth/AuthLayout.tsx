@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
-import { ArrowLeft, Bot } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { MOCK_ACCOUNTS_HINT } from '../mocks/auth-mock'
 import { USE_MOCK_API } from '../mocks/mock-mode'
 import '../features/landing/landing.css'
@@ -79,10 +79,9 @@ export function AuthLayout() {
       <div className="auth-panel">
         <div className="auth-col">
           <Link to="/" className="auth-brand">
-            <span className="auth-brand__mark">
-              <Bot size={20} strokeWidth={2.1} aria-hidden="true" />
-            </span>
-            CampusTour
+            <img className="auth-brand__mark" src="/images/logo.png" alt="" width={40} height={40} />
+            <span>CampusTour</span>
+            <span className="auth-brand__sub">DT-AMR</span>
           </Link>
           <div className="auth-body">
             <Outlet />

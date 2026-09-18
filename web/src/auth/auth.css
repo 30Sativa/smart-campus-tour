@@ -240,14 +240,20 @@
 }
 
 .auth-brand__mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--lp-accent);
-  color: var(--lp-accent-ink);
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
   flex: none;
+}
+
+.auth-brand__sub {
+  padding-left: 10px;
+  border-left: 1px solid var(--lp-line-strong);
+  color: var(--lp-ink-2);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
 }
 
 /* ── Type ────────────────────────────────────────────────────────────────
