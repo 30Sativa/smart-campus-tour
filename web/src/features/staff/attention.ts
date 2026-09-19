@@ -216,11 +216,17 @@ function tourDetail(tour: StaffScheduleItem): string {
 /* ── Fleet readiness ──────────────────────────────────────────────────────── */
 
 /**
- * The four questions an operator asks about the fleet, in the order they ask
- * them: what is broken, what is worth watching, what is busy, what is free.
+ * The fleet as four readiness states, ordered best to worst: free, busy, worth
+ * watching, broken.
  *
  * Grouped rather than listed alphabetically because a flat device list makes
  * the reader do the triage. `id` is stable so the UI can key on it.
+ *
+ * Empty bands are RETURNED, not filtered out. The overview renders this as a
+ * four-column readiness board, and a board that drops a column when it happens
+ * to be empty moves every other column sideways - an operator who has learnt
+ * that "mất kết nối" is the far right has to re-read the labels on every
+ * refresh. The count reads 0; the column stays.
  */
 export type FleetBandId = 'down' | 'watch' | 'busy' | 'ready'
 
@@ -247,13 +253,14 @@ export function groupFleet(amrs: AmrStatus[]): FleetBand[] {
   }
 
   const order: Array<{ id: FleetBandId; label: string; tone: FleetBand['tone'] }> = [
-    { id: 'down', label: 'Mất kết nối / lỗi', tone: 'danger' },
-    { id: 'watch', label: 'Cần theo dõi', tone: 'warn' },
-    { id: 'busy', label: 'Đang chạy tour', tone: 'info' },
     { id: 'ready', label: 'Sẵn sàng', tone: 'ok' },
+    { id: 'busy', label: 'Đang tour', tone: 'info' },
+    { id: 'watch', label: 'Cần theo dõi', tone: 'warn' },
+    { id: 'down', label: 'Mất kết nối / lỗi', tone: 'danger' },
   ]
 
-  return order
-    .map((band) => ({ ...band, units: bands[band.id].sort((a, b) => a.name.localeCompare(b.name, 'vi')) }))
-    .filter((band) => band.units.length > 0)
+  return order.map((band) => ({
+    ...band,
+    units: bands[band.id].sort((a, b) => a.name.localeCompare(b.name, 'vi')),
+  }))
 }

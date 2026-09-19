@@ -11,20 +11,19 @@ export const panelClass = 'overflow-hidden rounded-[var(--ops-radius,1rem)] bord
  * The page's own heading. The shell header names the area, so this must not
  * repeat it: eyebrow, title and supporting line each say something new.
  *
- * `scale` is opt-in and defaults to what every page already had. The operations
- * overview is read at a glance, across a room, by someone holding a radio, so it
- * asks for `console`; nothing else changes size because nothing else opted in.
+ * The operations overview does NOT use this - it carries its own command bar,
+ * which is part of what makes that screen read as a console rather than as
+ * another report. Every other staff and admin page shares this one.
  */
-export function PageHeader({ eyebrow, title, description, action, scale = 'default' }: {
-  eyebrow: string; title: string; description: string; action?: ReactNode; scale?: 'default' | 'console'
+export function PageHeader({ eyebrow, title, description, action }: {
+  eyebrow: string; title: string; description: string; action?: ReactNode
 }) {
-  const console_ = scale === 'console'
   return (
-    <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
+    <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
       <div>
-        <p className={`font-bold tracking-[0.12em] text-[#5b91ed] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>{eyebrow}</p>
-        <h1 className={`mt-2 font-bold tracking-[-0.03em] text-[#1f314d] ${console_ ? 'text-[26px] leading-[1.15] sm:text-[30px] lg:text-[34px]' : 'text-2xl sm:text-[28px]'}`}>{title}</h1>
-        <p className={`mt-2 max-w-3xl text-[#71819a] ${console_ ? 'text-[15px] leading-7' : 'text-sm leading-6'}`}>{description}</p>
+        <p className="text-[11px] font-bold tracking-[0.12em] text-[#5b91ed] uppercase">{eyebrow}</p>
+        <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-[#1f314d] sm:text-[28px]">{title}</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#71819a]">{description}</p>
       </div>
       {action}
     </header>

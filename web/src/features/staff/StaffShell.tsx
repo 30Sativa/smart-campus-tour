@@ -34,7 +34,7 @@ export default function StaffShell() {
   }, [menuOpen])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#eef2f8] text-[#1f314d]">
+    <div className="flex min-h-[100dvh] bg-[#f4f6f9] text-[#1f314d]">
       <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="staff-navigation" className="fixed right-5 bottom-5 z-30 grid h-12 w-12 place-items-center rounded-full bg-[#5b91ed] text-white shadow-[0_10px_28px_rgba(79,141,247,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] focus-visible:ring-offset-2 lg:hidden" aria-label="Mở điều hướng vận hành">
         <Menu size={22} aria-hidden="true" />
       </button>
@@ -107,6 +107,15 @@ export default function StaffShell() {
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-[#dce9fb] bg-white/90 px-5 backdrop-blur-md lg:px-8">
           <p className="text-sm font-bold tracking-[-0.01em] text-[#1f314d] lg:hidden">{STAFF_NAV.find(({ path }) => active(path))?.label ?? 'Vận hành tour'}</p>
           <div className="ml-auto flex min-w-0 items-center gap-2">
+            {/* Development only. A full-width strip under the header read as an
+                operational warning about the fleet; a marker in the chrome says
+                the same thing without competing with a real alert. A production
+                bundle drops the branch, and `mock-mode.ts` warns to the console. */}
+            {import.meta.env.DEV && (
+              <span data-dev-only="true" title="Dữ liệu mẫu" className="shrink-0 rounded border border-[#dfe5ec] bg-[#f8fafc] px-1.5 py-0.5 text-[11px] font-bold tracking-[0.06em] text-[#8d99ab]">
+                DEV
+              </span>
+            )}
             <form
               role="search"
               className="relative hidden w-56 sm:block"
@@ -152,17 +161,6 @@ export default function StaffShell() {
             </Link>
           </div>
         </header>
-
-        {/* Development only. Amber across the full width read as an alert about
-            the fleet; a neutral chip beside the page title says the same thing
-            without competing with a real warning. A production bundle drops the
-            branch, and `mock-mode.ts` warns to the console instead. */}
-        {import.meta.env.DEV && (
-          <p data-dev-only="true" className="flex items-center gap-2 border-b border-[#e6ebf3] bg-[#f7f9fc] px-5 py-1 text-[11px] text-[#8a98ac] lg:px-8">
-            <span className="rounded border border-[#d9e1ec] bg-white px-1.5 py-0.5 font-bold tracking-[0.04em] text-[#71819a]">DEV</span>
-            dữ liệu mẫu
-          </p>
-        )}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>

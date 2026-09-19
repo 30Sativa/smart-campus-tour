@@ -11,23 +11,21 @@ public partial class Poi
 
     public string? Description { get; set; }
 
+    public string MapKey { get; set; } = null!;
+
+    public string MapFrame { get; set; } = null!;
+
     public decimal X { get; set; }
 
     public decimal Y { get; set; }
 
     public decimal Yaw { get; set; }
 
-    public string? NarrationViText { get; set; }
+    public string? NarrationText { get; set; }
 
-    public string? NarrationEnText { get; set; }
+    public string? AudioUrl { get; set; }
 
-    public string? AudioViUrl { get; set; }
-
-    public string? AudioEnUrl { get; set; }
-
-    public int? NarrationViSeconds { get; set; }
-
-    public int? NarrationEnSeconds { get; set; }
+    public int? NarrationSeconds { get; set; }
 
     public bool IsActive { get; set; }
 

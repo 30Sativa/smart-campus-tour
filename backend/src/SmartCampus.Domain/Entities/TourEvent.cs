@@ -19,9 +19,17 @@ public partial class TourEvent
 
     public string? LegKind { get; set; }
 
+    public Guid? StopVisitId { get; set; }
+
+    public Guid? CommandId { get; set; }
+
     public Guid? TargetPoiId { get; set; }
 
     public int? TargetStopOrder { get; set; }
+
+    public string? TargetMapKey { get; set; }
+
+    public string? TargetMapFrame { get; set; }
 
     public decimal? TargetX { get; set; }
 
@@ -34,8 +42,6 @@ public partial class TourEvent
     public string? ReasonCode { get; set; }
 
     public string? ReasonNote { get; set; }
-
-    public bool? NarrationInterrupted { get; set; }
 
     public string? DataJson { get; set; }
 
