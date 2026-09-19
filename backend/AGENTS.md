@@ -1,415 +1,294 @@
 # AGENTS.md — `backend/`
 
-Booking, tour scheduling and multi-robot dispatch API for CampusTour DT-AMR
-(Work Package 2). Read the repo-root `AGENTS.md` first for the shared rules;
-this file only covers what is specific to `backend/`.
+Read the repo-root `AGENTS.md` first. This file is the authoritative guide for
+placing backend code. The SQL schema, generated EF model, and
+`docs/decisions/0006-demo-first-tour-schema.md` define the current persisted
+business model. `docs/decisions/0005-backend-authoritative-poi-per-leg-orchestration.md`
+defines the fleet ownership boundary. Parts of `docs/architecture.md` still
+describe an older booking model; review that contract before implementing those
+flows, rather than treating its old entity names as current tables.
 
----
+## 1. Current stack and physical structure
 
-## 1. Stack
+- C# / .NET 10, controller-based ASP.NET Core Web API, MediatR,
+  FluentValidation, xUnit.
+- SQL Server + EF Core **Database First**. No normal EF migrations.
+- SignalR is the chosen browser realtime transport, but no Hub exists yet.
+- Four separate projects; no root-level backend project or extra architecture
+  layer.
 
-- Language / runtime: **C# / .NET 10 (LTS)**.
-- Framework: **ASP.NET Core Web API** (controller-based, not Minimal API).
-- Browser realtime transport: **SignalR**, matching `web/AGENTS.md`; it is not
-  implemented in the current backend scaffold. `backend/src/SmartCampus.Api/Hubs/`
-  is the intended API location when it lands.
-- Database / ORM: **SQL Server + Entity Framework Core, Database First**. The
-  database schema is the source of truth. Scaffolded partial entities live in
-  `Domain/Entities/`; the scaffolded `ApplicationDbContext` and EF mappings
-  live in `Infrastructure/Persistence/`. The normal workflow has no EF
-  migrations.
-- Architecture style: pragmatic **Clean Architecture + light CQRS + DDD-light**.
-  Do not add full-DDD infrastructure (aggregate roots, value objects, domain
-  events, specifications, factories) without a real business need.
-- Local database setup and DB First tooling are documented below. Never put a
-  real connection string in tracked configuration or a command committed to
-  the repository.
-
-### Local database configuration
-
-Runtime reads `ConnectionStrings:DefaultConnection`. From the repo root, set
-the environment variable and then start the API, for example in PowerShell:
-
-```powershell
-$env:ConnectionStrings__DefaultConnection = 'Server=localhost;Database=SmartCampus;User Id=<user>;Password=<password>;TrustServerCertificate=True'
-dotnet run --project backend/src/SmartCampus.Api/SmartCampus.Api.csproj
+```text
+backend/
+├── AGENTS.md
+├── SmartCampus.slnx
+├── database/smart-campus-tour-schema-v1.0.sql
+├── scripts/
+│   ├── verify
+│   └── scaffold-db
+├── src/
+│   ├── SmartCampus.Domain/          Entities/, Exceptions/
+│   ├── SmartCampus.Application/     Common/, DependencyInjection.cs
+│   ├── SmartCampus.Infrastructure/  Persistence/, DependencyInjection.cs
+│   └── SmartCampus.Api/             Common/, ExceptionHandling/,
+│                                    Properties/, Program.cs, appsettings.json
+└── tests/
+    ├── SmartCampus.UnitTests/
+    └── SmartCampus.IntegrationTests/
 ```
 
-The API project is already initialized with a `UserSecretsId`, so .NET 10 User
-Secrets works without another package or a project-file edit:
+Current `backend/src/SmartCampus.Api/` has no Controller or Hub implementation;
+current `backend/src/SmartCampus.Application/` has no feature use case or
+repository abstraction. An absent extension folder on GitHub is not missing
+setup.
 
-```bash
-dotnet user-secrets set \
-  "ConnectionStrings:DefaultConnection" \
-  "<connection-string>" \
-  --project backend/src/SmartCampus.Api/SmartCampus.Api.csproj
+Compile-time dependencies: `Domain` has no project references; `Application`
+references `Domain`; `Infrastructure` references `Application` and `Domain`;
+`Api` references `Application` and `Infrastructure`. `Api` is the composition
+root: `Program.cs` calls `AddApplication()` and
+`AddInfrastructure(builder.Configuration)`. Runtime requests enter Application
+use cases through MediatR; this is not a required linear
+`Api -> Infrastructure -> Application` call chain.
+
+## 2. Logical extension points and ownership
+
+The tree below shows where code belongs **when a real implementation needs
+it**. Entries marked `future` are not mandatory empty directories. Do not add
+`.gitkeep`, `<Folder Include>`, or a class/interface just to complete the tree.
+
+```text
+backend/src/SmartCampus.Domain/
+├── Entities/                         generated partial POCOs; handwritten behavior partials as needed
+├── Enums/                            future: stable domain enums only
+└── Exceptions/
+
+backend/src/SmartCampus.Application/
+├── Common/
+│   ├── Abstractions/
+│   │   ├── Messaging/               ICommand<T>, IQuery<T>
+│   │   └── Persistence/             IApplicationDbContext; specific repository interfaces when needed
+│   ├── Behaviors/                    validation and command commit pipeline
+│   ├── Exceptions/
+│   └── Models/                       PagedResult<T>
+├── Features/                          future: create for the first use case
+│   └── <Feature>/
+│       ├── Commands/<UseCase>/
+│       └── Queries/<UseCase>/
+└── DependencyInjection.cs
+
+backend/src/SmartCampus.Infrastructure/
+├── Persistence/
+│   ├── ApplicationDbContext.cs       generated EF mapping
+│   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
+│   └── Repositories/                future: specific implementations
+├── Authentication/                   future: JWT/password/token technology
+├── Integrations/                     future: fleet, email, storage adapters
+└── DependencyInjection.cs
+
+backend/src/SmartCampus.Api/
+├── Common/{Requests,Responses}/
+├── Controllers/                      future: HTTP endpoints
+├── ExceptionHandling/
+├── Hubs/                             future: SignalR transport
+├── Properties/
+└── Program.cs
 ```
 
-User Secrets are stored outside the repository. Do not commit passwords,
-`secrets.json`, or a secret-bearing `.env`/`appsettings.Development.json`.
+- **Domain** owns entities, business behavior, domain exceptions, and only
+  enums stable in the domain. It has no EF, ASP.NET, or external package
+  dependency. A generated `Tour.cs` remains replaceable; put a real tour rule
+  in a sibling `Tour.Behavior.cs` partial. Do not create behavior files for
+  simple data entities by default. Do not convert SQL string status columns to
+  enums without checking persistence and external compatibility.
+- **Application** owns commands/queries, validators, handlers, use-case
+  results/DTOs, and use-case-facing boundaries. Persistence abstractions go in
+  `backend/src/SmartCampus.Application/Common/Abstractions/Persistence/`;
+  external service abstractions belong in `Common/Abstractions/` when used.
+  Application does not reference EF, ASP.NET, `DbSet<T>`, or `IQueryable<T>`.
+- **Infrastructure** owns EF/SQL query construction, specific repository
+  implementations in `Persistence/Repositories/`, authentication technology in
+  `Authentication/`, and external adapters in `Integrations/<Capability>/`.
+  Create each folder with its first implementation. Repositories do not call
+  `SaveChangesAsync` under the normal command flow.
+- **Api** owns HTTP binding, transport request/response models, controllers,
+  status and exception mapping, SignalR Hubs, and DI composition. Controllers
+  dispatch Application use cases; they neither contain business rules nor
+  access `DbContext` or external clients directly. Do not return Domain or EF
+  entities directly from controllers.
 
-### Database First re-scaffold
+Organize Application **feature first**. Keep one use case and its validator,
+handler, and feature-local result together, for example:
 
-`backend/scripts/scaffold-db` reads the tooling-only variable
-`SMARTCAMPUS_DB_CONNECTION`; it never falls back to the runtime variable. The
-two variables may contain the same local connection string, but their purposes
-are different:
+```text
+backend/src/SmartCampus.Application/Features/Tours/
+├── Commands/StartTour/{StartTourCommand,StartTourCommandHandler,StartTourCommandValidator}.cs
+└── Queries/GetTour/{GetTourQuery,GetTourQueryHandler}.cs
+```
 
-- `ConnectionStrings__DefaultConnection`: API runtime configuration.
-- `SMARTCAMPUS_DB_CONNECTION`: input to the EF scaffold command.
+The example describes future placement, not existing files. Do not create
+global `Features/Commands/`, `Features/Queries/`, `DTOs/`, `Validators/`,
+`Handlers/`, or `Services/` buckets. A MediatR handler is the default use-case
+orchestrator. Add an Application service near its capability only for meaningful
+reuse or an independent named algorithm, such as a future dispatch algorithm;
+do not create one service per handler.
 
-Run from the repo root in Bash:
+## 3. Current model and fleet boundary
+
+`backend/database/smart-campus-tour-schema-v1.0.sql` and the scaffolded entities
+currently contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`,
+`RouteStop`, `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `TourEvent`, and
+`AuditLog`. A `Tour` stores scheduling and execution state; group registration
+and roster rows model school participation. `Robot` and `Tour` retain assignment
+references. `TourEvent` stores meaningful execution events. `RowVersion` on
+`Robot`, `Tour`, and `GroupRegistration` is a SQL Server concurrency token.
+
+`TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
+design, **not current tables or entities**. A navigation leg remains a
+conceptual command/operation under ADR-0005; there is no `TourLeg` or `Mission`
+table. `Tour.CurrentLegId` and `TourEvent.LegId` are identifiers, not foreign
+keys to a leg table. Do not invent those entities from older text in
+`docs/architecture.md`. The current schema has no visitor capacity column or
+individual visitor booking table, so older capacity/booking rules cannot be
+treated as implemented invariants. Resolve any desired behavior against the
+current schema and record public contract changes in `docs/architecture.md`.
+
+The backend owns POI/navigation target data, robot assignment decisions, and
+tour progression; the robot bridge only translates external commands to ROS.
+For production targets, use the backend-managed map/frame context and send
+only the current navigation leg. Keep transient high-frequency robot telemetry
+out of transactional SQL. A future fleet boundary such as `IFleetGateway` is
+an Application abstraction; its transport adapter belongs in
+`backend/src/SmartCampus.Infrastructure/Integrations/Fleet/`. The transport,
+authentication, and exact wire schema remain undecided. Do not invent REST or
+gRPC messages before the cross-system contract is agreed in
+`docs/architecture.md`. ROS topics and message types stay outside Domain and
+Application. A controller must never call a fleet or ROS client directly.
+
+## 4. Request, persistence, and response flow
+
+**Command:** HTTP request -> Api controller and transport mapping -> MediatR
+`ICommand<T>` -> `ValidationBehavior` (if validators exist) -> Application
+handler -> Domain behavior/Application service and Application repository or
+gateway boundary as needed -> Infrastructure implementation -> handler returns
+-> `UnitOfWorkBehavior` resolves `IApplicationDbContext` and calls
+`SaveChangesAsync` once -> Application result -> Api `BaseResponse<T>` -> client.
+`UnitOfWorkBehavior` runs after a successful handler; failed commands do not
+commit through that pipeline. The handler and repository normally do not save
+independently. External side effects and partial failures need explicit
+use-case design when implemented.
+
+**Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
+`ValidationBehavior` -> Application query handler -> Application read boundary
+-> Infrastructure query implementation -> Application result or
+`PagedResult<T>` -> Api response mapping -> client. Queries do not mutate
+state or commit. The globally registered `UnitOfWorkBehavior` skips queries
+without resolving `IApplicationDbContext`.
+
+The current pipeline code is in
+`backend/src/SmartCampus.Application/Common/Behaviors/`. The current
+`IApplicationDbContext` exposes only `SaveChangesAsync`; its implementation is
+the same scoped EF context registered by Infrastructure. It must not become an
+EF query surface for Application.
+
+`CollectionQueryParameters` in
+`backend/src/SmartCampus.Api/Common/Requests/CollectionQueryParameters.cs`
+currently defines `Search`, `Sort`, `Page` (default 1), `Size` (default 20),
+and `Expand`; it does not define `Select`. For a collection endpoint, validate
+`Page >= 1` and `1 <= Size <= 100`; the feature decides searchable fields,
+sort whitelist, and expandable relations. Do not add a generic reflection
+query engine. The flow is Api `CollectionQueryParameters` -> feature query ->
+Application persistence abstraction -> Application `PagedResult<T>` -> Api
+`PagedResponse<T>` with `PaginationMetadata`. No collection endpoint or bounds
+validator is implemented yet.
+
+`GlobalExceptionHandler` in Api currently maps Domain and FluentValidation
+exceptions to 400, `NotFoundException` to 404, `ConflictException` to 409,
+and unexpected exceptions to 500. HTTP errors use a `BaseResponse` envelope.
+Do not expose stack traces, SQL details, secrets, or visitor personal data in
+responses or logs. Domain and Application code must not throw HTTP-specific
+exceptions.
+
+## 5. Database First and local configuration
+
+The schema is the source of truth. The normal path is SQL schema ->
+`backend/scripts/scaffold-db` -> temporary EF scaffold -> generated partial
+POCOs in `backend/src/SmartCampus.Domain/Entities/` and generated
+`backend/src/SmartCampus.Infrastructure/Persistence/ApplicationDbContext.cs`.
+The handwritten `ApplicationDbContext.Abstractions.cs` implements the
+Application commit interface and survives re-scaffolding. Business behavior
+belongs in separate partial files. The script never runs migrations or changes
+the database, does not use `--force`, and does not delete obsolete generated
+entities. Review the diff and remove obsolete generated files manually only
+after verifying the schema dropped them.
+
+For a schema change: write an ADR under `docs/decisions/` first; update the
+SQL source; apply the database change through the project's database process;
+re-scaffold; review generated changes and tests. The current v1.0 SQL script
+creates tables in an **empty** selected database and does not migrate old data.
+Do not treat a re-scaffold as a database migration.
+
+Runtime reads `ConnectionStrings:DefaultConnection`, for example from
+`ConnectionStrings__DefaultConnection` or .NET User Secrets; never track a
+real connection string. The tooling script reads only
+`SMARTCAMPUS_DB_CONNECTION`, requires `dotnet-ef` 10.x, and can be run from the
+repo root as:
 
 ```bash
-export SMARTCAMPUS_DB_CONNECTION='Server=localhost;Database=SmartCampus;User Id=<user>;Password=<password>;TrustServerCertificate=True'
+export SMARTCAMPUS_DB_CONNECTION='<local SQL Server connection string>'
 bash backend/scripts/scaffold-db
 ```
 
-The script requires `dotnet-ef` 10.x (10.0.12 matches the project). If it is
-not installed, install it outside the project with
-`dotnet tool install --global dotnet-ef --version 10.0.12`.
+## 6. Planned authentication and realtime placement
 
-The script scaffolds into a temporary directory first, then copies only the
-entity files generated by EF to `backend/src/SmartCampus.Domain/Entities/` and
-the generated `ApplicationDbContext.cs` to
-`backend/src/SmartCampus.Infrastructure/Persistence/`. It does not use
-`--force`, delete destination files, create migrations, or update the database.
-Consequently `*.Behavior.cs` and `ApplicationDbContext.Abstractions.cs` are not
-touched. Review the diff after every scaffold and manually remove an obsolete
-generated entity only when the database schema has actually dropped it.
+Auth is **not implemented**. Future auth use cases belong in
+`backend/src/SmartCampus.Application/Features/Auth/`, token/password/JWT
+technology in `backend/src/SmartCampus.Infrastructure/Authentication/`, and
+HTTP endpoints in `backend/src/SmartCampus.Api/Controllers/`. The planned
+contract is a 15-minute JWT access token in the login response and a 7-day
+refresh token set in an HttpOnly, Secure cookie, never a JSON body; access
+tokens are sent as Bearer tokens and contain only `sub` and `role`, no personal
+data. Planned endpoints
+are `POST /api/auth/login`, `POST /api/auth/refresh`, and
+`POST /api/auth/logout`. Passwords need a modern password hash. Refresh tokens
+are stored only as hashes and are revoked
+server-side on logout; refresh rejects unknown, expired, or revoked tokens.
+The current `RefreshTokens` table has a binary `TokenHash` and nullable
+`RevokedAt`, not a revoked flag. The schema's `UserRoles.Role` examples are
+`ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`; align the final JWT role contract
+with `web/` before implementing endpoints. Do not assume a visitor account
+exists in the current schema. Robot-control endpoints must require
+authorization.
 
----
+SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/` when a realtime
+use case exists. Application must not depend on SignalR types; add an
+Application notification boundary only when needed, then implement its
+transport adapter in Api or Infrastructure according to the transport. Hub
+names and methods are not yet a contract; record them in
+`docs/architecture.md` before cross-system use.
 
-## 2. Layout
+## 7. Tests, verification, and limits
 
-**4 separate `.csproj` per layer** in one solution, not folders inside one
-project. Dependencies point inward only (API -> Infrastructure/Application ->
-Domain; nothing points back out to API).
+- `backend/tests/SmartCampus.UnitTests/`: Domain behavior, validators,
+  handlers/services with meaningful mocked boundaries, pipeline behaviors,
+  and pure models.
+- `backend/tests/SmartCampus.IntegrationTests/`: Infrastructure DI, EF
+  mapping/persistence, API error/transport behavior, and endpoint integration
+  when implemented. Test observable behavior, not private implementation;
+  avoid fake tests added only for coverage.
+- From the repo root, run `scripts/verify backend`. It restores, builds
+  `backend/SmartCampus.slnx` with warnings as errors, and runs xUnit tests.
+  It does not connect to SQL Server, invoke the scaffold script, or run EF
+  migration checks. Do not report completion while it fails.
 
-```
-backend/
-├── SmartCampus.slnx
-├── src/
-│   ├── SmartCampus.Domain/          Scaffolded partial Entities/ and domain
-│   │                                 Exceptions/. No project references.
-│   ├── SmartCampus.Application/     Common/{Abstractions,Behaviors,
-│   │                                 Exceptions,Models}/; feature-first
-│   │                                 Features/<Feature>/{Commands,Queries}/;
-│   │                                 DependencyInjection.cs.
-│   │                                 -> Domain. MediatR + FluentValidation.
-│   ├── SmartCampus.Infrastructure/  Persistence/ApplicationDbContext.cs and
-│   │                                 concrete technology implementations;
-│   │                                 DependencyInjection.cs.
-│   │                                 -> Application + Domain.
-│   └── SmartCampus.Api/             Controllers/, Common/{Requests,Responses}/,
-│                                     ExceptionHandling/, Properties/,
-│                                     Program.cs, appsettings.
-│                                     -> Application + Infrastructure.
-├── tests/
-│   ├── SmartCampus.UnitTests/       unit tests, xUnit
-│   └── SmartCampus.IntegrationTests/ integration tests, xUnit
-└── scripts/{verify,scaffold-db}
-```
+Do not introduce by default `IRepository<T>`, `GenericRepository<T>`, another
+`IUnitOfWork` or `TransactionBehavior`, generic CRUD services/base controllers,
+Result/Maybe/Specification frameworks, AutoMapper, generic reflection
+search/sort/expand, domain-event or aggregate-root frameworks, Redis, a
+message broker, microservices, event sourcing, or a new architecture layer.
+Use async I/O, propagate cancellation, keep UTC timestamps, and address
+concurrency/retries where a real state-changing use case requires them.
 
-Wiring: `Program.cs` gọi `builder.Services.AddApplication()` và
-`AddInfrastructure(builder.Configuration)` — mỗi layer tự đăng ký DI của mình
-trong `DependencyInjection.cs` của layer đó, `Api` không new trực tiếp class
-của `Infrastructure`.
-
----
-
-## 3. Architecture Rules
-
-Clean Architecture, dependencies point inward only:
-
-```
-SmartCampus.Api
-    v
-SmartCampus.Infrastructure  --\
-    v                         > both depend on
-SmartCampus.Application     --/
-    v
-SmartCampus.Domain
-```
-
-- `Domain` has zero project references. No EF Core, no ASP.NET, no external
-  package beyond the BCL. Plain entities, enums, and domain exceptions only.
-- Database-scaffolded entity files are `public partial class`. Keep generated
-  files re-scaffoldable: put handwritten lifecycle behavior in a sibling such
-  as `Mission.Behavior.cs`, using the same partial class. Do not add behavior
-  files to simple lookup, telemetry, or audit entities without a real rule.
-- `ApplicationDbContext.cs` is scaffolded. Keep Application abstraction wiring
-  in the handwritten partial `ApplicationDbContext.Abstractions.cs` so a
-  re-scaffold cannot overwrite it.
-- `Application` defines persistence and external-boundary abstractions
-  (`IFooRepository`, `IClock`, ...), commands/queries, and their handlers. It
-  must not reference EF Core, ASP.NET Core, or any HTTP-specific type — only
-  `Domain` and abstractions.
-- `Infrastructure` implements the `Application` abstractions: the scaffolded EF
-  Core `DbContext`, entity mappings, specific repository classes, and external
-  service clients (email, storage, ROS bridge client, ...). Query construction
-  lives here only, never in `Application`.
-- `Api` is composition + transport: controllers, DTOs, DI registration
-  (`Program.cs`), model validation, HTTP status mapping. Controllers must not
-  contain business logic or touch `DbContext`/EF Core types directly. They
-  dispatch an Application command/query through MediatR; a named Application
-  capability service is valid where that is the established boundary.
-- A new feature adds one command/query and its handler for one use case. If it
-  needs persistence, use an Application repository abstraction and an
-  Infrastructure implementation. Extract an Application service only when it
-  has an independent responsibility, meaningful reuse, or a clearly named
-  capability. Do not reach from `Api` straight into `Infrastructure`.
-- Features are organized by business capability, for example
-  `Features/Robots/Commands/CreateRobot/` and
-  `Features/Robots/Queries/GetRobot/`; never create root-level
-  `Features/Commands/` or `Features/Queries/` buckets.
-
-Scheduling / dispatch specifically:
-
-- The backend owns `TourRoute`, `TourSlot`, `Booking`, `TourInstance`,
-  `TourLeg`, POI/navigation-target data, robot assignment, and the per-leg tour
-  state machine. These business concepts and their use cases belong in
-  `Domain`/`Application` according to the dependency rules above.
-- A `TourSlot` is a timed group with visitor capacity. Confirmed visitors share
-  one `TourInstance`; booking a place does not reserve a robot days in advance.
-  Robot assignment happens near the tour start.
-- The robot-assignment algorithm (which available robot takes which ready tour,
-  when) lives in an **`Application` service** — e.g. `DispatchService`. It
-  fetches robots and tour state through repository interfaces and returns the
-  decision. Do not put it in a controller, a repository, or a fleet client.
-- The backend sends only the current `TourLeg`, waits for robot arrival, owns
-  the `AT_POI` narration/interaction pause, and then decides when to send the
-  next leg. Never send a whole stop list for the robot to orchestrate.
-- If no robot is available at the tour time, put the `TourInstance` into an
-  operational waiting/delayed state such as `WAITING_FOR_ROBOT` or `DELAYED`
-  for operator intervention. Do not fail an already confirmed booking merely
-  because a robot is temporarily unavailable.
-- The fleet bridge client (the thing that actually talks to the robot over
-  the still-TBD external transport) is **`Infrastructure`**, behind an
-  `Application` interface such as `IFleetGateway`. `Application` code calls
-  the interface, never a transport client directly.
-- **A controller must never call the bridge directly.** The path is always
-  `Api -> Application use case -> IFleetGateway -> Infrastructure`, with a
-  named dispatch capability service where that algorithm warrants one, even
-  for a one-line "send this command" endpoint.
-
-Core invariants (implementation is deferred until the relevant feature task):
-
-- confirmed visitor count never exceeds `TourSlot` capacity;
-- one robot has at most one active assignment;
-- one active `TourInstance` has at most one assigned robot;
-- transient robot telemetry state and tour business state remain separate;
-- retries/duplicate commands do not create duplicate business-level leg
-  execution;
-- stale/out-of-order robot state cannot overwrite newer state; `seq` supports
-  ordering.
-
-### Coding and maintainability
-
-The layer ownership and dependency direction above are authoritative. These
-rules add practical guidance without introducing another architecture layer.
-
-- Keep controllers thin: bind/validate transport input, dispatch the
-  Application use case, and map the result. Do not duplicate a business
-  invariant in the controller, handler/service, and persistence mapping.
-- HTTP and SignalR DTOs remain transport types; do not make them Domain
-  entities. Keep Application persistence and external-boundary abstractions
-  in Application, with their implementations in Infrastructure.
-- One `ICommand<TResponse>` or `IQuery<TResponse>` represents one use case.
-  Its MediatR handler is the default orchestration entry point. Queries do not
-  mutate business state.
-- Extract an Application service only for a real independent responsibility,
-  meaningful reuse across handlers, or a clearly named business capability.
-  Do not create one service per handler merely for layering. A named dispatch
-  capability such as `DispatchService` is appropriate when its algorithm
-  genuinely deserves one.
-- The decided persistence pattern is Application-owned repository abstractions
-  implemented by Infrastructure. Concrete repositories are added per real use
-  case; none should be assumed to exist before implementation. Do not add a
-  second generic/base repository layer or repositories for data that has no
-  persistence boundary.
-- The existing `UnitOfWorkBehavior<,>` is the command persistence boundary.
-  Do not introduce a second Unit of Work abstraction or competing
-  `SaveChanges` policy without a concrete requirement. It resolves
-  `IApplicationDbContext` only after a command handler succeeds; queries must
-  not resolve a DbContext merely because the behavior is globally registered.
-- `IApplicationDbContext` is the commit abstraction used by that pipeline. It
-  must not become an EF leakage point: do not expose `DbSet<T>`, `IQueryable<T>`
-  or other EF Core-specific types from it into Application.
-- FluentValidation handles input/use-case checks that can run before the
-  operation. Rules requiring current persisted state belong in the use-case
-  flow; critical invariants also need persistence protection when races allow
-  application-side checks to be bypassed.
-- Use `async`/`await` for I/O. Do not use `.Result` or `.Wait()`; propagate
-  `CancellationToken`; do not use unowned fire-and-forget for business-critical
-  work; cancellation/failure must not knowingly leave inconsistent state.
-- Use PascalCase for types/public members, camelCase for locals/parameters,
-  `Async` suffixes where appropriate, and keep nullable enabled. Do not
-  suppress warnings without understanding them; verification treats compiler
-  warnings as errors.
-- Avoid `dynamic` unless a real external/interoperability boundary requires it.
-- Avoid broad `catch (Exception)` except at an intentional boundary that
-  logs/maps unexpected failures without swallowing them.
-- Persistence is Database First. Keep EF Core and SQL Server tooling in
-  Infrastructure, preserve scaffolded mappings, use no-tracking for appropriate
-  read-only queries, avoid N+1 queries, and preserve transaction/invariant
-  semantics. Do not add migrations or a pending-migration verification gate to
-  the current workflow. Schema changes still require the ADR rule in Section 9.
-- Do not swallow exceptions or expose stack traces, SQL errors, internal
-  messages, or secrets at the API boundary. Use structured operational logs
-  with useful context, no secrets/tokens, and no noisy high-frequency telemetry;
-  Section 9 owns the visitor-PII prohibition.
-- Keep API contracts explicit. Controllers do not return EF or Domain entities
-  directly; preserve `BaseResponse<T>`/`PagedResponse<T>` conventions where
-  applicable. Collection parameters are `Search`, `Sort`, `Page`, `Size`, and
-  `Expand` as defined by
-  `backend/src/SmartCampus.Api/Common/Requests/CollectionQueryParameters.cs` —
-  `Select` is not currently implemented. Contract changes visible outside this
-  backend follow Section 6: update `docs/architecture.md` in the same PR.
-- `PagedResult<T>` is the Application use-case paging model.
-  `BaseResponse<T>`, `PagedResponse<T>`, and `PaginationMetadata` are API/HTTP
-  presentation types and remain in API.
-- Use UTC for persisted/server timestamps and configuration for environment-
-  specific values. For state-changing operations, account for retries,
-  concurrency, stale state, and partial failure; do not add distributed
-  locking or a generic idempotency framework without a real requirement.
-- Clean Architecture and SOLID keep responsibilities and boundaries clear;
-  they do not maximize the number of layers, interfaces, or classes. Do not
-  introduce by default an interface for every class, a generic/base
-  repository, generic CRUD service, generic base controller, second Unit of
-  Work, Result/Maybe/Specification framework, AutoMapper for a few explicit
-  mappings, CQRS infrastructure beyond the existing MediatR pattern, event
-  sourcing, a generic domain-event or state-machine framework, Redis/message
-  broker, microservices, or factories/builders for trivial construction.
-
----
-
-## 4. Testing Strategy
-
-- Unit test framework: **xUnit**.
-- Actual solution projects are `backend/tests/SmartCampus.UnitTests/` and
-  `backend/tests/SmartCampus.IntegrationTests/`.
-- Unit tests cover observable Application behavior and invariants without
-  ASP.NET or real infrastructure where possible. Integration tests cover
-  persistence, SQL, transactions, mappings, and other real infrastructure
-  semantics when those implementations exist. Do not add an alternate in-memory
-  persistence strategy or Testcontainers without a concrete test case.
-- Add regression tests for reproducible bugs, mock meaningful external
-  boundaries rather than every owned class, and do not test private details or
-  add tests only to increase coverage. A refactor without behavior change does
-  not require unrelated test rewrites.
-- `backend/scripts/verify` restores, builds `backend/SmartCampus.slnx` with
-  `-warnaserror`, then runs `dotnet test SmartCampus.slnx --no-build` from
-  `backend/`. Database First verification does not run EF migration checks,
-  connect to SQL Server, or invoke `backend/scripts/scaffold-db`.
-- There is no coverage threshold. A behavior change should ship with tests in
-  the same change, or document why it cannot be automated.
-
----
-
-## 5. Authentication
-
-Contract with `web/` (see `web/AGENTS.md`) — decided, details TBD:
-
-- **JWT access token + refresh token in an HttpOnly cookie.**
-- Access token: short-lived, returned in the login response body, sent by the
-  client as `Authorization: Bearer <token>`. Carries the user's role
-  (`staff`/`ops`/visitor, etc.) as a claim so the frontend can gate `/admin/*`
-  without an extra round trip.
-- Refresh token: long-lived, issued as an **HttpOnly, Secure** cookie — the
-  API sets it via `Set-Cookie`, never returns it in a JSON body. A dedicated
-  refresh endpoint reads the cookie and issues a new access token.
-- Password storage: hash with a modern algorithm (BCrypt or ASP.NET Core
-  Identity's default) — never plaintext, never a fast general-purpose hash
-  (MD5/SHA1/SHA256 alone).
-- Token lifetimes: access token **15 minutes**, refresh token **7 days**.
-- Claims on the access token: **`sub` (user id) and `role` only** — no
-  display name, email, or other PII in the JWT payload. If the frontend needs
-  a display name, it fetches that separately (e.g. a `/api/auth/me` call),
-  not from the token.
-- Endpoints: `POST /api/auth/login` (returns access token in the body, sets
-  the refresh token as an HttpOnly cookie), `POST /api/auth/refresh` (reads
-  the refresh cookie, returns a new access token), `POST /api/auth/logout`.
-- Logout/revocation: **server-side revocation, not just cookie deletion.**
-  Refresh tokens are persisted (e.g. a `RefreshTokens` table/entity — token
-  hash, user id, expiry, revoked flag — schema change needs an ADR per
-  Section 9). `POST /api/auth/logout` marks the presented refresh token as
-  revoked in storage, then clears the cookie. `POST /api/auth/refresh` must
-  reject a revoked or unknown token even if it has not yet expired. This
-  means a stolen refresh token can be invalidated by the legitimate user
-  logging out, instead of staying valid until its 7-day expiry.
-- Store a hash of the refresh token (not the raw token) — same reasoning as
-  password storage: a DB leak should not hand out usable tokens.
-
----
-
-## 6. Interface with the robot fleet
-
-The robot side (`robot/`) is a separate deploy unit maintained by WP3. Any
-change to the telemetry the backend consumes or the commands it sends is a
-**contract change**: update `docs/architecture.md` in the same PR and tell WP3.
-
-The backend does **not** speak ROS. It talks to a thin bridge node that lives
-in `robot/` and translates to ROS 2 on the other side — full topology in
-`docs/architecture.md` §3. For the backend that means:
-
-- One `Application` interface (`IFleetGateway` or similar) describes what the
-  fleet can do — send/cancel one leg and receive/read latest robot state. Its
-  implementation in `Infrastructure` uses the external transport once that
-  transport is decided.
-- Do not add ROS concepts (topic names, action names, message types) to
-  `Domain` or `Application`. They stop at the `Infrastructure` boundary.
-- Treat the robot as unreliable: it can be offline, slow, or mid-reboot. A
-  dispatch call that cannot reach a robot must not hang a request thread or
-  leave an inconsistent assignment. Keep the confirmed booking intact and
-  move the `TourInstance` to the documented waiting/delayed operational path.
-- Production POI target poses are backend-managed data. Each `TourLeg`
-  resolves `stop_id`, `x`, `y`, and `yaw` in its map/frame/context before
-  dispatch; robot-local `bus_stops.yaml` is not authoritative production data.
-- Robot state is transient latest-state data. Do not persist every pose update
-  to transactional SQL Server; persist meaningful business state transitions
-  and use a dedicated experiment log/file when a benchmark needs telemetry.
-- Battery is optional/nullable telemetry, not a guaranteed physical capability
-  or a mandatory dispatch threshold.
-- The external Fleet Emulator in `digital-twin/` uses this same boundary and
-  must not reference `SmartCampus.Application` or
-  `SmartCampus.Infrastructure`.
-
-<!-- TODO(WP2+WP3): chốt wire protocol (REST vs gRPC), auth cho kênh điều
-khiển robot, và schema telemetry/command — rồi ghi vào docs/architecture.md §3
-trước khi code hai đầu. -->
-
----
-
-## 7. Verification
-
-```bash
-backend/scripts/verify
-```
-
-Order: `dotnet restore` -> `dotnet build -warnaserror` -> `dotnet test`.
-There is no migrations or pending-model-change step in the Database First
-workflow.
-
----
-
-## 8. Definition of Done
-
-Standard **DONE (verified)** from the root `AGENTS.md`. The backend has no
-tier-3 hardware step — if a change is fully covered by tests and
-`backend/scripts/verify` passes, it is DONE.
-
-Exception: anything that sends commands to a real robot. That is tier 3 and
-must be reported as READY FOR HARDWARE TEST.
-
----
-
-## 9. Hard Constraints
-
-- Do not change the database schema without an ADR in `docs/decisions/`.
-- Do not weaken authentication on robot-control endpoints. An unauthenticated
-  path that can move a robot is a safety bug, not a convenience.
-- Visitor personal data (name, contact, booking history) must never appear in
-  logs or in an error response body.
-
-<!-- TODO(WP2): thêm constraint khác khi có. -->
+Do not change the database schema without an ADR. Do not weaken robot-control
+authorization. Do not log or return visitor names, contact details, roster
+rows, booking history, tokens, or other secrets. A change to an API, SignalR,
+or fleet public contract must also update `docs/architecture.md` under the
+repo-root rule.
