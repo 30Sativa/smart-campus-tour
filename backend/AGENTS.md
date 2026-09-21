@@ -4,9 +4,9 @@ Read the repo-root `AGENTS.md` first. This file is the authoritative guide for
 placing backend code. The SQL schema, generated EF model, and
 `docs/decisions/0006-demo-first-tour-schema.md` define the current persisted
 business model. `docs/decisions/0005-backend-authoritative-poi-per-leg-orchestration.md`
-defines the fleet ownership boundary. Parts of `docs/architecture.md` still
-describe an older booking model; review that contract before implementing those
-flows, rather than treating its old entity names as current tables.
+defines the fleet ownership boundary. `docs/architecture.md` distinguishes the
+current persisted model from historical terminology and planned cross-system
+flows; review those contracts before implementing them.
 
 ## 1. Current stack and physical structure
 
@@ -145,8 +145,8 @@ references. `TourEvent` stores meaningful execution events. `RowVersion` on
 design, **not current tables or entities**. A navigation leg remains a
 conceptual command/operation under ADR-0005; there is no `TourLeg` or `Mission`
 table. `Tour.CurrentLegId` and `TourEvent.LegId` are identifiers, not foreign
-keys to a leg table. Do not invent those entities from older text in
-`docs/architecture.md`. The current schema has no visitor capacity column or
+keys to a leg table. Historical terminology in `docs/architecture.md` does
+not define current entities. The current schema has no visitor capacity column or
 individual visitor booking table, so older capacity/booking rules cannot be
 treated as implemented invariants. Resolve any desired behavior against the
 current schema and record public contract changes in `docs/architecture.md`.
