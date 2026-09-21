@@ -21,8 +21,11 @@ shared rules; this file only covers what is specific to `web/`.
   same domain. They are split by route + role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
   - `/staff/*`: tour operations, for `Staff` and `Admin`. What an operator does
-    during a shift: today's tours, the AMR fleet, alerts, the digital twin,
-    feedback reports. `CampusStaff` and `TourOperator` were merged into the one
+    around a remote tour: today's sessions and their groups, the pre-start
+    check and Start, live operations on the operational twin (Hold / Next /
+    End Early / recovery), the robot, the session log. Scope: the remote-tour
+    specification of 19/09/2026; screen map in `web/docs/staff-operations.md`.
+    `CampusStaff` and `TourOperator` were merged into the one
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
@@ -108,9 +111,11 @@ web/
     │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
     │   │                 sections/ (one component per landing section)
     │   ├── staff/        StaffShell, staff-nav, use-mobile-nav, StaffUi
-    │   │                 (shared chrome), status/type vocabulary, formatters,
-    │   │                 attention (the "needs me now" queue + fleet bands),
-    │   │                 staff-hooks (query layer)
+    │   │                 (shared chrome), ui-classes, status/type vocabulary,
+    │   │                 formatters, reason, attention (next action per
+    │   │                 state, counts, "needs me now"), staff-hooks (query
+    │   │                 layer + realtime sync), components/ (run status,
+    │   │                 controls, route, robot, dialogs, operational twin)
     │   └── administration/ AdminShell, admin-nav, admin-analytics (pure DTO to
     │                     chart rows), charts/ (Recharts, admin only)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub

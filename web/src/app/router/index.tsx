@@ -46,12 +46,14 @@ const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
+const ToursTodayPage = lazy(() => import('../../routes/staff/ToursTodayPage'))
 const SchedulePage = lazy(() => import('../../routes/staff/SchedulePage'))
-const SessionDetailPage = lazy(() => import('../../routes/staff/SessionDetailPage'))
-const AmrPage = lazy(() => import('../../routes/staff/AmrPage'))
-const AlertsPage = lazy(() => import('../../routes/staff/AlertsPage'))
+const TourDetailPage = lazy(() => import('../../routes/staff/TourDetailPage'))
+const StartCheckPage = lazy(() => import('../../routes/staff/StartCheckPage'))
+const LiveOperationsPage = lazy(() => import('../../routes/staff/LiveOperationsPage'))
+const RobotPage = lazy(() => import('../../routes/staff/RobotPage'))
+const TourHistoryPage = lazy(() => import('../../routes/staff/TourHistoryPage'))
 const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
-const ReportsPage = lazy(() => import('../../routes/staff/ReportsPage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
 const SystemOverviewPage = lazy(() => import('../../routes/admin/SystemOverviewPage'))
@@ -174,12 +176,25 @@ export const routes = [
     element: <StaffArea />,
     children: [
       { index: true, element: <OverviewPage /> },
+      // Sessions (remote-tour scope): today's list, any day, detail & log,
+      // and the pre-start check for a Ready one.
+      { path: 'tours', element: <ToursTodayPage /> },
+      { path: 'tours/:tourId', element: <TourDetailPage /> },
+      { path: 'tours/:tourId/start', element: <StartCheckPage /> },
       { path: 'schedule', element: <SchedulePage /> },
-      { path: 'tours/:sessionId', element: <SessionDetailPage /> },
-      { path: 'amr', element: <AmrPage /> },
-      { path: 'alerts', element: <AlertsPage /> },
+      // Operations.
+      { path: 'live', element: <LiveOperationsPage /> },
+      { path: 'live/:tourId', element: <LiveOperationsPage /> },
+      { path: 'robot', element: <RobotPage /> },
       { path: 'digital-twin', element: <DigitalTwinPage /> },
-      { path: 'reports', element: <ReportsPage /> },
+      { path: 'history', element: <TourHistoryPage /> },
+      // Renamed with the operations redesign (2026-09-21). Migration only:
+      // drop once no bookmark points at them.
+      { path: 'amr', element: <Navigate to="/staff/robot" replace /> },
+      { path: 'alerts', element: <Navigate to="/staff" replace /> },
+      { path: 'reports', element: <Navigate to="/staff/history" replace /> },
+      // A mistyped path inside the area stays inside the area.
+      { path: '*', element: <Navigate to="/staff" replace /> },
     ],
   },
   {
@@ -195,10 +210,10 @@ export const routes = [
   // and an Admin route always wins over a legacy path. Drop these once the old
   // links are gone.
   { path: '/admin/schedule', element: <Navigate to="/staff/schedule" replace /> },
-  { path: '/admin/amr', element: <Navigate to="/staff/amr" replace /> },
-  { path: '/admin/alerts', element: <Navigate to="/staff/alerts" replace /> },
+  { path: '/admin/amr', element: <Navigate to="/staff/robot" replace /> },
+  { path: '/admin/alerts', element: <Navigate to="/staff" replace /> },
   { path: '/admin/digital-twin', element: <Navigate to="/staff/digital-twin" replace /> },
-  { path: '/admin/reports', element: <Navigate to="/staff/reports" replace /> },
+  { path: '/admin/reports', element: <Navigate to="/staff/history" replace /> },
   { path: '/admin/tours/:sessionId', element: <LegacySessionRedirect /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]

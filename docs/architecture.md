@@ -220,7 +220,12 @@ must not receive every pose update. A controlled benchmark may write telemetry
 to a dedicated experiment log/file.
 
 Backend-to-browser realtime delivery uses SignalR. Exact hub and method schema
-remain TBD.
+remain TBD. The operations console's proposal (hub `/hubs/operations` with
+`FleetUpdated`, `TourUpdated(tourId, revision)`, `AssistanceRequired`, and the
+`/api/staff/tours/*` + `/api/staff/robots/*` calls it expects, following the
+remote-tour scope of 19/09/2026) is written down in
+`web/src/api/contracts/staff-realtime.ts`, `web/src/api/contracts/staff.ts` and
+`web/docs/staff-operations.md`; it is not agreed until recorded here.
 
 ---
 

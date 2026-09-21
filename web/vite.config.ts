@@ -14,5 +14,6 @@ export default defineConfig({
     // lazy admin/chart chunks compile. Keep behavioral query timeouts unchanged,
     // but do not terminate the whole test while that transform is in flight.
     testTimeout: 30_000,
+    maxWorkers: 3,
   },
 })
