@@ -19,13 +19,15 @@ BƯỚC 1 — BUILD MAP (chọn 1 trong 2 case, đều dùng slam_toolbox):
 
 BƯỚC 2 — LƯU MAP (khi map trong RViz đã kín):
     ros2 run nav2_map_server map_saver_cli -f \
-        ~/fleet-management-system/ros2_ws/src/robot_navigation/maps/my_map
-    # tạo my_map.yaml + my_map.pgm, rồi rebuild để copy vào share:
-    colcon build --packages-select robot_navigation
+        /maps/campus_map
+    # tạo /maps/campus_map.yaml + /maps/campus_map.pgm trên volume host
+    # ./robot_maps:/maps; không lưu map robot thật vào source/image.
 
 BƯỚC 3 — NAVIGATE trên map đã lưu (KHÔNG chạy SLAM nữa):
     ros2 launch robot_navigation navigation.launch.py \
-        map:=/path/to/my_map.yaml                             # robot thật
+        map:=/maps/campus_map.yaml                           # robot thật
+    ros2 launch robot_navigation localization.launch.py \
+        robot_id:=robot_01 map:=/maps/campus_map.yaml        # AMCL standalone
     ros2 launch robot_navigation sim_navigation.launch.py    # Gazebo (map co san)
     # Gui goal: RViz "Nav2 Goal", hoac bus_manager (/go_to_stop).
     # RViz KHONG tu mo; them rviz:=true neu muon xem.
@@ -38,7 +40,7 @@ LUU Y robot that: KHONG co map mac dinh. Quen map:= se bao loi ro rang roi dung.
 
 | File | Mục đích |
 |---|---|
-| `localization.launch.py` | map_server + AMCL + lifecycle manager (standalone hoặc được include) |
+| `localization.launch.py` | map_server + AMCL + lifecycle manager; standalone cần truyền `map:=...` |
 | `navigation.launch.py` | Robot thật: bringup + LiDAR + AMCL + Nav2 trên map đã lưu |
 | `sim_navigation.launch.py` | Gazebo: mode_manager + relay + AMCL + Nav2 trên map đã lưu |
 
