@@ -26,12 +26,13 @@
 export const ADMIN_ROLE = 'Admin' as const
 export const STAFF_ROLE = 'Staff' as const
 export const VISITOR_ROLE = 'Visitor' as const
+export const REPRESENTATIVE_ROLE = 'Representative' as const
 
 /** May open `/staff/*`. */
 export const STAFF_ROLES = [STAFF_ROLE, ADMIN_ROLE] as const
 
 /** Every role the app can see, visitor included. */
-export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
+export const ALL_ROLES = [VISITOR_ROLE, REPRESENTATIVE_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
 
 /**
  * Home of the visitor app.
@@ -65,6 +66,8 @@ const LEGACY_MAP: Record<string, AppRole> = {
   administrator: ADMIN_ROLE,
   visitor: VISITOR_ROLE,
   guest: VISITOR_ROLE,
+  representative: REPRESENTATIVE_ROLE,
+  schoolrepresentative: REPRESENTATIVE_ROLE,
 }
 
 export function normalizeRole(raw?: string | null): AppRole {
@@ -81,6 +84,16 @@ export function isStaffRole(role?: string | null): boolean {
 /** May open `/admin/*`. Administration is not part of the operations role. */
 export function isAdminRole(role?: string | null): boolean {
   return normalizeRole(role) === ADMIN_ROLE
+}
+
+/** Opening the monitoring area never grants robot-control permission. */
+export function hasOperationalRole(role?: string | null): boolean {
+  return normalizeRole(role) === STAFF_ROLE
+}
+
+/** Legacy Visitor accounts are representatives, never Student identities. */
+export function isRepresentativeRole(role?: string | null): boolean {
+  return Boolean(role) && ['representative', 'schoolrepresentative', 'visitor', 'guest'].includes(role!.trim().toLowerCase())
 }
 
 /**
@@ -101,6 +114,8 @@ export function roleLabel(role?: string | null): string {
       return 'Quản trị viên'
     case STAFF_ROLE:
       return 'Nhân viên vận hành'
+    case REPRESENTATIVE_ROLE:
+      return 'Đại diện trường/đoàn'
     default:
       return 'Khách tham quan'
   }
@@ -112,8 +127,8 @@ export function roleLabel(role?: string | null): string {
  * being re-derived at each call site.
  */
 export function homePathForRole(role?: string | null): string {
+  if (normalizeRole(role) === REPRESENTATIVE_ROLE) return VISITOR_HOME
   if (isAdminRole(role)) return '/admin'
   if (isStaffRole(role)) return '/staff'
   return VISITOR_HOME
 }
-

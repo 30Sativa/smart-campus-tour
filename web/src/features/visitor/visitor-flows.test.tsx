@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
+import { remotePreviewApi, resetRemotePreview } from '../../mocks/remote-tour-mock'
+import { useAuthStore } from '../../stores/auth-store'
 import { mockVisitorApi } from '../../mocks/visitor-mock'
 import VisitorShell from './VisitorShell'
 import VisitorHomePage from '../../routes/visitor/VisitorHomePage'
@@ -40,6 +42,8 @@ function visit(path: string) {
 }
 
 beforeEach(() => {
+  resetRemotePreview()
+  useAuthStore.getState().setAuth('mock', { userId: 'mock-user-representative', username: 'demo', role: 'Representative' })
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   // jsdom has no layout or native modal implementation. These model open/close;
   // browser focus trapping and visual layout still require a browser check.
@@ -47,10 +51,10 @@ beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value() { this.setAttribute('open', '') } })
   Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value() { this.removeAttribute('open') } })
 })
-afterEach(() => { clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks() })
+afterEach(() => { useAuthStore.getState().logout(); clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks() })
 
 describe('visitor journeys', () => {
-  it('follows Home → Explore → Map → location and preserves the destination for booking', async () => {
+  it('follows Home → Explore → Map → location and opens scheduled tours without a custom destination', async () => {
     visit('/visit')
     fireEvent.click((await screen.findAllByRole('link', { name: 'Explore campus' }))[0])
     expect(await screen.findByRole('heading', { level: 1, name: 'Explore campus' })).toHaveFocus()
@@ -63,7 +67,7 @@ describe('visitor journeys', () => {
     expect(await screen.findByRole('button', { name: /Central Library.*Delta Building/ })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('link', { name: 'View details' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Central Library' })).toHaveFocus()
-    expect(screen.getByRole('link', { name: 'Take me there' })).toHaveAttribute('href', '/visit/book?destination=loc-library')
+    expect(screen.getByRole('link', { name: 'View available tours' })).toHaveAttribute('href', '/visit/book')
   })
 
   it('recovers an empty search by clearing filters', async () => {
@@ -164,8 +168,7 @@ describe('visitor journeys', () => {
   })
 
   it('marks unread notifications as read and keeps history accessible', async () => {
-    const notifications = await mockVisitorApi.notifications()
-    vi.spyOn(mockVisitorApi, 'markNotificationsRead').mockResolvedValue(notifications.map((item) => ({ ...item, readAt: new Date().toISOString() })))
+    const notifications = await remotePreviewApi.notifications()
     visit('/visit/notifications')
     fireEvent.click(await screen.findByRole('button', { name: 'Mark all as read' }))
     await screen.findByText('All caught up. Your notifications are marked as read.')

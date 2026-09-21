@@ -73,8 +73,8 @@ export default function LocationDetailPage() {
             <Link to={`/visit/map?destination=${location.id}`} className="lp-btn lp-btn--ghost lp-btn--sm">
               Directions
             </Link>
-            <Link to={`/visit/book?destination=${location.id}`} className="lp-btn lp-btn--solid lp-btn--sm">
-              Take me there
+            <Link to="/visit/book" className="lp-btn lp-btn--solid lp-btn--sm">
+              View available tours
             </Link>
           </>
         }

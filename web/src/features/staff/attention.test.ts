@@ -70,10 +70,10 @@ describe('buildAttentionQueue', () => {
 
     it('raises a tour with no robot, and treats one starting soon as urgent', () => {
       const later = dashboard({ todaySchedule: [tour({ amrName: null, startTime: at(90) })] })
-      expect(buildAttentionQueue(later, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Chưa gán AMR', toLabel: 'Gán AMR' })
+      expect(buildAttentionQueue(later, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Chưa bắt đầu buổi', toLabel: 'Kiểm tra buổi' })
 
       const soon = dashboard({ todaySchedule: [tour({ amrName: null, startTime: at(5) })] })
-      expect(buildAttentionQueue(soon, NOW)[0]).toMatchObject({ tone: 'danger', headline: 'Chưa gán AMR' })
+      expect(buildAttentionQueue(soon, NOW)[0]).toMatchObject({ tone: 'danger', headline: 'Chưa bắt đầu buổi' })
     })
 
     it('raises a paused tour as a decision waiting on a person', () => {

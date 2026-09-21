@@ -46,14 +46,14 @@ export const VISITOR_NAV: VisitorNavItem[] = [
   { label: 'Home', path: '/visit', icon: House, end: true },
   { label: 'Explore', path: '/visit/explore', icon: Compass },
   { label: 'Campus map', path: '/visit/map', icon: Map },
-  { label: 'Book a robot', path: '/visit/book', icon: Calendar },
-  { label: 'My tours', path: '/visit/tours', icon: Route },
+  { label: 'Register group', path: '/visit/book', icon: Calendar },
+  { label: 'My registrations', path: '/visit/bookings', icon: Route },
 ]
 
 /** Reachable from the account menu and the mobile sheet, not from the main row. */
 export const VISITOR_SECONDARY_NAV: VisitorNavItem[] = [
-  { label: 'My bookings', path: '/visit/bookings', icon: CalendarCheck },
-  { label: 'Ask the robot', path: '/visit/assistant', icon: MessageCircle },
+  { label: 'My registrations', path: '/visit/bookings', icon: CalendarCheck },
+  { label: 'Join a tour', path: '/join', icon: MessageCircle },
   { label: 'Profile', path: '/visit/profile', icon: GraduationCap },
   { label: 'Help', path: '/visit/help', icon: LifeBuoy },
 ]
@@ -73,8 +73,8 @@ export const VISITOR_SECONDARY_NAV: VisitorNavItem[] = [
 export const VISITOR_BOTTOM_NAV: VisitorNavItem[] = [
   { label: 'Home', path: '/visit', icon: House, end: true },
   { label: 'Explore', path: '/visit/explore', icon: Compass },
-  { label: 'Book', path: '/visit/book', icon: Calendar },
-  { label: 'Tours', path: '/visit/tours', icon: Route },
+  { label: 'Register', path: '/visit/book', icon: Calendar },
+  { label: 'My groups', path: '/visit/bookings', icon: Route },
   { label: 'Profile', path: '/visit/profile', icon: GraduationCap },
 ]
 

@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, ShieldCheck, Calendar, Users } from 'lucide-react'
 import type { NavItem } from '../staff/staff-nav'
 
 /**
@@ -13,14 +13,14 @@ import type { NavItem } from '../staff/staff-nav'
  */
 export const ADMIN_NAV: NavItem[] = [
   { label: 'Tổng quan hệ thống', path: '/admin', icon: LayoutDashboard },
+  { label: 'Buổi tham quan', path: '/admin/tours', icon: Calendar },
+  { label: 'Tài khoản', path: '/admin/accounts', icon: Users },
   { label: 'Vai trò & quyền', path: '/admin/roles', icon: ShieldCheck },
 ]
 
 export const ADMIN_BLOCKED_ON_BACKEND = [
-  'Người dùng',
-  'Quản lý nhân viên',
   'Thiết bị AMR (cấp phát, cấu hình)',
-  'Tour / tuyến / POI',
+  'Biên tập tuyến / POI',
   'Cấu hình hệ thống',
   'Nhật ký hoạt động',
 ] as const

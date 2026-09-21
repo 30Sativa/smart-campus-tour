@@ -1,0 +1,28 @@
+/* New flow controls inherit the existing visitor palette; console chrome stays unchanged. */
+.remote-visitor .remote-panel {
+  border: 1px solid var(--lp-line);
+  border-radius: var(--lp-r);
+  background: var(--lp-surface);
+  box-shadow: none;
+  color: var(--lp-ink);
+}
+.remote-visitor .remote-panel-title { color: var(--lp-ink); border-color: var(--lp-line); }
+.remote-visitor .remote-field { color: var(--lp-ink-2); }
+.remote-visitor .remote-button {
+  border-radius: 999px;
+  border-color: var(--lp-line-strong);
+  background: var(--lp-surface);
+  color: var(--lp-accent);
+  font-family: inherit;
+}
+.remote-visitor .remote-button:hover { background: var(--lp-bg-sunk); }
+.remote-visitor .remote-button:focus-visible { outline-color: var(--lp-accent); }
+.remote-visitor .remote-input {
+  border-radius: var(--auth-r);
+  border-color: var(--lp-line-strong);
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+}
+.remote-visitor .remote-dialog { background: var(--lp-surface); color: var(--lp-ink); border-color: var(--lp-line); }
+.remote-visitor .remote-badge { background: var(--lp-bg-sunk); color: var(--lp-ink); }
+.remote-visitor .vs-tab[aria-current="page"] { color: var(--lp-accent); border-bottom: 2px solid currentColor; }

@@ -25,6 +25,9 @@ type Entry = { label: string; tone: StatusTone }
 
 /** Keyed by the enum value lowercased, so casing from the API never matters. */
 const STATUS: Record<string, Entry> = {
+  approved: { label: 'Approved', tone: 'ok' },
+  submitted: { label: 'Pending approval', tone: 'warn' },
+  rejected: { label: 'Needs revision', tone: 'danger' },
   // Booking lifecycle
   confirmed: { label: 'Confirmed', tone: 'info' },
   upcoming: { label: 'Upcoming', tone: 'info' },

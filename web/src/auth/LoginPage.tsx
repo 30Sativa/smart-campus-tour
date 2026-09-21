@@ -89,7 +89,7 @@ export default function LoginPage() {
       </form>
 
       <p className="auth-switch">
-        Chưa có tài khoản? <Link to="/register" viewTransition>Đăng ký</Link>
+        Bạn là học sinh? <Link to="/join" viewTransition>Tham gia bằng lời mời</Link>
       </p>
     </>
   )

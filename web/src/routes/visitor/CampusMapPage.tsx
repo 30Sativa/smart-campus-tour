@@ -31,7 +31,7 @@ export default function CampusMapPage() {
 
   const filters = useMemo(() => ({ search: search.trim() || undefined, category }), [search, category])
   const locations = useCampusLocations(filters)
-  const { data: activeTour } = useActiveTour()
+  const { data: activeTour } = useActiveTour(false)
 
   const destinationId = params.get('destination')
   const all = useCampusLocations()
@@ -174,8 +174,8 @@ export default function CampusMapPage() {
                   <Link to={`/visit/explore/${selectedLocation.id}`} className="lp-btn lp-btn--ghost lp-btn--sm">
                     View details
                   </Link>
-                  <Link to={`/visit/book?destination=${selectedLocation.id}`} className="lp-btn lp-btn--solid lp-btn--sm">
-                    Take me there
+                  <Link to="/visit/book" className="lp-btn lp-btn--solid lp-btn--sm">
+                    View available tours
                   </Link>
                 </div>
               </>

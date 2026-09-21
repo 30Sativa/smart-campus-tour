@@ -16,12 +16,12 @@ import {
   type MissionCommand,
   type ScheduleFilters,
 } from '../../api/contracts/staff'
-import { mockStaffApi } from '../../mocks/staff-mock'
+import { remoteStaffApi } from '../../mocks/remote-staff-adapter'
 
-const api = mockStaffApi
+const api = remoteStaffApi
 
-const LIVE_REFETCH_MS = 15_000
-const DASHBOARD_REFETCH_MS = 30_000
+const LIVE_REFETCH_MS = 1500
+const DASHBOARD_REFETCH_MS = 1500
 
 export const staffQueryKeys = {
   all: ['staff'] as const,
@@ -46,6 +46,7 @@ export function useStaffSchedule(filters: ScheduleFilters = {}) {
   return useQuery({
     queryKey: staffQueryKeys.schedule(filters),
     queryFn: () => api.schedule(filters),
+    refetchInterval: DASHBOARD_REFETCH_MS,
   })
 }
 

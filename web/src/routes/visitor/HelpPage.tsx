@@ -17,53 +17,18 @@ import { RobotMark } from '../../features/visitor/components/RobotMark'
  * searchable by the browser's own find-in-page without a line of JavaScript.
  */
 const STEPS = [
-  {
-    icon: CalendarCheck,
-    title: 'Book a robot',
-    text: 'Pick a date, a time and where you want to meet. You will get a booking reference straight away.',
-  },
-  {
-    icon: RobotMark,
-    title: 'Meet your robot',
-    text: 'Your robot waits at the meeting point you chose. Show your booking reference and it will greet you by name.',
-  },
-  {
-    icon: Route,
-    title: 'Walk the tour',
-    text: 'It leads at walking pace and stops at each destination. Ask it anything along the way, or pause whenever you like.',
-  },
-  {
-    icon: MapPin,
-    title: 'Finish anywhere',
-    text: 'End the tour when you are done. The robot returns to its charging point on its own.',
-  },
+  { icon: CalendarCheck, title: 'Register a group', text: 'Choose a scheduled tour, enter the school contact and upload an Excel student list.' },
+  { icon: RobotMark, title: 'Wait for approval', text: 'The administrator reviews the roster. Your representative receives the join link and group code after approval.' },
+  { icon: Route, title: 'Join remotely', text: 'Students open the invitation and enter their name and class. No account or OTP is needed.' },
+  { icon: MapPin, title: 'Follow the tour', text: 'Watch the shared view and ask private questions. Staff operates the robot; the tour finishes after its return is confirmed.' },
 ]
-
 const FAQ = [
-  {
-    q: 'Do I need to book in advance?',
-    a: 'Booking ahead guarantees a robot is free when you arrive. If one happens to be available you can also start a tour on the day from the Explore screen.',
-  },
-  {
-    q: 'How long does a campus tour take?',
-    a: 'The full guided route is about 45 minutes. A single destination is usually under 10 minutes, and a custom tour depends on how many places you pick.',
-  },
-  {
-    q: 'Can I change or cancel my booking?',
-    a: 'Yes. Open My bookings, choose the booking and cancel it. There is no charge and no deadline, though cancelling early frees the robot for someone else.',
-  },
-  {
-    q: 'What if the robot has not arrived?',
-    a: 'Check the Active tour screen — it shows where your robot is and roughly how long it needs. If nothing is showing, contact the campus desk below.',
-  },
-  {
-    q: 'Can the robot take me somewhere not on the tour?',
-    a: 'Ask it. The campus assistant understands plain questions like "take me to the library" and will re-route if that destination is reachable.',
-  },
-  {
-    q: 'Is the route step-free?',
-    a: 'The robot only uses step-free paths, so every route it walks is accessible. Individual buildings list their own access details on their location page.',
-  },
+  { q: 'Can I edit or cancel a registration?', a: 'Only while the tour is scheduled. Submitted, approved and rejected registrations may be cancelled. Replacing a roster requires approval again.' },
+  { q: 'Can I still see my registration after it is locked?', a: 'Yes. My registrations keeps the status and join information available after the tour is ready, running or ended.' },
+  { q: 'Why can a student not join?', a: 'Check the invitation, name and class with the representative. The registration must be approved. Students do not see internal rejection reasons.' },
+  { q: 'Who controls the robot?', a: 'Staff starts the tour, holds at a stopped observation point and handles recovery. Students cannot change the destination or pause the robot.' },
+  { q: 'When does live participation open?', a: 'Approved students wait until Staff starts the tour. Live content and private questions close when the tour ends or participation is revoked.' },
+  { q: 'Does this preview send emails or stream video?', a: 'No. It uses in-memory mock data in this tab. Reloading resets the demo; video, voice and real robot control are not connected.' },
 ]
 
 export default function HelpPage() {
@@ -74,9 +39,9 @@ export default function HelpPage() {
         title="Help and support"
         description="How a robot tour works, answers to the questions we get most, and who to contact if something is not right."
         actions={
-          <Link to="/visit/assistant" className="lp-btn lp-btn--solid lp-btn--sm">
+          <Link to="/join" className="lp-btn lp-btn--solid lp-btn--sm">
             <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
-            Ask the robot
+            Join a tour
           </Link>
         }
       />

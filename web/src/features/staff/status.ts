@@ -24,6 +24,14 @@ type Entry = { label: string; tone: StatusTone }
 
 /** Keyed by the enum value lowercased, so casing from the API never matters. */
 const STATUS: Record<string, Entry> = {
+  ready: { label: 'Đã chốt, chờ bắt đầu', tone: 'info' },
+  running: { label: 'Đang diễn ra', tone: 'info' },
+  preparing: { label: 'Chuẩn bị tại điểm', tone: 'info' },
+  observing: { label: 'Đang quan sát', tone: 'info' },
+  front: { label: 'Đưa camera về phía trước', tone: 'info' },
+  returning: { label: 'Về điểm kết thúc', tone: 'info' },
+  hold: { label: 'Đang giữ tại điểm', tone: 'warn' },
+  needs_assistance: { label: 'Cần hỗ trợ', tone: 'danger' },
   // Tour session / booking
   scheduled: { label: 'Đã lên lịch', tone: 'info' },
   pending: { label: 'Chờ điều phối', tone: 'muted' },
@@ -96,6 +104,7 @@ export function statusLabel(value?: string | null): string {
  */
 const EVENT_TYPES: Record<string, string> = {
   // Alert types
+  remoteassistance: 'Cần hỗ trợ vận hành',
   obstacledetected: 'Phát hiện vật cản',
   lowbattery: 'Pin yếu',
   missionprogress: 'Tiến độ nhiệm vụ',

@@ -8,7 +8,7 @@ import { ADMIN_NAV } from '../../features/administration/admin-nav'
 const shell = 'min-h-full bg-[#f1f6fe] px-4 py-5 font-sans sm:px-6 lg:px-8 lg:py-7'
 
 const AREA_PAGES: Record<string, string[]> = {
-  public: ['Trang giới thiệu', 'Đăng nhập', 'Đăng ký'],
+  public: ['Trang giới thiệu', 'Đăng nhập', 'Student tham gia bằng lời mời'],
   // The visitor app is an English surface, so its own nav labels are English.
   // They are listed as the area ships them rather than translated here, which
   // would put a second name on every page.
@@ -87,7 +87,7 @@ export default function RolesPage() {
         <section className={`${panelClass} mt-5`} aria-label="Ma trận quyền truy cập">
           <PanelHead
             title="Ma trận truy cập"
-            description="Chỉ đọc. Việc cấp hoặc thu hồi vai trò được thực hiện ở máy chủ, giao diện chưa có chức năng chỉnh sửa."
+            description="Quyền mở màn hình khác với quyền thao tác. Admin xem vận hành; chỉ Staff điều khiển buổi. Tài khoản được cấp bằng chức năng mock."
           />
 
           {/* Desktop: a matrix, because the whole point is comparing rows against

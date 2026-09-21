@@ -5,7 +5,8 @@ import { RobotMark } from '../../features/visitor/components/RobotMark'
 import { LocationCard } from '../../features/visitor/components/LocationCard'
 import { StatusBadge } from '../../features/visitor/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingSkeleton } from '../../features/visitor/components/States'
-import { useActiveTour, useCampusLocations, useMyBookings, useVisitorProfile } from '../../features/visitor/visitor-hooks'
+import { useActiveTour, useCampusLocations, useVisitorProfile } from '../../features/visitor/visitor-hooks'
+import { useRemoteWorkspace } from '../../features/remote-tour/remote-hooks'
 import { formatDate, formatDuration } from '../../features/visitor/visitor-format'
 
 /**
@@ -23,21 +24,27 @@ import { formatDate, formatDuration } from '../../features/visitor/visitor-forma
 const QUICK_ACTIONS = [
   { to: '/visit/explore', label: 'Explore campus', text: 'Browse buildings, labs, food and student services.', icon: Compass },
   { to: '/visit/map', label: 'Campus map', text: 'See where you are and how to get where you are going.', icon: Map },
-  { to: '/visit/book', label: 'Book a robot', text: 'Pick a date, a time and a meeting point.', icon: Calendar },
-  { to: '/visit/assistant', label: 'Ask the robot', text: 'Ask anything about the campus and get directions.', icon: MessageCircle },
+  { to: '/visit/book', label: 'Register a group', text: 'Choose a scheduled tour and submit your student list.', icon: Calendar },
+  { to: '/join', label: 'Join a tour', text: 'Students use their invitation to watch and ask questions.', icon: MessageCircle },
 ]
 
 export default function VisitorHomePage() {
   const user = useAuthStore((state) => state.user)
   const { data: profile } = useVisitorProfile()
-  const { data: activeTour } = useActiveTour()
-  const bookings = useMyBookings()
+  const { data: activeTour } = useActiveTour(false)
+  const workspace = useRemoteWorkspace()
+  const bookings = { ...workspace, data: workspace.data?.registrations.filter(r => r.ownerId === user?.userId).map(r => {
+    const tour = workspace.data!.tours.find(t => t.id === r.tourId)!
+    const date = new Date(tour.scheduledAt)
+    return { id: r.id, date: date.toLocaleDateString('en-CA'), time: date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      status: r.state, tourState: tour.state, durationMinutes: 45, meetingPointName: tour.name, robotName: r.school }
+  }) }
   const locations = useCampusLocations()
 
-  const firstName = (profile?.fullName ?? user?.username ?? 'there').split(' ')[0]
+  const firstName = (user?.username ?? profile?.fullName ?? 'there').split(' ')[0]
 
   const nextBooking = bookings.data
-    ?.filter((booking) => booking.status === 'Confirmed')
+    ?.filter((booking) => booking.status !== 'CANCELLED' && !['COMPLETED', 'CANCELLED'].includes(booking.tourState))
     .sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))[0]
 
   const featured = locations.data?.slice(0, 3) ?? []
@@ -55,8 +62,8 @@ export default function VisitorHomePage() {
             <p className="vs-hero__eyebrow">Campus tour</p>
             <h1 className="vs-hero__title">Welcome back, {firstName}</h1>
             <p className="vs-hero__lead">
-              Where would you like to explore today? Discover campus locations, or start a guided
-              tour with a Smart Campus robot.
+              Discover campus locations, register your group for a scheduled tour,
+              and share the approved invitation with your students.
             </p>
             <div className="vs-hero__cta">
               <Link to="/visit/explore" className="lp-btn lp-btn--solid lp-btn--lg">
@@ -64,7 +71,7 @@ export default function VisitorHomePage() {
                 <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
               </Link>
               <Link to="/visit/book" className="lp-btn lp-btn--onmedia">
-                Book a robot
+                Register a group
               </Link>
             </div>
           </div>
@@ -107,7 +114,7 @@ export default function VisitorHomePage() {
               </h2>
             </div>
             <p className="vs-open__lead">
-              Four ways into the campus. Browse it yourself, or let a robot walk you there.
+              Explore campus, register your group and follow your tour online.
             </p>
           </div>
 
@@ -144,7 +151,7 @@ export default function VisitorHomePage() {
               </h2>
             </div>
             <Link to="/visit/bookings" className="lp-btn lp-btn--ghost lp-btn--sm">
-              All bookings
+              My registrations
             </Link>
           </div>
 
@@ -160,23 +167,23 @@ export default function VisitorHomePage() {
                 <h3 className="vs-card__title">{formatDate(`${nextBooking.date}T00:00:00`)}</h3>
                 <p className="vs-card__meta"><Clock size={14} className="vs-ico" aria-hidden="true" />{nextBooking.time} · {formatDuration(nextBooking.durationMinutes)}</p>
                 <p className="vs-card__meta"><MapPin size={14} className="vs-ico" aria-hidden="true" />{nextBooking.meetingPointName}</p>
-                <p className="vs-card__meta">{nextBooking.robotName || 'We will show your robot here when assigned.'}</p>
+                <p className="vs-card__meta">{nextBooking.robotName || 'Your group registration.'}</p>
               </div>
               <div className="vs-upcoming__actions">
                 <StatusBadge value={nextBooking.status} />
                 <Link to="/visit/bookings" className="lp-btn lp-btn--ghost lp-btn--sm">
-                  Manage booking <ArrowRight size={14} aria-hidden="true" />
+                  View registration <ArrowRight size={14} aria-hidden="true" />
                 </Link>
               </div>
             </div>
           ) : (
             <EmptyState
-              title="No tour booked yet"
-              text="Pick a date, a time and a meeting point, and a robot will be waiting for you."
+              title="No group registered yet"
+              text="Choose a scheduled tour and submit your roster for approval."
               icon={<RobotMark size={24} />}
               actions={
                 <Link to="/visit/book" className="lp-btn lp-btn--solid lp-btn--sm">
-                  Book a robot
+                  Register a group
                 </Link>
               }
             />

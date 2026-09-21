@@ -382,3 +382,36 @@ and offline fallback remain TBD.
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see
 [ADR-0002](decisions/0002-manual-stlink-flash-no-can-bootloader.md).
+
+
+## FE remote-tour preview (2026-09-21)
+
+This is a frontend-only mock contract, not an implemented backend interface.
+`web/src/api/contracts/remote-tour.ts` and `web/src/mocks/remote-tour-mock.ts`
+own the demo lifecycle. No backend, robot or AI service is changed.
+
+The existing visitor, staff and administration shells are retained. `/visit/book`
+is representative group registration; `/visit/bookings` lists registrations in
+all tour states. `/join/:tourId` is account-free Student matching and participation.
+`/admin/tours` handles tour preparation, approval and invitation simulation;
+`/admin/accounts` creates/locks in-memory demo accounts. Legacy self-registration
+redirects to login; accounts are provisioned by Admin. Legacy Visitor identities
+remain compatible as representatives. Admin may monitor Staff screens but does
+not gain operational commands.
+
+`web/src/mocks/remote-staff-adapter.ts` projects the same remote store into the
+existing dashboard, schedule, AMR and alert view models. Old HTTP DTOs remain
+unwired historical contracts. Only the mock lifecycle enforces SCHEDULED-only
+registration mutation, revision checks, approval-before-invitation, READY content
+locking, separate Start preflight, per-step Hold/Next/recovery, return completion,
+and retained robot assignment after End Early until inspection/release.
+Student snapshots exclude roster and rejection reasons; live/AI access is
+revalidated against the approved roster and tour state.
+
+The three robot source labels are fixtures, not live Physical/Gazebo/Emulator
+connections. Readiness and return/stop evidence are synthetic. Media, STT/TTS,
+email delivery, robot commands and persistence remain unimplemented. Data is
+shared only inside one browser tab and resets on reload. A browser join grant
+expires after two hours in this preview; this is not a production auth contract.
+Backend integration must define real readiness, stop evidence, release, stream
+fault policy and multi-role authorization before deployment.

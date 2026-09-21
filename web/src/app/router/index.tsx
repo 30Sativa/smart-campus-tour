@@ -2,7 +2,6 @@ import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation, useParams } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
-import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { areaById, type AreaId } from '../../auth/access'
@@ -35,11 +34,6 @@ const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'
 const ExplorePage = lazy(() => import('../../routes/visitor/ExplorePage'))
 const LocationDetailPage = lazy(() => import('../../routes/visitor/LocationDetailPage'))
 const CampusMapPage = lazy(() => import('../../routes/visitor/CampusMapPage'))
-const BookRobotPage = lazy(() => import('../../routes/visitor/BookRobotPage'))
-const MyBookingsPage = lazy(() => import('../../routes/visitor/MyBookingsPage'))
-const MyToursPage = lazy(() => import('../../routes/visitor/MyToursPage'))
-const ActiveTourPage = lazy(() => import('../../routes/visitor/ActiveTourPage'))
-const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
 const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
 const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
@@ -56,6 +50,11 @@ const ReportsPage = lazy(() => import('../../routes/staff/ReportsPage'))
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
 const SystemOverviewPage = lazy(() => import('../../routes/admin/SystemOverviewPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
+const RepresentativePage = lazy(() => import('../../features/remote-tour/RepresentativePage'))
+const StudentPage = lazy(() => import('../../features/remote-tour/StudentPage'))
+const StudentShell = lazy(() => import('../../features/remote-tour/StudentShell'))
+const AdminToursPage = lazy(() => import('../../features/remote-tour/AdminToursPage'))
+const AccountsPage = lazy(() => import('../../features/remote-tour/AccountsPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -129,6 +128,10 @@ function LegacySessionRedirect() {
  * clicking through a running app is behaviour that quietly regresses.
  */
 export const routes = [
+  { path: '/representative', element: <Navigate to="/visit/bookings" replace /> },
+  { path: '/join', element: <Suspense fallback={<ShellFallback background="#f8f6f4" />}><StudentShell /></Suspense>, children: [
+    { index: true, element: <StudentPage /> }, { path: ':tourId', element: <StudentPage /> },
+  ] },
   {
     path: '/',
     element: (
@@ -143,7 +146,7 @@ export const routes = [
     element: <AuthLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
+      { path: '/register', element: <Navigate to="/login" replace /> },
     ],
   },
   {
@@ -154,14 +157,14 @@ export const routes = [
       { path: 'explore', element: <ExplorePage /> },
       { path: 'explore/:locationId', element: <LocationDetailPage /> },
       { path: 'map', element: <CampusMapPage /> },
-      { path: 'book', element: <BookRobotPage /> },
-      { path: 'bookings', element: <MyBookingsPage /> },
-      { path: 'tours', element: <MyToursPage /> },
+      { path: 'book', element: <RepresentativePage /> },
+      { path: 'bookings', element: <RepresentativePage /> },
+      { path: 'tours', element: <Navigate to="/visit/bookings" replace /> },
       // The active tour is one session at a time, so it needs no id in the URL:
       // the API answers "the tour this account is on right now", and a link from
       // a notification cannot go stale.
-      { path: 'tour', element: <ActiveTourPage /> },
-      { path: 'assistant', element: <AskRobotPage /> },
+      { path: 'tour', element: <Navigate to="/join" replace /> },
+      { path: 'assistant', element: <Navigate to="/join" replace /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'help', element: <HelpPage /> },
@@ -188,6 +191,8 @@ export const routes = [
     children: [
       { index: true, element: <SystemOverviewPage /> },
       { path: 'roles', element: <RolesPage /> },
+      { path: 'tours', element: <AdminToursPage /> },
+      { path: 'accounts', element: <AccountsPage /> },
     ],
   },
   // Migration only: the operations pages that used to sit under `/admin`.

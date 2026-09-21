@@ -50,3 +50,27 @@ lands on `/staff`. Sign-up mints a Visitor and lands on `/`.
 ```bash
 web/scripts/verify        # npm ci -> typecheck -> lint -> test -> build
 ```
+
+
+## Remote-tour flow on the existing UI
+
+The post-merge landing, visitor hero, shells, operations dashboard, schedule,
+AMR list, alerts, Twin and admin overview keep their design. Registration and
+invitation controls use the existing visitor tokens; Staff detail keeps its
+two-column information/control/timeline layout.
+
+Demo accounts: `representative/representative`, `staff/staff`, `admin/admin`.
+The representative starts at `/visit`; use **Register group** or **My registrations**.
+Admin uses **Buổi tham quan** for create/edit, review, invitation and READY.
+Staff opens a tour from the existing schedule or dashboard for Start, Hold,
+Next, recovery and End Early. Admin monitoring has no Staff controls.
+Student uses `/join/tour-3`, code `DEMO-3`, name `Nguyễn Văn An`, class `12A1`.
+Use only synthetic student data. Excel import uses `read-excel-file` to validate
+actual XLSX rows; a sample workbook is at `web/public/templates/roster.xlsx`.
+
+All new state is in-memory mock API state, shared by views within the same tab.
+Reload resets it; independent tabs do not synchronize. Synthetic steps advance
+when polled. Real video/audio, voice AI, email, robot and backend are not connected.
+Existing feedback/profile/location screens are legacy reference features, not
+new remote-tour requirements. The legacy self-booking/control pages remain in
+source and their regression tests, but are no longer routed into the active flow.

@@ -12,11 +12,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   visitorApi,
+  type ActiveTour,
   type LocationFilters,
   type NewBooking,
   type ProfileUpdate,
   type TourCommand,
 } from '../../api/contracts/visitor'
+import { remotePreviewApi } from '../../mocks/remote-tour-mock'
+import { useAuthStore } from '../../stores/auth-store'
 import { mockVisitorApi } from '../../mocks/visitor-mock'
 import { USE_MOCK_API } from '../../mocks/mock-mode'
 
@@ -74,18 +77,21 @@ export function useMyTours() {
   return useQuery({ queryKey: visitorQueryKeys.tours, queryFn: () => api.tours() })
 }
 
-export function useActiveTour() {
-  return useQuery({
-    queryKey: visitorQueryKeys.activeTour,
-    queryFn: () => api.activeTour(),
+export function useActiveTour(enabled = true) {
+  return useQuery<ActiveTour | null>({
+    queryKey: [...visitorQueryKeys.activeTour, enabled],
+    // Representative browsing does not grant Student live access.
+    queryFn: () => enabled ? api.activeTour() : Promise.resolve(null),
     refetchInterval: ACTIVE_TOUR_REFETCH_MS,
   })
 }
 
 export function useNotifications() {
+  const userId = useAuthStore(s => s.user?.userId)
   return useQuery({
-    queryKey: visitorQueryKeys.notifications,
-    queryFn: () => api.notifications(),
+    queryKey: [...visitorQueryKeys.notifications, userId],
+    queryFn: () => remotePreviewApi.notifications(),
+    enabled: Boolean(userId),
     refetchInterval: NOTIFICATIONS_REFETCH_MS,
   })
 }
@@ -137,8 +143,8 @@ export function useAskAssistant() {
 export function useMarkNotificationsRead() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => api.markNotificationsRead(),
-    onSuccess: (data) => client.setQueryData(visitorQueryKeys.notifications, data),
+    mutationFn: () => remotePreviewApi.markNotificationsRead(),
+    onSuccess: () => client.invalidateQueries({ queryKey: visitorQueryKeys.notifications }),
   })
 }
 

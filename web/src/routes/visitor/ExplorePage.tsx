@@ -120,7 +120,7 @@ export default function ExplorePage() {
                         Directions
                       </Link>
                       <Link
-                        to={`/visit/book?destination=${location.id}`}
+                        to="/visit/book"
                         className="lp-btn lp-btn--solid lp-btn--sm"
                       >
                         Book a visit

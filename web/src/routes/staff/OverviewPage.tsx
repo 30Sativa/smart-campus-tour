@@ -561,7 +561,7 @@ function UpcomingTimeline({ tours, now }: { tours: StaffScheduleItem[]; now: num
                     {tour.amrName || 'Chưa có AMR'}
                   </span>
                   <Link to={`/staff/tours/${tour.sessionId}`} className={`${TEXT_ACTION} shrink-0 lg:w-[112px] lg:justify-end`}>
-                    {unassigned ? 'Gán AMR' : 'Mở tour'}
+                    {unassigned ? 'Kiểm tra buổi' : 'Mở tour'}
                     <ChevronRight size={15} aria-hidden="true" />
                   </Link>
                 </div>

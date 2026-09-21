@@ -497,3 +497,15 @@ claim the UI is correct.
 - Do not commit `node_modules/` or build output.
 
 <!-- TODO(WP5): thêm constraint khác khi có. -->
+
+
+## Current user direction: preserve post-merge UI (2026-09-21)
+
+Retain existing shells, dashboard, hero, palettes and page layouts. Adapt logic,
+state labels and actions; add missing remote-tour screens using the existing UI.
+Do not replace every Staff route with a combined operations page. Current flow
+uses representative registration, Admin approval/invitation, public Student join
+and Staff-only operation. The earlier on-site self-booking journey is historical.
+API work is mock-only. See `docs/architecture.md` and `web/README.md` for the
+preview routes and limits. Preserve old unwired HTTP contracts until agreed
+backend replacements exist.

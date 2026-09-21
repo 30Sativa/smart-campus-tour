@@ -36,7 +36,7 @@ export const AREAS: Area[] = [
     id: 'visitor',
     label: 'Ứng dụng khách tham quan',
     path: VISITOR_HOME,
-    purpose: 'Khám phá khuôn viên, đặt robot và theo dõi tour của chính mình. Cần đăng nhập.',
+    purpose: 'Khám phá khuôn viên. Đại diện đăng ký đoàn và theo dõi kết quả duyệt. Cần đăng nhập.',
     allows: isVisitorAreaRole,
   },
   {

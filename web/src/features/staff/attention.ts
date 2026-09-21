@@ -75,7 +75,7 @@ const tourLabel = (item: { startTime: string }) =>
 /** A tour that has not run yet and has not been called off. */
 export const isOpenTour = (status: string) => {
   const key = status.trim().toLowerCase()
-  return key === 'scheduled' || key === 'pending' || key === 'confirmed' || key === 'upcoming'
+  return key === 'ready' || key === 'scheduled' || key === 'pending' || key === 'confirmed' || key === 'upcoming'
 }
 const isOpenTourStatus = isOpenTour
 
@@ -154,11 +154,11 @@ export function buildAttentionQueue(data: StaffDashboard, now: number = Date.now
         id: `unassigned:${tour.sessionId}`,
         tone: soon ? 'danger' : 'warn',
         subject: tourLabel(tour),
-        headline: 'Chưa gán AMR',
+        headline: 'Chưa bắt đầu buổi',
         detail: tourDetail(tour),
         since: undefined,
         to: `/staff/tours/${tour.sessionId}`,
-        toLabel: 'Gán AMR',
+        toLabel: 'Kiểm tra buổi',
         rank: RANK.tourUnassigned,
       })
     }
@@ -171,7 +171,7 @@ export function buildAttentionQueue(data: StaffDashboard, now: number = Date.now
       id: `paused:${session.id}`,
       tone: 'warn',
       subject: session.routeName,
-      headline: 'Tour đang tạm dừng',
+      headline: session.missionState === 'HOLD' ? 'Đang giữ tại điểm' : 'Tour đang tạm dừng',
       detail: session.amrName ? `${session.amrName} · chờ quyết định của nhân viên` : 'Chờ quyết định của nhân viên',
       since: session.startTime,
       to: `/staff/tours/${session.id}`,

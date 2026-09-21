@@ -53,7 +53,7 @@ export function VisitorNav() {
   const { data: notifications } = useNotifications()
   const unread = notifications?.filter((item) => !item.readAt).length ?? 0
 
-  const displayName = profile?.fullName ?? user?.username ?? 'Visitor'
+  const displayName = user?.username ?? profile?.fullName ?? 'Representative'
 
   useEffect(() => {
     if (!accountOpen) return

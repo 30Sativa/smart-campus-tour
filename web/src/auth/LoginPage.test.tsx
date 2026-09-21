@@ -57,6 +57,6 @@ describe('LoginPage', () => {
   it('offers the sign-up route now that the register screen exists', () => {
     renderPage()
 
-    expect(screen.getByRole('link', { name: 'Đăng ký' })).toHaveAttribute('href', '/register')
+    expect(screen.getByRole('link', { name: 'Tham gia bằng lời mời' })).toHaveAttribute('href', '/join')
   })
 })

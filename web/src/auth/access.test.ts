@@ -8,8 +8,8 @@ import { homePathForRole, isAdminRole, isStaffRole, normalizeRole } from './role
  * through a screen.
  */
 describe('area access', () => {
-  it('has exactly three roles', () => {
-    expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin'])
+  it('includes representatives while retaining legacy visitors', () => {
+    expect([...ALL_ROLES]).toEqual(['Visitor', 'Representative', 'Staff', 'Admin'])
   })
 
   it('keeps a visitor out of operations and administration', () => {

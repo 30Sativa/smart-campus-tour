@@ -6,6 +6,8 @@
  * these screens may be treated as protected until the real endpoints land.
  */
 import { mockDelay } from './mock-mode'
+import { useAuthStore } from '../stores/auth-store'
+import { isAdminRole } from '../auth/roles'
 
 export type AuthResponse = {
   accessToken: string
@@ -18,6 +20,7 @@ export type AuthResponse = {
 export const MOCK_ACCOUNTS = [
   { username: 'admin', password: 'admin', role: 'Admin', userId: 'mock-user-admin' },
   { username: 'staff', password: 'staff', role: 'Staff', userId: 'mock-user-staff' },
+  { username: 'representative', password: 'representative', role: 'Representative', userId: 'mock-user-representative' },
   // Added when `/visit` shipped. Without it the visitor app could only be reached
   // by registering, and a freshly registered name is not one the visitor
   // fixtures know anything about.
@@ -25,9 +28,33 @@ export const MOCK_ACCOUNTS = [
 ] as const
 
 export const MOCK_ACCOUNTS_HINT =
-  'Tài khoản mẫu: visitor/visitor (khách), staff/staff (vận hành), admin/admin (quản trị)'
+  'Tài khoản mẫu: representative/representative (đại diện), staff/staff (vận hành), admin/admin (quản trị)'
 
 export class MockAuthError extends Error {}
+
+type PreviewAccount = { username: string; password: string; role: string; userId: string }
+const extraAccounts: PreviewAccount[] = []
+const lockedAccounts = new Set<string>()
+export const previewAccountApi = {
+  async list() {
+    if (!isAdminRole(useAuthStore.getState().user?.role)) throw new MockAuthError('Cần quyền Admin.')
+    return [...MOCK_ACCOUNTS, ...extraAccounts].map(({ username, role, userId }) => ({ username, role, userId, locked: lockedAccounts.has(userId) }))
+  },
+  async create(username: string, password: string, role: string) {
+    await this.list()
+    if (!['Staff', 'Representative'].includes(role) || !/^[a-z0-9_-]{3,32}$/.test(username) || password.length < 6) throw new MockAuthError('Tên đăng nhập 3–32 ký tự a-z/0-9/_/-, mật khẩu tối thiểu 6 ký tự và vai trò hợp lệ.')
+    if ([...MOCK_ACCOUNTS, ...extraAccounts].some(a => a.username === username)) throw new MockAuthError('Tên đăng nhập đã tồn tại.')
+    extraAccounts.push({ username, password, role, userId: crypto.randomUUID() })
+  },
+  async setLocked(userId: string, locked: boolean) {
+    const accounts = await this.list()
+    const account = accounts.find(a => a.userId === userId)
+    if (!account || account.role === 'Admin') throw new MockAuthError('Không thể khóa tài khoản này.')
+    if (locked) lockedAccounts.add(userId); else lockedAccounts.delete(userId)
+  },
+}
+
+export function isPreviewAccountLocked(userId: string) { return lockedAccounts.has(userId) }
 
 /**
  * Mock sign-up. Registration has no backend endpoint, so this validates the
@@ -51,7 +78,7 @@ export async function mockRegister(username: string, password: string): Promise<
 }
 
 export async function mockLogin(username: string, password: string): Promise<AuthResponse> {
-  const account = MOCK_ACCOUNTS.find((item) => item.username === username.trim().toLowerCase() && item.password === password)
+  const account = [...MOCK_ACCOUNTS, ...extraAccounts].find((item) => item.username === username.trim().toLowerCase() && item.password === password && !lockedAccounts.has(item.userId))
   if (!account) throw new MockAuthError('Sai tên đăng nhập hoặc mật khẩu mẫu.')
   return mockDelay({
     accessToken: `mock-access-token.${account.userId}`,
