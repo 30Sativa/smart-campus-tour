@@ -1,0 +1,23 @@
+FROM ros:humble-ros-base
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-colcon-common-extensions python3-pytest python3-yaml \
+    ros-humble-gazebo-ros-pkgs ros-humble-gazebo-ros2-control \
+    ros-humble-diff-drive-controller ros-humble-joint-state-broadcaster \
+    ros-humble-robot-state-publisher ros-humble-xacro \
+    ros-humble-topic-tools ros-humble-teleop-twist-keyboard \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /ros2_ws
+COPY ros2_ws/src/robot_description src/robot_description
+COPY ros2_ws/src/robot_control src/robot_control
+COPY ros2_ws/src/simulation src/simulation
+COPY ros2_ws/src/fleet_bridge src/fleet_bridge
+RUN source /opt/ros/humble/setup.bash && colcon build --symlink-install
+COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
+RUN sed -i 's/\r$//' /ros_entrypoint.sh && chmod +x /ros_entrypoint.sh
+ENV ROS_DOMAIN_ID=71
+ENV ROS_LOCALHOST_ONLY=1
+ENV GAZEBO_MODEL_PATH=/ros2_ws/install/simulation/share/simulation/models
+ENV GAZEBO_MODEL_DATABASE_URI=""
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["ros2", "launch", "fleet_bridge", "gazebo_web.launch.py"]

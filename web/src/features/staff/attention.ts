@@ -1,217 +1,144 @@
 /**
- * The two derived operational views of the dashboard payload: what needs a
- * person right now, and how ready the fleet is.
+ * The derived views of the console: each Tour's next step, the overview
+ * counts, what needs a person right now, and route progress.
  *
- * Pure functions: no React, no fetching. The overview renders whatever this
- * returns, so what counts as urgent is decided in one place and can be tested
- * without a browser.
- *
- * EVERY signal below is computed from a field that exists in
- * `api/contracts/staff.ts`. The operator vocabulary this console would
- * ideally speak - WAITING_FOR_ROBOT, WAITING_FOR_STAFF_CONFIRMATION, AT_POI,
- * NEEDS_ASSISTANCE - is NOT in the contract, so none of it is invented here.
- * Where a real field carries the same meaning it is used instead:
- *
- *   "no robot yet"      StaffScheduleItem.amrName == null on a Scheduled tour
- *   "running late"      StaffScheduleItem.startTime < now while still Scheduled
- *   "needs a decision"  TourSessionSummary.status/missionState === Paused
- *   "robot in trouble"  AmrStatus.connectionState / operationalState
- *
- * When the backend grows the real lifecycle states, add them here and the
- * screen follows without changing.
+ * Pure functions: no React, no fetching. None of this decides whether an
+ * action is ALLOWED - that is the server's `allowedActions`. This only decides
+ * what to show first and where the operator goes next.
  */
-import type { AmrStatus, StaffAlert, StaffDashboard, StaffScheduleItem } from '../../api/contracts/staff'
-import { statusInfo } from './status'
+import type { AmrStatus, RouteStop, TourOperation } from '../../api/contracts/staff'
+import { REASON_SHORT } from './reason'
 
-/** Only two tones reach this queue: everything in it is something to act on. */
-export type AttentionTone = 'danger' | 'warn'
+/* ── Tour next step ───────────────────────────────────────────────────────── */
+
+export type TourAction = { label: string; to: string; kind: 'primary' | 'secondary' }
+
+/**
+ * The one action a Tour row offers. Start itself is never on a list: it lives
+ * on the pre-start check, next to the reasons it is (not) enabled.
+ */
+export function tourAction(tour: Pick<TourOperation, 'id' | 'state' | 'operationalStatus'>): TourAction {
+  const detail = `/staff/tours/${tour.id}`
+  switch (tour.state) {
+    case 'Ready':
+      return { label: 'Kiểm tra & bắt đầu', to: `${detail}/start`, kind: 'primary' }
+    case 'Running':
+      return tour.operationalStatus === 'NeedsAssistance'
+        ? { label: 'Xử lý hỗ trợ', to: `/staff/live/${tour.id}`, kind: 'primary' }
+        : { label: 'Điều hành', to: `/staff/live/${tour.id}`, kind: 'secondary' }
+    case 'Completed':
+    case 'Cancelled':
+      return { label: 'Xem nhật ký', to: detail, kind: 'secondary' }
+    default:
+      return { label: 'Xem chi tiết', to: detail, kind: 'secondary' }
+  }
+}
+
+/* ── Counts ───────────────────────────────────────────────────────────────── */
+
+export type OperationsCounts = {
+  toursToday: number
+  running: number
+  ready: number
+  scheduled: number
+  finished: number
+  needsAssistance: number
+  groupsToday: number
+}
+
+export function operationsCounts(tours: TourOperation[]): OperationsCounts {
+  const live = tours.filter((tour) => tour.state !== 'Cancelled' || tour.startedAt)
+  return {
+    toursToday: live.length,
+    running: tours.filter((tour) => tour.state === 'Running').length,
+    ready: tours.filter((tour) => tour.state === 'Ready').length,
+    scheduled: tours.filter((tour) => tour.state === 'Scheduled').length,
+    finished: tours.filter((tour) => tour.state === 'Completed' || (tour.state === 'Cancelled' && tour.startedAt)).length,
+    needsAssistance: tours.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length,
+    groupsToday: live.reduce((sum, tour) => sum + tour.registrations.filter((reg) => reg.state === 'Approved').length, 0),
+  }
+}
+
+/** Seconds after which a pose is not shown as live (display policy, not a robot rule). */
+export const POSE_STALE_SECONDS = 5
+
+/**
+ * A robot needs a look when it cannot be reached, is not localized, reports a
+ * head fault, is held after a cancelled Tour, or its pose has gone stale.
+ */
+export function robotIssues(robot: AmrStatus): string[] {
+  const issues: string[] = []
+  if (robot.connectionState !== 'Live') issues.push('Mất kết nối')
+  if (robot.localized === false) issues.push('Chưa định vị')
+  if (robot.headFault) issues.push('Lỗi đầu xoay')
+  if (robot.needsCheck) issues.push('Chờ xác nhận kiểm tra')
+  if (robot.connectionState === 'Live' && robot.poseAgeSeconds != null && robot.poseAgeSeconds > POSE_STALE_SECONDS) issues.push('Vị trí cũ')
+  return issues
+}
+
+/* ── Needs attention ──────────────────────────────────────────────────────── */
 
 export type AttentionItem = {
   id: string
-  tone: AttentionTone
-  /** Who or what this is about, e.g. "AMR Lotus-03" or "Tour 14:30". */
+  tone: 'danger' | 'warn' | 'info'
   subject: string
-  /** What is wrong, in three or four words. */
   headline: string
-  /** Supporting context. Omitted rather than padded when there is none. */
   detail?: string
-  /** When it started, so the row can show how long it has been waiting. */
   since?: string
-  /** Where the operator goes to deal with it. Always a route that exists. */
   to: string
   toLabel: string
-  /** Set only when this row is an alert that can be acknowledged in place. */
-  alertId?: string
-  /** Sort key. Lower is more urgent; ties break on `since`. */
   rank: number
 }
 
-/** A tour is "starting soon" inside this window, which raises its urgency. */
-const SOON_MS = 15 * 60_000
+const DUE_MS = 15 * 60_000
+const SOON_MS = 60 * 60_000
 
-const isOpen = (alert: StaffAlert) => !alert.acknowledgedAt
-const toneOf = (value?: string | null) => statusInfo(value).tone
-const isTrouble = (value?: string | null) => toneOf(value) === 'danger'
-const needsWatching = (value?: string | null) => toneOf(value) === 'warn'
-
-/**
- * Rank bands, so the ordering is a stated policy rather than an accident of the
- * order the pushes happen to run in. Within a band the oldest thing wins,
- * because the thing that has been waiting longest is the thing going wrong.
- */
-const RANK = {
-  criticalAlert: 0,
-  robotDown: 1,
-  tourLate: 2,
-  tourUnassigned: 3,
-  tourPaused: 4,
-  warningAlert: 5,
-  robotDegraded: 6,
-} as const
-
-const tourLabel = (item: { startTime: string }) =>
-  `Tour ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(item.startTime))}`
-
-/** A tour that has not run yet and has not been called off. */
-export const isOpenTour = (status: string) => {
-  const key = status.trim().toLowerCase()
-  return key === 'scheduled' || key === 'pending' || key === 'confirmed' || key === 'upcoming'
-}
-const isOpenTourStatus = isOpenTour
-
-export function buildAttentionQueue(data: StaffDashboard, now: number = Date.now()): AttentionItem[] {
+export function buildAttentionQueue({ tours, robots }: { tours: TourOperation[]; robots: AmrStatus[] }, now: number = Date.now()): AttentionItem[] {
   const items: AttentionItem[] = []
-  const alerts = (data.recentAlerts ?? []).filter(isOpen)
 
-  /*
-   * A robot that already has an open alert against it does not also get a
-   * derived row: the alert says the same thing with a human-written message and
-   * an acknowledge action, and printing both turns one problem into two lines.
-   */
-  const alertedAmrs = new Set(alerts.map((alert) => alert.amrName).filter(Boolean) as string[])
-
-  for (const alert of alerts) {
-    const critical = toneOf(alert.severity) === 'danger'
-    items.push({
-      id: `alert:${alert.id}`,
-      tone: critical ? 'danger' : 'warn',
-      subject: alert.amrName || 'Hệ thống',
-      headline: critical ? 'Cảnh báo nghiêm trọng' : 'Cảnh báo',
-      detail: alert.message,
-      since: alert.createdAt,
-      to: '/staff/alerts',
-      toLabel: 'Mở cảnh báo',
-      alertId: alert.id,
-      rank: critical ? RANK.criticalAlert : RANK.warningAlert,
-    })
-  }
-
-  for (const amr of data.activeAmrsList ?? []) {
-    if (alertedAmrs.has(amr.name)) continue
-    const down = amr.connectionState === 'Disconnected' || isTrouble(amr.operationalState)
-    const degraded =
-      amr.connectionState === 'Stale' ||
-      needsWatching(amr.operationalState) ||
-      (amr.batteryPercent != null && amr.batteryPercent < 20)
-    if (!down && !degraded) continue
-
-    items.push({
-      id: `amr:${amr.id}`,
-      tone: down ? 'danger' : 'warn',
-      subject: amr.name,
-      headline: down ? robotDownHeadline(amr) : robotDegradedHeadline(amr),
-      detail: robotDetail(amr),
-      since: amr.lastSeenAt ?? undefined,
-      to: '/staff/amr',
-      toLabel: 'Xem AMR',
-      rank: down ? RANK.robotDown : RANK.robotDegraded,
-    })
-  }
-
-  for (const tour of data.todaySchedule ?? []) {
-    if (!isOpenTourStatus(tour.status)) continue
-    const start = new Date(tour.startTime).getTime()
-    const late = Number.isFinite(start) && start < now
-    const soon = Number.isFinite(start) && start - now <= SOON_MS
-
-    if (late) {
-      items.push({
-        id: `late:${tour.sessionId}`,
-        tone: 'danger',
-        subject: tourLabel(tour),
-        headline: 'Quá giờ khởi hành',
-        detail: tourDetail(tour),
-        since: tour.startTime,
-        to: `/staff/tours/${tour.sessionId}`,
-        toLabel: 'Mở tour',
-        rank: RANK.tourLate,
-      })
-      continue
-    }
-
-    if (!tour.amrName) {
-      items.push({
-        id: `unassigned:${tour.sessionId}`,
-        tone: soon ? 'danger' : 'warn',
-        subject: tourLabel(tour),
-        headline: 'Chưa gán AMR',
-        detail: tourDetail(tour),
-        since: undefined,
-        to: `/staff/tours/${tour.sessionId}`,
-        toLabel: 'Gán AMR',
-        rank: RANK.tourUnassigned,
-      })
+  for (const tour of tours) {
+    const start = new Date(tour.scheduledAt).getTime()
+    const subject = `${tour.code} · ${tour.name}`
+    if (tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance') {
+      items.push({ id: `tour:${tour.id}`, tone: 'danger', subject, headline: tour.reason ? `Cần hỗ trợ · ${REASON_SHORT[tour.reason] ?? tour.reason}` : 'Cần hỗ trợ', detail: tour.reasonDetail ?? undefined, to: `/staff/live/${tour.id}`, toLabel: 'Xử lý hỗ trợ', rank: 0 })
+    } else if (tour.state === 'Running' && tour.progress?.hold) {
+      items.push({ id: `tour:${tour.id}`, tone: 'info', subject, headline: 'Đang giữ tại POI', detail: 'Bấm Đi tiếp khi muốn rời điểm.', to: `/staff/live/${tour.id}`, toLabel: 'Điều hành', rank: 3 })
+    } else if (tour.state === 'Ready' && start - now <= DUE_MS) {
+      items.push({ id: `tour:${tour.id}`, tone: start < now ? 'warn' : 'info', subject, headline: start < now ? 'Đã tới giờ, chưa bắt đầu' : 'Sắp tới giờ bắt đầu', detail: tour.allowedActions.start.allowed ? 'Đủ điều kiện kiểm tra để bắt đầu.' : tour.allowedActions.start.reason ?? undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}/start`, toLabel: 'Kiểm tra & bắt đầu', rank: 2 })
+    } else if (tour.state === 'Scheduled' && start - now <= SOON_MS) {
+      items.push({ id: `tour:${tour.id}`, tone: 'warn', subject, headline: 'Chưa được Admin chốt buổi', detail: tour.readyBlockers.join(' · ') || undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}`, toLabel: 'Xem chi tiết', rank: 4 })
     }
   }
 
-  for (const session of data.activeSessions ?? []) {
-    const paused = toneOf(session.status) === 'warn' || toneOf(session.missionState) === 'warn'
-    if (!paused) continue
-    items.push({
-      id: `paused:${session.id}`,
-      tone: 'warn',
-      subject: session.routeName,
-      headline: 'Tour đang tạm dừng',
-      detail: session.amrName ? `${session.amrName} · chờ quyết định của nhân viên` : 'Chờ quyết định của nhân viên',
-      since: session.startTime,
-      to: `/staff/tours/${session.id}`,
-      toLabel: 'Mở tour',
-      rank: RANK.tourPaused,
-    })
+  for (const robot of robots) {
+    if (!robot.assignable) continue
+    const issues = robotIssues(robot)
+    if (issues.length === 0 || robot.currentSessionId) continue
+    items.push({ id: `robot:${robot.id}`, tone: robot.connectionState === 'Live' ? 'warn' : 'danger', subject: robot.name, headline: issues.join(' · '), detail: robot.needsCheck ? 'Robot bị giữ sau buổi trước; kiểm tra tại chỗ rồi xác nhận sẵn sàng.' : undefined, to: '/staff/robot', toLabel: 'Mở trang robot', rank: 1 })
   }
 
-  return items.sort((a, b) => {
-    if (a.rank !== b.rank) return a.rank - b.rank
-    const at = a.since ? new Date(a.since).getTime() : Number.POSITIVE_INFINITY
-    const bt = b.since ? new Date(b.since).getTime() : Number.POSITIVE_INFINITY
-    return at - bt
-  })
+  return items.sort((a, b) => a.rank - b.rank)
 }
 
-function robotDownHeadline(amr: AmrStatus): string {
-  if (amr.connectionState === 'Disconnected') return 'Mất kết nối'
-  return statusInfo(amr.operationalState).label
+/* ── Route progress ───────────────────────────────────────────────────────── */
+
+export function routeProgress(tour: Pick<TourOperation, 'stops' | 'progress'>): { done: number; total: number; current: RouteStop | null; next: RouteStop | null } {
+  const done = tour.stops.filter((stop) => stop.status === 'Completed' || stop.status === 'Skipped').length
+  const index = tour.progress?.stopIndex
+  const current = index != null ? tour.stops[index] ?? null : null
+  const next = index != null ? tour.stops[index + 1] ?? null : null
+  return { done, total: tour.stops.length, current, next }
 }
 
-function robotDegradedHeadline(amr: AmrStatus): string {
-  if (amr.connectionState === 'Stale') return 'Dữ liệu chậm'
-  if (amr.batteryPercent != null && amr.batteryPercent < 20) return 'Pin yếu'
-  return statusInfo(amr.operationalState).label
-}
 
-/** Context an operator can act on, never a restatement of the headline. */
-function robotDetail(amr: AmrStatus): string | undefined {
-  const parts: string[] = []
-  if (amr.currentPoi) parts.push(amr.currentPoi)
-  if (amr.currentSessionId) parts.push('đang gắn với một tour')
-  if (amr.batteryPercent != null && amr.batteryPercent < 20) parts.push(`pin ${amr.batteryPercent.toFixed(0)}%`)
-  return parts.length > 0 ? parts.join(' · ') : undefined
-}
-
-function tourDetail(tour: StaffScheduleItem): string {
-  const who = tour.visitorName || 'Khách chưa công khai'
-  return `${tour.routeName} · ${who}`
-}
+/** Approved groups and students of a Tour, for this screen's labels. */
+export function groupSummary(tour: Pick<TourOperation, 'registrations'>) {
+  const approved = tour.registrations.filter((reg) => reg.state === 'Approved')
+  return {
+    groups: approved.length,
+    students: approved.reduce((sum, reg) => sum + reg.studentCount, 0),
+    pending: tour.registrations.filter((reg) => reg.state === 'Submitted').length,
+  }
 
 /* ── Fleet readiness ──────────────────────────────────────────────────────── */
 
@@ -263,4 +190,5 @@ export function groupFleet(amrs: AmrStatus[]): FleetBand[] {
     ...band,
     units: bands[band.id].sort((a, b) => a.name.localeCompare(b.name, 'vi')),
   }))
+
 }

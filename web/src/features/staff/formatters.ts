@@ -46,3 +46,45 @@ export function formatCountdown(value?: string | null, now: number = Date.now())
   const rest = minutes % 60
   return rest === 0 ? `còn ${hours} giờ` : `còn ${hours} giờ ${rest} phút`
 }
+
+/** "1:05:12" / "12:07" for an elapsed stopwatch, from two instants. */
+export function formatStopwatch(from?: string | null, now: number = Date.now()): string {
+  if (!from) return '—'
+  const total = Math.max(0, Math.floor((now - new Date(from).getTime()) / 1000))
+  const hours = Math.floor(total / 3600)
+  const mins = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return hours > 0 ? `${hours}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`
+}
+
+/** "45 phút" / "1 giờ 10 phút" between two instants. */
+export function formatDuration(from?: string | null, to?: string | null): string {
+  if (!from || !to) return '—'
+  const minutes = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60_000))
+  if (minutes < 60) return `${minutes} phút`
+  const rest = minutes % 60
+  return rest === 0 ? `${Math.floor(minutes / 60)} giờ` : `${Math.floor(minutes / 60)} giờ ${rest} phút`
+}
+
+/** Heartbeat freshness: seconds while fresh, then the usual relative time. */
+export function formatHeartbeat(ageSeconds?: number | null, lastSeenAt?: string | null, now: number = Date.now()): string {
+  if (ageSeconds == null) return 'Không có dữ liệu'
+  if (ageSeconds < 60) return ageSeconds <= 2 ? 'vừa xong' : `${ageSeconds} giây trước`
+  return formatElapsed(lastSeenAt, now) ?? 'Không có dữ liệu'
+}
+
+export function formatDate(value?: string | null) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value))
+}
+
+/** m/s, one decimal; a robot that sends no speed gets no number. */
+export function formatSpeed(value?: number | null) {
+  return value == null ? 'Không có dữ liệu' : `${value.toFixed(1)} m/s`
+}
+
+/** "32 khách" or "31/32 khách" once the head count is confirmed. */
+export function visitorLabel(tour: { visitorCount: number; confirmedVisitorCount?: number | null }) {
+  return tour.confirmedVisitorCount != null ? `${tour.confirmedVisitorCount}/${tour.visitorCount} khách` : `${tour.visitorCount} khách`
+}

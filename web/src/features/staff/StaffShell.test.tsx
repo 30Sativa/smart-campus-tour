@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,7 +7,7 @@ import StaffShell from './StaffShell'
 
 function renderShell(role = 'Staff', path = '/staff') {
   useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role })
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/staff" element={<StaffShell />}><Route index element={<h1>Tình hình điều hành</h1>} /><Route path="schedule" element={<h1>Lịch và phiên tour</h1>} /><Route path="tours/:id" element={<h1>Chi tiết tour</h1>} /></Route><Route path="/" element={<h1>Trang chủ</h1>} /></Routes></MemoryRouter>)
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}><Routes><Route path="/staff" element={<StaffShell />}><Route index element={<h1>Tình hình điều hành</h1>} /><Route path="schedule" element={<h1>Lịch và phiên tour</h1>} /><Route path="tours/:id" element={<h1>Chi tiết tour</h1>} /></Route><Route path="/" element={<h1>Trang chủ</h1>} /></Routes></MemoryRouter></QueryClientProvider>)
 }
 
 afterEach(() => useAuthStore.getState().logout())
@@ -25,11 +26,11 @@ describe('StaffShell', () => {
   it('finds a staff page and navigates when the search is submitted', () => {
     renderShell()
     fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm trang vận hành' }), { target: { value: 'LỊCH' } })
-    expect(within(screen.getByRole('list', { name: 'Kết quả tìm trang' })).getByRole('link', { name: 'Lịch tour' })).toHaveAttribute('href', '/staff/schedule')
+    expect(within(screen.getByRole('list', { name: 'Kết quả tìm trang' })).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('href', '/staff/schedule')
     fireEvent.submit(screen.getByRole('search'))
     expect(screen.getByRole('heading', { name: 'Lịch và phiên tour' })).toBeInTheDocument()
     expect(screen.getByRole('searchbox')).toHaveValue('')
-    expect(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch tour' })).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('handles an unmatched search and lets Escape dismiss it', () => {
@@ -53,7 +54,7 @@ describe('StaffShell', () => {
     expect(open).toHaveAttribute('aria-expanded', 'false')
     expect(open).toHaveFocus()
     fireEvent.click(open)
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch tour' }))
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch buổi' }))
     expect(open).toHaveAttribute('aria-expanded', 'false')
   })
 })

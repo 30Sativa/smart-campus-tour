@@ -36,6 +36,32 @@ const STATUS: Record<string, Entry> = {
   confirmed: { label: 'Đã xác nhận', tone: 'ok' },
   upcoming: { label: 'Sắp tới', tone: 'info' },
 
+  // TourState (remote-tour scope): Scheduled → Ready → Running → Completed | Cancelled
+  ready: { label: 'Sẵn sàng', tone: 'ok' },
+  running: { label: 'Đang chạy', tone: 'info' },
+
+  // OperationalStatus, only while Running
+  normal: { label: 'Bình thường', tone: 'ok' },
+  needsassistance: { label: 'Cần hỗ trợ', tone: 'danger' },
+
+  // Group registration (decided by Admin; Staff reads it)
+  submitted: { label: 'Chờ duyệt', tone: 'warn' },
+  approved: { label: 'Đã duyệt', tone: 'ok' },
+  rejected: { label: 'Từ chối', tone: 'danger' },
+
+  // Robot data source: anything not physical is labelled
+  physical: { label: 'Robot thật', tone: 'info' },
+  gazebo: { label: 'Gazebo', tone: 'muted' },
+  emulator: { label: 'Emulator', tone: 'muted' },
+
+  // Robot execution and the livestream
+  stopped: { label: 'Đã dừng', tone: 'muted' },
+  connecting: { label: 'Đang kết nối', tone: 'warn' },
+
+  // Route stops
+  current: { label: 'Hiện tại', tone: 'info' },
+  skipped: { label: 'Bỏ qua', tone: 'muted' },
+
   // AMR connection
   live: { label: 'Trực tuyến', tone: 'ok' },
   stale: { label: 'Dữ liệu chậm', tone: 'warn' },
@@ -104,6 +130,38 @@ const EVENT_TYPES: Record<string, string> = {
   amrassigned: 'Đã gán AMR',
   waitingforassignment: 'Chờ điều phối AMR',
   missionstarted: 'Bắt đầu nhiệm vụ',
+  // Assistance reasons (also the alert types administration reads)
+  navigationfailed: 'Lỗi điều hướng',
+  robotdisconnected: 'Mất kết nối robot',
+  headfailure: 'Lỗi đầu xoay',
+  streamunavailable: 'Mất nguồn livestream',
+  commandunknown: 'Lệnh chưa rõ kết quả',
+  backendrestarted: 'Backend khởi động lại',
+  // Tour log (scope §4.4, §12)
+  tourcreated: 'Tạo buổi',
+  readyconfirmed: 'Admin chốt buổi',
+  tourcancelled: 'Hủy buổi',
+  tourstarted: 'Bắt đầu phiên',
+  legsent: 'Gửi chặng',
+  legsucceeded: 'Chặng thành công',
+  legfailed: 'Chặng thất bại',
+  visitopened: 'Mở lượt dừng',
+  narrationstarted: 'Bắt đầu thuyết minh',
+  headstep: 'Chuyển góc quan sát',
+  holdset: 'Giữ tại POI',
+  visitclosed: 'Đóng lượt dừng',
+  commandsucceeded: 'Lệnh hoàn tất',
+  commandfailed: 'Lệnh thất bại',
+  assistancerequired: 'Cần hỗ trợ',
+  recovered: 'Phục hồi',
+  streamlost: 'Mất nguồn hình',
+  streamrestored: 'Nguồn hình trở lại',
+  heldatpoi: 'Đứng giữ tại POI',
+  heldatend: 'Đứng giữ tại điểm cuối',
+  cancelsent: 'Gửi yêu cầu hủy',
+  tourcompleted: 'Hoàn thành',
+  tourendedearly: 'Kết thúc sớm',
+  robotreleased: 'Giải phóng robot',
 }
 
 export function eventTypeLabel(value?: string | null): string {
@@ -112,6 +170,37 @@ export function eventTypeLabel(value?: string | null): string {
 }
 
 /** Severity order for sorting an alert list: the worst thing first. */
+/** Where a running Tour is inside its flow, in the operator's words. */
+export const STEP_LABEL: Record<string, string> = {
+  PreparingStart: 'Chuẩn bị chặng đầu (quay FRONT)',
+  Navigating: 'Đang di chuyển tới POI',
+  PreparingView: 'Chuẩn bị góc quan sát',
+  Observing: 'Đang quan sát & thuyết minh',
+  HeldAtPoi: 'Đứng giữ tại POI',
+  ReturningFront: 'Quay FRONT trước chặng kế',
+  ReturningToEnd: 'Về điểm kết thúc',
+  Finished: 'Đã kết thúc',
+}
+
+export function stepLabel(value?: string | null): string {
+  if (!value) return '—'
+  return STEP_LABEL[value] ?? value
+}
+
+/** Head presets. Rotating the camera head never turns the body marker. */
+export const HEAD_LABEL: Record<string, string> = { FRONT: 'Phía trước', LEFT: 'Bên trái', RIGHT: 'Bên phải' }
+
+/** Start checks, by the id the server evaluates. */
+export const START_CHECK_LABEL: Record<string, string> = {
+  groupsApproved: 'Có đoàn đã được duyệt',
+  robotConnected: 'Robot đang kết nối',
+  robotLocalized: 'Robot đã định vị',
+  robotFree: 'Robot không phục vụ buổi khác',
+  headAtFront: 'Đầu xoay ở FRONT',
+  batteryMeasured: 'Nguồn / pin',
+  streamLive: 'Nguồn livestream có tín hiệu',
+}
+
 export function severityRank(value?: string | null): number {
   switch (value?.trim().toLowerCase()) {
     case 'critical':
@@ -129,6 +218,15 @@ export function severityRank(value?: string | null): number {
  * It lives beside the tones rather than in the component file, which keeps that
  * file exporting components only.
  */
+/** Solid dot per tone; the one place a tone becomes a fill colour. */
+export const dotClass: Record<StatusTone, string> = {
+  ok: 'bg-[#2f8f6b]',
+  info: 'bg-[#5b91ed]',
+  warn: 'bg-[#d69412]',
+  danger: 'bg-[#c9534a]',
+  muted: 'bg-[#a8b6c9]',
+}
+
 export const toneClass: Record<StatusTone, string> = {
   ok: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]',
   info: 'border-[#cfe1fb] bg-[#eef5ff] text-[#2f62b8]',

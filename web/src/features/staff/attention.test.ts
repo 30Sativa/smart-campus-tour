@@ -1,139 +1,109 @@
 import { describe, expect, it } from 'vitest'
-import { buildAttentionQueue } from './attention'
-import type { AmrStatus, StaffAlert, StaffDashboard, StaffScheduleItem } from '../../api/contracts/staff'
+import type { AmrStatus, StaffActions, TourOperation } from '../../api/contracts/staff'
+import { buildAttentionQueue, groupSummary, operationsCounts, robotIssues, routeProgress, tourAction } from './attention'
 
-const NOW = new Date('2026-09-18T14:00:00+07:00').getTime()
+const NOW = new Date('2026-09-21T09:00:00Z').getTime()
 const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
+const closed = { allowed: false, reason: 'x' }
+const noActions: StaffActions = { start: closed, hold: closed, next: closed, endEarly: closed, retryLeg: closed, rerunPoi: closed, retryFront: closed, confirmComplete: closed }
 
-const amr = (over: Partial<AmrStatus> = {}): AmrStatus => ({
-  id: 'amr-1', name: 'AMR Lotus-01', operationalState: 'Navigating', connectionState: 'Live',
-  batteryPercent: 80, sensorHealth: 'Healthy', lastSeenAt: at(-1), ...over,
+const tour = (over: Partial<TourOperation>): TourOperation => ({
+  id: 't1',
+  code: 'T-01',
+  name: 'Buổi mẫu',
+  routeName: 'Tuyến mẫu',
+  scheduledAt: at(60),
+  estimatedEndAt: at(90),
+  state: 'Scheduled',
+  readyBlockers: [],
+  language: 'Tiếng Việt',
+  registrations: [],
+  stops: [],
+  endPoint: { name: 'Sảnh', position: { x: 0, y: 0 } },
+  livestream: { state: 'Offline' },
+  startChecks: [],
+  allowedActions: noActions,
+  revision: 1,
+  ...over,
 })
 
-const tour = (over: Partial<StaffScheduleItem> = {}): StaffScheduleItem => ({
-  sessionId: 's-1', bookingId: 'b-1', startTime: at(60), endTime: at(120),
-  routeName: 'Khám phá khuôn viên', visitorName: 'Trần Gia Hân', status: 'Scheduled',
-  amrName: 'AMR Lotus-01', ...over,
+const robot = (over: Partial<AmrStatus>): AmrStatus => ({
+  id: 'robot_01',
+  name: 'robot_01',
+  operationalState: 'Idle',
+  connectionState: 'Live',
+  sensorHealth: 'Healthy',
+  source: 'Physical',
+  assignable: true,
+  localized: true,
+  poseAgeSeconds: 1,
+  ...over,
 })
 
-const alert = (over: Partial<StaffAlert> = {}): StaffAlert => ({
-  id: 'a-1', type: 'ObstacleDetected', severity: 'Critical', message: 'Vật cản kéo dài.',
-  createdAt: at(-5), ...over,
+describe('tourAction', () => {
+  it('offers the step the state calls for, and never Start from a list', () => {
+    expect(tourAction(tour({ state: 'Scheduled' }))).toMatchObject({ label: 'Xem chi tiết', to: '/staff/tours/t1' })
+    expect(tourAction(tour({ state: 'Ready' }))).toMatchObject({ label: 'Kiểm tra & bắt đầu', to: '/staff/tours/t1/start', kind: 'primary' })
+    expect(tourAction(tour({ state: 'Running', operationalStatus: 'Normal' }))).toMatchObject({ label: 'Điều hành', to: '/staff/live/t1', kind: 'secondary' })
+    expect(tourAction(tour({ state: 'Running', operationalStatus: 'NeedsAssistance' }))).toMatchObject({ label: 'Xử lý hỗ trợ', kind: 'primary' })
+    expect(tourAction(tour({ state: 'Cancelled' })).label).toBe('Xem nhật ký')
+  })
 })
 
-const dashboard = (over: Partial<StaffDashboard> = {}): StaffDashboard => ({
-  todayTours: 0, upcomingTours: 0, activeTours: 0, completedTours: 0, pendingTours: 0,
-  activeAmrs: 0, offlineAmrs: 0, activeAlerts: 0, criticalAlerts: 0,
-  todaySchedule: [], activeAmrsList: [], recentAlerts: [], activeSessions: [], ...over,
+describe('robotIssues', () => {
+  it('separates a live heartbeat from a stale pose, and holds a robot awaiting a check', () => {
+    expect(robotIssues(robot({}))).toEqual([])
+    expect(robotIssues(robot({ poseAgeSeconds: 12 }))).toEqual(['Vị trí cũ'])
+    expect(robotIssues(robot({ connectionState: 'Disconnected', poseAgeSeconds: 40 }))).toEqual(['Mất kết nối'])
+    expect(robotIssues(robot({ needsCheck: true, headFault: true }))).toEqual(['Lỗi đầu xoay', 'Chờ xác nhận kiểm tra'])
+  })
 })
 
-const ids = (data: StaffDashboard) => buildAttentionQueue(data, NOW).map((item) => item.id)
+describe('operationsCounts', () => {
+  it('counts sessions by TourState and running ones needing assistance', () => {
+    const reg = { id: 'r', schoolName: 'S', representativeName: 'R', studentCount: 10, roster: [] }
+    const counts = operationsCounts([
+      tour({ state: 'Running', operationalStatus: 'NeedsAssistance', startedAt: at(-5), registrations: [{ ...reg, state: 'Approved' }] }),
+      tour({ state: 'Ready', registrations: [{ ...reg, state: 'Approved' }, { ...reg, state: 'Approved' }] }),
+      tour({ state: 'Scheduled', registrations: [{ ...reg, state: 'Submitted' }] }),
+      tour({ state: 'Completed', startedAt: at(-90) }),
+      tour({ state: 'Cancelled' }),
+    ])
+    expect(counts).toEqual({ toursToday: 4, running: 1, ready: 1, scheduled: 1, finished: 1, needsAssistance: 1, groupsToday: 3 })
+  })
+
+  it('summarises approved groups only', () => {
+    const reg = { id: 'r', schoolName: 'S', representativeName: 'R', studentCount: 12, roster: [] }
+    expect(groupSummary(tour({ registrations: [{ ...reg, state: 'Approved' }, { ...reg, state: 'Submitted' }] }))).toEqual({ groups: 1, students: 12, pending: 1 })
+  })
+})
 
 describe('buildAttentionQueue', () => {
-  it('is empty when nothing needs a person', () => {
-    const data = dashboard({
-      activeAmrsList: [amr()],
-      todaySchedule: [tour()],
-      activeSessions: [{ id: 's-9', status: 'InProgress', routeName: 'R', startTime: at(-10), missionState: 'Navigating', progressPercent: 40 }],
-    })
-    expect(buildAttentionQueue(data, NOW)).toEqual([])
+  it('puts a Tour needing assistance first, then a held robot, then a due start', () => {
+    const queue = buildAttentionQueue({
+      tours: [
+        tour({ id: 'ready', state: 'Ready', scheduledAt: at(10) }),
+        tour({ id: 'run', state: 'Running', operationalStatus: 'NeedsAssistance', reason: 'NavigationFailed', reasonDetail: 'Nav2 báo thất bại' }),
+        tour({ id: 'later', state: 'Scheduled', scheduledAt: at(240) }),
+      ],
+      robots: [robot({ needsCheck: true })],
+    }, NOW)
+    expect(queue.map((item) => item.id)).toEqual(['tour:run', 'robot:robot_01', 'tour:ready'])
+    expect(queue[0]).toMatchObject({ headline: 'Cần hỗ trợ · Lỗi điều hướng', toLabel: 'Xử lý hỗ trợ' })
   })
 
-  describe('what gets in', () => {
-    it('raises a disconnected robot', () => {
-      const data = dashboard({ activeAmrsList: [amr({ connectionState: 'Disconnected', operationalState: 'Offline' })] })
-      const [item] = buildAttentionQueue(data, NOW)
-      expect(item.tone).toBe('danger')
-      expect(item.headline).toBe('Mất kết nối')
-      expect(item.to).toBe('/staff/amr')
-    })
-
-    it('raises a stale robot as a warning, not a failure', () => {
-      const data = dashboard({ activeAmrsList: [amr({ connectionState: 'Stale' })] })
-      expect(buildAttentionQueue(data, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Dữ liệu chậm' })
-    })
-
-    it('raises a low battery', () => {
-      const data = dashboard({ activeAmrsList: [amr({ batteryPercent: 12 })] })
-      expect(buildAttentionQueue(data, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Pin yếu' })
-    })
-
-    it('leaves a robot with no battery reading alone rather than calling it flat', () => {
-      const data = dashboard({ activeAmrsList: [amr({ batteryPercent: null })] })
-      expect(buildAttentionQueue(data, NOW)).toEqual([])
-    })
-
-    it('raises a tour that should already have started', () => {
-      const data = dashboard({ todaySchedule: [tour({ startTime: at(-20) })] })
-      expect(buildAttentionQueue(data, NOW)[0]).toMatchObject({ tone: 'danger', headline: 'Quá giờ khởi hành' })
-    })
-
-    it('raises a tour with no robot, and treats one starting soon as urgent', () => {
-      const later = dashboard({ todaySchedule: [tour({ amrName: null, startTime: at(90) })] })
-      expect(buildAttentionQueue(later, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Chưa gán AMR', toLabel: 'Gán AMR' })
-
-      const soon = dashboard({ todaySchedule: [tour({ amrName: null, startTime: at(5) })] })
-      expect(buildAttentionQueue(soon, NOW)[0]).toMatchObject({ tone: 'danger', headline: 'Chưa gán AMR' })
-    })
-
-    it('raises a paused tour as a decision waiting on a person', () => {
-      const data = dashboard({
-        activeSessions: [{ id: 's-2', status: 'Paused', routeName: 'Không gian nghiên cứu mở', startTime: at(-40), amrName: 'AMR Lotus-03', missionState: 'Paused', progressPercent: 38 }],
-      })
-      expect(buildAttentionQueue(data, NOW)[0]).toMatchObject({ tone: 'warn', headline: 'Tour đang tạm dừng', to: '/staff/tours/s-2' })
-    })
-
-    it('carries the alert id so the row can be acknowledged in place', () => {
-      const data = dashboard({ recentAlerts: [alert()] })
-      expect(buildAttentionQueue(data, NOW)[0].alertId).toBe('a-1')
-    })
+  it('ignores rehearsal robots and the robot already serving a Tour', () => {
+    const queue = buildAttentionQueue({ tours: [], robots: [robot({ id: 'gz', assignable: false, headFault: true }), robot({ currentSessionId: 't1', poseAgeSeconds: 30 })] }, NOW)
+    expect(queue).toEqual([])
   })
+})
 
-  describe('what stays out', () => {
-    it('ignores an already acknowledged alert', () => {
-      const data = dashboard({ recentAlerts: [alert({ acknowledgedAt: at(-2) })] })
-      expect(buildAttentionQueue(data, NOW)).toEqual([])
-    })
-
-    it('ignores a completed or cancelled tour with no robot', () => {
-      const data = dashboard({
-        todaySchedule: [tour({ status: 'Completed', amrName: null }), tour({ sessionId: 's-3', status: 'Cancelled', amrName: null })],
-      })
-      expect(buildAttentionQueue(data, NOW)).toEqual([])
-    })
-
-    it('does not print a robot twice when an open alert already names it', () => {
-      const data = dashboard({
-        recentAlerts: [alert({ amrName: 'AMR Lotus-04', severity: 'Warning' })],
-        activeAmrsList: [amr({ id: 'amr-4', name: 'AMR Lotus-04', connectionState: 'Disconnected', operationalState: 'Offline' })],
-      })
-      expect(ids(data)).toEqual(['alert:a-1'])
-    })
-
-    it('does not also nag about a robot for a tour that is merely late', () => {
-      const data = dashboard({ todaySchedule: [tour({ startTime: at(-20), amrName: null })] })
-      expect(ids(data)).toEqual(['late:s-1'])
-    })
-  })
-
-  describe('ordering', () => {
-    it('puts failures above warnings and the oldest first inside a band', () => {
-      const data = dashboard({
-        recentAlerts: [
-          alert({ id: 'a-warn', severity: 'Warning', amrName: 'AMR Lotus-09', createdAt: at(-30) }),
-          alert({ id: 'a-crit-new', severity: 'Critical', amrName: 'AMR Lotus-07', createdAt: at(-2) }),
-          alert({ id: 'a-crit-old', severity: 'Critical', amrName: 'AMR Lotus-08', createdAt: at(-45) }),
-        ],
-        activeAmrsList: [amr({ id: 'amr-5', name: 'AMR Lotus-05', connectionState: 'Disconnected' })],
-        todaySchedule: [tour({ sessionId: 's-late', startTime: at(-10) })],
-      })
-      expect(ids(data)).toEqual([
-        'alert:a-crit-old',
-        'alert:a-crit-new',
-        'amr:amr-5',
-        'late:s-late',
-        'alert:a-warn',
-      ])
-    })
+describe('routeProgress', () => {
+  it('reads the target from the server progress, not from a guess', () => {
+    const stop = (id: string, status: 'Completed' | 'Current' | 'Upcoming') => ({ id, name: id, position: { x: 0, y: 0 }, dwellSeconds: 20, headSteps: ['FRONT' as const], status, visits: 0 })
+    const progress = routeProgress({ stops: [stop('a', 'Completed'), stop('b', 'Current'), stop('c', 'Upcoming')], progress: { step: 'Navigating', stopIndex: 1, hold: false, narration: 'Idle' } })
+    expect(progress).toMatchObject({ done: 1, total: 3 })
+    expect(progress.current?.id).toBe('b')
+    expect(progress.next?.id).toBe('c')
   })
 })

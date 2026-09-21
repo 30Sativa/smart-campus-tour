@@ -1,0 +1,18 @@
+name: campus-gazebo-preview
+services:
+  preview-api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.preview
+    ports:
+      - "127.0.0.1:5000:5000"
+    restart: "no"
+  gazebo:
+    build:
+      context: .
+      dockerfile: Dockerfile.preview
+    # Sharing the network namespace keeps pose ingestion strictly on loopback.
+    network_mode: service:preview-api
+    depends_on: [preview-api]
+    restart: "no"
+    shm_size: 512m

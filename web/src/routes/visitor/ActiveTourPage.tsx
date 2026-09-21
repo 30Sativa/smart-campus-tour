@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { BatteryMedium, Clock, MapPin, MessageCircle, Pause, Play, Square } from 'lucide-react'
 import { PageHeader } from '../../features/visitor/components/PageHeader'
 import { CampusMap, MapLegend } from '../../features/visitor/components/CampusMap'
+import { CORRIDOR } from '../../features/visitor/campus-floorplan'
 import { RobotMark } from '../../features/visitor/components/RobotMark'
 import { StatusBadge } from '../../features/visitor/components/StatusBadge'
 import { EmptyState, ErrorState, LoadingPanel } from '../../features/visitor/components/States'
@@ -108,7 +109,10 @@ export default function ActiveTourPage() {
             })),
             { id: 'robot', name: active.robotName, x: active.robotMapX, y: active.robotMapY, role: 'robot' as const },
           ]}
-          route={active.stops.map((stop) => ({ x: stop.mapX, y: stop.mapY }))}
+          /* The circulation ring, which is the path the robot actually takes.
+             Joining the stops directly would draw a line straight through the
+             atrium and through several walls. */
+          route={[...CORRIDOR, CORRIDOR[0]]}
           note="Campus plan preview. The robot's position updates as it moves."
         >
           <MapLegend />

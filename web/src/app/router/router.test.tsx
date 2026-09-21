@@ -96,10 +96,13 @@ describe('route table', () => {
   describe('legacy operations URLs', () => {
     it.each([
       ['/admin/schedule', '/staff/schedule'],
-      ['/admin/amr', '/staff/amr'],
-      ['/admin/alerts', '/staff/alerts'],
+      ['/admin/amr', '/staff/robot'],
+      ['/admin/alerts', '/staff'],
       ['/admin/digital-twin', '/staff/digital-twin'],
-      ['/admin/reports', '/staff/reports'],
+      ['/admin/reports', '/staff/history'],
+      ['/staff/amr', '/staff/robot'],
+      ['/staff/alerts', '/staff'],
+      ['/staff/reports', '/staff/history'],
       ['/admin/tours/abc-123', '/staff/tours/abc-123'],
     ])('redirects %s to %s', async (from, to) => {
       signIn('Admin')

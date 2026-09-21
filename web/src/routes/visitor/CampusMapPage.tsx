@@ -4,8 +4,7 @@ import { Compass, Footprints, MapPin } from 'lucide-react'
 import type { LocationCategory } from '../../api/contracts/visitor'
 import { PageHeader } from '../../features/visitor/components/PageHeader'
 import { SearchBar } from '../../features/visitor/components/SearchBar'
-import type { MapPin as Pin } from '../../features/visitor/components/CampusMap'
-import { CampusMap3D } from '../../features/visitor/components/CampusMap3D'
+import { CampusMap, MapLegend, type MapPin as Pin } from '../../features/visitor/components/CampusMap'
 import { StatusBadge } from '../../features/visitor/components/StatusBadge'
 import { RobotMark } from '../../features/visitor/components/RobotMark'
 import { ErrorState, LoadingPanel } from '../../features/visitor/components/States'
@@ -69,6 +68,25 @@ export default function CampusMapPage() {
     return list
   }, [locations.data, destination, destinationId, you, activeTour])
 
+  /**
+   * The line drawn on the plan.
+   *
+   * A tour that is running owns the route — those are the stops the robot is
+   * actually walking. Otherwise it is the straight line from where the visitor
+   * is to the place they picked, which is an honest "this is the direction"
+   * rather than a turn-by-turn path the backend cannot yet produce.
+   */
+  const route = useMemo(() => {
+    if (activeTour) return activeTour.stops.map((stop) => ({ x: stop.mapX, y: stop.mapY }))
+    if (you && destination) {
+      return [
+        { x: you.mapX, y: you.mapY },
+        { x: destination.mapX, y: destination.mapY },
+      ]
+    }
+    return undefined
+  }, [activeTour, you, destination])
+
   const selectLocation = (id: string) => {
     if (id === 'robot') {
       setRobotSelected(true)
@@ -122,7 +140,19 @@ export default function CampusMapPage() {
         ) : locations.isError ? (
           <ErrorState error={locations.error} onRetry={() => void locations.refetch()} />
         ) : (
-          <CampusMap3D pins={pins} selectedId={selected} onSelect={selectLocation} />
+          <CampusMap
+            pins={pins}
+            route={route}
+            selectedId={selected}
+            onSelect={selectLocation}
+            note={
+              destination
+                ? `Route to ${destination.name}. Walking directions arrive with the campus map service.`
+                : 'Campus plan. Pick a place to see the way there.'
+            }
+          >
+            <MapLegend />
+          </CampusMap>
         )}
 
         <aside className="vs-map-details">
