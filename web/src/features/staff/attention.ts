@@ -130,6 +130,7 @@ export function routeProgress(tour: Pick<TourOperation, 'stops' | 'progress'>): 
   return { done, total: tour.stops.length, current, next }
 }
 
+
 /** Approved groups and students of a Tour, for this screen's labels. */
 export function groupSummary(tour: Pick<TourOperation, 'registrations'>) {
   const approved = tour.registrations.filter((reg) => reg.state === 'Approved')
@@ -138,4 +139,56 @@ export function groupSummary(tour: Pick<TourOperation, 'registrations'>) {
     students: approved.reduce((sum, reg) => sum + reg.studentCount, 0),
     pending: tour.registrations.filter((reg) => reg.state === 'Submitted').length,
   }
+
+/* ── Fleet readiness ──────────────────────────────────────────────────────── */
+
+/**
+ * The fleet as four readiness states, ordered best to worst: free, busy, worth
+ * watching, broken.
+ *
+ * Grouped rather than listed alphabetically because a flat device list makes
+ * the reader do the triage. `id` is stable so the UI can key on it.
+ *
+ * Empty bands are RETURNED, not filtered out. The overview renders this as a
+ * four-column readiness board, and a board that drops a column when it happens
+ * to be empty moves every other column sideways - an operator who has learnt
+ * that "mất kết nối" is the far right has to re-read the labels on every
+ * refresh. The count reads 0; the column stays.
+ */
+export type FleetBandId = 'down' | 'watch' | 'busy' | 'ready'
+
+export type FleetBand = {
+  id: FleetBandId
+  label: string
+  tone: 'danger' | 'warn' | 'info' | 'ok'
+  units: AmrStatus[]
+}
+
+export function groupFleet(amrs: AmrStatus[]): FleetBand[] {
+  const bands: Record<FleetBandId, AmrStatus[]> = { down: [], watch: [], busy: [], ready: [] }
+
+  for (const amr of amrs) {
+    if (amr.connectionState === 'Disconnected' || isTrouble(amr.operationalState)) bands.down.push(amr)
+    else if (
+      amr.connectionState === 'Stale' ||
+      needsWatching(amr.operationalState) ||
+      needsWatching(amr.sensorHealth) ||
+      (amr.batteryPercent != null && amr.batteryPercent < 20)
+    ) bands.watch.push(amr)
+    else if (amr.currentSessionId) bands.busy.push(amr)
+    else bands.ready.push(amr)
+  }
+
+  const order: Array<{ id: FleetBandId; label: string; tone: FleetBand['tone'] }> = [
+    { id: 'ready', label: 'Sẵn sàng', tone: 'ok' },
+    { id: 'busy', label: 'Đang tour', tone: 'info' },
+    { id: 'watch', label: 'Cần theo dõi', tone: 'warn' },
+    { id: 'down', label: 'Mất kết nối / lỗi', tone: 'danger' },
+  ]
+
+  return order.map((band) => ({
+    ...band,
+    units: bands[band.id].sort((a, b) => a.name.localeCompare(b.name, 'vi')),
+  }))
+
 }

@@ -47,8 +47,10 @@ stacks in the same ROS domain yet.
 Robot geometry is authoritative in
 `robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`.
 `robot/ros2_ws/src/robot_description/config/diff_drive_controller.yaml` and
-the real bridge launch defaults must match its `wheel_radius` and
-`wheel_separation`; tests enforce that relationship.
+the URDF use the physical/CAD driven-wheel separation of `0.4325` m for
+simulation. The real STM32 wheel odometry intentionally uses the calibrated
+effective `wheel_base` of `0.4714` m. Wheel radius remains common to both;
+tests enforce these relationships.
 
 `robot/firmware/stm32/motor_controller` is the STM32G431 firmware for the HBS57H
 STEP/DIR motor controller.

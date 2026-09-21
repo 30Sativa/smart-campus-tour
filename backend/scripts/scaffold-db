@@ -48,7 +48,7 @@ dotnet ef dbcontext scaffold \
   "$SMARTCAMPUS_DB_CONNECTION" \
   Microsoft.EntityFrameworkCore.SqlServer \
   --project src/SmartCampus.Infrastructure/SmartCampus.Infrastructure.csproj \
-  --startup-project src/SmartCampus.Api/SmartCampus.Api.csproj \
+  --startup-project src/SmartCampus.Infrastructure/SmartCampus.Infrastructure.csproj \
   --output-dir "$TEMP_PROJECT_PATH/Entities" \
   --context-dir "$TEMP_PROJECT_PATH/Persistence" \
   --namespace SmartCampus.Domain.Entities \

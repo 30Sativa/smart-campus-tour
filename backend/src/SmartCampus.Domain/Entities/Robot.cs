@@ -15,9 +15,9 @@ public partial class Robot
 
     public byte[] CredentialHash { get; set; } = null!;
 
-    public bool IsFaulted { get; set; }
-
     public bool IsDispatchEnabled { get; set; }
+
+    public bool NeedsInspection { get; set; }
 
     public Guid? CurrentTourId { get; set; }
 
@@ -26,6 +26,8 @@ public partial class Robot
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    public byte[] RowVersion { get; set; } = null!;
 
     public virtual Tour? CurrentTour { get; set; }
 

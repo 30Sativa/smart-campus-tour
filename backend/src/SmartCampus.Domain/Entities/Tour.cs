@@ -7,41 +7,61 @@ public partial class Tour
 {
     public Guid Id { get; set; }
 
+    public string Name { get; set; } = null!;
+
+    public string? Description { get; set; }
+
     public Guid RouteId { get; set; }
 
     public DateTimeOffset ScheduledStartAt { get; set; }
 
-    public int MaxVisitors { get; set; }
+    public string State { get; set; } = null!;
 
-    public string Status { get; set; } = null!;
+    public Guid? AssignedRobotId { get; set; }
 
-    public Guid? CurrentRobotId { get; set; }
+    public string? OperationalStatus { get; set; }
 
-    public int? LastArrivedStopOrder { get; set; }
+    public string? AssistanceReason { get; set; }
+
+    public string? CurrentStep { get; set; }
 
     public Guid? CurrentLegId { get; set; }
 
-    public Guid? RepresentativeBookingId { get; set; }
+    public string? CurrentLegKind { get; set; }
 
-    public string? NarrationLanguage { get; set; }
+    public int? CurrentStopOrder { get; set; }
 
-    public DateTimeOffset? RobotArrivedMeetingAt { get; set; }
+    public int? LastArrivedStopOrder { get; set; }
 
-    public DateTimeOffset? ActualStartedAt { get; set; }
+    public Guid? CurrentStopVisitId { get; set; }
 
-    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? StopVisitClosedAt { get; set; }
 
-    public DateTimeOffset? CancelledAt { get; set; }
+    public Guid? CurrentHeadCommandId { get; set; }
+
+    public bool IsHeld { get; set; }
+
+    public DateTimeOffset? DwellDeadlineAt { get; set; }
+
+    public DateTimeOffset? StartedAt { get; set; }
+
+    public DateTimeOffset? EndedAt { get; set; }
+
+    public string? EndReason { get; set; }
+
+    public Guid CreatedByUserId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
-    public virtual Booking? Booking { get; set; }
+    public byte[] RowVersion { get; set; } = null!;
 
-    public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+    public virtual Robot? AssignedRobot { get; set; }
 
-    public virtual Robot? CurrentRobot { get; set; }
+    public virtual User CreatedByUser { get; set; } = null!;
+
+    public virtual ICollection<GroupRegistration> GroupRegistrations { get; set; } = new List<GroupRegistration>();
 
     public virtual ICollection<Robot> Robots { get; set; } = new List<Robot>();
 

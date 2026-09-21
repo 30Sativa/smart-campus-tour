@@ -11,6 +11,24 @@ public partial class Route
 
     public string? Description { get; set; }
 
+    public string MapKey { get; set; } = null!;
+
+    public string MapFrame { get; set; } = null!;
+
+    public decimal StartX { get; set; }
+
+    public decimal StartY { get; set; }
+
+    public decimal StartYaw { get; set; }
+
+    public string EndMode { get; set; } = null!;
+
+    public decimal? EndX { get; set; }
+
+    public decimal? EndY { get; set; }
+
+    public decimal? EndYaw { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

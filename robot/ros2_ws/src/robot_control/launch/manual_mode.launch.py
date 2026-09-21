@@ -66,9 +66,10 @@ def generate_launch_description():
                               description='STM32 USB CDC serial port.'),
         DeclareLaunchArgument('baudrate', default_value='115200',
                               description='STM32 serial baudrate.'),
-        DeclareLaunchArgument('wheel_base', default_value='0.4325',
-                              description='Distance between driven wheels '
-                                          '(center-to-center: 0.4325 m).'),
+        DeclareLaunchArgument('wheel_base', default_value='0.4714',
+                              description='Calibrated effective wheel base for '
+                                          'real-robot differential odometry; '
+                                          'physical/CAD separation is 0.4325 m.'),
         DeclareLaunchArgument('wheel_radius', default_value='0.09725',
                               description='Real wheel radius for odometry.'),
         DeclareLaunchArgument('max_wheel_speed_mm_s', default_value='250.0',

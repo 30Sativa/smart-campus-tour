@@ -25,7 +25,9 @@ except ImportError:  # pragma: no cover - depends on host ROS environment
 UINT32_MODULO = 2 ** 32
 INT32_MODULO = 2 ** 32
 INT32_HALF_RANGE = 2 ** 31
-DEFAULT_WHEEL_BASE = 0.4325
+# Effective wheel base calibrated from real-robot point turns. This is
+# intentionally different from the 0.4325 m physical/CAD wheel separation.
+DEFAULT_WHEEL_BASE = 0.4714
 DEFAULT_WHEEL_RADIUS = 0.09725
 DEFAULT_ODOM_COVARIANCE_DIAGONAL = [
     0.01,

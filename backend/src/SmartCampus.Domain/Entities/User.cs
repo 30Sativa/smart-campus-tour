@@ -9,6 +9,8 @@ public partial class User
 
     public string Username { get; set; } = null!;
 
+    public string NormalizedUsername { get; set; } = null!;
+
     public string PasswordHash { get; set; } = null!;
 
     public string FullName { get; set; } = null!;
@@ -17,13 +19,19 @@ public partial class User
 
     public DateTimeOffset CreatedAt { get; set; }
 
+    public DateTimeOffset? UpdatedAt { get; set; }
+
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
-    public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+    public virtual ICollection<GroupRegistration> GroupRegistrationRepresentativeUsers { get; set; } = new List<GroupRegistration>();
+
+    public virtual ICollection<GroupRegistration> GroupRegistrationReviewedByUsers { get; set; } = new List<GroupRegistration>();
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
+
+    public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

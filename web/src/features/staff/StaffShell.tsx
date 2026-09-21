@@ -58,6 +58,7 @@ export default function StaffShell() {
   }, [toast])
 
   return (
+
     <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#0f172a]">
       {/* Mobile drawer trigger */}
       <button
@@ -69,6 +70,10 @@ export default function StaffShell() {
         className="fixed right-5 bottom-5 z-30 grid h-12 w-12 place-items-center rounded-full bg-[#2563eb] text-white shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 lg:hidden"
         aria-label="Mở điều hướng vận hành"
       >
+
+    <div className="flex min-h-[100dvh] bg-[#f4f6f9] text-[#1f314d]">
+      <button ref={menuButtonRef} type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="staff-navigation" className="fixed right-5 bottom-5 z-30 grid h-12 w-12 place-items-center rounded-full bg-[#5b91ed] text-white shadow-[0_10px_28px_rgba(79,141,247,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] focus-visible:ring-offset-2 lg:hidden" aria-label="Mở điều hướng vận hành">
+
         <Menu size={22} aria-hidden="true" />
       </button>
 
@@ -195,6 +200,7 @@ export default function StaffShell() {
 
       {/* ── Main Layout ──────────────────────────────────────────────────────── */}
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
+
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white/95 px-5 backdrop-blur-md lg:px-8">
           <p className="text-sm font-bold text-[#0f172a] lg:hidden">
             {STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'}
@@ -214,6 +220,21 @@ export default function StaffShell() {
           </span>
 
           <div className="ml-auto flex min-w-0 items-center gap-2.5">
+
+        {/* The shell header names the area. The page heading below says what the
+            page is, so the two never print the same words. */}
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between border-b border-[#dce9fb] bg-white/90 px-5 backdrop-blur-md lg:px-8">
+          <p className="text-sm font-bold tracking-[-0.01em] text-[#1f314d] lg:hidden">{STAFF_NAV.find(({ path }) => active(path))?.label ?? 'Vận hành tour'}</p>
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            {/* Development only. A full-width strip under the header read as an
+                operational warning about the fleet; a marker in the chrome says
+                the same thing without competing with a real alert. A production
+                bundle drops the branch, and `mock-mode.ts` warns to the console. */}
+            {import.meta.env.DEV && (
+              <span data-dev-only="true" title="Dữ liệu mẫu" className="shrink-0 rounded border border-[#dfe5ec] bg-[#f8fafc] px-1.5 py-0.5 text-[11px] font-bold tracking-[0.06em] text-[#8d99ab]">
+                DEV
+              </span>
+            )}
             <form
               role="search"
               className="relative hidden w-60 sm:block"
@@ -335,6 +356,9 @@ function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClos
         >
           <X size={15} />
         </button>
+
+        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
+
       </div>
     </div>
   )

@@ -9,11 +9,30 @@
 # After startup, if the robot did not start at the mapping origin, give it a
 # "2D Pose Estimate" in RViz (publishes /initialpose to AMCL).
 # =============================================================================
+import os
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import (DeclareLaunchArgument, LogInfo, OpaqueFunction,
+                            Shutdown)
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+
+
+def _check_map(context, *args, **kwargs):
+    """Fail early when the required saved-map path is missing or invalid."""
+    path = LaunchConfiguration('map').perform(context)
+    if not path:
+        return [LogInfo(msg=(
+            '\n[localization] No real-world map was provided. '
+            'Pass map:=/path/to/map.yaml (for example, '
+            'map:=/maps/campus_map.yaml).')),
+            Shutdown(reason='map launch argument is required')]
+    if not os.path.isfile(path):
+        return [LogInfo(msg=f'\n[localization] Map file not found: {path}\n'
+                            '  Check that the saved .yaml file exists.'),
+                Shutdown(reason=f'map file not found: {path}')]
+    return [LogInfo(msg=f'[localization] Using map: {path}')]
 
 
 def generate_launch_description():
@@ -28,19 +47,16 @@ def generate_launch_description():
         'config',
         'localization_params.yaml',
     ])
-    default_map = PathJoinSubstitution([
-        FindPackageShare('robot_navigation'),
-        'maps',
-        'map.yaml',
-    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'robot_id', default_value='',
             description='ROS namespace for this robot.'),
         DeclareLaunchArgument(
-            'map', default_value=default_map,
-            description='Full path to the saved map .yaml file.'),
+            'map', default_value='',
+            description='Full path to the saved map .yaml file. Required; '
+                        'there is no default real-world map.'),
+        OpaqueFunction(function=_check_map),
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
             description='Use simulation clock.'),

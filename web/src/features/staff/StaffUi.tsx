@@ -8,6 +8,7 @@ export const panelClass =
   'overflow-hidden rounded-2xl border border-[var(--ops-border,#e2e8f0)] bg-white shadow-xs transition-[box-shadow,border-color] duration-200'
 
 /**
+
  * The page's own heading. Eyebrow, title and supporting line each say something new.
  */
 export function PageHeader({
@@ -22,11 +23,22 @@ export function PageHeader({
   description: string
   action?: ReactNode
   scale?: 'default' | 'console'
+
+ * The page's own heading. The shell header names the area, so this must not
+ * repeat it: eyebrow, title and supporting line each say something new.
+ *
+ * The operations overview does NOT use this - it carries its own command bar,
+ * which is part of what makes that screen read as a console rather than as
+ * another report. Every other staff and admin page shares this one.
+ */
+export function PageHeader({ eyebrow, title, description, action }: {
+  eyebrow: string; title: string; description: string; action?: ReactNode
+
 }) {
-  const console_ = scale === 'console'
   return (
-    <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
+    <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
       <div>
+
         <p className={`font-bold tracking-[0.12em] text-[#2563eb] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>
           {eyebrow}
         </p>
@@ -40,6 +52,11 @@ export function PageHeader({
         <p className={`mt-1.5 max-w-3xl text-[#64748b] ${console_ ? 'text-sm sm:text-[15px] leading-relaxed' : 'text-sm leading-6'}`}>
           {description}
         </p>
+
+        <p className="text-[11px] font-bold tracking-[0.12em] text-[#5b91ed] uppercase">{eyebrow}</p>
+        <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-[#1f314d] sm:text-[28px]">{title}</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#71819a]">{description}</p>
+
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </header>

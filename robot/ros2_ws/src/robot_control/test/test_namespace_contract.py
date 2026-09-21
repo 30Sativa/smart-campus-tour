@@ -67,6 +67,15 @@ def test_primary_launch_files_accept_robot_id():
         assert "DeclareLaunchArgument(\n            'robot_id'" in _read(launch_file)
 
 
+def test_real_localization_requires_explicit_existing_map():
+    launch = _read('robot_navigation/launch/localization.launch.py')
+    assert "'map', default_value=''" in launch
+    assert 'OpaqueFunction(function=_check_map)' in launch
+    assert 'if not path:' in launch
+    assert 'if not os.path.isfile(path):' in launch
+    assert "'maps',\n        'map.yaml'" not in launch
+
+
 def test_topic_parameters_are_relative():
     config_files = (
         'robot_control/config/frontier_explorer.yaml',

@@ -9,7 +9,7 @@ public partial class RefreshToken
 
     public Guid UserId { get; set; }
 
-    public string TokenHash { get; set; } = null!;
+    public byte[] TokenHash { get; set; } = null!;
 
     public DateTimeOffset ExpiresAt { get; set; }
 
