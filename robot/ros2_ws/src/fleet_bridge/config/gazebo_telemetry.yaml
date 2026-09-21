@@ -1,0 +1,9 @@
+gazebo_telemetry:
+  ros__parameters:
+    endpoint: http://127.0.0.1:5000/api/simulation/pose
+    model_name: amr_robot
+    robot_id: robot_01
+    world_id: map3d-preview-v1
+    model_states_topic: /gazebo/model_states
+    rate_hz: 10.0
+    http_timeout: 1.0

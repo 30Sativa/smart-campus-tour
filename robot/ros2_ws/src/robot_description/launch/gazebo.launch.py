@@ -63,6 +63,7 @@ def setup_gazebo(context):
         package='gazebo_ros',
         executable='spawn_entity.py',
         arguments=['-topic', 'robot_description', '-entity', 'amr_robot',
+                   '-x', LaunchConfiguration('spawn_x'),
                    '-z', '0.05', '-timeout', '120.0'],
         output='screen',
     )
@@ -101,6 +102,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'gui', default_value='true',
             description='Start gzclient GUI when true.'),
+        DeclareLaunchArgument(
+            'spawn_x', default_value='0.0',
+            description='Initial robot X in Gazebo world coordinates (metres).'),
         DeclareLaunchArgument(
             'load_controllers', default_value='true',
             description='Spawn ros2_control controllers when true.'),

@@ -247,6 +247,47 @@ predictive engine.
 
 ## 5. Fleet-scale validation and research
 
+### Local Gazebo display integration
+
+The first executable display integration is a **development-only, read-only,
+single-Gazebo-robot** path. It does not implement the production fleet command
+contract, robot authentication, dispatch, or physical localization above.
+
+- Enable backend `SimulationPreview:Enabled=true` in `Development` only.
+  Preview endpoints accept loopback connections only; use an SSH tunnel when
+  Gazebo/backend run on another computer. They are unavailable by default and
+  in Production. No database is required in this explicit preview mode.
+- `POST /api/simulation/pose`: JSON fields `robotId` (`robot_01`), `source`
+  (`gazebo`), `worldId` (`map3d-preview-v1`), `frameId` (`gazebo_world`),
+  `streamId` (bridge-start UUID), `seq` (positive monotonic integer),
+  `capturedAt` (UTC wall-clock ISO timestamp), `x`, `y`, `z` (metres),
+  `yaw` (radians). This is Gazebo ground truth, **not** AMCL localization.
+- The ROS bridge subscribes to `/gazebo/model_states` from
+  `libgazebo_ros_state.so`, selects `amr_robot`, and posts at most 10 Hz.
+  Its one-slot latest-state buffer bounds memory and keeps HTTP off the ROS
+  callback thread. No commands or motor topics are exposed to the browser.
+- SignalR `/hubs/simulation` emits `PoseUpdated` with the same fields plus
+  backend `receivedAt`. A newly connected client receives the last snapshot.
+  Backend rejects invalid, stale (>10 s), future (>5 s), duplicate or reordered
+  samples. Sequence order applies within one stream; a restarted stream must
+  have a newer capture timestamp. This preview permits one publisher only.
+- The web explicitly selects Demo or Gazebo, retries initial connections,
+  reconnects, and considers samples stale after 2 s. It never substitutes demo
+  poses for missing telemetry. Demo controls cannot command Gazebo.
+- Map source: `robot/Map3d/map.obj` + `robot/Map3d/map.mtl`. Deployment copies
+  live in `robot/ros2_ws/src/simulation/models/map3d_preview/meshes/` and
+  `web/public/models/simulator-map/`. Both use scale `20 / 659.524231`,
+  source center X `5.7220155`, source center Z `38.546127`, source floor Y `10`.
+  Gazebo is Z-up: `(s*(X-cx), -s*(Z-cz), s*(Y-10))`. The web scene is Y-up:
+  `(gazebo.x, gazebo.z, -gazebo.y)` and rotation about scene Y is Gazebo yaw.
+  Assets are display-calibrated; this is not measured campus geometry. The
+  ground plane fills mesh gaps. The imported mesh supplies static collisions.
+
+Run instructions and behavioral acceptance checks:
+`robot/docs/gazebo-web-preview.md`. Ubuntu ROS 2 Humble / Gazebo Classic and
+hardware-style physics must still be exercised before claiming behavioral
+correctness. The legacy Classic integration is retained, not migrated here.
+
 The external Fleet Emulator belongs in `digital-twin/`; see
 [ADR-0004](decisions/0004-external-fleet-emulator.md). It simulates
 pose/state progression toward per-leg `go_to` targets and supplies controlled

@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /source
+COPY src ./src
+RUN dotnet publish src/SmartCampus.Api/SmartCampus.Api.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+ENV ASPNETCORE_URLS=http://0.0.0.0:5000
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV SimulationPreview__Enabled=true
+USER $APP_UID
+ENTRYPOINT ["dotnet", "SmartCampus.Api.dll"]
