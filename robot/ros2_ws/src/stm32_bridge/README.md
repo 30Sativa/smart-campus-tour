@@ -104,6 +104,11 @@ delta_s = (right_distance + left_distance) / 2
 delta_theta = (right_distance - left_distance) / wheel_base
 ```
 
+For real STM32 wheel odometry, `wheel_base` is the calibrated effective value
+`0.4714` m. It intentionally differs from the physical/CAD driven-wheel
+center-to-center separation of `0.4325` m used by the URDF and simulation
+controller; the simulation geometry must continue to match CAD.
+
 Wheel pose and twist are integrated only from STEP counts; BNO085 yaw never
 overrides this pose inside the bridge. The bridge publishes:
 
@@ -246,7 +251,7 @@ ros2 run tf2_tools view_frames
 |---|---:|---|
 | `port` | `/dev/ttyACM0` | STM32 USB CDC serial port |
 | `baudrate` | `115200` | Serial baudrate |
-| `wheel_base` | `0.4325` | Distance between wheels, meters (center-to-center; matched to URDF) |
+| `wheel_base` | `0.4714` | Calibrated effective wheel base for real STM32 differential odometry, meters |
 | `wheel_radius` | `0.09725` | Wheel radius, meters (matched to URDF) |
 | `steps_per_rev` | `200.0` | Motor full steps per revolution |
 | `microstep` | `8.0` | HBS57H microstep multiplier |
