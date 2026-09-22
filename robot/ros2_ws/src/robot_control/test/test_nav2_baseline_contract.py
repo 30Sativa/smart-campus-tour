@@ -67,6 +67,37 @@ def test_navfn_is_gone():
 # ------------------------------------------------------------- controller
 
 
+def test_progress_checker_key_is_humble_singular():
+    """Humble declares "progress_checker_plugin" (singular, a plain string).
+
+    The plural "progress_checker_plugins" landed in Iron. On Humble the plural
+    key is never read: the id falls back to default_progress_checker_id_,
+    which is itself "progress_checker", so a block named exactly that still
+    gets loaded by luck. Rename the block and the progress checker silently
+    reverts to stock defaults with no warning in the log.
+    """
+    controller = _nav2_params()['controller_server']['ros__parameters']
+    assert 'progress_checker_plugins' not in controller
+    plugin_id = controller['progress_checker_plugin']
+    assert isinstance(plugin_id, str), 'Humble wants a string, not a list'
+    assert plugin_id == 'progress_checker'
+    # The referenced block must exist and name a real plugin.
+    assert controller[plugin_id]['plugin'] == 'nav2_controller::SimpleProgressChecker'
+
+
+def test_goal_checker_and_controller_keys_stay_plural():
+    """Only the progress checker is singular on Humble - do not "fix" these."""
+    controller = _nav2_params()['controller_server']['ros__parameters']
+    assert isinstance(controller['goal_checker_plugins'], list)
+    assert isinstance(controller['controller_plugins'], list)
+    assert 'goal_checker_plugin' not in controller
+    assert 'controller_plugin' not in controller
+    for plugin_id in controller['goal_checker_plugins']:
+        assert plugin_id in controller, plugin_id
+    for plugin_id in controller['controller_plugins']:
+        assert plugin_id in controller, plugin_id
+
+
 def test_controller_is_regulated_pure_pursuit():
     controller = _nav2_params()['controller_server']['ros__parameters']
     assert controller['controller_plugins'] == ['FollowPath']

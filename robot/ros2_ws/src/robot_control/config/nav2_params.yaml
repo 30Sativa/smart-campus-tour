@@ -56,7 +56,15 @@ controller_server:
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
-    progress_checker_plugins: ["progress_checker"]
+    # HUMBLE: progress_checker_plugin is SINGULAR and takes a plain string;
+    # goal_checker_plugins and controller_plugins are plural lists. The plural
+    # spelling for the progress checker arrived in Iron. Getting this wrong is
+    # quiet rather than loud: controller_server.cpp declares
+    # "progress_checker_plugin", the plural key is simply never read, and the
+    # id falls back to default_progress_checker_id_ - which is also
+    # "progress_checker", so the block below still gets picked up by accident.
+    # Rename that block and the whole thing silently reverts to defaults.
+    progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["goal_checker"]
     controller_plugins: ["FollowPath"]
 
