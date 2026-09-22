@@ -92,6 +92,22 @@ def test_topic_parameters_are_relative():
         assert absolute_topic.search(_read(config_file)) is None
 
 
+def test_nav2_humble_launch_pushes_robot_namespace():
+    launch_files = (
+        'robot_navigation/launch/navigation.launch.py',
+        'robot_navigation/launch/sim_navigation.launch.py',
+    )
+    for launch_file in launch_files:
+        launch = _read(launch_file)
+        assert 'PushRosNamespace(robot_id)' in launch
+        assert "'namespace': robot_id" in launch
+        assert "'use_composition': 'false'" in launch
+
+
+def test_nav2_sonar_topics_are_relative():
+    nav2 = _read('robot_control/config/nav2_params.yaml')
+    assert '"/ultrasonic/' not in nav2
+
 def test_canonical_robot_id_replaces_legacy_bus_id():
     node = _read('bus_manager/bus_manager/stop_navigator_node.py')
     launch = _read('bus_manager/launch/stop_navigator.launch.py')
