@@ -20,7 +20,8 @@ shared rules; this file only covers what is specific to `web/`.
   operations and administration live in the same React app, same Vercel project,
   same domain. They are split by route + role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
-  - `/staff/*`: tour operations, for `Staff` and `Admin`. What an operator does
+  - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
+    run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
     check and Start, live operations on the operational twin (Hold / Next /
     End Early / recovery), the robot, the session log. Scope: the remote-tour
@@ -29,17 +30,20 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/admin/*`: administration, `Admin` only. System-level: what the product
-    consists of and who may enter which area. It is NOT the operations
-    dashboard with a different title, and it must not grow one.
+  - `/admin/*`: Tour administration, `Admin` only: create/edit a Tour while
+    Scheduled, pick a prepared route, review groups (approve / reject with a
+    reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
+    Start, and read finished Tours. Admin never starts, holds, advances or ends
+    a run and never controls a robot; no fleet, analytics, route editor or
+    scenario tools here. Screen map: `web/docs/admin-tours.md`.
   - Both signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
   - **Renamed on 2026-09-17.** Operations used to live at `/admin/*` back when
     there was only one signed-in area. The old operations URLs
     (`/admin/schedule`, `/admin/amr`, `/admin/alerts`, `/admin/digital-twin`,
-    `/admin/reports`, `/admin/tours/:id`) now redirect to their `/staff/*`
-    equivalent. `/admin` itself is NOT redirected: it is the administration
+    `/admin/reports`) now redirect to their `/staff/*` equivalent;
+    `/admin/tours/:id` is an admin page again (2026-09-21). `/admin` itself is NOT redirected: it is the administration
     overview. Those redirects are migration scaffolding — delete them once the
     old links are gone.
   - The **frontend route namespace and the backend API namespace are
@@ -116,8 +120,11 @@ web/
     │   │                 state, counts, "needs me now"), staff-hooks (query
     │   │                 layer + realtime sync), components/ (run status,
     │   │                 controls, route, robot, dialogs, operational twin)
-    │   └── administration/ AdminShell, admin-nav, admin-analytics (pure DTO to
-    │                     chart rows), charts/ (Recharts, admin only)
+    │   └── administration/ AdminShell, AdminUi, admin-nav, admin-status
+    │                     (labels), admin-hooks (query layer), admin-attention
+    │                     (dashboard tasks), components/ (TourForm, RoutePreview,
+    │                     ReadyChecklist, registration table/drawer, roster,
+    │                     invitation + Chốt/Mở lại/Hủy dialogs)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
     ├── auth/             AuthLayout + LoginPage/RegisterPage/AuthFields,
@@ -202,10 +209,9 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
   A new page is not done until it is behind the guard — do not rely on "nobody
   will guess the URL", and never rely on simply not rendering a nav link.
 - **No dead navigation.** A nav item must open a page that does something with
-  real data. Administration ships two entries today because two are all the
-  current contracts support; the rest are listed once, as prose, in the
-  "Chưa khả dụng" panel on the admin overview. When an endpoint lands, move its
-  item out of that list and into `features/administration/admin-nav.ts`.
+  real data. Administration's entries are exactly the scope's Admin work
+  (`features/administration/admin-nav.ts`); do not add robot, fleet, analytics
+  or editor entries there.
 - **No backend enum reaches a screen.** The API speaks `InProgress`, `Live`,
   `Critical`; people read Vietnamese. Everything a person sees goes through
   `features/staff/status.ts`, which also assigns the tone (ok / info /
@@ -237,25 +243,38 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
     you create: `.lp-btn`, `.lp-navlink`, `.lp-brand`, `.lp-h3`, `.lp-meta`,
     `.auth-input`, `.auth-submit` and `AuthField` are all already there.
 - **Operations and administration share one palette and one component set.**
-  Both signed-in Vietnamese consoles are Tailwind utilities on the same values:
-  ground `#f1f6fe`, panel border `#dce9fb`, ink `#1f314d` / `#40546f` / `#647793`
-  / `#71819a` / `#8a98ac`, primary `#2f62b8`, accent `#5b91ed`, soft fills
-  `#eaf4ff` / `#edf2fa` / `#f8fbff`, focus ring `#4f8df7`. Administration ran a
-  separate slate palette until 2026-09-18; it was dropped because the only
-  account that can open both areas is an Admin, so the only person who ever saw
-  the difference was the one guaranteed to cross it. The two still differ in
-  *priority* — administration has no alert bell and no live badge — which is the
-  right axis to diverge on.
+  Both signed-in Vietnamese consoles are Tailwind utilities on the same values
+  (the slate set the Staff console moved to on 2026-09-21, adopted by
+  administration on 2026-09-22): ground `#f8fafc`, panel `bg-white` with border
+  `#e2e8f0` and `shadow-xs` (no large soft shadows), dividers `#f1f5f9`, ink
+  `#0f172a` / `#1e293b` / `#334155` / `#475569` / `#64748b` / `#94a3b8`,
+  primary `#2563eb` (hover `#1d4ed8`; white on it is ~5.2:1), soft fill
+  `#eff6ff`, active chip `#0f172a` on white. Type: page title 24-26px bold,
+  section/panel title 15px semibold, body 14px, labels 12-13px medium,
+  sentence case (the page eyebrow is the one uppercase label). Buttons are
+  14px (`md`) / 13px (`sm`) semibold; no `font-black`.
+  Shape: panels 16px (`rounded-2xl`), buttons/inputs 12px (`rounded-xl`),
+  nav and list items 8px (`rounded-lg`), chips and badges full pill. Motion is
+  short (150-300ms), on opacity/transform/colour only, and every overlay
+  carries `motion-reduce:transition-none`. Visible copy uses no em/en dash:
+  empty values print `-`, sentences use a comma, colon or full stop.
+  Both shells render `staff/ConsoleSidebar.tsx` (2026-09-22).
+  The two still differ in *priority* — administration has no alert bell and no
+  live badge — which is the right axis to diverge on.
   - Shared chrome lives in `features/staff/StaffUi.tsx` and is used by
-    both areas: `panelClass`, `PageHeader`, `PanelHead`, `SummaryTile`,
-    `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`, `PageSkeleton`.
+    both areas: `panelClass`, `PageHeader`, `PanelHead`, `SectionHeading`,
+    `StatStrip`/`StatTile`, `SearchField`, `Pagination` (+ `use-pagination.ts`),
+    `SummaryTile`, `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`,
+    `PageSkeleton`; `ui-classes.ts` holds `buttonClass`, `inputClass`,
+    `labelClass`, `thClass`/`tdClass`/`rowClass`.
     Build a page out of those before writing new markup.
   - **One accent.** `SummaryTile` never tints itself by meaning, because colour
     on these screens already means severity on a `StatusBadge`. The exceptions
     are deliberate and few: `StatusBadge` tones (`features/staff/status.ts`),
-    the fleet-health counts, the access matrix's yes/no, and the chart *series*
-    colours in `features/administration/charts/chart-utils.ts` — where a bar IS a
-    status. Everything else is blue.
+    the access matrix's yes/no, the READY checklist ✓/✕, the pending-review
+    figure and the overview charts, whose series use the same status tones and
+    always print their counts. Charts draw only what the API returned: no seeded
+    series, no trend deltas, no ratings (feedback is PENDING GVHD).
   - A screen's summary row counts rows the API already returned, for the labels
     on that same screen. That is presentation. Anything genuinely derived still
     comes from the backend (Section 3).

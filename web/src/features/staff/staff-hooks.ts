@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AmrStatus, FeedbackFilters, StartConfirmation, TourCommand, TourFilters, TourOperationDetail } from '../../api/contracts/staff'
+import type { AmrStatus, StartConfirmation, TourCommand, TourFilters, TourOperationDetail } from '../../api/contracts/staff'
 import type { RealtimeConnectionState, StaffRealtimeEvent } from '../../api/contracts/staff-realtime'
 import { mockStaffApi } from '../../mocks/staff-mock'
 import { mockStaffRealtime } from '../../mocks/staff-realtime-mock'
@@ -34,7 +34,6 @@ export const staffQueryKeys = {
   tour: (id: string) => ['staff', 'tour', id] as const,
   amrs: ['staff', 'amrs'] as const,
   alerts: ['staff', 'alerts'] as const,
-  feedback: (filters: FeedbackFilters) => ['staff', 'feedback', filters] as const,
 }
 
 export function useTours(filters: TourFilters = {}) {
@@ -63,28 +62,12 @@ export function useTour(id: string) {
   })
 }
 
-/** Robots. Administration reads the same key. */
+/** Robots. */
 export function useStaffAmrs() {
   return useQuery<AmrStatus[]>({
     queryKey: staffQueryKeys.amrs,
     queryFn: () => api.amrs(),
     refetchInterval: LIVE_REFETCH_MS,
-  })
-}
-
-/** Assistance history, read by administration's analytics. */
-export function useStaffAlerts() {
-  return useQuery({
-    queryKey: staffQueryKeys.alerts,
-    queryFn: () => api.alerts(),
-    refetchInterval: LIVE_REFETCH_MS,
-  })
-}
-
-export function useFeedbackReports(filters: FeedbackFilters = {}) {
-  return useQuery({
-    queryKey: staffQueryKeys.feedback(filters),
-    queryFn: () => api.feedbackReports(filters),
   })
 }
 

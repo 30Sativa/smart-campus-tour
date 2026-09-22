@@ -12,8 +12,8 @@ const VISUAL = {
     lead: 'Một tài khoản để đặt tour và theo dõi lịch tham quan của bạn.',
   },
   default: {
-    title: 'Mỗi chuyến tham quan đều có người dõi theo.',
-    lead: 'Robot dẫn đường, lịch tham quan và tình trạng khuôn viên nằm chung một nơi.',
+    title: 'Khám phá khuôn viên. Trải nghiệm tương lai.',
+    lead: 'Tham quan cùng robot tự hành, khám phá qua bản đồ trực quan và kết nối với khuôn viên thông minh.',
   },
 } as const
 
@@ -39,7 +39,7 @@ const ENTRANCE_MS = 700
  * than hard-coding a second one.
  *
  * The photograph is decorative, so it is `aria-hidden` and holds nothing
- * focusable. Below 1024px it is dropped rather than stacked: a decorative image
+ * focusable. On phones it is dropped rather than stacked: a decorative image
  * above the form would push the fields off a phone screen.
  */
 export function AuthLayout() {
@@ -61,12 +61,19 @@ export function AuthLayout() {
   return (
     <main
       className="lp auth"
+      data-page={onRegister ? 'register' : 'login'}
       data-entrance={entering ? 'on' : 'off'}
       data-side={onRegister ? 'form-left' : 'form-right'}
     >
       <section className="auth-visual" aria-hidden="true">
-        <img src="/images/hero-campus.jpg" alt="" className="auth-visual__img" />
+        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-bg.jpg'} alt="" className="auth-visual__img" fetchPriority="high" />
         <div className="auth-visual__scrim" />
+        {!onRegister && (
+          <div className="auth-visual__brand">
+            <img src="/images/logo.png" alt="" width={44} height={44} />
+            <span>CampusTour <span className="auth-visual__brand-sub">DT-AMR</span></span>
+          </div>
+        )}
         <div className="auth-visual__inner">
           <div>
             <p className="auth-visual__title">{visual.title}</p>
@@ -89,6 +96,7 @@ export function AuthLayout() {
             <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
             Về trang chủ
           </Link>
+          {!onRegister && <p className="auth-footer">© {new Date().getFullYear()} Smart Campus Tour</p>}
         </div>
       </div>
 

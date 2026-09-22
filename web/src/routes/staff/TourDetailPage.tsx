@@ -87,10 +87,10 @@ export default function TourDetailPage() {
                   {formatTime(tour.scheduledAt)}
                 </span>
               </Field>
-              <Field label="Bắt đầu">{tour.startedAt ? formatTime(tour.startedAt) : '—'}</Field>
-              <Field label="Kết thúc">{tour.endedAt ? formatTime(tour.endedAt) : '—'}</Field>
+              <Field label="Bắt đầu">{tour.startedAt ? formatTime(tour.startedAt) : '-'}</Field>
+              <Field label="Kết thúc">{tour.endedAt ? formatTime(tour.endedAt) : '-'}</Field>
               <Field label="Thời lượng">
-                {tour.startedAt && tour.endedAt ? formatDuration(tour.startedAt, tour.endedAt) : '—'}
+                {tour.startedAt && tour.endedAt ? formatDuration(tour.startedAt, tour.endedAt) : '-'}
               </Field>
               <Field label="Robot phục vụ">
                 <span className="font-mono font-bold text-[#0f172a]">

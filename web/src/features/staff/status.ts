@@ -183,7 +183,7 @@ export const STEP_LABEL: Record<string, string> = {
 }
 
 export function stepLabel(value?: string | null): string {
-  if (!value) return '—'
+  if (!value) return '-'
   return STEP_LABEL[value] ?? value
 }
 

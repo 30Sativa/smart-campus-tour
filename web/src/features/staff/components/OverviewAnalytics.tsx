@@ -14,19 +14,20 @@ export function OverviewAnalytics({ tours, robots }: { tours: TourOperation[]; r
   const running = tours.find((tour) => tour.state === 'Running')
   const progress = running ? routeProgress(running) : null
   const progressPercent = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : null
-  const healthy = robots.filter(
+  // Only robots that can serve a Tour count towards readiness; Gazebo / emulator units never do.
+  const fleet = robots.filter((robot) => robot.assignable !== false)
+  const healthy = fleet.filter(
     (robot) => robot.connectionState === 'Live' && robot.localized !== false && !robot.headFault && !robot.needsCheck,
   ).length
-  const reliability = robots.length ? Math.round((healthy / robots.length) * 100) : null
+  const reliability = fleet.length ? Math.round((healthy / fleet.length) * 100) : null
 
   return (
     <section className="mt-6" aria-labelledby="overview-analytics-title">
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 id="overview-analytics-title" className="text-sm font-bold tracking-[-0.01em] text-[#0f172a]">
-            Chỉ số Đo lường & Hiệu suất Thiết bị
+          <h2 id="overview-analytics-title" className="text-base font-semibold tracking-[-0.01em] text-[#0f172a]">
+            Học sinh, pin và độ sẵn sàng
           </h2>
-          <span className="size-1.5 rounded-full bg-[#10b981]" />
         </div>
         <span className="rounded-md bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#64748b] border border-[#e2e8f0]">
           Thời gian thực
@@ -136,7 +137,7 @@ export function OverviewAnalytics({ tours, robots }: { tours: TourOperation[]; r
               <div className="grid size-20 place-items-center rounded-full bg-white text-center shadow-xs">
                 <span>
                   <strong className="block text-2xl font-black text-[#0f172a] leading-none tabular-nums">
-                    {reliability == null ? '—' : `${reliability}%`}
+                    {reliability == null ? '-' : `${reliability}%`}
                   </strong>
                   <small className="mt-1 block text-[9px] font-bold text-[#64748b] uppercase tracking-wider">
                     Sẵn sàng
@@ -146,7 +147,7 @@ export function OverviewAnalytics({ tours, robots }: { tours: TourOperation[]; r
             </div>
             <dl className="min-w-0 flex-1 space-y-2.5 text-xs">
               <LegendRow color="bg-[#10b981]" label="Sẵn sàng" value={healthy} />
-              <LegendRow color="bg-[#f59e0b]" label="Cần kiểm tra" value={Math.max(0, robots.length - healthy)} />
+              <LegendRow color="bg-[#f59e0b]" label="Cần kiểm tra" value={Math.max(0, fleet.length - healthy)} />
               <LegendRow
                 color="bg-[#ef4444]"
                 label="Cần hỗ trợ"

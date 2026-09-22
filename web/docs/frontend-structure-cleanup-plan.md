@@ -15,11 +15,10 @@
 > Namespace route của FE và namespace API của BE độc lập với nhau: màn ở
 > `/staff/*` vẫn gọi `/api/staff/*`, không đổi contract.
 >
-> Quản trị hiện chỉ có hai mục — Tổng quan hệ thống và Vai trò & quyền — vì đó
-> là tất cả những gì contract hiện tại dựng được một cách trung thực. Người
-> dùng, nhân viên, thiết bị, tour/tuyến/POI, cấu hình và nhật ký còn chờ
-> endpoint; chúng được liệt kê một lần trong panel "Chưa khả dụng" trên trang
-> tổng quan, không đưa vào điều hướng để tránh menu dẫn tới trang rỗng.
+> Cập nhật 2026-09-21: `/admin/*` là khu quản trị Tour theo scope tham quan
+> từ xa (tạo/sửa Tour, duyệt đoàn, gửi email tham gia, Chốt/Mở lại/Hủy, danh
+> mục tuyến chỉ đọc, lịch sử). Trang "Tổng quan hệ thống" với biểu đồ robot và
+> feedback đã được gỡ. Xem `web/docs/admin-tours.md`.
 >
 > **Trạng thái 2026-09-16.** Đợt cắt gọn đầu tiên đã chạy. Đã xử lý P0 #1 (một
 > cây route + redirect), #2 (bỏ `persist`, token chỉ trong memory), #3 (lazy cả

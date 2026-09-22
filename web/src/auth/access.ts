@@ -43,14 +43,14 @@ export const AREAS: Area[] = [
     id: 'staff',
     label: 'Vận hành tour',
     path: '/staff',
-    purpose: 'Theo dõi tour trong ngày, đội AMR và cảnh báo vận hành.',
+    purpose: 'Kiểm tra và bắt đầu Tour đã chốt, giữ / đi tiếp tại POI, xử lý sự cố, kết thúc sớm. Quản trị viên chỉ xem.',
     allows: isStaffRole,
   },
   {
     id: 'admin',
-    label: 'Quản trị hệ thống',
+    label: 'Quản trị Tour',
     path: '/admin',
-    purpose: 'Tổng quan hệ thống và phạm vi truy cập theo vai trò.',
+    purpose: 'Tạo Tour, duyệt đoàn đăng ký, gửi thông tin tham gia, Chốt / Mở lại / Hủy Tour trước khi chạy. Không điều khiển robot.',
     allows: isAdminRole,
   },
 ]

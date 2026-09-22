@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
+import { ArrowRight, CircleAlert, LockKeyhole, UserRound } from 'lucide-react'
+import { ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
 import { landingPathAfterLogin } from './access'
 import { MockAuthError, mockLogin } from '../mocks/auth-mock'
@@ -19,6 +21,8 @@ export default function LoginPage() {
   } = useForm<LoginFormInputs>({ mode: 'onTouched' })
 
   const [apiError, setApiError] = useState('')
+  const [invalidCredentials, setInvalidCredentials] = useState(false)
+  const submittingRef = useRef(false)
   const alertRef = useRef<HTMLDivElement>(null)
 
   const navigate = useNavigate()
@@ -34,6 +38,7 @@ export default function LoginPage() {
   const onSubmit = async ({ username, password }: LoginFormInputs) => {
     try {
       setApiError('')
+      setInvalidCredentials(false)
       const response = await mockLogin(username, password)
 
       setAuth(response.accessToken, {
@@ -47,27 +52,53 @@ export default function LoginPage() {
       const from = (location.state as { from?: string })?.from
       navigate(landingPathAfterLogin(response.role, from), { replace: true })
     } catch (error) {
-      if (error instanceof MockAuthError) setApiError(error.message)
-      else setApiError('Không đăng nhập được. Thử lại sau ít phút.')
+      if (error instanceof MockAuthError || (error instanceof ApiError && error.status === 401)) {
+        setInvalidCredentials(true)
+        setApiError('Tên đăng nhập hoặc mật khẩu không chính xác.')
+      } else if (error instanceof ApiError && error.status === 403) {
+        setApiError('Tài khoản không thể truy cập hệ thống. Vui lòng liên hệ quản trị viên để được hỗ trợ.')
+      } else if (error instanceof TypeError) {
+        setApiError('Không thể kết nối đến hệ thống. Vui lòng thử lại.')
+      } else {
+        setApiError('Không đăng nhập được. Vui lòng thử lại sau ít phút.')
+      }
     }
   }
 
   return (
     <>
       <h1 className="auth-title">Chào mừng bạn trở lại</h1>
-      <p className="auth-lead">Đăng nhập để tiếp tục hành trình CampusTour.</p>
+      <p className="auth-lead">Đăng nhập để tiếp tục sử dụng Smart Campus Tour.</p>
 
       {apiError && (
-        <div ref={alertRef} role="alert" tabIndex={-1} className="auth-alert">
-          {apiError}
+        <div id="login-error" ref={alertRef} role="alert" tabIndex={-1} className="auth-alert auth-alert--login">
+          <CircleAlert size={18} aria-hidden="true" />
+          <span>{apiError}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="auth-form" noValidate>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          // Lock before validation too: two rapid submits must not start two
+          // handleSubmit cycles that can reset each other's loading state.
+          if (submittingRef.current) return
+          submittingRef.current = true
+          void handleSubmit(onSubmit)(event).finally(() => { submittingRef.current = false })
+        }}
+        className="auth-form"
+        aria-busy={isSubmitting}
+        noValidate
+      >
         <AuthField
           label="Tên đăng nhập"
           autoComplete="username"
-          placeholder="vd: operator"
+          placeholder="Nhập tên đăng nhập"
+          icon={<UserRound size={19} />}
+          autoCapitalize="none"
+          spellCheck={false}
+          aria-invalid={invalidCredentials || undefined}
+          aria-describedby={apiError ? 'login-error' : undefined}
           disabled={isSubmitting}
           error={errors.username?.message}
           {...register('username', { required: 'Vui lòng nhập tên đăng nhập' })}
@@ -77,6 +108,9 @@ export default function LoginPage() {
           label="Mật khẩu"
           autoComplete="current-password"
           placeholder="Nhập mật khẩu"
+          icon={<LockKeyhole size={19} />}
+          aria-invalid={invalidCredentials || undefined}
+          aria-describedby={apiError ? 'login-error' : undefined}
           disabled={isSubmitting}
           error={errors.password?.message}
           {...register('password', { required: 'Vui lòng nhập mật khẩu' })}
@@ -85,6 +119,7 @@ export default function LoginPage() {
         <button type="submit" className="auth-submit" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting && <span className="auth-spinner" aria-hidden="true" />}
           {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          {!isSubmitting && <ArrowRight size={18} aria-hidden="true" />}
         </button>
       </form>
 
