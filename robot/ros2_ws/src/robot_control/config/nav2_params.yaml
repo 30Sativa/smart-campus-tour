@@ -1,3 +1,32 @@
+# =============================================================================
+# nav2_params.yaml - Nav2 baseline for the campus-tour AMR (ROS 2 Humble).
+#
+# Loaded through nav2_bringup/launch/navigation_launch.py, which wraps this
+# file in RewrittenYaml(root_key=<namespace>) and ParameterFile(allow_substs=
+# True). Two consequences you must respect when editing:
+#
+#   1. Comments are stripped at launch time (safe_load -> dump). They are for
+#      humans reading the repo, not for the running node.
+#   2. "$(var robot_ns)" is substituted at launch time. Every launch file that
+#      includes navigation_launch.py with THIS params file must first do
+#      SetLaunchConfiguration('robot_ns', ...) -> '' or '/robot_01'.
+#      Without it, launch aborts with "substitution failure".
+#
+# Why $(var robot_ns) instead of a plain relative topic: costmap plugins
+# subscribe on the *costmap* node, whose namespace is <robot_ns>/local_costmap
+# (nav2_costmap_2d::Costmap2DROS pushes a sub-namespace). A relative "scan"
+# there resolves to <robot_ns>/local_costmap/scan - a topic nobody publishes.
+# Upstream nav2 solves this by hardcoding "/robot1/scan" in its multirobot
+# params; the substitution does the same thing without baking the robot id
+# into the file.
+#
+# CHAIN (do not break it - see robot_navigation/README.md):
+#   controller_server -\
+#   behavior_server   -+-> cmd_vel_ctrl -> velocity_smoother -> cmd_vel_nav
+#                                                -> mode_manager -> cmd_vel
+#                                                -> stm32_bridge -> motors
+# =============================================================================
+
 bt_navigator:
   ros__parameters:
     use_sim_time: false
@@ -7,12 +36,20 @@ bt_navigator:
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
+    # BASELINE SAFETY: the stock Humble trees end their recovery RoundRobin
+    # with <BackUp backup_dist="0.30" backup_speed="0.05"/>. Rear sonar pose
+    # is still schematic (sensors.xacro) and there is no rear-facing LiDAR or
+    # depth, so an autonomous reverse is not defensible yet. These two trees
+    # are the stock trees with the BackUp node removed - nothing else changed.
+    # Re-enable BackUp only after the rear-coverage tests in
+    # robot_navigation/README.md pass on the real robot.
+    default_nav_to_pose_bt_xml: "$(find-pkg-share robot_navigation)/behavior_trees/navigate_to_pose_no_backup.xml"
+    default_nav_through_poses_bt_xml: "$(find-pkg-share robot_navigation)/behavior_trees/navigate_through_poses_no_backup.xml"
 
 controller_server:
   ros__parameters:
     use_sim_time: false
     controller_frequency: 10.0
-    costmap_update_timeout: 0.30
     odom_topic: odom
     publish_zero_velocity: true
     min_x_velocity_threshold: 0.001
@@ -26,7 +63,10 @@ controller_server:
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.20
-      movement_time_allowance: 12.0
+      # RPP rotates in place before moving off (use_rotate_to_heading), and an
+      # in-place rotation counts as zero progress. 15 s covers a 180 deg turn
+      # at 0.8 rad/s with margin.
+      movement_time_allowance: 15.0
 
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
@@ -34,51 +74,80 @@ controller_server:
       yaw_goal_tolerance: 0.30
       stateful: true
 
+    # -----------------------------------------------------------------------
+    # Regulated Pure Pursuit. Plugin id is the fully qualified type: the class
+    # entry in nav2_regulated_pure_pursuit_controller.xml has no name="..."
+    # attribute, so pluginlib looks it up by type.
+    #
+    # WHAT RPP DOES: follows the global path, regulating speed on curvature,
+    # proximity cost and approach distance, and collision-checks the arc up to
+    # the lookahead carrot against the LOCAL costmap.
+    # WHAT RPP DOES NOT DO: it is not a local trajectory planner. It will not
+    # search for a detour around an obstacle the global planner cannot see. An
+    # obstacle that only the depth camera or sonar sees makes RPP refuse to
+    # drive (collision check fails) - the expected baseline outcome is a safe
+    # stop / navigation failure, not an automatic detour.
+    # -----------------------------------------------------------------------
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: false
-      min_vel_x: -0.10      # allow reverse so it can back out of tight corners
-      min_vel_y: 0.0
-      max_vel_x: 0.20       # TODO(real robot): tune after motor/odom test.
-      max_vel_y: 0.0
-      max_vel_theta: 1.20   # faster in-place turns (was 0.50) so corners aren't slow.
-      min_speed_xy: 0.0
-      max_speed_xy: 0.20
-      min_speed_theta: 0.0
-      acc_lim_x: 0.50
-      acc_lim_y: 0.0
-      acc_lim_theta: 2.50   # snappier angular accel (was 0.70).
-      decel_lim_x: -0.50
-      decel_lim_y: 0.0
-      decel_lim_theta: -2.50
-      vx_samples: 16
-      vy_samples: 1
-      vtheta_samples: 40    # more rotation samples (was 20) -> smoother turn choice.
-      sim_time: 1.5
-      linear_granularity: 0.05
-      angular_granularity: 0.025
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+
+      # Speed. Kept at the existing 0.20 m/s baseline on purpose - this is a
+      # first supervised A->B run, not a demo.
+      desired_linear_vel: 0.20
+
+      # Lookahead. Fixed (not velocity-scaled) for a predictable first run.
+      # 0.60 m >= robot_radius: a carrot closer than the robot's own radius
+      # makes pure pursuit oscillate. TUNE ON HARDWARE: raise if the robot
+      # cuts corners, lower if it wanders wide in corridors.
+      use_velocity_scaled_lookahead_dist: false
+      lookahead_dist: 0.60
+      min_lookahead_dist: 0.40
+      max_lookahead_dist: 0.90
+      lookahead_time: 1.5
+      use_interpolation: true
+
+      # In-place rotation instead of arcing onto the path. Correct for a
+      # differential base in a corridor. Mutually exclusive with
+      # allow_reversing - RPP force-disables reversing if both are true.
+      use_rotate_to_heading: true
+      rotate_to_heading_min_angle: 0.785
+      # <= velocity_smoother max theta (1.20) so the smoother never has to
+      # clip the controller's own request.
+      rotate_to_heading_angular_vel: 0.80
+      # <= velocity_smoother max_accel theta (2.50). Conservative: the STM32
+      # stepper base does not like sharp angular steps.
+      max_angular_accel: 1.50
+
+      # BASELINE POLICY: no autonomous reverse. Rear sonar pose is schematic
+      # and there is no rear LiDAR/depth. See bt_navigator above.
+      allow_reversing: false
+
+      # Collision checking on the arc to the carrot, against the LOCAL costmap
+      # (which is where depth + sonar live). This is what makes the robot stop
+      # for a depth-only or sonar-only obstacle.
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 1.0
+
+      # Speed regulation.
+      use_regulated_linear_velocity_scaling: true
+      use_cost_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.90
+      # MUST stay below desired_linear_vel. The Humble default is 0.25, which
+      # is ABOVE our 0.20 m/s - leaving it at the default silently disables
+      # curvature regulation entirely.
+      regulated_linear_scaling_min_speed: 0.10
+      cost_scaling_dist: 0.60
+      cost_scaling_gain: 1.0
+      # MUST equal local_costmap.inflation_layer.cost_scaling_factor below, or
+      # RPP's cost regulation reads the inflation gradient wrong (it logs a
+      # warning at configure time).
+      inflation_cost_scaling_factor: 3.0
+
+      # Approach to goal.
+      min_approach_linear_velocity: 0.05
+      approach_velocity_scaling_dist: 0.60
+
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.15
-      trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: true
-      stateful: true
-      critics: [
-        "RotateToGoal",
-        "Oscillation",
-        "BaseObstacle",
-        "GoalAlign",
-        "PathAlign",
-        "PathDist",
-        "GoalDist"
-      ]
-      BaseObstacle.scale: 0.04
-      PathAlign.scale: 16.0
-      GoalAlign.scale: 8.0      # less obsession with facing the goal mid-path (was 24).
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 16.0  # don't over-prioritize spinning to goal heading (was 32).
-      RotateToGoal.slowing_factor: 3.0
-      RotateToGoal.lookahead_time: -1.0
 
 local_costmap:
   local_costmap:
@@ -92,73 +161,128 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.47       # Real robot 74x55cm: half-diagonal ~0.461 m, rounded up.
-      plugins: ["obstacle_layer", "sonar_layer", "inflation_layer"]
-      obstacle_layer:
+      # Circumscribed radius of the CAD chassis box in
+      # robot_description/urdf/common_properties.xacro:
+      #   base_length 0.802199951 x base_width 0.562799988
+      #   half-diagonal = 0.490 m
+      # NOT the odometry wheel_base (0.4714) - different quantity entirely.
+      # TODO(hardware): measure the finished chassis envelope including any
+      # bumper/handle/cable that sticks out past the CAD box, and re-derive.
+      robot_radius: 0.49
+
+      # -------------------------------------------------------------------
+      # SEPARATE obstacle layers per sensor family. One shared ObstacleLayer
+      # would let the LiDAR's clearing raytrace erase marks the depth camera
+      # made (the LiDAR plane passes straight over a low box). Each layer
+      # keeps its own grid and writes into the master with MAX, so a LiDAR
+      # clear can no longer wipe a depth mark.
+      #
+      # This reduces cross-sensor clearing. It does NOT solve stale depth
+      # marks: the depth layer can still only clear inside the camera's own
+      # ~58 deg cone, so an obstacle that is removed while the robot is
+      # turned away stays marked until the robot faces it again. Verify on
+      # hardware - see robot_navigation/README.md acceptance test D.
+      # -------------------------------------------------------------------
+      plugins: ["lidar_obstacle_layer", "depth_obstacle_layer", "sonar_layer",
+                "inflation_layer"]
+
+      lidar_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        # PHASE 3: two sensors, different jobs.
-        #   scan       - the safety sensor. 360 deg, long range, one height only.
-        #   pointcloud - the Astra. ~58 deg wide, 0.6-3 m, but it sees the things
-        #                a single LiDAR plane cannot: a box on the floor, a pallet
-        #                edge, a table top overhanging into the aisle.
-        # The camera is ADDITIVE. It never replaces the LiDAR and it is not
-        # trusted alone - see expected_update_rate below.
-        observation_sources: scan pointcloud
+        # 0 = Overwrite, 1 = Maximum, anything else = do nothing.
+        # 1 is also the Humble default; set explicitly so a future reader does
+        # not have to go read obstacle_layer.cpp to know the layers combine
+        # with MAX rather than overwriting each other.
+        combination_method: 1
+        observation_sources: scan
         scan:
-          topic: scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
+          topic: "$(var robot_ns)/scan"
           data_type: LaserScan
-          raytrace_max_range: 15.0  # RPLiDAR A3M1: 25 m max (white), ~10 m dark objects.
+          marking: true
+          clearing: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 12.0  # A3M1; keep < raytrace so far obstacles still get cleared.
+          obstacle_max_range: 12.0
           obstacle_min_range: 0.12
+          # 0.0 = never mark this layer stale. The LiDAR is the primary
+          # safety sensor; if it dies we would rather Nav2 keep the last
+          # marks than silently treat the world as empty. The supervised
+          # operator is the watchdog for the first runs.
+          expected_update_rate: 0.0
+
+      depth_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        combination_method: 1
+        observation_sources: pointcloud
         pointcloud:
-          topic: camera/depth/points
+          topic: "$(var robot_ns)/camera/depth/points"
           data_type: PointCloud2
           marking: true
           clearing: true
-          # Astra Pro spec is 0.6-8 m, but depth noise grows with range^2 and the
-          # local costmap is only 3x3 m. Past 3 m the camera would just add noise
-          # to cells the LiDAR already covers better.
+          # Astra Pro spec is 0.6-8 m, but depth noise grows with range^2 and
+          # the local costmap is only 3x3 m.
           obstacle_min_range: 0.60
           obstacle_max_range: 3.00
           raytrace_min_range: 0.60
-          raytrace_max_range: 3.50   # > obstacle_max_range so stale marks get cleared.
-          # Heights are measured in the costmap frame (odom), z=0 at the floor.
-          # 0.08 m is the floor-rejection threshold and it is exactly what Phase 2
-          # bought: ground plane within 20 mm of z=0, ground noise <= 30 mm. Skip
-          # the mount calibration and the floor itself becomes a wall.
+          raytrace_max_range: 3.50
+          # Heights in the costmap frame (odom), z=0 at the floor. 0.08 m is
+          # the floor-rejection threshold from the Phase 2 mount calibration
+          # (ground plane within 20 mm of z=0, ground noise <= 30 mm). Skip
+          # that calibration and the floor becomes a wall.
           min_obstacle_height: 0.08
-          max_obstacle_height: 1.20   # above the robot; nothing up there can hit it.
-          # 0.0 = a dead camera never marks this layer stale, so Nav2 keeps driving
-          # on LiDAR alone. That is the deliberate choice: the camera is additive.
-          # Set ~5.0 instead if you would rather Nav2 refuse to move when the
-          # camera stops publishing.
+          max_obstacle_height: 1.20
+          # 0.0 is what makes enable_camera:=false safe: with no publisher on
+          # the topic the layer simply never marks, stays "current", and the
+          # costmap keeps updating from LiDAR + sonar. A positive value here
+          # would mark the layer stale and block navigation whenever the
+          # camera is off or unplugged.
           expected_update_rate: 0.0
           inf_is_valid: false
-      # RangeSensorLayer for the four SR04T sonars (stm32_bridge). They see the
-      # one thing both other sensors miss - a LOW obstacle CLOSER than 0.85 m,
-      # where the Astra has gone blind and the LiDAR raytraces straight over
-      # it and clears the mark. See docs/phase3-nav2.md section 7 for the
-      # reasoning and the sonar_max_range=2.0 m rationale.
+
+      # Four SR04T. They cover the one case the other two sensors miss: a LOW
+      # obstacle CLOSER than 0.85 m, where the Astra is blind and the LiDAR
+      # plane raytraces over it and clears the mark.
+      #
+      # LIMITATIONS - do not read this layer as 360 deg protection:
+      #   - The four sonars point diagonally out of the four chassis corners.
+      #     There are blind wedges dead ahead, dead astern, very close to the
+      #     sensor face, and in the volume swept while the robot rotates.
+      #   - Poses in sensors.xacro are schematic, not measured.
+      #   - no_readings_timeout is NOT a per-sensor watchdog. RangeSensorLayer
+      #     keeps ONE last_reading_time_ for all four topics, so a single live
+      #     sonar keeps the whole layer "current" while the other three are
+      #     dead. There is no per-sensor health signal anywhere in this stack.
+      #   - mode_manager does not read sonar at all. Nothing stops the robot
+      #     on a sonar reading except the costmap -> RPP collision check.
       sonar_layer:
         plugin: "nav2_costmap_2d::RangeSensorLayer"
         enabled: true
-        topics: ["/ultrasonic/sonar1/range", "/ultrasonic/sonar2/range",
-                  "/ultrasonic/sonar3/range", "/ultrasonic/sonar4/range"]
+        topics: ["$(var robot_ns)/ultrasonic/sonar1/range",
+                 "$(var robot_ns)/ultrasonic/sonar2/range",
+                 "$(var robot_ns)/ultrasonic/sonar3/range",
+                 "$(var robot_ns)/ultrasonic/sonar4/range"]
         input_sensor_type: "ALL"
-        clear_on_max_reading: true   # het tam = trong, neu khong vet se dinh mai
+        clear_on_max_reading: true
         no_readings_timeout: 2.0
-        mark_threshold: 0.9          # cao hon mac dinh 0.8: sonar rat nhieu
+        mark_threshold: 0.9
         clear_threshold: 0.2
         phi: 1.2
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0   # steeper falloff (was 3.0) -> cost drops fast away from walls.
-        inflation_radius: 0.35     # smaller buffer on LOCAL map (was 0.60) so it can thread gaps.
+        # Inflation is measured FROM THE OBSTACLE, not from the robot's
+        # skin, so inflation_radius must be >= robot_radius or the robot's
+        # own body can sit in cells the planner considers cheap. The previous
+        # 0.35 (< robot_radius 0.47) was the bug.
+        # 0.60 = 0.49 robot radius + ~0.11 m clearance. Conservative first
+        # run. TUNE ON HARDWARE: if the robot refuses a doorway it can
+        # physically fit through, lower this - never robot_radius.
+        inflation_radius: 0.60
+        # Must equal FollowPath.inflation_cost_scaling_factor above.
+        cost_scaling_factor: 3.0
+
       always_send_full_costmap: true
 
 global_costmap:
@@ -169,37 +293,44 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_footprint
-      robot_radius: 0.47       # Real robot 74x55cm: half-diagonal ~0.461 m, rounded up.
       resolution: 0.05
       track_unknown_space: true
+      # Same CAD-derived radius as the local costmap - keep the two in sync.
+      robot_radius: 0.49
+
+      # LiDAR is the ONLY dynamic obstacle source here. The global costmap
+      # does not roll, and neither the depth camera (~58 deg cone) nor the
+      # sonars can raytrace-clear a mark once the robot has turned away from
+      # it - the mark would freeze into the map permanently and the planner
+      # would route around obstacles that stopped existing ten minutes ago.
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: true
+
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        # PHASE 3: the camera is deliberately NOT a source here. The global
-        # costmap does not roll, so a mark placed by the camera stays until
-        # something raytraces it away - and the camera can only clear inside its
-        # own 58 deg cone. Turn the robot once and every camera mark behind it is
-        # frozen into the global map forever. The planner would route around
-        # obstacles that stopped existing ten minutes ago.
+        combination_method: 1
         observation_sources: scan
         scan:
-          topic: scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
+          topic: "$(var robot_ns)/scan"
           data_type: LaserScan
-          raytrace_max_range: 15.0  # RPLiDAR A3M1: 25 m max (white), ~10 m dark objects.
+          marking: true
+          clearing: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 15.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 12.0  # A3M1; keep < raytrace so far obstacles still get cleared.
+          obstacle_max_range: 12.0
           obstacle_min_range: 0.12
+          expected_update_rate: 0.0
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.60
         cost_scaling_factor: 3.0
-        inflation_radius: 0.60  # > robot_radius for obstacle buffer; tune for aisle width.
+
       always_send_full_costmap: true
 
 planner_server:
@@ -207,15 +338,34 @@ planner_server:
     use_sim_time: false
     expected_planner_frequency: 5.0
     planner_plugins: ["GridBased"]
+    # SmacPlanner2D: grid A* with a configurable cost penalty. Chosen over
+    # Hybrid-A* / State Lattice because this base is differential drive, can
+    # rotate in place, and runs corridors - a kinematically feasible curve
+    # planner buys nothing and costs predictability.
+    # Plugin id comes from smac_plugin_2d.xml class name="...".
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: false
+      downsampling_factor: 1
       allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      # >1.0 pushes the path away from inflated obstacles instead of hugging
+      # the shortest route. 2.0 keeps the robot nearer the corridor centre.
+      # TUNE ON HARDWARE: lower if the planner refuses tight passages.
+      cost_travel_multiplier: 2.0
+      # Leave the final pose orientation to the goal checker / RPP rather
+      # than to the straight-line approach of the grid path.
+      use_final_approach_orientation: false
 
 smoother_server:
   ros__parameters:
     use_sim_time: false
+    # PATH smoother (geometry). Not the velocity smoother - different thing,
+    # different node. The baseline BT does not call SmoothPath; this stays
+    # configured and lifecycle-managed for later use.
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -231,6 +381,9 @@ behavior_server:
     local_footprint_topic: local_costmap/published_footprint
     global_footprint_topic: global_costmap/published_footprint
     cycle_frequency: 10.0
+    # backup/drive_on_heading stay LOADED so a human can trigger a reverse
+    # deliberately over the action interface during rear-coverage testing.
+    # The baseline behavior trees never invoke them - see bt_navigator.
     behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
     spin:
       plugin: "nav2_behaviors/Spin"

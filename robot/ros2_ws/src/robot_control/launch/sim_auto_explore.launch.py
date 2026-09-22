@@ -23,7 +23,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, GroupAction,
-                            IncludeLaunchDescription)
+                            IncludeLaunchDescription, SetLaunchConfiguration)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
@@ -37,6 +37,11 @@ def generate_launch_description():
         get_package_share_directory('simulation'),
         'worlds', 'warehouse_12x12.world')
     robot_id = LaunchConfiguration('robot_id')
+
+    # '' -> '' and 'robot_01' -> '/robot_01'. Consumed by nav2_params.yaml
+    # through $(var robot_ns); see the Nav2 GroupAction below.
+    robot_ns = PythonExpression(
+        ["'' if '", robot_id, "' == '' else '/' + '", robot_id, "'.strip('/')"])
     world = LaunchConfiguration('world')
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_teleop = LaunchConfiguration('enable_teleop')
@@ -198,8 +203,50 @@ def generate_launch_description():
             # so this works - but never pass use_composition:=True here or every
             # rule below is silently dropped and Nav2 drives /cmd_vel directly,
             # bypassing mode_manager and the e-stop.
+            # NAMESPACE - this is the root cause of the old runtime failure
+            # "controller_server: No critics defined for FollowPath".
+            # On Humble, nav2_bringup/launch/navigation_launch.py does NOT put
+            # its nodes in a namespace. The `namespace` argument is used only
+            # for RewrittenYaml(root_key=...) and for the composition
+            # container name; no Node gets namespace= and there is no
+            # PushRosNamespace. So with robot_id:=robot_01 the servers came up
+            # at the ROOT (/controller_server, /planner_server, ...) while the
+            # rewritten YAML declared parameters under /robot_01/... . Nothing
+            # matched, every Nav2 server started with an EMPTY parameter set,
+            # and controller_server failed on the first goal - even though
+            # FollowPath and its critics were right there in nav2_params.yaml.
+            # With robot_id:='' RewrittenYaml skips the root key entirely,
+            # which is why the bug only ever showed up namespaced.
+            PushRosNamespace(robot_id),
+
+            # TF STAYS GLOBAL. navigation_launch.py remaps /tf -> tf on every
+            # node; under a pushed namespace that becomes /robot_01/tf. But
+            # AMCL, the EKF and robot_state_publisher broadcast on the global
+            # /tf (tf2's broadcaster uses the absolute name), so namespaced
+            # Nav2 would see an empty TF tree and never move. Global remap
+            # rules are inserted BEFORE a node's own remappings and rcl takes
+            # the FIRST matching rule, so these identity rules shadow nav2's
+            # and the whole stack keeps sharing one TF tree - exactly as it
+            # did before the namespace was fixed.
+            # Per-robot frame prefixes are a separate cross-stack change; see
+            # docs/architecture.md section 2.1.
+            SetRemap(src='/tf', dst='/tf'),
+            SetRemap(src='/tf_static', dst='/tf_static'),
+
             SetRemap(src='cmd_vel', dst='cmd_vel_ctrl'),
             SetRemap(src='cmd_vel_smoothed', dst='cmd_vel_nav'),
+
+            # nav2_params.yaml reads this as "$(var robot_ns)" to build the
+            # costmap sensor topics. It must be '' or '/robot_01'.
+            # Why the costmaps cannot just use relative names: costmap plugins
+            # subscribe on the costmap node, whose namespace is
+            # <robot_ns>/local_costmap (Costmap2DROS pushes a sub-namespace),
+            # so a plain "scan" would resolve to
+            # <robot_ns>/local_costmap/scan - a topic nobody publishes.
+            # Upstream nav2 hardcodes "/robot1/scan" in its multirobot params;
+            # this does the same without baking the robot id into the file.
+            SetLaunchConfiguration('robot_ns', robot_ns),
+
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(nav2_launch),
                 launch_arguments={

@@ -69,9 +69,40 @@ RPLiDAR A3M1        -> /scan                 -> local + global costmap, AMCL, SL
 STM32 STEP counts   -> /wheel/odom -\
 BNO085 orientation  -> /imu/data   -> EKF -> /odom + odom -> base_footprint TF
 Astra Pro (depth)   -> /camera/depth/points  -> LOCAL costmap ONLY
+4x SR04T sonar      -> /ultrasonic/sonarN/range -> LOCAL costmap ONLY
 Astra Pro (RGB)     -> person detection      -> Nav2 speed limit
                        (`robot_perception`, not the AI tour guide)
 ```
+
+Wheel odometry is derived from the STEP pulses the STM32 generated, not from
+encoder feedback: the HBS57H closes its encoder loop internally and ROS never
+reads encoder position. The EKF fuses `vx`, the nonholonomic `vy = 0`
+constraint and wheel-derived `vyaw` from `wheel/odom`, plus BNO085 **orientation
+yaw** from `imu/data`. Firmware publishes no raw gyro rate, so nothing in this
+stack fuses gyro yaw-rate.
+
+### 2.0 Navigation baseline
+
+Planner `nav2_smac_planner/SmacPlanner2D`, controller
+`RegulatedPurePursuitController` at 0.20 m/s, autonomous reverse disabled in
+both the controller and the behaviour tree -
+[ADR-0007](decisions/0007-smac2d-rpp-no-autonomous-reverse.md).
+
+RPP does path tracking plus collision checking against the local costmap. It is
+not a local trajectory planner and does not search for detours. So: an obstacle
+the LiDAR sees reaches the global costmap and the planner can route around it;
+an obstacle only the depth camera or sonar sees reaches the local costmap only,
+and the baseline requirement is that the robot **detects it and stops safely** -
+an automatic detour is not guaranteed and is not claimed.
+
+The four SR04T sonars are mounted diagonally at the chassis corners with poses
+that are schematic rather than measured. They are not 360-degree coverage, they
+do not constitute rear safety coverage, and `RangeSensorLayer.no_readings_timeout`
+is a single shared timer rather than a per-sensor health watchdog.
+
+`mode_manager` provides manual override, E-stop and command timeouts. It is
+**not** an independent collision monitor; `nav2_collision_monitor` is a later
+phase. Early runs are supervised, in a controlled area, at low speed.
 
 The STM32G431 owns real-time stepping. ROS 2 sends wheel-speed commands over
 USB CDC serial and does not reach below that line.
@@ -115,6 +146,27 @@ Gazebo robot. Multi-entity Gazebo and prefixed TF frames are not a core fleet
 validation requirement. Until both are implemented and hardware-tested, do
 not run multiple robot stacks in one ROS domain: topic isolation alone is not
 enough to prevent TF and Gazebo controller collisions.
+
+This is deliberate and explicit in the launch files. Nav2's own
+`navigation_launch.py` remaps `/tf -> tf` on every node, which under a pushed
+namespace would give Nav2 a private `/robot_01/tf` while AMCL, the EKF and
+`robot_state_publisher` keep broadcasting on the global `/tf`. The Nav2 group
+therefore inserts identity remaps `/tf -> /tf` and `/tf_static -> /tf_static`
+to shadow nav2's and keep one global TF tree. **ROS namespace-ready topics are
+not multi-robot TF isolation.** Frame prefixing is a separate, cross-stack
+change and is not implemented.
+
+Two further namespace notes, both load-bearing:
+
+- Nav2 nodes are placed in the robot namespace by `PushRosNamespace(robot_id)`
+  in each launch file. `nav2_bringup/navigation_launch.py` on Humble uses its
+  own `namespace` argument only for `RewrittenYaml(root_key=...)`, so without
+  that push the servers start at the ROS root and match none of the rewritten
+  parameters.
+- Costmap sensor topics cannot be plain relative names: costmap plugins
+  subscribe on the costmap node, whose namespace is `<robot_ns>/local_costmap`.
+  They are written as `$(var robot_ns)/scan` in `nav2_params.yaml` and
+  substituted at launch time.
 
 ---
 

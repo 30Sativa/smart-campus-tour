@@ -77,6 +77,19 @@ def test_real_localization_requires_explicit_existing_map():
 
 
 def test_topic_parameters_are_relative():
+    """No config may hardcode a topic at the ROS root.
+
+    Two acceptable forms:
+      - a plain relative name ("scan"), which resolves under the node's own
+        namespace;
+      - "$(var robot_ns)/scan", required for nav2 costmap plugins because they
+        subscribe on the costmap node, whose namespace is
+        <robot_ns>/local_costmap - a plain relative name there would resolve to
+        <robot_ns>/local_costmap/scan and never receive data.
+
+    A bare leading "/" is the failure: it pins the topic to the root and the
+    namespaced robot silently gets nothing.
+    """
     config_files = (
         'robot_control/config/frontier_explorer.yaml',
         'robot_control/config/mode_manager.yaml',
@@ -84,12 +97,33 @@ def test_topic_parameters_are_relative():
         'robot_control/config/ekf.yaml',
         'robot_control/config/slam_toolbox_online_async.yaml',
     )
+    # Scalars: `topic: /x`, `topic: "/x"`, `scan_topic: '/x'`, and the list
+    # entries RangeSensorLayer takes (`- /x`).
     absolute_topic = re.compile(
-        r'^\s*(?:[a-z0-9_]*topic|nav2_cancel_service):\s*/',
+        r'^\s*(?:-|(?:[a-z0-9_]*topics?|nav2_cancel_service):)\s*["\']?/',
         re.MULTILINE,
     )
     for config_file in config_files:
-        assert absolute_topic.search(_read(config_file)) is None
+        offender = absolute_topic.search(_read(config_file))
+        assert offender is None, (config_file, offender.group(0))
+
+
+def test_no_config_hardcodes_a_robot_id():
+    config_files = (
+        'robot_control/config/frontier_explorer.yaml',
+        'robot_control/config/mode_manager.yaml',
+        'robot_control/config/nav2_params.yaml',
+        'robot_control/config/ekf.yaml',
+        'robot_control/config/slam_toolbox_online_async.yaml',
+        'robot_navigation/config/localization_params.yaml',
+    )
+    for config_file in config_files:
+        # Comments may name robot_01 as an example; RewrittenYaml strips them
+        # before the node ever sees the file. Only values matter.
+        values = '\n'.join(
+            line.split('#', 1)[0]
+            for line in _read(config_file).splitlines())
+        assert 'robot_01' not in values, config_file
 
 
 def test_canonical_robot_id_replaces_legacy_bus_id():

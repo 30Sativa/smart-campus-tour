@@ -6,8 +6,11 @@
 #   ros2 launch robot_navigation localization.launch.py \
 #       map:=/path/to/my_map.yaml
 #
-# After startup, if the robot did not start at the mapping origin, give it a
-# "2D Pose Estimate" in RViz (publishes /initialpose to AMCL).
+# AMCL does NOT seed itself on the real robot (set_initial_pose defaults to
+# false). After startup you MUST give it a "2D Pose Estimate" in RViz, which
+# publishes <robot_ns>/initialpose in the map frame. Pass
+# set_initial_pose:=true only where the start pose is genuinely known - Gazebo,
+# or a future dock/homing routine.
 # =============================================================================
 import os
 
@@ -16,6 +19,7 @@ from launch.actions import (DeclareLaunchArgument, LogInfo, OpaqueFunction,
                             Shutdown)
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -41,6 +45,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     params_file = LaunchConfiguration('params_file')
     autostart = LaunchConfiguration('autostart')
+    set_initial_pose = LaunchConfiguration('set_initial_pose')
 
     default_params = PathJoinSubstitution([
         FindPackageShare('robot_navigation'),
@@ -66,6 +71,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'autostart', default_value='true',
             description='Auto-activate the lifecycle nodes.'),
+        DeclareLaunchArgument(
+            'set_initial_pose', default_value='false',
+            description='Seed AMCL at the pose in the params file instead of '
+                        'waiting for <robot_ns>/initialpose. Default false: a '
+                        'real robot does not necessarily start at the map '
+                        'origin, and a wrong seed produces a confidently '
+                        'wrong map -> odom. Gazebo passes true because the '
+                        'robot really does spawn at the world origin.'),
 
         Node(
             package='nav2_map_server',
@@ -90,7 +103,11 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 params_file,
-                {'use_sim_time': use_sim_time},
+                {
+                    'use_sim_time': use_sim_time,
+                    'set_initial_pose': ParameterValue(
+                        set_initial_pose, value_type=bool),
+                },
             ],
         ),
 

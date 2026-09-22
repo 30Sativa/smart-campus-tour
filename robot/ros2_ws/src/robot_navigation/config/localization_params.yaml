@@ -58,10 +58,28 @@
     transform_tolerance: 1.0
     save_pose_rate: 0.5
 
-    # Initial pose. Robot is assumed to start at the same spot mapping
-    # started (map origin, e.g. the dock). Override via launch args, or just
-    # use "2D Pose Estimate" in RViz after startup.
-    set_initial_pose: true
+    # INITIAL POSE - real robot must NOT auto-assume (0, 0, 0).
+    #
+    # A map origin of [0, 0, 0] in the .yaml only states where the bottom-left
+    # corner of the PGM sits in the map frame. It says nothing about where the
+    # robot is standing. Seeding AMCL at (0, 0, 0) when the robot is somewhere
+    # else gives you a confidently wrong map -> odom transform: the particle
+    # cloud looks tight, RViz looks plausible, and the robot drives into a
+    # wall that is 4 m from where it thinks it is.
+    #
+    # So: false. The real robot waits for an initial pose on
+    #   <robot_ns>/initialpose        (frame_id MUST be "map")
+    # published by RViz "2D Pose Estimate", or by a dock/homing routine once
+    # one exists.
+    #
+    # localization.launch.py exposes set_initial_pose:=true for Gazebo, where
+    # the robot really does spawn at the world origin the sim map was recorded
+    # from. sim_navigation.launch.py passes it.
+    #
+    # Sending an initial pose is NOT the same as being localized. Always
+    # verify on the real robot that the laser scan overlays the saved walls
+    # and that map -> odom stays stable while driving and rotating.
+    set_initial_pose: false
     initial_pose:
       x: 0.0
       y: 0.0

@@ -1,0 +1,55 @@
+<!--
+  BASELINE navigate-to-pose tree for the campus-tour robot.
+
+  This is the stock ROS 2 Humble
+  nav2_bt_navigator/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+  with exactly ONE change: the <BackUp> node has been removed from the
+  RecoveryActions RoundRobin.
+
+  WHY: BackUp drives the robot 0.30 m in reverse. The only rear-facing sensors
+  are sonar3 and sonar4, they point diagonally out of the rear corners (blind
+  wedge dead astern), their poses in sensors.xacro are schematic rather than
+  measured, and RangeSensorLayer cannot tell us when one of them has died.
+  An autonomous reverse is therefore not defensible for the first supervised
+  A->B runs.
+
+  Everything else is stock and intentional:
+    - replan the global path at 1 Hz (LiDAR obstacles reach the global costmap,
+      so the planner CAN route around them if there is room)
+    - clear the local costmap and retry when FollowPath fails
+    - Spin and Wait remain available as recoveries (both are safe in place)
+
+  RE-ENABLE BackUp only after the rear-coverage acceptance tests in
+  robot_navigation/README.md pass on the real robot. The BackUp plugin is
+  still loaded by behavior_server, so it can be exercised manually over the
+  action interface without editing this file.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

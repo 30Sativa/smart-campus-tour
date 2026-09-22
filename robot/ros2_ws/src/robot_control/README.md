@@ -273,9 +273,27 @@ firmware `STOP,<seq>` command.
 
 ## Important Tuning TODOs
 
-- `config/nav2_params.yaml`: `robot_radius=0.47` and `inflation_radius=0.60` are
-  set from the real footprint (74x55 cm -> half-diagonal ~0.461 m). `max_vel_x`
-  and `max_vel_theta` are still conservative bench defaults; tune on the robot.
+- `config/nav2_params.yaml`: `robot_radius=0.49` is the circumscribed radius of
+  the CAD chassis box in `robot_description/urdf/common_properties.xacro`
+  (0.8022 x 0.5628 m -> half-diagonal 0.490 m). The previous 0.47 came from a
+  74x55 cm estimate and was therefore SMALLER than the CAD body. This is a
+  costmap/footprint radius and has nothing to do with the odometry
+  `wheel_base=0.4714`. `inflation_radius=0.60` on both costmaps; inflation is
+  measured from the obstacle, so it must stay >= `robot_radius`.
+  TODO(hardware): measure the finished chassis envelope, including anything
+  that protrudes past the CAD box, and re-derive both numbers.
+- `config/nav2_params.yaml`: planner is `nav2_smac_planner/SmacPlanner2D`,
+  controller is `RegulatedPurePursuitController` at 0.20 m/s with
+  `allow_reversing: false`. Values marked `TUNE ON HARDWARE` in that file are
+  the ones to touch after a real run - not before. Rationale in
+  [ADR-0007](../../../../docs/decisions/0007-smac2d-rpp-no-autonomous-reverse.md);
+  behaviour and limitations in `robot_navigation/README.md`.
+- Any launch file that feeds `config/nav2_params.yaml` into
+  `nav2_bringup/navigation_launch.py` MUST first
+  `SetLaunchConfiguration('robot_ns', ...)` ('' or '/robot_01') and
+  `PushRosNamespace(robot_id)`. Without the first, launch aborts on a
+  substitution failure; without the second, every Nav2 server comes up with an
+  empty parameter set. See `robot_navigation/README.md`.
 - Real STM32 wheel odometry uses the calibrated effective
   `wheel_base=0.4714` m. The physical/CAD driven-wheel center-to-center
   separation remains `0.4325` m in `robot_description` and the simulation

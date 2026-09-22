@@ -1,5 +1,22 @@
 # Phase 3 — Astra vào Nav2 (obstacle avoidance)
 
+> **LƯU Ý — tài liệu lịch sử.** Đây là hồ sơ lý luận của Phase 3. Phần costmap
+> và controller **đã bị thay** bởi Nav2 A→B baseline:
+>
+> - `DWBLocalPlanner` → `RegulatedPurePursuitController`
+> - `NavfnPlanner` → `nav2_smac_planner/SmacPlanner2D`
+> - local costmap tách `obstacle_layer` thành `lidar_obstacle_layer` +
+>   `depth_obstacle_layer` riêng (LiDAR không xoá được vết của depth nữa)
+> - `robot_radius` 0.47 → **0.49** (bán kính bao box CAD),
+>   local `inflation_radius` 0.35 → **0.60**
+> - sonar topic `"/ultrasonic/..."` → `"$(var robot_ns)/ultrasonic/..."`
+> - AMCL không còn tự seed (0,0,0) trên robot thật
+>
+> Nguồn đúng hiện tại: `robot_navigation/README.md` và
+> [ADR-0007](../../docs/decisions/0007-smac2d-rpp-no-autonomous-reverse.md).
+> Các con số trong file này giữ nguyên để không mất mạch lý luận Phase 3 —
+> **đừng copy chúng vào config**.
+
 ## 0. Đánh giá sơ đồ Phase 3 ban đầu
 
 Sơ đồ gốc:
@@ -71,7 +88,7 @@ Astra Pro ─► /camera/depth/points ─► local costmap · obstacle_layer
                                         inflation_layer
                                               │
                                               ▼
-                                   controller_server (DWB)
+                       controller_server (RPP - xem README hien tai)
                                               │
                                     /cmd_vel_ctrl → velocity_smoother
                                               │
