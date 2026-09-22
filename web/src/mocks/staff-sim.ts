@@ -42,6 +42,7 @@ import type {
   TourState,
   TourStep,
 } from '../api/contracts/staff'
+import type { ReadyCheck } from '../api/contracts/admin'
 
 /* ── Tunables (demo pace, not measured values) ───────────────────────────── */
 
@@ -68,42 +69,107 @@ const PLACES = {
 
 type PlaceId = keyof typeof PLACES
 
-const ROUTES: Record<string, { name: string; stops: Array<{ place: PlaceId; dwell: number; head: HeadPreset[] }> }> = {
+/**
+ * Prepared routes: the technical team's config (scope §3.1, §6.5). Admin only
+ * chooses one; nobody edits POIs, poses or head angles from the web.
+ * `narration: null` is a missing audio asset, which makes the route invalid.
+ */
+export type RouteDef = {
+  name: string
+  description: string
+  endPlace: PlaceId | null
+  stops: Array<{ place: PlaceId; dwell: number; head: HeadPreset[]; narration: string | null }>
+}
+
+export const ROUTES: Record<string, RouteDef> = {
   main: {
     name: 'Tuyến khám phá trọng điểm',
+    description: 'Ba điểm tiêu biểu về công nghệ và học tập: AI Lab, Thư viện trung tâm, Innovation Space.',
+    endPlace: 'start',
     stops: [
-      { place: 'aiLab', dwell: 22, head: ['RIGHT', 'LEFT'] },
-      { place: 'library', dwell: 22, head: ['FRONT', 'RIGHT'] },
-      { place: 'innovation', dwell: 20, head: ['LEFT', 'RIGHT'] },
+      { place: 'aiLab', dwell: 22, head: ['RIGHT', 'LEFT'], narration: 'poi-ai-lab-vi' },
+      { place: 'library', dwell: 22, head: ['FRONT', 'RIGHT'], narration: 'poi-library-vi' },
+      { place: 'innovation', dwell: 20, head: ['LEFT', 'RIGHT'], narration: 'poi-innovation-vi' },
     ],
   },
   heritage: {
     name: 'Tuyến lịch sử & học thuật',
+    description: 'Hội trường A, Thư viện trung tâm và AI Lab: lịch sử trường và hoạt động học thuật.',
+    endPlace: 'start',
     stops: [
-      { place: 'hall', dwell: 22, head: ['LEFT'] },
-      { place: 'library', dwell: 22, head: ['RIGHT', 'LEFT'] },
-      { place: 'aiLab', dwell: 20, head: ['FRONT'] },
+      { place: 'hall', dwell: 22, head: ['LEFT'], narration: 'poi-hall-vi' },
+      { place: 'library', dwell: 22, head: ['RIGHT', 'LEFT'], narration: 'poi-library-vi' },
+      { place: 'aiLab', dwell: 20, head: ['FRONT'], narration: 'poi-ai-lab-vi' },
     ],
   },
+  labs: {
+    name: 'Tuyến phòng thí nghiệm (đang hoàn thiện)',
+    description: 'Tuyến ngắn qua AI Lab và Innovation Space. Nhóm kỹ thuật chưa bổ sung audio thuyết minh cho Innovation Space.',
+    endPlace: 'start',
+    stops: [
+      { place: 'aiLab', dwell: 25, head: ['LEFT', 'RIGHT'], narration: 'poi-ai-lab-vi' },
+      { place: 'innovation', dwell: 20, head: ['FRONT'], narration: null },
+    ],
+  },
+}
+
+/** Why a route cannot be used, in words. Empty = usable. */
+export function routeIssues(key: string): string[] {
+  const route = ROUTES[key]
+  if (!route) return ['Tuyến không còn trong cấu hình']
+  const issues: string[] = []
+  if (route.stops.length === 0) issues.push('Tuyến chưa có POI nào')
+  if (!route.endPlace) issues.push('Tuyến chưa có điểm kết thúc')
+  for (const stop of route.stops) {
+    const name = PLACES[stop.place].name
+    if (!stop.narration) issues.push(`${name}: thiếu audio thuyết minh`)
+    if (stop.dwell <= 0) issues.push(`${name}: thời gian dừng không hợp lệ`)
+    if (stop.head.length === 0) issues.push(`${name}: chưa có góc quan sát`)
+  }
+  return issues
+}
+
+export function placeOf(id: PlaceId) {
+  return PLACES[id]
 }
 
 /* ── Internal state ───────────────────────────────────────────────────────── */
 
 type Pending = PendingCommand & { left: number; fail?: AssistanceReason; failDetail?: string; then: () => void }
 
-type SimTour = {
+/**
+ * A group registration as the server keeps it. Staff sees the
+ * `GroupRegistration` subset; administration sees all of it.
+ */
+export type SimRegistration = GroupRegistration & {
+  contactEmail: string
+  submittedAt: string
+  reviewedAt: string | null
+  reviewedBy: string | null
+  rejectionReason: string | null
+  resubmittedAfterApproval: boolean
+  invitationFailed: boolean
+  groupCode: string
+  version: number
+}
+
+export type SimTour = {
   id: string
   code: string
   name: string
+  description: string
+  routeKey: string
   routeName: string
   scheduledAt: string
   estimatedEndAt: string
+  createdAt: string
   state: TourState
   status: 'Normal' | 'NeedsAssistance' | null
   reason: AssistanceReason | null
   reasonDetail: string | null
-  readyBlockers: string[]
-  registrations: GroupRegistration[]
+  registrations: SimRegistration[]
+  /** Admin concurrency token; bumps on business changes only, not on robot motion. */
+  version: number
   robotId: string | null
   startedAt: string | null
   endedAt: string | null
@@ -192,11 +258,47 @@ function roster(count: number, seed: number, className: string | null) {
   }))
 }
 
-function registration(id: string, school: string, rep: string, count: number, state: RegistrationState, seed: number, className: string | null = '11A1'): GroupRegistration {
-  return { id, schoolName: school, representativeName: rep, state, studentCount: count, invitationSentAt: state === 'Approved' ? iso(now() - minutes(600 + seed)) : null, roster: roster(count, seed, className) }
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+/** A hard-to-guess group code, deterministic per registration id so fixtures stay stable. */
+export function groupCodeFor(id: string) {
+  let h = 2166136261
+  for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0
+  let code = ''
+  for (let i = 0; i < 8; i += 1) {
+    code += CODE_ALPHABET[h % CODE_ALPHABET.length]
+    h = Math.imul(h ^ (h >>> 13), 2246822519) >>> 0
+  }
+  return `${code.slice(0, 4)}-${code.slice(4)}`
 }
 
-function stopsFor(routeKey: keyof typeof ROUTES): RouteStop[] {
+type RegistrationExtras = Partial<Omit<SimRegistration, 'id' | 'schoolName' | 'representativeName' | 'state' | 'studentCount' | 'roster'>>
+
+function registration(id: string, school: string, rep: string, count: number, state: RegistrationState, seed: number, className: string | null = '11A1', extra: RegistrationExtras = {}): SimRegistration {
+  const decided = state === 'Approved' || state === 'Rejected'
+  return {
+    id,
+    schoolName: school,
+    representativeName: rep,
+    state,
+    studentCount: count,
+    invitationSentAt: state === 'Approved' ? iso(now() - minutes(600 + seed)) : null,
+    roster: roster(count, seed, className),
+    // Openly fake addresses on a reserved domain (scope §6.3).
+    contactEmail: `daidien.${id}@truong-mau.example`,
+    submittedAt: iso(now() - minutes(60 * 24 * 2 + seed * 37)),
+    reviewedAt: decided ? iso(now() - minutes(60 * 24 + seed * 11)) : null,
+    reviewedBy: decided ? 'admin' : null,
+    rejectionReason: null,
+    resubmittedAfterApproval: false,
+    invitationFailed: false,
+    groupCode: groupCodeFor(id),
+    version: 1,
+    ...extra,
+  }
+}
+
+export function stopsFor(routeKey: keyof typeof ROUTES): RouteStop[] {
   return ROUTES[routeKey].stops.map((stop) => ({
     id: `stop-${stop.place}`,
     name: PLACES[stop.place].name,
@@ -210,23 +312,31 @@ function stopsFor(routeKey: keyof typeof ROUTES): RouteStop[] {
   }))
 }
 
-function tour(over: Partial<SimTour> & Pick<SimTour, 'id' | 'code' | 'name' | 'state'> & { route: keyof typeof ROUTES; at: number }): SimTour {
+const endPointOf = (routeKey: string) => {
+  const place = ROUTES[routeKey]?.endPlace
+  return place ? { ...PLACES[place] } : { ...PLACES.start }
+}
+
+export function tour(over: Partial<SimTour> & Pick<SimTour, 'id' | 'code' | 'name' | 'state'> & { route: keyof typeof ROUTES; at: number }): SimTour {
   const { route, at, ...rest } = over
   return {
+    description: 'Buổi tham quan trực tuyến: học sinh xem livestream từ robot, nghe thuyết minh tại từng điểm và hỏi AI.',
+    routeKey: route,
     routeName: ROUTES[route].name,
     scheduledAt: iso(now() + minutes(at)),
     estimatedEndAt: iso(now() + minutes(at + 30)),
+    createdAt: iso(now() - minutes(60 * 24 * 4)),
     status: null,
     reason: null,
     reasonDetail: null,
-    readyBlockers: [],
     registrations: [],
+    version: 1,
     robotId: null,
     startedAt: null,
     endedAt: null,
     endReason: null,
     stops: stopsFor(route),
-    endPoint: { ...PLACES.start },
+    endPoint: endPointOf(route),
     step: null,
     stopIndex: null,
     legId: null,
@@ -306,15 +416,56 @@ function seed(): SimState {
   log(ready, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24 * 2))
   log(ready, 'ReadyConfirmed', 'Admin chốt buổi: 2 đoàn đã duyệt.', 'Admin', now() - minutes(90))
 
+  // Admin scenario A: Scheduled, 2 approved + 1 waiting (a roster replaced after
+  // approval), so it cannot be finalized yet.
   const scheduled = tour({
     id: 'tour-03', code: 'T-03', name: 'Tham quan từ xa · Buổi chiều', state: 'Scheduled', route: 'main', at: 180,
     registrations: [
       registration('reg-06', 'THPT Nguyễn Du', 'Thầy Đỗ Minh Quân', 30, 'Approved', 6),
-      registration('reg-07', 'THPT Bùi Thị Xuân', 'Cô Huỳnh Gia Chi', 26, 'Submitted', 7),
+      registration('reg-09', 'THPT Trần Phú', 'Cô Lê Thanh Vy', 21, 'Approved', 10, '10A5', { invitationSentAt: null }),
+      registration('reg-07', 'THPT Bùi Thị Xuân', 'Cô Huỳnh Gia Chi', 26, 'Submitted', 7, '11A1', { resubmittedAfterApproval: true, reviewedAt: null, reviewedBy: null, invitationSentAt: iso(now() - minutes(60 * 20)), submittedAt: iso(now() - minutes(45)), version: 3 }),
+      registration('reg-12', 'THCS Hoa Lư', 'Thầy Ngô Gia Bảo', 15, 'Rejected', 12, '9A2', { rejectionReason: 'File danh sách thiếu cột Lớp cho 6 học sinh; vui lòng bổ sung và gửi lại.' }),
     ],
-    readyBlockers: ['1 đăng ký đang chờ Admin duyệt', 'Admin chưa chốt buổi'],
   })
+  scheduled.version = 6
   log(scheduled, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24))
+  log(scheduled, 'RegistrationApproved', 'Duyệt đăng ký THPT Nguyễn Du (30 học sinh).', 'admin', now() - minutes(60 * 22))
+  log(scheduled, 'RegistrationApproved', 'Duyệt đăng ký THPT Bùi Thị Xuân (24 học sinh).', 'admin', now() - minutes(60 * 21))
+  log(scheduled, 'InvitationSent', 'Gửi thông tin tham gia tới đại diện THPT Bùi Thị Xuân.', 'admin', now() - minutes(60 * 20))
+  log(scheduled, 'RegistrationRejected', 'Từ chối đăng ký THCS Hoa Lư: File danh sách thiếu cột Lớp cho 6 học sinh; vui lòng bổ sung và gửi lại.', 'admin', now() - minutes(60 * 19))
+  log(scheduled, 'RegistrationApproved', 'Duyệt đăng ký THPT Trần Phú (21 học sinh).', 'admin', now() - minutes(60 * 5))
+  log(scheduled, 'RosterReplaced', 'Đại diện THPT Bùi Thị Xuân thay danh sách (24 → 26 học sinh); đăng ký về Chờ duyệt.', 'Đại diện trường', now() - minutes(45))
+
+  // Admin scenario B: Scheduled, 2 approved, nothing waiting: can be finalized.
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  tomorrow.setHours(9, 0, 0, 0)
+  const finalizable = tour({
+    id: 'tour-05', code: 'T-05', name: 'Tham quan từ xa · Sáng mai', state: 'Scheduled', route: 'heritage', at: (tomorrow.getTime() - now()) / 60_000,
+    registrations: [
+      registration('reg-10', 'THPT Lương Thế Vinh', 'Cô Trịnh Mai Anh', 27, 'Approved', 13, '11A4'),
+      registration('reg-11', 'THPT Nguyễn Trãi', 'Thầy Phan Đức Khánh', 23, 'Approved', 14, '10A1', { invitationSentAt: null }),
+      registration('reg-13', 'THCS Ngô Sĩ Liên', 'Cô Vũ Thu Trang', 12, 'Rejected', 15, '8A3', { rejectionReason: 'Buổi dành cho học sinh THPT; đoàn THCS vui lòng chọn buổi khác.' }),
+    ],
+  })
+  finalizable.version = 4
+  log(finalizable, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 30))
+
+  // A Scheduled Tour nobody has registered for yet.
+  const empty = tour({ id: 'tour-06', code: 'T-06', name: 'Tham quan từ xa · Chiều thứ Năm', state: 'Scheduled', route: 'main', at: (tomorrow.getTime() - now()) / 60_000 + 60 * 24 * 2 + 5 * 60 })
+  log(empty, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 3))
+
+  // On a route whose config became invalid, with one fresh submission and one
+  // group that cancelled itself.
+  const labs = tour({
+    id: 'tour-07', code: 'T-07', name: 'Tham quan từ xa · Phòng thí nghiệm', state: 'Scheduled', route: 'labs', at: (tomorrow.getTime() - now()) / 60_000 + 60 * 24 * 5 + 60,
+    registrations: [
+      registration('reg-14', 'THPT Chuyên Trần Đại Nghĩa', 'Thầy Hồ Quốc Trung', 18, 'Submitted', 16, '12CT', { submittedAt: iso(now() - minutes(20)) }),
+      registration('reg-15', 'THPT Hùng Vương', 'Cô Đinh Ngọc Hà', 20, 'Cancelled', 17, '11A2', { invitationSentAt: null }),
+    ],
+  })
+  labs.version = 3
+  log(labs, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 26))
 
   const completed = tour({ id: 'tour-00', code: 'T-00', name: 'Tham quan từ xa · Buổi thử', state: 'Completed', route: 'main', at: -150, registrations: [registration('reg-00', 'THPT Phú Nhuận', 'Cô Đặng Thu Trâm', 24, 'Approved', 8)] })
   finishSeed(completed, now() - minutes(150), 27, null)
@@ -324,7 +475,7 @@ function seed(): SimState {
   cancelled.endedAt = iso(now() - minutes(70))
   log(cancelled, 'TourCancelled', cancelled.endReason, 'Admin', now() - minutes(70))
 
-  const state: SimState = { elapsed: 0, robots, tours: [completed, running, ready, scheduled, cancelled], history: seedHistory(), alerts: seedAlerts(), fired: new Set(), revision: 100 }
+  const state: SimState = { elapsed: 0, robots, tours: [completed, running, ready, scheduled, cancelled, finalizable, empty, labs], history: seedHistory(), alerts: seedAlerts(), fired: new Set(), revision: 100 }
   for (const t of state.tours) t.revision = state.revision
   return state
 }
@@ -686,9 +837,42 @@ function startChecks(t: SimTour): StartCheck[] {
     { id: 'robotLocalized', passed: r.localized, detail: r.localized ? 'Đã định vị trên bản đồ' : 'Chưa định vị' },
     { id: 'robotFree', passed: free, detail: r.tourId ? `Đang phục vụ ${tourById(r.tourId)?.code ?? 'buổi khác'}` : r.needsCheck ? 'Chờ xác nhận kiểm tra sau buổi trước' : 'Không phục vụ buổi nào' },
     { id: 'headAtFront', passed: r.head === 'FRONT' && !r.headFault, detail: r.headFault ? 'Đầu xoay đang báo lỗi' : r.head === 'FRONT' ? 'Đầu ở FRONT' : `Đầu đang ở ${r.head}` },
-    { id: 'batteryMeasured', passed: r.battery == null || r.battery >= 40, detail: r.battery == null ? 'Robot không đo pin — kiểm tra nguồn tại chỗ' : `${Math.round(r.battery)}% (tối thiểu 40%)` },
+    { id: 'batteryMeasured', passed: r.battery == null || r.battery >= 40, detail: r.battery == null ? 'Robot không đo pin, kiểm tra nguồn tại chỗ' : `${Math.round(r.battery)}% (tối thiểu 40%)` },
     { id: 'streamLive', passed: free && r.connection === 'Live', detail: free ? 'Nguồn hình có tín hiệu' : 'Nguồn hình đang dùng cho buổi khác' },
   ]
+}
+
+/**
+ * The READY conditions of scope §5.2, evaluated on the server's current data.
+ * Admin's checklist renders this; Staff's Start gate quotes the failures.
+ * Robot, Quest and e-mail are deliberately NOT here: READY ≠ robot ready.
+ */
+export function readyChecklist(t: SimTour): ReadyCheck[] {
+  const route = ROUTES[t.routeKey]
+  const issues = routeIssues(t.routeKey)
+  const approved = t.registrations.filter((reg) => reg.state === 'Approved')
+  const emptyApproved = approved.filter((reg) => reg.roster.length === 0)
+  const waiting = t.registrations.filter((reg) => reg.state === 'Submitted')
+  const poiIssues = issues.filter((issue) => issue.includes(':'))
+  const names = (rows: SimRegistration[]) => rows.map((reg) => reg.schoolName).join(', ')
+  return [
+    { id: 'stateScheduled', label: 'Tour đang ở trạng thái Đang chuẩn bị', passed: t.state === 'Scheduled', detail: t.state === 'Scheduled' ? null : `Tour đang ở trạng thái ${t.state === 'Ready' ? 'Sẵn sàng' : t.state === 'Running' ? 'Đang diễn ra' : 'đã kết thúc'}` },
+    { id: 'hasName', label: 'Đã có tên Tour', passed: Boolean(t.name.trim()), detail: t.name.trim() ? null : 'Tour chưa có tên' },
+    { id: 'hasSchedule', label: 'Đã có thời gian dự kiến', passed: Boolean(t.scheduledAt), detail: t.scheduledAt ? null : 'Chưa đặt giờ dự kiến' },
+    { id: 'routeValid', label: 'Đã chọn tuyến hợp lệ', passed: Boolean(route) && issues.length === 0, detail: !route ? 'Chưa chọn tuyến' : issues.length ? `Tuyến "${route.name}" chưa dùng được` : route.name },
+    { id: 'hasPoi', label: 'Tuyến có ít nhất 1 POI', passed: Boolean(route?.stops.length), detail: route?.stops.length ? `${route.stops.length} POI` : 'Tuyến chưa có POI' },
+    { id: 'hasEndPoint', label: 'Tuyến có điểm kết thúc', passed: Boolean(route?.endPlace), detail: route?.endPlace ? PLACES[route.endPlace].name : 'Chưa cấu hình điểm kết thúc' },
+    { id: 'poiConfigValid', label: 'Cấu hình POI hợp lệ (vị trí, thuyết minh, thời gian dừng, góc quay)', passed: Boolean(route) && poiIssues.length === 0, detail: poiIssues.length ? poiIssues.join('; ') : null },
+    { id: 'hasApproved', label: 'Có ít nhất 1 đoàn đã duyệt', passed: approved.length > 0, detail: approved.length ? `${approved.length} đoàn đã duyệt` : 'Chưa có đoàn nào được duyệt' },
+    { id: 'rosterNotEmpty', label: 'Danh sách học sinh của đoàn đã duyệt không rỗng', passed: approved.length > 0 && emptyApproved.length === 0, detail: emptyApproved.length ? `Danh sách rỗng: ${names(emptyApproved)}` : approved.length ? `${approved.reduce((sum, reg) => sum + reg.roster.length, 0)} học sinh` : 'Chưa có danh sách được duyệt' },
+    { id: 'noSubmitted', label: 'Không còn đăng ký chờ duyệt', passed: waiting.length === 0, detail: waiting.length ? `Còn ${waiting.length} đăng ký chờ duyệt: ${names(waiting)}` : null },
+  ]
+}
+
+/** Failing READY checks as one line each; what Staff sees on a Scheduled Tour. */
+export function readyBlockers(t: SimTour): string[] {
+  if (t.state !== 'Scheduled') return []
+  return readyChecklist(t).filter((check) => !check.passed).map((check) => check.detail ?? check.label)
 }
 
 function actions(t: SimTour): StaffActions {
@@ -705,7 +889,7 @@ function actions(t: SimTour): StaffActions {
   const robotOk = Boolean(r && r.connection === 'Live')
 
   return {
-    start: gate(t.state === 'Ready' && !failed, t.state === 'Scheduled' ? `Chờ Admin chốt buổi: ${t.readyBlockers.join('; ')}` : t.state !== 'Ready' ? notRunning : failed?.detail),
+    start: gate(t.state === 'Ready' && !failed, t.state === 'Scheduled' ? `Chờ Admin chốt buổi${readyBlockers(t).length ? `: ${readyBlockers(t).join('; ')}` : ''}` : t.state !== 'Ready' ? notRunning : failed?.detail),
     hold: gate(normal && atPoi && !t.hold, !running ? notRunning : assist ? assistReason : t.hold ? 'Đang giữ tại POI' : !atPoi ? `Chỉ giữ khi robot đã dừng quan sát tại POI (${busyReason.toLowerCase()})` : null),
     next: gate(normal && atPoi && !t.pending, !running ? notRunning : assist ? assistReason : !atPoi ? busyReason : null),
     endEarly: gate(running, notRunning),
@@ -765,9 +949,9 @@ export function tourView(t: SimTour): TourOperation {
     operationalStatus: running ? t.status : null,
     reason: running ? t.reason : null,
     reasonDetail: running ? t.reasonDetail : null,
-    readyBlockers: t.state === 'Scheduled' ? t.readyBlockers : [],
+    readyBlockers: readyBlockers(t),
     language: LANGUAGE,
-    registrations: t.registrations,
+    registrations: t.registrations.map((reg) => ({ id: reg.id, schoolName: reg.schoolName, representativeName: reg.representativeName, state: reg.state, studentCount: reg.studentCount, invitationSentAt: reg.invitationSentAt, roster: reg.roster })),
     robotId: t.robotId,
     robotName: robot?.name ?? t.robotId,
     startedAt: t.startedAt,
@@ -804,8 +988,19 @@ export const sim = {
   get alerts() {
     return state.alerts
   },
+  /** One-shot flags for scripted demo moments (faults, a conflict, a failed e-mail). */
+  get fired() {
+    return state.fired
+  },
   robotById,
+  addTour(t: SimTour) {
+    state.tours.push(t)
+    bump(t)
+  },
 }
+
+/** Shared with `admin-sim.ts`, the administration half of the same server. */
+export { log as logEvent, bump as touchTour }
 
 /* ── Commands (the server-side rules) ─────────────────────────────────────── */
 

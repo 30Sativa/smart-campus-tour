@@ -14,7 +14,7 @@ import { TourStateBadges } from './TourParts'
 export function RunStatus({ tour, robot, now, compact = false }: { tour: TourOperation; robot?: AmrStatus; now: number; compact?: boolean }) {
   const progress = tour.progress
   const { current, done, total } = routeProgress(tour)
-  const target = progress?.step === 'ReturningToEnd' ? tour.endPoint.name : current?.name ?? '—'
+  const target = progress?.step === 'ReturningToEnd' ? tour.endPoint.name : current?.name ?? '-'
   const dwellLeft = progress?.dwellEndsAt ? Math.max(0, Math.round((new Date(progress.dwellEndsAt).getTime() - now) / 1000)) : null
   const poseAge = robot?.poseAgeSeconds
   const stale = robot && (robot.connectionState !== 'Live' || (poseAge ?? 0) > POSE_STALE_SECONDS)
@@ -30,13 +30,13 @@ export function RunStatus({ tour, robot, now, compact = false }: { tour: TourOpe
         <Field label={progress?.step === 'Navigating' || progress?.step === 'ReturningToEnd' ? 'Đang tới' : 'POI'}>{target}</Field>
         <Field label="Bắt đầu">{formatTime(tour.startedAt)} · <span className="tabular-nums">{formatStopwatch(tour.startedAt, now)}</span></Field>
         <Field label="Thời gian dừng còn">
-          {dwellLeft != null ? <span className="tabular-nums">{dwellLeft}s{progress?.hold ? ' (đang giữ)' : ''}</span> : '—'}
+          {dwellLeft != null ? <span className="tabular-nums">{dwellLeft}s{progress?.hold ? ' (đang giữ)' : ''}</span> : '-'}
         </Field>
       </dl>
       <ul className={`mt-4 space-y-1.5 ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
         <li className={`flex items-center gap-2 ${stale ? 'font-bold text-[#8a5a06]' : 'text-[#647793]'}`}>
           <Radio size={14} aria-hidden="true" />
-          {robot ? (robot.connectionState !== 'Live' ? 'Robot mất kết nối — vị trí là mẫu cuối cùng' : `Vị trí cập nhật ${poseAge ?? '—'}s trước${stale ? ' (cũ)' : ''}`) : 'Chưa có dữ liệu robot'}
+          {robot ? (robot.connectionState !== 'Live' ? 'Robot mất kết nối, vị trí là mẫu cuối cùng' : `Vị trí cập nhật ${poseAge ?? '-'}s trước${stale ? ' (cũ)' : ''}`) : 'Chưa có dữ liệu robot'}
         </li>
         <li className="flex items-center gap-2 text-[#647793]">
           <Send size={14} aria-hidden="true" />
@@ -44,7 +44,7 @@ export function RunStatus({ tour, robot, now, compact = false }: { tour: TourOpe
         </li>
         <li className="flex items-center gap-2 text-[#647793]">
           <Hourglass size={14} aria-hidden="true" />
-          Chặng <span className="font-mono text-xs">{progress?.legId ?? '—'}</span> · lượt dừng <span className="font-mono text-xs">{progress?.visitId ?? '—'}</span>
+          Chặng <span className="font-mono text-xs">{progress?.legId ?? '-'}</span> · lượt dừng <span className="font-mono text-xs">{progress?.visitId ?? '-'}</span>
         </li>
         <li className="flex items-center gap-2 text-[#647793]">
           <Clock3 size={14} aria-hidden="true" />

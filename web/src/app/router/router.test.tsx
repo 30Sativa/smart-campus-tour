@@ -81,7 +81,7 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt('/admin')
       await settled(router, '/admin')
-      expect(await screen.findByRole('heading', { name: /Tổng quan hiệu suất/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /Tổng quan quản trị/i, level: 1 })).toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: /Tình hình điều hành/i })).toBeNull()
     })
 
@@ -90,6 +90,35 @@ describe('route table', () => {
       const router = renderAt('/admin/roles')
       await settled(router, '/admin/roles')
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
+    })
+  })
+
+  describe('tour administration', () => {
+    it.each([
+      ['/admin/tours', /Quản lý Tour/],
+      ['/admin/tours/new', /Tạo Tour mới/],
+      ['/admin/registrations/pending', /Đăng ký chờ duyệt/],
+      ['/admin/registrations', /Tất cả đăng ký/],
+      ['/admin/routes', /Danh mục tuyến/],
+      ['/admin/history', /Lịch sử Tour/],
+    ])('serves %s as a real admin page', async (path, heading) => {
+      signIn('Admin')
+      const router = renderAt(path)
+      await settled(router, path)
+      expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()
+    })
+
+    it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
+      signIn('Admin')
+      const router = renderAt('/admin/tours/tour-03')
+      await settled(router, '/admin/tours/tour-03')
+      expect(await screen.findByRole('heading', { name: /Buổi chiều/, level: 1 })).toBeInTheDocument()
+    })
+
+    it('keeps a mistyped admin path inside administration', async () => {
+      signIn('Admin')
+      const router = renderAt('/admin/khong-co')
+      await settled(router, '/admin')
     })
   })
 
@@ -103,7 +132,6 @@ describe('route table', () => {
       ['/staff/amr', '/staff/robot'],
       ['/staff/alerts', '/staff'],
       ['/staff/reports', '/staff/history'],
-      ['/admin/tours/abc-123', '/staff/tours/abc-123'],
     ])('redirects %s to %s', async (from, to) => {
       signIn('Admin')
       const router = renderAt(from)

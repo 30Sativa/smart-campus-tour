@@ -1,10 +1,10 @@
 export function formatDateTime(value?: string | null) {
-  if (!value) return '—'
+  if (!value) return '-'
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
 }
 
 export function formatTime(value?: string | null) {
-  if (!value) return '—'
+  if (!value) return '-'
   return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
@@ -49,7 +49,7 @@ export function formatCountdown(value?: string | null, now: number = Date.now())
 
 /** "1:05:12" / "12:07" for an elapsed stopwatch, from two instants. */
 export function formatStopwatch(from?: string | null, now: number = Date.now()): string {
-  if (!from) return '—'
+  if (!from) return '-'
   const total = Math.max(0, Math.floor((now - new Date(from).getTime()) / 1000))
   const hours = Math.floor(total / 3600)
   const mins = Math.floor((total % 3600) / 60)
@@ -60,7 +60,7 @@ export function formatStopwatch(from?: string | null, now: number = Date.now()):
 
 /** "45 phút" / "1 giờ 10 phút" between two instants. */
 export function formatDuration(from?: string | null, to?: string | null): string {
-  if (!from || !to) return '—'
+  if (!from || !to) return '-'
   const minutes = Math.max(0, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 60_000))
   if (minutes < 60) return `${minutes} phút`
   const rest = minutes % 60
@@ -75,7 +75,7 @@ export function formatHeartbeat(ageSeconds?: number | null, lastSeenAt?: string 
 }
 
 export function formatDate(value?: string | null) {
-  if (!value) return '—'
+  if (!value) return '-'
   return new Intl.DateTimeFormat('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value))
 }
 

@@ -266,7 +266,11 @@ remain TBD. The operations console's proposal (hub `/hubs/operations` with
 `/api/staff/tours/*` + `/api/staff/robots/*` calls it expects, following the
 remote-tour scope of 19/09/2026) is written down in
 `web/src/api/contracts/staff-realtime.ts`, `web/src/api/contracts/staff.ts` and
-`web/docs/staff-operations.md`; it is not agreed until recorded here.
+`web/docs/staff-operations.md`; it is not agreed until recorded here. The same
+holds for administration's proposal (`/api/admin/tours|registrations|routes/*`,
+version tokens, JSON error bodies with `StaleData` / `NotAllowed` /
+`Validation` / `EmailFailed`) in `web/src/api/contracts/admin.ts` and
+`web/docs/admin-tours.md`.
 
 Backend-to-browser realtime delivery is **planned** to use SignalR; the
 backend has no Hub yet. Authentication implementation and the dispatch

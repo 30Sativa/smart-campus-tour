@@ -1,11 +1,12 @@
 import { useId, useState } from 'react'
-import type { InputHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, ReactNode } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 
 type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string
   /** Message for this field. The slot below the input is reserved either way. */
   error?: string
+  icon?: ReactNode
 }
 
 /**
@@ -17,7 +18,7 @@ type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
  * keeps its height when empty, so validating on blur does not shove the rest of
  * the form down the page.
  */
-export function AuthField({ label, error, id, ...input }: FieldProps) {
+export function AuthField({ label, error, icon, id, ...input }: FieldProps) {
   const generatedId = useId()
   const fieldId = id ?? generatedId
   const errorId = `${fieldId}-error`
@@ -28,12 +29,13 @@ export function AuthField({ label, error, id, ...input }: FieldProps) {
         {label}
       </label>
       <span className="auth-input-wrap">
+        {icon && <span className="auth-field-icon" aria-hidden="true">{icon}</span>}
         <input
           {...input}
           id={fieldId}
-          className="auth-input"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          className={`auth-input${icon ? ' auth-input--with-icon' : ''}`}
+          aria-invalid={error ? true : input['aria-invalid']}
+          aria-describedby={[error ? errorId : '', input['aria-describedby']].filter(Boolean).join(' ') || undefined}
         />
       </span>
       <span className="auth-error-slot">
@@ -54,7 +56,7 @@ export function AuthField({ label, error, id, ...input }: FieldProps) {
  * keyboard in the natural tab order, and its accessible name states what the
  * next press will do. Toggling swaps only the input `type`, so nothing moves.
  */
-export function AuthPasswordField({ label, error, id, ...input }: FieldProps) {
+export function AuthPasswordField({ label, error, icon, id, ...input }: FieldProps) {
   const [visible, setVisible] = useState(false)
   const generatedId = useId()
   const fieldId = id ?? generatedId
@@ -66,17 +68,19 @@ export function AuthPasswordField({ label, error, id, ...input }: FieldProps) {
         {label}
       </label>
       <span className="auth-input-wrap">
+        {icon && <span className="auth-field-icon" aria-hidden="true">{icon}</span>}
         <input
           {...input}
           id={fieldId}
           type={visible ? 'text' : 'password'}
-          className="auth-input auth-input--with-toggle"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          className={`auth-input auth-input--with-toggle${icon ? ' auth-input--with-icon' : ''}`}
+          aria-invalid={error ? true : input['aria-invalid']}
+          aria-describedby={[error ? errorId : '', input['aria-describedby']].filter(Boolean).join(' ') || undefined}
         />
         <button
           type="button"
           className="auth-reveal"
+          disabled={input.disabled}
           onClick={() => setVisible((shown) => !shown)}
           aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
           aria-pressed={visible}

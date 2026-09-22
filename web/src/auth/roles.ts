@@ -84,6 +84,18 @@ export function isAdminRole(role?: string | null): boolean {
 }
 
 /**
+ * May Start, Hold, Next, End Early, recover a run or confirm a robot ready.
+ *
+ * Narrower than `isStaffRole`: Admin may LOOK at `/staff/*` but does not run
+ * robots unless the account also holds Staff (scope §2, §2.1 "Cần thêm role
+ * Staff"). Tokens here carry one role, so an Admin-only account is read-only
+ * in the operations console; the server applies the same rule.
+ */
+export function canOperateTours(role?: string | null): boolean {
+  return normalizeRole(role) === STAFF_ROLE
+}
+
+/**
  * May open `/visit/*`.
  *
  * Every signed-in account can: a staff member checking what a visitor sees is a

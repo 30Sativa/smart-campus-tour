@@ -13,9 +13,29 @@
  * is used to paper over a failed request.
  */
 import { ApiError } from '../api/client'
-import type { FeedbackFilters, FeedbackReport, StaffApi, TourOperation } from '../api/contracts/staff'
+import type { FeedbackFilters, FeedbackReport, StaffActions, StaffApi, TourOperation } from '../api/contracts/staff'
+import { canOperateTours } from '../auth/roles'
+import { useAuthStore } from '../stores/auth-store'
 import { mockDelay } from './mock-mode'
 import * as world from './staff-sim'
+
+/**
+ * The server's role check for operating a run (scope §2.1): Admin reads the
+ * console but may not Start/Hold/Next/End Early without the Staff role. The
+ * gates say so, and a direct call is refused with 403.
+ */
+const OPERATOR_ONLY = 'Cần vai trò Nhân viên vận hành (Staff) để vận hành robot; tài khoản Quản trị viên chỉ xem.'
+const operator = () => canOperateTours(useAuthStore.getState().user?.role)
+
+function forCaller<T extends TourOperation>(tour: T): T {
+  if (operator()) return tour
+  const locked = Object.fromEntries(Object.keys(tour.allowedActions).map((key) => [key, { allowed: false, reason: OPERATOR_ONLY }])) as StaffActions
+  return { ...tour, allowedActions: locked }
+}
+
+function requireOperator() {
+  if (!operator()) throw new ApiError(403, OPERATOR_ONLY)
+}
 
 /** Run a "server" command and translate its refusal into an HTTP-shaped error. */
 async function call<T>(run: () => T): Promise<T> {
@@ -74,24 +94,24 @@ const bySchedule = (a: TourOperation, b: TourOperation) => a.scheduledAt.localeC
 export const mockStaffApi: StaffApi = {
   tours: (filters = {}) =>
     call(() => {
-      if (filters.history) return world.sim.history.map(world.tourView)
+      if (filters.history) return world.sim.history.map(world.tourView).map(forCaller)
       const today = dayKey(new Date())
       const day = filters.date ?? today
       const source = day === today ? world.sim.tours : world.sim.history
-      return source.filter((t) => sameDay(t.scheduledAt, day)).map(world.tourView).sort(bySchedule)
+      return source.filter((t) => sameDay(t.scheduledAt, day)).map(world.tourView).map(forCaller).sort(bySchedule)
     }),
 
   tour: (id) =>
     call(() => {
       const t = world.tourById(id)
       if (!t) throw new world.SimRejection('Không tìm thấy buổi tham quan.')
-      return world.tourDetailView(t)
+      return forCaller(world.tourDetailView(t))
     }),
 
-  startTour: (id, confirmation) => call(() => world.tourView(world.startTour(id, confirmation))),
-  commandTour: (id, command, reason) => call(() => world.tourView(world.command(id, command, reason))),
+  startTour: (id, confirmation) => call(() => (requireOperator(), world.tourView(world.startTour(id, confirmation)))),
+  commandTour: (id, command, reason) => call(() => (requireOperator(), world.tourView(world.command(id, command, reason)))),
   amrs: () => call(() => world.sim.robots.map(world.robotView)),
-  confirmRobotReady: (robotId, note) => call(() => world.robotView(world.confirmRobotReady(robotId, note))),
+  confirmRobotReady: (robotId, note) => call(() => (requireOperator(), world.robotView(world.confirmRobotReady(robotId, note)))),
   alerts: () => call(() => world.sim.alerts),
 
   feedbackReports: (filters: FeedbackFilters = {}) => {

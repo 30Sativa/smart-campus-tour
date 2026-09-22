@@ -1,7 +1,11 @@
 import { useState, useMemo } from 'react'
-import { CalendarCheck, History, Search } from 'lucide-react'
+import { CalendarCheck, CircleX, History } from 'lucide-react'
 import { useTours } from '../../features/staff/staff-hooks'
-import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, panelClass, StaffPage } from '../../features/staff/StaffUi'
+import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, Pagination, SearchField, StatStrip, StatTile, panelClass, StaffPage } from '../../features/staff/StaffUi'
+import { usePagination } from '../../features/staff/use-pagination'
+
+/** Case- and diacritic-insensitive, so "le quy don" finds "Lê Quý Đôn". */
+const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase()
 import { TourTable } from '../../features/staff/components/TourParts'
 import { useNow } from '../../features/staff/use-now'
 
@@ -16,15 +20,10 @@ export default function TourHistoryPage() {
 
   const filtered = useMemo(() => {
     if (!search.trim()) return list
-    const q = search.trim().toLowerCase()
-    return list.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.code.toLowerCase().includes(q) ||
-        t.routeName.toLowerCase().includes(q) ||
-        t.registrations.some((r) => r.schoolName.toLowerCase().includes(q)),
-    )
+    const q = fold(search.trim())
+    return list.filter((t) => fold(`${t.name} ${t.code} ${t.routeName} ${t.registrations.map((r) => r.schoolName).join(' ')}`).includes(q))
   }, [list, search])
+  const paged = usePagination(filtered, 10, search)
 
   return (
     <StaffPage>
@@ -34,57 +33,16 @@ export default function TourHistoryPage() {
         description="Lịch sử các buổi tham quan từ xa trước đây. Xem lộ trình thực tế, các mốc thời gian và nhật ký can thiệp kỹ thuật."
       />
 
-      {/* Summary KPI */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]">
-            <History size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#64748b]">Tổng số tour lịch sử</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">
-              {list.length}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ecfdf5] text-[#16a34a]">
-            <CalendarCheck size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#16a34a]">Hoàn thành</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">
-              {completed}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fef2f2] text-[#dc2626]">
-            <History size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#dc2626]">Đã hủy / Kết thúc sớm</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">
-              {cancelled}
-            </span>
-          </div>
-        </div>
-      </div>
+      <StatStrip label="Tổng hợp lịch sử" columns="sm:grid-cols-3">
+        <StatTile icon={History} label="Buổi trong lịch sử" value={list.length} />
+        <StatTile icon={CalendarCheck} label="Hoàn thành" value={completed} />
+        <StatTile icon={CircleX} label="Kết thúc sớm / hủy" value={cancelled} tone={cancelled ? 'danger' : undefined} />
+      </StatStrip>
 
-      <section className={panelClass} aria-label="Lịch sử tour">
+      <section className={`${panelClass} mt-6`} aria-label="Lịch sử tour">
         <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-bold text-[#0f172a]">Danh sách tour lưu trữ</h2>
-          <div className="relative w-full sm:w-64">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm kiếm lịch sử tour…"
-              aria-label="Tìm kiếm lịch sử"
-              className="w-full rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-1.5 pl-8 pr-3 text-xs text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:bg-white transition-all"
-            />
-          </div>
+          <h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách tour lưu trữ</h2>
+          <SearchField value={search} onChange={setSearch} label="Tìm kiếm lịch sử" placeholder="Tìm theo buổi, mã, tuyến hoặc trường…" className="w-full sm:w-72" />
         </div>
 
         {tours.isPending ? (
@@ -102,7 +60,10 @@ export default function TourHistoryPage() {
             </EmptyPanel>
           </div>
         ) : (
-          <TourTable tours={filtered} now={now} showDate label="Lịch sử tour" />
+          <>
+            <TourTable tours={paged.rows} now={now} showDate label="Lịch sử tour" />
+            <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang lịch sử tour" />
+          </>
         )}
       </section>
     </StaffPage>

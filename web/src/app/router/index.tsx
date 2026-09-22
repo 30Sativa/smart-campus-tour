@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
-import { Navigate, createBrowserRouter, useLocation, useParams } from 'react-router'
+import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
 import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
@@ -14,7 +14,7 @@ import { homePathForRole } from '../../auth/roles'
  *   `/`        public   marketing pages, no account
  *   `/visit/*` visitor  the visitor app: explore, book a robot, walk a tour
  *   `/staff/*` staff    tour operations, for Staff and Admin
- *   `/admin/*` admin    administration, Admin only
+ *   `/admin/*` admin    Tour administration (create, review groups, e-mail, Chốt/Mở lại/Hủy), Admin only
  *
  * All three signed-in areas are lazy, shell included, so a visitor loading `/`
  * downloads none of them, a visitor never downloads operations, and an operator
@@ -56,7 +56,14 @@ const TourHistoryPage = lazy(() => import('../../routes/staff/TourHistoryPage'))
 const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
-const SystemOverviewPage = lazy(() => import('../../routes/admin/SystemOverviewPage'))
+const AdminDashboardPage = lazy(() => import('../../routes/admin/AdminDashboardPage'))
+const AdminTourListPage = lazy(() => import('../../routes/admin/AdminTourListPage'))
+const AdminTourCreatePage = lazy(() => import('../../routes/admin/AdminTourCreatePage'))
+const AdminTourDetailPage = lazy(() => import('../../routes/admin/AdminTourDetailPage'))
+const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPage'))
+const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
+const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
+const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 function ShellFallback({ background }: { background: string }) {
@@ -116,12 +123,6 @@ function AdminArea() {
       </Suspense>
     </RequireArea>
   )
-}
-
-/** Legacy `/admin/tours/:sessionId` kept its parameter, so carry it across. */
-function LegacySessionRedirect() {
-  const { sessionId } = useParams()
-  return <Navigate to={`/staff/tours/${sessionId ?? ''}`} replace />
 }
 
 /**
@@ -201,8 +202,19 @@ export const routes = [
     path: '/admin',
     element: <AdminArea />,
     children: [
-      { index: true, element: <SystemOverviewPage /> },
+      // Preparing Tours before they run (remote-tour scope §2, §3, §11.1).
+      { index: true, element: <AdminDashboardPage /> },
+      { path: 'tours', element: <AdminTourListPage /> },
+      { path: 'tours/new', element: <AdminTourCreatePage /> },
+      { path: 'tours/:tourId', element: <AdminTourDetailPage /> },
+      { path: 'tours/:tourId/edit', element: <AdminTourEditPage /> },
+      { path: 'registrations', element: <AdminRegistrationsPage mode="all" /> },
+      { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
+      { path: 'routes', element: <AdminRouteCatalogPage /> },
+      { path: 'history', element: <AdminTourHistoryPage /> },
       { path: 'roles', element: <RolesPage /> },
+      // A mistyped path inside the area stays inside the area.
+      { path: '*', element: <Navigate to="/admin" replace /> },
     ],
   },
   // Migration only: the operations pages that used to sit under `/admin`.
@@ -214,7 +226,6 @@ export const routes = [
   { path: '/admin/alerts', element: <Navigate to="/staff" replace /> },
   { path: '/admin/digital-twin', element: <Navigate to="/staff/digital-twin" replace /> },
   { path: '/admin/reports', element: <Navigate to="/staff/history" replace /> },
-  { path: '/admin/tours/:sessionId', element: <LegacySessionRedirect /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]
 

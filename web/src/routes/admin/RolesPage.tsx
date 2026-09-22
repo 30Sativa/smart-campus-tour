@@ -1,11 +1,9 @@
 import { Check, Layers, Minus, ShieldCheck, Users } from 'lucide-react'
-import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../features/staff/StaffUi'
+import { CellIcon, PageHeader, PanelHead, StaffPage, SummaryTile, panelClass } from '../../features/staff/StaffUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
 import { STAFF_NAV } from '../../features/staff/staff-nav'
 import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
 import { ADMIN_NAV } from '../../features/administration/admin-nav'
-
-const shell = 'min-h-full bg-[#f1f6fe] px-4 py-5 font-sans sm:px-6 lg:px-8 lg:py-7'
 
 const AREA_PAGES: Record<string, string[]> = {
   public: ['Trang giới thiệu', 'Đăng nhập', 'Đăng ký'],
@@ -62,10 +60,9 @@ export default function RolesPage() {
   const grants = rows.reduce((total, row) => total + row.areas.filter((area) => area.allowed).length, 0)
 
   return (
-    <div className={shell}>
-      <div className="mx-auto w-full max-w-[1400px]">
+    <StaffPage>
         <PageHeader
-          eyebrow="Quản trị hệ thống"
+          eyebrow="Tham khảo"
           title="Vai trò & quyền"
           description="Vai trò nào vào được khu vực nào. Bảng này đọc trực tiếp từ quy tắc mà route guard đang áp dụng, nên luôn khớp với hành vi thật của ứng dụng."
         />
@@ -95,7 +92,7 @@ export default function RolesPage() {
               grid on a phone is a scrollbar with a table behind it. */}
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-left text-sm">
-              <thead className="bg-[#f8fbff] text-[11px] font-bold text-[#71819a]">
+              <thead className="border-b border-[#f1f5f9] bg-[#f8fafc] text-xs font-medium text-[#64748b]">
                 <tr>
                   <th scope="col" className="px-5 py-4">Vai trò</th>
                   {AREAS.map((area) => (
@@ -103,15 +100,15 @@ export default function RolesPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#edf2fa]">
+              <tbody className="divide-y divide-[#f1f5f9]">
                 {rows.map((row) => (
                   <tr key={row.role} className="transition-colors hover:bg-[#f8fbff]">
                     <th scope="row" className="px-5 py-4 text-left align-top">
                       <div className="flex items-center gap-3">
                         <CellIcon icon={ShieldCheck} />
                         <span className="min-w-0">
-                          <span className="block font-bold text-[#40546f]">{row.label}</span>
-                          <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#8a98ac]">{row.role}</code>
+                          <span className="block font-bold text-[#334155]">{row.label}</span>
+                          <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#94a3b8]">{row.role}</code>
                         </span>
                       </div>
                     </th>
@@ -126,20 +123,20 @@ export default function RolesPage() {
             </table>
           </div>
 
-          <ul className="divide-y divide-[#edf2fa] lg:hidden">
+          <ul className="divide-y divide-[#f1f5f9] lg:hidden">
             {rows.map((row) => (
               <li key={row.role} className="p-4">
                 <div className="flex items-center gap-3">
                   <CellIcon icon={ShieldCheck} />
                   <span className="min-w-0">
-                    <span className="block font-bold text-[#40546f]">{row.label}</span>
-                    <code className="mt-0.5 block font-mono text-[11px] text-[#8a98ac]">{row.role}</code>
+                    <span className="block font-bold text-[#334155]">{row.label}</span>
+                    <code className="mt-0.5 block font-mono text-[11px] text-[#94a3b8]">{row.role}</code>
                   </span>
                 </div>
                 <dl className="mt-3 space-y-2">
                   {row.areas.map((cell) => (
                     <div key={cell.id} className="flex items-center justify-between gap-3">
-                      <dt className="min-w-0 truncate text-sm text-[#647793]">
+                      <dt className="min-w-0 truncate text-sm text-[#64748b]">
                         {AREAS.find((area) => area.id === cell.id)?.label}
                       </dt>
                       <dd className="shrink-0">
@@ -158,17 +155,17 @@ export default function RolesPage() {
             title="Mỗi khu vực gồm những gì"
             description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
           />
-          <div className="grid divide-y divide-[#edf2fa] md:grid-cols-2 md:divide-x md:divide-[#edf2fa] lg:grid-cols-4 lg:divide-y-0">
+          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-4 lg:divide-y-0">
             {AREAS.map((area) => (
               <div key={area.id} className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-bold text-[#1f314d]">{area.label}</h3>
-                  <code className="rounded bg-[#edf2fa] px-1.5 py-0.5 font-mono text-[11px] text-[#2f62b8]">{area.path}</code>
+                  <h3 className="font-bold text-[#1e293b]">{area.label}</h3>
+                  <code className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11px] text-[#2563eb]">{area.path}</code>
                 </div>
-                <p className="mt-1.5 text-xs leading-5 text-[#71819a]">{area.purpose}</p>
+                <p className="mt-1.5 text-xs leading-5 text-[#64748b]">{area.purpose}</p>
                 <ul className="mt-3 space-y-1.5">
                   {(AREA_PAGES[area.id] ?? []).map((page) => (
-                    <li key={page} className="flex items-start gap-2 text-sm text-[#647793]">
+                    <li key={page} className="flex items-start gap-2 text-sm text-[#64748b]">
                       <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-[#5b91ed]" />
                       {page}
                     </li>
@@ -178,7 +175,6 @@ export default function RolesPage() {
             ))}
           </div>
         </section>
-      </div>
-    </div>
+    </StaffPage>
   )
 }
