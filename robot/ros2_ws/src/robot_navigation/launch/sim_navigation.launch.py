@@ -30,7 +30,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (LaunchConfiguration, PathJoinSubstitution,
                                   PythonExpression)
-from launch_ros.actions import Node, SetRemap
+from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
@@ -164,6 +164,13 @@ def generate_launch_description():
 
         # 5) Nav2, velocity output remapped to /cmd_vel_nav for the mux.
         GroupAction([
+            # nav2_bringup/navigation_launch.py on ROS 2 Humble uses the
+            # namespace argument to rewrite the parameter YAML root, but it
+            # does NOT push that namespace onto the Node actions itself.
+            # Without this outer push, controller_server starts globally,
+            # misses robot_01.controller_server params, falls back to DWB
+            # defaults, and fails with "No critics defined for FollowPath".
+            PushRosNamespace(robot_id),
             # Nav2 Humble's navigation_launch.py already wires an internal
             # chain, and it uses BOTH of the names this stack cares about:
             #
@@ -205,6 +212,7 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time,
                     'params_file': nav2_params_file,
                     'autostart': 'true',
+                    'use_composition': 'false',
                 }.items(),
             ),
         ]),
