@@ -29,7 +29,7 @@ function useOverlay(open: boolean, onClose: () => void) {
   return panelRef
 }
 
-const scrim = 'fixed inset-0 bg-[#1f314d]/30 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0'
+const scrim = 'fixed inset-0 bg-[#0f172a]/25 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
 
 /**
  * Every operational action that ends, overrides or re-routes something goes
@@ -44,6 +44,9 @@ export function ConfirmationDialog({
   tone = 'default',
   requireReason = false,
   reasonLabel = 'Lý do / ghi chú',
+  withReason = true,
+  reasonPlaceholder = 'Ghi lại để đồng nghiệp và nhật ký vận hành hiểu vì sao…',
+  busyLabel = 'Đang gửi…',
   busy = false,
   error,
   onConfirm,
@@ -57,6 +60,10 @@ export function ConfirmationDialog({
   tone?: 'default' | 'danger'
   requireReason?: boolean
   reasonLabel?: string
+  /** False for a decision that needs no note (e.g. approving a group). */
+  withReason?: boolean
+  reasonPlaceholder?: string
+  busyLabel?: string
   busy?: boolean
   error?: string | null
   onConfirm: (reason: string) => void
@@ -72,7 +79,7 @@ export function ConfirmationDialog({
   }
   const panelRef = useOverlay(open, close)
   if (!open) return null
-  const missingReason = requireReason && !reason.trim()
+  const missingReason = withReason && requireReason && !reason.trim()
   const danger = tone === 'danger'
 
   return (
@@ -84,7 +91,7 @@ export function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative z-10 w-full max-w-lg rounded-2xl border border-[#dce9fb] bg-white p-6 shadow-[0_24px_64px_rgba(31,49,77,0.24)] transition-[opacity,transform] duration-200 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 focus-visible:outline-none"
+        className="relative z-10 w-full max-w-lg rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-[0_20px_48px_rgba(31,49,77,0.18)] transition-[opacity,transform] duration-200 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none"
       >
         <div className="flex items-start gap-3">
           {danger && (
@@ -93,23 +100,27 @@ export function ConfirmationDialog({
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-lg font-bold tracking-[-0.01em] text-[#1f314d]">{title}</h2>
-            <div className="mt-1.5 text-sm leading-6 text-[#647793]">{description}</div>
+            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#0f172a]">{title}</h2>
+            <div className="mt-1.5 text-sm leading-6 text-[#64748b]">{description}</div>
           </div>
         </div>
         {children && <div className="mt-5">{children}</div>}
-        <label htmlFor={reasonId} className="mt-5 block text-xs font-bold text-[#516783]">
-          {reasonLabel}{requireReason ? ' (bắt buộc)' : ' (tùy chọn)'}
-        </label>
-        <textarea
-          id={reasonId}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          maxLength={500}
-          rows={3}
-          placeholder="Ghi lại để đồng nghiệp và nhật ký vận hành hiểu vì sao…"
-          className="mt-2 w-full rounded-xl border border-[#dce9fb] px-3 py-2 text-sm text-[#40546f] outline-none placeholder:text-[#a8b6c9] focus:border-[#6ba0ff] focus:ring-2 focus:ring-[#4f8df7]/20"
-        />
+        {withReason && (
+          <>
+            <label htmlFor={reasonId} className="mt-5 block text-[13px] font-medium text-[#334155]">
+              {reasonLabel}{requireReason ? ' (bắt buộc)' : ' (tùy chọn)'}
+            </label>
+            <textarea
+              id={reasonId}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder={reasonPlaceholder}
+              className="mt-2 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 text-sm text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#6ba0ff] focus:ring-2 focus:ring-[#2563eb]/20"
+            />
+          </>
+        )}
         {error && <p role="alert" className="mt-3 rounded-xl border border-[#f5c8c2] bg-[#fff1ef] px-3 py-2 text-sm font-semibold text-[#b23e31]">{error}</p>}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={close} className={buttonClass('secondary')}>Quay lại</button>
@@ -119,7 +130,7 @@ export function ConfirmationDialog({
             onClick={() => onConfirm(reason.trim())}
             className={danger ? `${buttonClass('secondary')} !border-[#c9534a] !bg-[#c9534a] !text-white hover:!bg-[#b23e31] disabled:!opacity-50` : buttonClass('primary')}
           >
-            {busy ? 'Đang gửi…' : confirmLabel}
+            {busy ? busyLabel : confirmLabel}
           </button>
         </div>
       </div>
@@ -128,8 +139,8 @@ export function ConfirmationDialog({
 }
 
 /** A right-hand sheet for a task with its own steps, e.g. choosing a replacement robot. */
-export function Drawer({ open, title, description, onClose, children, footer }: {
-  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode
+export function Drawer({ open, title, description, onClose, children, footer, wide = false }: {
+  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean
 }) {
   const titleId = useId()
   const panelRef = useOverlay(open, onClose)
@@ -143,17 +154,17 @@ export function Drawer({ open, title, description, onClose, children, footer }: 
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="absolute top-0 right-0 z-10 flex h-full w-full max-w-md flex-col border-l border-[#dce9fb] bg-white shadow-[-24px_0_64px_rgba(31,49,77,0.18)] transition-transform duration-300 ease-out starting:translate-x-full focus-visible:outline-none"
+        className={`absolute top-0 right-0 z-10 flex h-full w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} border-l border-[#e2e8f0] bg-white shadow-[-24px_0_64px_rgba(31,49,77,0.18)] transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none focus-visible:outline-none`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#edf2fa] px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-[#f1f5f9] px-6 py-5">
           <div>
-            <h2 id={titleId} className="text-lg font-bold text-[#1f314d]">{title}</h2>
-            {description && <p className="mt-1 text-sm leading-6 text-[#71819a]">{description}</p>}
+            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#0f172a]">{title}</h2>
+            {description && <p className="mt-1 text-sm leading-6 text-[#64748b]">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Đóng" className="grid size-9 shrink-0 place-items-center rounded-xl text-[#8a98ac] hover:bg-[#eef2f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7]"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Đóng" className="grid size-9 shrink-0 place-items-center rounded-xl text-[#94a3b8] hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]"><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        {footer && <div className="border-t border-[#edf2fa] px-6 py-4">{footer}</div>}
+        {footer && <div className="border-t border-[#f1f5f9] px-6 py-4">{footer}</div>}
       </div>
     </div>
   )

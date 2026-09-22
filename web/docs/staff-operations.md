@@ -24,6 +24,10 @@ Step               PreparingStart · Navigating · PreparingView · Observing ·
                    HeldAtPoi · ReturningFront · ReturningToEnd · Finished
 ```
 
+An Admin-only account can open `/staff/*` but every run action is locked with
+the reason "Cần vai trò Nhân viên vận hành (Staff)" (scope §2.1 "Admin cần thêm
+role Staff"); the mock server also refuses such calls with 403.
+
 Every button's availability comes from the server (`allowedActions`, each with a
 reason). A disabled button always prints its reason. The screen never decides.
 
@@ -72,7 +76,8 @@ src/features/staff/components/        OperationControls, RunStatus, TourTimeline
 - Around 110 s a FRONT command fails → **Thử lại FRONT**.
 - T-02 is Ready but the robot is busy: Start stays disabled with the reason.
   End T-01 early, confirm the robot on `/staff/robot`, then start T-02.
-- T-03 is Scheduled (1 group waiting for Admin approval).
+- T-03 is Scheduled (1 group waiting for Admin approval). Approve it and Chốt Tour
+  as `admin/admin` (`/admin/tours/tour-03`), or Chốt T-05, and Staff can start it.
 
 ## Switching to the real backend
 

@@ -113,7 +113,7 @@ export function RobotTelemetry({ robot, now }: { robot: AmrStatus; now: number }
     {
       label: 'Đầu xoay',
       value: robot.headFault ? (
-        <span className="font-bold text-[#dc2626]">Lỗi · lệnh cuối {robot.headPreset ?? '—'}</span>
+        <span className="font-bold text-[#dc2626]">Lỗi · lệnh cuối {robot.headPreset ?? '-'}</span>
       ) : robot.headPreset ? (
         `${robot.headPreset} · ${HEAD_LABEL[robot.headPreset]}`
       ) : (

@@ -8,6 +8,7 @@ import ToursTodayPage from './ToursTodayPage'
 import { OperationControls } from '../../features/staff/components/OperationControls'
 import { RunStatus } from '../../features/staff/components/RunStatus'
 import { command, confirmRobotReady, resetSim, tick, tourById, tourView } from '../../mocks/staff-sim'
+import { useAuthStore } from '../../stores/auth-store'
 
 /**
  * The operator workflow as a person meets it (remote-tour scope): the right
@@ -28,8 +29,14 @@ function renderAt(path: string, element: ReactNode, route: string) {
 }
 
 describe('staff session workflow', () => {
-  beforeEach(() => resetSim())
-  afterEach(() => resetSim())
+  beforeEach(() => {
+    resetSim()
+    useAuthStore.getState().setAuth('test-token', { userId: 'test-staff', username: 'staff', role: 'Staff' })
+  })
+  afterEach(() => {
+    resetSim()
+    useAuthStore.getState().logout()
+  })
 
   it('keeps live state and missing telemetry visible in the compact status card', () => {
     renderAt('/staff/live/tour-01', <RunStatus tour={tourView(tourById('tour-01')!)} now={Date.now()} compact />, '/staff/live/:tourId')
@@ -47,7 +54,7 @@ describe('staff session workflow', () => {
     expect(within(row('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
     expect(within(row('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
     expect(within(row('T-03')).getByRole('link', { name: 'Xem chi tiết' })).toBeInTheDocument()
-    expect(within(row('T-03')).getByText(/chờ Admin duyệt/)).toBeInTheDocument()
+    expect(within(row('T-03')).getByText(/Còn 1 đăng ký chờ duyệt/)).toBeInTheDocument()
     expect(within(table).queryByRole('button', { name: /Bắt đầu/ })).toBeNull()
   })
 

@@ -102,7 +102,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
           role="status"
           className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-3.5 text-sm text-[#475569] shadow-xs"
         >
-          Buổi đã {statusLabel(tour.state).toLowerCase()}{tour.endReason ? ` — ${tour.endReason}` : ''}. Live và AI của
+          Buổi đã {statusLabel(tour.state).toLowerCase()}{tour.endReason ? `: ${tour.endReason}` : ''}. Live và AI của
           học sinh đã đóng.
         </div>
       )}
