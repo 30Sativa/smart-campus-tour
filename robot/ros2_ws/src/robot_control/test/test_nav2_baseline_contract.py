@@ -7,6 +7,7 @@ runtime behaviour - that is robot_navigation/README.md section "Acceptance
 tests on the real robot".
 """
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -130,6 +131,59 @@ def test_rpp_regulation_is_actually_active():
     params = _follow_path()
     assert params['use_regulated_linear_velocity_scaling'] is True
     assert params['regulated_linear_scaling_min_speed'] < params['desired_linear_vel']
+
+
+def test_heading_and_recovery_turns_share_the_supervised_speed_envelope():
+    """Recovery must not retain the old fast spin after RPP is slowed down."""
+    params = _nav2_params()
+    rpp = _follow_path()
+    behavior = params['behavior_server']['ros__parameters']
+    smoother = params['velocity_smoother']['ros__parameters']
+    limit = smoother['max_velocity'][2]
+    assert 0.0 < limit <= 0.40
+    assert smoother['min_velocity'][2] == -limit
+    assert 0.0 < rpp['rotate_to_heading_angular_vel'] <= limit
+    assert (0.0 < behavior['min_rotational_vel'] <
+            behavior['max_rotational_vel'] <= limit)
+
+
+def test_turn_acceleration_is_limited_without_weakening_braking():
+    """Check the downstream ramp as well as each turn producer's settings."""
+    params = _nav2_params()
+    smoother = params['velocity_smoother']['ros__parameters']
+    accel = smoother['max_accel'][2]
+    assert 0.0 < _follow_path()['max_angular_accel'] <= accel <= 0.50
+    assert (0.0 < params['behavior_server']['ros__parameters'][
+        'rotational_acc_lim'] <= accel)
+    # Startup ramp changes must not silently reduce the existing brake limit.
+    assert smoother['max_decel'] == [-0.50, 0.0, -2.50]
+    assert smoother['velocity_timeout'] == 0.5
+
+
+def test_progress_timeout_budgets_slow_half_turn_then_translation():
+    """Ideal timing budget, not proof of physical acceleration or progress.
+
+    SimpleProgressChecker only counts translation. Budget a trapezoidal
+    180-degree turn, then the progress radius plus one grid cell at the
+    regulated minimum cruise speed, and two seconds of scheduling margin.
+    """
+    params = _nav2_params()
+    controller = params['controller_server']['ros__parameters']
+    progress = controller[controller['progress_checker_plugin']]
+    rpp = controller['FollowPath']
+    smoother = params['velocity_smoother']['ros__parameters']
+    speed = rpp['rotate_to_heading_angular_vel']
+    accel = min(rpp['max_angular_accel'], smoother['max_accel'][2],
+                -smoother['max_decel'][2])
+    assert speed > 0.0 and accel > 0.0
+    if math.pi >= speed * speed / accel:
+        turn_seconds = math.pi / speed + speed / accel
+    else:
+        turn_seconds = 2.0 * math.sqrt(math.pi / accel)
+    travel_seconds = (
+        progress['required_movement_radius'] + _local_costmap()['resolution']
+    ) / rpp['regulated_linear_scaling_min_speed']
+    assert progress['movement_time_allowance'] >= turn_seconds + travel_seconds + 2.0
 
 
 def test_rpp_lookahead_is_not_shorter_than_the_robot():

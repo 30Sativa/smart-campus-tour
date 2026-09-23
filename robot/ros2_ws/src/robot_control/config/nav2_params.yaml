@@ -72,8 +72,9 @@ controller_server:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.20
       # RPP rotates in place before moving off (use_rotate_to_heading), and an
-      # in-place rotation counts as zero progress. 15 s covers a 180 deg turn
-      # at 0.8 rad/s with margin.
+      # in-place rotation counts as zero progress. Keep 15 s for the slower
+      # turn: pi/0.35 + 0.35/0.50 ~= 9.7 s before translation. The contract
+      # test also budgets translation past required_movement_radius.
       movement_time_allowance: 15.0
 
     goal_checker:
@@ -119,12 +120,13 @@ controller_server:
       # allow_reversing - RPP force-disables reversing if both are true.
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      # <= velocity_smoother max theta (1.20) so the smoother never has to
-      # clip the controller's own request.
-      rotate_to_heading_angular_vel: 0.80
-      # <= velocity_smoother max_accel theta (2.50). Conservative: the STM32
-      # stepper base does not like sharp angular steps.
-      max_angular_accel: 1.50
+      # Supervised turn test: ~20 deg/s. Recovery Spin and the smoother share
+      # a 0.40 rad/s ceiling so recovery cannot suddenly request a fast turn.
+      # Acceptance and rollback: robot/docs/nav2-turn-test.md.
+      rotate_to_heading_angular_vel: 0.35
+      # Match smoother acceleration: +0.05 rad/s per controller tick at 10 Hz.
+      # Actual smoothness still needs hardware measurement.
+      max_angular_accel: 0.50
 
       # BASELINE POLICY: no autonomous reverse. Rear sonar pose is schematic
       # and there is no rear LiDAR/depth. See bt_navigator above.
@@ -409,9 +411,12 @@ behavior_server:
     robot_base_frame: base_footprint
     transform_tolerance: 0.2
     simulate_ahead_time: 2.0
-    max_rotational_vel: 1.20
-    min_rotational_vel: 0.20
-    rotational_acc_lim: 2.50
+    # Recovery Spin has its own speed settings, separate from RPP heading
+    # alignment. In Humble its acceleration parameter controls the stopping
+    # speed calculation; the downstream smoother provides the startup ramp.
+    max_rotational_vel: 0.40
+    min_rotational_vel: 0.10
+    rotational_acc_lim: 0.50
 
 waypoint_follower:
   ros__parameters:
@@ -430,9 +435,13 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: OPEN_LOOP
-    max_velocity: [0.20, 0.0, 1.20]
-    min_velocity: [-0.20, 0.0, -1.20]
-    max_accel: [0.50, 0.0, 2.50]
+    # Bound both rotation directions, including path turns and recovery.
+    max_velocity: [0.20, 0.0, 0.40]
+    min_velocity: [-0.20, 0.0, -0.40]
+    max_accel: [0.50, 0.0, 0.50]
+    # Preserve braking limits for this test; lowering startup acceleration
+    # must not also lengthen commanded stopping distance. This is not a
+    # jerk-limited controller, and manual/e-stop commands bypass this node.
     max_decel: [-0.50, 0.0, -2.50]
     odom_topic: odom
     odom_duration: 0.1
