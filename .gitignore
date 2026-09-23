@@ -463,3 +463,7 @@ _to_delete/
 
 # Thu muc do Claude desktop tao khi gui file ve may. Khong thuoc source.
 Claude outputs/
+
+# Agent skills (cai local, khong thuoc source)
+.agents/
+.aider-desk/
