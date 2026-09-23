@@ -45,6 +45,16 @@ def _install_ros_stubs():
     sensor_msgs.msg = sensor_msgs_msg
     sensor_msgs_msg.Range = type('Range', (), {'ULTRASOUND': 0})
 
+    class JointState:
+        def __init__(self):
+            self.header = SimpleNamespace(stamp=None)
+            self.name = []
+            self.position = []
+            self.velocity = []
+            self.effort = []
+
+    sensor_msgs_msg.JointState = JointState
+
     class Imu:
         def __init__(self):
             self.header = SimpleNamespace(stamp=None, frame_id='')
@@ -438,9 +448,15 @@ class _FeedbackHarness:
         model = OdometryModel()
         self.steps_per_meter = model.steps_per_meter
         self.wheel_base = model.wheel_base
+        self.wheel_radius = 0.09725
         self._x = 0.0
         self._y = 0.0
         self._theta = 0.0
+        self._left_wheel_position = 0.0
+        self._right_wheel_position = 0.0
+        self.published_joint_states = []
+        self._joint_state_pub = SimpleNamespace(
+            publish=self.published_joint_states.append)
         self.max_steps_per_sec = 12000.0
         self.send_rate_hz = 20.0
         self._last_count_jump_warn_time = 0.0
@@ -469,6 +485,7 @@ class _FeedbackHarness:
     _diff_signed_32 = staticmethod(Stm32BridgeNode._diff_signed_32)
     _warn_if_count_jump = Stm32BridgeNode._warn_if_count_jump
     _update_odometry = Stm32BridgeNode._update_odometry
+    _publish_joint_state = Stm32BridgeNode._publish_joint_state
     _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
 
 
@@ -489,6 +506,7 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
     harness._parse_feedback_line = lambda *args, **kwargs: next(samples)
     harness.get_clock = lambda: SimpleNamespace(now=lambda: SimpleNamespace(
         nanoseconds=0,
+        to_msg=lambda: 'stamp',
     ))
 
     Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
@@ -498,6 +516,8 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
     assert harness._x == 0.0
     assert harness._y == 0.0
     assert harness._theta == 0.0
+    assert len(harness.published_joint_states) == 1
+    assert harness.published_joint_states[0].position == [0.0, 0.0]
 
     Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
 
@@ -508,6 +528,7 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
     approx(harness._x, expected_ten_steps, tol=1e-12)
     approx(harness._y, 0.0, tol=1e-12)
     approx(harness._theta, 0.0, tol=1e-12)
+    assert len(harness.published_joint_states) == 2
 
     Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
 
@@ -518,6 +539,66 @@ def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
     approx(harness._y, 0.0, tol=1e-12)
     approx(harness._theta, 0.0, tol=1e-12)
     assert len(harness.published_odometry) == 1
+    assert len(harness.published_joint_states) == 3
+
+
+def test_joint_states_follow_corrected_feedback_deltas_and_refresh_at_stop():
+    harness = _FeedbackHarness()
+    harness.odom_invert_left = True
+    harness.odom_invert_right = True
+    harness._publish_odometry = lambda *args: None
+    harness._publish_imu = lambda *args: None
+    harness._publish_sonar_range = lambda *args: None
+    samples = iter([
+        (1, 100, 200, 20.0, 'OK', None, None,
+         None, None, None, None),
+        (2, 90, 180, 20.0, 'OK', None, None,
+         None, None, None, None),
+        (3, 90, 180, 20.0, 'STOP', None, None,
+         None, None, None, None),
+    ])
+    harness._parse_feedback_line = lambda *args, **kwargs: next(samples)
+    stamps = iter([100, 120, 140])
+
+    def now():
+        stamp = next(stamps)
+        return SimpleNamespace(
+            nanoseconds=stamp * 1000000,
+            to_msg=lambda: stamp,
+        )
+
+    harness.get_clock = lambda: SimpleNamespace(now=now)
+
+    for _ in range(3):
+        Stm32BridgeNode._handle_feedback_line(harness, 'ignored')
+
+    messages = harness.published_joint_states
+    assert len(messages) == 3
+    assert [msg.header.stamp for msg in messages] == [100, 120, 140]
+    assert all(msg.name == ['left_wheel_joint', 'right_wheel_joint']
+               for msg in messages)
+    assert all(msg.velocity == [] and msg.effort == [] for msg in messages)
+    assert messages[0].position == [0.0, 0.0]
+    expected_left = 10 / harness.steps_per_meter / harness.wheel_radius
+    expected_right = 20 / harness.steps_per_meter / harness.wheel_radius
+    approx(messages[1].position[0], expected_left, tol=1e-12)
+    approx(messages[1].position[1], expected_right, tol=1e-12)
+    assert messages[2].position == messages[1].position
+    # Joint publication observes feedback; wheel odometry still integrates it.
+    expected_theta = 10 / harness.steps_per_meter / harness.wheel_base
+    approx(harness._x, 15 / harness.steps_per_meter *
+           math.cos(expected_theta / 2), tol=1e-12)
+
+
+def test_joint_states_use_relative_topic_and_leave_wheel_tf_to_rsp():
+    node_path = os.path.join(_PKG_ROOT, 'stm32_bridge',
+                             'stm32_bridge_node.py')
+    with open(node_path, encoding='utf-8') as source:
+        bridge_source = source.read()
+    assert "JointState, 'joint_states'" in bridge_source
+    assert 'left_wheel_link' not in bridge_source
+    assert 'right_wheel_link' not in bridge_source
+    assert bridge_source.count('sendTransform(') == 1
 
 
 def test_diff_drive_vy_constraint_variance():

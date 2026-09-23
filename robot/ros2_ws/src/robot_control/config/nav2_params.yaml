@@ -191,8 +191,10 @@ local_costmap:
       # turned away stays marked until the robot faces it again. Verify on
       # hardware - see robot_navigation/README.md acceptance test D.
       # -------------------------------------------------------------------
-      plugins: ["lidar_obstacle_layer", "depth_obstacle_layer", "sonar_layer",
-                "inflation_layer"]
+      # Temporary sonar-OFF baseline. Do not load RangeSensorLayer: on Humble
+      # updateBounds still processes readings even when enabled is false.
+      # Keep its configuration below for a later, isolated hardware retest.
+      plugins: ["lidar_obstacle_layer", "depth_obstacle_layer", "inflation_layer"]
 
       lidar_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -243,7 +245,7 @@ local_costmap:
           max_obstacle_height: 1.20
           # 0.0 is what makes enable_camera:=false safe: with no publisher on
           # the topic the layer simply never marks, stays "current", and the
-          # costmap keeps updating from LiDAR + sonar. A positive value here
+          # costmap keeps updating from LiDAR. A positive value here
           # would mark the layer stale and block navigation whenever the
           # camera is off or unplugged.
           expected_update_rate: 0.0
@@ -266,7 +268,9 @@ local_costmap:
       #     on a sonar reading except the costmap -> RPP collision check.
       sonar_layer:
         plugin: "nav2_costmap_2d::RangeSensorLayer"
-        enabled: true
+        # Dormant: also excluded from plugins above. Revisit the bridge's
+        # invalid-reading semantics and Humble timeout recovery before reuse.
+        enabled: false
         topics: ["$(var robot_ns)/ultrasonic/sonar1/range",
                  "$(var robot_ns)/ultrasonic/sonar2/range",
                  "$(var robot_ns)/ultrasonic/sonar3/range",

@@ -6,7 +6,7 @@ from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Imu, Range
+from sensor_msgs.msg import Imu, JointState, Range
 from tf2_ros import TransformBroadcaster
 
 try:
@@ -259,6 +259,8 @@ class Stm32BridgeNode(Node):
         self._x = 0.0
         self._y = 0.0
         self._theta = 0.0
+        self._left_wheel_position = 0.0
+        self._right_wheel_position = 0.0
         self._imu_pub = None
         self._last_imu_measurement: Optional[Tuple[float, Optional[int]]] = None
         self._last_left_count: Optional[int] = None
@@ -274,6 +276,8 @@ class Stm32BridgeNode(Node):
 
         self._odom_pub = None
         self._tf_broadcaster = None
+        self._joint_state_pub = self.create_publisher(
+            JointState, 'joint_states', 10)
         self._sonar1_pub = None
         self._sonar2_pub = None
         self._sonar3_pub = None
@@ -549,6 +553,7 @@ class Stm32BridgeNode(Node):
         self._last_feedback_ros_sec = now_ros_sec
 
         if delta_left_count is None or delta_right_count is None:
+            self._publish_joint_state(now_ros)
             return
 
         # NOTE: do NOT reuse invert_left/invert_right here. The firmware STEP
@@ -571,6 +576,7 @@ class Stm32BridgeNode(Node):
             delta_right_count,
             dt,
         )
+        self._publish_joint_state(now_ros, delta_left_count, delta_right_count)
 
         # Invalid dt means velocity is unavailable, but the STEP delta is still
         # a valid pose measurement. Keep the integration and omit this sample
@@ -579,6 +585,20 @@ class Stm32BridgeNode(Node):
             return
 
         self._publish_odometry(now_ros, linear_velocity, angular_velocity)
+
+    def _publish_joint_state(
+            self, stamp, delta_left_count: int = 0,
+            delta_right_count: int = 0):
+        self._left_wheel_position += (
+            delta_left_count / self.steps_per_meter / self.wheel_radius)
+        self._right_wheel_position += (
+            delta_right_count / self.steps_per_meter / self.wheel_radius)
+
+        msg = JointState()
+        msg.header.stamp = stamp.to_msg()
+        msg.name = ['left_wheel_joint', 'right_wheel_joint']
+        msg.position = [self._left_wheel_position, self._right_wheel_position]
+        self._joint_state_pub.publish(msg)
 
     def _publish_imu(self, stamp, yaw_rad: Optional[float],
                      yaw_acc: Optional[int]):

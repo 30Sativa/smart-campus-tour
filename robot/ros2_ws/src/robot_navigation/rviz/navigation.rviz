@@ -1,6 +1,11 @@
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Sonar - display only1
+      Splitter Ratio: 0.55
   - Class: rviz_common/Views
     Name: Views
   - Class: nav2_rviz_plugins/Navigation 2
@@ -27,6 +32,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Global Costmap
       Enabled: true
+      Alpha: 0.3
       Topic:
         Value: /global_costmap/costmap
         Durability Policy: Transient Local
@@ -36,6 +42,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Local Costmap
       Enabled: true
+      Alpha: 0.6
       Topic:
         Value: /local_costmap/costmap
         Durability Policy: Transient Local
@@ -61,11 +68,70 @@ Visualization Manager:
       Style: Points
       Color Transformer: AxisColor
       Value: true
+    # Checkboxes only control visualization; they do not enable costmap layers.
+    - Class: rviz_common/Group
+      Name: Sonar - display only
+      Enabled: true
+      Displays:
+        - Class: rviz_default_plugins/Range
+          Name: Sonar 1 - Front Left
+          Enabled: false
+          Topic:
+            Value: /ultrasonic/sonar1/range
+            Depth: 5
+            History Policy: Keep Last
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+          Color: 0; 220; 80
+          Alpha: 0.45
+          Buffer Length: 1
+          Value: false
+        - Class: rviz_default_plugins/Range
+          Name: Sonar 2 - Front Right
+          Enabled: false
+          Topic:
+            Value: /ultrasonic/sonar2/range
+            Depth: 5
+            History Policy: Keep Last
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+          Color: 255; 210; 0
+          Alpha: 0.45
+          Buffer Length: 1
+          Value: false
+        - Class: rviz_default_plugins/Range
+          Name: Sonar 3 - Rear Left
+          Enabled: false
+          Topic:
+            Value: /ultrasonic/sonar3/range
+            Depth: 5
+            History Policy: Keep Last
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+          Color: 0; 160; 255
+          Alpha: 0.45
+          Buffer Length: 1
+          Value: false
+        - Class: rviz_default_plugins/Range
+          Name: Sonar 4 - Rear Right
+          Enabled: false
+          Topic:
+            Value: /ultrasonic/sonar4/range
+            Depth: 5
+            History Policy: Keep Last
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+          Color: 255; 100; 180
+          Alpha: 0.45
+          Buffer Length: 1
+          Value: false
     - Class: rviz_default_plugins/RobotModel
       Name: RobotModel
       Enabled: true
       Description Topic:
         Value: /robot_description
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
       Value: true
     - Class: rviz_default_plugins/TF
       Name: TF
@@ -80,14 +146,23 @@ Visualization Manager:
       Color: 0; 255; 0
       Value: true
     - Class: rviz_default_plugins/Path
-      Name: Local Path
+      Name: RPP Transformed Path
       Enabled: true
       Topic:
-        Value: /local_plan
+        Value: /received_global_plan
         Reliability Policy: Reliable
       Color: 255; 0; 255
       Value: true
-    - Class: rviz_default_plugins/PoseArray
+    - Class: rviz_default_plugins/Polygon
+      Name: Local Footprint
+      Enabled: true
+      Topic:
+        Value: /local_costmap/published_footprint
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Color: 0; 255; 255
+      Value: true
+    - Class: nav2_rviz_plugins/ParticleCloud
       Name: AMCL Particles
       Enabled: true
       Topic:
@@ -107,9 +182,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/SetInitialPose
       Topic:
         Value: /initialpose
-    - Class: rviz_default_plugins/SetGoal
-      Topic:
-        Value: /goal_pose
+    - Class: nav2_rviz_plugins/GoalTool
   Views:
     Current:
       Class: rviz_default_plugins/Orbit

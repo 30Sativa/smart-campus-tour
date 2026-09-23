@@ -187,10 +187,12 @@ def test_global_costmap_has_no_depth_or_sonar():
 # ----------------------------------------------------------- local costmap
 
 
-def test_local_costmap_separates_lidar_depth_and_sonar():
+def test_local_costmap_keeps_lidar_depth_and_disables_sonar():
     costmap = _local_costmap()
+    # Sonar is intentionally not loaded in the temporary hardware baseline.
+    # Humble still processes Range messages when only enabled=false is set.
     assert costmap['plugins'] == ['lidar_obstacle_layer', 'depth_obstacle_layer',
-                                  'sonar_layer', 'inflation_layer']
+                                  'inflation_layer']
 
     lidar = costmap['lidar_obstacle_layer']
     assert lidar['plugin'] == OBSTACLE_LAYER
@@ -204,10 +206,66 @@ def test_local_costmap_separates_lidar_depth_and_sonar():
 
     sonar = costmap['sonar_layer']
     assert sonar['plugin'] == 'nav2_costmap_2d::RangeSensorLayer'
+    assert sonar['enabled'] is False
     assert len(sonar['topics']) == 4
 
     inflation = costmap['inflation_layer']
     assert inflation['plugin'] == 'nav2_costmap_2d::InflationLayer'
+
+
+def test_navigation_rviz_has_four_independent_sonar_displays_off_by_default():
+    config = yaml.safe_load(_read('robot_navigation/rviz/navigation.rviz'))
+    displays = config['Visualization Manager']['Displays']
+    group = next(display for display in displays
+                 if display['Name'] == 'Sonar - display only')
+    assert group['Class'] == 'rviz_common/Group'
+    assert group['Enabled'] is True
+    sonars = group['Displays']
+    assert len(sonars) == 4
+    assert len({display['Color'] for display in sonars}) == 4
+    for index, display in enumerate(sonars, start=1):
+        assert display['Class'] == 'rviz_default_plugins/Range'
+        assert display['Enabled'] is False
+        assert display['Value'] is False
+        assert display['Topic']['Value'] == f'/ultrasonic/sonar{index}/range'
+        assert display['Topic']['Reliability Policy'] == 'Best Effort'
+        assert display['Buffer Length'] == 1
+
+
+def test_navigation_rviz_matches_humble_amcl_and_rpp_interfaces():
+    config = yaml.safe_load(_read('robot_navigation/rviz/navigation.rviz'))
+    manager = config['Visualization Manager']
+    by_name = {display['Name']: display for display in manager['Displays']}
+    assert manager['Global Options']['Fixed Frame'] == 'map'
+    assert by_name['AMCL Particles']['Class'] == 'nav2_rviz_plugins/ParticleCloud'
+    assert (by_name['RPP Transformed Path']['Topic']['Value']
+            == '/received_global_plan')
+    assert (by_name['Local Footprint']['Topic']['Value']
+            == '/local_costmap/published_footprint')
+    assert any(tool['Class'] == 'nav2_rviz_plugins/GoalTool'
+               for tool in manager['Tools'])
+
+
+def test_navigation_rviz_is_in_package_install_data():
+    import ast
+    import os
+
+    tree = ast.parse(_read('robot_navigation/setup.py'))
+    setup_call = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.Call)
+                      and isinstance(node.func, ast.Name)
+                      and node.func.id == 'setup')
+    data_files = next(arg.value for arg in setup_call.keywords
+                      if arg.arg == 'data_files')
+    package = SRC / 'robot_navigation'
+    entries = eval(compile(ast.Expression(data_files), '<data_files>', 'eval'), {
+        '__builtins__': {}, 'os': os, 'package_name': 'robot_navigation',
+        'glob': lambda pattern: [str(path.relative_to(package))
+                                 for path in package.glob(pattern)],
+    })
+    destination = os.path.join('share', 'robot_navigation', 'rviz')
+    installed = dict(entries)[destination]
+    assert os.path.join('rviz', 'navigation.rviz') in installed
 
 
 def test_obstacle_layers_combine_with_maximum():
@@ -233,7 +291,7 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
     """enable_camera:=false leaves camera/depth/points with no publisher.
 
     expected_update_rate 0.0 tells ObstacleLayer never to mark itself stale,
-    so the local costmap keeps updating from LiDAR + sonar and the lifecycle
+    so the local costmap keeps updating from LiDAR and the lifecycle
     transition still succeeds.
     """
     depth = _local_costmap()['depth_obstacle_layer']['pointcloud']

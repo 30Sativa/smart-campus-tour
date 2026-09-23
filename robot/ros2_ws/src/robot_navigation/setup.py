@@ -18,6 +18,8 @@ setup(
          glob(os.path.join('launch', '*.launch.py'))),
         (os.path.join('share', package_name, 'config'),
          glob(os.path.join('config', '*.yaml'))),
+        (os.path.join('share', package_name, 'rviz'),
+         glob(os.path.join('rviz', '*.rviz'))),
         (os.path.join('share', package_name, 'maps'),
          glob(os.path.join('maps', '*.yaml')) + glob(os.path.join('maps', '*.pgm'))),
         # bt_navigator resolves these through

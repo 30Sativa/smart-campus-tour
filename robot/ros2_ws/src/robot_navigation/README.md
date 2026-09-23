@@ -56,6 +56,37 @@ số Phase 2 đã hiệu chỉnh.
 
 ## Nav2 baseline (A→B trên robot thật)
 
+**Baseline tạm thời: cả 4 sonar OFF trong Nav2.**
+`robot/ros2_ws/src/robot_control/config/nav2_params.yaml` loại `sonar_layer`
+khỏi danh sách `local_costmap.plugins` và giữ block của nó với `enabled: false`.
+LiDAR và depth giữ nguyên. Bridge vẫn publish Range để quan sát; đây không phải
+lệnh tắt nguồn cảm biến. Chưa áp dụng patch semantic bridge hoặc timeout policy.
+Trước khi nạp lại sonar vào costmap cần xử lý đồng thời hai vấn đề đó và test
+từng sensor; chỉ đổi checkbox RViz không bật sonar vào navigation.
+
+### RViz Nav2 và bật/tắt hiển thị từng sensor
+
+Mở riêng RViz sau khi build/source package trên máy có desktop:
+
+```bash
+ros2 run rviz2 rviz2 -d "$(ros2 pkg prefix --share robot_navigation)/rviz/navigation.rviz"
+```
+
+Hoặc thêm `rviz:=true` vào lệnh launch navigation hiện tại. RViz vẫn OFF mặc định.
+Layout có map, global/local costmap, footprint, LiDAR, depth, AMCL particles,
+global path, RPP transformed path, TF và công cụ Nav2 Goal.
+Trong **Displays → Sonar - display only**, bốn mục Front Left / Front Right /
+Rear Left / Rear Right có màu riêng và đều bỏ tick sẵn. Tick từng mục để xem
+Range khi test lại; các checkbox chỉ thay đổi hiển thị, không đổi costmap,
+publisher hay nguồn điện sensor. TF cũng có thể bật riêng để kiểm tra hướng.
+
+File dành cho phiên không namespace (`robot_id:=''`), dùng `/scan`,
+`/ultrasonic/sonar1/range`, ... . Nếu chạy `robot_id:=robot_01`, cần cấu hình
+topic/action tương ứng có tiền tố `/robot_01` cho RViz trước khi gửi goal;
+layout này chưa tự thêm tiền tố theo launch argument. Frame cố định vẫn là `map`.
+
+Các mô tả sonar bên dưới chỉ áp dụng khi layer được bật lại sau kiểm chứng.
+
 ```
 Goal / tour waypoint
    │
@@ -89,7 +120,7 @@ vòng. Hệ quả trực tiếp:
 |---|---|---|
 | LiDAR thấy | global + local costmap | Planner replan vòng qua **nếu còn chỗ** |
 | Chỉ depth camera thấy | local costmap thôi | Robot **dừng / nav fail**. KHÔNG đảm bảo tự vòng |
-| Chỉ sonar thấy | local costmap thôi | Robot **dừng / nav fail**. KHÔNG đảm bảo tự vòng |
+| Chỉ sonar thấy | OFF trong baseline hiện tại | Chưa đóng góp vật cản vào navigation |
 
 Yêu cầu tối thiểu của baseline là **phát hiện + dừng an toàn**, không phải tự
 vòng. Muốn robot tự vòng vật chỉ camera thấy thì phải đưa depth vào global
@@ -103,7 +134,7 @@ vết đánh dấu sẽ đóng băng vĩnh viễn vào map).
 global_costmap                      local_costmap
 ├── static_layer   (saved map)      ├── lidar_obstacle_layer  (LaserScan)
 ├── obstacle_layer (LiDAR ONLY)     ├── depth_obstacle_layer  (PointCloud2)
-└── inflation_layer                 ├── sonar_layer           (4x Range)
+└── inflation_layer                 ├── sonar_layer           (OFF, không load)
                                     └── inflation_layer
 ```
 
@@ -142,7 +173,7 @@ KHÔNG được coi đây là bảo vệ 360°:
 
 ### Camera tắt (`enable_camera:=false`)
 
-Nav2 vẫn launch bình thường, local costmap vẫn chạy bằng LiDAR + sonar.
+Nav2 vẫn launch bình thường, local costmap chạy bằng LiDAR trong baseline sonar OFF.
 Cơ chế: `depth_obstacle_layer.pointcloud.expected_update_rate: 0.0` — layer
 không bao giờ tự đánh dấu stale khi topic không có publisher, nên lifecycle
 không fail và navigation không bị chặn. Không cần rewrite parameter lúc launch.
@@ -316,7 +347,7 @@ vào STM32.
 ```
 RPLiDAR /scan                -> local costmap + global costmap
 Astra   /camera/depth/points -> local costmap CHỈ (depth_obstacle_layer)
-4x SR04T /ultrasonic/sonarN/range -> local costmap CHỈ (sonar_layer)
+4x SR04T /ultrasonic/sonarN/range -> RViz khi bật display; sonar_layer hiện OFF
 ```
 
 `navigation.launch.py` bật camera mặc định (`enable_camera:=true`). Bộ số
@@ -365,7 +396,7 @@ làm trên xe thật, có người giám sát, tay đặt sẵn E-stop.
 2. Robot **dừng trước khi va**. Tự vòng KHÔNG phải yêu cầu của baseline.
 3. Dọn vật đi → vết phải được clear khi robot quay mặt lại nhìn.
 4. Thử: quay robot ra chỗ khác rồi dọn vật — xem vết có bị đóng băng không.
-5. Rút camera giữa chừng → navigation phải tiếp tục bằng LiDAR + sonar.
+5. Rút camera giữa chừng → navigation phải tiếp tục bằng LiDAR (sonar hiện OFF).
 
 **E. Sonar**
 1. Test **từng** sonar một, riêng lẻ (che tay trước từng cái, xem `ros2 topic echo`).
@@ -383,7 +414,7 @@ làm trên xe thật, có người giám sát, tay đặt sẵn E-stop.
 ```
 ros2 launch robot_navigation navigation.launch.py   robot_id:=robot_01 map:=/maps/campus_map.yaml enable_camera:=false
 ```
-Nav2 phải lên đủ lifecycle, local costmap vẫn chạy bằng LiDAR + sonar.
+Nav2 phải lên đủ lifecycle, local costmap vẫn chạy bằng LiDAR (sonar hiện OFF).
 
 **H. E-stop / manual override**
 1. Teleop khi đang chạy nav → manual chiếm quyền, Nav2 goal bị cancel.
