@@ -1,0 +1,43 @@
+{
+  "callbackThreads": {
+    "command": "Signalrcore websocket client",
+    "open": "Signalrcore websocket client",
+    "reconnect": "Signalrcore websocket client"
+  },
+  "closeCallbacks": 0,
+  "commandCallbackExecutions": 1,
+  "commandsReceived": 1,
+  "disconnectDetection": "send API accepted while backend stopped",
+  "disconnectObservedAt": [],
+  "errorCallbacks": 0,
+  "exceptions": [
+    "URLError: <urlopen error [Errno -5] No address associated with hostname>",
+    "URLError: <urlopen error [Errno -5] No address associated with hostname>",
+    "TimeoutError: Timed out waiting for ReportState completion",
+    "TimeoutError: Timed out waiting for ReportState completion",
+    "TimeoutError: Timed out waiting for ReportState completion",
+    "TimeoutError: Timed out waiting for ReportState completion",
+    "TimeoutError: SignalR invoke did not confirm the connection within the bounded recovery window"
+  ],
+  "failure": "TimeoutError: SignalR invoke did not confirm the connection within the bounded recovery window",
+  "handlersRegistered": 1,
+  "logicalResultEffects": 0,
+  "maxTerminalBuffer": 32,
+  "offlineSendRejected": false,
+  "openCallbacks": 1,
+  "reconnectCallbacks": 1,
+  "reconnectCount": 1,
+  "reconnectedAt": [
+    1790277807.554414
+  ],
+  "rssSamplesKb": [],
+  "seqFirst": 1,
+  "seqLast": 1,
+  "startedAt": 1790277797.9041767,
+  "stateCoalesced": 2,
+  "stateSent": 1,
+  "streamId": "f1e32b1b-c06e-4d2e-b5f2-2c5d6c7fa517",
+  "terminalBufferHighWater": 0,
+  "terminalTransmissions": 0,
+  "verdict": "BLOCKED"
+}

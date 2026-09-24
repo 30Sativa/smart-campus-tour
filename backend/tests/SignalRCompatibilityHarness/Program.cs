@@ -14,29 +14,44 @@ builder.WebHost.ConfigureKestrel(options => options.ListenAnyIP(port, listen =>
     listen.UseHttps(certificatePath, certificatePassword)));
 builder.Services.AddSignalR().AddJsonProtocol(options =>
     options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-
 var app = builder.Build();
+var controlDirectory = Environment.GetEnvironmentVariable("S2_CONTROL_DIR");
+var expectedToken = Environment.GetEnvironmentVariable("S1_EXPECTED_TOKEN") ?? "s1-valid";
+if (!string.IsNullOrWhiteSpace(controlDirectory))
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+        File.WriteAllText(Path.Combine(controlDirectory, "server-ready.json"),
+            JsonSerializer.Serialize(new { startedAt = DateTimeOffset.UtcNow })));
+}
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/hubs/compatibility"))
+    if (context.Request.Path.StartsWithSegments("/hubs/compatibility") &&
+        context.Request.Headers.Authorization != $"Bearer {expectedToken}")
     {
-        if (context.Request.Headers.Authorization != "Bearer s1-valid")
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
+        Interlocked.Increment(ref AuthMetrics.Rejections);
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return;
     }
 
     await next();
 });
 app.MapGet("/ready", () => Results.Ok(new { ready = true }));
+app.MapGet("/test/metrics", () => Results.Ok(new { authRejections = Volatile.Read(ref AuthMetrics.Rejections) }));
+app.MapPost("/test/command/{commandId:guid}", async (Guid commandId, IHubContext<CompatibilityHub> hub) =>
+{
+    await hub.Clients.All.SendAsync("DummyGoTo", new DummyGoToDto(
+        commandId, "campus-map-v1", "map", 1.25, -0.75, 1.5707963267948966, "poi-library"));
+    return Results.Ok();
+});
 app.MapHub<CompatibilityHub>("/hubs/compatibility");
 app.Run();
 
 public sealed class CompatibilityHub : Hub
 {
     private static readonly ConcurrentQueue<ReportStateDto> States = new();
-    private static readonly ConcurrentQueue<ReportCommandResultDto> Results = new();
+    private static readonly ConcurrentDictionary<Guid, TerminalResultDto> ProcessedResults = new();
+    private static readonly ConcurrentDictionary<Guid, byte> DroppedAcks = new();
+    private static readonly ConcurrentDictionary<Guid, int> ResultTransmissions = new();
 
     public async Task<bool> ReportState(ReportStateDto report)
     {
@@ -85,37 +100,50 @@ public sealed class CompatibilityHub : Hub
             return Task.FromResult(false);
         }
 
-        Results.Enqueue(report);
         return Task.FromResult(true);
+    }
+
+    // Test-only correlated application acknowledgement. Processing is keyed by resultId,
+    // and the first transmission deliberately returns no application ACK when requested.
+    public Task<ResultAckDto?> ProcessTerminalResult(TerminalResultDto report)
+    {
+        if (report.ResultId == Guid.Empty || report.LegId == Guid.Empty || string.IsNullOrWhiteSpace(report.Outcome))
+        {
+            return Task.FromResult<ResultAckDto?>(null);
+        }
+
+        var transmission = ResultTransmissions.AddOrUpdate(report.ResultId, 1, (_, count) => count + 1);
+        ProcessedResults.TryAdd(report.ResultId, report);
+        if (report.DropFirstAck && transmission == 1 && DroppedAcks.TryAdd(report.ResultId, 0))
+        {
+            return Task.FromResult<ResultAckDto?>(null);
+        }
+
+        return Task.FromResult<ResultAckDto?>(new ResultAckDto(report.ResultId, ProcessedResults.Count));
+    }
+
+    public async Task<bool> SlowReceiver(int delayMs)
+    {
+        await Task.Delay(Math.Clamp(delayMs, 0, 5000));
+        return true;
     }
 }
 
-public sealed record ReportStateDto(
-    Guid RobotId,
-    Guid StreamId,
-    long Seq,
-    DateTimeOffset ReportedAt,
-    string MapKey,
-    string FrameId,
-    PoseDto? Pose,
-    RobotStatus Status,
-    Guid? LegId);
+public static class AuthMetrics
+{
+    public static int Rejections;
+}
 
+public sealed record ReportStateDto(
+    Guid RobotId, Guid StreamId, long Seq, DateTimeOffset ReportedAt, string MapKey,
+    string FrameId, PoseDto? Pose, RobotStatus Status, Guid? LegId);
 public sealed record PoseDto(double X, double Y, double Yaw, DateTimeOffset CapturedAt);
 public sealed record DummyGoToDto(
-    Guid LegId,
-    string MapKey,
-    string FrameId,
-    double X,
-    double Y,
-    double Yaw,
-    string? StopId);
+    Guid LegId, string MapKey, string FrameId, double X, double Y, double Yaw, string? StopId);
 public sealed record ReportCommandResultDto(
-    Guid LegId,
-    CommandKind CommandKind,
-    CommandPhase Phase,
-    CommandOutcome? Outcome,
-    string? Reason);
+    Guid LegId, CommandKind CommandKind, CommandPhase Phase, CommandOutcome? Outcome, string? Reason);
+public sealed record TerminalResultDto(Guid ResultId, Guid LegId, string Outcome, bool DropFirstAck);
+public sealed record ResultAckDto(Guid ResultId, int LogicalEffectCount);
 
 [JsonConverter(typeof(JsonStringEnumConverter<RobotStatus>))]
 public enum RobotStatus { IDLE, NAVIGATING, ARRIVED, FAILED, UNKNOWN }
