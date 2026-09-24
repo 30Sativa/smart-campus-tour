@@ -1,9 +1,10 @@
 # AGENTS.md — `ai-assistant/`
 
-> **STATUS: SKELETON.** Nothing is implemented yet. Fill the TODO blocks when
-> WP4 starts; delete this banner at that point.
+> **STATUS: SKELETON.** Nothing is implemented yet. Fill the TODO blocks as
+> WP4 implementation proceeds; delete this banner when appropriate.
 
-Multilingual AI tour-guide service for CampusTour DT-AMR (Work Package 4).
+Student private Q&A service for CampusTour DT-AMR (Work Package 4). V1 uses one
+project language; multilingual and per-tour language selection are out of scope.
 Read the repo-root `AGENTS.md` first; this file covers only this deploy unit.
 
 ---
@@ -34,14 +35,16 @@ not part of this assistant.
 
 - The assistant must never publish `/cmd_vel`, set Nav2 goals, change
   `/speed_limit`, or expose an API that directly commands robot movement.
-- Robot stop/task events and audio exchange cross a deploy-unit boundary.
-  Define their transport, schemas, authentication, timeouts and fallback in
-  `docs/architecture.md` before implementing either side.
-- Keep the robot-side adapter thin. STT, retrieval/dialogue and TTS
-  orchestration stay in this folder and do not run on the robot miniPC.
+- Student Q&A follows the browser/cloud path. Define its transport, schemas,
+  authentication, timeouts and fallback in `docs/architecture.md` before
+  implementation; do not route visitor audio through the robot.
+- STT, retrieval/dialogue and TTS orchestration stay in this folder and do not
+  run on the robot miniPC. Approved, pre-generated narration is played in the
+  browser, not by robot-side cached speech playback.
 - Do not log raw visitor audio, transcripts or personal data by default.
-- Offline/unavailable behaviour must degrade to approved cached narration;
-  assistant failure must not block navigation or safe robot shutdown.
+- Assistant failure affects private Q&A; approved narration assets remain a
+  browser playback path. Assistant failure must not block navigation or safe
+  robot shutdown.
 
 ---
 

@@ -52,9 +52,10 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 - `robot_perception` is WP3 person perception for navigation behaviour. It is
   not the WP4 AI tour-guide assistant and must not contain STT, LLM/dialogue,
   campus knowledge or TTS orchestration.
-- A future robot-side tour-guide adapter stays thin: ROS stop/task events and
-  audio I/O only. The conversational pipeline belongs in `ai-assistant/`; its
-  cross-folder contract must be recorded in `docs/architecture.md` first.
+- The robot owns navigation, physical sensors, the fleet bridge, and rotating
+  camera/head hardware. It does not own visitor audio playback, narration, or
+  the AI Q&A pipeline; those use the browser/cloud path described in
+  `docs/architecture.md`.
 - The **production fleet bridge** for the physical robot lives here (planned:
   `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
   is `Backend fleet contract ↔ ROS navigation/state`. It is a translator

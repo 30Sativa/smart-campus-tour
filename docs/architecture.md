@@ -21,32 +21,37 @@ that its API, dispatch, bridge, or realtime implementation already exists.
 ## 1. Components and ownership
 
 ```text
-   Visitor                         Campus staff
+   Student browser                 Campus staff browser
       |                                 |
       v                                 v
-   +----------------------------------------------------+
-   | web/  visitor + ops UI; 3D Twin data planned           |
-   +---------------------------+------------------------+
-                               | HTTP API + SignalR (planned backend)
-                               v
-   +----------------------------------------------------+
-   | backend/  tour schema; API/orchestration planned     |
-   +-------------------+------------------+-------------+
-                       |                  |
-          SignalR/TLS fleet (gated)       | same planned fleet contract
-                       |                  |
-                       v                  v
-   +---------------------------+   +-----------------------------+
-   | robot/ physical or one    |   | digital-twin/ Fleet Emulator|
-   | Gazebo AMR; bridge planned|   | scaffold; behavior planned  |
-   +---------------------------+   +-----------------------------+
-                       |
-                       | assistant integration TBD
-                       v
-   +----------------------------------------------------+
-   | ai-assistant/  STT + visitor Q&A/LLM + TTS          |
-   +----------------------------------------------------+
+   +----------------------+   +--------------------------+
+   | web/ student + staff |   | web/ Staff Operations   |
+   | browser experiences |   | and operational Twin    |
+   +----------+-----------+   +------------+-------------+
+              ^                            ^
+              | livestream media path      | backend projections
+              +------------------+---------+
+                                 |
+                                 v
+                     +-------------------------+
+                     | backend / tour services |
+                     +-----------+-------------+
+                                 ^
+                                 | fleet/navigation state
+                                 |
+                     +-----------+-------------+   +----------------------+
+                     | Physical AMR             |   | Fleet Emulator      |
+                     | ROS 2 + fleet_bridge    |   | digital-twin/ (WP4) |
+                     +-------------------------+   +----------------------+
+
+Student browser -> Backend / cloud AI -> private STT / LLM / TTS Q&A
+Approved, pre-generated narration assets -> browser playback
 ```
+
+This is a conceptual boundary only; livestream and browser/cloud AI transport
+details remain for their integration work. Students join remotely in the
+browser. A School Representative registers the group and uploads its roster;
+student self-booking is not part of the current product baseline.
 
 The backend schema currently models `Route`, `RouteStop`, `Poi`, `Tour`,
 `GroupRegistration`, `RosterRow`, `Robot`, and `TourEvent`, alongside user,
@@ -751,23 +756,24 @@ observe motor stopping and no automatic restart, not only successful action RPCs
 
 ## 7. AI narration and visitor Q&A
 
-POI narration does not require an LLM. It may use TTS from approved POI
-content, or audio generated/cached when that content is published or updated.
-The LLM is used for visitor Q&A. NLP and translation quality are outside the
-Digital Twin synchronization research scope.
+POI narration does not require an LLM. The student browser plays approved,
+pre-generated narration assets. Private student Q&A follows the browser/cloud
+path through STT, LLM and TTS; it is not a robot-to-assistant audio path. V1
+uses one project language; multilingual and per-tour language selection are
+out of scope.
 
 `robot_perception` and the AI tour-guide assistant remain separate systems:
 
 | Concern | Owner | Runs on | Responsibility |
 |---|---|---|---|
 | Person perception | WP3, `robot/ros2_ws/src/robot_perception/` | robot miniPC | RGB-D person detection and Nav2 speed limiting |
-| AI tour guide | WP4, `ai-assistant/` | server/cloud | multilingual STT, visitor Q&A/LLM, narration TTS |
+| Student AI Q&A | WP4, browser/cloud path and `ai-assistant/` | browser + server/cloud | private STT, LLM and TTS in one project language |
 
-The assistant never publishes `/cmd_vel`, sets Nav2 goals, alters
-`/speed_limit`, or makes a movement/safety decision. A future thin robot-side
-adapter may handle stop/task events, visitor audio, speech playback, and
-cached narration. Event/audio transport, schemas, authentication, timeouts,
-and offline fallback remain TBD.
+The robot owns navigation, physical sensors, the fleet bridge and rotating-head
+hardware. It does not own visitor audio playback or AI narration. The assistant
+never publishes `/cmd_vel`, sets Nav2 goals, alters `/speed_limit`, or makes a
+movement/safety decision. Student audio/Q&A and livestream use browser/cloud
+paths; their final media transports remain undecided.
 
 ---
 
@@ -777,7 +783,7 @@ and offline fallback remain TBD.
 |---|---|---|---|
 | `robot/` ROS 2 | GitHub Actions -> DockerHub | `docker compose --profile hardware pull robot-ros2 && docker compose --profile hardware up -d --force-recreate robot-ros2` | robot miniPC |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
-| `digital-twin/` | <!-- TODO(WP3) --> | service/container | simulation workstation/server |
+| `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
 | `backend/` | <!-- TODO(WP2) --> | <!-- TODO(WP2): docker image? dotnet publish? --> | AWS EC2 |
 | `ai-assistant/` | <!-- TODO(WP4) --> | service/container | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |

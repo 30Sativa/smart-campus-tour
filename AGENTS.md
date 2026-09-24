@@ -7,10 +7,11 @@ Repo-wide instructions for coding agents. Read this first, then read the
 
 ## 1. Project Overview
 
-**CampusTour DT-AMR** — an AI-driven campus tour system: visitors book a tour,
-an autonomous mobile robot (AMR) guides them around campus, and an operations
-team schedules and monitors the fleet through a Digital Twin kept in sync with
-the real robots over ROS 2.
+**CampusTour DT-AMR** — a remote campus-tour system: a School Representative
+registers a group and uploads its roster; an autonomous mobile robot (AMR)
+guides the tour while students join through a browser. Students receive a
+livestream, 2D robot position, approved pre-generated narration and private AI
+Q&A. Campus staff schedule and monitor tours through the Digital Twin.
 
 Repo này chứa toàn bộ hệ thống CampusTour DT-AMR: robot, digital twin, backend, ai-assistant và web. Không có phần nào của hệ thống tách sang repo khác.
 
@@ -24,10 +25,10 @@ build, its own verification, and its own `AGENTS.md`.
 | Folder | What it is | Deploys to | Read before editing |
 |---|---|---|---|
 | `robot/` | ROS 2 Humble workspace + STM32 motor firmware | robot miniPC (Docker image) | `robot/AGENTS.md` |
-| `digital-twin/` | Fleet Emulator, load experiments and synchronization research tooling | simulation workstation/server | `digital-twin/AGENTS.md` |
-| `backend/` | Booking, scheduling & dispatch API | AWS EC2 | `backend/AGENTS.md` |
-| `ai-assistant/` | Multilingual STT, dialogue/LLM and TTS service | server/cloud, not the robot miniPC | `ai-assistant/AGENTS.md` |
-| `web/` | Visitor app + operations dashboard | Vercel | `web/AGENTS.md` |
+| `digital-twin/` | Fleet Emulator, load experiments and synchronization research tooling (WP4) | simulation workstation/server | `digital-twin/AGENTS.md` |
+| `backend/` | Group registration, scheduling & dispatch API | AWS EC2 | `backend/AGENTS.md` |
+| `ai-assistant/` | Single-project-language STT, dialogue/LLM and TTS service (WP4) | server/cloud, not the robot miniPC | `ai-assistant/AGENTS.md` |
+| `web/` | Student browser experience + Staff Operations (WP4) | Vercel | `web/AGENTS.md` |
 | `docs/` | System-level architecture and decisions | — | `docs/architecture.md` |
 | `scripts/` | Cross-folder entry points | — | — |
 

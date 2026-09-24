@@ -1,7 +1,7 @@
 # AGENTS.md — `web/`
 
-Public site, visitor app, tour operations console and administration for
-CampusTour DT-AMR (Work Package 5). Read the repo-root `AGENTS.md` first for the
+Public site, legacy visitor app, student browser experience, tour operations console and administration for
+CampusTour DT-AMR (Work Package 4). Read the repo-root `AGENTS.md` first for the
 shared rules; this file only covers what is specific to `web/`.
 
 ---
@@ -135,9 +135,11 @@ web/
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-There are four entry points: `/` (public landing page), `/visit/*` (the visitor
-app, behind the visitor guard), `/staff/*` (operations, behind the staff guard)
-and `/admin/*` (administration, behind the admin guard).
+There are four implemented entry points: `/` (public landing page), `/visit/*`
+(legacy visitor app, behind the visitor guard), `/staff/*` (operations, behind
+the staff guard) and `/admin/*` (administration, behind the admin guard).
+The `/visit/*` booking flow is existing implementation, not the current student
+product baseline described below.
 
 **Who may enter what is written in exactly one place: `src/auth/access.ts`.**
 The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
@@ -146,11 +148,13 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
-The visitor booking/tour flow was removed on 2026-09-16 and came back on
-2026-09-18 as its own area at `/visit/*`, with its own shell, routes, contract
-and English surface. A visitor account is therefore a real account with a real
-app, not a public-site-only account. The 2026-09-18 note that said otherwise was
-written while the flow was gone; do not restore it.
+The current frontend contains a legacy visitor registration/tour flow at
+`/visit/*`, but it is not the current product baseline. For this milestone,
+School Representatives register groups and upload rosters; students join
+remotely in the browser for livestream, 2D robot position, approved narration
+and private AI Q&A. Do not treat visitor self-booking or the existing mock flow
+as product scope. Keep the implementation unchanged in documentation-only
+scope-alignment work.
 
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
@@ -476,10 +480,11 @@ factory only:
   `start()` / `stop()`;
 - `withAutomaticReconnect()` is on by default.
 
-No hub is consumed yet — the backend hub contract is not defined.
+No hub is consumed yet. `/hubs/operations` and its projection events are
+selected in `docs/architecture.md`; frontend payload mapping and reconnect /
+refetch behavior remain unimplemented.
 
-<!-- TODO(WP5): ghi quyết định SignalR + tên hub/method vào
-docs/architecture.md khi backend chốt contract. -->
+<!-- TODO(WP4): wire the selected /hubs/operations projection contract. -->
 
 ---
 
@@ -520,4 +525,4 @@ claim the UI is correct.
   local fail-safe behaviour remains robot-side.
 - Do not commit `node_modules/` or build output.
 
-<!-- TODO(WP5): thêm constraint khác khi có. -->
+<!-- TODO(WP4): thêm constraint khác khi có. -->

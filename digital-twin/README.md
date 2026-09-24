@@ -1,6 +1,6 @@
 # Fleet Emulator and Digital Twin research tooling
 
-WP3 deploy unit for external fleet emulation and controlled synchronization
+WP4 deploy unit for external fleet emulation and controlled synchronization
 research. It runs on a simulation workstation/server and owns:
 
 - a future external Fleet Emulator using the physical/Gazebo robot contract;

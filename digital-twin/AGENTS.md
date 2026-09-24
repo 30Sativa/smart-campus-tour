@@ -4,7 +4,7 @@
 > emulator behaviour or research tooling is implemented yet.
 
 External fleet emulation and synchronization research tooling for CampusTour
-DT-AMR (WP3). Read the repo-root `AGENTS.md` first; this file covers only this
+DT-AMR (WP4). Read the repo-root `AGENTS.md` first; this file covers only this
 deploy unit.
 
 ---

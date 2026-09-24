@@ -8,8 +8,9 @@ The current single-robot ROS implementation exposes a named-stop
 development and manual tests, but it makes a robot-local file appear to own
 production tour data and encourages robot-side route scheduling.
 
-The booking and operations system needs one consistent owner for routes,
-slots, tour progress, robot assignment, POI content, and navigation targets.
+The School Representative's group registration and roster upload, plus tour
+operations, need one consistent owner for routes, slots, tour progress, robot
+assignment, POI content, and navigation targets.
 
 ## Decision
 
@@ -49,9 +50,9 @@ fixtures, not the production boundary or source of truth for POI coordinates.
 
 Positive:
 
-- Booking, dispatch, narration, operator views, and navigation targets use the
-  same route/POI ownership boundary.
-- The backend can pause at a POI for narration or visitor interaction before
+- Group registration, dispatch, narration, operator views, and navigation
+  targets use the same route/POI ownership boundary.
+- The backend can pause at a POI for narration or student interaction before
   deciding when to issue the next leg.
 - Physical robots, a Gazebo robot, and Fleet Emulator robots can use the same
   external per-leg semantics.
