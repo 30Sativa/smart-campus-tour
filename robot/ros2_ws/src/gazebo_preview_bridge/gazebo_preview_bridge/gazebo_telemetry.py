@@ -11,7 +11,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
-from fleet_bridge.telemetry import pose_payload
+from gazebo_preview_bridge.telemetry import pose_payload
 
 
 class GazeboTelemetry(Node):

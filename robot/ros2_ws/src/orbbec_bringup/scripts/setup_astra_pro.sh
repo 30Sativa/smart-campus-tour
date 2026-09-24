@@ -68,7 +68,7 @@ cat <<'NEXT'
 Done.  Next:
 
   cd <workspace root>
-  colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+  colcon build --symlink-install --packages-up-to orbbec_bringup --cmake-args -DCMAKE_BUILD_TYPE=Release
   source install/setup.bash
   ros2 launch orbbec_bringup orbbec_with_mount.launch.py rviz:=true
 

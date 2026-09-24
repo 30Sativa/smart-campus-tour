@@ -371,7 +371,7 @@ contract, robot authentication, dispatch, or physical localization above.
   `streamId` (bridge-start UUID), `seq` (positive monotonic integer),
   `capturedAt` (UTC wall-clock ISO timestamp), `x`, `y`, `z` (metres),
   `yaw` (radians). This is Gazebo ground truth, **not** AMCL localization.
-- The ROS bridge subscribes to `/gazebo/model_states` from
+- `gazebo_preview_bridge` subscribes to `/gazebo/model_states` from
   `libgazebo_ros_state.so`, selects `amr_robot`, and posts at most 10 Hz.
   Its one-slot latest-state buffer bounds memory and keeps HTTP off the ROS
   callback thread. No commands or motor topics are exposed to the browser.

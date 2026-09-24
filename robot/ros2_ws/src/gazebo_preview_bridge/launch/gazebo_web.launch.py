@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    bridge = get_package_share_directory('fleet_bridge')
+    bridge = get_package_share_directory('gazebo_preview_bridge')
     description = get_package_share_directory('robot_description')
     control = get_package_share_directory('robot_control')
     simulation = get_package_share_directory('simulation')
@@ -26,6 +26,6 @@ def generate_launch_description():
                  {'use_sim_time': True, 'initial_mode': 'manual'}]),
         Node(package='topic_tools', executable='relay', name='preview_cmd_relay',
              arguments=['/robot_01/cmd_vel', '/diff_drive_controller/cmd_vel_unstamped']),
-        Node(package='fleet_bridge', executable='gazebo_telemetry', output='screen',
+        Node(package='gazebo_preview_bridge', executable='gazebo_telemetry', output='screen',
              parameters=[os.path.join(bridge, 'config', 'gazebo_telemetry.yaml')]),
     ])

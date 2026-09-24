@@ -1,4 +1,6 @@
-# Một compose file duy nhất cho cả hai máy.
+# Compose runtime/development chính: hardware, debug, and standalone sim.
+# Gazebo + backend SimulationPreview integration has its own
+# docker-compose.preview.yml and is not a physical robot deployment path.
 #
 # MỌI service đều nằm sau một profile, nên `docker compose up` trần sẽ KHÔNG
 # khởi động gì cả. Đó là chủ ý: trên VMware không thể vô tình start service

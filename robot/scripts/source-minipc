@@ -20,8 +20,10 @@ if [ -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]; then
     source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
 else
     echo "WARNING: $ROBOT_ROOT/ros2_ws/install/setup.bash not found."
-    echo "         Native ROS packages are NOT on the path. Build first:"
-    echo "         cd $ROBOT_ROOT/ros2_ws && colcon build --symlink-install"
+    echo "         Native Astra camera packages are NOT on the path. If setting up"
+    echo "         the camera host exception, build only its overlay with:"
+    echo "         cd $ROBOT_ROOT/ros2_ws && colcon build --symlink-install --packages-up-to orbbec_bringup"
+    echo "         Do not build or launch duplicate drivetrain/Nav2 nodes on the host."
 fi
 
 echo "ROS environment loaded:"

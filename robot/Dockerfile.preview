@@ -11,7 +11,7 @@ WORKDIR /ros2_ws
 COPY ros2_ws/src/robot_description src/robot_description
 COPY ros2_ws/src/robot_control src/robot_control
 COPY ros2_ws/src/simulation src/simulation
-COPY ros2_ws/src/fleet_bridge src/fleet_bridge
+COPY ros2_ws/src/gazebo_preview_bridge src/gazebo_preview_bridge
 RUN source /opt/ros/humble/setup.bash && colcon build --symlink-install
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN sed -i 's/\r$//' /ros_entrypoint.sh && chmod +x /ros_entrypoint.sh
@@ -20,4 +20,4 @@ ENV ROS_LOCALHOST_ONLY=1
 ENV GAZEBO_MODEL_PATH=/ros2_ws/install/simulation/share/simulation/models
 ENV GAZEBO_MODEL_DATABASE_URI=""
 ENTRYPOINT ["/ros_entrypoint.sh"]
-CMD ["ros2", "launch", "fleet_bridge", "gazebo_web.launch.py"]
+CMD ["ros2", "launch", "gazebo_preview_bridge", "gazebo_web.launch.py"]

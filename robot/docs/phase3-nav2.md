@@ -119,9 +119,15 @@ sẽ trễ nhịp trên mini PC. Nếu driver không nhận 320×240, chạy
 
 ## 3. Chạy
 
+Các lệnh dưới đây dành cho development container/VM. Trên miniPC triển khai,
+build và chạy Nav2 trong `robot-ros2` container. Astra Pro là ngoại lệ native
+host: launch camera riêng trên host, rồi launch navigation trong container với
+`enable_camera:=false` để không khởi chạy camera thứ hai. Cả hai dùng chung
+ROS domain; không chạy `robot_control`, Nav2 hoặc STM32 bridge trên host.
+
 ```bash
 cd ~/fleet-management-system/robot/ros2_ws
-colcon build --packages-select orbbec_bringup robot_control robot_navigation
+colcon build --packages-up-to robot_navigation
 source install/setup.bash
 
 ros2 launch robot_navigation navigation.launch.py \
@@ -129,6 +135,11 @@ ros2 launch robot_navigation navigation.launch.py \
   camera_x:=0.25 camera_y:=0.0 camera_z:=0.3996 \
   camera_roll:=0.0297 camera_pitch:=0.2498
 ```
+
+For the deployed miniPC, run the navigation build and launch commands inside
+the `robot-ros2` container. Run the native Astra camera launch on the host as
+documented in `orbbec_bringup/README.md`, and add `enable_camera:=false` to the
+navigation launch command shown above.
 
 > `camera_*` phải là **bộ số Phase 2 đã hội tụ**, không phải số mặc định trong
 > launch. Mặc định chỉ là điểm khởi động. Sai pitch 3° là sàn thành tường.

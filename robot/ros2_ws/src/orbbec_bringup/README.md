@@ -32,6 +32,14 @@ repository under `astra_camera/openni2_redist`.  There is no separate
 
 ## 2. One-time host setup
 
+On the deployed miniPC, native execution is a camera-only hardware exception:
+the Astra USB dependencies and this camera driver run on the host. Drivetrain,
+navigation, and the main ROS runtime remain in the Docker image. Build only the
+camera package and its dependencies for the native overlay; do not build the
+full workspace on the naked miniPC or run duplicate STM32, Nav2, or
+`robot_control` nodes there. Development machines may use the workspace build
+flow below for broader testing.
+
 udev rules and libuvc belong to the machine holding the USB cable — the Ubuntu
 VM now, the miniPC later.  A Docker image cannot supply them for you.
 
@@ -46,11 +54,13 @@ driver into `ros2_ws/src/third_party/ros2_astra_camera`, installs
 **Unplug and replug the camera after this step** — udev rules do not apply
 retroactively to an already-enumerated device.
 
-Then build:
+Then build. On the deployed miniPC, select the camera package and its
+dependencies:
 
 ```bash
 cd ros2_ws
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --packages-up-to orbbec_bringup \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
@@ -144,7 +154,7 @@ it by eye.
 ## 6. Not in Phase 1, deliberately
 
 Docker packaging, depth→laserscan, Nav2 integration, RGB intrinsic
-calibration, and depth-to-colour alignment are all Phase 2+.  The production
-`docker-compose.yml` currently forwards only the STM32 serial device; add the
-camera's `/dev/bus/usb` and `/dev/video*` mappings **after** the camera is
-proven on bare metal, not before.
+calibration, and depth-to-colour alignment are all Phase 2+. The main
+`docker-compose.yml` forwards the STM32 serial device and RPLiDAR device; the
+Astra Pro stays on the host as the camera-only hardware exception above. This
+does not change camera TF, USB mapping, or calibration.

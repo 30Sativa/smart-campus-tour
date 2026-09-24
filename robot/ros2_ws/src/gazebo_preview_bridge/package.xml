@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>fleet_bridge</name><version>0.1.0</version>
-  <description>Read-only Gazebo telemetry for the local web preview.</description>
+  <name>gazebo_preview_bridge</name><version>0.1.0</version>
+  <description>Development-only read-only Gazebo telemetry for SimulationPreview.</description>
   <maintainer email="caoduy856@gmail.com">Duy</maintainer><license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>rclpy</exec_depend><exec_depend>gazebo_msgs</exec_depend>

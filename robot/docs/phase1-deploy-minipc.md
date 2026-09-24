@@ -49,16 +49,16 @@ bash robot/ros2_ws/src/orbbec_bringup/scripts/setup_astra_pro.sh
 lsusb -d 2bc5:
 #   mong đợi: 2bc5:0403 (depth) + 2bc5:0501 (RGB)
 
-# 4. Build
+# 4. Build the camera-only native overlay
 cd robot/ros2_ws
-colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --packages-up-to orbbec_bringup --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 
 # 5. Chạy (miniPC có GPU/desktop thì bỏ LIBGL_ALWAYS_SOFTWARE)
 ros2 launch orbbec_bringup orbbec_with_mount.launch.py \
   x:=0.25 y:=0.0 z:=0.35 rviz:=true
 
-# 6. Nghiệm thu — miniPC dùng ngưỡng gốc (RGB >= 10 Hz), KHÔNG cần MIN_COLOR_HZ
+# 6. Nghiệm thu camera native — miniPC dùng ngưỡng gốc (RGB >= 10 Hz)
 cd ~/fleet-management-system/robot/ros2_ws
 source install/setup.bash
 bash src/orbbec_bringup/scripts/verify_astra_pro.sh
@@ -79,5 +79,11 @@ thật từ `base_link` (tâm robot) tới thân camera, đơn vị mét, ROS co
 
 ## Phase 2 (không thuộc Phase 1)
 
-Đóng gói Docker + device mapping trong docker-compose.yml → calibrate RGB
-intrinsics → align depth↔color (`depth_image_proc`) → depth→laserscan cho Nav2.
+Calibrate RGB intrinsics → align depth↔color (`depth_image_proc`) →
+depth→laserscan for Nav2. The Astra Pro host exception remains camera-only;
+drivetrain and navigation continue to use the Docker runtime.
+
+This native host procedure is only for Astra Pro and `orbbec_bringup`. The
+drivetrain, navigation, and main ROS runtime still deploy from the prebuilt
+Docker image. Do not build the full workspace on the miniPC host or run
+duplicate STM32, Nav2, or `robot_control` nodes there; see ADR-0003.

@@ -15,6 +15,7 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `robot_navigation` | localization (map_server + AMCL) and navigation on a saved map |
 | `orbbec_bringup` | Astra Pro depth camera bringup + mount TF + Phase 2 depth diagnostics |
 | `robot_perception` | Phase 4 person perception -> Nav2 speed limit |
+| `gazebo_preview_bridge` | Development-only Gazebo telemetry -> local backend `SimulationPreview` |
 | `bus_manager` | `go_to_stop` action: drive to named bus stops via Nav2 |
 | `bus_interfaces` | action/msg definitions for the bus system |
 | `simulation` | Gazebo worlds/models for testing without hardware |
@@ -103,9 +104,20 @@ The robot software was brought up in four phases; each has a design doc under
 This workflow does not implement a CAN bootloader and does not auto-flash the
 STM32 from the miniPC or from GitHub Actions.
 
+The drivetrain, navigation, and main ROS runtime on the miniPC use the
+prebuilt Docker image. There is no normal deployment path that builds the full
+ROS workspace on the naked host. The Astra Pro is a documented hardware
+exception: its USB driver and `orbbec_bringup` run natively on the host, using
+a camera-only ROS overlay. This does not allow duplicate STM32, Nav2, or
+`robot_control` nodes to run outside the container; see ADR-0003 and
+`ros2_ws/src/orbbec_bringup/README.md`.
+
 ## Docker Compose Environments
 
-Chỉ còn **một** file: `robot/docker-compose.yml`. Mỗi máy chọn một profile.
+`robot/docker-compose.yml` là Compose chính cho các profile `hardware`,
+`debug` và `sim`. `robot/docker-compose.preview.yml` là integration development
+riêng giữa Gazebo và backend `SimulationPreview`; nó không phải deployment path
+của robot thật. Hai file giữ các mục đích riêng.
 
 | Profile | Máy | Service | Image | USB devices | GUI |
 |---|---|---|---|---|---|
@@ -304,11 +316,17 @@ Navigate on a saved map (build a map first — there is no default real-world ma
 ros2 launch robot_navigation navigation.launch.py map:=/path/to/my_map.yaml
 ```
 
-Run in simulation (Gazebo, uses the bundled `warehouse_12x12` map):
+Run standalone Gazebo navigation with the bundled `warehouse_12x12` map:
 
 ```bash
 ros2 launch robot_navigation sim_navigation.launch.py
 ```
+
+The separate `docker-compose.preview.yml` integration runs the
+`map3d_preview` world and `gazebo_preview_bridge` to send read-only Gazebo
+ground truth to the local backend `SimulationPreview` endpoint. This is
+development preview data, not telemetry from the physical AMR. See
+`robot/ros2_ws/src/gazebo_preview_bridge/README.md` for the package boundary.
 
 Add `rviz:=true` to any launch above to open RViz with the matching layout
 (off by default so a headless robot does not hang).

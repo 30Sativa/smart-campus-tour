@@ -9,9 +9,12 @@ ros2_ws/
 ├── src/
 │   ├── bus_interfaces/     # Message/action dùng chung
 │   ├── bus_manager/        # Điều hướng tới trạm bus
+│   ├── gazebo_preview_bridge/ # Gazebo -> local SimulationPreview (dev only)
+│   ├── orbbec_bringup/     # Astra Pro host bringup + diagnostics
 │   ├── robot_control/      # Mode, mapping và exploration
 │   ├── robot_description/  # URDF/Xacro, STL, sensor, ros2_control
 │   ├── robot_navigation/   # Localization và Nav2
+│   ├── robot_perception/   # Person perception -> Nav2 speed limit
 │   ├── simulation/         # World/model cho Gazebo
 │   ├── stm32_bridge/       # Cầu nối /cmd_vel với STM32
 │   └── bus_bringup/        # Chỗ dành cho launch tổng hợp; hiện chưa có package
@@ -28,12 +31,26 @@ ros2_ws/
 |---|---|
 | `bus_interfaces` | Định nghĩa `BusStatus.msg` và action `GoToStop.action`; không chạy node riêng. |
 | `bus_manager` | Thực thi điều hướng một xe tới trạm đặt tên, dùng `config/bus_stops.yaml` và action `GoToStop` cho local/manual development. |
+| `gazebo_preview_bridge` | Chỉ cho development: đọc Gazebo model state và gửi pose ground truth tới local backend `SimulationPreview`; không phải telemetry robot thật hoặc production fleet transport. |
+| `orbbec_bringup` | Astra Pro native-host bringup, mount launch, RViz và công cụ chẩn đoán camera. |
 | `robot_control` | Launch cho robot thật/Gazebo, mode manager, manual mapping và frontier exploration. |
 | `robot_description` | Mô tả hình học/frame của xe, 7 STL, LiDAR, IMU và `ros2_control`. |
 | `robot_navigation` | Map server, AMCL và Nav2 trên map đã lưu. |
-| `simulation` | World Gazebo; hiện có `warehouse_12x12.world`. |
+| `robot_perception` | Phase 4 person perception, cung cấp speed limit cho Nav2; không phải AI tour guide. |
+| `simulation` | Gazebo worlds/models: `warehouse_12x12` cho standalone navigation và `map3d_preview` cho web SimulationPreview integration. |
 | `stm32_bridge` | Đổi `/cmd_vel` thành lệnh serial gửi STM32, publish `wheel/odom`, `imu/data` và sonar. |
 | `bus_bringup` | Hiện chỉ có `launch/.gitkeep`; chưa phải package và chưa có chức năng runtime. |
+
+`gazebo_preview_bridge` = Gazebo → local `SimulationPreview` backend.
+Production `fleet_bridge` tương lai = physical robot ↔ production backend, với
+trách nhiệm `Backend fleet contract ↔ ROS navigation/state`. Package production
+chưa tồn tại và không được phụ thuộc Gazebo/simulation. Transport, auth, wire
+schema và ROS mapping vẫn TBD trong `docs/architecture.md`.
+
+Các lệnh build toàn workspace bên dưới dành cho máy development hoặc
+container development. Trên miniPC triển khai, drivetrain/navigation/main ROS
+runtime dùng Docker image; chỉ Astra Pro có native-host overlay riêng như mô
+tả trong ADR-0003 và README của `orbbec_bringup`.
 
 Phần arm trước đây (`arm_bridge`, `arm_description`) đã được bỏ khỏi workspace.
 
@@ -139,6 +156,10 @@ ros2 launch robot_navigation navigation.launch.py map:=/path/to/my_map.yaml
 ```
 
 Trong Gazebo dùng `ros2 launch robot_navigation sim_navigation.launch.py` với cùng tham số `map`.
+
+World `warehouse_12x12` là lựa chọn cho mô phỏng navigation standalone. Web
+preview integration dùng world/model `map3d_preview` qua
+`gazebo_preview_bridge`; các pose đó là Gazebo ground truth.
 
 ### Robot thật qua STM32
 

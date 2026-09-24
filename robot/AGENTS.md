@@ -55,14 +55,19 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 - A future robot-side tour-guide adapter stays thin: ROS stop/task events and
   audio I/O only. The conversational pipeline belongs in `ai-assistant/`; its
   cross-folder contract must be recorded in `docs/architecture.md` first.
-- The **fleet bridge** to the backend lives here (planned:
-  `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. It is a translator
+- The **production fleet bridge** for the physical robot lives here (planned:
+  `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
+  is `Backend fleet contract ↔ ROS navigation/state`. It is a translator
   only — ROS 2 on one side, the backend's still-TBD external transport on the
   other. It must
   not contain booking rules, scheduling, or robot-assignment logic; those are
   backend concerns (`docs/architecture.md` §3). The robot executes one leg at
   a time; it never receives a full tour to orchestrate. Bridge commands go
   through the robot navigation boundary, never straight onto `/cmd_vel`.
+  The existing `gazebo_preview_bridge` is a separate development-only path:
+  Gazebo → local SimulationPreview backend. It is not physical-robot
+  telemetry or the production fleet transport, and the future production
+  package must not depend on Gazebo or simulation.
 - Production POI target poses come from backend-managed route/POI data and are
   meaningful only in their map/frame/context. The current
   `bus_manager/config/bus_stops.yaml` remains a local/manual-development
@@ -151,13 +156,18 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
   compose file depend on them.
 - The Docker build context is `robot/`. Paths inside `Dockerfile` are relative
   to `robot/`, not to the repo root.
-- Deployment is image-based: build in CI, push to DockerHub, pull on the
-  miniPC. Do not add a "git pull and colcon build on the robot" path.
+- The drivetrain, navigation, and main ROS runtime deploy as a Docker image:
+  build in CI, push to DockerHub, pull on the miniPC. There is no normal path
+  to build the full ROS stack on the naked miniPC host. The Astra Pro's native
+  host bring-up is a hardware exception for the camera package only; it does
+  not authorize duplicate STM32, Nav2, or robot-control nodes outside the
+  container.
   See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
 - **Exception, TEST phase only:** the `hardware` service currently bind-mounts
   `./ros2_ws/src:/ros2_ws/src` so a fix can be built in the container without a
   CI round trip. This is temporary and marked as such in `docker-compose.yml`.
-  Remove the mount before production so what runs matches the image. Do not
-  build on the naked miniPC host — that path still does not exist.
+  Remove the mount before production so what runs matches the image. This
+  container overlay exception is separate from the native Astra Pro camera
+  bring-up described in ADR-0003.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

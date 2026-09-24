@@ -104,9 +104,13 @@ Build:
 
 ```bash
 cd ~/fleet-management-system/robot/ros2_ws
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --packages-up-to orbbec_bringup \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
+
+Trên miniPC triển khai, đây chỉ là camera-native overlay exception. Không
+build hoặc chạy drivetrain/Nav2 trên host; phần đó vẫn chạy trong container.
 
 ## 4. Chạy
 
