@@ -36,6 +36,14 @@ Its future external robot/backend connection will use the official
 
 The current entry point is intentionally only a runnable skeleton. Do not add
 emulator behaviour or research tooling until the external contract is ready.
+Research implementation and benchmark execution are deferred until the
+production Remote Tour end-to-end path works. The Capstone documents, including
+the Register's research methodology, remain authoritative and unchanged. All
+research-related architecture decisions are frozen for this milestone. Do not
+reconcile research rates, metrics/targets, fleet size, measurement clients,
+benchmark SLOs, or the measurement pipeline during production work; none may
+constrain or block production integration. Revisit research in a separate task
+after that path works. See `docs/architecture.md` Section 5.
 
 ---
 
@@ -50,13 +58,10 @@ emulator behaviour or research tooling until the external contract is ready.
   authentication in `docs/architecture.md` before coding the external client.
 - Keep emulator control on the external fleet contract. It must not directly
   invoke backend use cases or command a physical robot.
+- The experiment guidance below applies only when deferred research resumes;
+  it is not a production implementation requirement or acceptance gate.
 - Experiments must record emulator configuration, offered load, clock source,
   limits/caps, and metrics so another team member can reproduce the result.
-- Measure end-to-end synchronization from robot/emulator state creation until
-  the browser SignalR callback receives it. Exclude Three.js render time.
-- Primary metrics are p95 synchronization latency and effective frontend update
-  rate/state freshness. Do not call every skipped `seq` packet loss when
-  latest-state/coalescing semantics may intentionally drop intermediate state.
 - For one-way timing across machines, document NTP/chrony (or equivalent) and
   the clock policy in the experiment methodology.
 - Current state is transient/latest-state data. Do not persist every pose to

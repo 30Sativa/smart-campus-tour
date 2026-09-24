@@ -36,9 +36,9 @@ adding a test, bumping a patch version.
 | [0004](0004-external-fleet-emulator.md) | Use an external Fleet Emulator for fleet-scale validation | accepted |
 | [0005](0005-backend-authoritative-poi-per-leg-orchestration.md) | Backend owns authoritative POI navigation targets and per-leg tour orchestration | accepted |
 | [0007](0007-smac2d-rpp-no-autonomous-reverse.md) | SmacPlanner2D + Regulated Pure Pursuit, with autonomous reverse disabled | accepted |
+| [0008](0008-production-fleet-transport.md) | SignalR fleet transport, separate Hubs, and navigation MVP semantics | accepted; Python compatibility gate pending |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
-     - chọn transport cho contract robot <-> backend
      - chọn database cho backend
      - chọn model AI cho assistant dưới ràng buộc i3-7100T / 8GB / không GPU
      - monorepo vs multi-repo (nếu muốn ghi lại lý do gộp)

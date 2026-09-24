@@ -33,7 +33,7 @@ that its API, dispatch, bridge, or realtime implementation already exists.
    | backend/  tour schema; API/orchestration planned     |
    +-------------------+------------------+-------------+
                        |                  |
-          fleet transport/auth TBD       | same planned fleet contract
+          SignalR/TLS fleet (gated)       | same planned fleet contract
                        |                  |
                        v                  v
    +---------------------------+   +-----------------------------+
@@ -55,7 +55,9 @@ and robot assignment is a decided boundary; the dispatch use cases are not
 implemented yet. A robot is intended to execute one navigation leg at a time
 without owning the tour workflow. The web app owns the 3D Operational Digital
 Twin UI, while `digital-twin/` owns the Fleet Emulator scaffold and future
-load experiments, not the 3D frontend.
+load experiments, not the 3D frontend. Production fleet transport is selected
+by [ADR-0008](decisions/0008-production-fleet-transport.md), with a Python
+compatibility acceptance gate that has not passed yet.
 
 ---
 
@@ -109,10 +111,11 @@ USB CDC serial and does not reach below that line.
 
 The current `go_to_stop` ROS 2 action (`bus_manager` / `bus_interfaces`)
 resolves a named stop through `bus_stops.yaml`. That is retained for local ROS
-development, manual testing, and as a fallback/test fixture. It is not the
-production source of truth for POI coordinates. Migration to the external
-per-leg contract in Section 3 is intentionally not implemented by this
-documentation change; see [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md).
+development and manual test fixtures. It is not the production source of truth
+for POI coordinates or a production transport fallback. The selected production
+mapping is directly to Nav2 `NavigateToPose`, as described in Section 3.5 and
+[ADR-0008](decisions/0008-production-fleet-transport.md); it is not implemented
+by this documentation change.
 
 ### 2.1 Robot identity and ROS namespace
 
@@ -172,62 +175,75 @@ Two further namespace notes, both load-bearing:
 
 ## 3. Backend-owned tour orchestration and fleet contract
 
-**Decided boundary, implementation pending:** the backend does not speak ROS.
-A future bridge inside `robot/` translates between the external fleet contract
-and ROS 2. The Fleet Emulator in `digital-twin/` has a scaffold but no fleet
-behavior yet; its implementation will use the same external contract without
-referencing backend implementation projects.
+**Decided contract, implementation and compatibility checkpoint pending:** the
+backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
+defines ownership; [ADR-0008](decisions/0008-production-fleet-transport.md)
+selects **SignalR JSON Hub Protocol over TLS** for the physical `fleet_bridge`
+and Fleet Emulator. Production use depends on a successful Python client
+compatibility checkpoint against ASP.NET Core/.NET 10. That compatibility has
+not been demonstrated.
 
 ```text
-backend/ Application use case -> IFleetGateway (planned Application boundary)
-    -> Infrastructure fleet adapter (planned) -> external transport/auth TBD
-       +--> robot/ fleet bridge (planned) -> ROS 2 robot stack
-       +--> digital-twin/ Fleet Emulator (planned alternative client)
+Physical fleet_bridge -- outbound --\
+                                    <-> /hubs/fleet <-> Backend Application
+Fleet Emulator ------- outbound --/                         |
+                                                  operations projection
+                                                           |
+                                                   /hubs/operations
+                                                           |
+                                                   Staff Web / 3D Twin
+
+Separate development path (already exists):
+Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
+                               -> /hubs/simulation -> preview browser
 ```
 
-The wire transport, robot authentication, exact update frequency, and exact
-schema/serialization are still TBD. The following is a conceptual per-leg
-shape from [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md),
-not an implemented DTO or a new database entity. In particular, `stop_id`
-has no current SQL column or settled mapping to `Poi`/`RouteStop`:
+| Boundary | Clients and purpose |
+|---|---|
+| `/hubs/fleet` | Physical bridge and Fleet Emulator; bidirectional machine command/state contract. |
+| `/hubs/operations` | Backend-to-browser projections for Staff Web / Operational Digital Twin. |
+| `/hubs/simulation` | Existing development-only SimulationPreview; unchanged. |
+
+Do not merge these Hubs. Browsers do not connect to the fleet Hub; robots do not
+connect to operations. Different URLs are not authorization: Section 3.7 defines
+the required identity separation. The production Hubs are not implemented yet.
+
+Application owns a future gateway boundary such as `IFleetGateway`. Hubs and
+the thin SignalR adapter using `IHubContext` belong in Api, without an
+Infrastructure-to-Api reference. Application stays independent of SignalR and
+ROS types. The bridge translates fleet commands/state only; it owns no booking,
+scheduling, assignment, or tour state machine. Execution tracking and result
+retention belong to the adapter, not to tour orchestration.
+
+The conceptual MVP contract is below. Method names and semantics are selected;
+these are not implemented DTOs or new database entities. Exact binding,
+validation limits, and acknowledgement encoding remain implementation work.
+`?` denotes an optional/nullable value. Commands travel backend-to-robot;
+reports travel robot-to-backend.
 
 ```text
-go_to {
-  leg_id,
-  stop_id,
-  x,
-  y,
-  yaw
+GoTo { legId, mapKey, frameId, x, y, yaw, stopId? }
+Cancel { legId }
+
+ReportState {
+  robotId, streamId, seq, reportedAt,
+  mapKey, frameId,
+  pose?: { x, y, yaw, capturedAt },
+  status, legId?, localized?, faultCode?, batteryPercent?
 }
 
-cancel {
-  leg_id
-}
-
-state {
-  robot_id,
-  seq,
-  stamp,
-  x,
-  y,
-  yaw,
-  battery?,
-  status,
-  leg_id?,
-  fault_code?
+ReportCommandResult {
+  legId, commandKind, phase, outcome?, reason?
 }
 ```
 
-Robot execution states `IDLE`, `NAVIGATING`, `ARRIVED`, and `FAILED` describe
-the planned external fleet contract, not `Tour.State` values.
-Battery is an optional/nullable capability: the physical firmware/hardware is
-not assumed to provide a percentage. It is not a mandatory dispatch rule.
+`GoTo` carries the resolved target, never a route to execute locally. `stopId`
+is optional metadata, not a robot-local lookup key; no SQL `stop_id` column or
+mapping to `Poi`/`RouteStop` is introduced. End/return legs need not have a stop.
 
-The planned bridge is a translator only. It contains no registration rules,
-scheduling, robot assignment, tour state machine, or persistence. Commands
-use the robot's navigation boundary rather than publishing `/cmd_vel`
-directly. The outbound-from-robot connection preference remains, but its
-transport is TBD.
+The navigation MVP has no manual drive, raw `/cmd_vel`, cloud E-stop, or Head
+command. Head support remains separate despite the existing frontend/schema
+references; this MVP does not complete the full remote-tour feature set.
 
 ### 3.1 POI target invariant
 
@@ -287,11 +303,79 @@ fleet telemetry, separate from persisted tour business state and `TourEvent`.
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
 the fleet gateway, handles arrival and the configured POI dwell/interaction,
-then decides whether to send another leg or complete the tour. No robot
-availability policy, no-robot state transition, retry handling, or timing rule
-is implemented yet. Requirements such as one active assignment per robot and
-ignoring stale or duplicate results need explicit application/persistence
+then decides whether to send another leg or complete the tour. The selected
+operational rules below are not backend implementations. Requirements such as
+one active assignment per robot and ignoring stale or duplicate results need
+explicit application/persistence
 enforcement; the v1.0 schema does not provide those guarantees by itself.
+
+FleetHub transport is not tour orchestration. The later Application work owns:
+
+```text
+Tour/dispatch -> derive current leg -> persist execution intent/current leg
+             -> external send -> reconcile result -> TourEvent / dwell
+             -> decide next leg
+```
+
+The current `UnitOfWorkBehavior` commits after a handler returns. Sending an
+external `GoTo` and assuming the subsequent commit is atomic with robot
+execution is incorrect. Persist intent before sending, then reconcile ambiguous
+results in the later orchestration design; no distributed transaction or
+pipeline implementation change is introduced here.
+
+Physical and emulated robots share external schema, command/reconnect semantics,
+and identity model, without referencing backend implementation projects. Each
+emulated robot has its own identity/connection. Keep `Robot.SourceType` and
+eligibility checks so synthetic robots cannot be dispatched into real tours;
+shared transport does not erase source or validation boundaries.
+
+#### Remote Tour operational rules (planned Application behavior)
+
+These rules make explicit the existing remote-tour intent in
+`backend/database/smart-campus-tour-schema-v1.0.sql`,
+`web/docs/staff-operations.md`, `web/src/api/contracts/staff.ts`, and
+`web/src/features/staff/reason.ts`. The web mock illustrates the flow; it is not
+an implemented persistence/concurrency guarantee. Backend evaluates allowed
+actions and records operator actions, leg intent/results, visit closure, and
+recovery as meaningful events.
+
+Head/pan preset support is a V1 requirement. The specific sequencing
+`Next -> confirmed FRONT -> next leg` (and FRONT before the first leg) is a
+**current Remote Tour orchestration decision**, reflected in the schema/web
+contract and mock. No independently verified business source establishes this
+specific sequence as a Capstone requirement; do not attribute it to scope.
+The decision remains the implementation baseline unless explicitly revised.
+
+| Operation | Application behavior | Robot interaction |
+|---|---|---|
+| Start | Only from READY after device/business checks and on-site confirmations. Atomically claim an eligible physical robot and transition the tour, so concurrent Starts cannot share it. No automatic mid-tour reassignment. | Confirm head FRONT before the first GoTo; one current leg. |
+| Hold | Only during observation at a POI; set `IsHeld` to prevent automatic departure when dwell ends. Reject it during a navigation leg. | No navigation command; this is not pause/resume of motion. |
+| Next | Close the current visit exactly once, resolving races with dwell completion/Hold through persisted concurrency checks and `StopVisitClosedAt`. | Wait for confirmed FRONT, then send a new leg to the next POI/end point. |
+| End Early | Record reason and tour CANCELLED; stop further progression. Set `Robot.NeedsInspection` and retain `Robot.CurrentTourId` until terminal execution is reconciled and on-site release is confirmed. | Cancel an active leg; send completion or `IDLE` alone does not release the robot. Not an E-stop. |
+| Retry leg | Require authorized recovery, live/readiness checks, and confirmed end of the old leg; unknown execution blocks retry. | Use a new `legId`; never blindly resume a previous goal. |
+| Re-run POI / Retry FRONT | A new visit or head-command attempt; preserve history and gate subsequent progression on its result. | Head contract/controller work is required; not a new navigation command. |
+| Backend restart | Reconcile active tours as needing assistance (`BackendRestarted`); do not restore a dwell timer or automatically continue navigation. | Reconcile actual execution before any recovery action. |
+
+Do not copy the mock's early clearing of its transient robot `tourId` into SQL:
+the schema explicitly retains `Robot.CurrentTourId` through End Early until
+release confirmation. `NeedsInspection` additionally prevents redispatch.
+`Tour.AssignedRobotId` may remain as history after release.
+
+Persisted intent is necessary but insufficient for safe retries: a bridge
+restart may lose in-memory idempotency state. Reconcile before replay. Late
+results for an old leg may be recorded, but must not advance a new leg or
+restart a canceled tour. End Early racing with a send requires coordinated
+send/cancel reconciliation, not only a check before the send. Publish business
+notifications after the corresponding state/event commit. Define tour revision
+semantics across backend restart before wiring the frontend revision guard.
+
+Rotating head/pan presets remain a V1 requirement outside the navigation wire
+MVP. FRONT gating is the current orchestration decision described above, not a
+separately established Capstone requirement. A separate patch must define presets,
+command/result correlation, timeout/fault/retry behavior, and the actuator's
+ROS interface. Do not invent a completed FRONT report or make a navigation leg
+proceed merely because a head command was sent. This document does not yet
+select a `SetHead` method or add head fields to the current navigation DTO.
 
 The older `TourRoute` / `TourSlot` / `Booking` / `TourInstance` flow is
 historical and is not the current persisted model. No `Mission` entity exists.
@@ -312,22 +396,178 @@ must not receive every pose update. A controlled benchmark may write telemetry
 to a dedicated experiment log/file.
 
 
-Backend-to-browser realtime delivery uses SignalR. Exact hub and method schema
-remain TBD. The operations console's proposal (hub `/hubs/operations` with
-`FleetUpdated`, `TourUpdated(tourId, revision)`, `AssistanceRequired`, and the
-`/api/staff/tours/*` + `/api/staff/robots/*` calls it expects, following the
-remote-tour scope of 19/09/2026) is written down in
-`web/src/api/contracts/staff-realtime.ts`, `web/src/api/contracts/staff.ts` and
-`web/docs/staff-operations.md`; it is not agreed until recorded here. The same
-holds for administration's proposal (`/api/admin/tours|registrations|routes/*`,
-version tokens, JSON error bodies with `StaleData` / `NotAllowed` /
-`Validation` / `EmailFailed`) in `web/src/api/contracts/admin.ts` and
-`web/docs/admin-tours.md`.
+Backend-to-browser realtime uses the selected `/hubs/operations` boundary.
+`FleetUpdated`, `TourUpdated(tourId, revision)`, and `AssistanceRequired` are
+the operations event vocabulary; payloads are backend projections, not raw
+fleet reports. `web/src/api/contracts/staff-realtime.ts` records the unwired
+frontend proposal. Exact payload mapping and reconnect/refetch behavior still
+need implementation agreement, including revision handling across backend
+restart. This decision does not approve or implement the proposed staff/admin
+HTTP APIs in `web/src/api/contracts/staff.ts` and
+`web/src/api/contracts/admin.ts`, nor their error/version contracts.
 
-Backend-to-browser realtime delivery is **planned** to use SignalR; the
-backend has no Hub yet. Authentication implementation and the dispatch
-algorithm are also pending. Exact hub/method and fleet wire schemas remain
-TBD.
+No robot-to-backend or backend-to-browser frequency is fixed in this decision.
+Production integration must declare configurable operational rates and
+freshness thresholds, independently of ROS internal rates. Send execution/fault
+changes promptly; bound buffers and
+keep network I/O off ROS callbacks. Latest-state pose delivery must not discard
+terminal results, which require separate retention/retry. The SimulationPreview
+10 Hz limit remains local to preview. Research implementation and benchmark
+execution are deferred under Section 5. Research requirements impose no
+constraints or acceptance gates on this production milestone; the Capstone
+scope remains unchanged.
+
+The backend already has a development SimulationHub. Production fleet and
+operations Hubs, authentication, and dispatch remain unimplemented. A single
+backend process with per-robot latest state is the initial implementation
+baseline; multiple instances would require shared-state and connection-routing
+design, not just separate Hub names.
+
+### 3.4 State and command-result semantics
+
+| Field | Requirement and meaning |
+|---|---|
+| `robotId` | Required canonical code such as `robot_01`; maps to `Robot.RobotCode`, not the SQL GUID `Robot.Id`. Must match authenticated identity. |
+| `streamId` | Required process-start identifier; retained across network reconnect, changed on process restart. |
+| `seq` | Required positive sequence increasing within a stream; ordering key is `(robotId, streamId, seq)`. |
+| `reportedAt` | Required UTC wall-clock report creation time. Backend adds its own receipt time for liveness. |
+| `mapKey`, `frameId` | Required loaded-map context; `frameId` is currently `map`. Targets must match that context, not just the same frame name. |
+| `pose` | Optional/nullable when unavailable; if present, requires finite `x`, `y` in metres, `yaw` in radians, and `capturedAt`. |
+| `pose.capturedAt` | UTC wall-clock time of the represented pose sample, distinct from report creation time. Never refresh it just because a heartbeat is new. |
+| `status` | Required execution status: `IDLE`, `NAVIGATING`, `ARRIVED`, `FAILED`, or `UNKNOWN`. |
+| `legId` | Required for active-leg state and leg-specific results; otherwise nullable. Correlates an execution attempt, not a whole tour. |
+| `localized` | Optional/nullable localization assessment; missing/null means unknown, not ready. TF existence alone cannot establish `true`. |
+| `faultCode` | Optional stable fault identifier when available; do not fabricate a fault merely from connection loss. |
+| `batteryPercent` | Optional/nullable measured percentage; the physical robot is not assumed to provide it and it is not a mandatory dispatch rule. |
+
+Numeric JSON `seq` must stay within `1..9007199254740991` for exact representation
+in the browser; a backend int64 type alone does not guarantee this.
+
+Use `reportedAt` and `pose.capturedAt` to distinguish a living bridge from a stale
+pose. ROS time and wall-clock conversion/freshness thresholds must be documented
+when implementing the bridge. Sequence ordering does not depend on synchronized
+wall clocks. Server-side source metadata comes from `Robot.SourceType`; no
+per-sample source/version field is required by this MVP.
+
+Execution status is separate from both `Tour.State` and connection/freshness.
+`UNKNOWN` means the bridge/robot cannot determine execution, for example after
+losing goal information. Backend loss of contact marks its connection view
+stale/disconnected; it does not turn a known robot execution report into a new
+robot-reported `UNKNOWN` or prove that navigation stopped.
+
+For `ReportCommandResult`, `commandKind` is `GoTo` or `Cancel`, and `phase` is
+`ACCEPTED`, `REJECTED`, or `TERMINAL`. `outcome` is required only for `TERMINAL`
+and is `ARRIVED`, `CANCELLED`, or `FAILED`; `reason` is optional explanatory
+context. Robot identity is supplied by the authenticated current connection.
+Correlate by robot, leg, and command kind, distinguishing acceptance from the
+later terminal phase. Deduplicate repeated terminal reports while reconciling
+one actual terminal leg outcome if both GoTo and Cancel reports arrive.
+One logical outcome may be transmitted repeatedly until acknowledged; do not
+interpret it as "send TERMINAL only once". Completion of a result invocation is
+an acknowledgement only when the handler waits for required processing and
+state/event commit. A transport-level send or receipt does not establish that.
+
+```text
+Cancel(legId) -> ACCEPTED -> Nav2 terminal result
+             -> ReportCommandResult(legId, Cancel, TERMINAL, actual outcome)
+             -> IDLE
+```
+
+`CANCELLED` is a terminal result, never a `ReportState.status` value. Neither
+SignalR send completion, `ACCEPTED`, nor later `IDLE` proves a cancellation.
+If arrival precedes effective cancellation, report `ARRIVED`. A result timeout
+without a confirmed Nav2 outcome requires reconciliation, not a fabricated
+`FAILED`/`CANCELLED`. Retain and resend terminal results until backend processing
+is acknowledged; an idle heartbeat cannot replace the result of the exact leg.
+
+### 3.5 ROS mapping and navigation ownership
+
+Production pose uses TF `map -> base_footprint`, combining AMCL global
+correction with EKF odometry; `/amcl_pose` is not the sole fleet pose source.
+Check transform availability and freshness. Good localization still needs an
+explicit readiness criterion, not merely a present TF. The current global TF
+tree and multi-robot limitations in Section 2.1 are unchanged.
+
+`GoTo` maps directly to the robot's namespaced Nav2 `NavigateToPose` action
+using the backend target pose/map/frame. `Cancel` targets that leg's goal.
+`GoToStop.action` and `bus_stops.yaml` stay local/manual development fixtures.
+There is exactly one production navigation-goal owner: fleet bridge, local
+stop navigator, and RViz must not send competing goals. Keep the existing
+Nav2 -> mode manager -> motor path; the backend/bridge never publishes raw
+`/cmd_vel`. No ROS interface, Nav2, AMCL, or EKF implementation changes here.
+
+Bind the robot's `mapKey` to its deployed, loaded map through explicit
+configuration/validation. Do not copy the requested key from GoTo or derive map
+identity merely from the frame name `map`. Reject a mismatched map/frame before
+creating a Nav2 goal; `MAP_MISMATCH` is the proposed reason to finalize with DTO
+binding. Readiness also requires live/fresh state, no active unresolved leg,
+localization readiness, available Nav2, and locally permitted motion (including
+E-stop/manual ownership checks). A missing `faultCode` is not positive evidence
+of readiness. Proposed diagnostic codes such as `NAV2_UNAVAILABLE`, `TF_STALE`,
+and `ESTOP_ENGAGED` need actual local evidence and a mapping contract.
+
+Before physical end-to-end testing, define the initial-pose/operator procedure
+and readiness evidence. `set_initial_pose: false` is deliberate; neither an
+RViz initial-pose message nor `Route.StartX/Y/Yaw` proves the robot is localized
+at that position. This prerequisite does not block the transport-only spike.
+
+### 3.6 Connection lifecycle and idempotency
+
+- Retry initial connection failure and automatically reconnect after disconnect,
+  with bounded backoff and jitter. Register handlers once, not on every retry.
+- Keep one current authenticated connection per robot. A valid new connection
+  supersedes the old; reject reports from the old connection and prevent its
+  disconnect callback from removing the new one.
+- Reject duplicate/out-of-order state within `(robotId, streamId, seq)`. Bind
+  streams to the authenticated current connection; reconcile new streams after
+  process restart rather than comparing sequence numbers across streams.
+- Duplicate `GoTo` with the same leg and target returns existing execution/result
+  information without creating a new goal. The same leg with a different target
+  is rejected. A busy robot rejects other legs, without automatic preemption or
+  an implicit queue.
+- `Cancel` is idempotent and leg-specific. A late duplicate GoTo, including one
+  arriving after Cancel for that leg, must not revive canceled execution.
+- Keep terminal results through reconnect until backend processing is confirmed;
+  backend result handling is idempotent and must not advance a tour twice.
+- Reconnect sends current execution state for reconciliation before new dispatch.
+  Lost execution information after restart requires `UNKNOWN`/reconciliation,
+  not blind replay. Backend restart or connection loss must not be mistaken for
+  robot-reported execution failure. The robot-local connectivity-loss stop and
+  no-auto-resume requirement is in Section 6; its detection budget, crash
+  coverage, and recovery mechanism must be validated before physical operation.
+  Replaying a persisted intent after bridge restart is not automatically safe:
+  in-memory idempotency history may be gone. Reconcile first.
+
+These are application guarantees, not exactly-once delivery or distributed
+consensus supplied by SignalR.
+
+### 3.7 Authentication and compatibility acceptance gate
+
+The local-only spike may bootstrap with dummy/local identity. Passing the
+checkpoint requires valid credentials, invalid-credential rejection,
+authenticated reconnect, and backend restart. Outside that spike, before
+allowing navigation commands require TLS, a machine credential per robot, and
+a fleet-machine authorization policy. User/browser identities cannot submit
+robot state or use the fleet Hub. Operations requires separate user access.
+Reuse `Robot.CredentialHash`; auth implementation and credential lifecycle are
+later work, without adding PKI/mTLS or a device-management platform to the MVP.
+
+After these docs are merged, the next task is a small Python SignalR client
+against an ASP.NET Core/.NET 10 test Hub. The acceptance checklist is in
+[ADR-0008](decisions/0008-production-fleet-transport.md#python-compatibility-checkpoint-next-step-after-documentation-merge):
+runtime parity with the robot's Humble image; verified TLS/auth; bidirectional
+representative payloads; initial retry; clean and silent loss detection;
+authenticated reconnect/backend restart; observable result acknowledgement and
+idempotent replay; bounded offline buffering; and an at least 30-minute soak
+at a declared configurable test rate with memory/queue/callback evidence.
+The test rate is not a production frequency or research requirement. No ROS
+nodes, TF, Nav2, or hardware is needed. Spike measurements do not establish a
+physical stop budget.
+
+**Python SignalR compatibility with ASP.NET Core/.NET 10 is unproven and must
+pass this checkpoint before production fleet bridge implementation.** No Python
+client dependency is selected here. If it fails, review the transport for both
+the physical bridge and Fleet Emulator; no fallback implementation is chosen.
 
 
 ---
@@ -351,6 +591,29 @@ can be aligned deliberately.
 The web twin is not a physics engine, web Nav2 implementation, collision
 simulator, LiDAR point-cloud or camera-texture viewer, scenario editor, or
 predictive engine.
+
+### Remote viewer and livestream integration boundary
+
+Remote visitors receive a read-only projection of tour progress, robot position,
+and POI/narration cues. This is separate from staff control and must not expose
+rosters or navigation commands. Audience authorization and exact delivery
+endpoint remain to be specified in the viewer integration patch; this decision
+does not select group-code authentication or a new Hub.
+
+Livestream is a separate media path, not payload on `/hubs/fleet` or a camera
+texture requirement for the operational Twin. Staff start/progression checks
+need an explicit, testable source of stream availability. Its owner, observation
+method, freshness, and manual-confirmation policy must be defined before full
+Remote Tour acceptance. A media outage is distinct from loss of the backend
+control connection: the existing staff recovery flow can let a navigating leg
+finish and hold at the POI on media outage; it does not waive the local
+connectivity-loss stop requirement.
+
+The older booking-oriented `web/src/api/contracts/visitor.ts` includes visitor
+pause/resume/end calls. Those calls are not an authorized Remote Tour robot
+control contract; reconcile that frontend separately without changing it in
+this documentation patch. Browser narration/media responsibilities also do not
+add audio or head commands to the navigation fleet MVP.
 
 ---
 
@@ -400,7 +663,7 @@ correctness. The legacy Classic integration is retained, not migrated here.
 The external Fleet Emulator belongs in `digital-twin/`; see
 [ADR-0004](decisions/0004-external-fleet-emulator.md). Only its executable
 scaffold exists today. Its **planned** behavior simulates pose/state
-progression toward per-leg `go_to` targets and supplies controlled multi-robot
+progression toward per-leg `GoTo` targets and supplies controlled multi-robot
 load through the same external contract as physical and Gazebo robots. It must
 not reference `SmartCampus.Application`,
 `SmartCampus.Infrastructure`, or other backend implementation projects. A
@@ -419,38 +682,70 @@ Scenario orchestration, what-if analysis, replay engines, predictive
 simulation, Isaac Sim, and a stress-test scenario editor are future/stretch
 work, not core requirements.
 
-The primary research question is how increasing fleet load affects the
-Web-based Operational Digital Twin's synchronization latency and update
-freshness. Primary metrics are:
+**Research implementation and benchmark execution are deferred until the production
+Remote Tour end-to-end path works.** Fleet-scale synchronization research stays
+in project scope; it is not a prerequisite for the production transport,
+fail-safe, head integration, or tour orchestration work.
 
-- p95 end-to-end state synchronization latency;
-- effective frontend update rate / state freshness.
-
-The planned latency measurement starts when the robot/emulator creates state
-and stops when the browser SignalR callback receives it. Three.js render time
-is outside this synchronization metric. One-way measurements across machines
-must document NTP/chrony or an equivalent synchronization mechanism and the
-clock policy in the methodology.
-
-Sequence numbers support ordering and gap detection. A skipped `seq` is not
-automatically "packet loss": latest-state/coalescing semantics may
-intentionally omit intermediate states.
-
-Experiments increase the synthetic fleet until a predefined latency/freshness
-SLO is violated, resource use approaches a predefined safe limit, or a
-predefined test cap is reached. Crashing the server is not the success
-criterion. Exact SLOs, update frequency, safe resource limit, and test cap
-remain TBD and must be recorded with each experiment.
+The Capstone documents, including the Register's research methodology, remain
+authoritative and unchanged. This deferral neither removes nor redefines any
+official research requirement. All research-related architecture decisions are
+frozen for this milestone: do not reconcile research telemetry rates, latency
+metrics or targets, freshness ratio, emulator fleet size, measurement clients,
+benchmark SLOs, or the measurement pipeline as part of production work. None
+may constrain or block the production end-to-end path. Revisit research
+implementation and benchmarking in a separate task after that path works.
 
 ---
 
 ## 6. Safety boundary
 
-Planned backend/web operational commands may assign or reassign a robot and
-cancel a tour or navigation leg. Cloud/web cancellation is not an Emergency
-Stop and must not be presented as one. Physical/local emergency-stop and
+Planned backend/web operations claim a robot at Start and may cancel a tour or
+navigation leg; no automatic mid-tour reassignment is part of this flow.
+Cloud/web cancellation is not an Emergency Stop and must not be presented as
+one. Physical/local emergency-stop and
 fail-safe behaviour remain robot-side safety concerns; the real ROS
 emergency-stop interfaces are unchanged.
+
+Production physical fleet operation requires a **robot-local stop/inhibit on
+backend connectivity loss beyond a validated `T_loss`, with no automatic
+resume**. A cloud request cannot provide this guarantee during a partition.
+Transport recovery alone must not restart motion; staff recovery requires
+reconciled execution, readiness/on-site checks, and a new leg attempt.
+
+Existing layers are insufficient evidence of WAN-loss coverage:
+
+- `robot/ros2_ws/src/robot_control/config/mode_manager.yaml` sets
+  `nav_timeout: 0.5` for stale Nav2 velocity input, not backend connectivity.
+- The STM32 serial timeout is `CMD_TIMEOUT_MS = 300` in
+  `robot/firmware/stm32/motor_controller/Core/Inc/usb_protocol.h`;
+  `Protocol_CheckTimeout` calls `Motor_StopAll` after valid serial traffic stops.
+  It cannot detect WAN loss while the miniPC continues supplying valid traffic,
+  and its constant is not a measured upper bound on physical stopping distance.
+- An active Nav2 goal may outlive its fleet action client; bridge crash/orphan
+  goal behavior must be tested, not inferred from socket disconnection.
+
+Before the first physical GoTo through the fleet path, a separate robot safety
+patch must specify and test the local liveness detector/supervisor, timeout
+budget, motion-inhibition path through robot control, and targeted Nav2 goal
+cancellation/reconciliation. It must cover silent loss, backend restart, bridge
+crash, and startup with unknown goals. A detector inside the bridge alone does
+not cover bridge crash. Inhibition must remain effective when action cancellation
+is delayed or fails; do not depend solely on a cooperative Nav2 result.
+Keep command ownership explicit instead of unconditionally canceling every
+goal at bridge startup. No firmware or robot-control implementation changes
+are made here.
+
+Choose `T_loss` using transport measurements plus the acceptable stopping budget
+and hardware evidence; the Python spike cannot determine safety by itself.
+Coordinate backend stale/assistance thresholds with this policy without making
+backend stale detection the local safety mechanism. A locally interrupted leg
+must retain its cause (connectivity loss, local stop, or navigation fault), not
+pretend it received a backend Cancel. Final reason/outcome mapping and recovery
+are required in that patch; until termination is known, report uncertainty
+rather than manufacturing a terminal result. If ARRIVED occurred before the
+interruption took effect, retain that actual outcome. Physical acceptance must
+observe motor stopping and no automatic restart, not only successful action RPCs.
 
 ---
 

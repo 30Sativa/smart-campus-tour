@@ -58,20 +58,37 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 - The **production fleet bridge** for the physical robot lives here (planned:
   `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
   is `Backend fleet contract ↔ ROS navigation/state`. It is a translator
-  only — ROS 2 on one side, the backend's still-TBD external transport on the
-  other. It must
-  not contain booking rules, scheduling, or robot-assignment logic; those are
+  only — ROS 2 on one side, SignalR JSON Hub Protocol over TLS on the other
+  (`/hubs/fleet`, ADR-0008). Python compatibility with ASP.NET Core/.NET 10
+  is unproven and must pass the checkpoint in
+  `docs/decisions/0008-production-fleet-transport.md` before production bridge
+  implementation. It must not contain booking rules, scheduling, or
+  robot-assignment logic; those are
   backend concerns (`docs/architecture.md` §3). The robot executes one leg at
   a time; it never receives a full tour to orchestrate. Bridge commands go
-  through the robot navigation boundary, never straight onto `/cmd_vel`.
+  directly to Nav2 `NavigateToPose`, never straight onto `/cmd_vel`. Use TF
+  `map -> base_footprint` for fleet pose, checking freshness separately from
+  localization readiness. Production has one navigation-goal owner; local stop
+  navigator and RViz goals must not compete with the fleet bridge.
   The existing `gazebo_preview_bridge` is a separate development-only path:
   Gazebo → local SimulationPreview backend. It is not physical-robot
   telemetry or the production fleet transport, and the future production
   package must not depend on Gazebo or simulation.
+- Before physical fleet-command operation, implement and hardware-test the
+  local connectivity-loss stop/inhibit and no-auto-resume policy in
+  `docs/architecture.md` Section 6, including bridge crash and unknown Nav2
+  goals. Existing Nav2-input/serial timeouts do not detect loss of backend
+  connectivity. Python compatibility testing is not physical fail-safe evidence.
+- Rotating-head control remains a separate contract/controller patch, outside
+  the navigation wire MVP. Head/pan presets remain a V1 requirement. Confirmed
+  FRONT before first/next legs is the current Remote Tour orchestration decision,
+  not an independently verified Capstone requirement. A sent head command is
+  not completion evidence.
 - Production POI target poses come from backend-managed route/POI data and are
   meaningful only in their map/frame/context. The current
-  `bus_manager/config/bus_stops.yaml` remains a local/manual-development
-  fallback or test fixture, not the production source of truth. The ROS
+  `robot/ros2_ws/src/bus_manager/config/bus_stops.yaml` and `GoToStop.action`
+  remain local/manual-development test fixtures, not the production boundary
+  or source of truth. The ROS
   migration needed for the per-leg external contract is a separate task.
 - Launch files must keep RViz **off by default** (`rviz:=true` to enable) so a
   headless miniPC does not hang.

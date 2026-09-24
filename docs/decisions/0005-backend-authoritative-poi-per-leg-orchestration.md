@@ -14,21 +14,36 @@ slots, tour progress, robot assignment, POI content, and navigation targets.
 ## Decision
 
 The backend owns authoritative POI/route data and the tour state machine. Each
-`TourLeg` resolves to a target containing `stop_id`, `x`, `y`, and `yaw` in
-the correct map/frame/context. The backend sends only the current leg through
-conceptual commands:
+`TourLeg` resolves to a target pose in the correct map/frame/context. The
+backend sends only the current leg. [ADR-0008](0008-production-fleet-transport.md)
+refines the original conceptual `go_to` / `cancel` notation to:
 
 ```text
-go_to { leg_id, stop_id, x, y, yaw }
-cancel { leg_id }
+GoTo { legId, mapKey, frameId, x, y, yaw, stopId? }
+Cancel { legId }
 ```
 
 The robot executes that leg and reports execution state; it does not receive
-an entire tour or own progression between stops. Transport, authentication,
-exact wire schema, and the mapping onto ROS interfaces remain TBD.
+an entire tour or own progression between stops. ADR-0008 selects SignalR JSON
+Hub Protocol over TLS, with a mandatory Python-to-ASP.NET Core/.NET 10
+compatibility checkpoint before production bridge implementation. The
+checkpoint has not passed. `docs/architecture.md` Section 3 records the
+conceptual report shapes, machine-auth requirements, and reconnect semantics;
+final DTO binding and implementations remain pending.
 
-`bus_stops.yaml` may remain as a local/manual-development fallback or test
-fixture, but it is not the source of truth for production POI coordinates.
+Production `GoTo` maps directly to Nav2 `NavigateToPose`. `stopId` is optional
+metadata, not a local lookup instruction; end/return legs need not have a stop.
+Pose reports use TF `map -> base_footprint`, with separate freshness and
+localization assessment. One owner sends production navigation goals.
+
+Cancellation requires the terminal outcome of the exact leg through
+`ReportCommandResult`; acceptance or later `IDLE` alone is insufficient. If
+arrival precedes effective cancel, the outcome is `ARRIVED`. `CANCELLED` is a
+terminal result, not an execution status. `UNKNOWN` execution means the bridge
+cannot determine execution, not that the backend lost its connection.
+
+`GoToStop.action` and `bus_stops.yaml` remain local/manual-development test
+fixtures, not the production boundary or source of truth for POI coordinates.
 
 ## Consequences
 
@@ -43,9 +58,9 @@ Positive:
 
 Negative:
 
-- The current named-stop action and navigator do not yet implement this
-  production contract; a later reviewed implementation task must migrate or
-  adapt the boundary.
+- The current named-stop action and navigator are local tools. A later bridge
+  implementation must use the selected direct Nav2 boundary without making
+  local/manual goal senders compete with production control.
 - Backend POI data must retain its map/frame/context, because coordinates
   without that context are unsafe and meaningless.
 - Retries, duplicate commands, and out-of-order state require idempotency and

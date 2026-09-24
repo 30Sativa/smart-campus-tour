@@ -13,7 +13,9 @@ flows; review those contracts before implementing them.
 - C# / .NET 10, controller-based ASP.NET Core Web API, MediatR,
   FluentValidation, xUnit.
 - SQL Server + EF Core **Database First**. No normal EF migrations.
-- SignalR is the chosen browser realtime transport, but no Hub exists yet.
+- SignalR serves the development SimulationPreview Hub. Production fleet and
+  operations Hubs are selected but not implemented; ADR-0008 requires a Python
+  compatibility checkpoint before production fleet bridge implementation.
 - Four separate projects; no root-level backend project or extra architecture
   layer.
 
@@ -29,17 +31,18 @@ backend/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
 │   ├── SmartCampus.Application/     Common/, DependencyInjection.cs
 │   ├── SmartCampus.Infrastructure/  Persistence/, DependencyInjection.cs
-│   └── SmartCampus.Api/             Common/, ExceptionHandling/,
+│   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
 │                                    Properties/, Program.cs, appsettings.json
 └── tests/
     ├── SmartCampus.UnitTests/
     └── SmartCampus.IntegrationTests/
 ```
 
-Current `backend/src/SmartCampus.Api/` has no Controller or Hub implementation;
-current `backend/src/SmartCampus.Application/` has no feature use case or
-repository abstraction. An absent extension folder on GitHub is not missing
-setup.
+Current `backend/src/SmartCampus.Api/` has a development-only simulation
+controller and Hub; Application has its transient pose-publishing feature.
+Production fleet/operations Hubs, tour/dispatch use cases, and feature
+repository abstractions remain unimplemented. An absent extension folder on
+GitHub is not missing setup.
 
 Compile-time dependencies: `Domain` has no project references; `Application`
 references `Domain`; `Infrastructure` references `Application` and `Domain`;
@@ -69,7 +72,7 @@ backend/src/SmartCampus.Application/
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          future: create for the first use case
+├── Features/                          Simulation exists; add other real use cases as needed
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
 │       └── Queries/<UseCase>/
@@ -81,14 +84,14 @@ backend/src/SmartCampus.Infrastructure/
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
 │   └── Repositories/                future: specific implementations
 ├── Authentication/                   future: JWT/password/token technology
-├── Integrations/                     future: fleet, email, storage adapters
+├── Integrations/                     future: external adapters without Api/Hub references
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Api/
 ├── Common/{Requests,Responses}/
-├── Controllers/                      future: HTTP endpoints
+├── Controllers/                      simulation exists; production HTTP endpoints future
 ├── ExceptionHandling/
-├── Hubs/                             future: SignalR transport
+├── Hubs/                             Simulation exists; fleet/operations future
 ├── Properties/
 └── Program.cs
 ```
@@ -156,12 +159,34 @@ tour progression; the robot bridge only translates external commands to ROS.
 For production targets, use the backend-managed map/frame context and send
 only the current navigation leg. Keep transient high-frequency robot telemetry
 out of transactional SQL. A future fleet boundary such as `IFleetGateway` is
-an Application abstraction; its transport adapter belongs in
-`backend/src/SmartCampus.Infrastructure/Integrations/Fleet/`. The transport,
-authentication, and exact wire schema remain undecided. Do not invent REST or
-gRPC messages before the cross-system contract is agreed in
-`docs/architecture.md`. ROS topics and message types stay outside Domain and
-Application. A controller must never call a fleet or ROS client directly.
+an Application abstraction. For the selected SignalR transport, the thin
+adapter using `IHubContext` belongs in Api alongside the Hubs; do not make
+Infrastructure reference Api to access a Hub. ADR-0008 and
+`docs/architecture.md` Section 3 select SignalR JSON Hub Protocol over TLS,
+separate `/hubs/fleet` and `/hubs/operations`, and the conceptual command/report
+contract with machine-auth requirements. Python compatibility remains unproven
+and gated; final DTO binding and implementations remain pending. ROS topics
+and message types stay outside Domain and Application. A controller must never
+call a fleet or ROS client directly.
+
+FleetHub is not tour orchestration. Later Application work must persist the
+execution intent/current leg before external send and reconcile the outcome.
+The current commit-after-handler pipeline does not make an external GoTo and
+SQL commit atomic; no distributed transaction or pipeline change is introduced
+by this decision. Transient state ingestion must not commit every pose to SQL.
+
+`docs/architecture.md` Section 3.2 records planned Remote Tour semantics:
+atomic robot claim at Start, Hold only at a POI, Next after confirmed FRONT,
+and End Early retaining `Robot.CurrentTourId` / `NeedsInspection` until safe
+release. No automatic mid-tour reassignment or timer restoration after backend
+restart. Do not copy mock-only state mutation into persistence as a concurrency
+guarantee. A result acknowledgement follows required state/event commit;
+replayed terminal reports must not advance a tour twice. These are implementation
+requirements, not existing backend features. Specifically, `Next -> FRONT ->
+next leg` is the current Remote Tour orchestration decision, not an independently
+verified Capstone requirement; head/pan presets remain a V1 requirement.
+Research implementation/benchmark execution are deferred and do not gate this
+production flow; the Capstone methodology remains in force.
 
 ## 4. Request, persistence, and response flow
 
@@ -261,9 +286,15 @@ authorization.
 SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/` when a realtime
 use case exists. Application must not depend on SignalR types; add an
 Application notification boundary only when needed, then implement its
-transport adapter in Api or Infrastructure according to the transport. Hub
-names and methods are not yet a contract; record them in
-`docs/architecture.md` before cross-system use.
+transport adapter in Api or Infrastructure according to the transport. The
+fleet/operations boundaries and conceptual fleet methods are now recorded in
+`docs/architecture.md` and ADR-0008; production implementation is still pending.
+Before navigation commands are enabled outside the local compatibility spike,
+require TLS, per-robot credentials using the existing `Robot.CredentialHash`
+concept, and a fleet-machine policy distinct from operations user access.
+Browser/user credentials must not submit robot state. The local spike may
+bootstrap with dummy identity, but passing the checkpoint requires valid and
+invalid credentials, authenticated reconnect, and backend restart tests.
 
 ## 7. Tests, verification, and limits
 

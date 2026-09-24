@@ -37,18 +37,22 @@ Scenario orchestration, what-if analysis, replay engines, predictive
 simulation, Isaac Sim, and a stress-test scenario editor are future/stretch
 work rather than core scope.
 
-## Research measurement
+## Research status: architecture frozen, execution deferred
 
-Primary metrics are p95 end-to-end state synchronization latency and effective
-frontend update rate/state freshness as synthetic fleet load increases. Timing
-starts when a robot/emulator creates state and stops when the browser SignalR
-callback receives it; Three.js rendering is excluded. Cross-machine one-way
-measurements must document clock synchronization and clock policy.
+Fleet research remains in project scope. Emulator implementation and benchmarks
+are deferred until the production Remote Tour end-to-end path works; they do
+not block physical fleet transport, robot fail-safe, rotating head, or backend
+tour orchestration. A small protocol test client for production transport is
+not a fleet benchmark.
 
-Sequence gaps may reflect intentional latest-state/coalescing behaviour and
-must not automatically be labelled packet loss. Experiments stop at a
-predefined latency/freshness SLO violation, a predefined safe resource limit,
-or a predefined test cap; crashing the server is not required.
+The Capstone documents, including the Register's research methodology, remain
+authoritative and unchanged. This deferral neither removes nor redefines any
+official research requirement. All research-related architecture decisions are
+frozen for this milestone. Do not reconcile research rates, latency metrics or
+targets, freshness ratio, emulator fleet size, measurement clients, benchmark
+SLOs, or the measurement pipeline during production work. They impose no
+production constraints or acceptance gates. Revisit implementation and
+benchmarking in a separate task after the production end-to-end path works.
 
 ## Foundation status
 
@@ -57,8 +61,25 @@ external synthetic client and currently only prints a startup message. The
 official SignalR client is referenced for the future robot/backend connection;
 there is no connection, authentication, command, state, or benchmark logic yet.
 
-Transport, authentication, exact wire schema, update frequency, SLOs, safe
-resource limits, and test caps remain undecided.
+`docs/decisions/0008-production-fleet-transport.md` selects SignalR JSON Hub
+Protocol over TLS on `/hubs/fleet`, shared with the physical bridge. Production
+use is gated on the still-unproven Python client compatibility with ASP.NET
+Core/.NET 10. The checkpoint follows documentation merge and precedes
+production bridge implementation. A failed checkpoint reopens transport review
+for both clients; no fallback is preselected.
+
+`docs/architecture.md` Section 3 records conceptual `GoTo`, `Cancel`,
+`ReportState`, and `ReportCommandResult` semantics, machine identity/auth, and
+reconnect rules. Each emulated robot uses its own identity/connection. Retain
+`Robot.SourceType` / eligibility so synthetic robots cannot serve real tours.
+The development Gazebo preview remains a separate path.
+
+Operational rates remain configurable and must be recorded during production
+integration; no numeric rate is fixed here. Exact DTO binding, auth
+implementation, and recovery details remain production work. Research
+implementation/benchmark execution are deferred under the unchanged Capstone
+scope; no research architecture decisions are made in this milestone.
+No Emulator behavior or dependency is added by this documentation decision.
 
 ## Verification
 
