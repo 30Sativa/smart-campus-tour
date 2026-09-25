@@ -1,0 +1,20 @@
+# Start the Quest stream at boot and restart it if it dies.
+# Install: see README.md "Run at boot". Replace USER and the path below.
+[Unit]
+Description=Quest 3 USB -> HLS live stream (Smart Campus Tour)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=USER
+WorkingDirectory=/home/USER/smart-campus-tour/robot/quest-stream
+ExecStart=/home/USER/smart-campus-tour/robot/quest-stream/scripts/start-stream.sh --foreground
+Restart=on-failure
+RestartSec=5
+# The server waits for the Quest itself; systemd only restarts on a crash.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

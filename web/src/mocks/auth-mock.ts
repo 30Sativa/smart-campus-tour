@@ -22,10 +22,13 @@ export const MOCK_ACCOUNTS = [
   // by registering, and a freshly registered name is not one the visitor
   // fixtures know anything about.
   { username: 'visitor', password: 'visitor', role: 'Visitor', userId: 'mock-user-visitor' },
+  // School representative (flow review §4). Owns the demo groups of THPT Trần Phú
+  // in `representative-sim.ts`.
+  { username: 'daidien', password: 'daidien', role: 'Representative', userId: 'mock-user-daidien' },
 ] as const
 
 export const MOCK_ACCOUNTS_HINT =
-  'Tài khoản mẫu: visitor/visitor (khách), staff/staff (vận hành), admin/admin (quản trị)'
+  'Tài khoản mẫu: visitor/visitor (khách), staff/staff (vận hành), admin/admin (quản trị), daidien/daidien (đại diện trường)'
 
 export class MockAuthError extends Error {}
 

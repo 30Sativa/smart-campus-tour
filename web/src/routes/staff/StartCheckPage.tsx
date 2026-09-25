@@ -11,6 +11,8 @@ import { formatTime } from '../../features/staff/formatters'
 import { statusLabel } from '../../features/staff/status'
 import { ConfirmationDialog } from '../../features/staff/components/ConfirmationDialog'
 import { LiveCameraPreview } from '../../features/staff/components/LiveCameraPreview'
+import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
+import { QUEST_STREAM_URL } from '../../features/quest-stream/quest-stream-config'
 import { RegistrationList, StartChecklist, TourStateBadges } from '../../features/staff/components/TourParts'
 import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
 import { useNow } from '../../features/staff/use-now'
@@ -96,7 +98,9 @@ export default function StartCheckPage() {
         <aside className="space-y-5">
           <section className={panelClass} aria-label="Preview nguồn hình">
             <PanelHead title="Preview nguồn hình" action={<StatusBadge value={data.livestream.state} />} />
-            <div className="p-4"><LiveCameraPreview livestream={data.livestream} robotName={robot?.name} /></div>
+            <div className="p-4">
+              {QUEST_STREAM_URL ? <QuestLiveVideo label={robot?.name} /> : <LiveCameraPreview livestream={data.livestream} robotName={robot?.name} />}
+            </div>
           </section>
 
           <section className={panelClass} aria-label="Điều kiện bắt đầu">

@@ -15,6 +15,8 @@ import { homePathForRole } from '../../auth/roles'
  *   `/visit/*` visitor  the visitor app: explore, book a robot, walk a tour
  *   `/staff/*` staff    tour operations, for Staff and Admin
  *   `/admin/*` admin    Tour administration (create, review groups, e-mail, Chốt/Mở lại/Hủy), Admin only
+ *   `/dai-dien/*`       school representative: register a group, roster, invitation
+ *   `/tour/*`           students, no account: join, waiting room, live, end
  *
  * All three signed-in areas are lazy, shell included, so a visitor loading `/`
  * downloads none of them, a visitor never downloads operations, and an operator
@@ -43,6 +45,17 @@ const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
 const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
 const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
+
+// Students join a remote tour with the group code, no account (flow review 21/09/2026 §5).
+const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'))
+
+// School representative (flow review 21/09/2026 §4).
+const RepresentativeShell = lazy(() => import('../../features/representative/RepresentativeShell'))
+const RepToursPage = lazy(() => import('../../routes/representative/RepToursPage'))
+const RepTourDetailPage = lazy(() => import('../../routes/representative/RepTourDetailPage'))
+const RepRegisterPage = lazy(() => import('../../routes/representative/RepRegisterPage'))
+const RepRegistrationsPage = lazy(() => import('../../routes/representative/RepRegistrationsPage'))
+const RepRegistrationDetailPage = lazy(() => import('../../routes/representative/RepRegistrationDetailPage'))
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
@@ -105,6 +118,16 @@ function VisitorArea() {
   )
 }
 
+function RepresentativeArea() {
+  return (
+    <RequireArea area="representative">
+      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
+        <RepresentativeShell />
+      </Suspense>
+    </RequireArea>
+  )
+}
+
 function StaffArea() {
   return (
     <RequireArea area="staff">
@@ -147,6 +170,37 @@ export const routes = [
     children: [
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
+    ],
+  },
+  // Students: join with the group code, then waiting room, live and end (no account).
+  {
+    path: '/tour',
+    element: (
+      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
+        <StudentTourPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/tour/:tourId',
+    element: (
+      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
+        <StudentTourPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/dai-dien',
+    element: <RepresentativeArea />,
+    children: [
+      { index: true, element: <RepToursPage /> },
+      { path: 'buoi/:tourId', element: <RepTourDetailPage /> },
+      { path: 'buoi/:tourId/dang-ky', element: <RepRegisterPage /> },
+      { path: 'dang-ky', element: <RepRegistrationsPage /> },
+      { path: 'dang-ky/:registrationId', element: <RepRegistrationDetailPage /> },
+      { path: 'dang-ky/:registrationId/sua', element: <RepRegisterPage /> },
+      // A mistyped path inside the area stays inside the area.
+      { path: '*', element: <Navigate to="/dai-dien" replace /> },
     ],
   },
   {

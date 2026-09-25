@@ -6,11 +6,12 @@
  * a signed-in account out of an area it has no business in, including by direct
  * URL, and it decides where a fresh sign-in lands.
  *
- * Three roles, three signed-in areas, and they line up one to one:
+ * Four roles, four signed-in areas, and they line up one to one:
  *
  *   Visitor  `/visit/*`, the visitor app: explore, book a robot, walk a tour
  *   Staff    `/staff/*`, tour operations
  *   Admin    `/admin/*`, administration, and `/staff/*` as well
+ *   Representative `/dai-dien/*`, a school registers its group (flow review §4)
  *
  * The public pages at `/` need no account at all and are open to every role.
  *
@@ -26,12 +27,14 @@
 export const ADMIN_ROLE = 'Admin' as const
 export const STAFF_ROLE = 'Staff' as const
 export const VISITOR_ROLE = 'Visitor' as const
+/** School representative: registers a group and manages its roster (flow review §4). */
+export const REPRESENTATIVE_ROLE = 'Representative' as const
 
 /** May open `/staff/*`. */
 export const STAFF_ROLES = [STAFF_ROLE, ADMIN_ROLE] as const
 
 /** Every role the app can see, visitor included. */
-export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
+export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE, REPRESENTATIVE_ROLE] as const
 
 /**
  * Home of the visitor app.
@@ -41,6 +44,9 @@ export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
  * account rather than back on the page they signed in from.
  */
 export const VISITOR_HOME = '/visit'
+
+/** Home of the school representative's area. */
+export const REPRESENTATIVE_HOME = '/dai-dien'
 
 export type StaffRole = (typeof STAFF_ROLES)[number]
 export type AppRole = (typeof ALL_ROLES)[number]
@@ -65,6 +71,11 @@ const LEGACY_MAP: Record<string, AppRole> = {
   administrator: ADMIN_ROLE,
   visitor: VISITOR_ROLE,
   guest: VISITOR_ROLE,
+  representative: REPRESENTATIVE_ROLE,
+  'school representative': REPRESENTATIVE_ROLE,
+  schoolrepresentative: REPRESENTATIVE_ROLE,
+  school_representative: REPRESENTATIVE_ROLE,
+  daidien: REPRESENTATIVE_ROLE,
 }
 
 export function normalizeRole(raw?: string | null): AppRole {
@@ -81,6 +92,15 @@ export function isStaffRole(role?: string | null): boolean {
 /** May open `/admin/*`. Administration is not part of the operations role. */
 export function isAdminRole(role?: string | null): boolean {
   return normalizeRole(role) === ADMIN_ROLE
+}
+
+/**
+ * May open `/dai-dien/*`: register a group, replace its roster, share the
+ * invitation. Admin is not let in: Admin does not upload rosters on a school's
+ * behalf in V1 (flow review §3.2).
+ */
+export function isRepresentativeRole(role?: string | null): boolean {
+  return normalizeRole(role) === REPRESENTATIVE_ROLE
 }
 
 /**
@@ -113,6 +133,8 @@ export function roleLabel(role?: string | null): string {
       return 'Quản trị viên'
     case STAFF_ROLE:
       return 'Nhân viên vận hành'
+    case REPRESENTATIVE_ROLE:
+      return 'Đại diện trường'
     default:
       return 'Khách tham quan'
   }
@@ -126,6 +148,7 @@ export function roleLabel(role?: string | null): string {
 export function homePathForRole(role?: string | null): string {
   if (isAdminRole(role)) return '/admin'
   if (isStaffRole(role)) return '/staff'
+  if (isRepresentativeRole(role)) return REPRESENTATIVE_HOME
   return VISITOR_HOME
 }
 

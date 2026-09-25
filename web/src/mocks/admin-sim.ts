@@ -42,6 +42,8 @@ const notAllowed = (message: string) => new AdminRejection(409, { code: 'NotAllo
 const stale = (message = 'Dữ liệu đã thay đổi. Vui lòng tải lại.') => new AdminRejection(409, { code: 'StaleData', message })
 
 const JOIN_BASE = 'https://campustour.example/tham-gia'
+/** The student join link of a Tour; the representative area shows the same one. */
+export const joinLinkFor = (tourCode: string) => `${JOIN_BASE}/${tourCode}`
 const now = () => Date.now()
 const iso = (ms: number) => new Date(ms).toISOString()
 const gate = (allowed: boolean, reason?: string | null): ActionGate => ({ allowed, reason: allowed ? null : reason ?? null })
