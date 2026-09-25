@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { RegistrationBar } from './TourParts'
+import { RegistrationBar, TourJourney } from './TourParts'
 
 describe('RegistrationBar', () => {
   it('shows waiting groups prominently and describes every registration state', () => {
@@ -27,5 +27,25 @@ describe('RegistrationBar', () => {
     expect(screen.getByText('Chưa có đoàn đăng ký')).toBeInTheDocument()
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.queryByText(/đoàn chờ duyệt/)).toBeNull()
+  })
+})
+
+describe('TourJourney', () => {
+  const base = { readyBlockers: [] as string[], counts: { total: 0, approved: 0, submitted: 0, rejected: 0, cancelled: 0 } }
+
+  it('marks the current step and says what holds it', () => {
+    render(<TourJourney tour={{ ...base, state: 'Scheduled', counts: { total: 3, approved: 2, submitted: 1, rejected: 0, cancelled: 0 } }} />)
+    const steps = within(screen.getByRole('list', { name: 'Tiến trình chuẩn bị Tour' })).getAllByRole('listitem')
+    expect(steps).toHaveLength(4)
+    expect(steps[1]).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByText('Duyệt nốt 1 đoàn để chốt')).toBeInTheDocument()
+  })
+
+  it('moves to finalizing once nothing waits, and to running after READY', () => {
+    const { rerender } = render(<TourJourney tour={{ ...base, state: 'Scheduled', readyBlockers: [], counts: { total: 2, approved: 2, submitted: 0, rejected: 0, cancelled: 0 } }} />)
+    expect(screen.getAllByRole('listitem')[2]).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByText('Đủ điều kiện chốt')).toBeInTheDocument()
+    rerender(<TourJourney tour={{ ...base, state: 'Ready', counts: { total: 2, approved: 2, submitted: 0, rejected: 0, cancelled: 0 } }} />)
+    expect(screen.getAllByRole('listitem')[3]).toHaveAttribute('aria-current', 'step')
   })
 })

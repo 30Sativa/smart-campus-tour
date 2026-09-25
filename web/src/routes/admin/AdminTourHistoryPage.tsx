@@ -25,7 +25,7 @@ export default function AdminTourHistoryPage() {
     <AdminPage>
       <PageHeader eyebrow="Lịch sử" title="Lịch sử Tour" description="Tour đã hoàn thành hoặc đã hủy. Chỉ xem; muốn chạy lại thì tạo Tour mới." />
       <section className={panelClass} aria-label="Lịch sử Tour">
-        <div className="border-b border-[#f1f5f9] p-4">
+        <div className="border-b border-[#efefe9] p-4">
           <FilterChips<Filter>
             label="Lọc theo kết quả"
             value={filter}
@@ -58,7 +58,7 @@ function HistoryTable({ tours }: { tours: AdminTour[] }) {
   return (
     <>
       <TableFrame label="Lịch sử Tour">
-        <thead className="border-b border-[#f1f5f9] bg-[#f8fafc]">
+        <thead className="border-b border-[#efefe9] bg-[#f7f7f3]">
           <tr>
             <th scope="col" className={thClass}>Tour</th>
             <th scope="col" className={thClass}>Dự kiến</th>
@@ -69,33 +69,33 @@ function HistoryTable({ tours }: { tours: AdminTour[] }) {
             <th scope="col" className={thClass}>Lý do kết thúc</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#f1f5f9]">
+        <tbody className="divide-y divide-[#efefe9]">
           {tours.map((tour) => (
             <tr key={tour.id} className={rowClass}>
               <td className={tdClass}>
-                <Link to={`/admin/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2563eb] hover:underline">{tour.name}</Link>
-                <p className="text-xs text-[#94a3b8]">{tour.code} · {tour.routeName}</p>
+                <Link to={`/admin/tours/${tour.id}`} className="font-semibold text-[#1c1c1c] hover:text-[#4d6410] hover:underline">{tour.name}</Link>
+                <p className="text-xs text-[#8e9096]">{tour.code} · {tour.routeName}</p>
               </td>
-              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#334155]`}>{formatSlot(tour.scheduledAt)}</td>
-              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#334155]`}>{formatStamp(tour.startedAt)}</td>
-              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#334155]`}>{formatStamp(tour.endedAt)}</td>
+              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#3a3d44]`}>{formatSlot(tour.scheduledAt)}</td>
+              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#3a3d44]`}>{formatStamp(tour.startedAt)}</td>
+              <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#3a3d44]`}>{formatStamp(tour.endedAt)}</td>
               <td className={`${tdClass} text-right tabular-nums`}>{tour.counts.approved}</td>
               <td className={tdClass}><TourStateBadge state={tour.state} /></td>
-              <td className={`${tdClass} max-w-80 text-[13px] leading-5 text-[#475569]`}>{tour.endReason ?? '-'}</td>
+              <td className={`${tdClass} max-w-80 text-[13px] leading-5 text-[#4a4f59]`}>{tour.endReason ?? '-'}</td>
             </tr>
           ))}
         </tbody>
       </TableFrame>
-      <ul className="divide-y divide-[#f1f5f9] md:hidden" aria-label="Lịch sử Tour">
+      <ul className="divide-y divide-[#efefe9] md:hidden" aria-label="Lịch sử Tour">
         {tours.map((tour) => (
           <li key={tour.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
-              <Link to={`/admin/tours/${tour.id}`} className="font-bold text-[#1e293b]">{tour.name}</Link>
+              <Link to={`/admin/tours/${tour.id}`} className="font-bold text-[#1c1c1c]">{tour.name}</Link>
               <TourStateBadge state={tour.state} />
             </div>
-            <p className="mt-1 text-xs text-[#94a3b8]">{tour.code} · {formatSlot(tour.scheduledAt)}</p>
-            <p className="mt-2 text-[13px] text-[#334155]">{formatStamp(tour.startedAt)} → {formatStamp(tour.endedAt)}</p>
-            {tour.endReason && <p className="mt-1 text-[13px] leading-5 text-[#475569]">{tour.endReason}</p>}
+            <p className="mt-1 text-xs text-[#8e9096]">{tour.code} · {formatSlot(tour.scheduledAt)}</p>
+            <p className="mt-2 text-[13px] text-[#3a3d44]">{formatStamp(tour.startedAt)} → {formatStamp(tour.endedAt)}</p>
+            {tour.endReason && <p className="mt-1 text-[13px] leading-5 text-[#4a4f59]">{tour.endReason}</p>}
           </li>
         ))}
       </ul>

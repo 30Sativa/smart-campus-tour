@@ -24,7 +24,7 @@ export default function AdminTourEditPage() {
 
   return (
     <AdminPage>
-      <Link to={back} className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#2563eb] hover:underline"><ArrowLeft size={15} aria-hidden="true" />Về chi tiết Tour</Link>
+      <Link to={back} className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#4d6410] hover:underline"><ArrowLeft size={15} aria-hidden="true" />Về chi tiết Tour</Link>
       <PageHeader eyebrow="Quản lý Tour" title={data ? `Sửa ${data.name}` : 'Sửa Tour'} description="Chỉ sửa được khi Tour đang chuẩn bị. Nếu đã gửi thông tin tham gia mà đổi giờ, hãy gửi lại cho các đoàn." />
       {tour.isError || routes.isError ? (
         <AdminErrorPanel title="Không tải được Tour." onRetry={() => { void tour.refetch(); void routes.refetch() }} />

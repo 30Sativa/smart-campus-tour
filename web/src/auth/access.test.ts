@@ -8,13 +8,27 @@ import { homePathForRole, isAdminRole, isStaffRole, normalizeRole } from './role
  * through a screen.
  */
 describe('area access', () => {
-  it('has exactly three roles', () => {
-    expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin'])
+  // Representative added with the registration area (flow review 21/09/2026 §4);
+  // Visitor and its /visit area removed on 2026-09-24.
+  it('has exactly three roles, and no visitor area', () => {
+    expect([...ALL_ROLES]).toEqual(['Staff', 'Admin', 'Representative'])
+    expect(AREAS.map((area) => area.id)).toEqual(['public', 'staff', 'admin', 'representative'])
   })
 
-  it('keeps a visitor out of operations and administration', () => {
-    expect(areaById('staff').allows('Visitor')).toBe(false)
-    expect(areaById('admin').allows('Visitor')).toBe(false)
+  it('keeps the representative area to representatives only', () => {
+    expect(areaById('representative').allows('Representative')).toBe(true)
+    expect(areaById('representative').allows('daidien')).toBe(true)
+    for (const role of ['Staff', 'Admin', undefined]) expect(areaById('representative').allows(role)).toBe(false)
+    expect(areaById('admin').allows('Representative')).toBe(false)
+    expect(areaById('staff').allows('Representative')).toBe(false)
+    expect(homePathForRole('Representative')).toBe('/dai-dien')
+    expect(landingPathAfterLogin('Representative', '/dai-dien/dang-ky')).toBe('/dai-dien/dang-ky')
+    expect(landingPathAfterLogin('Representative', '/admin')).toBe('/dai-dien')
+  })
+
+  it('opens nothing for a missing or retired role, an old Visitor token included', () => {
+    expect(normalizeRole('Visitor')).toBeNull()
+    for (const area of ['staff', 'admin', 'representative'] as const) expect(areaById(area).allows('Visitor')).toBe(false)
     expect(areaById('staff').allows(undefined)).toBe(false)
     expect(areaById('admin').allows(null)).toBe(false)
     expect(areaById('public').allows(undefined)).toBe(true)
@@ -23,11 +37,6 @@ describe('area access', () => {
   it('keeps staff out of administration', () => {
     expect(areaById('staff').allows('Staff')).toBe(true)
     expect(areaById('admin').allows('Staff')).toBe(false)
-  })
-
-  it('allows signed-in roles to browse the visitor area', () => {
-    for (const role of ALL_ROLES) expect(areaById('visitor').allows(role)).toBe(true)
-    expect(landingPathAfterLogin('Visitor', '/visit/map?destination=library')).toBe('/visit/map?destination=library')
   })
 
   it('lets an admin into both, which is the policy this app has always had', () => {
@@ -43,8 +52,8 @@ describe('area access', () => {
     }
     expect(normalizeRole('administrator')).toBe('Admin')
     expect(isAdminRole('admin')).toBe(true)
-    // Anything unrecognised is a visitor, never an accidental staff member.
-    expect(normalizeRole('superuser')).toBe('Visitor')
+    // Anything unrecognised has no role, never an accidental staff member.
+    expect(normalizeRole('superuser')).toBeNull()
     expect(isStaffRole('superuser')).toBe(false)
   })
 
@@ -52,8 +61,8 @@ describe('area access', () => {
     expect(homePathForRole('Admin')).toBe('/admin')
     expect(homePathForRole('Staff')).toBe('/staff')
     expect(homePathForRole('CampusStaff')).toBe('/staff')
-    expect(homePathForRole('Visitor')).toBe('/visit')
-    expect(homePathForRole(undefined)).toBe('/visit')
+    expect(homePathForRole('Visitor')).toBe('/')
+    expect(homePathForRole(undefined)).toBe('/')
   })
 
   describe('landing after sign-in', () => {
@@ -75,7 +84,7 @@ describe('area access', () => {
 
     it('ignores a destination the role does not belong in', () => {
       expect(landingPathAfterLogin('Staff', '/admin')).toBe('/staff')
-      expect(landingPathAfterLogin('Visitor', '/staff')).toBe('/visit')
+      expect(landingPathAfterLogin('Representative', '/staff')).toBe('/dai-dien')
     })
 
     it('falls back to the role home when there is nothing remembered', () => {

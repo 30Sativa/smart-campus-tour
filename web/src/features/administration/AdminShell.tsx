@@ -6,7 +6,7 @@ import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { PageSkeleton } from '../staff/StaffUi'
 import { useMobileNav } from '../staff/use-mobile-nav'
-import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../staff/ConsoleSidebar'
+import { ConsoleSidebar, ConsoleTopbar, DevDataBadge, MobileNavToggle } from '../staff/ConsoleSidebar'
 import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
 
 /**
@@ -30,7 +30,7 @@ export default function AdminShell() {
   const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị Tour'
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#1e293b]">
+    <div className="flex min-h-[100dvh] bg-[#f0f0eb] text-[#1c1c1c]">
       <MobileNavToggle open={menuOpen} controls="admin-navigation" label="Mở điều hướng quản trị" closeLabel="Đóng điều hướng quản trị" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
 
       <ConsoleSidebar
@@ -54,9 +54,7 @@ export default function AdminShell() {
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white/85 px-5 backdrop-blur-md lg:px-8">
-          <p className="truncate text-sm font-semibold tracking-[-0.01em] text-[#1e293b]">{title}</p>
-        </header>
+        <ConsoleTopbar area="Quản trị" areaPath="/admin" title={title} />
 
         <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>
 

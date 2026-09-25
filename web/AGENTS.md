@@ -1,6 +1,7 @@
 # AGENTS.md — `web/`
 
-Public site, visitor app, tour operations console and administration for
+Public site, student remote tour, school-representative area, tour operations
+console and administration for
 CampusTour DT-AMR (Work Package 5). Read the repo-root `AGENTS.md` first for the
 shared rules; this file only covers what is specific to `web/`.
 
@@ -16,10 +17,11 @@ shared rules; this file only covers what is specific to `web/`.
   **Zustand**. Do not put server data (bookings, robot status, ...) in
   Zustand — that belongs to TanStack Query's cache.
 - Package manager: **npm** (no workspaces needed — see below).
-- Codebase shape: **one app, one deploy, four areas**. Public, the visitor app,
-  operations and administration live in the same React app, same Vercel project,
+- Codebase shape: **one app, one deploy**. Public (with `/tour/*` for students,
+  no account), the representative area (`/dai-dien/*`), operations and
+  administration live in the same React app, same Vercel project,
   same domain. They are split by route + role, not by separate apps:
-  - `/` and public routes: visitor-facing, no login required.
+  - `/` and public routes (`/login`, `/tour/*`): no login required.
   - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
     run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
@@ -59,10 +61,11 @@ shared rules; this file only covers what is specific to `web/`.
   in `src/components/`.
 - Auth mechanism: **JWT access token + refresh token in an HttpOnly cookie**.
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
-    on every API request. Carries the user's role (`Visitor`, `Staff`,
-    `Admin`) as a claim; the area route guard reads the role from the decoded
+    on every API request. Carries the user's role (`Staff`, `Admin`,
+    `Representative`) as a claim; the area route guard reads the role from the decoded
     token, not from a separate call. `auth/roles.ts` normalises whatever
-    spelling arrives onto those three.
+    spelling arrives onto those three; an unknown or retired role (e.g. an old
+    `Visitor` token) normalises to none and opens no area.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
     access token when the old one expires, without forcing re-login.
@@ -108,7 +111,8 @@ web/
     │                     asserts guards, legacy redirects and /admin precedence
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
-    │   ├── visitor/      visitor pages ("/visit/*"), all lazy-loaded
+    │   ├── student/      StudentTourPage ("/tour/*"), no account
+    │   ├── representative/ representative pages ("/dai-dien/*"), lazy-loaded
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
     │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
@@ -127,7 +131,7 @@ web/
     │                     invitation + Chốt/Mở lại/Hủy dialogs)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
-    ├── auth/             AuthLayout + LoginPage/RegisterPage/AuthFields,
+    ├── auth/             AuthLayout + LoginPage/AuthFields (no self sign-up),
     │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
@@ -135,9 +139,9 @@ web/
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-There are four entry points: `/` (public landing page), `/visit/*` (the visitor
-app, behind the visitor guard), `/staff/*` (operations, behind the staff guard)
-and `/admin/*` (administration, behind the admin guard).
+Entry points: `/` (public landing page), `/tour/*` (students, no account),
+`/dai-dien/*` (representative guard), `/staff/*` (operations, behind the staff
+guard) and `/admin/*` (administration, behind the admin guard).
 
 **Who may enter what is written in exactly one place: `src/auth/access.ts`.**
 The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
@@ -146,11 +150,10 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
-The visitor booking/tour flow was removed on 2026-09-16 and came back on
-2026-09-18 as its own area at `/visit/*`, with its own shell, routes, contract
-and English surface. A visitor account is therefore a real account with a real
-app, not a public-site-only account. The 2026-09-18 note that said otherwise was
-written while the flow was gone; do not restore it.
+The `Visitor` role, its `/visit/*` area and self sign-up (`/register`) were
+removed on 2026-09-24: the project no longer has that role. Students join a tour
+without an account (`/tour/*`) and every other account is issued by Admin. Git
+history holds the removed code; do not restore it without a scope change.
 
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
@@ -178,8 +181,8 @@ branch was never exercised.
   not know which one it has. The binding is named once, in
   `features/staff/staff-hooks.ts`;
 - `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised.
-  There are exactly two accounts, one per signed-in role: `admin/admin` is an
-  `Admin`, `staff/staff` is a `Staff`. Sign-up mints a `Visitor`. It is not
+  One account per signed-in role: `admin/admin` (`Admin`), `staff/staff`
+  (`Staff`), `daidien/daidien` (`Representative`). There is no sign-up. It is not
   authentication and grants nothing server-side;
 - mock data is disclosed, but out of the way: a one-line badge in each shell and
   on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
@@ -231,17 +234,13 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
     than one surface reuses `.auth-input` and `.auth-submit` and those values
     must be declared once.
   - `auth/auth.css` styles the form controls. Its root carries `.lp`.
-  - `features/visitor/visitor.css` is the same system at application density: the
-    app shell, and the handful of patterns the landing page has no equivalent for
-    (badge, filter pill, tab row, stepper, chat column, map plane). Its root
-    carries `.lp` as well as `.vs`, and **every colour, radius and shadow in it
-    resolves to a `--lp-*` token** — it picks no palette of its own.
-  - The rule this exception exists under: a *visitor-facing* surface may extend
-    this layer; anything else may not. **Admin and staff screens stay on Tailwind
-    utilities — do not grow a CSS file for them.**
-  - When adding to the visitor area, reuse before you extend and extend before
-    you create: `.lp-btn`, `.lp-navlink`, `.lp-brand`, `.lp-h3`, `.lp-meta`,
-    `.auth-input`, `.auth-submit` and `AuthField` are all already there.
+  - Visitor-facing surfaces built on this layer after the 2026-09-24 removal of
+    the visitor area: `features/landing/home/home.css` (`.hm`),
+    `auth/auth-home.css` (`.ah`), `features/student/student.css` (`.st`) and
+    `features/representative/representative.css` (`.rp`), all on the home
+    page palette (ink, cream, lime).
+  - **Admin and staff screens stay on Tailwind utilities — do not grow a CSS
+    file for them.**
 - **Operations and administration share one palette and one component set.**
   Both signed-in Vietnamese consoles are Tailwind utilities on the same values
   (the slate set the Staff console moved to on 2026-09-21, adopted by
@@ -278,14 +277,6 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
   - A screen's summary row counts rows the API already returned, for the labels
     on that same screen. That is presentation. Anything genuinely derived still
     comes from the backend (Section 3).
-- **The visitor area is an English surface.** The public, staff and admin areas
-  are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
-  its status vocabulary in `features/visitor/visitor-status.ts`, which is the
-  same tone scale as `features/staff/status.ts` with English labels and
-  tone *tokens* rather than Tailwind classes, so the badge can follow the
-  light/dark switch. The `Intl` locale is `en-GB` in
-  `features/visitor/visitor-format.ts`. Same hard rule as everywhere else: no
-  backend enum reaches a screen.
 
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for

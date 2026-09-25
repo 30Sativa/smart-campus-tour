@@ -1,0 +1,150 @@
+/* ============================================================================
+   Sign-in / sign-up dressed like the public home page
+   (features/landing/home/home.css): ink photograph panel, cream ground, one
+   lime accent, mono kickers, large tight headlines, pill button with the lime
+   arrow circle. Layout mechanics (grid, sides, view transition, entrance) stay
+   in auth.css; this file only restyles, under `.lp.auth.ah` so it outranks
+   auth.css without touching the visitor app that shares it.
+   The split exit after sign-in (`split-exit.ts`) is styled at the bottom.
+   ========================================================================== */
+
+.lp.auth.ah {
+  --ah-ink: #1c1c1c; --ah-ink-2: #4a4f59; --ah-mute: #7e7f85; --ah-line: #c6c7cc;
+  --ah-paper: #ffffff; --ah-cream: #f0f0eb; --ah-lime: #bde74e; --ah-lime-ink: #5f7a12;
+  --ah-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --ah-ease: cubic-bezier(.22, 1, .36, 1);
+  --auth-col: 440px;
+  background: var(--ah-cream);
+  color: var(--ah-ink);
+  padding: 12px;
+  gap: 12px;
+}
+.lp.auth.ah :focus-visible { outline: 2px solid var(--ah-ink); outline-offset: 2px; box-shadow: 0 0 0 5px rgba(189,231,78,.55); }
+
+/* ── Photograph panel ─────────────────────────────────────────────────────── */
+
+.lp.auth.ah .auth-visual { border-radius: 14px; background: #0f1113; }
+.lp.auth.ah .auth-visual__img { object-position: 57% center; }
+.lp.auth.ah .auth-visual__scrim {
+  background: linear-gradient(180deg, rgba(12,13,14,.62) 0%, rgba(12,13,14,.18) 38%, rgba(12,13,14,.9) 100%);
+}
+.lp.auth.ah .auth-visual__brand { top: 30px; left: clamp(28px, 3.6vw, 56px); gap: 10px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; color: #fff; }
+.lp.auth.ah .auth-visual__brand svg { width: 32px; height: 32px; }
+.lp.auth.ah .auth-visual__brand-sub { display: inline; margin: 0 0 0 4px; font-family: var(--ah-mono); font-weight: 400; font-size: 11px; letter-spacing: .06em; opacity: .6; }
+.lp.auth.ah .auth-visual__inner { padding: clamp(28px, 3.6vw, 56px); padding-bottom: clamp(32px, 4vw, 60px); color: #fff; }
+.lp.auth.ah .auth-visual__title {
+  margin-top: 18px;
+  max-width: 13ch;
+  font-size: clamp(38px, 4.6vw, 76px);
+  font-weight: 500;
+  line-height: .98;
+  letter-spacing: -.045em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.lp.auth.ah .auth-visual__lead { max-width: 46ch; margin-top: 20px; font-size: 16px; line-height: 1.6; color: rgba(255,255,255,.8); }
+
+.lp.auth.ah .ah-kicker {
+  display: inline-flex; align-items: center; gap: 10px; margin: 0;
+  font-family: var(--ah-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+}
+.lp.auth.ah .ah-kicker::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--ah-lime); flex: none; }
+.lp.auth.ah .ah-kicker--panel { color: var(--ah-ink-2); margin-bottom: 14px; }
+
+.lp.auth.ah .ah-meta { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.2); }
+.lp.auth.ah .ah-meta div { font-family: var(--ah-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.62); }
+.lp.auth.ah .ah-meta b { display: block; font-family: inherit; font-family: "Be Vietnam Pro", sans-serif; font-weight: 400; font-size: 26px; letter-spacing: -.03em; text-transform: none; color: #fff; }
+
+/* ── Form panel ───────────────────────────────────────────────────────────── */
+
+.lp.auth.ah .auth-panel { background: var(--ah-paper); border-radius: 14px; padding: 40px clamp(24px, 4vw, 64px); }
+.lp.auth.ah .auth-brand { gap: 10px; color: var(--ah-ink); font-weight: 600; font-size: 17px; letter-spacing: -.02em; }
+.lp.auth.ah .auth-brand__mark { width: 30px; height: 30px; transform: none; }
+.lp.auth.ah .auth-brand__sub { font-family: var(--ah-mono); font-weight: 400; font-size: 10px; letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; background: var(--ah-ink); color: var(--ah-lime); margin-left: 2px; }
+.lp.auth.ah .auth-body { margin-top: clamp(36px, 6vh, 64px); }
+.lp.auth.ah .auth-title { font-size: clamp(34px, 3vw, 46px); font-weight: 400; line-height: 1.04; letter-spacing: -.045em; color: var(--ah-ink); }
+.lp.auth.ah .auth-lead { margin-top: 12px; font-size: 15px; line-height: 1.6; color: var(--ah-ink-2); }
+.lp.auth.ah .auth-form { margin-top: 30px; }
+
+.lp.auth.ah .auth-label { font-family: var(--ah-mono); font-size: 11px; font-weight: 400; letter-spacing: .06em; text-transform: uppercase; color: var(--ah-ink-2); }
+.lp.auth.ah .auth-input {
+  height: 54px; border-radius: 14px; border: 1px solid var(--ah-line); background: var(--ah-paper);
+  color: var(--ah-ink); font-size: 15px; box-shadow: none;
+  transition: border-color .3s var(--ah-ease), box-shadow .3s var(--ah-ease);
+}
+.lp.auth.ah .auth-input:hover:not(:disabled):not(:focus) { border-color: var(--ah-ink-2); }
+.lp.auth.ah .auth-input:focus { outline: none; border-color: var(--ah-ink); box-shadow: 0 0 0 4px rgba(189,231,78,.5); }
+.lp.auth.ah .auth-input:disabled { background: var(--ah-cream); }
+.lp.auth.ah .auth-input[aria-invalid='true'] { border-color: #c4353a; }
+.lp.auth.ah .auth-input[aria-invalid='true']:focus { box-shadow: 0 0 0 4px rgba(196,53,58,.18); }
+.lp.auth.ah .auth-input-wrap:focus-within .auth-field-icon { color: var(--ah-ink); }
+.lp.auth.ah .auth-reveal { border-radius: 999px; color: var(--ah-ink-2); }
+.lp.auth.ah .auth-reveal:hover { background: var(--ah-cream); color: var(--ah-ink); }
+.lp.auth.ah .auth-error { color: #c4353a; }
+.lp.auth.ah .auth-alert { border-radius: 14px; border: 0; border-left: 4px solid #c4353a; background: #fff0f0; color: #8a1c20; }
+
+/* Pill button: ink, text on the left, the icon inside a lime circle on the right. */
+.lp.auth.ah .auth-submit {
+  position: relative; justify-content: space-between; height: 56px; margin-top: 8px;
+  padding: 0 6px 0 24px; border-radius: 999px; background: var(--ah-ink); color: #fff;
+  font-size: 15px; font-weight: 500; box-shadow: none; filter: none; overflow: hidden;
+  transition: background .4s var(--ah-ease), color .4s var(--ah-ease), transform .3s var(--ah-ease);
+}
+.lp.auth.ah .auth-submit > svg {
+  width: 44px; height: 44px; padding: 13px; box-sizing: border-box; border-radius: 50%;
+  background: var(--ah-lime); color: var(--ah-ink); flex: none; transition: transform .5s var(--ah-ease), background .4s;
+}
+.lp.auth.ah .auth-submit:hover:not(:disabled) { filter: none; transform: translateY(-1px); box-shadow: 0 12px 24px -14px rgba(28,28,28,.6); }
+.lp.auth.ah .auth-submit:hover:not(:disabled) > svg { transform: rotate(-45deg); }
+.lp.auth.ah .auth-submit:disabled { opacity: .72; }
+.lp.auth.ah .auth-submit .auth-spinner { order: 2; width: 44px; height: 44px; border-width: 3px; border-color: var(--ah-lime); border-top-color: transparent; }
+.lp.auth.ah .auth-submit.is-success { background: var(--ah-lime); color: var(--ah-ink); opacity: 1; }
+.lp.auth.ah .auth-submit.is-success > svg { background: var(--ah-ink); color: var(--ah-lime); animation: ah-pop .5s var(--ah-ease) both; }
+@keyframes ah-pop { 0% { transform: scale(.4); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+.lp.auth.ah .auth-switch { color: var(--ah-ink-2); }
+.lp.auth.ah .auth-switch a { color: var(--ah-ink); font-weight: 500; text-decoration: none; background: linear-gradient(var(--ah-lime), var(--ah-lime)) 0 100% / 100% 6px no-repeat; transition: background-size .35s var(--ah-ease); }
+.lp.auth.ah .auth-switch a:hover { background-size: 100% 100%; }
+.lp.auth.ah .auth-back { color: var(--ah-ink-2); font-size: 14px; }
+.lp.auth.ah .auth-back:hover { color: var(--ah-ink); }
+.lp.auth.ah .auth-footer { color: var(--ah-mute); font-family: var(--ah-mono); font-size: 11px; letter-spacing: .04em; }
+.lp.auth.ah .auth-devbadge { font-family: var(--ah-mono); font-size: 11px; color: var(--ah-mute); background: transparent; border: 0; }
+
+/* Register keeps its side and proportions from auth.css; only the ground changes. */
+.lp.auth.ah[data-page='register'] .auth-visual__title { font-size: clamp(34px, 3.8vw, 60px); }
+
+@media (max-width: 1023px) {
+  .lp.auth.ah { padding: 10px; }
+}
+@media (max-width: 767px) {
+  .lp.auth.ah { padding: 0; gap: 0; }
+  .lp.auth.ah .auth-panel { border-radius: 0; min-height: 100dvh; }
+  .lp.auth.ah .auth-title { font-size: 34px; }
+}
+
+/* ── Split exit (split-exit.ts) ───────────────────────────────────────────── */
+
+.ah-split { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+.ah-split__half {
+  position: absolute; inset: 0; overflow: hidden;
+  transition: transform 1.05s cubic-bezier(.76, 0, .24, 1), filter 1.05s ease;
+  will-change: transform;
+}
+.ah-split__half--left { clip-path: inset(0 50% 0 0); }
+.ah-split__half--right { clip-path: inset(0 0 0 50%); }
+.ah-split__half::after { content: ""; position: absolute; inset: 0; background: rgba(12,12,12,0); transition: background 1.05s ease; }
+.ah-split.is-open .ah-split__half--left { transform: translateX(-52%); }
+.ah-split.is-open .ah-split__half--right { transform: translateX(52%); }
+.ah-split.is-open .ah-split__half::after { background: rgba(12,12,12,.35); }
+.ah-split__clone, .ah-split__clone * { view-transition-name: none !important; animation: none !important; }
+.ah-split__seam {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px;
+  background: #bde74e; box-shadow: 0 0 24px 6px rgba(189,231,78,.55);
+  transform: scaleY(0); transform-origin: center; animation: ah-seam .5s cubic-bezier(.22,1,.36,1) .05s forwards;
+}
+.ah-split.is-open .ah-split__seam { opacity: 0; transition: opacity .3s ease; }
+@keyframes ah-seam { to { transform: scaleY(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-split { display: none; }
+}

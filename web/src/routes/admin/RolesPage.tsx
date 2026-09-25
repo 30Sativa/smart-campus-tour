@@ -2,15 +2,11 @@ import { Check, Layers, Minus, ShieldCheck, Users } from 'lucide-react'
 import { CellIcon, PageHeader, PanelHead, StaffPage, SummaryTile, panelClass } from '../../features/staff/StaffUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
 import { STAFF_NAV } from '../../features/staff/staff-nav'
-import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
 import { ADMIN_NAV } from '../../features/administration/admin-nav'
 
 const AREA_PAGES: Record<string, string[]> = {
-  public: ['Trang giới thiệu', 'Đăng nhập', 'Đăng ký'],
-  // The visitor app is an English surface, so its own nav labels are English.
-  // They are listed as the area ships them rather than translated here, which
-  // would put a second name on every page.
-  visitor: [...VISITOR_NAV, ...VISITOR_SECONDARY_NAV].map((item) => item.label),
+  public: ['Trang giới thiệu', 'Đăng nhập', 'Tham gia tour (học sinh, không cần tài khoản)'],
+  representative: ['Buổi tham quan', 'Đăng ký của tôi'],
   staff: STAFF_NAV.map((item) => item.label),
   admin: ADMIN_NAV.map((item) => item.label),
 }
@@ -25,12 +21,12 @@ const AREA_PAGES: Record<string, string[]> = {
  */
 function AccessCell({ allowed }: { allowed: boolean }) {
   return allowed ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#cde9dc] bg-[#effbf5] px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-[#1f7a55]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8b8] bg-[#f2f7e4] px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-[#4d6410]">
       <Check size={12} strokeWidth={2.4} aria-hidden="true" />
       Được vào
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe6f4] bg-[#f6f9fd] px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-[#5d7085]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e0e0d8] bg-[#f7f7f3] px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-[#6b6e75]">
       <Minus size={12} strokeWidth={2.4} aria-hidden="true" />
       Không
     </span>
@@ -92,7 +88,7 @@ export default function RolesPage() {
               grid on a phone is a scrollbar with a table behind it. */}
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-[#f1f5f9] bg-[#f8fafc] text-xs font-medium text-[#64748b]">
+              <thead className="border-b border-[#efefe9] bg-[#f7f7f3] text-xs font-medium text-[#6b6e75]">
                 <tr>
                   <th scope="col" className="px-5 py-4">Vai trò</th>
                   {AREAS.map((area) => (
@@ -100,15 +96,15 @@ export default function RolesPage() {
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#f1f5f9]">
+              <tbody className="divide-y divide-[#efefe9]">
                 {rows.map((row) => (
-                  <tr key={row.role} className="transition-colors hover:bg-[#f8fbff]">
+                  <tr key={row.role} className="transition-colors hover:bg-[#fbfbf8]">
                     <th scope="row" className="px-5 py-4 text-left align-top">
                       <div className="flex items-center gap-3">
                         <CellIcon icon={ShieldCheck} />
                         <span className="min-w-0">
-                          <span className="block font-bold text-[#334155]">{row.label}</span>
-                          <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#94a3b8]">{row.role}</code>
+                          <span className="block font-bold text-[#3a3d44]">{row.label}</span>
+                          <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#8e9096]">{row.role}</code>
                         </span>
                       </div>
                     </th>
@@ -123,20 +119,20 @@ export default function RolesPage() {
             </table>
           </div>
 
-          <ul className="divide-y divide-[#f1f5f9] lg:hidden">
+          <ul className="divide-y divide-[#efefe9] lg:hidden">
             {rows.map((row) => (
               <li key={row.role} className="p-4">
                 <div className="flex items-center gap-3">
                   <CellIcon icon={ShieldCheck} />
                   <span className="min-w-0">
-                    <span className="block font-bold text-[#334155]">{row.label}</span>
-                    <code className="mt-0.5 block font-mono text-[11px] text-[#94a3b8]">{row.role}</code>
+                    <span className="block font-bold text-[#3a3d44]">{row.label}</span>
+                    <code className="mt-0.5 block font-mono text-[11px] text-[#8e9096]">{row.role}</code>
                   </span>
                 </div>
                 <dl className="mt-3 space-y-2">
                   {row.areas.map((cell) => (
                     <div key={cell.id} className="flex items-center justify-between gap-3">
-                      <dt className="min-w-0 truncate text-sm text-[#64748b]">
+                      <dt className="min-w-0 truncate text-sm text-[#6b6e75]">
                         {AREAS.find((area) => area.id === cell.id)?.label}
                       </dt>
                       <dd className="shrink-0">
@@ -155,18 +151,18 @@ export default function RolesPage() {
             title="Mỗi khu vực gồm những gì"
             description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
           />
-          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-4 lg:divide-y-0">
+          <div className="grid divide-y divide-[#efefe9] md:grid-cols-2 md:divide-x md:divide-[#efefe9] lg:grid-cols-4 lg:divide-y-0">
             {AREAS.map((area) => (
               <div key={area.id} className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-bold text-[#1e293b]">{area.label}</h3>
-                  <code className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11px] text-[#2563eb]">{area.path}</code>
+                  <h3 className="font-bold text-[#1c1c1c]">{area.label}</h3>
+                  <code className="rounded bg-[#efefe9] px-1.5 py-0.5 font-mono text-[11px] text-[#4d6410]">{area.path}</code>
                 </div>
-                <p className="mt-1.5 text-xs leading-5 text-[#64748b]">{area.purpose}</p>
+                <p className="mt-1.5 text-xs leading-5 text-[#6b6e75]">{area.purpose}</p>
                 <ul className="mt-3 space-y-1.5">
                   {(AREA_PAGES[area.id] ?? []).map((page) => (
-                    <li key={page} className="flex items-start gap-2 text-sm text-[#64748b]">
-                      <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-[#5b91ed]" />
+                    <li key={page} className="flex items-start gap-2 text-sm text-[#6b6e75]">
+                      <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-[#9cc93a]" />
                       {page}
                     </li>
                   ))}

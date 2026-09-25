@@ -15,6 +15,7 @@ import { isAdminRole } from '../auth/roles'
 import { useAuthStore } from '../stores/auth-store'
 import * as admin from './admin-sim'
 import { mockDelay } from './mock-mode'
+import { ensureRepresentativeSeed } from './representative-sim'
 
 function actor() {
   return useAuthStore.getState().user?.username || 'admin'
@@ -22,6 +23,7 @@ function actor() {
 
 async function call<T>(run: () => T): Promise<T> {
   try {
+    ensureRepresentativeSeed()
     if (!isAdminRole(useAuthStore.getState().user?.role)) {
       throw new admin.AdminRejection(403, { code: 'NotAllowed', message: 'Chỉ Quản trị viên được thực hiện thao tác này.' })
     }

@@ -92,7 +92,7 @@ export function TourForm({ initial, routes, submitLabel, busy, serverErrors = {}
               </select>
             )}
           </FormField>
-          <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t border-[#efefe9] pt-4 sm:flex-row sm:justify-end">
             <Link to={cancelTo} className={buttonClass('secondary')}>Hủy bỏ</Link>
             <button type="submit" disabled={busy} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : submitLabel}</button>
           </div>
@@ -102,7 +102,7 @@ export function TourForm({ initial, routes, submitLabel, busy, serverErrors = {}
       <section className={panelClass} aria-label="Xem trước tuyến">
         <PanelHead title="Xem trước tuyến" description="Chỉ xem. Thứ tự POI, thời gian dừng, góc quay và thuyết minh do nhóm kỹ thuật cấu hình." />
         <div className="p-5">
-          {route ? <RoutePreview route={route} /> : <p className="py-10 text-center text-sm text-[#94a3b8]">Chọn một tuyến để xem các điểm dừng.</p>}
+          {route ? <RoutePreview route={route} /> : <p className="py-10 text-center text-sm text-[#8e9096]">Chọn một tuyến để xem các điểm dừng.</p>}
         </div>
       </section>
     </form>
@@ -118,7 +118,7 @@ function FormField({ label, hint, error, children }: { label: string; hint?: str
     <div>
       <label htmlFor={id} className={labelClass}>{label} <span className="text-[#b23e31]" aria-hidden="true">*</span></label>
       <div className="mt-1.5">{children(id, describedBy)}</div>
-      {hint && <p id={hintId} className="mt-1 text-xs text-[#94a3b8]">{hint}</p>}
+      {hint && <p id={hintId} className="mt-1 text-xs text-[#8e9096]">{hint}</p>}
       {error && <p id={errorId} className="mt-1 text-xs font-bold text-[#b23e31]">{error}</p>}
     </div>
   )

@@ -220,17 +220,17 @@ export function severityRank(value?: string | null): number {
  */
 /** Solid dot per tone; the one place a tone becomes a fill colour. */
 export const dotClass: Record<StatusTone, string> = {
-  ok: 'bg-[#2f8f6b]',
-  info: 'bg-[#5b91ed]',
+  ok: 'bg-[#5f7a12]',
+  info: 'bg-[#9cc93a]',
   warn: 'bg-[#d69412]',
   danger: 'bg-[#c9534a]',
-  muted: 'bg-[#a8b6c9]',
+  muted: 'bg-[#a4a6aa]',
 }
 
 export const toneClass: Record<StatusTone, string> = {
-  ok: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]',
-  info: 'border-[#cfe1fb] bg-[#eef5ff] text-[#2f62b8]',
+  ok: 'border-[#dbe8b8] bg-[#f2f7e4] text-[#4d6410]',
+  info: 'border-[#d5e5a8] bg-[#f2f7e4] text-[#3d5010]',
   warn: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]',
   danger: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]',
-  muted: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]',
+  muted: 'border-[#e0e0d8] bg-[#f7f7f3] text-[#6b6e75]',
 }

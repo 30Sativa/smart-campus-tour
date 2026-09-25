@@ -62,7 +62,7 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
   }
 
   if (tour.state !== 'Running') {
-    return <p className="rounded-xl bg-[#f5f8fd] px-4 py-3 text-sm text-[#647793]">Thao tác vận hành chỉ có khi buổi đang chạy.</p>
+    return <p className="rounded-xl bg-[#f7f7f3] px-4 py-3 text-sm text-[#6b6e75]">Thao tác vận hành chỉ có khi buổi đang chạy.</p>
   }
 
   const recoveries = (Object.keys(RECOVERY) as Recovery[]).filter((key) => actions[key].allowed)
@@ -72,8 +72,8 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
       {assist ? (
         <div className="rounded-xl border border-[#ffe3a3] bg-[#fffcf2] p-4">
           <p className="text-sm font-extrabold text-[#b23e31]">Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}</p>
-          {tour.reasonDetail && <p className="mt-1 text-[13px] leading-5 text-[#40546f]">{tour.reasonDetail}</p>}
-          {tour.reason && REASON_GUIDE[tour.reason] && <p className="mt-2 text-xs leading-5 text-[#71819a]">{REASON_GUIDE[tour.reason]}</p>}
+          {tour.reasonDetail && <p className="mt-1 text-[13px] leading-5 text-[#44474e]">{tour.reasonDetail}</p>}
+          {tour.reason && REASON_GUIDE[tour.reason] && <p className="mt-2 text-xs leading-5 text-[#74777d]">{REASON_GUIDE[tour.reason]}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {recoveries.map((key) => {
               const { label, icon: Icon } = RECOVERY[key]
@@ -96,25 +96,25 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
               <SkipForward size={18} aria-hidden="true" />Đi tiếp
             </button>
           </div>
-          <div className="mt-2 space-y-0.5 text-xs leading-5 text-[#8a98ac]">
+          <div className="mt-2 space-y-0.5 text-xs leading-5 text-[#8e9096]">
             {!actions.hold.allowed && actions.hold.reason && <p id={`gate-hold-${tour.id}`}>Giữ: {actions.hold.reason}</p>}
             {!actions.next.allowed && actions.next.reason && <p id={`gate-next-${tour.id}`}>Đi tiếp: {actions.next.reason}</p>}
-            {tour.progress?.hold && <p className="font-semibold text-[#2f62b8]">Đang giữ tại POI. Bấm Đi tiếp khi muốn rời điểm.</p>}
+            {tour.progress?.hold && <p className="font-semibold text-[#3d5010]">Đang giữ tại POI. Bấm Đi tiếp khi muốn rời điểm.</p>}
           </div>
         </>
       )}
 
       {message && (
-        <p role={message.tone === 'ok' ? 'status' : 'alert'} className={`mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-opacity duration-300 starting:opacity-0 ${message.tone === 'ok' ? 'bg-[#effbf5] text-[#1f7a55]' : 'bg-[#fff1ef] text-[#b23e31]'}`}>
+        <p role={message.tone === 'ok' ? 'status' : 'alert'} className={`mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-opacity duration-300 starting:opacity-0 ${message.tone === 'ok' ? 'bg-[#f2f7e4] text-[#4d6410]' : 'bg-[#fff1ef] text-[#b23e31]'}`}>
           {message.text}
         </p>
       )}
 
-      <div className="mt-4 border-t border-[#edf2fa] pt-4">
+      <div className="mt-4 border-t border-[#efefe9] pt-4">
         <button type="button" onClick={() => setPending('endEarly')} disabled={!actions.endEarly.allowed} className={`${buttonClass('danger')} w-full`}>
           <CircleStop size={16} aria-hidden="true" />Kết thúc sớm
         </button>
-        <p className="mt-2 text-[11px] leading-4 text-[#9aa8bd]">Kết thúc sớm là yêu cầu hủy qua mạng, không phải dừng khẩn cấp. Dừng khẩn cấp dùng cơ chế an toàn trên robot.</p>
+        <p className="mt-2 text-[11px] leading-4 text-[#999ba0]">Kết thúc sớm là yêu cầu hủy qua mạng, không phải dừng khẩn cấp. Dừng khẩn cấp dùng cơ chế an toàn trên robot.</p>
       </div>
 
       <ConfirmationDialog

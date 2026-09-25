@@ -58,7 +58,7 @@ export default function ToursTodayPage() {
         description="Theo dõi danh sách các buổi tham quan trong ngày. Nhân viên vận hành kiểm tra thiết bị và bắt đầu khi buổi ở trạng thái Sẵn sàng."
       />
       <section className={panelClass} aria-label="Danh sách buổi hôm nay">
-        <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#efefe9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <FilterChips
             label="Lọc theo trạng thái"
             value={view}
@@ -71,14 +71,14 @@ export default function ToursTodayPage() {
           />
 
           <div className="relative w-full sm:w-64">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8e9096]" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm theo mã, tên, đoàn…"
               aria-label="Tìm kiếm buổi hôm nay"
-              className="w-full rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-1.5 pl-8 pr-3 text-xs text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#2563eb] focus:bg-white transition-all"
+              className="w-full rounded-lg border border-[#e3e3dc] bg-[#f7f7f3] py-1.5 pl-8 pr-3 text-xs text-[#1c1c1c] outline-none placeholder:text-[#8e9096] focus:border-[#1c1c1c] focus:bg-white transition-all"
             />
           </div>
         </div>

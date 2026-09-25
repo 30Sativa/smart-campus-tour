@@ -59,7 +59,7 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
       />
 
       <section className={panelClass} aria-label="Danh sách đăng ký">
-        <div className="space-y-3 border-b border-[#f1f5f9] p-4">
+        <div className="space-y-3 border-b border-[#efefe9] p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
             <SearchField value={q} onChange={(value) => update({ q: value || null })} label="Tìm theo trường, đại diện hoặc Tour" placeholder="Tìm theo trường, đại diện, Tour..." className="w-full lg:max-w-sm" />
             <DateRangeFilter label="Lọc theo ngày Tour" value={date} from={custom.from} to={custom.to} options={DATE_OPTIONS} onChange={(next) => update({ date: next.date === 'all' ? null : next.date, from: next.from || null, to: next.to || null })} />

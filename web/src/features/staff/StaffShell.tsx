@@ -6,7 +6,7 @@ import { useLogout } from '../../auth/use-logout'
 import { isAdminRole, roleLabel } from '../../auth/roles'
 import { LiveDot, PageSkeleton } from './StaffUi'
 import { useMobileNav } from './use-mobile-nav'
-import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from './ConsoleSidebar'
+import { ConsoleSidebar, ConsoleTopbar, DevDataBadge, MobileNavToggle } from './ConsoleSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
 import { REASON_SHORT } from './reason'
@@ -59,7 +59,7 @@ export default function StaffShell() {
   }, [toast])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#0f172a]">
+    <div className="flex min-h-[100dvh] bg-[#f0f0eb] text-[#1c1c1c]">
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
       <ConsoleSidebar
@@ -83,15 +83,16 @@ export default function StaffShell() {
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white/95 px-5 backdrop-blur-md lg:px-8">
-          <p className="text-sm font-bold text-[#0f172a] lg:hidden">
-            {STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'}
-          </p>
+        <ConsoleTopbar
+          area="Vận hành"
+          areaPath="/staff"
+          title={STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'}
+        >
           <span
             role="status"
             className={`hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-bold sm:inline-flex ${
               connection === 'connected'
-                ? 'bg-[#ecfdf5] text-[#16a34a] border border-[#a7f3d0]'
+                ? 'bg-[#f2f7e4] text-[#5f7a12] border border-[#d5e8a6]'
                 : connection === 'disconnected'
                 ? 'bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]'
                 : 'bg-[#fffbeb] text-[#d97706] border border-[#fde68a]'
@@ -113,8 +114,8 @@ export default function StaffShell() {
                 }
               }}
             >
-              <label className="flex h-9.5 items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 focus-within:bg-white focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20 transition-all">
-                <Search size={14} className="shrink-0 text-[#64748b]" aria-hidden="true" />
+              <label className="flex h-9.5 items-center gap-2 rounded-xl border border-[#e3e3dc] bg-[#f7f7f3] px-3 focus-within:bg-white focus-within:border-[#1c1c1c] focus-within:ring-2 focus-within:ring-[#9cc93a]/20 transition-all">
+                <Search size={14} className="shrink-0 text-[#6b6e75]" aria-hidden="true" />
                 <input
                   type="search"
                   value={search}
@@ -124,18 +125,18 @@ export default function StaffShell() {
                   }}
                   aria-label="Tìm trang vận hành"
                   placeholder="Tìm trang vận hành…"
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#1c1c1c] outline-none placeholder:text-[#8e9096]"
                 />
               </label>
               {search.trim() && (
-                <div className="absolute top-11 right-0 left-0 rounded-xl border border-[#e2e8f0] bg-white p-1.5 shadow-lg transition-[opacity,transform] duration-150 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+                <div className="absolute top-11 right-0 left-0 rounded-xl border border-[#e3e3dc] bg-white p-1.5 shadow-lg transition-[opacity,transform] duration-150 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none">
                   <ul aria-label="Kết quả tìm trang" className="space-y-0.5">
                     {searchResults.map(({ path, label }) => (
                       <li key={path}>
                         <Link
                           to={path}
                           onClick={() => setSearch('')}
-                          className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold text-[#2563eb] hover:bg-[#eff6ff]"
+                          className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold text-[#4d6410] hover:bg-[#f2f7e4]"
                         >
                           {label}
                           <ChevronRight size={13} aria-hidden="true" />
@@ -144,7 +145,7 @@ export default function StaffShell() {
                     ))}
                   </ul>
                   {searchResults.length === 0 && (
-                    <p role="status" className="p-3 text-xs text-[#64748b]">
+                    <p role="status" className="p-3 text-xs text-[#6b6e75]">
                       Không tìm thấy trang phù hợp.
                     </p>
                   )}
@@ -155,7 +156,7 @@ export default function StaffShell() {
             <Link
               to={runningTour ? `/staff/live/${runningTour.id}` : '/staff/live'}
               aria-label={assistCount > 0 ? `Điều hành trực tiếp, ${assistCount} buổi cần hỗ trợ` : 'Điều hành trực tiếp'}
-              className="relative grid size-9.5 shrink-0 place-items-center rounded-xl border border-[#e2e8f0] bg-white text-[#64748b] hover:border-[#cbd5e1] hover:text-[#2563eb] hover:bg-[#f8fafc] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]"
+              className="relative grid size-9.5 shrink-0 place-items-center rounded-xl border border-[#e3e3dc] bg-white text-[#6b6e75] hover:border-[#c6c7cc] hover:text-[#4d6410] hover:bg-[#f7f7f3] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9cc93a]"
             >
               <Bell size={17} aria-hidden="true" />
               {assistCount > 0 && (
@@ -168,7 +169,7 @@ export default function StaffShell() {
               )}
             </Link>
           </div>
-        </header>
+        </ConsoleTopbar>
 
         <DevDataBadge>dữ liệu mẫu · mô phỏng thời gian thực</DevDataBadge>
 
@@ -193,14 +194,14 @@ function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClos
       <div className="flex items-start gap-3">
         <ShieldAlert size={20} className="mt-0.5 shrink-0 text-[#dc2626]" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-extrabold text-[#0f172a]">
+          <p className="text-sm font-extrabold text-[#1c1c1c]">
             {notice.tourCode} cần hỗ trợ · {REASON_SHORT[notice.reason] ?? notice.reason}
           </p>
-          {notice.detail && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#64748b]">{notice.detail}</p>}
+          {notice.detail && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#6b6e75]">{notice.detail}</p>}
           <Link
             to={`/staff/live/${notice.tourId}`}
             onClick={onClose}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#2563eb] hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#4d6410] hover:underline"
           >
             Mở điều hành trực tiếp<ChevronRight size={13} aria-hidden="true" />
           </Link>
@@ -209,7 +210,7 @@ function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClos
           type="button"
           onClick={onClose}
           aria-label="Đóng thông báo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-[#94a3b8] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-[#8e9096] hover:bg-[#efefe9] hover:text-[#1c1c1c]"
         >
           <X size={15} />
         </button>

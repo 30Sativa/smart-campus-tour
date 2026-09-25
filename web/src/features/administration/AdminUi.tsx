@@ -43,11 +43,11 @@ export function RegistrationStateBadge({ state }: { state: RegistrationState }) 
  * §3.4): the time the mail service accepted the last send, not a read receipt.
  */
 export function InvitationStatus({ registration }: { registration: Pick<AdminRegistration, 'state' | 'invitationSentAt' | 'invitationFailed'> }) {
-  if (registration.state !== 'Approved') return <span className="text-xs text-[#94a3b8]">-</span>
+  if (registration.state !== 'Approved') return <span className="text-xs text-[#8e9096]">-</span>
   if (registration.invitationFailed)
     return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#b23e31]"><MailX size={14} aria-hidden="true" />Gửi lỗi, cần gửi lại</span>
   if (registration.invitationSentAt)
-    return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#2f7a5b]"><MailCheck size={14} aria-hidden="true" />Đã gửi {formatStamp(registration.invitationSentAt)}</span>
+    return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4d6410]"><MailCheck size={14} aria-hidden="true" />Đã gửi {formatStamp(registration.invitationSentAt)}</span>
   return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#92400e]"><MailWarning size={14} aria-hidden="true" />Chưa gửi</span>
 }
 
@@ -56,8 +56,8 @@ export function AdminErrorPanel({ title, onRetry }: { title: string; onRetry?: (
   return (
     <div className={`${panelClass} flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center`} role="alert">
       <AlertCircle className="text-[#bd473a]" size={24} aria-hidden="true" />
-      <p className="text-[15px] font-semibold text-[#1e293b]">{title}</p>
-      <p className="max-w-md text-sm text-[#64748b]">Kiểm tra kết nối với máy chủ rồi thử lại.</p>
+      <p className="text-[15px] font-semibold text-[#1c1c1c]">{title}</p>
+      <p className="max-w-md text-sm text-[#6b6e75]">Kiểm tra kết nối với máy chủ rồi thử lại.</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className={buttonClass('secondary', 'sm')}>
           <RotateCcw size={15} aria-hidden="true" />Thử lại
@@ -70,9 +70,9 @@ export function AdminErrorPanel({ title, onRetry }: { title: string; onRetry?: (
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
     <div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      <span className="grid size-11 place-items-center rounded-full bg-[#f1f5f9] text-[#94a3b8]" aria-hidden="true"><Inbox size={20} /></span>
-      <p className="text-[15px] font-semibold text-[#1e293b]">{title}</p>
-      {description && <p className="max-w-md text-sm text-[#64748b]">{description}</p>}
+      <span className="grid size-11 place-items-center rounded-full bg-[#efefe9] text-[#8e9096]" aria-hidden="true"><Inbox size={20} /></span>
+      <p className="text-[15px] font-semibold text-[#1c1c1c]">{title}</p>
+      {description && <p className="max-w-md text-sm text-[#6b6e75]">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   )
@@ -83,7 +83,7 @@ export function SkeletonRows({ rows = 5, label = 'Đang tải' }: { rows?: numbe
   return (
     <div className="space-y-2 p-5" aria-busy="true" aria-label={label}>
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="h-12 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" style={{ animationDelay: `${i * 80}ms` }} />
+        <div key={i} className="h-12 animate-pulse rounded-xl bg-[#efefe9] motion-reduce:animate-none" style={{ animationDelay: `${i * 80}ms` }} />
       ))}
     </div>
   )
@@ -91,7 +91,7 @@ export function SkeletonRows({ rows = 5, label = 'Đang tải' }: { rows?: numbe
 
 /** An inline notice inside a panel or dialog. */
 export function Notice({ tone = 'info', children, action }: { tone?: 'info' | 'warn' | 'danger'; children: ReactNode; action?: ReactNode }) {
-  const palette = tone === 'danger' ? 'border-[#f5c8c2] bg-[#fff4f2] text-[#9d3428]' : tone === 'warn' ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : 'border-[#d8e5f7] bg-[#f5f9ff] text-[#35507a]'
+  const palette = tone === 'danger' ? 'border-[#f5c8c2] bg-[#fff4f2] text-[#9d3428]' : tone === 'warn' ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : 'border-[#dbe8b8] bg-[#f5f9ea] text-[#44474e]'
   return (
     <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-[13px] leading-5 font-medium ${palette}`} role={tone === 'info' ? 'status' : 'alert'}>
       <div className="min-w-0 flex-1">{children}</div>
@@ -126,8 +126,8 @@ export function DateRangeFilter({ label, value, from, to, options, onChange }: {
       <FilterChips<DateRangeKey> label={label} value={value} onChange={(date) => onChange({ date })} options={options} />
       {value === 'custom' && (
         <div className="flex flex-wrap items-end gap-3 transition-opacity duration-200 starting:opacity-0">
-          <label className="text-xs font-medium text-[#475569]">Từ ngày<input type="date" value={from} max={to || undefined} onChange={(event) => onChange({ date: 'custom', from: event.target.value, to })} className={`${inputClass} mt-1 w-44`} /></label>
-          <label className="text-xs font-medium text-[#475569]">Đến ngày<input type="date" value={to} min={from || undefined} onChange={(event) => onChange({ date: 'custom', from, to: event.target.value })} className={`${inputClass} mt-1 w-44`} /></label>
+          <label className="text-xs font-medium text-[#4a4f59]">Từ ngày<input type="date" value={from} max={to || undefined} onChange={(event) => onChange({ date: 'custom', from: event.target.value, to })} className={`${inputClass} mt-1 w-44`} /></label>
+          <label className="text-xs font-medium text-[#4a4f59]">Đến ngày<input type="date" value={to} min={from || undefined} onChange={(event) => onChange({ date: 'custom', from, to: event.target.value })} className={`${inputClass} mt-1 w-44`} /></label>
         </div>
       )}
     </div>

@@ -35,7 +35,7 @@ function useTransition(tour: AdminTourDetail, action: TourTransition, onClose: (
 }
 
 function Effects({ items }: { items: ReactNode[] }) {
-  return <ul className="list-disc space-y-1 pl-5 text-[13px] leading-5 text-[#334155]">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+  return <ul className="list-disc space-y-1 pl-5 text-[13px] leading-5 text-[#3a3d44]">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>
 }
 
 /** "Chốt buổi" (scope §5.2): Scheduled → Ready. Locks content and groups; says nothing about the robot. */
@@ -57,8 +57,8 @@ export function FinalizeTourDialog({ tour, open, onClose, onReload }: DialogProp
     >
       <div className="space-y-3">
         <dl className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl border border-[#d6eee2] bg-[#f5fcf8] px-3 py-2"><dt className="text-[11px] font-semibold text-[#5d7a6c]">Đoàn đã duyệt</dt><dd className="text-lg font-bold text-[#1e293b] tabular-nums">{tour.counts.approved} <span className="text-xs font-semibold text-[#64748b]">· {students} học sinh</span></dd></div>
-          <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2"><dt className="text-[11px] font-semibold text-[#64748b]">Đăng ký chờ duyệt</dt><dd className="text-lg font-bold text-[#1e293b] tabular-nums">{tour.counts.submitted}</dd></div>
+          <div className="rounded-xl border border-[#dbe8b8] bg-[#f5f9ea] px-3 py-2"><dt className="text-[11px] font-semibold text-[#5f6b4a]">Đoàn đã duyệt</dt><dd className="text-lg font-bold text-[#1c1c1c] tabular-nums">{tour.counts.approved} <span className="text-xs font-semibold text-[#6b6e75]">· {students} học sinh</span></dd></div>
+          <div className="rounded-xl border border-[#e3e3dc] bg-[#f7f7f3] px-3 py-2"><dt className="text-[11px] font-semibold text-[#6b6e75]">Đăng ký chờ duyệt</dt><dd className="text-lg font-bold text-[#1c1c1c] tabular-nums">{tour.counts.submitted}</dd></div>
         </dl>
         <Effects
           items={[

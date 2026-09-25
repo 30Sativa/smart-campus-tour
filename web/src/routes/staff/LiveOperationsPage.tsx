@@ -53,7 +53,7 @@ export default function LiveOperationsPage() {
             )
           }
         />
-        <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
+        <div className="overflow-hidden rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)]">
           <OperationalTwin robots={robots.data ?? []} className="h-[clamp(380px,62vh,720px)]" />
         </div>
       </StaffPage>
@@ -81,7 +81,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
   return (
     <StaffPage
       wide
-      className="!bg-[#f8fafc] [--ops-radius:1rem] [--ops-border:#e2e8f0] [--ops-shadow:none] [&_h2]:text-sm [&_section>div:first-child]:border-b-0"
+      className="!bg-[#f7f7f3] [--ops-radius:1rem] [--ops-border:#e3e3dc] [--ops-shadow:none] [&_h2]:text-sm [&_section>div:first-child]:border-b-0"
     >
       <PageHeader
         eyebrow={`Điều hành trực tiếp · ${tour.code}`}
@@ -100,7 +100,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
       {tour.state !== 'Running' && (
         <div
           role="status"
-          className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-3.5 text-sm text-[#475569] shadow-xs"
+          className="mb-4 rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] px-5 py-3.5 text-sm text-[#4a4f59] shadow-xs"
         >
           Buổi đã {statusLabel(tour.state).toLowerCase()}{tour.endReason ? `: ${tour.endReason}` : ''}. Live và AI của
           học sinh đã đóng.
@@ -112,7 +112,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
           className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-[#fef2f2] px-5 py-3.5 shadow-xs"
         >
           <ShieldAlert size={20} className="shrink-0 text-[#dc2626]" aria-hidden="true" />
-          <p className="min-w-0 flex-1 text-xs sm:text-sm text-[#334155]">
+          <p className="min-w-0 flex-1 text-xs sm:text-sm text-[#3a3d44]">
             <strong className="text-[#dc2626] font-bold">
               Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}.
             </strong>{' '}
@@ -122,7 +122,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
       )}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.08fr)_minmax(280px,1fr)]">
-        <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs lg:col-start-1 lg:row-start-1">
+        <div className="overflow-hidden rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] lg:col-start-1 lg:row-start-1">
           <OperationalTwin
             robots={robots}
             tour={tour}
@@ -135,7 +135,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
           <PanelHead
             title="Trạng thái phiên"
             action={
-              <span className="font-mono text-xs text-[#64748b] bg-[#f1f5f9] px-2 py-0.5 rounded">
+              <span className="font-mono text-xs text-[#6b6e75] bg-[#efefe9] px-2 py-0.5 rounded">
                 {done}/{total} POI · rev {tour.revision}
               </span>
             }
@@ -150,7 +150,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
             <PanelHead
               title="Lộ trình"
               description="Chọn một POI để xem cấu hình và làm nổi trên bản đồ."
-              action={<span className="font-mono text-xs font-bold text-[#2563eb]">{done} / {total} POI</span>}
+              action={<span className="font-mono text-xs font-bold text-[#4d6410]">{done} / {total} POI</span>}
             />
             <div className="px-4 pb-4">
               <TourTimeline
@@ -182,10 +182,10 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
                     className={`flex gap-3 rounded-xl p-3 text-xs transition-opacity duration-300 starting:opacity-0 ${
                       event.type === 'AssistanceRequired' || event.type.endsWith('Failed')
                         ? 'bg-[#fef2f2] border border-[#fecaca]'
-                        : 'bg-[#f8fafc] border border-[#f1f5f9]'
+                        : 'bg-[#f7f7f3] border border-[#efefe9]'
                     }`}
                   >
-                    <span className="w-11 shrink-0 font-mono font-bold text-[#64748b] tabular-nums">
+                    <span className="w-11 shrink-0 font-mono font-bold text-[#6b6e75] tabular-nums">
                       {formatTime(event.occurredAt)}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -193,12 +193,12 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
                         className={`font-bold ${
                           event.type === 'AssistanceRequired' || event.type.endsWith('Failed')
                             ? 'text-[#dc2626]'
-                            : 'text-[#0f172a]'
+                            : 'text-[#1c1c1c]'
                         }`}
                       >
                         {eventTypeLabel(event.type)}
                       </span>
-                      {event.detail && <span className="block text-[#64748b] mt-0.5">{event.detail}</span>}
+                      {event.detail && <span className="block text-[#6b6e75] mt-0.5">{event.detail}</span>}
                     </span>
                   </li>
                 ))}
@@ -219,8 +219,8 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
 
 function StopDetail({ stop }: { stop: RouteStop }) {
   return (
-    <div className="mt-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 transition-opacity duration-200 starting:opacity-0">
-      <p className="text-sm font-bold text-[#0f172a]">{stop.name}</p>
+    <div className="mt-2 rounded-xl border border-[#e3e3dc] bg-[#f7f7f3] p-4 transition-opacity duration-200 starting:opacity-0">
+      <p className="text-sm font-bold text-[#1c1c1c]">{stop.name}</p>
       <dl className="mt-3 grid grid-cols-2 gap-3">
         <Field label="Trạng thái">{statusLabel(stop.status)}</Field>
         <Field label="Số lượt dừng">{stop.visits}</Field>
@@ -229,7 +229,7 @@ function StopDetail({ stop }: { stop: RouteStop }) {
         <Field label="Tới lúc">{formatTime(stop.arrivedAt)}</Field>
         <Field label="Đóng lượt lúc">{formatTime(stop.closedAt)}</Field>
       </dl>
-      <p className="mt-3 text-[11px] text-[#94a3b8]">
+      <p className="mt-3 text-[11px] text-[#8e9096]">
         Tuyến, tọa độ và góc quay do nhóm kỹ thuật cấu hình; Staff không đổi từ màn hình này.
       </p>
     </div>

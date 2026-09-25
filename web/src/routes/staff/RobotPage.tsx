@@ -40,46 +40,46 @@ export default function RobotPage() {
 
       {/* ── Summary Stats ────────────────────────────────────────────────────── */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f8fafc] text-[#64748b]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] p-4 shadow-xs">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f7f7f3] text-[#6b6e75]">
             <Bot size={20} />
           </span>
           <div>
-            <span className="text-xs font-bold text-[#64748b]">Tổng số robot</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{total}</span>
+            <span className="text-xs font-bold text-[#6b6e75]">Tổng số robot</span>
+            <span className="block text-2xl font-black text-[#1c1c1c] tabular-nums leading-none mt-1">{total}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ecfdf5] text-[#16a34a]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] p-4 shadow-xs">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f2f7e4] text-[#5f7a12]">
             <Sparkles size={20} />
           </span>
           <div>
-            <span className="text-xs font-bold text-[#16a34a]">Sẵn sàng nhận tour</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{available}</span>
+            <span className="text-xs font-bold text-[#5f7a12]">Sẵn sàng nhận tour</span>
+            <span className="block text-2xl font-black text-[#1c1c1c] tabular-nums leading-none mt-1">{available}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] p-4 shadow-xs">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#1c1c1c] text-[#bde74e] shadow-[0_6px_14px_-6px_rgba(28,28,28,0.6)]">
             <Cpu size={20} />
           </span>
           <div>
-            <span className="text-xs font-bold text-[#2563eb]">Đang chạy tour</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{inTour}</span>
+            <span className="text-xs font-bold text-[#4d6410]">Đang chạy tour</span>
+            <span className="block text-2xl font-black text-[#1c1c1c] tabular-nums leading-none mt-1">{inTour}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] p-4 shadow-xs">
           <span
             className={`grid size-10 shrink-0 place-items-center rounded-xl ${
-              needsCheck > 0 ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#f8fafc] text-[#64748b]'
+              needsCheck > 0 ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#f7f7f3] text-[#6b6e75]'
             }`}
           >
             <ShieldAlert size={20} />
           </span>
           <div>
-            <span className={`text-xs font-bold ${needsCheck > 0 ? 'text-[#dc2626]' : 'text-[#64748b]'}`}>
+            <span className={`text-xs font-bold ${needsCheck > 0 ? 'text-[#dc2626]' : 'text-[#6b6e75]'}`}>
               Cần kiểm tra
             </span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">
+            <span className="block text-2xl font-black text-[#1c1c1c] tabular-nums leading-none mt-1">
               {needsCheck}
             </span>
           </div>
@@ -100,13 +100,13 @@ export default function RobotPage() {
             ))}
           </div>
           <div className="xl:sticky xl:top-20">
-            <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
-              <div className="flex items-center justify-between border-b border-[#f1f5f9] px-5 py-3.5">
+            <div className="overflow-hidden rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)]">
+              <div className="flex items-center justify-between border-b border-[#efefe9] px-5 py-3.5">
                 <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-[#10b981] animate-pulse" />
-                  <h3 className="text-sm font-bold text-[#0f172a]">Bản đồ vị trí hạm đội</h3>
+                  <span className="size-2 rounded-full bg-[#8fbf2a] animate-pulse" />
+                  <h3 className="text-sm font-bold text-[#1c1c1c]">Bản đồ vị trí hạm đội</h3>
                 </div>
-                <span className="text-xs text-[#64748b]">Tọa độ ROS thời gian thực</span>
+                <span className="text-xs text-[#6b6e75]">Tọa độ ROS thời gian thực</span>
               </div>
               <OperationalTwin robots={data} className="h-[460px]" />
             </div>
@@ -137,7 +137,7 @@ function RobotPanel({ robot, now }: { robot: AmrStatus; now: number }) {
       className={`${panelClass} ${robot.assignable === false ? 'opacity-90' : ''}`}
       aria-label={robot.name}
     >
-      <div className="border-b border-[#f1f5f9] px-5 py-4">
+      <div className="border-b border-[#efefe9] px-5 py-4">
         <RobotHeader robot={robot} action={release} />
       </div>
       {robot.needsCheck && (

@@ -8,7 +8,6 @@
  *
  * Three roles, three signed-in areas, and they line up one to one:
  *
- *   Visitor  `/visit/*`, the visitor app: explore, book a robot, walk a tour
  *   Staff    `/staff/*`, tour operations
  *   Admin    `/admin/*`, administration, and `/staff/*` as well
  *
@@ -25,28 +24,27 @@
  */
 export const ADMIN_ROLE = 'Admin' as const
 export const STAFF_ROLE = 'Staff' as const
-export const VISITOR_ROLE = 'Visitor' as const
+/** School representative: registers a group and manages its roster (flow review §4). */
+export const REPRESENTATIVE_ROLE = 'Representative' as const
 
 /** May open `/staff/*`. */
 export const STAFF_ROLES = [STAFF_ROLE, ADMIN_ROLE] as const
 
-/** Every role the app can see, visitor included. */
-export const ALL_ROLES = [VISITOR_ROLE, STAFF_ROLE, ADMIN_ROLE] as const
-
 /**
- * Home of the visitor app.
- *
- * A visitor used to land on `/` after signing in, because the account had nothing
- * else. It has this area now, so signing in ends somewhere that belongs to the
- * account rather than back on the page they signed in from.
+ * Every role the app knows. The `Visitor` role and its `/visit/*` area were
+ * removed on 2026-09-24: students join without an account (`/tour`) and the
+ * other accounts are issued by Admin, so nothing signs up as a visitor.
  */
-export const VISITOR_HOME = '/visit'
+export const ALL_ROLES = [STAFF_ROLE, ADMIN_ROLE, REPRESENTATIVE_ROLE] as const
+
+/** Home of the school representative's area. */
+export const REPRESENTATIVE_HOME = '/dai-dien'
 
 export type StaffRole = (typeof STAFF_ROLES)[number]
 export type AppRole = (typeof ALL_ROLES)[number]
 
 /**
- * Anything a server, an old token or a URL might spell, mapped onto the three.
+ * Anything a server, an old token or a URL might spell, mapped onto the current roles.
  * Keys are lowercased; `normalizeRole` lowercases before looking up.
  */
 const LEGACY_MAP: Record<string, AppRole> = {
@@ -59,18 +57,22 @@ const LEGACY_MAP: Record<string, AppRole> = {
   'campus staff': STAFF_ROLE,
   operator: STAFF_ROLE,
   ops: STAFF_ROLE,
-  // Spellings of the surviving three.
+  // Spellings of the current roles.
   staff: STAFF_ROLE,
   admin: ADMIN_ROLE,
   administrator: ADMIN_ROLE,
-  visitor: VISITOR_ROLE,
-  guest: VISITOR_ROLE,
+  representative: REPRESENTATIVE_ROLE,
+  'school representative': REPRESENTATIVE_ROLE,
+  schoolrepresentative: REPRESENTATIVE_ROLE,
+  school_representative: REPRESENTATIVE_ROLE,
+  daidien: REPRESENTATIVE_ROLE,
 }
 
-export function normalizeRole(raw?: string | null): AppRole {
-  if (!raw) return VISITOR_ROLE
+/** The role, or null for a missing or unknown one (an old `Visitor` token included): no area opens for it. */
+export function normalizeRole(raw?: string | null): AppRole | null {
+  if (!raw) return null
   const lower = raw.trim().toLowerCase()
-  return LEGACY_MAP[lower] ?? ALL_ROLES.find((role) => role.toLowerCase() === lower) ?? VISITOR_ROLE
+  return LEGACY_MAP[lower] ?? ALL_ROLES.find((role) => role.toLowerCase() === lower) ?? null
 }
 
 /** May open `/staff/*`. */
@@ -81,6 +83,15 @@ export function isStaffRole(role?: string | null): boolean {
 /** May open `/admin/*`. Administration is not part of the operations role. */
 export function isAdminRole(role?: string | null): boolean {
   return normalizeRole(role) === ADMIN_ROLE
+}
+
+/**
+ * May open `/dai-dien/*`: register a group, replace its roster, share the
+ * invitation. Admin is not let in: Admin does not upload rosters on a school's
+ * behalf in V1 (flow review §3.2).
+ */
+export function isRepresentativeRole(role?: string | null): boolean {
+  return normalizeRole(role) === REPRESENTATIVE_ROLE
 }
 
 /**
@@ -95,17 +106,6 @@ export function canOperateTours(role?: string | null): boolean {
   return normalizeRole(role) === STAFF_ROLE
 }
 
-/**
- * May open `/visit/*`.
- *
- * Every signed-in account can: a staff member checking what a visitor sees is a
- * normal thing to do, and the area holds nothing operational. What decides where
- * a role *lands* is `homePathForRole`, not this.
- */
-export function isVisitorAreaRole(role?: string | null): boolean {
-  return ALL_ROLES.includes(normalizeRole(role))
-}
-
 /** Vietnamese name for a role, for anything a person reads. */
 export function roleLabel(role?: string | null): string {
   switch (normalizeRole(role)) {
@@ -113,8 +113,10 @@ export function roleLabel(role?: string | null): string {
       return 'Quản trị viên'
     case STAFF_ROLE:
       return 'Nhân viên vận hành'
+    case REPRESENTATIVE_ROLE:
+      return 'Đại diện trường'
     default:
-      return 'Khách tham quan'
+      return 'Tài khoản không có vai trò'
   }
 }
 
@@ -126,6 +128,8 @@ export function roleLabel(role?: string | null): string {
 export function homePathForRole(role?: string | null): string {
   if (isAdminRole(role)) return '/admin'
   if (isStaffRole(role)) return '/staff'
-  return VISITOR_HOME
+  if (isRepresentativeRole(role)) return REPRESENTATIVE_HOME
+  // No area of its own: back to the public page.
+  return '/'
 }
 

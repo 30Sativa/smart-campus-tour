@@ -34,19 +34,19 @@ function Cap({ label, sub, reached, active = false, last = false }: { label: str
   return (
     <li className="relative flex gap-3 pb-3 last:pb-0">
       {!last && <Rail done={reached} />}
-      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#1f314d] text-white' : active ? 'bg-[#5b91ed] text-white' : 'border-2 border-[#d5dfec] bg-white text-[#a8b6c9]'}`} aria-hidden="true">
+      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#1c1c1c] text-white' : active ? 'bg-[#9cc93a] text-white' : 'border-2 border-[#dcdcd4] bg-white text-[#a4a6aa]'}`} aria-hidden="true">
         <Flag size={12} />
       </span>
       <span className="min-w-0 pt-0.5">
-        <span className={`block text-[13px] font-bold ${active ? 'text-[#1f314d]' : 'text-[#40546f]'}`}>{label}</span>
-        <span className="block truncate text-xs text-[#8a98ac]">{sub}</span>
+        <span className={`block text-[13px] font-bold ${active ? 'text-[#1c1c1c]' : 'text-[#44474e]'}`}>{label}</span>
+        <span className="block truncate text-xs text-[#8e9096]">{sub}</span>
       </span>
     </li>
   )
 }
 
 function Rail({ done }: { done: boolean }) {
-  return <span aria-hidden="true" className={`absolute top-7 bottom-0 left-[13px] w-0.5 transition-colors duration-500 ${done ? 'bg-[#5b91ed]' : 'bg-[#e1e8f2]'}`} />
+  return <span aria-hidden="true" className={`absolute top-7 bottom-0 left-[13px] w-0.5 transition-colors duration-500 ${done ? 'bg-[#9cc93a]' : 'bg-[#e3e3dc]'}`} />
 }
 
 function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: RouteStop; index: number; step?: string; selected: boolean; onSelect?: (id: string) => void; compact: boolean }) {
@@ -54,16 +54,16 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const done = stop.status === 'Completed'
   const skipped = stop.status === 'Skipped'
   const marker = done ? (
-    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#2f8f6b] text-white"><Check size={14} strokeWidth={3} /></span>
+    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#5f7a12] text-white"><Check size={14} strokeWidth={3} /></span>
   ) : skipped ? (
-    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#eef2f8] text-[#8a98ac]"><SkipForward size={13} /></span>
+    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#efefe9] text-[#8e9096]"><SkipForward size={13} /></span>
   ) : current ? (
     <span className="relative z-10 grid size-7 shrink-0 place-items-center">
-      <span className="absolute inset-0 animate-ping rounded-full bg-[#5b91ed]/30 [animation-duration:2.4s] motion-reduce:hidden" />
-      <span className="relative grid size-7 place-items-center rounded-full bg-[#5b91ed] text-white"><MapPinned size={13} /></span>
+      <span className="absolute inset-0 animate-ping rounded-full bg-[#9cc93a]/30 [animation-duration:2.4s] motion-reduce:hidden" />
+      <span className="relative grid size-7 place-items-center rounded-full bg-[#9cc93a] text-white"><MapPinned size={13} /></span>
     </span>
   ) : (
-    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full border-2 border-[#d5dfec] bg-white text-[11px] font-bold text-[#8a98ac]">{index + 1}</span>
+    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full border-2 border-[#dcdcd4] bg-white text-[11px] font-bold text-[#8e9096]">{index + 1}</span>
   )
 
   const meta = [
@@ -75,14 +75,14 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const content = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className={`truncate text-[14px] ${current ? 'font-extrabold text-[#1f314d]' : done ? 'font-semibold text-[#40546f]' : 'font-semibold text-[#71819a]'} ${skipped ? 'line-through decoration-[#b9c6d8]' : ''}`}>{stop.name}</span>
-        {current && step && <span className="shrink-0 rounded-full bg-[#eaf4ff] px-2 py-0.5 text-[10px] font-bold text-[#2f62b8]">{stepLabel(step)}</span>}
+        <span className={`truncate text-[14px] ${current ? 'font-extrabold text-[#1c1c1c]' : done ? 'font-semibold text-[#44474e]' : 'font-semibold text-[#74777d]'} ${skipped ? 'line-through decoration-[#bcbdc2]' : ''}`}>{stop.name}</span>
+        {current && step && <span className="shrink-0 rounded-full bg-[#f2f7e4] px-2 py-0.5 text-[10px] font-bold text-[#3d5010]">{stepLabel(step)}</span>}
       </span>
       {!compact && (
-        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#8a98ac]">
+        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#8e9096]">
           <span>{meta}</span>
           <span className="flex gap-1" aria-label={`Góc quan sát: ${stop.headSteps.join(', ')}`}>
-            {stop.headSteps.map((preset, i) => <span key={`${preset}-${i}`} className="rounded bg-[#f1f5fb] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#647793]">{preset}</span>)}
+            {stop.headSteps.map((preset, i) => <span key={`${preset}-${i}`} className="rounded bg-[#efefe9] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#6b6e75]">{preset}</span>)}
           </span>
         </span>
       )}
@@ -94,7 +94,7 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
       <Rail done={done || skipped} />
       {marker}
       {onSelect ? (
-        <button type="button" onClick={() => onSelect(stop.id)} aria-pressed={selected} className={`-mt-1 min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4f8df7] ${selected ? 'bg-[#eaf4ff]' : current ? 'bg-[#f5f9ff] hover:bg-[#eaf4ff]' : 'hover:bg-[#f5f8fd]'}`}>
+        <button type="button" onClick={() => onSelect(stop.id)} aria-pressed={selected} className={`-mt-1 min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9cc93a] ${selected ? 'bg-[#f2f7e4]' : current ? 'bg-[#f5f9ea] hover:bg-[#f2f7e4]' : 'hover:bg-[#f7f7f3]'}`}>
           {content}
         </button>
       ) : (

@@ -72,10 +72,12 @@ describe('LoginPage', () => {
     expect(container.querySelector('[data-dev-only]')).toBeNull()
   })
 
-  it('offers the sign-up route now that the register screen exists', () => {
+  // Self sign-up was removed with the Visitor role (2026-09-24): Admin issues accounts.
+  it('offers no sign-up route and says who issues accounts', () => {
     renderPage()
 
-    expect(screen.getByRole('link', { name: 'Đăng ký' })).toHaveAttribute('href', '/register')
+    expect(screen.queryByRole('link', { name: 'Đăng ký' })).toBeNull()
+    expect(screen.getByText(/Admin cấp tài khoản/)).toBeInTheDocument()
   })
 
   const fillCredentials = () => {
@@ -127,7 +129,7 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it.each([['Admin', '/admin'], ['Staff', '/staff'], ['Visitor', '/visit']])('preserves the %s destination', async (role, path) => {
+  it.each([['Admin', '/admin'], ['Staff', '/staff'], ['Representative', '/dai-dien']])('preserves the %s destination', async (role, path) => {
     vi.mocked(mockLogin).mockResolvedValue({ accessToken: 'mock-token', userId: 'demo', username: 'demo', role })
     renderPage()
     fillCredentials()

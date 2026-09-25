@@ -8,7 +8,7 @@ import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows, TourStateBadge } 
 import { useAdminRegistrations, useAdminTours } from '../../features/administration/admin-hooks'
 import { adminCounts, buildAdminTasks, type AdminTask } from '../../features/administration/admin-attention'
 import { formatShortDay, formatSlot, formatStamp, untilText } from '../../features/administration/admin-format'
-import { RegistrationBar } from '../../features/administration/components/TourParts'
+import { RegistrationBar, TourJourney } from '../../features/administration/components/TourParts'
 import { RegistrationReviewDrawer } from '../../features/administration/components/RegistrationReviewDrawer'
 import { useReviewParam } from '../../features/administration/use-review-param'
 
@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
             ) : upcoming.length === 0 ? (
               <EmptyState title="Chưa có Tour nào" action={<Link to="/admin/tours/new" className={buttonClass('primary', 'sm')}>Tạo Tour đầu tiên</Link>} />
             ) : (
-              <ul className="divide-y divide-[#f1f5f9]" aria-label="Tour sắp tới">
+              <ul className="divide-y divide-[#efefe9]" aria-label="Tour sắp tới">
                 {upcoming.map((tour) => <UpcomingRow key={tour.id} tour={tour} />)}
               </ul>
             )}
@@ -81,7 +81,7 @@ export default function AdminDashboardPage() {
               ) : !pending.data?.length ? (
                 <AllClear text="Tất cả đăng ký đã được xử lý." />
               ) : (
-                <ul className="divide-y divide-[#f1f5f9]">
+                <ul className="divide-y divide-[#efefe9]">
                   {pending.data.map((reg) => <PendingRow key={reg.id} registration={reg} onReview={open} />)}
                 </ul>
               )}
@@ -96,7 +96,7 @@ export default function AdminDashboardPage() {
               ) : tasks.length === 0 ? (
                 <AllClear text="Các Tour sắp tới không thiếu điều kiện." />
               ) : (
-                <ul className="divide-y divide-[#f1f5f9]">{tasks.map((task) => <TaskRow key={task.id} task={task} />)}</ul>
+                <ul className="divide-y divide-[#efefe9]">{tasks.map((task) => <TaskRow key={task.id} task={task} />)}</ul>
               )}
             </div>
           </section>
@@ -116,21 +116,22 @@ function UpcomingRow({ tour }: { tour: AdminTour }) {
     tour.state === 'Scheduled' && tour.counts.submitted > 0 ? { label: 'Duyệt đăng ký', kind: 'primary' as const, to: `/admin/tours/${tour.id}?tab=registrations` }
     : tour.state === 'Scheduled' && tour.allowedActions.finalize.allowed ? { label: 'Chốt Tour', kind: 'primary' as const, to: `/admin/tours/${tour.id}` }
     : { label: tour.state === 'Running' ? 'Xem' : 'Mở Tour', kind: 'secondary' as const, to: `/admin/tours/${tour.id}` }
-  const readiness = tour.state === 'Scheduled' ? (tour.readyBlockers.length ? `Còn ${tour.readyBlockers.length} điều kiện trước khi chốt` : 'Đủ điều kiện chốt') : tour.state === 'Ready' ? 'Đã chốt danh sách' : 'Staff đang điều hành'
   return (
-    <li className="grid gap-x-5 gap-y-3 px-5 py-4 transition-colors duration-150 hover:bg-[#f8fafc] sm:grid-cols-[76px_minmax(0,1fr)_auto]">
+    <li className="grid gap-x-5 gap-y-3 px-5 py-4 transition-colors duration-150 hover:bg-[#f7f7f3] sm:grid-cols-[76px_minmax(0,1fr)_auto]">
       <div className="pt-0.5">
-        <p className="text-[17px] leading-none font-bold text-[#0f172a] tabular-nums">{time}</p>
-        <p className="mt-1.5 text-xs whitespace-nowrap text-[#94a3b8]">{formatShortDay(tour.scheduledAt)}</p>
+        <p className="text-[17px] leading-none font-bold text-[#1c1c1c] tabular-nums">{time}</p>
+        <p className="mt-1.5 text-xs whitespace-nowrap text-[#8e9096]">{formatShortDay(tour.scheduledAt)}</p>
       </div>
       <div className="min-w-0">
         <p className="flex min-w-0 items-baseline gap-2">
-          <Link to={`/admin/tours/${tour.id}`} className="line-clamp-2 text-[15px] font-semibold text-[#0f172a] hover:text-[#2563eb] hover:underline sm:line-clamp-1">{tour.name}</Link>
-          <span className="shrink-0 font-mono text-[11px] text-[#94a3b8]">{tour.code}</span>
+          <Link to={`/admin/tours/${tour.id}`} className="line-clamp-2 text-[15px] font-semibold text-[#1c1c1c] hover:text-[#4d6410] hover:underline sm:line-clamp-1">{tour.name}</Link>
+          <span className="shrink-0 font-mono text-[11px] text-[#8e9096]">{tour.code}</span>
         </p>
-        <p className="mt-0.5 truncate text-[13px] text-[#64748b]">{tour.routeName} · {untilText(tour.scheduledAt)}</p>
-        <div className="mt-2.5 max-w-md"><RegistrationBar counts={tour.counts} /></div>
-        <p className={`mt-2 text-xs font-medium ${tour.state === 'Scheduled' && tour.readyBlockers.length ? 'text-[#92400e]' : tour.state === 'Scheduled' ? 'text-[#2f7a5b]' : 'text-[#64748b]'}`}>{readiness}</p>
+        <p className="mt-0.5 truncate text-[13px] text-[#6b6e75]">{tour.routeName} · {untilText(tour.scheduledAt)}</p>
+        <div className="mt-3 w-full max-w-[360px] divide-y divide-[#efefe9] rounded-xl border border-[#ebebe4] bg-transparent px-3.5">
+          <div className="py-3"><TourJourney tour={tour} /></div>
+          <div className="py-3"><RegistrationBar counts={tour.counts} /></div>
+        </div>
       </div>
       <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:justify-between">
         <TourStateBadge state={tour.state} />
@@ -142,14 +143,14 @@ function UpcomingRow({ tour }: { tour: AdminTour }) {
 
 function PendingRow({ registration: reg, onReview }: { registration: AdminRegistration; onReview: (id: string) => void }) {
   return (
-    <li className="flex items-start gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-[#f8fafc]">
+    <li className="flex items-start gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-[#f7f7f3]">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[#0f172a]">{reg.schoolName}</p>
-        <p className="mt-0.5 truncate text-xs text-[#64748b]">{reg.tourCode} · {formatSlot(reg.tourScheduledAt)}</p>
+        <p className="truncate text-sm font-semibold text-[#1c1c1c]">{reg.schoolName}</p>
+        <p className="mt-0.5 truncate text-xs text-[#6b6e75]">{reg.tourCode} · {formatSlot(reg.tourScheduledAt)}</p>
         {reg.resubmittedAfterApproval ? (
           <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[#92400e]"><RefreshCcw size={12} aria-hidden="true" />Danh sách cập nhật, cần duyệt lại</p>
         ) : (
-          <p className="mt-1 text-xs text-[#94a3b8]">{reg.studentCount} học sinh, gửi {formatStamp(reg.submittedAt)}</p>
+          <p className="mt-1 text-xs text-[#8e9096]">{reg.studentCount} học sinh, gửi {formatStamp(reg.submittedAt)}</p>
         )}
       </div>
       <button type="button" onClick={() => onReview(reg.id)} className={buttonClass('primary', 'sm')}>Duyệt ngay</button>
@@ -157,14 +158,14 @@ function PendingRow({ registration: reg, onReview }: { registration: AdminRegist
   )
 }
 
-const TASK_EDGE = { warn: 'border-l-[#d69412]', ok: 'border-l-[#2f8f6b]', info: 'border-l-[#5b91ed]' } as const
+const TASK_EDGE = { warn: 'border-l-[#d69412]', ok: 'border-l-[#5f7a12]', info: 'border-l-[#9cc93a]' } as const
 
 function TaskRow({ task }: { task: AdminTask }) {
   return (
     <li className={`flex items-start gap-3 border-l-[3px] px-4 py-3.5 ${TASK_EDGE[task.tone]}`}>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-[#0f172a]">{task.title}</p>
-        {task.detail && <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[#64748b]">{task.detail}</p>}
+        <p className="text-sm font-semibold text-[#1c1c1c]">{task.title}</p>
+        {task.detail && <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[#6b6e75]">{task.detail}</p>}
       </div>
       <Link to={task.to} className={buttonClass(task.tone === 'ok' ? 'primary' : 'secondary', 'sm')}>{task.actionLabel}</Link>
     </li>
@@ -172,5 +173,5 @@ function TaskRow({ task }: { task: AdminTask }) {
 }
 
 function AllClear({ text }: { text: string }) {
-  return <p className="flex items-center gap-2.5 px-5 py-4 text-sm font-medium text-[#2f7a5b]"><CheckCheck size={18} aria-hidden="true" />{text}</p>
+  return <p className="flex items-center gap-2.5 px-5 py-4 text-sm font-medium text-[#4d6410]"><CheckCheck size={18} aria-hidden="true" />{text}</p>
 }

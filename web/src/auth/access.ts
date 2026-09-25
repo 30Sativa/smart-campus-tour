@@ -1,4 +1,4 @@
-import { ALL_ROLES, VISITOR_HOME, homePathForRole, isAdminRole, isStaffRole, isVisitorAreaRole, normalizeRole, roleLabel } from './roles'
+import { ALL_ROLES, REPRESENTATIVE_HOME, homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole, normalizeRole, roleLabel } from './roles'
 
 /**
  * The four areas of the product, and who may enter each one.
@@ -13,7 +13,7 @@ import { ALL_ROLES, VISITOR_HOME, homePathForRole, isAdminRole, isStaffRole, isV
  * account from opening the wrong area by typing the URL, and it is what decides
  * what an account is shown.
  */
-export type AreaId = 'public' | 'visitor' | 'staff' | 'admin'
+export type AreaId = 'public' | 'staff' | 'admin' | 'representative'
 
 export type Area = {
   id: AreaId
@@ -33,13 +33,6 @@ export const AREAS: Area[] = [
     allows: () => true,
   },
   {
-    id: 'visitor',
-    label: 'Ứng dụng khách tham quan',
-    path: VISITOR_HOME,
-    purpose: 'Khám phá khuôn viên, đặt robot và theo dõi tour của chính mình. Cần đăng nhập.',
-    allows: isVisitorAreaRole,
-  },
-  {
     id: 'staff',
     label: 'Vận hành tour',
     path: '/staff',
@@ -52,6 +45,13 @@ export const AREAS: Area[] = [
     path: '/admin',
     purpose: 'Tạo Tour, duyệt đoàn đăng ký, gửi thông tin tham gia, Chốt / Mở lại / Hủy Tour trước khi chạy. Không điều khiển robot.',
     allows: isAdminRole,
+  },
+  {
+    id: 'representative',
+    label: 'Đăng ký đoàn',
+    path: REPRESENTATIVE_HOME,
+    purpose: 'Đại diện trường chọn buổi, gửi danh sách Excel, theo dõi duyệt và chia sẻ lời mời cho học sinh.',
+    allows: isRepresentativeRole,
   },
 ]
 
@@ -68,7 +68,7 @@ export { ALL_ROLES }
 function areaOfPath(path: string): AreaId {
   if (path.startsWith('/admin')) return 'admin'
   if (path.startsWith('/staff')) return 'staff'
-  if (path.startsWith(VISITOR_HOME)) return 'visitor'
+  if (path.startsWith(REPRESENTATIVE_HOME)) return 'representative'
   return 'public'
 }
 

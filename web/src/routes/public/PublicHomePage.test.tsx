@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import PublicHomePage from './PublicHomePage'
@@ -58,8 +58,50 @@ describe('PublicHomePage', () => {
   it('keeps the section anchors the navigation points at', () => {
     renderPage()
 
-    for (const id of ['quy-trinh', 'tinh-nang', 'gioi-thieu', 'chi-so', 'robot', 'nen-tang', 'dat-tour', 'lien-he']) {
+    // Section ids follow the 2026-09 home redesign (Himon layout).
+    for (const id of ['trai-nghiem', 'giai-phap', 'quy-trinh', 'robot', 'cong-nghe', 'goc-ky-thuat', 'hoi-dap', 'dat-tour', 'lien-he']) {
       expect(document.getElementById(id)).not.toBeNull()
     }
+
+    // Every in-page link lands on a section that exists.
+    document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((link) => {
+      const href = link.getAttribute('href') ?? ''
+      if (href.length > 1) expect(document.getElementById(href.slice(1))).not.toBeNull()
+    })
+  })
+
+  it('keeps one experience open at a time and lets a visitor switch it', () => {
+    renderPage()
+
+    const first = screen.getByRole('button', { name: /Tham quan qua livestream/i })
+    const second = screen.getByRole('button', { name: /Robot tự hành qua các POI/i })
+    expect(first).toHaveAttribute('aria-expanded', 'true')
+    expect(second).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(second)
+    expect(second).toHaveAttribute('aria-expanded', 'true')
+    expect(first).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('opens one FAQ answer at a time', () => {
+    renderPage()
+
+    const q1 = screen.getByRole('button', { name: /cần tạo tài khoản/i })
+    const q2 = screen.getByRole('button', { name: /điều khiển được robot/i })
+    expect(q1).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(q2)
+    expect(q2).toHaveAttribute('aria-expanded', 'true')
+    expect(q1).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(q2)
+    expect(q2).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('shows the demo figures even when motion never runs', () => {
+    renderPage()
+
+    expect(screen.getAllByText('≥ 3').length).toBeGreaterThan(0)
+    expect(document.querySelector('[data-count="30"]')?.textContent).toBe('30')
   })
 })

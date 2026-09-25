@@ -18,6 +18,7 @@ import { canOperateTours } from '../auth/roles'
 import { useAuthStore } from '../stores/auth-store'
 import { mockDelay } from './mock-mode'
 import * as world from './staff-sim'
+import { ensureRepresentativeSeed } from './representative-sim'
 
 /**
  * The server's role check for operating a run (scope §2.1): Admin reads the
@@ -40,6 +41,7 @@ function requireOperator() {
 /** Run a "server" command and translate its refusal into an HTTP-shaped error. */
 async function call<T>(run: () => T): Promise<T> {
   try {
+    ensureRepresentativeSeed()
     const value = run()
     return await mockDelay(structuredClone(value))
   } catch (error) {

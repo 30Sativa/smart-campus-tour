@@ -32,11 +32,11 @@ export default function AdminRouteCatalogPage() {
               const active = current?.id === route.id
               return (
                 <li key={route.id}>
-                  <button type="button" onClick={() => setSelected(route.id)} aria-pressed={active} className={`w-full rounded-2xl border bg-white p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${active ? 'border-[#5b91ed] shadow-[0_0_0_3px_rgba(91,145,237,0.12)]' : 'border-[#e2e8f0] hover:border-[#b9d3f7]'}`}>
-                    <p className="font-bold text-[#1e293b]">{route.name}</p>
-                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#64748b]">
+                  <button type="button" onClick={() => setSelected(route.id)} aria-pressed={active} className={`w-full rounded-2xl border bg-white p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9cc93a] ${active ? 'border-[#9cc93a] shadow-[0_0_0_3px_rgba(91,145,237,0.12)]' : 'border-[#e3e3dc] hover:border-[#cfe19c]'}`}>
+                    <p className="font-bold text-[#1c1c1c]">{route.name}</p>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6b6e75]">
                       <span className="inline-flex items-center gap-1"><MapPin size={12} aria-hidden="true" />{route.stops.length} POI</span>
-                      {route.valid ? <span className="inline-flex items-center gap-1 text-[#2f7a5b]"><CircleCheck size={12} aria-hidden="true" />Dùng được</span> : <span className="inline-flex items-center gap-1 font-bold text-[#92400e]"><TriangleAlert size={12} aria-hidden="true" />Chưa dùng được</span>}
+                      {route.valid ? <span className="inline-flex items-center gap-1 text-[#4d6410]"><CircleCheck size={12} aria-hidden="true" />Dùng được</span> : <span className="inline-flex items-center gap-1 font-bold text-[#92400e]"><TriangleAlert size={12} aria-hidden="true" />Chưa dùng được</span>}
                       {route.usedBy.length > 0 && <span>Đang dùng: {route.usedBy.join(', ')}</span>}
                     </p>
                   </button>

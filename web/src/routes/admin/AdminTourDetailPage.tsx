@@ -65,10 +65,10 @@ export default function AdminTourDetailPage() {
       <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">{tour.name}</h1>
+            <h1 className="text-2xl leading-tight font-bold tracking-[-0.025em] text-[#1c1c1c] sm:text-[28px]">{tour.name}</h1>
             <TourStateBadge state={tour.state} size="md" />
           </div>
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#64748b]">
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#6b6e75]">
             <span className="font-mono text-[13px]">{tour.code}</span>
             <span className="inline-flex items-center gap-1.5"><CalendarClock size={15} aria-hidden="true" />{formatSlot(tour.scheduledAt)}</span>
             <span className="inline-flex items-center gap-1.5"><RouteIcon size={15} aria-hidden="true" />{tour.routeName}</span>
@@ -79,7 +79,7 @@ export default function AdminTourDetailPage() {
 
       <StateNotice tour={tour} />
 
-      <div role="tablist" aria-label="Nội dung Tour" className="mb-5 flex gap-1 overflow-x-auto border-b border-[#e2e8f0]">
+      <div role="tablist" aria-label="Nội dung Tour" className="mb-5 flex gap-1 overflow-x-auto border-b border-[#e3e3dc]">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -88,7 +88,7 @@ export default function AdminTourDetailPage() {
             aria-selected={tab === item.id}
             aria-controls={`tab-${item.id}`}
             onClick={() => setTab(item.id)}
-            className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-[color,border-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] sm:px-4 ${tab === item.id ? 'border-[#2563eb] text-[#0f172a]' : 'border-transparent text-[#64748b] hover:border-[#cbd5e1] hover:text-[#1e293b]'}`}
+            className={`-mb-px inline-flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-[color,border-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9cc93a] sm:px-4 ${tab === item.id ? 'border-[#1c1c1c] text-[#1c1c1c]' : 'border-transparent text-[#6b6e75] hover:border-[#c6c7cc] hover:text-[#1c1c1c]'}`}
           >
             {item.label}
             {item.id === 'registrations' && tour.counts.submitted > 0 && <span className="rounded-full bg-[#fff1d6] px-1.5 text-[11px] text-[#92400e] tabular-nums">{tour.counts.submitted}</span>}
@@ -126,7 +126,7 @@ export default function AdminTourDetailPage() {
 }
 
 function BackLink() {
-  return <Link to="/admin/tours" className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#2563eb] hover:underline"><ArrowLeft size={15} aria-hidden="true" />Danh sách Tour</Link>
+  return <Link to="/admin/tours" className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#4d6410] hover:underline"><ArrowLeft size={15} aria-hidden="true" />Danh sách Tour</Link>
 }
 
 /** Actions by state, on the right of the header. Only what the server allows is enabled. */
@@ -169,7 +169,7 @@ function Overview({ tour, onShowRegistrations }: { tour: AdminTourDetail; onShow
             <Field label="Mã">{tour.code}</Field>
             <Field label="Thời gian dự kiến">{formatSlot(tour.scheduledAt)}</Field>
             <Field label="Tuyến">{tour.routeName}{tour.route ? ` · ${tour.route.stops.length} POI` : ''}</Field>
-            <div className="sm:col-span-2"><Field label="Mô tả"><span className="font-normal leading-6 text-[#334155]">{tour.description}</span></Field></div>
+            <div className="sm:col-span-2"><Field label="Mô tả"><span className="font-normal leading-6 text-[#3a3d44]">{tour.description}</span></Field></div>
             <Field label="Tạo lúc">{formatStamp(tour.createdAt)}</Field>
             {tour.startedAt && <Field label="Bắt đầu">{formatStamp(tour.startedAt)}</Field>}
             {tour.endedAt && <Field label="Kết thúc">{formatStamp(tour.endedAt)}</Field>}
@@ -187,9 +187,9 @@ function Overview({ tour, onShowRegistrations }: { tour: AdminTourDetail; onShow
           {tour.state === 'Scheduled' ? (
             <ReadyChecklist checks={tour.readyChecklist} />
           ) : tour.state === 'Ready' ? (
-            <p className="text-sm leading-6 text-[#334155]">Tour đã được chốt. Danh sách {tour.counts.approved} đoàn đã duyệt được khóa.</p>
+            <p className="text-sm leading-6 text-[#3a3d44]">Tour đã được chốt. Danh sách {tour.counts.approved} đoàn đã duyệt được khóa.</p>
           ) : (
-            <p className="text-sm leading-6 text-[#334155]">Không áp dụng: Tour {tour.state === 'Running' ? 'đang diễn ra' : 'đã kết thúc'}.</p>
+            <p className="text-sm leading-6 text-[#3a3d44]">Không áp dụng: Tour {tour.state === 'Running' ? 'đang diễn ra' : 'đã kết thúc'}.</p>
           )}
         </div>
       </section>
@@ -206,13 +206,13 @@ function Activity({ tour }: { tour: AdminTourDetail }) {
       {events.length === 0 ? (
         <EmptyState title="Chưa có hoạt động nào được ghi." />
       ) : (
-        <ol className="divide-y divide-[#f1f5f9]">
+        <ol className="divide-y divide-[#efefe9]">
           {events.map((event) => (
             <li key={event.id} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:gap-4">
-              <time dateTime={event.occurredAt} className="w-36 shrink-0 text-xs text-[#94a3b8] tabular-nums">{formatStamp(event.occurredAt)}</time>
+              <time dateTime={event.occurredAt} className="w-36 shrink-0 text-xs text-[#8e9096] tabular-nums">{formatStamp(event.occurredAt)}</time>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-[#1e293b]">{ADMIN_EVENT_LABEL[event.type] ?? eventTypeLabel(event.type)}{event.actor && <span className="font-normal text-[#94a3b8]"> · {event.actor}</span>}</p>
-                {event.detail && <p className="text-[13px] leading-5 text-[#475569]">{event.detail}</p>}
+                <p className="text-sm font-bold text-[#1c1c1c]">{ADMIN_EVENT_LABEL[event.type] ?? eventTypeLabel(event.type)}{event.actor && <span className="font-normal text-[#8e9096]"> · {event.actor}</span>}</p>
+                {event.detail && <p className="text-[13px] leading-5 text-[#4a4f59]">{event.detail}</p>}
               </div>
             </li>
           ))}

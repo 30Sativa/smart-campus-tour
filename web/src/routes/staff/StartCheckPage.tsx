@@ -84,7 +84,7 @@ export default function StartCheckPage() {
                   <RobotHeader robot={robot} />
                   <div className="mt-3"><RobotTelemetry robot={robot} now={now} /></div>
                 </>
-              ) : <p className="text-sm text-[#8a98ac]">Chưa có dữ liệu robot.</p>}
+              ) : <p className="text-sm text-[#8e9096]">Chưa có dữ liệu robot.</p>}
             </div>
           </section>
           <section className={panelClass} aria-label="Đoàn đăng ký">
@@ -100,27 +100,27 @@ export default function StartCheckPage() {
           </section>
 
           <section className={panelClass} aria-label="Điều kiện bắt đầu">
-            <PanelHead title="Điều kiện thiết bị" action={<span className={`text-sm font-extrabold tabular-nums ${passed === data.startChecks.length ? 'text-[#1f7a55]' : 'text-[#8a5a06]'}`}>{passed}/{data.startChecks.length} đạt</span>} />
+            <PanelHead title="Điều kiện thiết bị" action={<span className={`text-sm font-extrabold tabular-nums ${passed === data.startChecks.length ? 'text-[#4d6410]' : 'text-[#8a5a06]'}`}>{passed}/{data.startChecks.length} đạt</span>} />
             <div className="p-4"><StartChecklist checks={data.startChecks} /></div>
 
-            <fieldset className="border-t border-[#edf2fa] p-5">
+            <fieldset className="border-t border-[#efefe9] p-5">
               <legend className="sr-only">Xác nhận kiểm tra thực tế</legend>
-              <p className="mb-3 text-[11px] font-bold tracking-[0.06em] text-[#8a98ac] uppercase">Staff xác nhận tại chỗ</p>
+              <p className="mb-3 text-[11px] font-bold tracking-[0.06em] text-[#8e9096] uppercase">Staff xác nhận tại chỗ</p>
               <div className="space-y-2">
                 {CONFIRMATIONS.map(({ key, label, hint }) => (
-                  <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${confirmation[key] ? 'border-[#cde9dc] bg-[#f5fcf8]' : 'border-[#dce9fb] hover:border-[#b9d3f7]'}`}>
-                    <input type="checkbox" checked={confirmation[key]} onChange={(event) => setConfirmation((value) => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2f62b8]" />
-                    <span><span className="block text-[13px] font-bold text-[#1f314d]">{label}</span><span className="block text-xs text-[#8a98ac]">{hint}</span></span>
+                  <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${confirmation[key] ? 'border-[#dbe8b8] bg-[#f5f9ea]' : 'border-[#dbe8b8] hover:border-[#cfe19c]'}`}>
+                    <input type="checkbox" checked={confirmation[key]} onChange={(event) => setConfirmation((value) => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#3d5010]" />
+                    <span><span className="block text-[13px] font-bold text-[#1c1c1c]">{label}</span><span className="block text-xs text-[#8e9096]">{hint}</span></span>
                   </label>
                 ))}
               </div>
             </fieldset>
 
-            <div className="border-t border-[#edf2fa] p-5">
+            <div className="border-t border-[#efefe9] p-5">
               <button type="button" disabled={!canStart || start.isPending} onClick={() => setConfirming(true)} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby={`start-reason-${data.id}`}>
                 <Play size={18} aria-hidden="true" />Bắt đầu buổi
               </button>
-              <p id={`start-reason-${data.id}`} className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#1f7a55]' : 'text-[#8a5a06]'}`}>
+              <p id={`start-reason-${data.id}`} className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#4d6410]' : 'text-[#8a5a06]'}`}>
                 {canStart ? `Đủ điều kiện. Khi bắt đầu, backend nhận ${robot?.name ?? 'robot'} và gửi chặng đầu.` : !gate.allowed ? `Chưa thể bắt đầu: ${gate.reason}` : 'Đánh dấu đủ 3 xác nhận tại chỗ để bắt đầu.'}
               </p>
             </div>

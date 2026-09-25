@@ -29,7 +29,7 @@ function useOverlay(open: boolean, onClose: () => void) {
   return panelRef
 }
 
-const scrim = 'fixed inset-0 bg-[#0f172a]/25 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
+const scrim = 'fixed inset-0 bg-[#1c1c1c]/25 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
 
 /**
  * Every operational action that ends, overrides or re-routes something goes
@@ -91,7 +91,7 @@ export function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative z-10 w-full max-w-lg rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-[0_20px_48px_rgba(31,49,77,0.18)] transition-[opacity,transform] duration-200 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none"
+        className="relative z-10 w-full max-w-lg rounded-2xl border border-[#ebebe4] bg-white shadow-[0_4px_20px_-8px_rgba(28,28,28,0.16)] p-6 shadow-[0_20px_48px_rgba(31,49,77,0.18)] transition-[opacity,transform] duration-200 ease-out starting:translate-y-2 starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none"
       >
         <div className="flex items-start gap-3">
           {danger && (
@@ -100,14 +100,14 @@ export function ConfirmationDialog({
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#0f172a]">{title}</h2>
-            <div className="mt-1.5 text-sm leading-6 text-[#64748b]">{description}</div>
+            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#1c1c1c]">{title}</h2>
+            <div className="mt-1.5 text-sm leading-6 text-[#6b6e75]">{description}</div>
           </div>
         </div>
         {children && <div className="mt-5">{children}</div>}
         {withReason && (
           <>
-            <label htmlFor={reasonId} className="mt-5 block text-[13px] font-medium text-[#334155]">
+            <label htmlFor={reasonId} className="mt-5 block text-[13px] font-medium text-[#3a3d44]">
               {reasonLabel}{requireReason ? ' (bắt buộc)' : ' (tùy chọn)'}
             </label>
             <textarea
@@ -117,7 +117,7 @@ export function ConfirmationDialog({
               maxLength={500}
               rows={3}
               placeholder={reasonPlaceholder}
-              className="mt-2 w-full rounded-xl border border-[#e2e8f0] px-3 py-2 text-sm text-[#334155] outline-none placeholder:text-[#94a3b8] focus:border-[#6ba0ff] focus:ring-2 focus:ring-[#2563eb]/20"
+              className="mt-2 w-full rounded-xl border border-[#e3e3dc] px-3 py-2 text-sm text-[#3a3d44] outline-none placeholder:text-[#8e9096] focus:border-[#bde74e] focus:ring-2 focus:ring-[#9cc93a]/20"
             />
           </>
         )}
@@ -154,17 +154,17 @@ export function Drawer({ open, title, description, onClose, children, footer, wi
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`absolute top-0 right-0 z-10 flex h-full w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} border-l border-[#e2e8f0] bg-white shadow-[-24px_0_64px_rgba(31,49,77,0.18)] transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none focus-visible:outline-none`}
+        className={`absolute top-0 right-0 z-10 flex h-full w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} border-l border-[#e3e3dc] bg-white shadow-[-24px_0_64px_rgba(31,49,77,0.18)] transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none focus-visible:outline-none`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#f1f5f9] px-6 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-[#efefe9] px-6 py-5">
           <div>
-            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#0f172a]">{title}</h2>
-            {description && <p className="mt-1 text-sm leading-6 text-[#64748b]">{description}</p>}
+            <h2 id={titleId} className="text-lg font-semibold tracking-[-0.015em] text-[#1c1c1c]">{title}</h2>
+            {description && <p className="mt-1 text-sm leading-6 text-[#6b6e75]">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Đóng" className="grid size-9 shrink-0 place-items-center rounded-xl text-[#94a3b8] hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Đóng" className="grid size-9 shrink-0 place-items-center rounded-xl text-[#8e9096] hover:bg-[#efefe9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9cc93a]"><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-        {footer && <div className="border-t border-[#f1f5f9] px-6 py-4">{footer}</div>}
+        {footer && <div className="border-t border-[#efefe9] px-6 py-4">{footer}</div>}
       </div>
     </div>
   )

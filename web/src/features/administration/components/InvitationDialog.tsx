@@ -55,9 +55,9 @@ export function InvitationDialog({ registrationId, onClose }: { registrationId: 
       onConfirm={() => registrationId && send.mutate(registrationId, { onSuccess: close })}
       onCancel={close}
     >
-      {preview.isLoading && <div className="h-40 animate-pulse rounded-xl bg-[#f1f5f9]" aria-busy="true" aria-label="Đang tạo bản xem trước" />}
+      {preview.isLoading && <div className="h-40 animate-pulse rounded-xl bg-[#efefe9]" aria-busy="true" aria-label="Đang tạo bản xem trước" />}
       {data && (
-        <div className="space-y-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-sm">
+        <div className="space-y-3 rounded-xl border border-[#e3e3dc] bg-[#f7f7f3] p-4 text-sm">
           <dl className="grid gap-2">
             <Row label="Người nhận">{data.recipient}</Row>
             <Row label="Tiêu đề">{data.subject}</Row>
@@ -65,7 +65,7 @@ export function InvitationDialog({ registrationId, onClose }: { registrationId: 
             <Row label="Đường dẫn"><span className="break-all">{data.joinLink}</span></Row>
             <Row label="Mã đoàn"><span className="font-mono tracking-wider">{data.groupCode}</span></Row>
           </dl>
-          <ul className="list-disc space-y-1 pl-5 text-[13px] leading-5 text-[#475569]">
+          <ul className="list-disc space-y-1 pl-5 text-[13px] leading-5 text-[#4a4f59]">
             {data.instructions.map((line) => <li key={line}>{line}</li>)}
           </ul>
           <div className="flex flex-wrap gap-2">
@@ -81,8 +81,8 @@ export function InvitationDialog({ registrationId, onClose }: { registrationId: 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2">
-      <dt className="text-xs font-bold text-[#64748b]">{label}</dt>
-      <dd className="font-semibold text-[#1e293b]">{children}</dd>
+      <dt className="text-xs font-bold text-[#6b6e75]">{label}</dt>
+      <dd className="font-semibold text-[#1c1c1c]">{children}</dd>
     </div>
   )
 }

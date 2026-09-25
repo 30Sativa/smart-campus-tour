@@ -84,20 +84,20 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
                 <button type="button" onClick={() => setConfirm('approve')} className={buttonClass('primary')}>Duyệt đăng ký</button>
               </div>
             ) : (
-              <p className="text-sm text-[#64748b]">{stale ? 'Tải lại dữ liệu để tiếp tục duyệt.' : reg.allowedActions.approve.reason}</p>
+              <p className="text-sm text-[#6b6e75]">{stale ? 'Tải lại dữ liệu để tiếp tục duyệt.' : reg.allowedActions.approve.reason}</p>
             )
           ) : undefined
         }
       >
-        {query.isLoading && <div className="space-y-3" aria-busy="true" aria-label="Đang tải đăng ký">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-[#f1f5f9]" />)}</div>}
+        {query.isLoading && <div className="space-y-3" aria-busy="true" aria-label="Đang tải đăng ký">{[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-[#efefe9]" />)}</div>}
         {query.isError && <Notice tone="danger" action={<button type="button" onClick={() => void query.refetch()} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>Không tải được đăng ký này.</Notice>}
         {reg && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
               <RegistrationStateBadge state={reg.state} />
-              <span className="text-xs text-[#94a3b8]">Tour:</span>
+              <span className="text-xs text-[#8e9096]">Tour:</span>
               <TourStateBadge state={reg.tourState} />
-              <Link to={`/admin/tours/${reg.tourId}?tab=registrations`} onClick={close} className="text-xs font-bold text-[#2563eb] hover:underline">Mở Tour</Link>
+              <Link to={`/admin/tours/${reg.tourId}?tab=registrations`} onClick={close} className="text-xs font-bold text-[#4d6410] hover:underline">Mở Tour</Link>
             </div>
 
             {stale && (
@@ -110,7 +110,7 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
             {reg.state === 'Cancelled' && <Notice>Đại diện đã hủy đăng ký này; đoàn không còn quyền vào phiên.</Notice>}
             {reviewError && <Notice tone="danger">{reviewError}</Notice>}
 
-            <dl className="grid grid-cols-1 gap-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4 sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-4 rounded-xl border border-[#e3e3dc] bg-[#f7f7f3] p-4 sm:grid-cols-2">
               <Field label="Đại diện">{reg.representativeName}</Field>
               <Field label="Email liên hệ"><span className="[overflow-wrap:anywhere]">{reg.contactEmail}</span></Field>
               <Field label="Số học sinh">{reg.studentCount}</Field>
@@ -119,10 +119,10 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
             </dl>
 
             {reg.state === 'Approved' && (
-              <section className="rounded-xl border border-[#e2e8f0] p-4" aria-label="Thông tin tham gia">
+              <section className="rounded-xl border border-[#e3e3dc] p-4" aria-label="Thông tin tham gia">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-bold text-[#1e293b]">Thông tin tham gia</p>
+                    <p className="text-sm font-bold text-[#1c1c1c]">Thông tin tham gia</p>
                     <div className="mt-1"><InvitationStatus registration={reg} /></div>
                   </div>
                   {reg.allowedActions.sendInvitation.allowed ? (
@@ -130,10 +130,10 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
                       <Mail size={14} aria-hidden="true" />{reg.invitationSentAt || reg.invitationFailed ? 'Gửi lại' : 'Gửi thông tin'}
                     </button>
                   ) : (
-                    <p className="text-xs text-[#94a3b8]">{reg.allowedActions.sendInvitation.reason}</p>
+                    <p className="text-xs text-[#8e9096]">{reg.allowedActions.sendInvitation.reason}</p>
                   )}
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-[#334155]">
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-[#3a3d44]">
                   <span>Mã đoàn: <span className="font-mono font-bold tracking-wider">{reg.groupCode}</span></span>
                   <CopyButton value={reg.joinLink} label="Copy link" />
                   <CopyButton value={reg.groupCode} label="Copy mã đoàn" />

@@ -57,7 +57,7 @@ export default function AdminTourListPage() {
       />
 
       <section className={panelClass} aria-label="Danh sách Tour">
-        <div className="space-y-3 border-b border-[#f1f5f9] p-4">
+        <div className="space-y-3 border-b border-[#efefe9] p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
             <SearchField value={q} onChange={(value) => update({ q: value || null })} label="Tìm theo tên Tour" placeholder="Tìm theo tên Tour..." className="w-full lg:max-w-sm" />
             <DateRangeFilter label="Lọc theo ngày" value={date} from={custom.from} to={custom.to} options={DATE_OPTIONS} onChange={(next) => update({ date: next.date === 'all' ? null : next.date, from: next.from || null, to: next.to || null })} />

@@ -40,8 +40,8 @@ export default function TourHistoryPage() {
       </StatStrip>
 
       <section className={`${panelClass} mt-6`} aria-label="Lịch sử tour">
-        <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách tour lưu trữ</h2>
+        <div className="flex flex-col gap-3 border-b border-[#efefe9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-[15px] font-semibold text-[#1c1c1c]">Danh sách tour lưu trữ</h2>
           <SearchField value={search} onChange={setSearch} label="Tìm kiếm lịch sử" placeholder="Tìm theo buổi, mã, tuyến hoặc trường…" className="w-full sm:w-72" />
         </div>
 

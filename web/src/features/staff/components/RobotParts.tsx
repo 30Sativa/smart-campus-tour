@@ -14,24 +14,24 @@ function batteryTone(value: number): StatusTone {
 }
 
 const barFill: Record<StatusTone, string> = {
-  ok: 'bg-[#10b981]',
-  info: 'bg-[#2563eb]',
+  ok: 'bg-[#8fbf2a]',
+  info: 'bg-[#1c1c1c]',
   warn: 'bg-[#f59e0b]',
   danger: 'bg-[#ef4444]',
-  muted: 'bg-[#94a3b8]',
+  muted: 'bg-[#8e9096]',
 }
 
 const textTone: Record<StatusTone, string> = {
-  ok: 'text-[#16a34a]',
-  info: 'text-[#2563eb]',
+  ok: 'text-[#5f7a12]',
+  info: 'text-[#4d6410]',
   warn: 'text-[#d97706]',
   danger: 'text-[#dc2626]',
-  muted: 'text-[#64748b]',
+  muted: 'text-[#6b6e75]',
 }
 
 /** Battery as a bar and a number - only when the robot measures it (scope §8.4). */
 export function BatteryMeter({ value }: { value?: number | null }) {
-  if (value == null) return <span className="text-xs font-medium text-[#94a3b8]">Không đo</span>
+  if (value == null) return <span className="text-xs font-medium text-[#8e9096]">Không đo</span>
   const tone = batteryTone(value)
   return (
     <span className="flex min-w-0 items-center gap-2">
@@ -41,7 +41,7 @@ export function BatteryMeter({ value }: { value?: number | null }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(value)}
-        className="relative h-2 w-full min-w-16 flex-1 overflow-hidden rounded-full bg-[#f1f5f9]"
+        className="relative h-2 w-full min-w-16 flex-1 overflow-hidden rounded-full bg-[#efefe9]"
       >
         <span
           className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out ${barFill[tone]}`}
@@ -89,7 +89,7 @@ export function RobotTelemetry({ robot, now }: { robot: AmrStatus; now: number }
         robot.localized == null ? (
           'Không có dữ liệu'
         ) : robot.localized ? (
-          <span className="font-semibold text-[#16a34a]">Đã định vị</span>
+          <span className="font-semibold text-[#5f7a12]">Đã định vị</span>
         ) : (
           <span className="font-bold text-[#dc2626]">Chưa định vị</span>
         ),
@@ -97,10 +97,10 @@ export function RobotTelemetry({ robot, now }: { robot: AmrStatus; now: number }
     {
       label: 'Vị trí',
       value: robot.pose ? (
-        <span className={stale ? 'font-bold text-[#d97706]' : 'font-semibold text-[#0f172a]'}>
+        <span className={stale ? 'font-bold text-[#d97706]' : 'font-semibold text-[#1c1c1c]'}>
           {robot.currentPoi ?? `${robot.pose.x.toFixed(1)}, ${robot.pose.y.toFixed(1)} m`}
           {robot.poseAgeSeconds != null && (
-            <span className="ml-1 font-normal text-[#94a3b8]">
+            <span className="ml-1 font-normal text-[#8e9096]">
               · mẫu {robot.poseAgeSeconds}s trước{stale ? ' (cũ)' : ''}
             </span>
           )}
@@ -130,11 +130,11 @@ export function RobotTelemetry({ robot, now }: { robot: AmrStatus; now: number }
     },
   ]
   return (
-    <dl className="divide-y divide-[#f1f5f9]">
+    <dl className="divide-y divide-[#efefe9]">
       {rows.map((row) => (
         <div key={row.label} className="flex items-center justify-between gap-4 py-2.5">
-          <dt className="shrink-0 text-xs font-semibold text-[#64748b]">{row.label}</dt>
-          <dd className="flex min-w-0 justify-end text-right text-xs font-semibold text-[#0f172a]">{row.value}</dd>
+          <dt className="shrink-0 text-xs font-semibold text-[#6b6e75]">{row.label}</dt>
+          <dd className="flex min-w-0 justify-end text-right text-xs font-semibold text-[#1c1c1c]">{row.value}</dd>
         </div>
       ))}
     </dl>
@@ -149,7 +149,7 @@ export function RobotHeader({ robot, action }: { robot: AmrStatus; action?: Reac
       <div className="flex min-w-0 items-center gap-3">
         <span
           className={`grid size-10 shrink-0 place-items-center rounded-xl ${
-            issues.length ? 'bg-[#fffbeb] text-[#d97706]' : 'bg-[#eff6ff] text-[#2563eb]'
+            issues.length ? 'bg-[#fffbeb] text-[#d97706]' : 'bg-[#f2f7e4] text-[#4d6410]'
           }`}
           aria-hidden="true"
         >
@@ -157,10 +157,10 @@ export function RobotHeader({ robot, action }: { robot: AmrStatus; action?: Reac
         </span>
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[16px] font-extrabold text-[#0f172a]">{robot.name}</span>
+            <span className="font-mono text-[16px] font-extrabold text-[#1c1c1c]">{robot.name}</span>
             <SourceBadge source={robot.source} />
           </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[#64748b]">
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[#6b6e75]">
             <span className="inline-flex items-center gap-1">
               <Crosshair size={12} aria-hidden="true" />
               {robot.currentTourCode

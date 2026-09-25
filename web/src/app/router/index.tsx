@@ -2,7 +2,6 @@ import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
-import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { areaById, type AreaId } from '../../auth/access'
@@ -12,11 +11,15 @@ import { homePathForRole } from '../../auth/roles'
  * Four areas, four audiences:
  *
  *   `/`        public   marketing pages, no account
- *   `/visit/*` visitor  the visitor app: explore, book a robot, walk a tour
  *   `/staff/*` staff    tour operations, for Staff and Admin
  *   `/admin/*` admin    Tour administration (create, review groups, e-mail, Chốt/Mở lại/Hủy), Admin only
+ *   `/dai-dien/*`       school representative: register a group, roster, invitation
+ *   `/tour/*`           students, no account: join, waiting room, live, end
  *
- * All three signed-in areas are lazy, shell included, so a visitor loading `/`
+ * The visitor area (`/visit/*`) and self sign-up (`/register`) were removed on
+ * 2026-09-24 together with the Visitor role.
+ *
+ * All signed-in areas are lazy, shell included, so a visitor loading `/`
  * downloads none of them, a visitor never downloads operations, and an operator
  * never downloads administration.
  *
@@ -30,19 +33,6 @@ import { homePathForRole } from '../../auth/roles'
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 
-const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
-const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
-const ExplorePage = lazy(() => import('../../routes/visitor/ExplorePage'))
-const LocationDetailPage = lazy(() => import('../../routes/visitor/LocationDetailPage'))
-const CampusMapPage = lazy(() => import('../../routes/visitor/CampusMapPage'))
-const BookRobotPage = lazy(() => import('../../routes/visitor/BookRobotPage'))
-const MyBookingsPage = lazy(() => import('../../routes/visitor/MyBookingsPage'))
-const MyToursPage = lazy(() => import('../../routes/visitor/MyToursPage'))
-const ActiveTourPage = lazy(() => import('../../routes/visitor/ActiveTourPage'))
-const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
-const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
-const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
-const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
@@ -65,6 +55,16 @@ const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegist
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
+
+const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'))
+
+// School representative (screen flow review 21/09/2026 §4).
+const RepresentativeShell = lazy(() => import('../../features/representative/RepresentativeShell'))
+const RepToursPage = lazy(() => import('../../routes/representative/RepToursPage'))
+const RepTourDetailPage = lazy(() => import('../../routes/representative/RepTourDetailPage'))
+const RepRegisterPage = lazy(() => import('../../routes/representative/RepRegisterPage'))
+const RepRegistrationsPage = lazy(() => import('../../routes/representative/RepRegistrationsPage'))
+const RepRegistrationDetailPage = lazy(() => import('../../routes/representative/RepRegistrationDetailPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -92,14 +92,11 @@ function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) 
   return <>{children}</>
 }
 
-function VisitorArea() {
+function RepresentativeArea() {
   return (
-    <RequireArea area="visitor">
-      {/* The fallback ground is the landing page's light token value, so the
-          first paint of the shell is already the right colour rather than white
-          for a frame. */}
-      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
-        <VisitorShell />
+    <RequireArea area="representative">
+      <Suspense fallback={<ShellFallback background="#f0f0eb" />}>
+        <RepresentativeShell />
       </Suspense>
     </RequireArea>
   )
@@ -140,36 +137,41 @@ export const routes = [
       </Suspense>
     ),
   },
-  // One layout, two children: the photograph and the brand stay mounted while
-  // the form swaps, which is what the sign-in/sign-up crossfade animates.
+  // Sign-in layout. Accounts are issued by Admin; there is no self sign-up.
   {
     element: <AuthLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
     ],
   },
+  // Student Remote Tour experience (Roster matching, Waiting room, Live tour with AMR & AI, End)
   {
-    path: '/visit',
-    element: <VisitorArea />,
+    path: '/tour',
+    element: (
+      <Suspense fallback={<ShellFallback background="#f8fafc" />}>
+        <StudentTourPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/tour/:tourId',
+    element: (
+      <Suspense fallback={<ShellFallback background="#f8fafc" />}>
+        <StudentTourPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/dai-dien',
+    element: <RepresentativeArea />,
     children: [
-      { index: true, element: <VisitorHomePage /> },
-      { path: 'explore', element: <ExplorePage /> },
-      { path: 'explore/:locationId', element: <LocationDetailPage /> },
-      { path: 'map', element: <CampusMapPage /> },
-      { path: 'book', element: <BookRobotPage /> },
-      { path: 'bookings', element: <MyBookingsPage /> },
-      { path: 'tours', element: <MyToursPage /> },
-      // The active tour is one session at a time, so it needs no id in the URL:
-      // the API answers "the tour this account is on right now", and a link from
-      // a notification cannot go stale.
-      { path: 'tour', element: <ActiveTourPage /> },
-      { path: 'assistant', element: <AskRobotPage /> },
-      { path: 'notifications', element: <NotificationsPage /> },
-      { path: 'profile', element: <ProfilePage /> },
-      { path: 'help', element: <HelpPage /> },
-      // A mistyped path inside the area stays inside the area.
-      { path: '*', element: <Navigate to="/visit" replace /> },
+      { index: true, element: <RepToursPage /> },
+      { path: 'buoi/:tourId', element: <RepTourDetailPage /> },
+      { path: 'buoi/:tourId/dang-ky', element: <RepRegisterPage /> },
+      { path: 'dang-ky', element: <RepRegistrationsPage /> },
+      { path: 'dang-ky/:registrationId', element: <RepRegistrationDetailPage /> },
+      { path: 'dang-ky/:registrationId/sua', element: <RepRegisterPage /> },
+      { path: '*', element: <Navigate to="/dai-dien" replace /> },
     ],
   },
   {

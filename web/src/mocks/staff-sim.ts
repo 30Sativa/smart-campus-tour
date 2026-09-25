@@ -151,6 +151,8 @@ export type SimRegistration = GroupRegistration & {
   invitationFailed: boolean
   groupCode: string
   version: number
+  /** Account of the school representative who owns it (scope §2, §4.2). Seeded groups have none. */
+  ownerId?: string | null
 }
 
 export type SimTour = {

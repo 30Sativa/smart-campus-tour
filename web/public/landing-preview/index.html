@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampusTour · Tham quan khuôn viên từ xa cùng robot tự hành</title>
+<meta name="description" content="CampusTour DT-AMR: một robot tự hành đưa nhiều đoàn học sinh tham quan khuôn viên trường từ xa qua một livestream chung, bản đồ 2D và trợ lý AI riêng.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap&subset=vietnamese" rel="stylesheet">
+<style>
+/* ==========================================================
+   Design tokens (lấy từ template Himon)
+   ========================================================== */
+:root{
+  --ink:#1c1c1c; --ink-2:#4a4f59; --mute:#7e7f85; --mute-2:#a2a3a8; --line:#c6c7cc;
+  --paper:#ffffff; --cream:#f0f0eb; --lime:#bde74e; --lime-d:#b4db46;
+  --font:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --pad:clamp(16px,3.3vw,48px); --max:1440px;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p{margin:0;font-weight:400}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+.container{max-width:var(--max);margin:0 auto;padding:0 var(--pad)}
+.mono{font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;font-size:13px}
+.sub{display:inline-flex;align-items:center;gap:10px}
+.sub::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--lime);flex:none}
+.img-cover{width:100%;height:100%;object-fit:cover}
+
+/* ---------- Split text: chữ trồi lên từng ký tự ---------- */
+[data-split] .w{display:inline-block;overflow:hidden;vertical-align:top;padding:.14em .1em .06em;margin:-.14em -.1em -.06em;white-space:nowrap}
+[data-split] .c{display:inline-block;transform:translateY(115%);transition:transform .9s var(--ease);transition-delay:calc(var(--i) * 18ms)}
+[data-split].in .c{transform:none}
+.fade-up{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease);transition-delay:var(--d,0ms)}
+.fade-up.in{opacity:1;transform:none}
+
+/* ---------- Nút pill kiểu Himon: icon trái trượt vào khi hover ---------- */
+.btn{position:relative;display:inline-flex;align-items:center;gap:12px;height:52px;padding:0 6px 0 22px;border-radius:999px;background:var(--paper);color:var(--ink);font-size:15px;font-weight:500;overflow:hidden;isolation:isolate;transition:padding .5s var(--ease)}
+.btn .t{transition:transform .5s var(--ease)}
+.btn .ic{width:40px;height:40px;border-radius:50%;background:var(--lime);display:grid;place-items:center;flex:none;transition:transform .5s var(--ease)}
+.btn .ic svg{width:16px;height:16px}
+.btn .ic-l{position:absolute;left:6px;top:6px;transform:scale(0)}
+.btn:hover .ic-l{transform:scale(1)}
+.btn:hover .ic-r{transform:scale(0)}
+.btn:hover .t{transform:translateX(38px)}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.line{background:transparent;border:1px solid currentColor}
+/* nút chữ + chấm (Tìm hiểu thêm) */
+.link-dot{display:inline-flex;align-items:center;gap:14px;font-size:15px;font-weight:500}
+.link-dot .box{width:34px;height:34px;border-radius:50%;border:1px solid currentColor;display:grid;place-items:center;transition:background .4s var(--ease),border-color .4s}
+.link-dot .dot{width:6px;height:6px;border-radius:50%;background:currentColor;transition:transform .4s var(--ease)}
+.link-dot:hover .box{background:var(--lime);border-color:var(--lime)}
+.link-dot:hover .dot{transform:scale(1.8);background:var(--ink)}
+.link-dot .u{background:linear-gradient(currentColor,currentColor) 0 100%/0 1px no-repeat;transition:background-size .5s var(--ease)}
+.link-dot:hover .u{background-size:100% 1px}
+
+/* ==========================================================
+   Header: trong suốt trên Hero, đổi nền trắng sau Intro
+   ========================================================== */
+.header{position:fixed;inset:0 0 auto;z-index:50;color:#fff;transition:background .5s var(--ease),color .5s var(--ease),transform .5s var(--ease),box-shadow .5s}
+.header.solid{background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:var(--ink);box-shadow:0 1px 0 rgba(28,28,28,.08)}
+.header.hide{transform:translateY(-100%)}
+.header .container{display:flex;align-items:center;justify-content:space-between;height:76px;gap:24px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:19px;letter-spacing:-.02em}
+.logo svg{width:30px;height:30px}
+.logo small{font-family:var(--mono);font-size:11px;font-weight:400;opacity:.6;letter-spacing:.04em;margin-left:2px}
+.nav{display:flex;gap:30px;font-size:15px}
+.nav a{position:relative;opacity:.85;transition:opacity .3s}
+.nav a::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:currentColor;transform:scaleX(0);transform-origin:right;transition:transform .45s var(--ease)}
+.nav a:hover{opacity:1}.nav a:hover::after{transform:scaleX(1);transform-origin:left}
+.header .btn{height:44px;font-size:14px}
+.header .btn .ic{width:32px;height:32px}.header .btn .ic-l{top:6px}
+.header.solid .btn{background:var(--ink);color:#fff}
+.burger{display:none;width:44px;height:44px;position:relative}
+.burger i{position:absolute;left:11px;right:11px;height:1.5px;background:currentColor;transition:transform .45s var(--ease),top .45s var(--ease)}
+.burger i:nth-child(1){top:18px}.burger i:nth-child(2){top:25px}
+.menu-open .burger i:nth-child(1){top:21.5px;transform:rotate(45deg)}
+.menu-open .burger i:nth-child(2){top:21.5px;transform:rotate(-45deg)}
+.sheet{position:fixed;inset:0;z-index:49;background:var(--ink);color:#fff;padding:110px var(--pad) 40px;display:flex;flex-direction:column;justify-content:space-between;clip-path:inset(0 0 100% 0);transition:clip-path .7s var(--ease)}
+.menu-open .sheet{clip-path:inset(0 0 0 0)}
+.sheet nav{display:flex;flex-direction:column;gap:6px}
+.sheet nav a{font-size:clamp(34px,9vw,56px);letter-spacing:-.03em;line-height:1.15}
+.menu-open .header{color:#fff;background:transparent;box-shadow:none;backdrop-filter:none}
+
+/* ==========================================================
+   Hero
+   ========================================================== */
+.hero{position:relative;min-height:100svh;background:#0f1113;color:#fff;overflow:hidden;display:flex}
+.hero .bg{position:absolute;inset:0}
+.hero .bg img{transform:scale(1.18);transition:transform 2.4s var(--ease);will-change:transform}
+.hero.in .bg img{transform:scale(1.04)}
+.hero .bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,12,14,.55) 0%,rgba(10,12,14,.25) 40%,rgba(10,12,14,.75) 100%)}
+.hero .container{position:relative;width:100%;display:grid;grid-template-columns:1fr 2fr;gap:32px;padding-top:140px;padding-bottom:56px}
+.hero .left{padding-top:14px}
+.hero .right{display:flex;flex-direction:column;justify-content:space-between;gap:48px}
+.hero h1{font-size:clamp(44px,7.4vw,112px);line-height:.95;letter-spacing:-.04em;text-transform:uppercase;font-weight:400}
+.hero h1 span.row{display:block}
+.hero .desc{max-width:520px;color:rgba(255,255,255,.82);font-size:17px}
+.hero .meta{display:flex;gap:28px;flex-wrap:wrap;margin-top:28px}
+.hero .meta div{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:rgba(255,255,255,.62);text-transform:uppercase}
+.hero .meta b{display:block;color:#fff;font-family:var(--font);font-size:22px;font-weight:400;letter-spacing:-.02em;text-transform:none}
+.live-badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;padding:8px 12px;border:1px solid rgba(255,255,255,.3);border-radius:999px;margin-top:22px;backdrop-filter:blur(6px)}
+.live-badge i{width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+
+/* ==========================================================
+   Intro
+   ========================================================== */
+.intro{padding:clamp(90px,12vw,180px) 0 clamp(80px,10vw,160px)}
+.intro .content{display:grid;grid-template-columns:1fr 2fr;gap:32px}
+.intro h2{font-size:clamp(30px,3.9vw,56px);line-height:1.08;letter-spacing:-.035em}
+.intro .images{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,5vw,90px);margin-top:clamp(70px,9vw,140px);align-items:start}
+.intro .pic{aspect-ratio:4/3.1;overflow:hidden;border-radius:4px}
+.intro .pic img{transform:scale(1.2);transition:transform 1.6s var(--ease)}
+.intro .pic.in img{transform:scale(1)}
+.intro .lead{font-size:clamp(18px,1.6vw,22px);line-height:1.4;letter-spacing:-.01em;max-width:520px}
+.stats{margin-top:clamp(40px,5vw,80px);border-top:1px solid var(--line)}
+.stat{display:grid;grid-template-columns:1fr 1.2fr;gap:24px;padding:26px 0;border-bottom:1px solid var(--line);align-items:start}
+.stat h3{font-size:clamp(40px,4.2vw,60px);letter-spacing:-.04em;line-height:1}
+.stat p{color:var(--ink-2);font-size:14px}
+.intro .contact{margin-top:40px}
+
+/* ==========================================================
+   Services (Trải nghiệm) – danh sách mở rộng khi hover
+   ========================================================== */
+.services{padding:clamp(60px,8vw,120px) 0 clamp(90px,10vw,160px)}
+.sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+.sec-head h2{font-size:clamp(48px,8vw,120px);letter-spacing:-.05em;line-height:.95}
+.sec-head .count{font-size:clamp(28px,3.4vw,48px);letter-spacing:-.03em;color:var(--ink)}
+.divider{height:1px;background:var(--ink);margin-top:28px;transform-origin:left;transform:scaleX(0);transition:transform 1.4s var(--ease)}
+.divider.in{transform:scaleX(1)}
+.svc{border-bottom:1px solid var(--line);cursor:pointer}
+.svc-row{display:grid;grid-template-columns:90px 1fr 56px;align-items:center;gap:20px;padding:30px 0}
+.svc-num{font-family:var(--mono);font-size:14px;color:var(--mute)}
+.svc-title{font-size:clamp(26px,3.4vw,50px);letter-spacing:-.035em;line-height:1.05;transition:transform .6s var(--ease),color .4s}
+.svc-plus{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;transition:background .45s var(--ease),border-color .45s,transform .6s var(--ease)}
+.svc-plus svg{width:16px;height:16px}
+.svc:hover .svc-title,.svc.open .svc-title{transform:translateX(14px)}
+.svc.open .svc-plus{background:var(--lime);border-color:var(--lime);transform:rotate(45deg)}
+.svc-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .8s var(--ease)}
+.svc.open .svc-body{grid-template-rows:1fr}
+.svc-body>div{overflow:hidden}
+.svc-inner{display:grid;grid-template-columns:90px 1fr 1.25fr;gap:20px;padding:0 0 36px}
+.svc-inner .txt{display:flex;flex-direction:column;justify-content:space-between;gap:28px;padding-right:20px}
+.svc-inner p{color:var(--ink-2);font-size:17px;max-width:440px}
+.svc-inner ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px}
+.svc-inner li{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink-2)}
+.svc-img{aspect-ratio:16/9.5;overflow:hidden;border-radius:4px;background:var(--cream)}
+.svc-img img{transform:scale(1.15);transition:transform 1.2s var(--ease)}
+.svc.open .svc-img img{transform:scale(1)}
+
+/* ==========================================================
+   Solution: nền tối, 4 thẻ đồ hoạ động + chữ lộ dần + nền sticky
+   ========================================================== */
+.solution{background:var(--ink);color:#fff;position:relative}
+.solution .main{padding:clamp(90px,10vw,160px) 0 clamp(60px,7vw,100px);display:grid;grid-template-columns:1fr 2fr;gap:32px}
+.solution h2{font-size:clamp(30px,3.6vw,52px);line-height:1.1;letter-spacing:-.035em}
+.solution .sub{color:rgba(255,255,255,.75)}
+.solution .contact{margin-top:40px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-bottom:clamp(90px,10vw,160px)}
+.card{border-radius:10px;padding:26px;min-height:440px;display:flex;flex-direction:column;justify-content:space-between;gap:30px;background:#262626;transition:transform .6s var(--ease)}
+.card:hover{transform:translateY(-6px)}
+.card.light{background:var(--cream);color:var(--ink)}
+.card h3{font-size:22px;letter-spacing:-.02em;line-height:1.15}
+.card p{font-size:14px;color:rgba(255,255,255,.66);margin-top:12px}
+.card.light p{color:var(--ink-2)}
+.gfx{height:170px;position:relative;display:grid;place-items:center}
+/* 1: elip xoay */
+.g-ell span{position:absolute;width:150px;height:56px;border:1px solid rgba(189,231,78,.8);border-radius:50%;animation:spin 14s linear infinite}
+.g-ell span:nth-child(n){transform:rotate(calc(var(--k) * 26deg))}
+@keyframes spin{from{rotate:0deg}to{rotate:360deg}}
+.g-ell b{width:12px;height:12px;border-radius:50%;background:var(--lime);box-shadow:0 0 22px var(--lime)}
+/* 2: vòng tròn lan */
+.g-loop span{position:absolute;width:40px;height:40px;border-radius:50%;border:1px solid var(--lime);opacity:0;animation:ripple 4s var(--ease) infinite;animation-delay:calc(var(--k) * 1s)}
+@keyframes ripple{0%{transform:scale(.4);opacity:1}100%{transform:scale(4);opacity:0}}
+.g-loop b{width:14px;height:14px;border-radius:50%;background:var(--lime)}
+/* 3: mũi tên trái phải (pan) */
+.g-arrow{display:flex;gap:18px;align-items:center}
+.g-arrow .cam{width:56px;height:56px;border-radius:50%;background:var(--ink);display:grid;place-items:center;animation:pan 5s var(--ease) infinite}
+.g-arrow .cam svg{width:26px;height:26px}
+@keyframes pan{0%,100%{transform:rotate(0)}20%,35%{transform:rotate(-45deg)}55%,75%{transform:rotate(45deg)}}
+.g-arrow i{display:block;width:0;height:0;border:14px solid transparent;animation:pulse 5s var(--ease) infinite}
+.g-arrow .al{border-right:20px solid var(--ink);border-left:0}
+.g-arrow .ar{border-left:20px solid var(--ink);border-right:0;animation-delay:2s}
+.g-arrow .al.s,.g-arrow .ar.s{border-width:9px;opacity:.4}
+.g-arrow .al.s{border-right-width:13px;border-left:0}.g-arrow .ar.s{border-left-width:13px;border-right:0}
+@keyframes pulse{0%,100%{transform:scale(.8);opacity:.35}25%{transform:scale(1.15);opacity:1}}
+/* 4: lưới chấm */
+.g-grid{display:grid;grid-template-columns:repeat(3,26px);gap:18px}
+.g-grid span{width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.35);animation:dot 3.6s infinite;animation-delay:calc(var(--k) * .3s)}
+@keyframes dot{0%,100%{background:transparent}15%,35%{background:var(--lime);border-color:var(--lime)}}
+/* text reveal trên nền sticky */
+.reveal-wrap{position:relative;height:260vh}
+.reveal-sticky{position:sticky;top:0;height:100vh;overflow:hidden;display:grid;place-items:center}
+.reveal-sticky .bg{position:absolute;inset:0}
+.reveal-sticky .bg img{transform:scale(1.1);filter:blur(3px) saturate(.8)}
+.reveal-sticky .bg::after{content:"";position:absolute;inset:0;background:rgba(18,18,18,.8)}
+.reveal-text{position:relative;max-width:1100px;padding:0 var(--pad);font-size:clamp(28px,4.2vw,62px);line-height:1.12;letter-spacing:-.035em;text-align:center}
+.reveal-text .rw{opacity:.16;transition:opacity .25s linear}
+.reveal-text .rw.on{opacity:1}
+.reveal-text .hl{color:var(--lime)}
+/* ticker */
+.ticker{background:var(--lime);color:var(--ink);overflow:hidden;padding:22px 0;white-space:nowrap}
+.ticker .track{display:inline-flex;animation:marquee 38s linear infinite}
+.ticker span{font-size:clamp(20px,2.2vw,30px);letter-spacing:-.02em;padding:0 26px;display:inline-flex;align-items:center;gap:52px}
+.ticker span::after{content:"✦";font-size:.7em}
+@keyframes marquee{to{transform:translateX(-50%)}}
+
+/* ==========================================================
+   How we work (Quy trình) – 4 bước + đường tiến trình
+   ========================================================== */
+.how{padding:clamp(90px,10vw,170px) 0;background:var(--paper)}
+.how .title{display:grid;grid-template-columns:1fr 2fr;gap:32px}
+.how h2{font-size:clamp(34px,4.6vw,68px);line-height:1.02;letter-spacing:-.045em;max-width:900px}
+.progress{position:relative;height:1px;background:var(--line);margin:clamp(60px,7vw,110px) 0 38px}
+.progress i{position:absolute;inset:0;background:var(--ink);transform-origin:left;transform:scaleX(var(--p,0))}
+.progress b{position:absolute;top:-5px;left:calc(var(--p,0) * 100%);width:11px;height:11px;margin-left:-5px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 4px rgba(189,231,78,.3)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:clamp(16px,2vw,28px)}
+.step .n{font-family:var(--mono);font-size:13px;color:var(--mute);display:flex;justify-content:space-between}
+.step .n em{font-style:normal;color:var(--ink);transition:color .4s}
+.step.act .n em{color:#6f8f17}
+.step .ph{aspect-ratio:3/3.6;overflow:hidden;border-radius:6px;margin:18px 0 22px;background:var(--cream)}
+.step .ph img,.step .ph svg{width:100%;height:100%;object-fit:cover;transition:transform 1.2s var(--ease),filter .6s}
+.step:hover .ph img{transform:scale(1.06)}
+.step h3{font-size:22px;letter-spacing:-.02em;line-height:1.2}
+.step p{color:var(--ink-2);font-size:15px;margin-top:10px}
+
+/* ==========================================================
+   Who we are (Robot) – robot trượt vào + 4 thông số
+   ========================================================== */
+.robot{background:var(--cream);padding:clamp(90px,10vw,160px) 0;overflow:hidden}
+.robot .grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto;gap:clamp(24px,3vw,48px) 32px;align-items:start}
+.robot .headline{grid-column:1/3}
+.robot .headline .mono{color:var(--mute)}
+.robot .big{font-size:clamp(90px,16vw,240px);letter-spacing:-.07em;line-height:.85;margin-top:18px;display:flex;align-items:flex-start;gap:.08em}
+.robot .big sup{font-size:.28em;letter-spacing:-.03em;margin-top:.25em;color:var(--ink-2)}
+.robot .headline p{max-width:520px;color:var(--ink-2);margin-top:22px;font-size:17px}
+.spec{border-top:1px solid var(--ink);padding-top:16px}
+.spec .mono{display:flex;align-items:center;gap:8px}
+.spec .mono::before{content:"";width:7px;height:7px;background:var(--lime);border-radius:50%}
+.spec p{color:var(--ink-2);font-size:15px;margin-top:12px;max-width:340px}
+.robot-img{grid-column:1/4;position:relative;margin-top:10px;display:flex;justify-content:flex-end}
+.robot-img img{width:min(640px,78%);mix-blend-mode:multiply;transform:translateX(calc((1 - var(--p,0)) * -55vw));will-change:transform}
+.robot-img .road{position:absolute;left:0;right:0;bottom:12%;height:1px;background:repeating-linear-gradient(90deg,var(--ink-2) 0 14px,transparent 14px 28px);opacity:.35}
+.robot .specs{grid-column:1/4;display:grid;grid-template-columns:repeat(4,1fr);gap:32px}
+
+/* ==========================================================
+   Partnership (Công nghệ) – nền ảnh + chữ lộ dần + marquee tên công nghệ
+   ========================================================== */
+.partner{position:relative;color:#fff;overflow:hidden}
+.partner .bg{position:absolute;inset:-10% 0;}
+.partner .bg img{height:100%}
+.partner .bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,17,19,.82),rgba(15,17,19,.9))}
+.partner .container{position:relative;padding-top:clamp(100px,12vw,190px);padding-bottom:clamp(80px,9vw,140px)}
+.partner .title{display:grid;grid-template-columns:1fr 2fr;gap:32px}
+.partner .sub{color:rgba(255,255,255,.75)}
+.partner .words{font-size:clamp(26px,3.3vw,48px);line-height:1.14;letter-spacing:-.03em}
+.partner .words .rw{opacity:.2;transition:opacity .3s}
+.partner .words .rw.on{opacity:1}
+.partner .foot{display:grid;grid-template-columns:1fr 2fr;gap:32px;margin-top:clamp(70px,8vw,130px);align-items:end}
+.partner .foot>div{min-width:0}
+.partner .foot h3{font-size:clamp(56px,7vw,100px);letter-spacing:-.05em;line-height:.9}
+.partner .foot p{color:rgba(255,255,255,.7);margin-top:12px;max-width:280px}
+.logos{overflow:hidden;border-top:1px solid rgba(255,255,255,.18);border-bottom:1px solid rgba(255,255,255,.18);-webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.logos .track{display:inline-flex;animation:marquee 30s linear infinite;white-space:nowrap}
+.logos span{padding:30px 38px;font-size:22px;letter-spacing:-.02em;opacity:.7;display:inline-flex;align-items:center;gap:12px;transition:opacity .3s}
+.logos span:hover{opacity:1}
+.logos span small{font-family:var(--mono);font-size:11px;opacity:.6;letter-spacing:.04em}
+.partner .contact{margin-top:36px}
+
+/* ==========================================================
+   Insights (Góc kỹ thuật) – 2 thẻ nổi bật + 3 thẻ thường
+   ========================================================== */
+.insights{padding:clamp(90px,10vw,160px) 0}
+.insights .title{display:grid;grid-template-columns:1fr 2fr;gap:32px;margin-bottom:clamp(50px,6vw,90px)}
+.insights h2{font-size:clamp(34px,4.6vw,68px);line-height:1.02;letter-spacing:-.045em}
+.hl-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.post{display:flex;flex-direction:column;gap:18px}
+.post .thumb{position:relative;overflow:hidden;border-radius:6px;background:var(--cream)}
+.post .thumb img,.post .thumb svg{width:100%;height:100%;object-fit:cover;transition:transform 1.2s var(--ease)}
+.post:hover .thumb img,.post:hover .thumb svg{transform:scale(1.06)}
+.post .cat{position:absolute;left:14px;top:14px;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);color:var(--ink);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:7px 11px;border-radius:999px}
+.post .more{position:absolute;right:14px;bottom:14px;display:inline-flex;align-items:center;gap:8px;background:var(--lime);color:var(--ink);font-size:13px;font-weight:500;padding:8px 8px 8px 14px;border-radius:999px;transform:translateY(12px);opacity:0;transition:transform .5s var(--ease),opacity .5s}
+.post .more i{width:24px;height:24px;border-radius:50%;background:var(--ink);display:grid;place-items:center;color:var(--lime);overflow:hidden;position:relative}
+.post .more i svg{width:12px;height:12px;transition:transform .45s var(--ease)}
+.post:hover .more{transform:none;opacity:1}
+.post:hover .more i svg{animation:arrowloop .6s var(--ease)}
+@keyframes arrowloop{0%{transform:translateX(0)}49%{transform:translateX(18px)}50%{transform:translateX(-18px)}100%{transform:translateX(0)}}
+.hl .thumb{aspect-ratio:16/10}
+.hl .tag{font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:#6f8f17}
+.hl h4{font-size:clamp(22px,2vw,28px);letter-spacing:-.025em;line-height:1.2;margin-top:8px}
+.post .sum{color:var(--ink-2);font-size:15px;margin-top:10px}
+.def-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:56px;padding-top:40px;border-top:1px solid var(--line)}
+.def .thumb{aspect-ratio:4/3}
+.def h4{font-size:20px;letter-spacing:-.02em;line-height:1.25}
+
+/* ==========================================================
+   FAQ
+   ========================================================== */
+.faq{padding:clamp(40px,5vw,80px) 0 clamp(100px,11vw,170px)}
+.faq .wrap{display:grid;grid-template-columns:1fr 2fr;gap:32px}
+.faq h2{font-size:clamp(38px,4.8vw,72px);line-height:1;letter-spacing:-.045em;position:sticky;top:110px}
+.qa{border-top:1px solid var(--line)}
+.qa:last-child{border-bottom:1px solid var(--line)}
+.qa button{width:100%;text-align:left;display:flex;justify-content:space-between;gap:20px;align-items:center;padding:28px 0}
+.qa h3{font-size:clamp(19px,1.7vw,24px);letter-spacing:-.02em;line-height:1.3}
+.qa .pm{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);position:relative;flex:none;transition:background .4s,border-color .4s}
+.qa .pm::before,.qa .pm::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;background:var(--ink);translate:-50% -50%;transition:transform .5s var(--ease)}
+.qa .pm::after{transform:rotate(90deg)}
+.qa.open .pm{background:var(--lime);border-color:var(--lime)}
+.qa.open .pm::after{transform:rotate(0)}
+.qa .a{display:grid;grid-template-rows:0fr;transition:grid-template-rows .6s var(--ease)}
+.qa.open .a{grid-template-rows:1fr}
+.qa .a>div{overflow:hidden}
+.qa .a p{color:var(--ink-2);padding:0 60px 28px 0;font-size:16px;max-width:760px}
+
+/* ==========================================================
+   Footer – ảnh parallax + CTA + sitemap + tên thương hiệu khổng lồ
+   ========================================================== */
+.footer{position:relative;background:var(--ink);color:#fff;overflow:hidden}
+.footer .parallax{position:absolute;inset:-20% 0 auto;height:120%}
+.footer .parallax img{height:100%;opacity:.28}
+.footer .parallax::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,28,28,.2),var(--ink) 75%)}
+.footer .container{position:relative}
+.cta{display:grid;grid-template-columns:2fr 1fr;gap:40px;align-items:end;padding:clamp(110px,12vw,200px) 0 clamp(70px,8vw,120px);border-bottom:1px solid rgba(255,255,255,.16)}
+.cta h2{font-size:clamp(34px,4.6vw,68px);line-height:1.04;letter-spacing:-.045em}
+.cta p{color:rgba(255,255,255,.7);margin-bottom:26px}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:40px;padding:60px 0}
+.info .mono{color:rgba(255,255,255,.5);display:block;margin-bottom:18px;font-size:12px}
+.sitemap{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;gap:12px 70px}
+.sitemap div{display:flex;flex-direction:column;gap:10px}
+.sitemap a,.contact-list a,.social a{opacity:.85;transition:opacity .3s,color .3s}
+.sitemap a:hover,.contact-list a:hover,.social a:hover{opacity:1;color:var(--lime)}
+.info .right{display:grid;grid-template-columns:1fr 1fr;gap:32px}
+.contact-list{display:flex;flex-direction:column;gap:22px}
+.social div{display:flex;flex-direction:column;gap:10px}
+.sign{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:22px 0;border-top:1px solid rgba(255,255,255,.16);font-size:13px;color:rgba(255,255,255,.55)}
+.brand{font-size:clamp(64px,17vw,270px);letter-spacing:-.075em;line-height:.8;text-align:center;padding:10px 0 0;white-space:nowrap;background:linear-gradient(180deg,#fff 20%,rgba(255,255,255,.08));-webkit-background-clip:text;background-clip:text;color:transparent;transform:translateY(12%)}
+
+/* ==========================================================
+   Responsive
+   ========================================================== */
+@media (max-width:1100px){
+  .cards{grid-template-columns:1fr 1fr}
+  .steps{grid-template-columns:1fr 1fr;row-gap:48px}
+  .robot .specs{grid-template-columns:1fr 1fr}
+}
+@media (max-width:900px){
+  .nav,.header .btn{display:none}
+  .burger{display:block}
+  .hero .container,.intro .content,.intro .images,.solution .main,.how .title,.partner .title,.partner .foot,.insights .title,.faq .wrap,.cta,.info,.hl-grid{grid-template-columns:1fr}
+  .hero .container{padding-top:120px;align-content:space-between}
+  .svc-row{grid-template-columns:48px 1fr 48px}
+  .svc-inner{grid-template-columns:1fr}
+  .svc-inner .sp{display:none}
+  .def-grid{grid-template-columns:1fr 1fr}
+  .robot .grid{grid-template-columns:1fr}
+  .robot .headline,.robot-img,.robot .specs{grid-column:1}
+  .faq h2{position:static}
+  .info .right{grid-template-columns:1fr 1fr}
+}
+@media (max-width:600px){
+  .cards,.steps,.robot .specs,.def-grid{grid-template-columns:1fr}
+  .card{min-height:380px}
+  .stat{grid-template-columns:1fr}
+  .sitemap{grid-template-columns:1fr 1fr;gap:12px 40px}
+  .info .right{grid-template-columns:1fr}
+  .qa .a p{padding-right:0}
+  .reveal-wrap{height:220vh}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  [data-split] .c{transform:none}.fade-up{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<!-- SVG icons dùng lại -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="arr" viewBox="0 0 16 16"><path d="M3 13 13 3M5 3h8v8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="arr-r" viewBox="0 0 16 16"><path d="M2 8h12M9 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="mark" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="#bde74e"/><rect x="7" y="10" width="18" height="12" rx="4" fill="#1c1c1c"/><circle cx="12.5" cy="16" r="2" fill="#bde74e"/><circle cx="19.5" cy="16" r="2" fill="#bde74e"/><path d="M16 10V6.5" stroke="#1c1c1c" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="5.5" r="1.8" fill="#1c1c1c"/></symbol>
+</svg>
+
+<!-- ================= HEADER ================= -->
+<header class="header" id="header">
+  <div class="container">
+    <a class="logo" href="#top" aria-label="CampusTour, về đầu trang"><svg><use href="#mark"/></svg>CampusTour<small>DT‑AMR</small></a>
+    <nav class="nav" aria-label="Điều hướng chính">
+      <a href="#trai-nghiem">Trải nghiệm</a>
+      <a href="#giai-phap">Giải pháp</a>
+      <a href="#quy-trinh">Quy trình</a>
+      <a href="#robot">Robot</a>
+      <a href="#hoi-dap">Hỏi đáp</a>
+    </nav>
+    <a class="btn" href="/login"><span class="ic ic-l"><svg><use href="#arr"/></svg></span><span class="t">Vào phiên tham quan</span><span class="ic ic-r"><svg><use href="#arr"/></svg></span></a>
+    <button class="burger" id="burger" aria-label="Mở menu" aria-expanded="false"><i></i><i></i></button>
+  </div>
+</header>
+<div class="sheet" id="sheet">
+  <nav aria-label="Menu di động">
+    <a href="#trai-nghiem">Trải nghiệm</a><a href="#giai-phap">Giải pháp</a><a href="#quy-trinh">Quy trình</a><a href="#robot">Robot</a><a href="#hoi-dap">Hỏi đáp</a>
+  </nav>
+  <a class="btn" href="/login" style="align-self:flex-start"><span class="ic ic-l"><svg><use href="#arr"/></svg></span><span class="t">Vào phiên tham quan</span><span class="ic ic-r"><svg><use href="#arr"/></svg></span></a>
+</div>
+
+<main id="top">
+<!-- ================= HERO ================= -->
+<section class="hero" id="hero">
+  <div class="bg"><img class="img-cover" src="../images/hero-campus.jpg" alt="Robot tự hành đi trên lối đi trong khuôn viên trường lúc chiều tối"></div>
+  <div class="container">
+    <div class="left">
+      <div class="mono sub">Tham quan khuôn viên từ xa</div>
+      <div class="live-badge"><i></i>LIVE · ROBOT TỰ HÀNH</div>
+    </div>
+    <div class="right">
+      <div>
+        <h1 data-split data-auto><span class="row">Khuôn viên trường,</span><span class="row">tới tận lớp học.</span></h1>
+        <div class="fade-up" style="margin-top:36px;--d:500ms">
+          <a class="btn" href="/login"><span class="ic ic-l"><svg><use href="#arr"/></svg></span><span class="t">Vào phiên tham quan</span><span class="ic ic-r"><svg><use href="#arr"/></svg></span></a>
+        </div>
+      </div>
+      <div class="fade-up" style="--d:700ms">
+        <p class="desc">Một robot tự hành mang camera trên giá xoay, đưa nhiều đoàn học sinh đi qua từng điểm tham quan của trường bằng một livestream chung, bản đồ 2D và trợ lý AI trả lời riêng.</p>
+        <div class="meta">
+          <div><b>≥ 3</b>Điểm tham quan</div>
+          <div><b>≈ 30 phút</b>Mỗi buổi</div>
+          <div><b>0</b>Tài khoản cần tạo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INTRO ================= -->
+<section class="intro" id="intro">
+  <div class="container">
+    <div class="content">
+      <div><div class="mono sub fade-up">Giới thiệu</div></div>
+      <h2 data-split>CampusTour định nghĩa lại buổi tham quan trường: học sinh ngồi tại lớp, robot đi thay các em, tự hành qua AI Lab, thư viện và không gian sáng tạo, dừng đúng chỗ, xoay đúng góc và kể đúng câu chuyện.</h2>
+    </div>
+    <div class="images">
+      <div class="pic fade-up"><img class="img-cover" src="../images/login-bg.jpg" alt="Khuôn viên trường với lối đi, cây xanh và các tòa nhà"></div>
+      <div>
+        <p class="lead fade-up">Trải nghiệm một buổi tham quan liền mạch, từ phòng chờ trực tuyến tới điểm dừng cuối cùng, không cần đi xe, không cần tài khoản.</p>
+        <div class="stats">
+          <div class="stat fade-up"><h3><span data-count="3" data-prefix="≥ ">0</span> POI</h3><p>Mục tiêu demo: ít nhất ba điểm tham quan ở vị trí phân biệt, với ít nhất hai chặng navigation thật giữa các điểm.</p></div>
+          <div class="stat fade-up" style="--d:120ms"><h3><span data-count="1">0</span> luồng</h3><p>Một livestream chung cho mọi đoàn. Tất cả cùng xem hướng camera hiện tại, không ai phải điều khiển robot.</p></div>
+          <div class="stat fade-up" style="--d:240ms"><h3><span data-count="30" data-prefix="≈ ">0</span>′</h3><p>Thời lượng một buổi khoảng 30 phút trở xuống, gồm di chuyển, thuyết minh và thời gian quan sát tại từng điểm.</p></div>
+        </div>
+        <div class="contact fade-up"><a class="link-dot" href="#trai-nghiem"><span class="u">Tìm hiểu trải nghiệm tham quan</span><span class="box"><span class="dot"></span></span></a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SERVICES (TRẢI NGHIỆM) ================= -->
+<section class="services" id="trai-nghiem">
+  <div class="container">
+    <div class="sec-head"><h2 data-split>Trải nghiệm</h2><span class="count fade-up">(05)</span></div>
+    <div class="divider"></div>
+    <div id="svc-list">
+      <article class="svc open">
+        <div class="svc-row"><span class="svc-num">01</span><h3 class="svc-title">Tham quan qua livestream</h3><span class="svc-plus"><svg><use href="#plus"/></svg></span></div>
+        <div class="svc-body"><div><div class="svc-inner"><span class="sp"></span>
+          <div class="txt"><p>Học sinh mở đường link, nhập mã đoàn cùng họ tên và lớp, chờ trong phòng chờ rồi cùng xem một luồng hình trực tiếp từ robot. Không cần VR, không cần cài ứng dụng.</p><ul><li>Phòng chờ</li><li>Một góc nhìn chung</li><li>Trình duyệt web</li></ul></div>
+          <div class="svc-img"><img class="img-cover" src="../images/autonomous%20robot.avif" alt="Các robot tự hành trên sân trường"></div>
+        </div></div></div>
+      </article>
+      <article class="svc">
+        <div class="svc-row"><span class="svc-num">02</span><h3 class="svc-title">Robot tự hành qua các POI</h3><span class="svc-plus"><svg><use href="#plus"/></svg></span></div>
+        <div class="svc-body"><div><div class="svc-inner"><span class="sp"></span>
+          <div class="txt"><p>Robot nhận từng chặng từ backend, tự tìm đường bằng ROS 2 và Nav2, tránh vật cản, dừng đúng điểm rồi chuyển sang chặng kế khi hết thời gian dừng. Staff chỉ can thiệp khi cần.</p><ul><li>ROS 2 · Nav2</li><li>Dừng an toàn cục bộ</li><li>Về điểm kết thúc</li></ul></div>
+          <div class="svc-img"><img class="img-cover" src="../images/robot.avif" alt="Robot tự hành trên vỉa hè cạnh khu vui chơi"></div>
+        </div></div></div>
+      </article>
+      <article class="svc">
+        <div class="svc-row"><span class="svc-num">03</span><h3 class="svc-title">Góc nhìn trên giá xoay</h3><span class="svc-plus"><svg><use href="#plus"/></svg></span></div>
+        <div class="svc-body"><div><div class="svc-inner"><span class="sp"></span>
+          <div class="txt"><p>Nguồn hình (ưu tiên Quest 3, dự phòng camera RGB/UVC) đặt trên giá in 3D có motor. Tại mỗi POI, đầu xoay trái, phải theo các góc đã cấu hình; khi rời điểm luôn quay về hướng trước.</p><ul><li>Pan trái / phải</li><li>FRONT khi di chuyển</li><li>Gá in 3D</li></ul></div>
+          <div class="svc-img"><img class="img-cover" src="../images/tro-chuyen.avif" alt="Mô hình phần cứng giá xoay với dây nối và cảm biến"></div>
+        </div></div></div>
+      </article>
+      <article class="svc">
+        <div class="svc-row"><span class="svc-num">04</span><h3 class="svc-title">Thuyết minh và hỏi AI riêng</h3><span class="svc-plus"><svg><use href="#plus"/></svg></span></div>
+        <div class="svc-body"><div><div class="svc-inner"><span class="sp"></span>
+          <div class="txt"><p>Audio soạn sẵn cho từng điểm tự phát trên web khi robot tới nơi. Mỗi học sinh có thể hỏi trợ lý AI bằng chữ hoặc giọng nói, câu trả lời chỉ gửi về đúng trình duyệt của em đó.</p><ul><li>Audio theo POI</li><li>Text → TTS → STT</li><li>Một ngôn ngữ</li></ul></div>
+          <div class="svc-img"><img class="img-cover" src="../images/images.jpg" alt="Biểu tượng trợ lý AI trên điện thoại với sóng âm"></div>
+        </div></div></div>
+      </article>
+      <article class="svc">
+        <div class="svc-row"><span class="svc-num">05</span><h3 class="svc-title">Bản đồ 2D và Digital Twin</h3><span class="svc-plus"><svg><use href="#plus"/></svg></span></div>
+        <div class="svc-body"><div><div class="svc-inner"><span class="sp"></span>
+          <div class="txt"><p>Học sinh theo dõi vị trí robot trên bản đồ 2D. Staff vận hành trên Twin 3D đơn giản. Cả hai dùng chung một nguồn pose từ robot nên luôn khớp nhau.</p><ul><li>Map 2D</li><li>Twin 3D cho Staff</li><li>Cùng nguồn pose</li></ul></div>
+          <div class="svc-img"><img class="img-cover" src="../images/digital-twin.jpg" alt="Bản đồ số 3D của khuôn viên đại học"></div>
+        </div></div></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SOLUTION ================= -->
+<section class="solution" id="giai-phap">
+  <div class="container">
+    <div class="main">
+      <div><div class="mono sub fade-up">Giải pháp của chúng tôi</div></div>
+      <div>
+        <h2 data-split>Một backend điều phối, một robot tự hành, một luồng hình chung và trợ lý AI riêng cho từng học sinh, gói trong một buổi tham quan tự chạy.</h2>
+        <div class="contact fade-up"><a class="link-dot" href="#quy-trinh"><span class="u">Xem quy trình một buổi tham quan</span><span class="box"><span class="dot"></span></span></a></div>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card fade-up">
+        <div><h3>Điều phối tự động theo tuyến</h3><p>Backend giữ luồng tour: tới POI, dừng, xoay góc, thuyết minh, hết thời gian dừng thì tự sang chặng kế.</p></div>
+        <div class="gfx g-ell"><span style="--k:0"></span><span style="--k:1"></span><span style="--k:2"></span><span style="--k:3"></span><span style="--k:4"></span><span style="--k:5"></span><span style="--k:6"></span><b></b></div>
+      </div>
+      <div class="card fade-up" style="--d:100ms">
+        <div><h3>Trạng thái minh bạch, thời gian thực</h3><p>Pose robot, POI hiện tại và trạng thái phiên được đẩy qua SignalR tới map của học sinh và Twin của Staff.</p></div>
+        <div class="gfx g-loop"><span style="--k:0"></span><span style="--k:1"></span><span style="--k:2"></span><span style="--k:3"></span><b></b></div>
+      </div>
+      <div class="card light fade-up" style="--d:200ms">
+        <div><h3>Góc nhìn xoay trái, phải</h3><p>Backend yêu cầu lần lượt từng góc và thời gian giữ. Controller chỉ thực thi góc hiện tại và báo kết quả.</p></div>
+        <div class="gfx g-arrow"><i class="al s"></i><i class="al"></i><span class="cam"><svg viewBox="0 0 26 26"><rect x="4" y="8" width="18" height="11" rx="3" fill="#bde74e"/><circle cx="13" cy="13.5" r="3" fill="#1c1c1c"/><path d="M13 3v5" stroke="#bde74e" stroke-width="2" stroke-linecap="round"/></svg></span><i class="ar"></i><i class="ar s"></i></div>
+      </div>
+      <div class="card fade-up" style="--d:300ms">
+        <div><h3>Kiểm chứng bằng mô phỏng</h3><p>Gazebo và fleet emulator chạy song song từ đầu để thử contract và đo tải, không phải chờ robot thật.</p></div>
+        <div class="gfx"><div class="g-grid"><span style="--k:0"></span><span style="--k:1"></span><span style="--k:2"></span><span style="--k:5"></span><span style="--k:4"></span><span style="--k:3"></span><span style="--k:6"></span><span style="--k:7"></span><span style="--k:8"></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="reveal-wrap" id="reveal-wrap">
+    <div class="reveal-sticky">
+      <div class="bg"><img class="img-cover" src="../images/ai-fleet-management-autonomous-robot-fleet.webp" alt="" aria-hidden="true"></div>
+      <p class="reveal-text" id="reveal-text" data-words><span class="hl">CampusTour</span> kết nối học sinh, nhà trường, công nghệ và một robot tự hành để mỗi lớp học có thể đi qua từng góc của khuôn viên, trực tiếp, chỉ bằng một đường link.</p>
+    </div>
+  </div>
+
+  <div class="ticker" aria-hidden="true"><div class="track">
+    <span>THAM QUAN TỪ XA</span><span>ROBOT TỰ HÀNH</span><span>MỘT LIVESTREAM CHUNG</span><span>HỎI AI RIÊNG</span><span>BẢN ĐỒ 2D · DIGITAL TWIN</span><span>AN TOÀN LÀ TRƯỚC HẾT</span>
+    <span>THAM QUAN TỪ XA</span><span>ROBOT TỰ HÀNH</span><span>MỘT LIVESTREAM CHUNG</span><span>HỎI AI RIÊNG</span><span>BẢN ĐỒ 2D · DIGITAL TWIN</span><span>AN TOÀN LÀ TRƯỚC HẾT</span>
+  </div></div>
+</section>
+
+<!-- ================= HOW WE WORK (QUY TRÌNH) ================= -->
+<section class="how" id="quy-trinh">
+  <div class="container">
+    <div class="title">
+      <div><div class="mono sub fade-up">Cách một buổi tham quan diễn ra</div></div>
+      <h2 data-split>Bốn bước từ bảng Excel tới buổi tham quan trực tiếp.</h2>
+    </div>
+    <div class="progress" id="progress"><i></i><b></b></div>
+    <div class="steps" id="steps">
+      <div class="step fade-up">
+        <div class="n"><em>01</em><span>ĐẠI DIỆN</span></div>
+        <div class="ph"><img src="../images/booking-app.avif" alt="Người dùng thao tác đăng ký trên điện thoại"></div>
+        <h3>Đăng ký đoàn</h3>
+        <p>Admin tạo buổi tham quan. Đại diện lớp gửi đăng ký kèm file Excel danh sách học sinh.</p>
+      </div>
+      <div class="step fade-up" style="--d:120ms">
+        <div class="n"><em>02</em><span>ADMIN</span></div>
+        <div class="ph"><img src="../images/robot_mission_orchestration_hero.webp" alt="Màn hình điều phối robot và bản đồ tuyến"></div>
+        <h3>Duyệt và gửi mã đoàn</h3>
+        <p>Admin duyệt đăng ký, gửi email link và mã đoàn, rồi Chốt buổi sang READY khi đủ nội dung và tuyến.</p>
+      </div>
+      <div class="step fade-up" style="--d:240ms">
+        <div class="n"><em>03</em><span>STAFF · ROBOT</span></div>
+        <div class="ph">
+          <!-- Minh hoạ SVG: tuyến 3 POI, robot chạy dọc tuyến -->
+          <svg viewBox="0 0 300 360" role="img" aria-label="Sơ đồ tuyến: Xuất phát, AI Lab, Thư viện, Không gian sáng tạo, Kết thúc">
+            <rect width="300" height="360" fill="#1c1c1c"/>
+            <g stroke="rgba(255,255,255,.07)"><path d="M0 60H300M0 120H300M0 180H300M0 240H300M0 300H300M60 0V360M120 0V360M180 0V360M240 0V360"/></g>
+            <rect x="24" y="36" width="96" height="70" rx="6" fill="#262626"/><rect x="176" y="120" width="100" height="84" rx="6" fill="#262626"/><rect x="26" y="232" width="110" height="90" rx="6" fill="#262626"/>
+            <path id="route" d="M60 330 C60 250 170 280 200 250 S 250 170 220 150 S 90 170 80 120 S 150 60 250 50" fill="none" stroke="#bde74e" stroke-width="2" stroke-dasharray="6 7"/>
+            <g font-family="Geist Mono,monospace" font-size="10" fill="#fff">
+              <circle cx="60" cy="330" r="6" fill="#fff"/><text x="72" y="334">XUẤT PHÁT</text>
+              <circle cx="200" cy="250" r="8" fill="#bde74e"/><text x="148" y="275">POI 1 · AI LAB</text>
+              <circle cx="220" cy="150" r="8" fill="#bde74e"/><text x="186" y="112">POI 2 · THƯ VIỆN</text>
+              <circle cx="80" cy="120" r="8" fill="#bde74e"/><text x="30" y="150">POI 3 · SÁNG TẠO</text>
+              <circle cx="250" cy="50" r="6" fill="#fff"/><text x="190" y="30">KẾT THÚC</text>
+            </g>
+            <g><circle r="11" fill="#fff"/><circle r="5" fill="#1c1c1c"/>
+              <animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;0;.3;.3;.55;.55;.8;.8;1;1" keyTimes="0;.06;.24;.34;.5;.6;.76;.86;.98;1" calcMode="linear"><mpath href="#route"/></animateMotion></g>
+          </svg>
+        </div>
+        <h3>Robot khởi hành</h3>
+        <p>Staff kiểm tra định vị, nguồn và camera rồi bấm Start. Robot tự hành qua từng POI, dừng, xoay góc và đi tiếp.</p>
+      </div>
+      <div class="step fade-up" style="--d:360ms">
+        <div class="n"><em>04</em><span>HỌC SINH</span></div>
+        <div class="ph"><img src="../images/ai-assistant.avif" alt="Loa trợ lý giọng nói với vòng sáng"></div>
+        <h3>Xem live và hỏi AI</h3>
+        <p>Học sinh vào phòng chờ, xem livestream, theo dõi map 2D, nghe thuyết minh và hỏi trợ lý AI riêng.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= WHO WE ARE (ROBOT) ================= -->
+<section class="robot" id="robot">
+  <div class="container">
+    <div class="grid">
+      <div class="headline">
+        <div class="mono">Một robot · Nhiều đoàn · Cùng lúc</div>
+        <div class="big"><span data-count="30">0</span><sup>phút / buổi</sup></div>
+        <p class="fade-up">Một robot thật trong khu vực trong nhà giới hạn, đưa nhiều đoàn học sinh tham quan cùng một livestream. Luồng bình thường tự chạy, Staff luôn sẵn sàng giữ, đi tiếp hoặc kết thúc sớm.</p>
+      </div>
+      <div class="robot-img" id="robot-img"><div class="road"></div><img src="../smartbus-robot.jpg" alt="Minh hoạ robot tự hành CampusTour với màn hình mặt cười và dải đèn xanh"></div>
+      <div class="specs">
+        <div class="spec fade-up"><div class="mono">Tự hành ROS 2</div><p>Nav2 tìm đường, tránh vật cản và dừng cục bộ. Backend không gửi từng xung motor.</p></div>
+        <div class="spec fade-up" style="--d:100ms"><div class="mono">Nguồn hình trên giá xoay</div><p>Quest 3 chỉ là nguồn hình, dự phòng camera RGB/UVC. Không xoay camera phục vụ navigation.</p></div>
+        <div class="spec fade-up" style="--d:200ms"><div class="mono">fleet_bridge</div><p>Bridge Python trên robot chủ động kết nối backend qua SignalR, chuyển lệnh thành Nav2 action.</p></div>
+        <div class="spec fade-up" style="--d:300ms"><div class="mono">An toàn trước hết</div><p>Lỗi robot hoặc mất trạng thái chuyển phiên sang NEEDS_ASSISTANCE. Dừng khẩn cấp theo cơ chế của robot.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PARTNERSHIP (CÔNG NGHỆ) ================= -->
+<section class="partner" id="cong-nghe">
+  <div class="bg" id="partner-bg"><img class="img-cover" src="../images/hero-campus.jpg" alt="" aria-hidden="true"></div>
+  <div class="container">
+    <div class="title">
+      <div><div class="mono sub">Nền tảng và công nghệ</div></div>
+      <p class="words" id="partner-words" data-words>CampusTour phối hợp năm khối độc lập: web, backend, robot, trợ lý AI và digital twin. Mỗi khối giữ đúng trách nhiệm của mình, nói chuyện qua contract rõ ràng, để cả buổi tham quan chạy trơn tru từ lớp học tới khuôn viên.</p>
+    </div>
+    <div class="foot">
+      <div><h3><span data-count="5" data-pad="2">0</span></h3><p>Khối hệ thống trong một repo: web, backend, robot, ai-assistant, digital-twin.</p></div>
+      <div>
+        <div class="logos"><div class="track">
+          <span>ROS 2 <small>NAV2</small></span><span>ASP.NET Core</span><span>SignalR</span><span>React <small>+ VITE</small></span><span>Three.js</span><span>Gazebo</span><span>Meta Quest 3</span><span>Python <small>BRIDGE</small></span>
+          <span>ROS 2 <small>NAV2</small></span><span>ASP.NET Core</span><span>SignalR</span><span>React <small>+ VITE</small></span><span>Three.js</span><span>Gazebo</span><span>Meta Quest 3</span><span>Python <small>BRIDGE</small></span>
+        </div></div>
+        <div class="contact"><a class="link-dot" href="#goc-ky-thuat"><span class="u">Đọc ghi chép kỹ thuật của nhóm</span><span class="box"><span class="dot"></span></span></a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INSIGHTS (GÓC KỸ THUẬT) ================= -->
+<section class="insights" id="goc-ky-thuat">
+  <div class="container">
+    <div class="title">
+      <div><div class="mono sub fade-up">Góc kỹ thuật</div></div>
+      <h2 data-split>Ghi chép từ quá trình xây dựng robot dẫn tour.</h2>
+    </div>
+    <div class="hl-grid">
+      <a class="post hl fade-up" href="#">
+        <div class="thumb"><img src="../images/robot_mission_orchestration_hero.webp" alt="Bảng điều phối robot với tuyến đường"><span class="cat">Kiến trúc</span><span class="more">Đọc thêm<i><svg><use href="#arr-r"/></svg></i></span></div>
+        <div><div class="tag">● ĐIỂM NỔI BẬT</div><h4>Backend giữ quy tắc tour, ROS giữ chuyển động: vì sao phải tách rõ</h4><p class="sum">ASP.NET quyết định đi điểm nào, khi nào giới thiệu, khi nào hết giờ. Nav2 lo tìm đường và dừng cục bộ. SignalR chỉ là cửa nhận và gửi.</p></div>
+      </a>
+      <a class="post hl fade-up" href="#" style="--d:120ms">
+        <div class="thumb"><img src="../images/tro-chuyen.avif" alt="Phần cứng thử nghiệm với dây nối" style="object-position:center 30%"><span class="cat">Phần cứng</span><span class="more">Đọc thêm<i><svg><use href="#arr-r"/></svg></i></span></div>
+        <div><div class="tag">● ĐIỂM NỔI BẬT</div><h4>Quest 3 chỉ là nguồn hình: bài thử 40 phút không người đeo</h4><p class="sum">Cổng kiểm chứng đầu tiên: lấy được hình khi đứng yên, xoay, di chuyển, đổi ánh sáng và kết nối lại. Không đạt thì chuyển sang camera UVC.</p></div>
+      </a>
+    </div>
+    <div class="def-grid">
+      <a class="post def fade-up" href="#">
+        <div class="thumb"><img src="../images/digital-twin.jpg" alt="Bản đồ số của khuôn viên" style="object-position:center 35%"><span class="cat">Mô phỏng</span><span class="more">Đọc thêm<i><svg><use href="#arr-r"/></svg></i></span></div>
+        <h4>Gazebo và fleet emulator: thử tải trước khi có robot thật</h4><p class="sum">Emulator dùng cùng contract fleet, gắn dấu Synthetic để không lẫn với số đo thực địa.</p>
+      </a>
+      <a class="post def fade-up" href="#" style="--d:120ms">
+        <div class="thumb">
+          <svg viewBox="0 0 400 300" role="img" aria-label="Sơ đồ trạng thái Tour: SCHEDULED, READY, RUNNING, COMPLETED hoặc CANCELLED">
+            <rect width="400" height="300" fill="#f0f0eb"/>
+            <g font-family="Geist Mono,monospace" font-size="12" text-anchor="middle">
+              <rect x="30" y="60" width="100" height="36" rx="18" fill="#fff" stroke="#c6c7cc"/><text x="80" y="82" fill="#4a4f59">SCHEDULED</text>
+              <rect x="150" y="60" width="90" height="36" rx="18" fill="#fff" stroke="#c6c7cc"/><text x="195" y="82" fill="#4a4f59">READY</text>
+              <rect x="260" y="60" width="110" height="36" rx="18" fill="#1c1c1c"/><text x="315" y="82" fill="#bde74e">RUNNING</text>
+              <rect x="170" y="190" width="120" height="36" rx="18" fill="#bde74e"/><text x="230" y="212" fill="#1c1c1c">COMPLETED</text>
+              <rect x="30" y="190" width="120" height="36" rx="18" fill="#fff" stroke="#c6c7cc"/><text x="90" y="212" fill="#4a4f59">CANCELLED</text>
+              <rect x="248" y="124" width="138" height="28" rx="6" fill="#fff" stroke="#e0a02a" stroke-dasharray="4 3"/><text x="317" y="142" fill="#a06a00" font-size="10">NEEDS_ASSISTANCE</text>
+            </g>
+            <g stroke="#7e7f85" stroke-width="1.4" fill="none"><path d="M130 78h18M240 78h18M300 96l-50 92M270 96C200 150 140 150 100 188M80 96v92"/></g>
+          </svg>
+          <span class="cat">Vận hành</span><span class="more">Đọc thêm<i><svg><use href="#arr-r"/></svg></i></span></div>
+        <h4>NEEDS_ASSISTANCE: khi nào robot dừng và chờ Staff</h4><p class="sum">Mất riêng livestream không tự hủy chặng đang chạy. Lỗi robot hoặc mất trạng thái điều khiển áp dụng policy dừng riêng.</p>
+      </a>
+      <a class="post def fade-up" href="#" style="--d:240ms">
+        <div class="thumb"><img src="../images/booking-app.avif" alt="Người dùng thao tác trên điện thoại" style="object-position:center 40%"><span class="cat">Nghiệp vụ</span><span class="more">Đọc thêm<i><svg><use href="#arr-r"/></svg></i></span></div>
+        <h4>Mã đoàn và họ tên không dấu: vào phiên mà không cần tài khoản</h4><p class="sum">Đối chiếu roster đã duyệt để vào phòng chờ. Quyền luôn kiểm tra theo trạng thái server hiện hành.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="faq" id="hoi-dap">
+  <div class="container wrap">
+    <h2 data-split>Câu hỏi thường gặp</h2>
+    <div id="faq">
+      <div class="qa open"><button aria-expanded="true"><h3>Học sinh có cần tạo tài khoản để tham gia không?</h3><span class="pm"></span></button><div class="a"><div><p>Không. Đại diện lớp gửi danh sách Excel, Admin duyệt và gửi email có đường link cùng mã đoàn. Học sinh nhập mã đoàn và họ tên, lớp để đối chiếu với danh sách rồi vào phòng chờ.</p></div></div></div>
+      <div class="qa"><button aria-expanded="false"><h3>Học sinh có điều khiển được robot hay camera không?</h3><span class="pm"></span></button><div class="a"><div><p>Không. Mọi người cùng xem một góc nhìn chung. Robot tự hành theo tuyến đã cấu hình, đầu xoay theo góc đã thử trước, và chỉ Staff mới có thể Giữ, Đi tiếp hoặc Kết thúc sớm.</p></div></div></div>
+      <div class="qa"><button aria-expanded="false"><h3>Trợ lý AI trả lời câu hỏi như thế nào?</h3><span class="pm"></span></button><div class="a"><div><p>Câu hỏi được gửi qua backend và câu trả lời chỉ trả về đúng trình duyệt đã hỏi, không phát cho cả đoàn. Bản đầu dùng văn bản, sau đó thêm đọc câu trả lời (TTS) và nhận giọng nói (STT), tất cả cùng một ngôn ngữ. AI không xem video và không điều khiển robot.</p></div></div></div>
+      <div class="qa"><button aria-expanded="false"><h3>Điều gì xảy ra nếu mất livestream hoặc robot gặp sự cố?</h3><span class="pm"></span></button><div class="a"><div><p>Nếu chỉ mất livestream mà navigation vẫn bình thường, chặng đang chạy vẫn hoàn tất rồi giữ lại. Nếu robot lỗi hoặc mất trạng thái điều khiển, phiên chuyển sang NEEDS_ASSISTANCE và chờ Staff kiểm tra trước khi đi tiếp hoặc kết thúc.</p></div></div></div>
+      <div class="qa"><button aria-expanded="false"><h3>Làm sao để đăng ký một buổi tham quan cho lớp?</h3><span class="pm"></span></button><div class="a"><div><p>Khi nhà trường mở buổi tham quan, đại diện lớp gửi đăng ký kèm file Excel danh sách học sinh. Sau khi Admin duyệt, đại diện nhận email thông tin tham gia để chia sẻ cho cả lớp.</p></div></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="footer">
+  <div class="parallax" id="footer-parallax"><img class="img-cover" src="../images/login-bg.jpg" alt="" aria-hidden="true"></div>
+  <div class="container">
+    <div class="cta">
+      <h2 data-split>Sẵn sàng đưa cả lớp đi tham quan khuôn viên mà không cần rời chỗ ngồi?</h2>
+      <div class="fade-up"><p>Nhập mã đoàn đã nhận qua email để vào phòng chờ trước giờ bắt đầu.</p>
+        <a class="btn" href="/login"><span class="ic ic-l"><svg><use href="#arr"/></svg></span><span class="t">Vào phiên tham quan</span><span class="ic ic-r"><svg><use href="#arr"/></svg></span></a></div>
+    </div>
+    <div class="info">
+      <div>
+        <span class="mono">Sơ đồ trang</span>
+        <nav class="sitemap" aria-label="Sơ đồ trang">
+          <div><a href="#top">Trang chủ</a><a href="#trai-nghiem">Trải nghiệm</a><a href="#giai-phap">Giải pháp</a></div>
+          <div><a href="#quy-trinh">Quy trình</a><a href="#robot">Robot</a><a href="#goc-ky-thuat">Góc kỹ thuật</a></div>
+          <div><a href="#hoi-dap">Hỏi đáp</a><a href="/login">Đăng nhập</a></div>
+        </nav>
+      </div>
+      <div class="right">
+        <div class="contact-list">
+          <div><span class="mono">Email &amp; hỗ trợ</span><a href="mailto:campustour@example.edu.vn">campustour@example.edu.vn</a></div>
+          <div><span class="mono">Đồ án</span><span style="opacity:.85">CampusTour DT‑AMR · Robot tự hành dẫn tour khuôn viên</span></div>
+        </div>
+        <div class="social"><span class="mono">Tài nguyên</span><div><a href="#cong-nghe">Kiến trúc hệ thống</a><a href="#goc-ky-thuat">Ghi chép kỹ thuật</a><a href="/staff">Khu vực Staff</a><a href="/admin">Khu vực Admin</a></div></div>
+      </div>
+    </div>
+    <div class="sign"><span>© 2026 Nhóm đồ án CampusTour</span><span>Thiết kế theo cấu trúc template Himon</span></div>
+  </div>
+  <div class="brand" aria-hidden="true">CampusTour</div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- 1. Tách chữ để làm hiệu ứng trồi lên từng ký tự ---- */
+  document.querySelectorAll('[data-split]').forEach(el => {
+    let i = 0;
+    const walk = node => {
+      [...node.childNodes].forEach(n => {
+        if (n.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          n.textContent.normalize('NFC').split(/(\s+)/).forEach(part => {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(' ')); return; }
+            const w = document.createElement('span'); w.className = 'w';
+            Array.from(part).forEach(ch => {
+              const c = document.createElement('span'); c.className = 'c'; c.textContent = ch;
+              c.style.setProperty('--i', Math.min(i++, 90)); w.appendChild(c);
+            });
+            frag.appendChild(w);
+          });
+          n.replaceWith(frag);
+        } else if (n.nodeType === 1) walk(n);
+      });
+    };
+    walk(el);
+    el.setAttribute('aria-label', el.textContent);
+  });
+
+  /* ---- 2. Tách từ cho đoạn chữ lộ dần theo cuộn ---- */
+  document.querySelectorAll('[data-words]').forEach(el => {
+    const walk = node => [...node.childNodes].forEach(n => {
+      if (n.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        n.textContent.split(/(\s+)/).forEach(p => {
+          if (!p) return;
+          if (/^\s+$/.test(p)) frag.appendChild(document.createTextNode(' '));
+          else { const s = document.createElement('span'); s.className = 'rw'; s.textContent = p; frag.appendChild(s); }
+        });
+        n.replaceWith(frag);
+      } else if (n.nodeType === 1) walk(n);
+    });
+    walk(el);
+  });
+
+  /* ---- 3. Hiện khi vào khung nhìn ---- */
+  const counted = new WeakSet();
+  const runCount = el => {
+    if (counted.has(el)) return; counted.add(el);
+    const to = +el.dataset.count, pre = el.dataset.prefix || '', pad = +el.dataset.pad || 0;
+    const fmt = v => pre + String(v).padStart(pad, '0');
+    if (reduce) { el.textContent = fmt(to); return; }
+    const t0 = performance.now(), dur = 1600;
+    const tick = t => { const k = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(Math.round(to * e)); if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  };
+  const io = new IntersectionObserver(entries => entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    en.target.classList.add('in');
+    if (en.target.dataset.count) runCount(en.target);
+    io.unobserve(en.target);
+  }), { rootMargin: '0px 0px -12% 0px' });
+  document.querySelectorAll('[data-split]:not([data-auto]),.fade-up,.divider,.intro .pic,[data-count]').forEach(el => io.observe(el));
+
+  /* Hero chạy ngay khi tải */
+  requestAnimationFrame(() => setTimeout(() => {
+    document.getElementById('hero').classList.add('in');
+    document.querySelectorAll('[data-auto],.hero .fade-up').forEach(el => el.classList.add('in'));
+  }, 120));
+
+  /* ---- 4. Header: nền trắng sau Hero, ẩn khi cuộn xuống ---- */
+  const header = document.getElementById('header'), hero = document.getElementById('hero');
+  let lastY = scrollY;
+
+  /* ---- 5. Menu di động ---- */
+  const burger = document.getElementById('burger');
+  const toggleMenu = open => {
+    document.body.classList.toggle('menu-open', open);
+    burger.setAttribute('aria-expanded', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  };
+  burger.addEventListener('click', () => toggleMenu(!document.body.classList.contains('menu-open')));
+  document.querySelectorAll('#sheet a').forEach(a => a.addEventListener('click', () => toggleMenu(false)));
+
+  /* ---- 6. Danh sách Trải nghiệm: mở khi hover (desktop) hoặc bấm ---- */
+  const svcs = [...document.querySelectorAll('.svc')];
+  const openSvc = s => svcs.forEach(x => x.classList.toggle('open', x === s));
+  const canHover = matchMedia('(hover:hover) and (min-width:901px)').matches;
+  svcs.forEach(s => {
+    s.addEventListener('click', () => openSvc(s.classList.contains('open') && !canHover ? null : s));
+    if (canHover) s.addEventListener('mouseenter', () => openSvc(s));
+  });
+
+  /* ---- 7. FAQ accordion ---- */
+  document.querySelectorAll('.qa button').forEach(b => b.addEventListener('click', () => {
+    const qa = b.parentElement, open = !qa.classList.contains('open');
+    document.querySelectorAll('.qa').forEach(q => { q.classList.remove('open'); q.querySelector('button').setAttribute('aria-expanded', 'false'); });
+    if (open) { qa.classList.add('open'); b.setAttribute('aria-expanded', 'true'); }
+  }));
+
+  /* ---- 8. Hiệu ứng gắn với vị trí cuộn ---- */
+  const $ = id => document.getElementById(id);
+  const revealWrap = $('reveal-wrap'), revealWords = [...$('reveal-text').querySelectorAll('.rw')];
+  const partnerWords = [...$('partner-words').querySelectorAll('.rw')], partner = $('cong-nghe');
+  const progress = $('progress'), steps = [...document.querySelectorAll('.step')], stepsBox = $('steps');
+  const robotImg = $('robot-img'), heroImg = hero.querySelector('.bg img');
+  const partnerBg = $('partner-bg'), footPar = $('footer-parallax');
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const prog = (el, start = 1, end = 0) => { // 0 khi đỉnh el ở start*vh, 1 khi đáy el ở end*vh
+    const r = el.getBoundingClientRect(), vh = innerHeight;
+    return clamp((vh * start - r.top) / (r.height + vh * (start - end)));
+  };
+  const light = (words, p) => { const n = Math.round(p * words.length); words.forEach((w, i) => w.classList.toggle('on', i < n)); };
+
+  let ticking = false;
+  const onScroll = () => {
+    ticking = false;
+    const y = scrollY, heroBottom = hero.offsetHeight - 80;
+    header.classList.toggle('solid', y > heroBottom);
+    header.classList.toggle('hide', y > lastY && y > 600 && !document.body.classList.contains('menu-open'));
+    lastY = y;
+    if (reduce) { light(revealWords, 1); light(partnerWords, 1); robotImg.style.setProperty('--p', 1); progress.style.setProperty('--p', 1); return; }
+
+    if (y < innerHeight * 1.2) heroImg.style.translate = `0 ${y * 0.25}px`;
+    // Chữ lộ dần trên nền sticky
+    const rr = revealWrap.getBoundingClientRect();
+    light(revealWords, clamp(-rr.top / (rr.height - innerHeight) * 1.15));
+    // Đoạn đối tác
+    light(partnerWords, clamp(prog(partner, .9, .6) * 1.6));
+    partnerBg.style.transform = `translateY(${(prog(partner) - .5) * 80}px)`;
+    // Đường tiến trình quy trình
+    const sp = clamp(prog(stepsBox, .85, .5) * 1.05);
+    progress.style.setProperty('--p', sp.toFixed(4));
+    steps.forEach((s, i) => s.classList.toggle('act', sp >= i / steps.length + .02));
+    // Robot chạy vào
+    robotImg.style.setProperty('--p', clamp(prog(robotImg, 1, .3) * 1.5).toFixed(4));
+    // Footer parallax
+    const fp = prog(footPar.parentElement, 1, 0);
+    footPar.style.transform = `translateY(${fp * 18}%)`;
+  };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  addEventListener('resize', onScroll);
+  onScroll();
+})();
+</script>
+</body>
+</html>

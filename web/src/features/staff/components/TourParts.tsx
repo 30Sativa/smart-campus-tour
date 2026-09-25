@@ -29,7 +29,7 @@ export function TourStateBadges({
         </span>
       )}
       {tour.progress?.hold && (
-        <span className="inline-flex items-center gap-1 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2 py-0.5 text-[11px] font-bold text-[#2563eb]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#d5e5a8] bg-[#f2f7e4] px-2 py-0.5 text-[11px] font-bold text-[#4d6410]">
           <Hand size={11} aria-hidden="true" />
           Đang giữ
         </span>
@@ -66,7 +66,7 @@ export function TourTable({
     <>
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full text-left text-sm" aria-label={label}>
-          <thead className="bg-[#f8fafc] text-[11px] font-bold tracking-[0.05em] text-[#64748b] uppercase border-b border-[#e2e8f0]">
+          <thead className="bg-[#f7f7f3] text-[11px] font-bold tracking-[0.05em] text-[#6b6e75] uppercase border-b border-[#e3e3dc]">
             <tr>
               <th className="px-5 py-3">Giờ</th>
               <th className="px-3 py-3">Buổi tham quan</th>
@@ -78,15 +78,15 @@ export function TourTable({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f1f5f9]">
+          <tbody className="divide-y divide-[#efefe9]">
             {tours.map((tour) => {
               const groups = groupSummary(tour)
               const countdown = formatCountdown(tour.scheduledAt, now)
               return (
-                <tr key={tour.id} className="transition-colors hover:bg-[#f8fafc]">
+                <tr key={tour.id} className="transition-colors hover:bg-[#f7f7f3]">
                   <td className="px-5 py-3.5 align-top">
-                    <p className="font-extrabold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</p>
-                    <p className="mt-0.5 text-xs whitespace-nowrap text-[#94a3b8]">
+                    <p className="font-extrabold text-[#1c1c1c] tabular-nums">{formatTime(tour.scheduledAt)}</p>
+                    <p className="mt-0.5 text-xs whitespace-nowrap text-[#8e9096]">
                       {showDate
                         ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(
                             new Date(tour.scheduledAt),
@@ -101,35 +101,35 @@ export function TourTable({
                   <td className="px-3 py-3.5 align-top">
                     <Link
                       to={`/staff/tours/${tour.id}`}
-                      className="font-bold text-[#0f172a] hover:text-[#2563eb] transition-colors"
+                      className="font-bold text-[#1c1c1c] hover:text-[#4d6410] transition-colors"
                     >
                       {tour.name}
                     </Link>
-                    <p className="mt-0.5 text-xs text-[#64748b]">
-                      <span className="font-mono font-semibold text-[#2563eb]">{tour.code}</span> · {tour.routeName} ·{' '}
+                    <p className="mt-0.5 text-xs text-[#6b6e75]">
+                      <span className="font-mono font-semibold text-[#4d6410]">{tour.code}</span> · {tour.routeName} ·{' '}
                       {tour.stops.length} POI
                     </p>
                   </td>
                   <td className="px-3 py-3.5 align-top">
-                    <p className="font-semibold whitespace-nowrap text-[#334155]">
+                    <p className="font-semibold whitespace-nowrap text-[#3a3d44]">
                       {groups.groups} đoàn · {groups.students} học sinh
                     </p>
                     {groups.pending > 0 && (
                       <p className="mt-0.5 text-xs font-semibold text-[#d97706]">{groups.pending} đăng ký chờ duyệt</p>
                     )}
                   </td>
-                  <td className="px-3 py-3.5 align-top font-mono text-xs text-[#334155]">
-                    {tour.robotName ?? <span className="font-sans text-xs text-[#94a3b8]">Nhận khi bắt đầu</span>}
+                  <td className="px-3 py-3.5 align-top font-mono text-xs text-[#3a3d44]">
+                    {tour.robotName ?? <span className="font-sans text-xs text-[#8e9096]">Nhận khi bắt đầu</span>}
                   </td>
                   <td className="px-3 py-3.5 align-top">
                     <TourStateBadges tour={tour} />
                     {tour.state === 'Scheduled' && tour.readyBlockers.length > 0 && (
-                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#94a3b8]">
+                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#8e9096]">
                         {tour.readyBlockers.join(' · ')}
                       </p>
                     )}
                     {tour.state === 'Cancelled' && tour.endReason && (
-                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#94a3b8]">{tour.endReason}</p>
+                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#8e9096]">{tour.endReason}</p>
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-right align-top">
@@ -142,17 +142,17 @@ export function TourTable({
         </table>
       </div>
 
-      <ul className="divide-y divide-[#f1f5f9] lg:hidden" aria-label={label}>
+      <ul className="divide-y divide-[#efefe9] lg:hidden" aria-label={label}>
         {tours.map((tour) => {
           const groups = groupSummary(tour)
           return (
             <li key={tour.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#0f172a]">
+                  <p className="text-sm font-bold text-[#1c1c1c]">
                     <span className="tabular-nums">{formatTime(tour.scheduledAt)}</span> · {tour.name}
                   </p>
-                  <p className="mt-1 text-xs text-[#64748b]">
+                  <p className="mt-1 text-xs text-[#6b6e75]">
                     {tour.code} · {tour.routeName} · {groups.groups} đoàn · {groups.students} học sinh
                   </p>
                 </div>
@@ -176,15 +176,15 @@ export function TourTable({
  */
 export function RegistrationList({ registrations }: { registrations: GroupRegistration[] }) {
   const [open, setOpen] = useState<string | null>(null)
-  if (registrations.length === 0) return <p className="text-sm text-[#94a3b8]">Chưa có đoàn nào đăng ký.</p>
+  if (registrations.length === 0) return <p className="text-sm text-[#8e9096]">Chưa có đoàn nào đăng ký.</p>
   return (
-    <ul className="divide-y divide-[#f1f5f9]">
+    <ul className="divide-y divide-[#efefe9]">
       {registrations.map((reg) => (
         <li key={reg.id} className="py-3 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-bold text-sm text-[#0f172a]">{reg.schoolName}</p>
-              <p className="text-xs text-[#64748b]">
+              <p className="font-bold text-sm text-[#1c1c1c]">{reg.schoolName}</p>
+              <p className="text-xs text-[#6b6e75]">
                 {reg.representativeName} ·{' '}
                 {reg.invitationSentAt
                   ? `đã gửi thông tin lúc ${formatTime(reg.invitationSentAt)}`
@@ -192,8 +192,8 @@ export function RegistrationList({ registrations }: { registrations: GroupRegist
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#334155]">
-                <Users size={13} className="text-[#94a3b8]" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#3a3d44]">
+                <Users size={13} className="text-[#8e9096]" aria-hidden="true" />
                 {reg.studentCount}
               </span>
               <StatusBadge value={reg.state} />
@@ -213,12 +213,12 @@ export function RegistrationList({ registrations }: { registrations: GroupRegist
             </div>
           </div>
           {open === reg.id && (
-            <ol className="mt-3 grid max-h-56 gap-x-4 gap-y-1 overflow-y-auto rounded-xl bg-[#f8fafc] border border-[#e2e8f0] p-3 text-xs text-[#334155] transition-opacity duration-200 starting:opacity-0 sm:grid-cols-2">
+            <ol className="mt-3 grid max-h-56 gap-x-4 gap-y-1 overflow-y-auto rounded-xl bg-[#f7f7f3] border border-[#e3e3dc] p-3 text-xs text-[#3a3d44] transition-opacity duration-200 starting:opacity-0 sm:grid-cols-2">
               {reg.roster.map((row, i) => (
                 <li key={`${row.name}-${i}`} className="truncate">
-                  <span className="mr-2 text-[11px] text-[#94a3b8] tabular-nums">{i + 1}.</span>
+                  <span className="mr-2 text-[11px] text-[#8e9096] tabular-nums">{i + 1}.</span>
                   {row.name}
-                  {row.className ? <span className="text-[#64748b]"> · {row.className}</span> : null}
+                  {row.className ? <span className="text-[#6b6e75]"> · {row.className}</span> : null}
                 </li>
               ))}
             </ol>
@@ -237,19 +237,19 @@ export function StartChecklist({ checks }: { checks: StartCheck[] }) {
         <li
           key={check.id}
           className={`flex items-center justify-between rounded-xl border p-3 text-xs transition-colors ${
-            check.passed ? 'border-[#a7f3d0] bg-[#ecfdf5]' : 'border-[#e2e8f0] bg-[#f8fafc]'
+            check.passed ? 'border-[#d5e8a6] bg-[#f2f7e4]' : 'border-[#e3e3dc] bg-[#f7f7f3]'
           }`}
         >
           <span className="flex items-center gap-2">
             {check.passed ? (
-              <CircleCheck size={16} className="text-[#10b981]" aria-hidden="true" />
+              <CircleCheck size={16} className="text-[#8fbf2a]" aria-hidden="true" />
             ) : (
               <CircleX size={16} className="text-[#dc2626]" aria-hidden="true" />
             )}
-            <span className="font-bold text-[#0f172a]">{START_CHECK_LABEL[check.id] ?? check.id}</span>
+            <span className="font-bold text-[#1c1c1c]">{START_CHECK_LABEL[check.id] ?? check.id}</span>
           </span>
           {check.detail && (
-            <span className={`text-[11px] ${check.passed ? 'text-[#16a34a]' : 'text-[#64748b]'}`}>
+            <span className={`text-[11px] ${check.passed ? 'text-[#5f7a12]' : 'text-[#6b6e75]'}`}>
               {check.detail}
             </span>
           )}

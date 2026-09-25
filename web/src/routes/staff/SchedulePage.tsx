@@ -49,7 +49,7 @@ export default function SchedulePage() {
         title="Lịch tour"
         description="Xem lịch theo ngày. Lịch được tạo từ các đơn đặt tour được duyệt; nhân viên vận hành theo dõi và chuẩn bị thiết bị tương ứng."
         action={
-          <div className="flex items-center gap-2 bg-white border border-[#e2e8f0] p-1.5 rounded-xl shadow-xs">
+          <div className="flex items-center gap-2 bg-white border border-[#e3e3dc] p-1.5 rounded-xl shadow-xs">
             <button
               type="button"
               onClick={() => setDay(shift(day, -1))}
@@ -64,7 +64,7 @@ export default function SchedulePage() {
                 value={day}
                 onChange={(event) => event.target.value && setDay(event.target.value)}
                 aria-label="Chọn ngày"
-                className="min-h-8.5 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 text-xs font-bold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#2563eb]"
+                className="min-h-8.5 rounded-lg border border-[#e3e3dc] bg-[#f7f7f3] px-3 text-xs font-bold text-[#1c1c1c] outline-none focus:ring-2 focus:ring-[#9cc93a]"
               />
             </div>
             <button
@@ -85,18 +85,18 @@ export default function SchedulePage() {
       />
 
       <section className={panelClass} aria-label={`Lịch tour ${heading}`}>
-        <div className="flex items-center justify-between gap-3 border-b border-[#f1f5f9] px-5 py-3.5">
+        <div className="flex items-center justify-between gap-3 border-b border-[#efefe9] px-5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-[#eff6ff] text-[#2563eb]">
+            <span className="grid size-8 place-items-center rounded-lg bg-[#1c1c1c] text-[#bde74e] shadow-[0_6px_14px_-6px_rgba(28,28,28,0.6)]">
               <Calendar size={16} />
             </span>
             <div>
-              <h2 className="font-bold text-sm text-[#0f172a] first-letter:uppercase">{heading}</h2>
-              {isToday && <span className="text-[11px] font-semibold text-[#16a34a]">Hôm nay</span>}
+              <h2 className="font-bold text-sm text-[#1c1c1c] first-letter:uppercase">{heading}</h2>
+              {isToday && <span className="text-[11px] font-semibold text-[#5f7a12]">Hôm nay</span>}
             </div>
           </div>
           {tours.data && (
-            <span className="text-xs font-semibold text-[#64748b] bg-[#f1f5f9] px-2.5 py-1 rounded-md tabular-nums">
+            <span className="text-xs font-semibold text-[#6b6e75] bg-[#efefe9] px-2.5 py-1 rounded-md tabular-nums">
               {tours.data.length} tour được lên lịch
             </span>
           )}

@@ -70,20 +70,20 @@ export default function TourDetailPage() {
             <PanelHead title="Thông tin buổi tham quan" />
             <dl className="grid grid-cols-2 gap-x-5 gap-y-4 p-5 sm:grid-cols-3">
               <Field label="Mã buổi">
-                <span className="font-mono text-xs font-bold text-[#2563eb] bg-[#eff6ff] px-2 py-0.5 rounded">
+                <span className="font-mono text-xs font-bold text-[#4d6410] bg-[#f2f7e4] px-2 py-0.5 rounded">
                   {tour.code}
                 </span>
               </Field>
               <Field label="Tuyến">
                 <span className="flex items-center gap-1">
-                  <MapPin size={13} className="text-[#64748b]" />
+                  <MapPin size={13} className="text-[#6b6e75]" />
                   {tour.routeName} ({tour.stops.length} POI)
                 </span>
               </Field>
               <Field label="Ngôn ngữ">{tour.language}</Field>
               <Field label="Giờ dự kiến">
                 <span className="flex items-center gap-1 font-mono font-bold">
-                  <Clock size={13} className="text-[#64748b]" />
+                  <Clock size={13} className="text-[#6b6e75]" />
                   {formatTime(tour.scheduledAt)}
                 </span>
               </Field>
@@ -93,13 +93,13 @@ export default function TourDetailPage() {
                 {tour.startedAt && tour.endedAt ? formatDuration(tour.startedAt, tour.endedAt) : '-'}
               </Field>
               <Field label="Robot phục vụ">
-                <span className="font-mono font-bold text-[#0f172a]">
-                  {tour.robotName ?? <span className="font-sans text-xs text-[#94a3b8]">Nhận khi bắt đầu</span>}
+                <span className="font-mono font-bold text-[#1c1c1c]">
+                  {tour.robotName ?? <span className="font-sans text-xs text-[#8e9096]">Nhận khi bắt đầu</span>}
                 </span>
               </Field>
               <Field label="Đoàn / Học sinh">
                 <span className="flex items-center gap-1">
-                  <Users size={13} className="text-[#64748b]" />
+                  <Users size={13} className="text-[#6b6e75]" />
                   {groups.groups} đoàn ({groups.students} học sinh)
                 </span>
               </Field>
@@ -107,7 +107,7 @@ export default function TourDetailPage() {
             {tour.endReason && (
               <p
                 className={`mx-5 mb-5 rounded-xl px-4 py-2.5 text-xs font-semibold ${
-                  tour.state === 'Completed' ? 'bg-[#ecfdf5] text-[#16a34a] border border-[#a7f3d0]' : 'bg-[#fffbeb] text-[#d97706] border border-[#fde68a]'
+                  tour.state === 'Completed' ? 'bg-[#f2f7e4] text-[#5f7a12] border border-[#d5e8a6]' : 'bg-[#fffbeb] text-[#d97706] border border-[#fde68a]'
                 }`}
               >
                 Lý do kết thúc: {tour.endReason}
@@ -122,12 +122,12 @@ export default function TourDetailPage() {
               description={`${tour.events.length} mốc · ${interventions} thao tác của nhân viên`}
             />
             {tour.events.length === 0 ? (
-              <p className="p-5 text-xs text-[#94a3b8]">Chưa có mốc nào được ghi nhận.</p>
+              <p className="p-5 text-xs text-[#8e9096]">Chưa có mốc nào được ghi nhận.</p>
             ) : (
               <ol className="space-y-3.5 p-5">
                 {tour.events.map((event) => (
                   <li key={event.id} className="flex gap-4 text-xs">
-                    <span className="w-12 shrink-0 pt-0.5 text-right font-mono font-bold text-[#64748b] tabular-nums">
+                    <span className="w-12 shrink-0 pt-0.5 text-right font-mono font-bold text-[#6b6e75] tabular-nums">
                       {formatTime(event.occurredAt)}
                     </span>
                     <span
@@ -136,21 +136,21 @@ export default function TourDetailPage() {
                         ACCENT_EVENTS.has(event.type)
                           ? 'bg-[#dc2626]'
                           : event.actor
-                          ? 'bg-[#0f172a]'
-                          : 'bg-[#2563eb]'
+                          ? 'bg-[#1c1c1c]'
+                          : 'bg-[#1c1c1c]'
                       }`}
                     />
                     <span className="min-w-0 flex-1">
                       <span
                         className={`font-bold ${
-                          ACCENT_EVENTS.has(event.type) ? 'text-[#dc2626]' : 'text-[#0f172a]'
+                          ACCENT_EVENTS.has(event.type) ? 'text-[#dc2626]' : 'text-[#1c1c1c]'
                         }`}
                       >
                         {eventTypeLabel(event.type)}
                       </span>
-                      {event.detail && <span className="block text-[#64748b] mt-0.5">{event.detail}</span>}
+                      {event.detail && <span className="block text-[#6b6e75] mt-0.5">{event.detail}</span>}
                       {event.actor && (
-                        <span className="block text-[11px] text-[#94a3b8] mt-0.5">Thực hiện bởi: {event.actor}</span>
+                        <span className="block text-[11px] text-[#8e9096] mt-0.5">Thực hiện bởi: {event.actor}</span>
                       )}
                     </span>
                   </li>
