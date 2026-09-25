@@ -60,10 +60,9 @@
     <xacro:body_visual mesh_file="spacer_5.stl"/>
     <xacro:body_visual mesh_file="spacer_7.stl"/>
 
-    <!-- Camera va ga camera chi la visual. camera_link van do
+    <!-- Camera + ga la mot visual assembly. camera_link van do
          orbbec_bringup publish de tranh hai nguon TF trung nhau. -->
-    <xacro:assembly_visual mesh_file="camera_mount.stl" material="dark_grey"/>
-    <xacro:assembly_visual mesh_file="camera_body.stl" material="black"/>
+    <xacro:assembly_visual mesh_file="camera_assembly.stl" material="black"/>
 
     <!-- Collision = box don gian (khong dung mesh) de Gazebo/ODE dung va cham
          NHANH. Mesh chi tiet lam physics cham vai phut trong VM. -->

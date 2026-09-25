@@ -1,0 +1,79 @@
+{
+  "bindingErrors": [
+    "Failed to invoke 'ReportState' due to an error on the server."
+  ],
+  "candidate": "pysignalr",
+  "closeCallbacks": 0,
+  "commandCallbackExecutions": 1,
+  "commandsReceived": 1,
+  "disconnectObservedAt": [],
+  "dummyGoTo": {
+    "legId": "33333333-3333-4333-8333-333333333333",
+    "received": true
+  },
+  "errorCallbacks": 1,
+  "exceptions": [
+    "TimeoutError: timed out waiting for backend appearance after client startup",
+    "TimeoutError: timed out waiting for backend appearance after client startup"
+  ],
+  "failure": "TimeoutError: timed out waiting for backend appearance after client startup",
+  "handlersRegistered": 1,
+  "initialRetry": {
+    "attempts": 0,
+    "elapsedSeconds": null,
+    "retryDelaysSeconds": []
+  },
+  "invalidAuth": {
+    "errors": [],
+    "opened": false,
+    "runError": "AuthorizationError: "
+  },
+  "nullPose": {
+    "error": null,
+    "result": true
+  },
+  "openCallbacks": 1,
+  "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "python": "3.10.12",
+  "reconnectCycles": 0,
+  "reconnectedAt": [],
+  "reportCommandResult": {
+    "error": null,
+    "result": true
+  },
+  "reportState": {
+    "error": null,
+    "result": true
+  },
+  "stage2": "BLOCKED",
+  "startedAt": 1790315054.2449348,
+  "stateSent": 1,
+  "streamId": "fc08b670-af6e-4638-85b7-9fc671cf16b7",
+  "tlsUntrusted": {
+    "errors": [],
+    "opened": false,
+    "runError": "ClientConnectorCertificateError: Cannot connect to host compat-server:5443 ssl:True [SSLCertVerificationError: (1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1007)')]"
+  },
+  "typedBindingError": {
+    "completion": {
+      "error": "Failed to invoke 'ReportState' due to an error on the server.",
+      "result": null,
+      "type": "CompletionMessage"
+    },
+    "errorCallbackMessages": [
+      "Failed to invoke 'ReportState' due to an error on the server."
+    ],
+    "errorCallbackObserved": false,
+    "field": "seq",
+    "invocationErrorObserved": true,
+    "method": "ReportState",
+    "sentValue": "not-a-number"
+  },
+  "validTlsAuth": true,
+  "verdict": "BLOCKED",
+  "version": "1.3.2",
+  "humbleImage": "ros@sha256:1813d3c85d7f96ff7d3012d865204583255740182db5d0065f8f8cd029a83138",
+  "dotnetImage": "mcr.microsoft.com/dotnet/aspnet@sha256:55e37c7795bfaf6b9cc5d77c155811d9569f529d86e20647704bc1d7dd9741d4",
+  "dotnetRuntime": "Microsoft.AspNetCore.App 10.0.7 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\r\nMicrosoft.NETCore.App 10.0.7 [/usr/share/dotnet/shared/Microsoft.NETCore.App]",
+  "hubOs": "Ubuntu 24.04.4 LTS"
+}

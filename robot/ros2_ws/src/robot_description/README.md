@@ -33,10 +33,11 @@ base_footprint
 
 - `urdf/robot.urdf.xacro` — file chính (top-level).
 - `urdf/common_properties.xacro` — **tất cả số đo + macro inertia gom ở đây**.
-- `meshes/*.stl` — 37 mesh đã đổi tên ASCII và đặt trong package; 28 body mesh
+- `meshes/*.stl` — 36 mesh đã đổi tên ASCII và đặt trong package; 28 body mesh
   giữ nguyên tọa độ assembly, LiDAR, camera + gá, 2 bánh chính và 4 caster.
-  Camera và gá hiện chỉ là visual của `base_link`; TF `camera_link` vẫn do
-  `orbbec_bringup` publish cho đến khi bộ số mount được chốt.
+  Camera và gá dùng một STL assembly mới đã mate đúng trong CAD; camera vẫn
+  chỉ là visual của `base_link`. TF `camera_link` và optical frames vẫn do
+  `orbbec_bringup` quản lý cho đến khi transform mount được chốt/calibrate.
 - `urdf/wheels.xacro` — macro bánh chính + 4 bánh phụ dùng STL cho visual và
   primitive đơn giản cho collision.
 - `urdf/sensors.xacro` — LiDAR 2D + IMU + bốn SR04T. LiDAR ở giữa nóc xe;
@@ -88,11 +89,11 @@ encoder/vòng…) cho đúng driver/board của bạn. Chạy với `use_sim:=fa
 
 ## Quy ước mesh CAD
 
-STL dùng đơn vị mm và trục CAD `X=trái/phải, Y=cao, Z=trước/sau`. Xacro đổi sang ROS `X=trước, Y=trái, Z=cao` bằng `rpy="1.57079632679 0 1.57079632679"` và `scale="0.001 0.001 0.001"`. Các body mesh giữ chung tọa độ assembly và dùng `body_mesh_origin`; offset tâm của từng bánh được lưu trong `robot.urdf.xacro`.
+STL dùng đơn vị mm và trục CAD `X=trái/phải, Y=cao, Z=trước/sau`. Xacro đổi sang ROS `X=trước, Y=trái, Z=cao` bằng `rpy="1.57079632679 0 1.57079632679"` và `scale="0.001 0.001 0.001"`. Các body mesh và `camera_assembly.stl` giữ chung tọa độ assembly và dùng `body_mesh_origin`; offset tâm của từng bánh được lưu trong `robot.urdf.xacro`. Không suy ra `camera_link` hay optical-frame origins từ hình học mesh: các transform đó cần được chốt/calibrate riêng.
 
 Bánh phụ hiện đang là `fixed` để giữ hình dạng và tiếp xúc trong mô phỏng; bộ CAD chưa mô tả các trục swivel/quay tự do để tách thành joint chính xác.
 
 ## Đã kiểm tra
 
-- Xacro expand OK cả `use_sim:=true` và `false`; URDF sinh ra có 14 link, 13 joint và 37 mesh references.
+- Xacro expand OK cả `use_sim:=true` và `false`; URDF sinh ra có 14 link, 13 joint và 36 mesh references.
 - `wheel_separation` trong YAML (0.4325) và `wheel_radius` (0.09725) khớp Xacro.

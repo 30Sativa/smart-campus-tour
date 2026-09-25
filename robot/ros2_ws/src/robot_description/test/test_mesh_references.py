@@ -62,7 +62,7 @@ class RobotDescriptionMeshTest(unittest.TestCase):
         )
         mesh_files = sorted(path.name for path in MESH_DIR.glob("*.stl"))
 
-        self.assertEqual(37, len(references))
+        self.assertEqual(36, len(references))
         self.assertEqual(len(references), len(set(references)))
         self.assertEqual(mesh_files, sorted(references))
 
