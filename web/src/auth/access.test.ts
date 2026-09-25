@@ -8,8 +8,20 @@ import { homePathForRole, isAdminRole, isStaffRole, normalizeRole } from './role
  * through a screen.
  */
 describe('area access', () => {
-  it('has exactly three roles', () => {
-    expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin'])
+  it('has exactly four roles', () => {
+    expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin', 'Representative'])
+  })
+
+  // Representative added with the registration area (flow review 21/09/2026 §4).
+  it('keeps the representative area to representatives only', () => {
+    expect(areaById('representative').allows('Representative')).toBe(true)
+    expect(areaById('representative').allows('daidien')).toBe(true)
+    for (const role of ['Visitor', 'Staff', 'Admin', undefined]) expect(areaById('representative').allows(role)).toBe(false)
+    expect(areaById('admin').allows('Representative')).toBe(false)
+    expect(areaById('staff').allows('Representative')).toBe(false)
+    expect(homePathForRole('Representative')).toBe('/dai-dien')
+    expect(landingPathAfterLogin('Representative', '/dai-dien/dang-ky')).toBe('/dai-dien/dang-ky')
+    expect(landingPathAfterLogin('Representative', '/admin')).toBe('/dai-dien')
   })
 
   it('keeps a visitor out of operations and administration', () => {

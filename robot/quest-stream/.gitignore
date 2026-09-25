@@ -1,0 +1,6 @@
+quest-stream.env
+logs/*
+!logs/.gitkeep
+public/hls/*
+!public/hls/.gitkeep
+__pycache__/
