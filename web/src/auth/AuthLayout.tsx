@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
 import { MOCK_ACCOUNTS_HINT } from '../mocks/auth-mock'
@@ -17,71 +16,28 @@ const VISUAL = {
   },
 } as const
 
-/** Long enough to cover the slowest entrance step; see --motion-enter in auth.css. */
-const ENTRANCE_MS = 700
-
 /**
  * The shell both auth pages share, so sign-in and sign-up cannot drift apart.
  *
  * It is a *route layout*: `/login` and `/register` render into the `Outlet`, so
- * moving between them leaves the photograph, the panel and the brand mounted.
- * That is what lets the switch read as one screen changing its content rather
- * than two pages replacing each other, and it is the only reason the routing
- * shape changed.
+ * moving between them leaves the photograph and the brand mounted and only the
+ * form changes.
  *
- * The two routes sit on opposite sides: signing in puts the form on the right,
- * signing up puts it on the left. `data-side` is the only thing that says so;
- * the grid reads it, and the view transition turns the reordering into a slide
- * instead of a jump.
+ * Split screen: the form column on the left, one full-bleed campus photograph
+ * on the right (from `lg`). The photograph is decorative, so it is
+ * `aria-hidden` and holds nothing focusable; below `lg` it is dropped rather
+ * than stacked above the fields.
  *
  * The root carries `.lp`, which is where the palette, the font and the
- * light/dark switch come from: auth reads the landing page's language rather
- * than hard-coding a second one.
- *
- * The photograph is decorative, so it is `aria-hidden` and holds nothing
- * focusable. On phones it is dropped rather than stacked: a decorative image
- * above the form would push the fields off a phone screen.
+ * light/dark switch come from.
  */
 export function AuthLayout() {
   const { pathname } = useLocation()
   const onRegister = pathname === '/register'
   const visual = onRegister ? VISUAL['/register'] : VISUAL.default
 
-  /**
-   * The staggered entrance belongs to arriving at auth, not to every route
-   * change. Once it has played, the flag goes off and the sign-in/sign-up
-   * switch is left to the view transition, so the two never run at once.
-   */
-  const [entering, setEntering] = useState(true)
-  useEffect(() => {
-    const id = window.setTimeout(() => setEntering(false), ENTRANCE_MS)
-    return () => window.clearTimeout(id)
-  }, [])
-
   return (
-    <main
-      className="lp auth"
-      data-page={onRegister ? 'register' : 'login'}
-      data-entrance={entering ? 'on' : 'off'}
-      data-side={onRegister ? 'form-left' : 'form-right'}
-    >
-      <section className="auth-visual" aria-hidden="true">
-        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-bg.jpg'} alt="" className="auth-visual__img" fetchPriority="high" />
-        <div className="auth-visual__scrim" />
-        {!onRegister && (
-          <div className="auth-visual__brand">
-            <img src="/images/logo.png" alt="" width={44} height={44} />
-            <span>CampusTour <span className="auth-visual__brand-sub">DT-AMR</span></span>
-          </div>
-        )}
-        <div className="auth-visual__inner">
-          <div>
-            <p className="auth-visual__title">{visual.title}</p>
-            <p className="auth-visual__lead">{visual.lead}</p>
-          </div>
-        </div>
-      </section>
-
+    <main className="lp auth" data-page={onRegister ? 'register' : 'login'}>
       <div className="auth-panel">
         <div className="auth-col">
           <Link to="/" className="auth-brand">
@@ -96,15 +52,23 @@ export function AuthLayout() {
             <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
             Về trang chủ
           </Link>
-          {!onRegister && <p className="auth-footer">© {new Date().getFullYear()} Smart Campus Tour</p>}
+          <p className="auth-footer">© {new Date().getFullYear()} Smart Campus Tour</p>
         </div>
       </div>
+
+      <section className="auth-visual" aria-hidden="true">
+        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-bg.jpg'} alt="" className="auth-visual__img" fetchPriority="high" />
+        <div className="auth-visual__scrim" />
+        <div className="auth-visual__inner">
+          <p className="auth-visual__title">{visual.title}</p>
+          <p className="auth-visual__lead">{visual.lead}</p>
+        </div>
+      </section>
 
       {/* Development only. A production bundle drops this branch entirely, so
           no visitor ever sees build state in the sign-in UI. The equivalent
           warning for a production build that still runs on mocks goes to the
-          console from `mock-mode.ts`. It is deliberately outside every
-          animated group: build state does not get an entrance. */}
+          console from `mock-mode.ts`. */}
       {import.meta.env.DEV && (
         <p className="auth-devbadge" data-dev-only="true">
           DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.

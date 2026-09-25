@@ -80,6 +80,8 @@ export type RepresentativeRegistration = {
   tourState: TourState
   tourScheduledAt: string
   schoolName: string
+  /** Optional name of the group or class inside the school ("tên trường/đoàn", scope §3.2). */
+  groupName: string | null
   representativeName: string
   contactEmail: string
   state: RegistrationState
@@ -88,6 +90,8 @@ export type RepresentativeRegistration = {
   withClassCount: number
   submittedAt: string
   reviewedAt: string | null
+  /** Last change to this record by anyone (send, edit, review, cancel). */
+  updatedAt: string
   /** Admin's reason. Shown to the representative only, never to students (flow §5.2). */
   rejectionReason: string | null
   resubmittedAfterApproval: boolean
@@ -105,6 +109,8 @@ export type RepresentativeRegistrationDetail = RepresentativeRegistration & {
 
 export type RegistrationInput = {
   schoolName: string
+  /** Optional; empty string means none. */
+  groupName?: string
   representativeName: string
   contactEmail: string
   /** The whole list: an import replaces the roster, it never merges (flow §4.2). */

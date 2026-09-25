@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowRight, CircleAlert, LockKeyhole, UserRound } from 'lucide-react'
+import { CircleAlert } from 'lucide-react'
 import { ApiError } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
 import { landingPathAfterLogin } from './access'
 import { MockAuthError, mockLogin } from '../mocks/auth-mock'
 import { AuthField, AuthPasswordField } from './AuthFields'
+import { prepareSplitExit } from './split-exit'
 
 type LoginFormInputs = {
   username: string
@@ -50,7 +51,9 @@ export default function LoginPage() {
       // The role decides the console; a remembered destination only wins when
       // it is inside that same area (see `landingPathAfterLogin`).
       const from = (location.state as { from?: string })?.from
-      navigate(landingPathAfterLogin(response.role, from), { replace: true })
+      // The screen splits open onto the destination (see `split-exit.ts`).
+      const split = prepareSplitExit()
+      navigate(landingPathAfterLogin(response.role, from), { replace: true, viewTransition: split })
     } catch (error) {
       if (error instanceof MockAuthError || (error instanceof ApiError && error.status === 401)) {
         setInvalidCredentials(true)
@@ -94,7 +97,6 @@ export default function LoginPage() {
           label="Tên đăng nhập"
           autoComplete="username"
           placeholder="Nhập tên đăng nhập"
-          icon={<UserRound size={19} />}
           autoCapitalize="none"
           spellCheck={false}
           aria-invalid={invalidCredentials || undefined}
@@ -108,7 +110,6 @@ export default function LoginPage() {
           label="Mật khẩu"
           autoComplete="current-password"
           placeholder="Nhập mật khẩu"
-          icon={<LockKeyhole size={19} />}
           aria-invalid={invalidCredentials || undefined}
           aria-describedby={apiError ? 'login-error' : undefined}
           disabled={isSubmitting}
@@ -119,7 +120,6 @@ export default function LoginPage() {
         <button type="submit" className="auth-submit" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting && <span className="auth-spinner" aria-hidden="true" />}
           {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
-          {!isSubmitting && <ArrowRight size={18} aria-hidden="true" />}
         </button>
       </form>
 

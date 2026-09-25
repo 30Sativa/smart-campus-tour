@@ -1,13 +1,14 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import type { RegistrationState } from '../../api/contracts/admin'
-import { FilterChips, PageHeader, Pagination, SearchField, panelClass } from '../../features/staff/StaffUi'
+import { FilterChips, PageHeader, Pagination, SearchField, SectionHeading, panelClass } from '../../features/staff/StaffUi'
 import { usePagination } from '../../features/staff/use-pagination'
 import { AdminErrorPanel, AdminPage, DateRangeFilter, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
 import { useAdminRegistrations } from '../../features/administration/admin-hooks'
 import { rangeFor, type DateRangeKey } from '../../features/administration/admin-format'
 import { REGISTRATION_STATE, REGISTRATION_STATES } from '../../features/administration/admin-status'
 import { AdminRegistrationTable } from '../../features/administration/components/RegistrationParts'
+import { RegistrationInsights } from '../../features/administration/components/RegistrationInsights'
 import { RegistrationReviewDrawer } from '../../features/administration/components/RegistrationReviewDrawer'
 import { useReviewParam } from '../../features/administration/use-review-param'
 
@@ -55,9 +56,14 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
       <PageHeader
         eyebrow="Đăng ký đoàn"
         title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
-        description={mode === 'pending' ? 'Đoàn đã gửi danh sách và đang chờ quyết định. Duyệt hoặc từ chối (kèm lý do) khi Tour còn đang chuẩn bị.' : 'Mọi đăng ký của các Tour. Trạng thái đăng ký và thông tin tham gia là hai cột riêng.'}
+        description={mode === 'pending' ? 'Đoàn đã gửi danh sách và đang chờ quyết định. Duyệt hoặc từ chối (kèm lý do) khi Tour còn đang chuẩn bị.' : 'Toàn cảnh đăng ký đoàn của mọi Tour: trạng thái duyệt, số học sinh và tình trạng gửi thông tin tham gia.'}
       />
 
+      {mode === 'all' && !query.isError && (
+        <RegistrationInsights registrations={all} loading={query.isLoading} activeState={state} onSelectState={(value) => update({ state: value === 'all' ? null : value })} />
+      )}
+
+      {mode === 'all' && <SectionHeading title="Danh sách đăng ký" note={query.data ? `${rows.length} đăng ký${state !== 'all' ? `, ${REGISTRATION_STATE[state].label.toLowerCase()}` : ''}` : undefined} />}
       <section className={panelClass} aria-label="Danh sách đăng ký">
         <div className="space-y-3 border-b border-[#f1f5f9] p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start">

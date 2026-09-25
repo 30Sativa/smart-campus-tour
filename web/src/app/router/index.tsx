@@ -51,6 +51,7 @@ const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'
 
 // School representative (flow review 21/09/2026 §4).
 const RepresentativeShell = lazy(() => import('../../features/representative/RepresentativeShell'))
+const RepDashboardPage = lazy(() => import('../../routes/representative/RepDashboardPage'))
 const RepToursPage = lazy(() => import('../../routes/representative/RepToursPage'))
 const RepTourDetailPage = lazy(() => import('../../routes/representative/RepTourDetailPage'))
 const RepRegisterPage = lazy(() => import('../../routes/representative/RepRegisterPage'))
@@ -193,7 +194,8 @@ export const routes = [
     path: '/dai-dien',
     element: <RepresentativeArea />,
     children: [
-      { index: true, element: <RepToursPage /> },
+      { index: true, element: <RepDashboardPage /> },
+      { path: 'buoi', element: <RepToursPage /> },
       { path: 'buoi/:tourId', element: <RepTourDetailPage /> },
       { path: 'buoi/:tourId/dang-ky', element: <RepRegisterPage /> },
       { path: 'dang-ky', element: <RepRegistrationsPage /> },
