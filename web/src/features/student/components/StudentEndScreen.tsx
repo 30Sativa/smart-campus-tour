@@ -13,7 +13,7 @@ export function StudentEndScreen({ session, snapshot, onLeave }: StudentEndScree
   return (
     <div className="st-end">
       <div className={isCancelled ? 'st-end__visual is-cancelled' : 'st-end__visual'}>
-        <img src="/images/login-bg.jpg" alt="" aria-hidden="true" />
+        <img src="/images/student-campus.png" alt="" aria-hidden="true" />
         <span className="st-end__icon" aria-hidden="true">
           {isCancelled ? <XCircle size={32} /> : <CheckCircle2 size={32} />}
         </span>

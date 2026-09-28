@@ -2,16 +2,8 @@ import { Link } from 'react-router'
 import { ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { homePathForRole, isAdminRole, isStaffRole } from '../../../auth/roles'
-import { EXPERIENCE_HREF } from '../landing-content'
 
-/**
- * Asymmetric split over full-bleed campus footage.
- *
- * Three text elements: a headline that balances onto two lines, one supporting
- * sentence, and the two actions. The copy is deliberately short here, because a
- * visitor decides whether this page is for them before reading a paragraph. A
- * someone who is already signed in gets the door into their own area instead.
- */
+/** Public landing hero with a generated campus illustration and live HTML actions. */
 export function Hero() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const user = useAuthStore((state) => state.user)
@@ -19,30 +11,22 @@ export function Hero() {
   return (
     <section className="lp-hero" id="hero">
       <div className="lp-hero__media" id="hero-media">
-        <video
-          src="/videos/home.mp4"
-          poster="/images/hero-campus.jpg"
-          autoPlay
-          muted
-          loop
-          playsInline
-          aria-label="Robot dẫn đường cho khách tham quan trong khuôn viên đại học lúc chiều tối"
-        />
+        <img src="/images/home-3d/hero-smartbus.png" alt="Robot SmartBus di chuyển trong khuôn viên đại học, minh họa 3D" fetchPriority="high" />
       </div>
       <div className="lp-hero__scrim" aria-hidden="true" />
 
       <div className="lp-hero__body lp-ctn">
         <div className="lp-hero__copy">
+          <span className="lp3-hero-kicker">CAMPUS TOUR · TRẢI NGHIỆM TỪ XA</span>
           <h1 className="lp-display" id="hero-title">
-            Khám phá khuôn viên cùng robot tự hành
+            <span className="lp3-hero-line">Khám phá campus</span>
+            <span className="lp3-hero-line">từ bất cứ đâu<span className="lp3-title-accent">.</span></span>
           </h1>
           <p className="lp-lead" id="hero-lead">
-            Robot AMR dẫn đường, thuyết minh và đồng hành cùng bạn theo lộ trình có sẵn.
+            Một robot dẫn đường. Cả lớp cùng trải nghiệm trực tiếp trên trình duyệt.
           </p>
           <div className="lp-hero__cta" id="hero-cta">
-            {/* A signed-in account goes to its own area. Before `/visit` shipped
-                only staff had one, so a visitor was sent back to sign in from
-                here; now every role has somewhere to land. */}
+            {/* Signed-in accounts keep the direct route into their own area. */}
             {isAuthenticated ? (
               <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--lg">
                 {isAdminRole(user?.role)
@@ -53,15 +37,16 @@ export function Hero() {
                 <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
               </Link>
             ) : (
-              <Link to={EXPERIENCE_HREF} className="lp-btn lp-btn--solid lp-btn--lg">
-                Trải nghiệm Campus Tour
+              <a href="#quy-trinh" className="lp-btn lp-btn--solid lp-btn--lg">
+                Xem hành trình
                 <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
-              </Link>
+              </a>
             )}
-            <a href="#quy-trinh" className="lp-btn lp-btn--onmedia">
-              Xem cách hệ thống hoạt động
+            <a href="#gioi-thieu" className="lp-btn lp-btn--onmedia">
+              Tìm hiểu hệ thống
             </a>
           </div>
+          <span className="lp3-hero-footnote">CÔNG NGHỆ KẾT NỐI CON NGƯỜI VỚI NHỮNG CHÂN TRỜI MỚI</span>
         </div>
       </div>
     </section>

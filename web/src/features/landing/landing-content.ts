@@ -9,11 +9,11 @@
  */
 
 /**
- * Where the primary "Trải nghiệm Campus Tour" action goes.
+ * Where the representative sign-in action goes.
  *
  * The visitor booking route was removed from the app on 2026-09-16, so sign in
  * is currently the only door into the product. When a public booking route
- * ships, change this one constant and both the hero and the closing band follow.
+ * ships, update the closing action and its destination.
  */
 export const EXPERIENCE_HREF = '/login'
 
@@ -253,8 +253,8 @@ export const platformPillars: PlatformPillar[] = [
 /** Nav order follows the order the sections appear on the page. */
 export const navLinks = [
   { href: '#quy-trinh', label: 'Hành trình' },
-  { href: '#tinh-nang', label: 'Tính năng' },
+  { href: '#trai-nghiem', label: 'Trải nghiệm' },
   { href: '#gioi-thieu', label: 'Digital Twin' },
-  { href: '#robot', label: 'Công nghệ' },
+  { href: '#cong-nghe', label: 'Công nghệ' },
   { href: '#lien-he', label: 'Liên hệ' },
 ]

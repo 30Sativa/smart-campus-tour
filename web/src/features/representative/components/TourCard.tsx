@@ -17,7 +17,7 @@ export function TourCard({ tour, compact = false }: { tour: RepresentativeTour; 
   const canRegister = tour.register.allowed
 
   return (
-    <article className={`${panelBase} ${cardHover} grid gap-4 p-4 sm:grid-cols-[84px_minmax(0,1fr)] sm:p-5 lg:grid-cols-[84px_minmax(0,1fr)_220px] lg:items-center`}>
+    <article className={`rep-tour-card ${panelBase} ${cardHover} grid gap-4 p-4 sm:grid-cols-[84px_minmax(0,1fr)] sm:p-5 lg:grid-cols-[84px_minmax(0,1fr)_220px] lg:items-center`}>
       <div className="flex items-center gap-3 sm:block sm:rounded-xl sm:border sm:border-[#e3ebf7] sm:bg-[#f5f9ff] sm:py-3 sm:text-center">
         <p className="text-xs font-medium text-[#64748b]">{d.weekday}</p>
         <p className="text-[28px] leading-none font-bold tracking-tight text-[#0f172a] tabular-nums sm:mt-1">{d.day}</p>

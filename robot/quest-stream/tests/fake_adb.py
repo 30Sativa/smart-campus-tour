@@ -16,6 +16,7 @@ the state file stops saying ``device`` (like pulling the cable).
 """
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -105,6 +106,13 @@ def main(argv):
             ],
             stdout=sys.stdout.buffer, stdin=subprocess.DEVNULL,
         )
+
+        # Like the real adb: when adb is stopped, the recording stops too.
+        def stop(_signum, _frame):
+            proc.kill()
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, stop)
         while proc.poll() is None:
             if state() != "device":
                 proc.kill()

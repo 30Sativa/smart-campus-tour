@@ -1,16 +1,16 @@
 import { useRef } from 'react'
 import { LoaderCircle, RotateCcw, VideoOff } from 'lucide-react'
-import { QUEST_STREAM_URL } from './quest-stream-config'
-import { useHlsStream, type HlsStreamStatus } from './use-hls-stream'
+import { QUEST_WHEP_URL } from './quest-stream-config'
+import { useWhepStream, type LiveStreamStatus } from './use-whep-stream'
 
-const COPY: Record<Exclude<HlsStreamStatus, 'live'>, { title: string; hint: string }> = {
-  idle: { title: 'Chưa cấu hình nguồn hình Quest', hint: 'Đặt VITE_QUEST_STREAM_URL rồi khởi động lại web.' },
+const COPY: Record<Exclude<LiveStreamStatus, 'live'>, { title: string; hint: string }> = {
+  idle: { title: 'Chưa cấu hình nguồn hình Quest', hint: 'Đặt VITE_QUEST_WHEP_URL rồi khởi động lại web.' },
   connecting: { title: 'Đang kết nối nguồn hình…', hint: 'Hình ảnh sẽ xuất hiện khi kính bắt đầu phát.' },
-  offline: { title: 'Không có tín hiệu từ kính Quest', hint: 'Kiểm tra cáp USB, kính đang bật và dịch vụ quest-stream trên miniPC. Đang tự thử lại…' },
-  error: { title: 'Trình duyệt không phát được luồng trực tiếp', hint: 'Hãy dùng Chrome, Edge, Firefox hoặc Safari bản mới.' },
+  offline: { title: 'Không có tín hiệu từ kính Quest', hint: 'Kiểm tra cáp USB, kính đang bật, dịch vụ quest-stream và mediamtx trên miniPC. Đang tự thử lại…' },
+  error: { title: 'Trình duyệt không phát được hình trực tiếp (WebRTC)', hint: 'Hãy dùng Chrome, Edge, Firefox hoặc Safari bản mới.' },
 }
 
-const BADGE: Record<HlsStreamStatus, { label: string; className: string; dot: string }> = {
+const BADGE: Record<LiveStreamStatus, { label: string; className: string; dot: string }> = {
   live: { label: 'Trực tiếp', className: 'bg-[#1c1c1c]/60 text-white', dot: 'bg-[#22c55e] animate-pulse' },
   connecting: { label: 'Đang kết nối', className: 'bg-[#fff8e6]/90 text-[#8a5a06]', dot: 'bg-[#f59e0b]' },
   offline: { label: 'Mất tín hiệu', className: 'bg-white/85 text-[#b23e31]', dot: 'bg-[#dc2626]' },
@@ -19,7 +19,7 @@ const BADGE: Record<HlsStreamStatus, { label: string; className: string; dot: st
 }
 
 type QuestLiveVideoProps = {
-  /** HLS playlist URL. Defaults to VITE_QUEST_STREAM_URL. */
+  /** WHEP endpoint. Defaults to VITE_QUEST_WHEP_URL. */
   src?: string | null
   /** Shown next to the status badge, e.g. the robot's name. */
   label?: string | null
@@ -30,9 +30,9 @@ type QuestLiveVideoProps = {
  * The Quest 3 camera view as a 16:9 live video. It never shows an old frame
  * as if it were live: without a stream it says why and keeps reconnecting.
  */
-export function QuestLiveVideo({ src = QUEST_STREAM_URL, label, className = '' }: QuestLiveVideoProps) {
+export function QuestLiveVideo({ src = QUEST_WHEP_URL, label, className = '' }: QuestLiveVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const { status, retry } = useHlsStream(videoRef, src)
+  const { status, retry } = useWhepStream(videoRef, src)
   const badge = BADGE[status]
 
   return (

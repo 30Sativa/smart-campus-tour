@@ -1,18 +1,18 @@
-# Start the Quest stream at boot and restart it if it dies.
-# Install: see README.md "Run at boot". Replace USER and the path below.
+# Quest 3 (USB) -> FFmpeg -> MediaMTX. Installed by scripts/install-services.sh,
+# which replaces __DIR__ and __USER__. The server waits for the Quest and for
+# MediaMTX by itself; systemd only restarts it after a crash.
 [Unit]
-Description=Quest 3 USB -> HLS live stream (Smart Campus Tour)
-After=network-online.target
-Wants=network-online.target
+Description=Quest 3 USB capture -> MediaMTX (Smart Campus Tour)
+After=network-online.target mediamtx.service
+Wants=network-online.target mediamtx.service
 
 [Service]
 Type=simple
-User=USER
-WorkingDirectory=/home/USER/smart-campus-tour/robot/quest-stream
-ExecStart=/home/USER/smart-campus-tour/robot/quest-stream/scripts/start-stream.sh --foreground
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/scripts/start-stream.sh --foreground
 Restart=on-failure
 RestartSec=5
-# The server waits for the Quest itself; systemd only restarts on a crash.
 KillSignal=SIGTERM
 TimeoutStopSec=15
 

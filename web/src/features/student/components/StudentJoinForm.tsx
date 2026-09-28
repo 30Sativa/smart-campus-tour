@@ -52,9 +52,9 @@ export function StudentJoinForm({
 
   return (
     <div className="st-join">
-      {/* Campus photo side, same art direction as the home hero */}
+      {/* A campus view made for the student journey. */}
       <div className="st-join__visual">
-        <img src="/images/hero-campus.jpg" alt="" aria-hidden="true" />
+        <img src="/images/student-campus.png" alt="" aria-hidden="true" />
         <div>
           <div className="st-kicker">Tham quan qua robot tự hành</div>
           <h2 className="st-join__title">{tourName}</h2>
@@ -74,7 +74,7 @@ export function StudentJoinForm({
         <form onSubmit={handleSubmit} className="st-form">
           <div className="st-form__head">
             <div className="st-kicker">Vào phiên tham quan</div>
-            <h3>Xác nhận bạn có trong danh sách đoàn.</h3>
+            <h3>Sẵn sàng khám phá campus?</h3>
             <p>Không cần tài khoản. Thông tin được đối chiếu với danh sách trường đã gửi.</p>
           </div>
 

@@ -1,10 +1,9 @@
-import { CalendarDays } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, ClipboardList, Clock3, MailCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 import { buttonClass } from '../../features/staff/ui-classes'
-import { EmptyState, ErrorState, Panel, RegistrationStatusBadge, RepPage, RepPageHeader, Skeleton } from '../../features/representative/components/RepUi'
+import { EmptyState, ErrorState, Panel, RegistrationStatusBadge, RepPage, Skeleton } from '../../features/representative/components/RepUi'
 import { TourCard } from '../../features/representative/components/TourCard'
 import { useRepRegistrations, useRepTours } from '../../features/representative/representative-hooks'
-import { panelBase } from '../../features/representative/rep-classes'
 import { formatRelative, lastActivity, readRepError } from '../../features/representative/rep-format'
 import { currentRepresentativeProfile } from '../../mocks/representative-mock'
 
@@ -25,25 +24,36 @@ export default function RepDashboardPage() {
   const toFix = list.filter((r) => r.state === 'Rejected' && r.allowedActions.edit.allowed)
 
   const stats = [
-    { label: 'Tổng đăng ký', value: list.length, to: '/dai-dien/dang-ky' },
-    { label: 'Chờ duyệt', value: count('Submitted'), to: '/dai-dien/dang-ky?trang-thai=cho-duyet' },
-    { label: 'Đã duyệt', value: count('Approved'), to: '/dai-dien/dang-ky?trang-thai=da-duyet' },
-    { label: 'Từ chối', value: count('Rejected'), to: '/dai-dien/dang-ky?trang-thai=tu-choi' },
+    { label: 'Tổng đăng ký', value: list.length, to: '/dai-dien/dang-ky', icon: ClipboardList, tone: 'blue' },
+    { label: 'Chờ duyệt', value: count('Submitted'), to: '/dai-dien/dang-ky?trang-thai=cho-duyet', icon: Clock3, tone: 'amber' },
+    { label: 'Đã duyệt', value: count('Approved'), to: '/dai-dien/dang-ky?trang-thai=da-duyet', icon: MailCheck, tone: 'green' },
+    { label: 'Từ chối', value: count('Rejected'), to: '/dai-dien/dang-ky?trang-thai=tu-choi', icon: Sparkles, tone: 'rose' },
   ]
 
   return (
     <RepPage>
-      <RepPageHeader
-        title={profile.representativeName ? `Xin chào, ${profile.representativeName}` : 'Tổng quan'}
-        description={profile.schoolName ? `Theo dõi đăng ký tham quan từ xa của ${profile.schoolName}.` : 'Theo dõi các đăng ký tham quan từ xa của trường.'}
-        action={<Link to="/dai-dien/buoi" className={buttonClass('primary', 'lg')}>Xem buổi tham quan</Link>}
-      />
+      <section className="rep-hero" aria-labelledby="rep-welcome">
+        <div className="rep-hero-image" aria-hidden="true" />
+        <div className="rep-hero-content">
+          <span className="rep-eyebrow"><span className="rep-eyebrow-dot" /> CAMPUS TOUR · CỔNG ĐẠI DIỆN</span>
+          <h1 id="rep-welcome">{profile.representativeName ? `Xin chào, ${profile.representativeName}` : 'Chào mừng trở lại'}</h1>
+          <p>{profile.schoolName ? `Cùng ${profile.schoolName} mở cánh cửa tham quan khuôn viên từ xa cho học sinh.` : 'Chuẩn bị một hành trình khám phá khuôn viên từ xa cho học sinh của bạn.'}</p>
+          <Link to="/dai-dien/buoi" className="rep-hero-cta">Xem buổi tham quan <ArrowUpRight size={18} aria-hidden="true" /></Link>
+        </div>
+        <span className="rep-hero-caption">Hành trình khám phá · Trải nghiệm trực tiếp</span>
+      </section>
 
-      <section aria-label="Số liệu đăng ký" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="rep-section-intro">
+        <div><span className="rep-overline">TỔNG QUAN</span><h2>Đăng ký của trường</h2></div>
+        <p>Theo dõi từng đoàn, từ lúc gửi danh sách đến khi nhận thông tin tham gia.</p>
+      </div>
+
+      <section aria-label="Số liệu đăng ký" className="rep-stats grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
-          <Link key={s.label} to={s.to} className={`${panelBase} block px-5 py-4 transition-colors hover:border-[#cfd8e3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]`}>
-            <span className="block text-sm text-[#64748b]">{s.label}</span>
-            {regs.isLoading ? <Skeleton className="mt-2 h-8 w-12" /> : <span className="mt-1 block text-[30px] leading-tight font-bold tracking-tight text-[#0f172a] tabular-nums">{regs.isError ? '-' : s.value}</span>}
+          <Link key={s.label} to={s.to} className={`rep-stat rep-stat-${s.tone}`}>
+            <span className="rep-stat-top"><s.icon size={19} strokeWidth={1.8} aria-hidden="true" /><ArrowUpRight size={16} aria-hidden="true" /></span>
+            {regs.isLoading ? <Skeleton className="mt-5 h-9 w-12" /> : <span className="rep-stat-value">{regs.isError ? '-' : s.value}</span>}
+            <span className="rep-stat-label">{s.label}</span>
           </Link>
         ))}
       </section>
@@ -55,7 +65,7 @@ export default function RepDashboardPage() {
         </div>
       )}
 
-      <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-10 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section aria-labelledby="open-tours">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 id="open-tours" className="text-lg font-semibold tracking-[-0.01em] text-[#0f172a]">Buổi đang nhận đăng ký</h2>

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Quest 3 -> USB/ADB -> FFmpeg -> HLS live stream, served over HTTP.
+"""Quest 3 -> USB/ADB -> FFmpeg -> MediaMTX (RTSP publish) -> WebRTC viewers.
 
 One process, two jobs:
 
 * a supervisor thread that keeps ``adb exec-out screenrecord`` piped into one
-  long-lived FFmpeg (left eye, 16:9 crop, 1280x720, 30 fps, H.264, HLS), and
-  restarts the pieces with back-off when the Quest, ADB or FFmpeg fail;
-* a small HTTP server (stdlib only) that serves ``/hls/quest.m3u8`` with CORS
-  and live-appropriate caching, plus ``/status`` and ``/health``.
+  long-lived FFmpeg (left eye, 16:9 crop, 1280x720, 30 fps, H.264 constrained
+  baseline, no B-frames) that publishes to MediaMTX over RTSP, and restarts
+  the pieces with back-off when the Quest, ADB, FFmpeg or MediaMTX fail;
+* a small HTTP server (stdlib only) with ``/status`` and ``/health``.
 
-Nothing is recorded to disk except the rolling HLS window (a few 1 s
-segments), which FFmpeg deletes as it goes and this process wipes on every
-start/stop so a browser never plays a stale segment.
+Browsers never talk to this process for video: MediaMTX serves the path over
+WebRTC (WHEP, ``http://<NUC>:8889/quest/whep``). Nothing is written to disk
+except logs.
 
 Configuration is environment only (see ``quest-stream.env.example``). Python
 3.8+, no third-party packages.
@@ -22,9 +22,9 @@ from __future__ import annotations
 import json
 import logging
 import logging.handlers
-import mimetypes
 import os
 import shutil
+import socket
 import signal
 import subprocess
 import sys
@@ -32,13 +32,12 @@ import threading
 import time
 from dataclasses import dataclass, field
 from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 MODULE_DIR = Path(__file__).resolve().parent
-PLAYLIST_NAME = "quest.m3u8"
-SEGMENT_PREFIX = "quest"
 
 log = logging.getLogger("quest-stream")
 
@@ -102,10 +101,10 @@ class Config:
     screenrecord_limit: int = 180  # Android caps a screenrecord session at 180 s
     keep_awake: bool = False  # disable the proximity sensor while streaming
 
-    # HLS.
-    hls_time: float = 1.0
-    hls_list_size: int = 4
-    hls_dir: Path = MODULE_DIR / "public" / "hls"
+    # Output: where FFmpeg publishes (MediaMTX RTSP) and how often a keyframe
+    # is sent (a new WebRTC viewer starts on the next keyframe).
+    publish_url: str = "rtsp://127.0.0.1:8554/quest"
+    keyframe_interval: float = 1.0
     log_dir: Path = MODULE_DIR / "logs"
 
     # Supervision.
@@ -141,9 +140,8 @@ class Config:
             capture_bitrate=_env_int("QUEST_CAPTURE_BITRATE", 20_000_000),
             screenrecord_limit=_env_int("QUEST_SCREENRECORD_LIMIT", 180),
             keep_awake=_env("QUEST_KEEP_AWAKE", "0") in ("1", "true", "yes"),
-            hls_time=_env_float("QUEST_HLS_TIME", 1.0),
-            hls_list_size=_env_int("QUEST_HLS_LIST_SIZE", 4),
-            hls_dir=Path(_env("QUEST_HLS_DIR", str(MODULE_DIR / "public" / "hls"))),
+            publish_url=_env("QUEST_PUBLISH_URL", "rtsp://127.0.0.1:8554/quest"),
+            keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
             stall_timeout=_env_float("QUEST_STALL_TIMEOUT", 10.0),
         )
@@ -161,6 +159,30 @@ class Config:
             raise SystemExit("CONFIG_ERROR QUEST_ENCODER must be libx264 or h264_vaapi")
         if self.hwdec not in ("", "vaapi"):
             raise SystemExit("CONFIG_ERROR QUEST_HWDEC must be empty or 'vaapi'")
+        parts = urlsplit(self.publish_url)
+        if parts.scheme not in ("rtsp", "rtsps") or not parts.hostname or len(parts.path) < 2:
+            raise SystemExit("CONFIG_ERROR QUEST_PUBLISH_URL must look like rtsp://127.0.0.1:8554/quest")
+        if not 0.2 <= self.keyframe_interval <= 10:
+            raise SystemExit("CONFIG_ERROR QUEST_KEYFRAME_INTERVAL must be between 0.2 and 10 seconds")
+
+    @property
+    def publish_endpoint(self) -> Tuple[str, int]:
+        parts = urlsplit(self.publish_url)
+        return parts.hostname or "127.0.0.1", parts.port or (322 if parts.scheme == "rtsps" else 554)
+
+    @property
+    def path_name(self) -> str:
+        """The MediaMTX path, e.g. 'quest' (the WHEP URL is /<path>/whep)."""
+        return urlsplit(self.publish_url).path.strip("/")
+
+    @property
+    def publish_url_safe(self) -> str:
+        """publish_url without a password, for logs and /status."""
+        parts = urlsplit(self.publish_url)
+        if parts.password is None:
+            return self.publish_url
+        netloc = f"{parts.username}:***@{parts.hostname}" + (f":{parts.port}" if parts.port else "")
+        return urlunsplit(parts._replace(netloc=netloc))
 
 
 # --------------------------------------------------------------------------
@@ -205,8 +227,8 @@ def build_video_filter(cfg: Config) -> str:
     return ",".join(steps)
 
 
-def build_ffmpeg_command(cfg: Config, run_id: str) -> List[str]:
-    gop = str(max(1, round(cfg.fps * cfg.hls_time)))
+def build_ffmpeg_command(cfg: Config) -> List[str]:
+    gop = str(max(1, round(cfg.fps * cfg.keyframe_interval)))
     cmd = [cfg.ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats"]
     if cfg.encoder == "h264_vaapi":
         cmd += ["-vaapi_device", cfg.vaapi_device]
@@ -225,15 +247,23 @@ def build_ffmpeg_command(cfg: Config, run_id: str) -> List[str]:
         "-an",
         "-vf", build_video_filter(cfg),
     ]
+    # WebRTC: every browser decodes H.264 constrained baseline, and B-frames
+    # are not allowed at all.
     if cfg.encoder == "h264_vaapi":
-        cmd += ["-c:v", "h264_vaapi", "-bf", "0"]
+        # Many Intel drivers cannot encode constrained baseline; main without
+        # B-frames plays in every browser that plays WebRTC H.264.
+        cmd += ["-c:v", "h264_vaapi", "-profile:v", "main", "-bf", "0"]
     else:
         cmd += [
             "-c:v", "libx264",
             "-preset", cfg.x264_preset,
             "-tune", "zerolatency",
-            "-profile:v", "main",
+            "-profile:v", "baseline",
+            "-level:v", "3.1" if cfg.width * cfg.height <= 1280 * 720 and cfg.fps <= 30 else "4.1",
             "-pix_fmt", "yuv420p",
+            "-bf", "0",
+            # SPS/PPS before every keyframe: a viewer that joins late decodes at once.
+            "-x264-params", "repeat-headers=1",
         ]
     cmd += [
         "-b:v", cfg.bitrate,
@@ -242,18 +272,26 @@ def build_ffmpeg_command(cfg: Config, run_id: str) -> List[str]:
         "-g", gop,
         "-keyint_min", gop,
         "-sc_threshold", "0",
-        "-f", "hls",
-        "-hls_time", f"{cfg.hls_time:g}",
-        "-hls_list_size", str(cfg.hls_list_size),
-        "-hls_delete_threshold", "2",
-        "-hls_flags", "delete_segments+omit_endlist+independent_segments+temp_file+program_date_time",
-        # A new name per run: a browser can never be handed a cached segment
-        # from a previous run under the same URL.
-        "-hls_segment_filename", str(cfg.hls_dir / f"{SEGMENT_PREFIX}_{run_id}_%05d.ts"),
         "-progress", "pipe:1",
-        str(cfg.hls_dir / PLAYLIST_NAME),
+        "-stats_period", "0.5",
+        "-f", "rtsp",
+        "-rtsp_transport", "tcp",
+        cfg.publish_url,
     ]
     return cmd
+
+
+def mediamtx_reachable(cfg: Config, timeout: float = 2.0) -> Tuple[bool, str]:
+    """Is something listening where FFmpeg will publish?"""
+    host, port = cfg.publish_endpoint
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True, "ok"
+    except OSError as exc:
+        return False, (
+            f"cannot reach {host}:{port} ({exc.strerror or exc}); "
+            "is MediaMTX running? sudo systemctl status mediamtx"
+        )
 
 
 def build_screenrecord_command(cfg: Config, serial: str) -> List[str]:
@@ -386,23 +424,14 @@ class Status:
                     "dropFrames": p.get("drop_frames"),
                     "dupFrames": p.get("dup_frames"),
                 },
-                "playlist": f"/hls/{PLAYLIST_NAME}",
+                "publish": cfg.publish_url_safe,
+                "whepPath": f"/{cfg.path_name}/whep",
             }
 
 
 # --------------------------------------------------------------------------
 # Supervisor
 # --------------------------------------------------------------------------
-
-
-def clear_hls_dir(hls_dir: Path) -> None:
-    hls_dir.mkdir(parents=True, exist_ok=True)
-    for f in hls_dir.iterdir():
-        if f.is_file() and (f.suffix in (".ts", ".m3u8", ".tmp") or f.name.endswith(".m3u8.tmp")):
-            try:
-                f.unlink()
-            except FileNotFoundError:
-                pass
 
 
 def _kill(proc: Optional[subprocess.Popen], grace: float = 3.0) -> None:
@@ -447,6 +476,7 @@ class Supervisor(threading.Thread):
         ffmpeg_backoff = 2.0
         stall_backoff = 2.0
         last_missing_reason = None
+        last_mediamtx_reason = None
         while not self.stop_event.is_set():
             try:
                 devices = list_devices(self.cfg)
@@ -455,7 +485,6 @@ class Supervisor(threading.Thread):
                     log.error("ADB_ERROR %s", exc)
                     last_missing_reason = str(exc)
                 self.status.set("error", f"ADB_ERROR: {exc}")
-                clear_hls_dir(self.cfg.hls_dir)
                 if self.sleep(15):
                     break
                 continue
@@ -466,7 +495,6 @@ class Supervisor(threading.Thread):
                     log.warning("QUEST_NOT_CONNECTED %s", reason)
                     last_missing_reason = reason
                 self.status.set("offline", f"QUEST_NOT_CONNECTED: {reason}", serial="", model="")
-                clear_hls_dir(self.cfg.hls_dir)
                 if self.sleep(poll):
                     break
                 poll = min(self.cfg.poll_max, poll * 1.5)
@@ -474,6 +502,18 @@ class Supervisor(threading.Thread):
 
             poll = self.cfg.poll_min
             last_missing_reason = None
+
+            reachable, why = mediamtx_reachable(self.cfg)
+            if not reachable:
+                if last_mediamtx_reason != why:
+                    log.error("MEDIAMTX_ERROR %s", why)
+                    last_mediamtx_reason = why
+                self.status.set("error", f"MEDIAMTX_ERROR: {why}")
+                if self.sleep(3):
+                    break
+                continue
+            last_mediamtx_reason = None
+
             model = self._model(serial)
             log.info("QUEST_CONNECTED serial=%s model=%s", serial, model or "?")
             self.status.set("connecting", "QUEST_CONNECTED", serial=serial, model=model)
@@ -491,7 +531,7 @@ class Supervisor(threading.Thread):
                 log.warning("Restarting FFmpeg in %.0fs", ffmpeg_backoff)
                 if self.sleep(ffmpeg_backoff):
                     break
-                ffmpeg_backoff = min(60.0, ffmpeg_backoff * 2)
+                ffmpeg_backoff = min(10.0, ffmpeg_backoff * 2)
             elif outcome == "adb":
                 if self.sleep(10):
                     break
@@ -505,7 +545,6 @@ class Supervisor(threading.Thread):
             # "disconnected": loop straight back to device polling
 
         self._keep_awake(self.status.serial, False)
-        clear_hls_dir(self.cfg.hls_dir)
         self.status.set("stopped", "STREAM_STOPPED")
         log.info("STREAM_STOPPED supervisor exit")
 
@@ -545,11 +584,11 @@ class Supervisor(threading.Thread):
             return False
 
     def _start_ffmpeg(self, run_id: str) -> subprocess.Popen:
-        cmd = build_ffmpeg_command(self.cfg, run_id)
+        cmd = build_ffmpeg_command(self.cfg)
         log.info("STREAM_STARTING run=%s", run_id)
         log.debug("ffmpeg: %s", " ".join(cmd))
         ffmpeg_log = open(self.cfg.log_dir / "ffmpeg.log", "w", encoding="utf-8")
-        ffmpeg_log.write(" ".join(cmd) + "\n\n")
+        ffmpeg_log.write(" ".join(cmd).replace(self.cfg.publish_url, self.cfg.publish_url_safe) + "\n\n")
         ffmpeg_log.flush()
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=ffmpeg_log,
@@ -596,6 +635,13 @@ class Supervisor(threading.Thread):
         except (BrokenPipeError, ValueError, OSError):
             return
 
+    def _frames_out(self) -> int:
+        with self.status.lock:
+            try:
+                return int(self.status.progress.get("frame", "0"))
+            except ValueError:
+                return 0
+
     def _ffmpeg_tail(self) -> str:
         try:
             lines = (self.cfg.log_dir / "ffmpeg.log").read_text("utf-8", "replace").splitlines()
@@ -609,7 +655,6 @@ class Supervisor(threading.Thread):
         Returns 'disconnected', 'stalled', 'ffmpeg', 'adb' or 'stop'.
         """
         run_id = time.strftime("%Y%m%d%H%M%S")
-        clear_hls_dir(self.cfg.hls_dir)
         self.cfg.log_dir.mkdir(parents=True, exist_ok=True)
         with self.status.lock:
             self.status.run_id = run_id
@@ -617,7 +662,6 @@ class Supervisor(threading.Thread):
             self.status.last_input_at = 0.0
             self.status.input_bytes = 0
         self._ffmpeg = self._start_ffmpeg(run_id)
-        playlist = self.cfg.hls_dir / PLAYLIST_NAME
         announced = False
         short_failures = 0
         outcome = "stop"
@@ -636,9 +680,10 @@ class Supervisor(threading.Thread):
                         log.error("FFMPEG_ERROR exit=%s %s", self._ffmpeg.returncode, self._ffmpeg_tail())
                         self.status.set("error", "FFMPEG_ERROR: encoder stopped, restarting")
                         return "ffmpeg"
-                    if not announced and playlist.exists():
+                    if not announced and self._frames_out() > 0:
+                        # FFmpeg only encodes after the RTSP publish succeeded.
                         announced = True
-                        log.info("STREAM_STARTED url=/hls/%s", PLAYLIST_NAME)
+                        log.info("STREAM_STARTED publishing %s", self.cfg.publish_url_safe)
                         self.status.set("live", "STREAM_STARTED")
                     if self._adb.poll() is not None:
                         break
@@ -694,7 +739,6 @@ class Supervisor(threading.Thread):
             log_file = getattr(self._ffmpeg, "_log_file", None)
             if log_file:
                 log_file.close()
-            clear_hls_dir(self.cfg.hls_dir)
             log.info("STREAM_STOPPED run=%s", run_id)
 
 
@@ -703,47 +747,27 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-mimetypes.add_type("application/vnd.apple.mpegurl", ".m3u8")
-mimetypes.add_type("video/mp2t", ".ts")
-
-
 def make_handler(cfg: Config, status: Status):
-    public_dir = cfg.hls_dir.parent
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "QuestStream/2.0"
 
-    class Handler(SimpleHTTPRequestHandler):
-        server_version = "QuestStream/1.0"
-
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(public_dir), **kwargs)
-
-        # quiet: players poll the playlist every second
         def log_message(self, fmt, *args):  # noqa: N802
             log.debug("http %s - %s", self.address_string(), fmt % args)
 
         def end_headers(self):
             self.send_header("Access-Control-Allow-Origin", cfg.cors_origin)
             self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Range, Content-Type")
-            self.send_header("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
             if cfg.cors_origin != "*":
                 self.send_header("Vary", "Origin")
-            path = self.path.split("?", 1)[0]
-            if path.endswith(".ts"):
-                # Segment names are unique per run and never rewritten.
-                self.send_header("Cache-Control", "public, max-age=30, immutable")
-            else:
-                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-                self.send_header("Pragma", "no-cache")
-                self.send_header("Expires", "0")
+            self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
-        def _json(self, code: int, body: dict, extra_headers: Optional[Dict[str, str]] = None):
+        def _json(self, code: int, body: dict):
             data = json.dumps(body).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
-            for k, v in (extra_headers or {}).items():
-                self.send_header(k, v)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(data)
@@ -762,34 +786,14 @@ def make_handler(cfg: Config, status: Status):
                 return self._json(200, {"ok": True})
             if path == "/status":
                 return self._json(200, status.snapshot(cfg))
-            if path == "/" or path == "":
+            if path in ("/", ""):
                 return self._json(200, {
                     "service": "quest-stream",
-                    "playlist": f"/hls/{PLAYLIST_NAME}",
                     "status": "/status",
+                    "publish": cfg.publish_url_safe,
+                    "webrtc": f"http://<NUC_IP>:8889/{cfg.path_name}/whep",
                 })
-            if not path.startswith("/hls/") or path.endswith("/") or ".." in path:
-                return self._json(404, {"error": "not_found", "path": path})
-
-            name = path[len("/hls/"):]
-            if name == PLAYLIST_NAME and (
-                status.state != "live" or not (cfg.hls_dir / PLAYLIST_NAME).exists()
-            ):
-                snap = status.snapshot(cfg)
-                return self._json(
-                    503,
-                    {"error": "stream_unavailable", "state": snap["state"], "reason": snap["reason"]},
-                    {"Retry-After": "2"},
-                )
-            if not (cfg.hls_dir / name).is_file():
-                return self._json(404, {"error": "segment_not_found", "path": path})
-            if self.command == "HEAD":
-                return super().do_HEAD()
-            return super().do_GET()
-
-        def list_directory(self, path):  # never expose a listing
-            self._json(404, {"error": "not_found"})
-            return None
+            return self._json(404, {"error": "not_found", "path": path})
 
     return Handler
 
@@ -820,7 +824,6 @@ def main() -> int:
     if shutil.which(cfg.ffmpeg) is None and not Path(cfg.ffmpeg).is_file():
         log.error("FFMPEG_ERROR ffmpeg not found (%s); install with: sudo apt install ffmpeg", cfg.ffmpeg)
         return 2
-    clear_hls_dir(cfg.hls_dir)
 
     status = Status()
     supervisor = Supervisor(cfg, status)
@@ -841,8 +844,9 @@ def main() -> int:
     signal.signal(signal.SIGINT, shutdown)
 
     log.info(
-        "quest-stream listening on http://%s:%s/hls/%s (eye=%s keep=%s out=%sx%s@%s %s %s)",
-        cfg.host, cfg.port, PLAYLIST_NAME, cfg.eye, cfg.crop_keep,
+        "quest-stream: status on http://%s:%s/status, publishing to %s "
+        "(eye=%s keep=%s out=%sx%s@%s %s %s)",
+        cfg.host, cfg.port, cfg.publish_url_safe, cfg.eye, cfg.crop_keep,
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
     supervisor.start()
@@ -852,7 +856,6 @@ def main() -> int:
         supervisor.stop()
         supervisor.join(timeout=10)
         httpd.server_close()
-        clear_hls_dir(cfg.hls_dir)
     return 0
 
 

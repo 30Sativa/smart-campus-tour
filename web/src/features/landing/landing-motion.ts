@@ -21,28 +21,34 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Fade-and-rise for anything marked `data-reveal`. Batched so a grid of cells
- * enters as one gesture instead of a dozen independent triggers.
+ * Reveal visible Home elements once. IntersectionObserver remains reliable
+ * while Lenis is driving smooth scrolling; CSS owns the actual animation.
  */
-export function revealOnScroll(scope: HTMLElement): void {
-  const targets = gsap.utils.toArray<HTMLElement>('[data-reveal]', scope)
-  if (targets.length === 0) return
+export function revealOnScroll(scope: HTMLElement): () => void {
+  const targets = Array.from(scope.querySelectorAll<HTMLElement>('[data-reveal]'))
+  if (targets.length === 0) return () => {}
+  if (typeof IntersectionObserver === 'undefined') {
+    targets.forEach((target) => target.classList.add('is-visible'))
+    return () => {}
+  }
 
-  gsap.set(targets, { opacity: 0, y: 26 })
-
-  ScrollTrigger.batch(targets, {
-    start: 'top 88%',
-    once: true,
-    onEnter: (batch) =>
-      gsap.to(batch, {
-        opacity: 1,
-        y: 0,
-        duration: 0.72,
-        ease: EASE,
-        stagger: 0.07,
-        overwrite: true,
-      }),
+  const sectionCounts = new Map<Element, number>()
+  targets.forEach((target) => {
+    const section = target.closest('section') ?? scope
+    const index = sectionCounts.get(section) ?? 0
+    target.style.setProperty('--lp3-reveal-delay', `${Math.min(index, 5) * 90}ms`)
+    sectionCounts.set(section, index + 1)
   })
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return
+      entry.target.classList.add('is-visible')
+      observer.unobserve(entry.target)
+    })
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 })
+  targets.forEach((target) => observer.observe(target))
+  return () => observer.disconnect()
 }
 
 /** Counts a metric up once it is on screen, so the figure reads as a result. */

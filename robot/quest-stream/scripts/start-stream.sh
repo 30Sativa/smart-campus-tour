@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 [ -f quest-stream.env ] && set -a && . ./quest-stream.env && set +a
-mkdir -p logs public/hls
+mkdir -p logs
 PIDFILE=logs/quest-stream.pid
 
 if [ "${1:-}" = "--foreground" ]; then
@@ -26,7 +26,7 @@ if ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   echo "Failed to start, see logs/console.log:"; tail -5 logs/console.log; rm -f "$PIDFILE"; exit 1
 fi
 PORT="${QUEST_STREAM_PORT:-8080}"
-echo "Started (pid $(cat "$PIDFILE"))."
+echo "Started (pid $(cat "$PIDFILE")). It publishes to MediaMTX, which must be running."
 echo "  status:   curl http://localhost:$PORT/status"
-echo "  playlist: http://<NUC_IP>:$PORT/hls/quest.m3u8"
+echo "  webrtc:   http://<NUC_IP>:8889/quest        (WHEP: .../quest/whep)"
 echo "  logs:     tail -f logs/quest-stream.log"
