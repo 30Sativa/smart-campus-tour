@@ -21,6 +21,7 @@ export function SiteNav({ onLockScroll }: Props) {
   const [stuck, setStuck] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const themeWaveRunning = useRef(false)
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const user = useAuthStore((state) => state.user)
@@ -52,6 +53,47 @@ export function SiteNav({ onLockScroll }: Props) {
 
   const closeMenu = () => setMenuOpen(false)
 
+  const switchTheme = (button: HTMLButtonElement) => {
+    if (themeWaveRunning.current) return
+    if (
+      typeof document.startViewTransition !== 'function' ||
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      toggleTheme()
+      return
+    }
+
+    const rect = button.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const radius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y),
+    )
+    const root = document.documentElement
+    root.style.setProperty('--theme-wave-x', `${x}px`)
+    root.style.setProperty('--theme-wave-y', `${y}px`)
+    root.style.setProperty('--theme-wave-radius', `${radius}px`)
+    root.dataset.themeWave = ''
+    themeWaveRunning.current = true
+
+    const transition = document.startViewTransition(() => {
+      // The new snapshot needs the new theme immediately; ThemeProvider keeps
+      // the root class in sync with the persisted store afterward.
+      root.classList.remove('light', 'dark')
+      root.classList.add(theme === 'dark' ? 'light' : 'dark')
+      toggleTheme()
+    })
+    const cleanup = () => {
+      delete root.dataset.themeWave
+      root.style.removeProperty('--theme-wave-x')
+      root.style.removeProperty('--theme-wave-y')
+      root.style.removeProperty('--theme-wave-radius')
+      themeWaveRunning.current = false
+    }
+    void transition.finished.then(cleanup, cleanup)
+  }
+
   return (
     <>
       <div ref={sentinelRef} aria-hidden="true" style={{ position: 'absolute', top: 0, height: 1, width: 1 }} />
@@ -79,7 +121,7 @@ export function SiteNav({ onLockScroll }: Props) {
             <button
               type="button"
               className="lp-themebtn"
-              onClick={toggleTheme}
+              onClick={(event) => switchTheme(event.currentTarget)}
               aria-label={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
             >
               {theme === 'dark' ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}

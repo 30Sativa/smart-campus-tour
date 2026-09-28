@@ -3,6 +3,9 @@ using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
 using SmartCampus.Api.Hubs;
 using SmartCampus.Application.Features.Simulation;
+using SmartCampus.Application.Features.RobotTelemetry;
+using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 var simulationPreview = builder.Environment.IsDevelopment() &&
@@ -18,6 +21,23 @@ builder.Services.AddSingleton<SimulationBroadcaster>();
 builder.Services.AddSingleton<ISimulationPosePublisher>(services => services.GetRequiredService<SimulationBroadcaster>());
 builder.Services.AddCors(options => options.AddPolicy("SimulationPreview", policy =>
     policy.WithOrigins(previewOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+
+// Robot pose telemetry (POST /api/robots/telemetry -> /hubs/fleet).
+// Robots are checked against Robots.CredentialHash in SQL Server; without a
+// database (the preview) or with RobotTelemetry:UseConfiguredRobots they come
+// from configuration instead. Registered after AddInfrastructure, so these win.
+if (simulationPreview || builder.Configuration.GetValue<bool>("RobotTelemetry:UseConfiguredRobots"))
+{
+    builder.Services.AddSingleton<IRobotCredentialVerifier, ConfiguredRobotCredentialVerifier>();
+    builder.Services.AddSingleton<ITourRobotResolver, ConfiguredTourRobotResolver>();
+}
+builder.Services.AddSingleton<FleetViewerAccess>();
+builder.Services.AddSingleton<TourWatchRegistry>();
+builder.Services.AddHostedService<FleetBroadcastService>();
+var fleetOrigins = builder.Configuration.GetSection("RobotTelemetry:AllowedOrigins").Get<string[]>()
+    ?? (builder.Environment.IsDevelopment() ? previewOrigins : Array.Empty<string>());
+builder.Services.AddCors(options => options.AddPolicy("Fleet", policy =>
+    policy.WithOrigins(fleetOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -63,5 +83,6 @@ app.UseCors("SimulationPreview");
 
 app.MapControllers();
 if (simulationPreview) app.MapHub<SimulationHub>("/hubs/simulation");
+app.MapHub<FleetHub>("/hubs/fleet").RequireCors("Fleet");
 
 app.Run();

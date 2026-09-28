@@ -1,3 +1,5 @@
+import { mapToScenePose } from './map-config'
+
 /** Local presentation fixture, not a robot transport contract or physics model. */
 export type RobotPose = { x: number; y: number; yaw: number }
 
@@ -14,9 +16,12 @@ export function demoPose(seconds: number): RobotPose {
   }
 }
 
-/** ROS map: x/y ground, z up. Scene: x/-z ground, y up; metres, no offset. */
+/**
+ * ROS map: x/y ground, z up. Scene: x/-z ground, y up; metres, no offset.
+ * Kept for existing callers; the transform itself lives in `map-config.ts`.
+ */
 export function mapToScene(pose: RobotPose) {
-  return { position: [pose.x, 0, -pose.y] as [number, number, number], rotation: pose.yaw }
+  return mapToScenePose(pose)
 }
 
 export const DEMO_ROUTE = Array.from({ length: 97 }, (_, index) => {

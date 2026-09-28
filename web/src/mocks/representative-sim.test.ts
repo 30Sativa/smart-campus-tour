@@ -51,7 +51,7 @@ describe('representative area on the shared mock world', () => {
     const byId = Object.fromEntries(tours.map((t) => [t.id, t]))
     expect(byId['tour-06'].register.allowed).toBe(true)
     expect(byId['tour-03'].register.allowed).toBe(false) // already registered
-    expect(byId['tour-02'].register.reason).toMatch(/chốt danh sách/)
+    expect(byId['tour-02'].register.reason).toMatch(/đã được chốt/)
     expect(byId['tour-01'].register.reason).toBe('Buổi đang diễn ra.')
     expect(byId['tour-01'].register.allowed).toBe(false) // Running
   })

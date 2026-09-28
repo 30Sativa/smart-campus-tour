@@ -272,11 +272,70 @@ version tokens, JSON error bodies with `StaleData` / `NotAllowed` /
 `Validation` / `EmailFailed`) in `web/src/api/contracts/admin.ts` and
 `web/docs/admin-tours.md`.
 
-Backend-to-browser realtime delivery is **planned** to use SignalR; the
-backend has no Hub yet. Authentication implementation and the dispatch
+Backend-to-browser realtime delivery uses SignalR. Two hubs exist: the
+Development-only `/hubs/simulation` (§5) and `/hubs/fleet` for robot positions
+(§3.4); the operations hub for Tours is still planned. Authentication implementation and the dispatch
 algorithm are also pending. Exact hub/method and fleet wire schemas remain
 TBD.
 
+
+### 3.4 Robot pose telemetry (implemented 2026-09-25)
+
+Real positions of physical, Gazebo and emulated robots reach the Staff/Admin
+3D twin and the Student 2D map through the backend only. Browsers never talk
+to a robot and there is no command on this path.
+
+```text
+AMCL + TF map->base_footprint -> fleet_bridge pose_telemetry (<= 5 Hz)
+  -> POST /api/robots/telemetry (device credential)
+  -> RobotTelemetryStore (memory, latest per robot; no SQL per sample)
+  -> /hubs/fleet: RobotPoses (Admin/Staff, <= 5 Hz) | TourRobotPose (Student of a RUNNING Tour, <= 2 Hz)
+```
+
+**Robot -> backend.** `POST /api/robots/telemetry`, header
+`Authorization: Robot <robotCode>:<secret>`, body
+`{robotCode, source (physical|gazebo|emulator), mapKey, frameId, streamId, seq,
+capturedAt, x, y, yaw, localized, covXY}` in metres/radians of the ROS `map`
+frame (the frame of `Pois.X/Y/Yaw`). 204 accepted, 400 invalid, 401 bad
+credential or another robot's code, 409 duplicate/reordered sample or a source
+that differs from `Robots.SourceType`. `capturedAt` must be within 10 s past /
+5 s future of the server clock (robots run NTP). Within one `streamId` the
+`seq` must grow; a new stream must carry a newer `capturedAt`.
+
+**Credential.** `Robots.CredentialHash` = SHA-256 of the UTF-8 device secret
+(32 bytes). The secret is random (>= 32 bytes), lives only on the robot in
+`ROBOT_TELEMETRY_SECRET`, and is never a ROS parameter or committed. Without a
+database (the Development preview) or with
+`RobotTelemetry:UseConfiguredRobots=true`, robots come from configuration:
+`RobotTelemetry:Robots: [{RobotCode, Source, SecretSha256}]` and
+`RobotTelemetry:TourRobots: {"<tourId>": "<robotCode>"}`.
+
+**Backend -> browser, `/hubs/fleet`.** `RobotPoses {sentAt, robots[]}` goes to
+Admin/Staff (every robot, only those that changed, full snapshot on connect).
+A Student calls `WatchTour(tourId)`; the server resolves the robot assigned to
+that RUNNING Tour and sends `TourRobotPose {tourId, sentAt, pose{mapKey, x, y,
+yaw, localized, receivedAt} | null}` for that robot only, and `TourRobotEnded`
+once the Tour is no longer RUNNING (checked every 5 s). A Student never
+receives robot identity, source or health. `sentAt`/`receivedAt` are server
+clock; browsers compute age without trusting their own clock. Allowed browser
+origins: `RobotTelemetry:AllowedOrigins`.
+
+**Access, current limits.** Operators are principals in role `Admin` or
+`Staff`. The backend has no sign-in or Student browser session yet, so in
+Development only `RobotTelemetry:AllowAnonymousViewers=true` lets any browser
+watch; in any other environment no browser qualifies until authentication and
+the Student session exist. `FleetViewerAccess.CanWatchTour` is the one place
+to connect the Student session check.
+
+**Display.** `web/src/features/digital-twin/map-config.ts` is the only
+transform from `map` metres to the 3D scene and to the Student drawing, per
+`mapKey`, with a `fitAffine` helper for a three-landmark calibration. A map
+whose transform is not measured (`calibrated: false`) does not show a live
+robot on that surface. The web shows a pose as stale after 2 s (Student) or
+5 s (Staff) and as disconnected after 10 s, keeping the last position; it
+never substitutes a demo pose. Live data is enabled with `VITE_FLEET_HUB=on`.
+
+The Gazebo preview endpoints in §5 remain a separate Development tool.
 
 ---
 

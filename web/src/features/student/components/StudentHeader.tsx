@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react'
+import { USE_MOCK_API } from '../../../mocks/mock-mode'
 import type { StudentSession } from '../student-types'
 
 interface StudentHeaderProps {
@@ -28,7 +29,7 @@ export function StudentHeader({
             <div className="st-brand__top">
               <span className="st-brand__name">CampusTour</span>
               {isLive && (
-                <span className="st-live"><i />LIVE</span>
+                <span className="st-live"><i />{USE_MOCK_API ? 'PHIÊN MẪU' : 'LIVE'}</span>
               )}
             </div>
             <h1 className="st-brand__title">{tourName}</h1>
@@ -55,6 +56,7 @@ export function StudentHeader({
           <div className="st-portal"><i />Cổng tham quan học sinh</div>
         )}
       </div>
+      {USE_MOCK_API && <p className="st-demo-note">Bản xem trước · Thông tin phiên và trợ lý AI dùng dữ liệu mẫu.</p>}
     </header>
   )
 }

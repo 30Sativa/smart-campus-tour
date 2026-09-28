@@ -47,6 +47,7 @@ export function StudentVideoPlayer({
   // With VITE_QUEST_STREAM_URL set, the Quest 3 live stream replaces the
   // tour's video source; hls.js owns loading and reconnecting it.
   const questUrl = QUEST_STREAM_URL
+  const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
   const { status: questStatus, retry: retryQuest } = useHlsStream(videoRef, questUrl, active)
   const questWaiting = questUrl && questStatus !== 'live' ? questStatus : null
 
@@ -111,7 +112,7 @@ export function StudentVideoPlayer({
       <video
         ref={videoRef}
         src={questUrl ? undefined : streamUrl}
-        poster="/images/hero-campus.jpg"
+        poster="/images/student-campus.png"
         loop={!questUrl}
         playsInline
         autoPlay
@@ -122,6 +123,8 @@ export function StudentVideoPlayer({
         <div className="st-video__badges">
           {questWaiting ? (
             <span className="st-badge st-badge--dark">{questWaiting === 'connecting' ? 'Đang kết nối' : 'Mất tín hiệu'}</span>
+          ) : sampleVideo ? (
+            <span className="st-badge st-badge--sample">Video minh họa</span>
           ) : (
             <span className="st-badge st-badge--live"><i />Trực tiếp</span>
           )}

@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { Blob as NodeBlob } from 'node:buffer'
+import { deflateRawSync } from 'node:zlib'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { importRosterBytes, parseCsv, rosterTemplateBytes, rosterWorkbookBytes, rowsToRoster, ROSTER_MAX_ROWS } from './roster-import'
 import { buildWorkbook, readFirstSheet, zipStored } from './xlsx-lite'
 
 const enc = new TextEncoder()
+afterEach(() => vi.unstubAllGlobals())
 
 describe('roster import (flow review §4.2)', () => {
   it('reads the template it offers for download', async () => {
@@ -24,12 +27,13 @@ describe('roster import (flow review §4.2)', () => {
   it('reads a compressed workbook with shared strings, as Excel writes it', async () => {
     const shared = '<sst><si><t>Họ tên</t></si><si><t>Lớp</t></si><si><r><t>Phạm </t></r><r><t>Minh</t></r></si></sst>'
     const sheet = '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="3"><c r="B3" t="s"><v>1</v></c><c r="A3" t="s"><v>2</v></c></row></sheetData></worksheet>'
-    const deflate = async (text: string) =>
-      new Uint8Array(await new Response(new Blob([enc.encode(text)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer())
+    // jsdom's Blob has no stream(), while the browser reader uses that API.
+    vi.stubGlobal('Blob', NodeBlob)
+    const deflate = (text: string) => new Uint8Array(deflateRawSync(enc.encode(text)))
     // The sheet goes first and deflated: zipStored writes it as-is, then its
     // method is patched to 8 in both the local and the central header.
     const zip = zipStored([
-      { name: 'xl/worksheets/sheet1.xml', data: await deflate(sheet) },
+      { name: 'xl/worksheets/sheet1.xml', data: deflate(sheet) },
       { name: 'xl/sharedStrings.xml', data: enc.encode(shared) },
     ])
     const view = new DataView(zip.buffer)

@@ -5,7 +5,8 @@ interface Student2DMapProps {
   pois: PoiDetail[]
   currentPoi?: PoiDetail
   nextPoi?: PoiDetail
-  robotPose?: StudentRobotPose
+  /** `null`: live positions are on but there is nothing trustworthy to draw; the robot is not shown. */
+  robotPose?: StudentRobotPose | null
 }
 
 /** Landing "night ops" palette: blue-black ground, cyan route and current stop, white next stop. */
@@ -25,8 +26,10 @@ export function Student2DMap({
   pois,
   currentPoi,
   nextPoi,
-  robotPose = { x: 50, y: 50, heading: 0, isStale: false, lastUpdatedAt: '' },
+  robotPose: robotPoseProp = { x: 50, y: 50, heading: 0, isStale: false, lastUpdatedAt: '' },
 }: Student2DMapProps) {
+  const hasRobot = robotPoseProp !== null
+  const robotPose = robotPoseProp ?? { x: 50, y: 50, heading: 0, isStale: false, lastUpdatedAt: '' }
   // Toạ độ bản đồ từ 0 đến 100% -> nhân tỉ lệ lên viewBox 1000 x 700
   const scaleX = (val: number) => (val / 100) * 1000
   const scaleY = (val: number) => (val / 100) * 700
@@ -41,7 +44,13 @@ export function Student2DMap({
     <div className="st-map">
       <div className="st-map__head">
         <span className="st-mono"><Compass size={15} />Bản đồ 2D Khuôn viên (Thời gian thực)</span>
-        {robotPose.isStale && (
+        {!hasRobot && (
+          <span className="st-map__stale">
+            <AlertTriangle size={12} />
+            <span>Chưa có vị trí robot</span>
+          </span>
+        )}
+        {hasRobot && robotPose.isStale && (
           <span className="st-map__stale">
             <AlertTriangle size={12} />
             <span>Vị trí tạm gián đoạn</span>
@@ -112,7 +121,7 @@ export function Student2DMap({
           })}
 
           {/* Robot */}
-          <g transform={`translate(${robotX}, ${robotY})`}>
+          {hasRobot && <g transform={`translate(${robotX}, ${robotY})`} opacity={robotPose.isStale ? 0.55 : 1}>
             <circle cx="0" cy="0" r="36" fill="url(#robot-glow)" />
             <g transform={`rotate(${robotPose.heading})`}>
               <path d="M 0 0 L -18 -44 L 18 -44 Z" fill={C.accent} opacity="0.3" />
@@ -123,7 +132,7 @@ export function Student2DMap({
             <text x="0" y="28" fill={C.white} fontSize="11" fontFamily="ui-monospace, monospace" textAnchor="middle">
               ROBOT AMR
             </text>
-          </g>
+          </g>}
         </svg>
       </div>
 

@@ -16,16 +16,15 @@ const columns: FooterColumn[] = [
     title: 'Hành trình',
     links: [
       { href: '#quy-trinh', label: 'Các bước của một tour' },
-      { href: '#tinh-nang', label: 'Tính năng hệ thống' },
+      { href: '#trai-nghiem', label: 'Trải nghiệm học sinh' },
       { href: '#gioi-thieu', label: 'Digital Twin' },
     ],
   },
   {
     title: 'Kỹ thuật',
     links: [
-      { href: '#robot', label: 'Công nghệ robot' },
-      { href: '#nen-tang', label: 'Nền tảng kỹ thuật' },
-      { href: '#chi-so', label: 'Mục tiêu vận hành' },
+      { href: '#cong-nghe', label: 'Công nghệ robot' },
+      { href: '#gioi-thieu', label: 'Digital Twin' },
     ],
   },
   {
@@ -53,8 +52,8 @@ export function SiteFooter() {
               </span>
             </a>
             <p className="lp-body lp-foot__tag">
-              Hệ thống tham quan khuôn viên đại học bằng robot tự hành, trợ lý AI đa ngôn ngữ
-              và bản sao kỹ thuật số theo thời gian thực.
+              Một robot tự hành đưa học sinh tham quan khuôn viên từ xa qua hình ảnh trực tiếp,
+              bản đồ 2D và trợ lý AI riêng cho từng người.
             </p>
             <p className="lp-foot__eyebrow">Được phát triển tại</p>
             <p className="lp-foot__institution">Trường Đại học FPT<br />Campus TP. Hồ Chí Minh</p>

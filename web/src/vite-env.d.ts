@@ -14,6 +14,12 @@ interface ImportMetaEnv {
    * `features/quest-stream/quest-stream-config.ts`.
    */
   readonly VITE_QUEST_STREAM_URL?: string
+  /**
+   * `on` connects the operations twin and the student 2D map to the backend's
+   * real robot positions (`/hubs/fleet`). Anything else keeps the mocks. Read
+   * only through `api/contracts/fleet-realtime.ts`.
+   */
+  readonly VITE_FLEET_HUB?: string
 }
 
 interface ImportMeta {

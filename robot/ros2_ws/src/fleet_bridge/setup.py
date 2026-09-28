@@ -12,5 +12,6 @@ setup(
     install_requires=['setuptools'], tests_require=['pytest'],
     entry_points={'console_scripts': [
         'gazebo_telemetry = fleet_bridge.gazebo_telemetry:main',
+        'pose_telemetry = fleet_bridge.pose_telemetry:main',
     ]},
 )
