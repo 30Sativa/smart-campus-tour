@@ -7,7 +7,6 @@ import { Student2DMap } from './Student2DMap'
 import { StudentNarrationBar } from './StudentNarrationBar'
 import { StudentAiAssistant } from './StudentAiAssistant'
 import { useStudentStore } from '../student-store'
-import { useTourRobotPose } from '../use-tour-robot-pose'
 
 // Same breakpoint as `.st-only-desktop` / `.st-only-mobile` in student.css.
 const MOBILE_QUERY = '(max-width: 1023px)'
@@ -32,9 +31,6 @@ export function StudentLiveView({ session, snapshot }: StudentLiveViewProps) {
   const mobileTab = useStudentStore((s) => s.activeTab)
   const setMobileTab = useStudentStore((s) => s.setActiveTab)
   const isMobile = useSyncExternalStore(subscribeMobile, isMobileLayout, () => false)
-  // Real robot of this Tour (/hubs/fleet) when enabled; otherwise the snapshot's pose.
-  const livePose = useTourRobotPose(snapshot.tourId, snapshot.tourState === 'Running')
-
   const statusDisplay = getStudentStatusDisplay(
     snapshot.step,
     snapshot.currentPoi?.title,
@@ -54,7 +50,7 @@ export function StudentLiveView({ session, snapshot }: StudentLiveViewProps) {
       pois={snapshot.pois}
       currentPoi={snapshot.currentPoi}
       nextPoi={snapshot.nextPoi}
-      robotPose={livePose === undefined ? snapshot.robotPose : livePose}
+      robotPose={snapshot.robotPose}
     />
   )
 

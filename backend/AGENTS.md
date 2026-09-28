@@ -39,10 +39,11 @@ backend/
 ```
 
 Current `backend/src/SmartCampus.Api/` has a development-only simulation
-controller and Hub; Application has its transient pose-publishing feature.
-Production fleet/operations Hubs, tour/dispatch use cases, and feature
-repository abstractions remain unimplemented. An absent extension folder on
-GitHub is not missing setup.
+controller and Hub; Application has the in-memory pose publisher used by that
+SimulationPreview path. The temporary robot pose endpoint and read-only fleet
+pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
+cases, and feature repository abstractions remain unimplemented. An absent
+extension folder on GitHub is not missing setup.
 
 Compile-time dependencies: `Domain` has no project references; `Application`
 references `Domain`; `Infrastructure` references `Application` and `Domain`;
@@ -169,8 +170,9 @@ and gated; final DTO binding and implementations remain pending. ROS topics
 and message types stay outside Domain and Application. A controller must never
 call a fleet or ROS client directly.
 
-FleetHub is not tour orchestration. Later Application work must persist the
-execution intent/current leg before external send and reconcile the outcome.
+The future FleetHub transport is not tour orchestration. Later Application
+work must persist the execution intent/current leg before external send and
+reconcile the outcome.
 The current commit-after-handler pipeline does not make an external GoTo and
 SQL commit atomic; no distributed transaction or pipeline change is introduced
 by this decision. Transient state ingestion must not commit every pose to SQL.

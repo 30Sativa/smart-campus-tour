@@ -452,24 +452,27 @@ The frontend does not require any of the following by default:
 
 ---
 
-## 4. Live robot data
+## 4. Fleet state and realtime
 
-The dashboard shows live fleet state. That data crosses a contract boundary
-owned jointly with `robot/` and `backend/` — see `docs/architecture.md`.
+The staff dashboard currently uses a labelled mock API and mock push channel.
+Its robot pose, source, connection and health values are fixtures; the browser
+does not connect to robots or a backend fleet-pose Hub. The former
+`VITE_FLEET_HUB` pose stream and its client have been removed.
 
 The Web-based 3D Operational Digital Twin is core UI scope and lives in this
 app. It loads the campus model, renders physical/Gazebo/synthetic robot models,
-and visualizes backend identity, pose/heading, connection/operational state,
-active tour/leg, fault/health, and optional battery telemetry. Pose conversion
-uses one explicit ROS-map -> Twin-world transform (origin offset, axis
-conversion, rotation, and scale), rather than hardcoded coordinate formulas
-scattered across components. The 3D view is not a physics engine, web Nav2,
-collision simulator, sensor-stream viewer, scenario editor, or predictive
-engine.
+and visualizes the staff contract's identity, pose/heading,
+connection/operational state, active tour/leg, fault/health, and optional
+battery fields from fixtures. Pose conversion uses one explicit ROS-map ->
+Twin-world transform (origin offset, axis conversion, rotation, and scale),
+rather than hardcoded coordinate formulas scattered across components. The 3D
+view is not a physics engine, web Nav2, collision simulator, sensor-stream
+viewer, scenario editor, or predictive engine.
 
-How the backend itself gets that state from the robots is settled (a bridge
-node in `robot/`, `docs/architecture.md` §3). What is still open is only the
-last hop, backend -> browser.
+The production robot-to-backend and backend-to-browser fleet path remains
+planned in `docs/architecture.md` §3 and ADR-0008. The interim one-way robot
+pose endpoint and browser stream were removed; they are not the production
+contract.
 
 Decision (backend -> browser): **SignalR** (`@microsoft/signalr`), matching the
 ASP.NET backend. `src/api/signalr.ts` exposes a `createHubConnection(hubPath)`

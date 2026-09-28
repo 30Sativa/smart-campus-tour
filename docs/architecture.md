@@ -234,6 +234,12 @@ Do not merge these Hubs. Browsers do not connect to the fleet Hub; robots do not
 connect to operations. Different URLs are not authorization: Section 3.7 defines
 the required identity separation. The production Hubs are not implemented yet.
 
+A temporary one-way robot pose prototype (`POST /api/robots/telemetry` with a
+read-only `/hubs/fleet` browser stream) was removed. It did not implement the
+production machine command/state contract selected by ADR-0008. The
+`/hubs/fleet` contract and pose fields below remain planned and gated by the
+Python compatibility checkpoint.
+
 Application owns a future gateway boundary such as `IFleetGateway`. Hubs and
 the thin SignalR adapter using `IHubContext` belong in Api, without an
 Infrastructure-to-Api reference. Application stays independent of SignalR and
@@ -323,8 +329,9 @@ nullable foreign keys, and `Tour.AssignedRobotId` may remain after a tour
 ends. The database checks that referenced rows exist; it does not enforce
 agreement between these two fields or uniqueness of active assignments.
 `Robot.NeedsInspection` and `IsDispatchEnabled` are persisted dispatch inputs.
-Live pose, connection, battery, and external execution state are transient
-fleet telemetry, separate from persisted tour business state and `TourEvent`.
+In a future fleet implementation, live pose, connection, battery, and external
+execution state are transient fleet telemetry, separate from persisted tour
+business state and `TourEvent`.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through

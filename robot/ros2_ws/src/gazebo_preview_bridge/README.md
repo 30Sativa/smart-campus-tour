@@ -13,3 +13,6 @@ remain TBD in `docs/architecture.md`.
 The `gazebo_telemetry` executable, `gazebo_web.launch.py`,
 `/api/simulation/pose` endpoint, latest-state buffer, and maximum 10 Hz update
 rate belong to this local preview path.
+
+The former real-robot pose uploader to `/api/robots/telemetry` has been
+removed. It was separate from this Gazebo-only preview path.
