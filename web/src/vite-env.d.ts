@@ -18,12 +18,6 @@ interface ImportMetaEnv {
   readonly VITE_QUEST_ICE_SERVERS?: string
   /** @deprecated The old HLS address; only read to warn that it is ignored. */
   readonly VITE_QUEST_STREAM_URL?: string
-  /**
-   * `on` connects the operations twin and the student 2D map to the backend's
-   * real robot positions (`/hubs/fleet`). Anything else keeps the mocks. Read
-   * only through `api/contracts/fleet-realtime.ts`.
-   */
-  readonly VITE_FLEET_HUB?: string
 }
 
 interface ImportMeta {

@@ -5,7 +5,7 @@ import { apiUrl } from './client'
  * Build a hub connection. The caller owns the lifecycle: nothing is started
  * here, and nothing connects on import.
  *
- * @param hubPath path relative to VITE_API_BASE_URL, e.g. `/hubs/fleet`.
+ * @param hubPath path relative to VITE_API_BASE_URL, e.g. `/hubs/operations`.
  */
 export function createHubConnection(
   hubPath: string,

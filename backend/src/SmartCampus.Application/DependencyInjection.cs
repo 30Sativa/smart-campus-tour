@@ -1,9 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using FluentValidation;
 using MediatR;
 using SmartCampus.Application.Common.Behaviors;
-using SmartCampus.Application.Features.RobotTelemetry;
 
 
 namespace SmartCampus.Application
@@ -24,10 +22,6 @@ namespace SmartCampus.Application
             });
 
             services.AddValidatorsFromAssembly(assembly);
-
-            // Robot pose telemetry: latest state per robot, in memory only.
-            services.TryAddSingleton(TimeProvider.System);
-            services.AddSingleton<IRobotTelemetryStore, RobotTelemetryStore>();
 
             return services;
         }

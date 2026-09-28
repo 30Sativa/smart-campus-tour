@@ -9,7 +9,6 @@ import { useMobileNav } from './use-mobile-nav'
 import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from './ConsoleSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
-import { useLiveFleet } from './use-live-fleet'
 import { REASON_SHORT } from './reason'
 
 const TOAST_MS = 9_000
@@ -35,8 +34,6 @@ export default function StaffShell() {
 
   // The shell owns the one realtime subscription for the whole area.
   const connection = useStaffRealtimeSync(setToast)
-  // Real robot positions (/hubs/fleet), only when VITE_FLEET_HUB=on.
-  useLiveFleet()
   const today = useTours()
   const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
   const runningTour = today.data?.find((tour) => tour.state === 'Running')

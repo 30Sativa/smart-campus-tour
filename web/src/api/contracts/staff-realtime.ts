@@ -9,9 +9,9 @@
  * satisfies the same type. Hub and method names are a proposal until the
  * backend agrees them in `docs/architecture.md`.
  *
- * Events carry what changed, not a command to re-render: robot telemetry comes
- * as the latest fleet snapshot (latest-state semantics, a skipped sample is not
- * a loss), everything else names the object so the owner refetches it.
+ * Events carry what changed, not a command to re-render: fleet status comes as
+ * the latest operations snapshot, everything else names the object so the owner
+ * refetches it.
  */
 import type { HubConnection } from '@microsoft/signalr'
 import { createHubConnection } from '../signalr'
