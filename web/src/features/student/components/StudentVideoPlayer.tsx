@@ -7,8 +7,8 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { useStudentStore } from '../student-store'
-import { QUEST_STREAM_URL } from '../../quest-stream/quest-stream-config'
-import { useHlsStream } from '../../quest-stream/use-hls-stream'
+import { QUEST_WHEP_URL } from '../../quest-stream/quest-stream-config'
+import { useWhepStream } from '../../quest-stream/use-whep-stream'
 
 interface StudentVideoPlayerProps {
   streamUrl?: string
@@ -26,7 +26,7 @@ const QUEST_WAITING: Record<'idle' | 'connecting' | 'offline' | 'error', string>
   idle: 'Đang chờ nguồn hình…',
   connecting: 'Đang kết nối hình ảnh trực tiếp từ robot…',
   offline: 'Tạm mất hình ảnh trực tiếp. Đang tự kết nối lại…',
-  error: 'Trình duyệt này không phát được hình trực tiếp. Hãy dùng Chrome, Edge hoặc Safari.',
+  error: 'Trình duyệt này không phát được hình trực tiếp (WebRTC). Hãy dùng Chrome, Edge hoặc Safari.',
 }
 
 export function StudentVideoPlayer({
@@ -44,11 +44,12 @@ export function StudentVideoPlayer({
   const setAudioMuted = useStudentStore((s) => s.setAudioMuted)
   const isAiSpeaking = useStudentStore((s) => s.isAiSpeaking)
 
-  // With VITE_QUEST_STREAM_URL set, the Quest 3 live stream replaces the
-  // tour's video source; hls.js owns loading and reconnecting it.
-  const questUrl = QUEST_STREAM_URL
+  // With VITE_QUEST_WHEP_URL set, the Quest 3 live stream (WebRTC from
+  // MediaMTX) replaces the tour's video source; the hook owns connecting and
+  // reconnecting it.
+  const questUrl = QUEST_WHEP_URL
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
-  const { status: questStatus, retry: retryQuest } = useHlsStream(videoRef, questUrl, active)
+  const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active)
   const questWaiting = questUrl && questStatus !== 'live' ? questStatus : null
 
   useEffect(() => {
