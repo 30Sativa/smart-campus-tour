@@ -57,7 +57,7 @@ const STATE_WORDS: Record<TourState, string> = {
 
 const LOCKED_WHY: Record<TourState, string> = {
   Scheduled: '',
-  Ready: 'Buổi đã chốt danh sách. Không sửa, thay danh sách hay hủy được nữa; liên hệ Admin nếu cần mở lại.',
+  Ready: 'Buổi tham quan đã được chốt nên đăng ký không thể chỉnh sửa. Liên hệ Admin nếu cần mở lại.',
   Running: 'Buổi đang diễn ra; đăng ký chỉ còn để xem.',
   Completed: 'Buổi đã kết thúc; đăng ký chỉ còn để xem.',
   Cancelled: 'Buổi đã bị hủy; đăng ký chỉ còn để xem.',
@@ -109,6 +109,7 @@ function newRegistration(id: string, ownerId: string, input: RegistrationInput, 
   return {
     id,
     schoolName: input.schoolName,
+    groupName: input.groupName || null,
     representativeName: input.representativeName,
     contactEmail: input.contactEmail,
     state: 'Submitted',
@@ -159,7 +160,7 @@ function ensureSeeded() {
   }
 
   const rejectedAt = iso(now() - day * 0.6)
-  attach('tour-05', newRegistration('reg-r1', DEMO_OWNER, { ...profile, roster: [...demoRoster(19, 3, '10A5'), ...demoRoster(3, 9, null)] }, {
+  attach('tour-05', newRegistration('reg-r1', DEMO_OWNER, { ...profile, groupName: 'Lớp 10A5', roster: [...demoRoster(19, 3, '10A5'), ...demoRoster(3, 9, null)] }, {
     state: 'Rejected',
     submittedAt: iso(now() - day * 1.2),
     reviewedAt: rejectedAt,
@@ -167,7 +168,7 @@ function ensureSeeded() {
     rejectionReason: 'Có 3 học sinh thiếu Lớp trong khi các dòng khác đều có lớp. Vui lòng bổ sung cột Lop cho đủ rồi gửi lại.',
   }), iso(now() - day * 1.2))
 
-  attach('tour-02', newRegistration('reg-r2', DEMO_OWNER, { ...profile, roster: demoRoster(24, 5, '11A2') }, {
+  attach('tour-02', newRegistration('reg-r2', DEMO_OWNER, { ...profile, groupName: 'Lớp 11A2', roster: demoRoster(24, 5, '11A2') }, {
     state: 'Approved',
     submittedAt: iso(now() - day * 3),
     reviewedAt: iso(now() - day * 2),
@@ -175,7 +176,7 @@ function ensureSeeded() {
     invitationSentAt: iso(now() - day * 1.9),
   }), iso(now() - day * 3))
 
-  attach('tour-00', newRegistration('reg-r3', DEMO_OWNER, { ...profile, roster: demoRoster(20, 7, '12A1') }, {
+  attach('tour-00', newRegistration('reg-r3', DEMO_OWNER, { ...profile, groupName: 'Lớp 12A1', roster: demoRoster(20, 7, '12A1') }, {
     state: 'Approved',
     submittedAt: iso(now() - day * 6),
     reviewedAt: iso(now() - day * 5),
@@ -211,6 +212,7 @@ function requireOwn(id: string, ownerId: string): { t: SimTour; reg: SimRegistra
 }
 
 function changed(t: SimTour, reg: SimRegistration) {
+  reg.updatedAt = iso(now())
   t.version += 1
   reg.version += 1
   world.touchTour(t)
@@ -252,6 +254,7 @@ function registrationView(t: SimTour, reg: SimRegistration): RepresentativeRegis
     tourState: t.state,
     tourScheduledAt: t.scheduledAt,
     schoolName: reg.schoolName,
+    groupName: reg.groupName ?? null,
     representativeName: reg.representativeName,
     contactEmail: reg.contactEmail,
     state: reg.state,
@@ -259,6 +262,7 @@ function registrationView(t: SimTour, reg: SimRegistration): RepresentativeRegis
     withClassCount: reg.roster.filter((row) => row.className?.trim()).length,
     submittedAt: reg.submittedAt,
     reviewedAt: reg.reviewedAt,
+    updatedAt: [reg.submittedAt, reg.reviewedAt, reg.updatedAt, reg.invitationSentAt].filter((v): v is string => Boolean(v)).sort().pop() ?? reg.submittedAt,
     rejectionReason: reg.state === 'Rejected' ? reg.rejectionReason : null,
     resubmittedAfterApproval: reg.resubmittedAfterApproval,
     participation:
@@ -315,6 +319,7 @@ export function validateInput(input: RegistrationInput): FieldErrors {
   const errors: FieldErrors = {}
   if (!input.schoolName?.trim()) errors.schoolName = 'Nhập tên trường / đoàn.'
   else if (input.schoolName.trim().length > 120) errors.schoolName = 'Tên trường tối đa 120 ký tự.'
+  if (input.groupName && input.groupName.trim().length > 60) errors.groupName = 'Tên đoàn / lớp tối đa 60 ký tự.'
   if (!input.representativeName?.trim()) errors.representativeName = 'Nhập họ tên người liên hệ.'
   else if (input.representativeName.trim().length > 80) errors.representativeName = 'Họ tên tối đa 80 ký tự.'
   if (!input.contactEmail?.trim()) errors.contactEmail = 'Nhập email liên hệ.'
@@ -329,6 +334,7 @@ export function validateInput(input: RegistrationInput): FieldErrors {
 function clean(input: RegistrationInput): RegistrationInput {
   return {
     schoolName: input.schoolName.trim(),
+    groupName: input.groupName?.trim() ?? '',
     representativeName: input.representativeName.trim(),
     contactEmail: input.contactEmail.trim(),
     roster: input.roster.map((row) => ({ name: row.name.trim().replace(/\s+/g, ' '), className: row.className?.trim() || null })),
@@ -415,6 +421,7 @@ export function submit(tourId: string, raw: RegistrationInput, requestId: string
     // Register again: the same record goes back to review (flow §4.2).
     Object.assign(existing, {
       schoolName: input.schoolName,
+      groupName: input.groupName || null,
       representativeName: input.representativeName,
       contactEmail: input.contactEmail,
       roster: input.roster,
@@ -458,6 +465,7 @@ export function update(id: string, raw: RegistrationInput, version: number, owne
     const fieldErrors: FieldErrors = {}
     if (input.contactEmail !== reg.contactEmail) fieldErrors.contactEmail = 'Đăng ký đã duyệt: không đổi email tại đây. Liên hệ Admin nếu cần.'
     if (input.schoolName !== reg.schoolName) fieldErrors.schoolName = 'Đăng ký đã duyệt: chỉ thay được danh sách học sinh.'
+    if ((input.groupName || null) !== (reg.groupName ?? null)) fieldErrors.groupName = 'Đăng ký đã duyệt: chỉ thay được danh sách học sinh.'
     if (input.representativeName !== reg.representativeName) fieldErrors.representativeName = 'Đăng ký đã duyệt: chỉ thay được danh sách học sinh.'
     if (Object.keys(fieldErrors).length) throw new RepresentativeRejection(400, { code: 'Validation', message: 'Khi đã duyệt chỉ thay được danh sách học sinh.', fieldErrors })
     if (sameRoster(input.roster, reg.roster)) {
@@ -474,6 +482,7 @@ export function update(id: string, raw: RegistrationInput, version: number, owne
   const wasRejected = reg.state === 'Rejected'
   Object.assign(reg, {
     schoolName: input.schoolName,
+    groupName: input.groupName || null,
     representativeName: input.representativeName,
     contactEmail: input.contactEmail,
     roster: input.roster,

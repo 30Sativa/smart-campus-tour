@@ -1,104 +1,123 @@
-import { ArrowLeft, Info } from 'lucide-react'
 import { Link, useParams } from 'react-router'
-import { Loading, Pill, RegistrationChip, TourChip } from '../../features/representative/components/RepUi'
+import type { RepresentativeTour } from '../../api/contracts/representative'
+import { buttonClass } from '../../features/staff/ui-classes'
+import { Callout, ErrorState, InfoList, PageSkeleton, Panel, RegistrationStatusBadge, RepPage, RepPageHeader, TourStateBadge } from '../../features/representative/components/RepUi'
 import { useRepTour } from '../../features/representative/representative-hooks'
-import { formatDateTime, readRepError } from '../../features/representative/rep-format'
+import { formatDate, formatTime, readRepError } from '../../features/representative/rep-format'
 
-/** Tour Detail (flow review §4.1): enough to decide, then Register or the reason why not. */
+const INSTRUCTIONS = [
+  'Đăng ký, sửa, thay danh sách hoặc hủy chỉ làm được khi buổi còn đang nhận đăng ký. Khi Admin chốt danh sách, đăng ký chỉ còn để xem.',
+  'Danh sách học sinh là file Excel có cột HoTen (bắt buộc) và Lop (không bắt buộc). Mỗi lần tải file mới sẽ thay toàn bộ danh sách cũ.',
+  'Admin duyệt từng đăng ký. Sau khi duyệt, bạn nhận đường dẫn và mã đoàn để chia sẻ cho học sinh.',
+  'Học sinh không cần tài khoản: các em vào bằng đường dẫn, mã đoàn, họ tên và lớp.',
+]
+
+/** Where this Tour stands for this account, and the one action that fits. */
+function RegistrationBox({ tour: t }: { tour: RepresentativeTour }) {
+  const hasActive = Boolean(t.myRegistrationId) && t.myRegistrationState !== 'Cancelled'
+  if (hasActive) {
+    return (
+      <>
+        <p className="text-sm leading-relaxed text-[#475569]">Bạn đã có đăng ký cho buổi này. Mỗi đại diện có một đăng ký cho một buổi; mọi thay đổi làm trong đăng ký đó.</p>
+        <Link to={`/dai-dien/dang-ky/${t.myRegistrationId}`} className={`${buttonClass('primary', 'lg')} mt-4 w-full max-lg:hidden`}>Xem đăng ký</Link>
+      </>
+    )
+  }
+  if (t.register.allowed) {
+    return (
+      <>
+        <p className="text-sm leading-relaxed text-[#475569]">
+          {t.myRegistrationState === 'Cancelled'
+            ? 'Đăng ký trước của bạn đã hủy. Đăng ký lại dùng chính bản ghi đó và chờ Admin duyệt lại.'
+            : 'Chuẩn bị file Excel danh sách học sinh. Bạn có thể tải file mẫu ở bước 2.'}
+        </p>
+        <Link to={`/dai-dien/buoi/${t.id}/dang-ky`} className={`${buttonClass('primary', 'lg')} mt-4 w-full max-lg:hidden`}>{t.myRegistrationState === 'Cancelled' ? 'Đăng ký lại' : 'Đăng ký đoàn'}</Link>
+      </>
+    )
+  }
+  return (
+    <>
+      <button type="button" disabled className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby="register-why">Đăng ký đoàn</button>
+      <p id="register-why" className="mt-2 text-[13px] leading-snug text-[#64748b]">{t.register.reason ?? 'Buổi không nhận đăng ký mới.'}</p>
+    </>
+  )
+}
+
+/** Tour Detail (flow review §4.1): enough to decide, then register or the reason why not. */
 export default function RepTourDetailPage() {
   const { tourId = '' } = useParams()
   const tour = useRepTour(tourId)
 
-  if (tour.isLoading) return <div className="rp-ctn"><Loading /></div>
+  if (tour.isLoading) return <PageSkeleton label="Đang tải buổi tham quan" />
   if (tour.isError || !tour.data) {
     return (
-      <div className="rp-ctn rp-section">
-        <div className="rp-callout rp-callout--danger" role="alert">
-          <div>
-            <b>Không mở được buổi này</b>
-            <p>{readRepError(tour.error).message}</p>
-            <div className="rp-callout__actions"><Link to="/dai-dien" className="rp-chip-btn">Về danh sách buổi</Link></div>
-          </div>
-        </div>
-      </div>
+      <RepPage>
+        <ErrorState title="Không mở được buổi này" message={readRepError(tour.error).message} back={{ to: '/dai-dien/buoi', label: 'Về danh sách buổi' }} />
+      </RepPage>
     )
   }
 
   const t = tour.data
-  const hasActive = t.myRegistrationId && t.myRegistrationState !== 'Cancelled'
+  const hasActive = Boolean(t.myRegistrationId) && t.myRegistrationState !== 'Cancelled'
+  const mobileCta = hasActive
+    ? { to: `/dai-dien/dang-ky/${t.myRegistrationId}`, label: 'Xem đăng ký' }
+    : t.register.allowed ? { to: `/dai-dien/buoi/${t.id}/dang-ky`, label: t.myRegistrationState === 'Cancelled' ? 'Đăng ký lại' : 'Đăng ký đoàn' } : null
 
   return (
-    <div className="rp-ctn">
-      <section className="rp-band">
-        <img src="/images/login-bg.jpg" alt="" aria-hidden="true" />
-        <div className="rp-band__top">
-          <Link to="/dai-dien" className="rp-back"><ArrowLeft size={14} />Tất cả buổi tham quan</Link>
-          <TourChip state={t.state} />
-        </div>
-        <div>
-          <span className="rp-kicker">{t.code} · Tham quan từ xa</span>
-          <h1 style={{ marginTop: 12 }}>{t.name}</h1>
-        </div>
-        <div className="rp-band__meta">
-          <div><b>{formatDateTime(t.scheduledAt)}</b>Giờ dự kiến</div>
-          <div><b>{t.stops.length} điểm</b>{t.routeName}</div>
-          <div><b>≈ 30 phút</b>Thời lượng</div>
-        </div>
-      </section>
+    <RepPage>
+      <RepPageHeader
+        back={{ to: '/dai-dien/buoi', label: 'Buổi tham quan' }}
+        badges={<><TourStateBadge state={t.state} size="md" />{t.myRegistrationState && <RegistrationStatusBadge state={t.myRegistrationState} size="md" />}</>}
+        title={t.name}
+        description={`Mã buổi ${t.code}. Tham quan khuôn viên từ xa qua robot tự hành và một livestream chung.`}
+      />
 
-      <div className="rp-layout">
-        <div className="rp-stack">
-          <div className="rp-card">
-            <div className="rp-card-title">Giới thiệu buổi</div>
-            <p style={{ fontSize: 16 }}>{t.description || 'Robot tự hành đi qua các điểm tham quan, học sinh xem qua một livestream chung, nghe thuyết minh và hỏi trợ lý AI riêng.'}</p>
-          </div>
-          <div className="rp-card">
-            <div className="rp-card-title"><span>Lộ trình dự kiến</span><span>{String(t.stops.length).padStart(2, '0')} điểm</span></div>
-            <ol className="rp-stops">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-5">
+          <Panel title="Thông tin buổi">
+            <InfoList items={[
+              { label: 'Ngày', value: formatDate(t.scheduledAt) },
+              { label: 'Giờ bắt đầu dự kiến', value: formatTime(t.scheduledAt) },
+              { label: 'Tuyến tham quan', value: t.routeName },
+              { label: 'Số điểm tham quan', value: `${t.stops.length} điểm` },
+            ]} />
+            {t.description && <p className="mt-5 border-t border-[#eef1f5] pt-5 text-[15px] leading-relaxed text-[#334155]">{t.description}</p>}
+          </Panel>
+
+          <Panel title="Lộ trình" action={<span className="text-sm text-[#64748b]">{t.stops.length} điểm, theo thứ tự</span>}>
+            <ol className="relative space-y-4 pl-0">
               {t.stops.map((stop, i) => (
-                <li key={stop} className="rp-stop"><em>{String(i + 1).padStart(2, '0')}</em><span>{stop}</span></li>
+                <li key={`${stop}-${i}`} className="relative flex items-center gap-3.5">
+                  {i < t.stops.length - 1 && <span aria-hidden="true" className="absolute top-8 left-[15px] h-[calc(100%-8px)] w-px bg-[#e2e8f0]" />}
+                  <span className="relative grid size-8 shrink-0 place-items-center rounded-full border border-[#d6e4fb] bg-[#f5f9ff] text-[13px] font-semibold text-[#2563eb] tabular-nums">{i + 1}</span>
+                  <span className="text-[15px] font-medium text-[#0f172a]">{stop}</span>
+                </li>
               ))}
             </ol>
-          </div>
+          </Panel>
+
+          <Panel title="Lưu ý quan trọng">
+            <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-[#475569] marker:text-[#94a3b8]">
+              {INSTRUCTIONS.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          </Panel>
         </div>
 
-        <aside className="rp-stack">
-          <div className="rp-card">
-            <div className="rp-card-title">Đăng ký của đoàn bạn</div>
-            {t.myRegistrationState && (
-              <p style={{ marginBottom: 14 }}><RegistrationChip state={t.myRegistrationState} /></p>
-            )}
-            {hasActive ? (
-              <>
-                <p className="rp-muted" style={{ marginBottom: 16 }}>Bạn đã có đăng ký cho buổi này. Mỗi đại diện có một đăng ký cho một buổi; sửa hoặc thay danh sách ngay trong đăng ký đó.</p>
-                <Pill to={`/dai-dien/dang-ky/${t.myRegistrationId}`} block>Mở đăng ký của tôi</Pill>
-              </>
-            ) : t.register.allowed ? (
-              <>
-                <p className="rp-muted" style={{ marginBottom: 16 }}>
-                  {t.myRegistrationState === 'Cancelled'
-                    ? 'Đăng ký trước đã hủy. Đăng ký lại sẽ gửi danh sách mới để Admin duyệt.'
-                    : 'Chuẩn bị file Excel có cột HoTen (bắt buộc) và Lop (nếu có). Có thể tải file mẫu ở bước tiếp theo.'}
-                </p>
-                <Pill to={`/dai-dien/buoi/${t.id}/dang-ky`} block>{t.myRegistrationState === 'Cancelled' ? 'Đăng ký lại' : 'Đăng ký đoàn'}</Pill>
-              </>
-            ) : (
-              <div className="rp-callout rp-callout--info">
-                <Info size={18} />
-                <div><b>Không nhận đăng ký mới</b><p>{t.register.reason}</p></div>
-              </div>
-            )}
-          </div>
-          <div className="rp-card rp-card--cream">
-            <div className="rp-card-title">Cần biết trước khi đăng ký</div>
-            <ul className="rp-stack" style={{ gap: 10, fontSize: 14 }}>
-              <li>Mọi thay đổi chỉ làm được khi buổi còn Đang nhận đăng ký. Khi Admin chốt danh sách, đăng ký bị khóa.</li>
-              <li>Mỗi lần tải file sẽ thay toàn bộ danh sách cũ; không ghép nhiều file.</li>
-              <li>Học sinh không cần tài khoản. Các em vào bằng đường dẫn, mã đoàn, họ tên và lớp.</li>
-            </ul>
-          </div>
+        <aside className="space-y-4 lg:sticky lg:top-24">
+          <Panel title="Đăng ký của đoàn bạn">
+            <RegistrationBox tour={t} />
+          </Panel>
+          {t.state !== 'Scheduled' && (
+            <Callout tone="muted" title="Chỉ xem">Buổi này không còn nhận thay đổi. Liên hệ Admin nếu cần hỗ trợ.</Callout>
+          )}
         </aside>
       </div>
-    </div>
+
+      {mobileCta && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#e5e9f0] bg-white/95 px-4 py-3 backdrop-blur-md lg:hidden">
+          <Link to={mobileCta.to} className={`${buttonClass('primary', 'lg')} w-full`}>{mobileCta.label}</Link>
+        </div>
+      )}
+    </RepPage>
   )
 }

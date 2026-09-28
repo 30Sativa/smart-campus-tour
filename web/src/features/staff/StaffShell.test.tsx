@@ -23,25 +23,13 @@ describe('StaffShell', () => {
     expect(screen.getByRole('link', { name: 'Khu vực quản trị' })).toHaveAttribute('href', '/admin')
   })
 
-  it('finds a staff page and navigates when the search is submitted', () => {
+  it('shows the signed-in account at the top right and no page search', () => {
     renderShell()
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm trang vận hành' }), { target: { value: 'LỊCH' } })
-    expect(within(screen.getByRole('list', { name: 'Kết quả tìm trang' })).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('href', '/staff/schedule')
-    fireEvent.submit(screen.getByRole('search'))
-    expect(screen.getByRole('heading', { name: 'Lịch và phiên tour' })).toBeInTheDocument()
-    expect(screen.getByRole('searchbox')).toHaveValue('')
-    expect(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('aria-current', 'page')
-  })
-
-  it('handles an unmatched search and lets Escape dismiss it', () => {
-    renderShell()
-    const search = screen.getByRole('searchbox')
-    fireEvent.change(search, { target: { value: 'Không tồn tại' } })
-    expect(screen.getByText('Không tìm thấy trang phù hợp.')).toBeInTheDocument()
-    fireEvent.submit(screen.getByRole('search'))
-    expect(screen.getByRole('heading', { name: 'Tình hình điều hành' })).toBeInTheDocument()
-    fireEvent.keyDown(search, { key: 'Escape' })
-    expect(screen.queryByText('Không tìm thấy trang phù hợp.')).not.toBeInTheDocument()
+    const account = screen.getByLabelText('Tài khoản đang đăng nhập')
+    expect(within(account).getByText('staff')).toBeInTheDocument()
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    // Sign-out stays in the sidebar.
+    expect(screen.getByRole('button', { name: /Đăng xuất/ })).toBeInTheDocument()
   })
 
   it('opens the mobile navigation and restores focus when dismissed', () => {

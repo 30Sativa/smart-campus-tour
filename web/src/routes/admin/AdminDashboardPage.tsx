@@ -8,7 +8,7 @@ import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows, TourStateBadge } 
 import { useAdminRegistrations, useAdminTours } from '../../features/administration/admin-hooks'
 import { adminCounts, buildAdminTasks, type AdminTask } from '../../features/administration/admin-attention'
 import { formatShortDay, formatSlot, formatStamp, untilText } from '../../features/administration/admin-format'
-import { RegistrationBar } from '../../features/administration/components/TourParts'
+import { TourProgressSteps } from '../../features/administration/components/TourParts'
 import { RegistrationReviewDrawer } from '../../features/administration/components/RegistrationReviewDrawer'
 import { useReviewParam } from '../../features/administration/use-review-param'
 
@@ -129,7 +129,7 @@ function UpcomingRow({ tour }: { tour: AdminTour }) {
           <span className="shrink-0 font-mono text-[11px] text-[#94a3b8]">{tour.code}</span>
         </p>
         <p className="mt-0.5 truncate text-[13px] text-[#64748b]">{tour.routeName} · {untilText(tour.scheduledAt)}</p>
-        <div className="mt-2.5 max-w-md"><RegistrationBar counts={tour.counts} /></div>
+        <div className="mt-3"><TourProgressSteps tour={tour} /></div>
         <p className={`mt-2 text-xs font-medium ${tour.state === 'Scheduled' && tour.readyBlockers.length ? 'text-[#92400e]' : tour.state === 'Scheduled' ? 'text-[#2f7a5b]' : 'text-[#64748b]'}`}>{readiness}</p>
       </div>
       <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:justify-between">

@@ -153,6 +153,10 @@ export type SimRegistration = GroupRegistration & {
   version: number
   /** Account of the school representative who owns it (scope §2, §4.2). Seeded groups have none. */
   ownerId?: string | null
+  /** Group or class name inside the school, given by the representative. */
+  groupName?: string | null
+  /** Last change made through the representative area (send, edit, cancel). */
+  updatedAt?: string | null
 }
 
 export type SimTour = {

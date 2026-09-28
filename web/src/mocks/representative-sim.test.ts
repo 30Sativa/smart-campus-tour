@@ -118,7 +118,7 @@ describe('representative area on the shared mock world', () => {
     const locked = rep.listRegistrations(ME).find((r) => r.tourState === 'Ready')!
     expect(locked.allowedActions.cancel.allowed).toBe(false)
     expect(locked.participation).not.toBeNull()
-    expect(error(() => rep.cancel(locked.id, locked.version, ME)).message).toMatch(/chốt danh sách/)
+    expect(error(() => rep.cancel(locked.id, locked.version, ME)).message).toMatch(/đã được chốt/)
   })
 
   it('refuses a save made on stale data', () => {

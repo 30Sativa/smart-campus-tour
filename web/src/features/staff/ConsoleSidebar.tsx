@@ -21,6 +21,7 @@ export function ConsoleSidebar({
   badges = {},
   secondary,
   user,
+  showUser = true,
   onNavigate,
   onLogout,
   open,
@@ -37,6 +38,8 @@ export function ConsoleSidebar({
   badges?: Record<string, { value: number; label: string }>
   secondary?: Array<{ to: string; label: string; icon: LucideIcon; current?: boolean }>
   user: { name: string; role: string; icon: LucideIcon }
+  /** Off when the shell shows the account in its header instead (operations). */
+  showUser?: boolean
   onNavigate: () => void
   onLogout: () => void
   open: boolean
@@ -63,7 +66,7 @@ export function ConsoleSidebar({
         <button ref={closeRef} type="button" onClick={onNavigate} className="grid size-9 place-items-center rounded-xl text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] lg:hidden" aria-label="Đóng menu"><X size={19} /></button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label={navLabel}>
+      <nav className="flex-1 overflow-y-auto px-3 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
         {sections.map((section, index) => (
           <div key={section.label ?? index} className={index ? 'mt-5' : ''}>
             {section.label && <p className="mb-1 px-3 text-[11px] font-semibold text-[#94a3b8]">{section.label}</p>}
@@ -103,13 +106,15 @@ export function ConsoleSidebar({
       </nav>
 
       <div className="border-t border-[#f1f5f9] p-3">
-        <div className="mb-1 flex items-center gap-2.5 rounded-lg px-2 py-2">
-          <span className="grid size-8 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><UserIcon size={15} aria-hidden="true" /></span>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-[#1e293b]">{user.name}</p>
-            <p className="truncate text-[11px] text-[#94a3b8]">{user.role}</p>
+        {showUser && (
+          <div className="mb-1 flex items-center gap-2.5 rounded-lg px-2 py-2">
+            <span className="grid size-8 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><UserIcon size={15} aria-hidden="true" /></span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold text-[#1e293b]">{user.name}</p>
+              <p className="truncate text-[11px] text-[#94a3b8]">{user.role}</p>
+            </div>
           </div>
-        </div>
+        )}
         <button type="button" onClick={onLogout} className="flex min-h-9 w-full items-center gap-3 rounded-lg px-3 text-[13px] font-medium text-[#6b7688] transition-colors hover:bg-[#f8fafc] hover:text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
           <LogOut size={16} aria-hidden="true" />Đăng xuất
         </button>

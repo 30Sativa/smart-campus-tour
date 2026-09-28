@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, ChevronRight, Radio, Search, ShieldAlert, X } from 'lucide-react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router'
+import { Bell, ChevronRight, Radio, ShieldAlert, X } from 'lucide-react'
+import { Link, Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { isAdminRole, roleLabel } from '../../auth/roles'
@@ -22,12 +22,10 @@ const CONNECTION_LABEL = {
 
 export default function StaffShell() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [search, setSearch] = useState('')
   const [toast, setToast] = useState<AssistanceNotice | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const location = useLocation()
-  const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const handleLogout = useLogout()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
@@ -41,10 +39,6 @@ export default function StaffShell() {
   const runningTour = today.data?.find((tour) => tour.state === 'Running')
 
   const currentPath = activeNavPath(location.pathname)
-  const searchResults = STAFF_NAV.filter(({ label }) =>
-    label.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')),
-  )
-
   useEffect(() => {
     if (!menuOpen) return
     const menuButton = menuButtonRef.current
@@ -77,6 +71,7 @@ export default function StaffShell() {
         user={{ name: user?.username || 'Nhân viên vận hành', role: roleLabel(user?.role), icon: Radio }}
         onNavigate={closeMenu}
         onLogout={handleLogout}
+        showUser={false}
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
@@ -102,55 +97,6 @@ export default function StaffShell() {
           </span>
 
           <div className="ml-auto flex min-w-0 items-center gap-2.5">
-            <form
-              role="search"
-              className="relative hidden w-60 sm:block"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (search.trim() && searchResults[0]) {
-                  navigate(searchResults[0].path)
-                  setSearch('')
-                }
-              }}
-            >
-              <label className="flex h-9.5 items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 focus-within:bg-white focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20 transition-all">
-                <Search size={14} className="shrink-0 text-[#64748b]" aria-hidden="true" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') setSearch('')
-                  }}
-                  aria-label="Tìm trang vận hành"
-                  placeholder="Tìm trang vận hành…"
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#0f172a] outline-none placeholder:text-[#94a3b8]"
-                />
-              </label>
-              {search.trim() && (
-                <div className="absolute top-11 right-0 left-0 rounded-xl border border-[#e2e8f0] bg-white p-1.5 shadow-lg transition-[opacity,transform] duration-150 ease-out starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-                  <ul aria-label="Kết quả tìm trang" className="space-y-0.5">
-                    {searchResults.map(({ path, label }) => (
-                      <li key={path}>
-                        <Link
-                          to={path}
-                          onClick={() => setSearch('')}
-                          className="flex items-center justify-between rounded-lg px-3 py-2 text-xs font-bold text-[#2563eb] hover:bg-[#eff6ff]"
-                        >
-                          {label}
-                          <ChevronRight size={13} aria-hidden="true" />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                  {searchResults.length === 0 && (
-                    <p role="status" className="p-3 text-xs text-[#64748b]">
-                      Không tìm thấy trang phù hợp.
-                    </p>
-                  )}
-                </div>
-              )}
-            </form>
 
             <Link
               to={runningTour ? `/staff/live/${runningTour.id}` : '/staff/live'}
@@ -167,6 +113,15 @@ export default function StaffShell() {
                 </span>
               )}
             </Link>
+
+            {/* The signed-in account, top right. Sign-out stays in the sidebar. */}
+            <div role="group" className="flex min-w-0 items-center gap-2.5 border-l border-[#e2e8f0] pl-3" aria-label="Tài khoản đang đăng nhập">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Radio size={16} aria-hidden="true" /></span>
+              <div className="hidden min-w-0 sm:block">
+                <p className="max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username || 'Nhân viên vận hành'}</p>
+                <p className="max-w-40 truncate text-[11px] leading-tight text-[#94a3b8]">{roleLabel(user?.role)}</p>
+              </div>
+            </div>
           </div>
         </header>
 

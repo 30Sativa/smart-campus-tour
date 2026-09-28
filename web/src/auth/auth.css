@@ -1,292 +1,196 @@
 /* ============================================================================
    CampusTour DT-AMR - authentication design layer
    ----------------------------------------------------------------------------
-   Auth is not a separate product, so it does not get a separate design system.
-   Both auth pages carry `.lp` on their root, which is what defines the palette
-   (--lp-bg / --lp-ink / --lp-accent), the font, the theme switch and the form
-   control tokens (--auth-field-bg / --auth-r / --lp-danger-*) this file styles
-   with.
-   landing.css is already in the main bundle, so reusing `.lp` costs nothing and
-   keeps the two surfaces from drifting apart.
+   Sign-in and sign-up share one split screen: a quiet white form column on the
+   left and one full-bleed campus photograph on the right. The form is the
+   only thing that asks for attention; the photograph sets the place.
 
-   Composition rule for this surface, stated once:
-   the panel holds exactly ONE column. Brand, heading, supporting line, fields,
-   call to action and the account switch are a single vertical group on one
-   measure, centred as a whole. Nothing floats in a corner on its own.
+   Both pages carry `.lp` on their root, which supplies the palette
+   (--lp-bg / --lp-ink / --lp-accent), the font, the light/dark switch and the
+   form-control tokens (--auth-field-bg / --auth-field-line / --auth-r). Auth
+   does not get a second design system.
 
-   Shape: auth form controls share one radius, --auth-r, so the input and the
-   button read as one family. This is the one place that departs from the
-   landing page's full-round pills, because a pill button above square inputs
-   makes a form look assembled from two kits.
+   Rules for this surface:
+   - One accent (--lp-accent) for the primary button, links and focus rings.
+   - One radius for inputs and the button, so the form reads as one family.
+   - Motion is a single short fade when the screen first appears, and the
+     browser's own crossfade between the two routes. Nothing bounces.
+   - `.auth-input`, `.auth-submit` and `.auth-spinner` are also used by the
+     visitor app, so their base rules below stay global; sizes specific to this
+     screen are scoped under `.auth`.
    ========================================================================== */
 
-/* Motion tokens.
-   One easing for the whole surface so it moves with a single hand, and a short
-   scale of durations: state feedback is faster than arrival. `--auth-ease` is a
-   soft ease-out with no overshoot, because nothing on a sign-in screen should
-   bounce.
-   These sit on :root rather than on .auth because the ::view-transition-*
-   pseudo-elements are children of the document root and cannot read a variable
-   scoped to the page. */
 :root {
   --auth-ease: cubic-bezier(0.22, 0.9, 0.3, 1);
-  --auth-fast: 150ms;   /* hover, focus, colour */
-  --auth-base: 200ms;   /* messages, small state changes */
-  --auth-enter: 400ms;  /* the column arriving */
-  --auth-media: 600ms;  /* the photograph settling */
-  --auth-exit: 160ms;   /* the outgoing form on a route switch */
-  --auth-swap: 520ms;   /* the panels changing sides */
+  --auth-fast: 150ms;
+  --auth-base: 200ms;
 }
 
-/* The form-control tokens this file's inputs and buttons read
-   (--auth-panel-bg, --auth-field-bg, --auth-field-line, --auth-r) and the danger
-   tokens its alert reads are declared on `.lp` in landing.css, for both themes.
-   They moved there when the signed-in visitor app started reusing `.auth-input`
-   and `.auth-submit`: one declaration on the root both surfaces carry, rather
-   than the same four values in two files drifting apart. Only the column width
-   is genuinely this surface's own. */
-.auth {
-  --auth-col: 460px;
-}
+/* ── Frame ───────────────────────────────────────────────────────────────── */
 
 .auth {
+  --auth-col: 400px;
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--auth-panel-bg);
 }
 
-/* Sign-in keeps the form on the right, sign-up moves it to the left. The
-   photograph holds the larger share either way, so only the order changes, not
-   the proportions. Below 1024px there is one column and nothing to swap. */
 @media (min-width: 1024px) {
   .auth {
-    grid-template-columns: 52fr 48fr;
-  }
-
-  .auth[data-side='form-left'] {
-    grid-template-columns: 48fr 52fr;
-  }
-
-  .auth[data-side='form-left'] .auth-panel {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .auth[data-side='form-left'] .auth-visual {
-    grid-column: 2;
-    grid-row: 1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
-/* ── Visual panel ────────────────────────────────────────────────────────── */
-
-.auth-visual {
-  position: relative;
-  display: none;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-@media (min-width: 1024px) {
-  .auth-visual {
-    display: block;
-  }
-}
-
-.auth-visual__img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 58%;
-}
-
-/* Enough to carry text, not enough to flatten the photograph. */
-.auth-visual__scrim {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(4, 13, 17, 0.34) 0%,
-    rgba(4, 13, 17, 0.12) 30%,
-    rgba(4, 13, 17, 0.74) 100%
-  );
-}
-
-.auth-visual__inner {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  padding: clamp(40px, 4vw, 64px);
-  /* The copy holds off the bottom edge instead of sitting on it. */
-  padding-bottom: clamp(56px, 6vw, 84px);
-  color: var(--lp-ink-on-media);
-}
-
-.auth-visual__title {
-  margin: 0;
-  font-size: clamp(2rem, 2.4vw, 2.375rem);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-  max-width: 20ch;
-}
-
-.auth .auth-visual__lead {
-  margin: 14px 0 0;
-  max-width: 36ch;
-  font-size: 1rem;
-  line-height: 1.6;
-  color: var(--lp-ink-on-media-2);
-}
-
-/* ── Form panel ──────────────────────────────────────────────────────────── */
+/* ── Form column ─────────────────────────────────────────────────────────── */
 
 .auth-panel {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
+  padding: 40px 24px 48px;
   background: var(--auth-panel-bg);
-  padding: 40px 22px 48px;
 }
 
 @media (min-width: 640px) {
   .auth-panel {
-    padding: 48px clamp(32px, 5vw, 64px);
+    padding: 56px 48px;
   }
 }
 
-/* The single column. Everything in the panel lives inside it. */
 .auth-col {
   width: 100%;
   max-width: var(--auth-col);
+  display: flex;
+  flex-direction: column;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-
-/* Arrival.
-   The stagger is carried by the layout's `data-entrance` flag rather than by
-   the elements themselves, so it plays once on reaching auth and never again
-   when the form swaps: the route switch is the view transition's job, and the
-   two must not run at the same time.
-   Order is reading order, and the whole sequence is under a quarter second of
-   offset, which registers as one settling gesture rather than three events. */
-.auth[data-entrance='on'] .auth-brand {
-  animation: auth-rise var(--auth-enter) var(--auth-ease) both;
-}
-
-.auth[data-entrance='on'] .auth-title,
-.auth[data-entrance='on'] .auth-lead {
-  animation: auth-rise var(--auth-enter) var(--auth-ease) 40ms both;
-}
-
-.auth[data-entrance='on'] .auth-form,
-.auth[data-entrance='on'] .auth-alert,
-.auth[data-entrance='on'] .auth-switch,
-.auth[data-entrance='on'] .auth-back {
-  animation: auth-rise var(--auth-enter) var(--auth-ease) 80ms both;
+  .auth-col {
+    animation: auth-rise 420ms var(--auth-ease) both;
+  }
 }
 
 @keyframes auth-rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-
-/* The photograph settles rather than arrives: it is context, and it must not
-   compete with the form for attention. */
-.auth[data-entrance='on'] .auth-visual__img {
-  animation: auth-settle var(--auth-media) var(--auth-ease) both;
-}
-
-.auth[data-entrance='on'] .auth-visual__inner {
-  animation: auth-rise 460ms var(--auth-ease) 180ms both;
-}
-
-@keyframes auth-settle {
-  from {
-    opacity: 0;
-    transform: scale(1.02);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-} /* end prefers-reduced-motion: no-preference */
-
-/* ── Brand, at the head of the column ────────────────────────────────────── */
 
 .auth-brand {
-  display: flex;
-  width: fit-content;
+  display: inline-flex;
   align-items: center;
-  gap: 0;
-  font-weight: 700;
-  font-size: 1.0625rem;
-  letter-spacing: -0.015em;
+  gap: 10px;
+  align-self: flex-start;
+  margin-bottom: 56px;
   color: var(--lp-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  border-radius: 10px;
+}
+
+.auth-brand:focus-visible {
+  outline: 2px solid var(--lp-accent);
+  outline-offset: 4px;
 }
 
 .auth-brand__mark {
-  display: block;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
-  flex: none;
-  transform: translate(4px, -4px) scale(1.25);
 }
 
 .auth-brand__sub {
   padding-left: 10px;
-  border-left: 1px solid var(--lp-line-strong);
-  color: var(--lp-ink-2);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-}
-
-/* ── Type ────────────────────────────────────────────────────────────────
-
-   landing.css resets `.lp h1` and `.lp p` to `margin: 0`, and an element plus
-   class beats a bare class, so every vertical margin below is written as
-   `.auth .x` to outrank it. Without the extra class the whole column collapses
-   to zero gaps: measured, not guessed. ────────────────────────────────────── */
-
-.auth .auth-body {
-  margin-top: 40px;
+  border-left: 1px solid var(--lp-line);
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .auth .auth-title {
   margin: 0;
-  font-size: clamp(1.875rem, 2.6vw, 2.4rem);
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
   color: var(--lp-ink);
+  font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.125rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .auth .auth-lead {
-  margin: 12px 0 0;
-  /* One short sentence: let it hold a line rather than balance into two. */
-  max-width: 46ch;
-  font-size: 1rem;
-  line-height: 1.6;
-  /* Holds one line where it fits, and never leaves a single word stranded. */
-  text-wrap: pretty;
+  margin: 10px 0 0;
   color: var(--lp-ink-2);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+/* ── Photograph ──────────────────────────────────────────────────────────── */
+
+/* Decorative, so it is dropped below `lg` rather than stacked above the form:
+   on a phone it would only push the fields down. */
+.auth-visual {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .auth-visual {
+    position: sticky;
+    top: 0;
+    display: block;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--lp-bg-sunk, #e8eef0);
+  }
+}
+
+.auth-visual__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Only as dark as the caption needs, and only at the bottom. */
+.auth-visual__scrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42%;
+  background: linear-gradient(to top, rgba(6, 13, 17, 0.62), rgba(6, 13, 17, 0));
+  pointer-events: none;
+}
+
+.auth-visual__inner {
+  position: absolute;
+  left: clamp(32px, 4vw, 56px);
+  right: clamp(32px, 4vw, 56px);
+  bottom: clamp(32px, 4vw, 48px);
+  color: #fff;
+}
+
+.auth-visual__title {
+  margin: 0;
+  max-width: 22ch;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.auth .auth-visual__lead {
+  margin: 8px 0 0;
+  max-width: 44ch;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.9375rem;
+  line-height: 1.55;
 }
 
 /* ── Form ────────────────────────────────────────────────────────────────── */
@@ -634,12 +538,86 @@
 
 /* Not part of the auth composition. It is pinned to the viewport, outside the
    column, and only ever rendered by a development build. */
+
+/* ── Sizes for this screen ───────────────────────────────────────────────── */
+
+/* The shared controls above are sized for the visitor app. On the sign-in
+   screen the form is denser and calmer: shorter fields, a smaller label, and a
+   gap that belongs to the error slot so nothing moves on blur. */
+.auth .auth-form {
+  margin-top: 36px;
+}
+
+.auth .auth-label {
+  margin-bottom: 7px;
+  font-size: 0.875rem;
+}
+
+.auth .auth-input {
+  height: 46px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+}
+
+.auth .auth-reveal {
+  right: 3px;
+  width: 40px;
+  height: 40px;
+}
+
+.auth .auth-error-slot {
+  min-height: 26px;
+  padding-top: 5px;
+}
+
+.auth .auth-submit {
+  height: 48px;
+  margin-top: 10px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+}
+
+.auth .auth-alert {
+  margin-top: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+}
+
+.auth-alert svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.auth .auth-switch {
+  margin-top: 28px;
+}
+
+.auth .auth-back {
+  margin-top: 16px;
+}
+
+.auth .auth-footer {
+  margin: 48px 0 0;
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── Development badge ───────────────────────────────────────────────────── */
+
+/* Not part of the composition: pinned to the top-right corner, outside the
+   column (over the photograph on desktop), rendered only by a development
+   build. */
 .auth-devbadge {
   position: fixed;
-  left: 14px;
-  bottom: 14px;
+  top: 14px;
+  right: 14px;
   z-index: 40;
   max-width: 300px;
+  margin: 0;
   padding: 9px 12px;
   border: 1px solid var(--lp-line-strong);
   border-radius: 10px;
@@ -647,331 +625,84 @@
   color: var(--lp-ink-3);
   font-size: 0.75rem;
   line-height: 1.45;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
-/* ── Sign-in to sign-up ──────────────────────────────────────────────────────
-
-   The two screens are one auth flow on two sides. The route layout keeps the
-   photograph, the brand and the panel mounted; `data-side` reorders the grid;
-   and the View Transitions API (native, no library) turns that reorder into a
-   slide and gives the outgoing form the exit React Router cannot.
-
-   Four things are named, and none of them is nested inside another, which is
-   what keeps the snapshots from being drawn twice. The page ground does not
-   move at all. Browsers without the API (Firefox today) swap sides instantly,
-   which is a correct fallback rather than a broken one. */
-
-@media (prefers-reduced-motion: no-preference) {
-  .auth-visual {
-    view-transition-name: auth-visual;
+/* On a phone the badge would cover the form's last line; it moves into the
+   flow under it instead. */
+@media (max-width: 767px) {
+  .auth-devbadge {
+    position: static;
+    max-width: none;
+    margin: 0 24px 24px;
   }
 
   .auth-brand {
-    view-transition-name: auth-brand;
-  }
-
-  .auth-body {
-    view-transition-name: auth-body;
-  }
-
-  .auth-back {
-    view-transition-name: auth-back;
+    margin-bottom: 40px;
   }
 }
 
-/* Nothing in the page ground changes between the two routes, so animating it
-   would only risk a flash. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
+/* ── Route switch ────────────────────────────────────────────────────────── */
 
-/* The groups carry the movement. Crossing the full width of the screen needs
-   longer than an in-place change, and everything crosses together so the screen
-   reads as one object turning over rather than four parts rearranging. */
-::view-transition-group(auth-visual),
-::view-transition-group(auth-body),
-::view-transition-group(auth-brand),
-::view-transition-group(auth-back) {
-  animation-duration: var(--auth-swap);
-  animation-timing-function: var(--auth-ease);
-}
-
-/* The brand and the back link are identical on both routes, so there is nothing
-   to crossfade: leaving the pair alone lets the group move clean pixels. */
-::view-transition-old(auth-brand),
-::view-transition-new(auth-brand),
-::view-transition-old(auth-back),
-::view-transition-new(auth-back) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-/* The two forms are different heights, and the panel changes width as it
-   crosses. Left to stretch to their group the snapshots would warp the text, so
-   each keeps its own size and is pinned to the top of the group. */
-::view-transition-old(auth-body),
-::view-transition-new(auth-body) {
-  height: auto;
-  object-fit: none;
-  object-position: top center;
-}
-
-::view-transition-old(auth-body) {
-  animation: auth-vt-out var(--auth-exit) var(--auth-ease) both;
-}
-
-::view-transition-new(auth-body) {
-  animation: auth-vt-in 300ms var(--auth-ease) 140ms both;
-}
-
-/* The photograph is the same picture on both sides, so crossfading it is worth
-   nothing and costs everything: fading the old one out before the new one
-   arrives empties the panel mid-slide and the screen goes blank. Measured at
-   170ms into the swap. So the outgoing photograph holds full opacity for the
-   whole slide, and the incoming one fades in on top of it. The only thing that
-   visibly changes is the line of copy, and the panel is never empty. */
-::view-transition-old(auth-visual) {
-  animation: none;
-}
-
-::view-transition-new(auth-visual) {
-  animation: auth-vt-fade 280ms var(--auth-ease) reverse both;
-}
-
-@keyframes auth-vt-out {
-  to {
-    opacity: 0;
-    transform: translateY(6px);
+/* Links between the two pages use a view transition; only the form content
+   changes, so a short crossfade of the page is all it needs. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 220ms;
+    animation-timing-function: var(--auth-ease);
   }
 }
-
-@keyframes auth-vt-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
-@keyframes auth-vt-fade {
-  to {
-    opacity: 0;
-  }
-}
-
-/* ── Mobile ──────────────────────────────────────────────────────────────────
-   No photograph to settle, a shorter column, and a visitor who is more likely
-   to be in a hurry: less travel, less time, almost no stagger. */
-
-@media (max-width: 768px) {
-  .auth[data-entrance='on'] .auth-title,
-  .auth[data-entrance='on'] .auth-lead {
-    animation-delay: 30ms;
-  }
-
-  .auth[data-entrance='on'] .auth-form,
-  .auth[data-entrance='on'] .auth-alert,
-  .auth[data-entrance='on'] .auth-switch,
-  .auth[data-entrance='on'] .auth-back {
-    animation-delay: 60ms;
-  }
-
-  .auth[data-entrance='on'] .auth-brand,
-  .auth[data-entrance='on'] .auth-title,
-  .auth[data-entrance='on'] .auth-lead,
-  .auth[data-entrance='on'] .auth-form,
-  .auth[data-entrance='on'] .auth-alert,
-  .auth[data-entrance='on'] .auth-switch,
-  .auth[data-entrance='on'] .auth-back {
-    animation-duration: 320ms;
-    animation-name: auth-rise-short;
-  }
-
-  @keyframes auth-rise-short {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-}
-
-/* Login composition extends the shared auth controls without changing the
-   registration or visitor forms. The existing daylight campus asset already
-   contains route markers, so no additional decorative UI is needed. */
-.auth[data-page='login'] {
-  padding: 16px;
-}
-
-.auth[data-page='login'] .auth-visual {
-  border-radius: var(--lp-r);
-}
-
-.auth[data-page='login'] .auth-visual__img {
-  object-position: 57% center;
-}
-
-.auth[data-page='login'] .auth-visual__scrim {
-  background: linear-gradient(180deg, rgba(11, 21, 25, 0.55), rgba(11, 21, 25, 0.02) 38%, rgba(11, 21, 25, 0.83));
-}
-
-.auth-visual__brand {
-  position: absolute;
-  top: 32px;
-  left: clamp(28px, 4vw, 60px);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--lp-ink-on-media);
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
-.auth-visual__brand img {
-  object-fit: contain;
-}
-
-.auth-visual__brand-sub {
-  display: block;
-  margin-top: 3px;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-}
-
-.auth[data-page='login'] .auth-visual__inner {
-  padding: clamp(28px, 4vw, 60px);
-}
-
-.auth[data-page='login'] .auth-visual__title {
-  max-width: 18ch;
-  font-size: clamp(2rem, 3.1vw, 3rem);
-  line-height: 1.3;
-  text-wrap: pretty;
-}
-
-.auth[data-page='login'] .auth-visual__lead {
-  max-width: 43ch;
-  margin-top: 20px;
-  color: var(--lp-ink-on-media);
-  line-height: 1.75;
-}
-
-.auth[data-page='login'] .auth-panel {
-  padding: 44px clamp(28px, 4vw, 64px);
-}
-
-.auth[data-page='login'] .auth-brand {
-  gap: 8px;
-}
-
-.auth[data-page='login'] .auth-brand__mark {
-  transform: none;
-}
-
-.auth[data-page='login'] .auth-title {
-  font-size: clamp(2rem, 2.5vw, 2.5rem);
-  line-height: 1.3;
-  letter-spacing: -0.035em;
-  text-wrap: pretty;
-}
-
-.auth-alert--login {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.auth-alert--login svg {
-  flex: none;
-  margin-top: 2px;
-}
-
-.auth .auth-footer {
-  margin-top: 36px;
-  color: var(--lp-ink-3);
-  font-size: 0.8125rem;
-  text-align: center;
-}
-
-/* The disclosure stays readable without covering form controls on phones. */
-.auth[data-page='login'] .auth-devbadge {
-  position: static;
-  grid-column: 1 / -1;
-  max-width: none;
-  margin: 8px 0 0;
-  padding: 4px 12px;
-  border: 0;
-  background: transparent;
-  text-align: center;
-  opacity: 1;
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  .auth[data-page='login'] {
-    grid-template-columns: 40fr 60fr;
-  }
-
-  .auth[data-page='login'] .auth-visual {
-    display: block;
-  }
-
-  .auth[data-page='login'] .auth-visual__title {
-    font-size: 1.875rem;
-  }
-}
-
-@media (max-width: 767px) {
-  .auth[data-page='login'] {
-    padding: 0;
-    align-content: center;
-  }
-
-  .auth[data-page='login'] .auth-panel {
-    padding: 32px 24px 20px;
-  }
-
-  .auth[data-page='login'] .auth-body {
-    margin-top: 28px;
-  }
-
-  .auth[data-page='login'] .auth-title {
-    font-size: 2rem;
-  }
-
-  .auth[data-page='login'] .auth-form {
-    margin-top: 24px;
-  }
-
-  .auth[data-page='login'] .auth-footer {
-    margin-top: 28px;
-  }
-}
-
-/* ── Reduced motion ──────────────────────────────────────────────────────────
-   A visitor who asked for less motion gets none of it: no entrance, no
-   settling, no route crossfade, no spinner rotation. Every element is simply
-   where it belongs, with full opacity, and the screen stays completely usable.
-   The transitions are neutralised rather than removed so state changes still
-   register instantly. */
 
 @media (prefers-reduced-motion: reduce) {
-  .auth *,
-  .auth *::before,
-  .auth *::after {
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    transition-delay: 0ms !important;
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
   }
+}
 
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
+/* ── Sign-in exit ────────────────────────────────────────────────────────────
+
+   After a successful sign-in, `split-exit.ts` sets data-auth-exit="split" on
+   <html> and navigates inside a view transition. Only then do the two halves
+   get transition names: the form column leaves to the left, the photograph
+   to the right, and the destination page (the new root) is shown at once
+   underneath them, as if the screen opened like a door. */
+
+html[data-auth-exit='split'] .auth-panel {
+  view-transition-name: auth-split-left;
+}
+
+html[data-auth-exit='split'] .auth-visual {
+  view-transition-name: auth-split-right;
+}
+
+/* The destination is simply there; only the two halves move. */
+html[data-auth-exit='split']::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}
+
+html[data-auth-exit='split']::view-transition-new(root) {
+  animation: none;
+}
+
+html[data-auth-exit='split']::view-transition-old(auth-split-left) {
+  animation: auth-split-left 720ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+html[data-auth-exit='split']::view-transition-old(auth-split-right) {
+  animation: auth-split-right 720ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+@keyframes auth-split-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes auth-split-right {
+  to {
+    transform: translateX(100%);
   }
 }

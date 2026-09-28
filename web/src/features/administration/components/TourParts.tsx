@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { useEffect, useRef } from 'react'
-import { CalendarClock, ChevronRight, CircleCheck, CircleX, Clock3, Route } from 'lucide-react'
+import { CalendarClock, Check, ChevronRight, CircleCheck, CircleX, Clock3, Route } from 'lucide-react'
 import type { AdminTour, ReadyCheck, RegistrationCounts } from '../../../api/contracts/admin'
 import { buttonClass } from '../../staff/ui-classes'
 import { formatSlot } from '../admin-format'
@@ -242,5 +242,55 @@ export function TourSummaryCard({ tour }: { tour: AdminTour }) {
       <p className="mt-2 text-xs text-[#64748b]">{tour.counts.total} đăng ký, {tour.counts.approved} đã duyệt, <span className={tour.counts.submitted ? 'font-bold text-[#a86a06]' : ''}>{tour.counts.submitted} chờ duyệt</span></p>
       <Link to={detailPath(tour)} className={`${buttonClass(action.kind, 'sm')} mt-3 w-full`}>{action.label}<ChevronRight size={14} aria-hidden="true" /></Link>
     </div>
+  )
+}
+
+const TOUR_STEPS = ['Đăng ký', 'Duyệt đoàn', 'Chốt Tour', 'Vận hành'] as const
+
+/**
+ * Where a Tour stands in its lifecycle, derived only from server facts:
+ * registrations arrive, Admin reviews them, Admin locks the Tour (Ready),
+ * Staff runs it. Completed Tours show every step done.
+ */
+function tourStepIndex(tour: Pick<AdminTour, 'state' | 'counts'>): number {
+  if (tour.state === 'Completed') return TOUR_STEPS.length
+  if (tour.state === 'Ready' || tour.state === 'Running') return 3
+  if (tour.counts.total === 0) return 0
+  if (tour.counts.submitted > 0 || tour.counts.approved === 0) return 1
+  return 2
+}
+
+/** Compact horizontal stepper: done = outlined check, current = filled, upcoming = muted. */
+export function TourProgressSteps({ tour }: { tour: Pick<AdminTour, 'state' | 'counts'> }) {
+  const current = tourStepIndex(tour)
+  return (
+    <ol className="flex w-full max-w-md items-start" aria-label="Tiến độ Tour">
+      {TOUR_STEPS.map((label, i) => {
+        const status = i < current ? 'done' : i === current ? 'current' : 'todo'
+        return (
+          <li key={label} className="relative flex min-w-0 flex-1 flex-col items-center" aria-current={status === 'current' ? 'step' : undefined}>
+            {i > 0 && (
+              <span
+                aria-hidden="true"
+                className={`absolute top-3.5 right-[calc(50%+20px)] left-[calc(-50%+20px)] h-0.5 -translate-y-1/2 rounded-full transition-colors duration-300 ${i <= current ? 'bg-[#3b82f6]' : 'bg-[#e2e8f0]'}`}
+              />
+            )}
+            <span
+              className={`relative z-10 grid size-7 place-items-center rounded-full text-xs font-semibold tabular-nums transition-colors duration-300 ${
+                status === 'done' ? 'border-[1.5px] border-[#3b82f6] bg-white text-[#3b82f6]'
+                : status === 'current' ? 'bg-[#3b82f6] text-white shadow-[0_0_0_4px_rgba(59,130,246,0.18)]'
+                : 'border-[1.5px] border-[#cbd5e1] bg-white text-[#94a3b8]'
+              }`}
+            >
+              {status === 'done' ? <Check size={14} strokeWidth={2.75} aria-hidden="true" /> : i + 1}
+            </span>
+            <span className={`mt-1.5 max-w-full truncate text-[11px] leading-4 ${status === 'current' ? 'font-semibold text-[#0f172a]' : status === 'done' ? 'font-medium text-[#475569]' : 'text-[#94a3b8]'}`}>
+              {label}
+              <span className="sr-only">{status === 'done' ? ': đã xong' : status === 'current' ? ': đang ở bước này' : ': chưa tới'}</span>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
