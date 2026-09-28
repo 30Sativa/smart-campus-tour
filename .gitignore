@@ -467,3 +467,4 @@ Claude outputs/
 # Agent skills (cai local, khong thuoc source)
 .agents/
 .aider-desk/
+skills-lock.json
