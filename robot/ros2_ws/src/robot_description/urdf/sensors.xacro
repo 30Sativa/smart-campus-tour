@@ -2,7 +2,7 @@
 <!-- =========================================================================
      sensors.xacro
      LiDAR 2D + IMU + 4 SR04T.
-     LiDAR lấy từ CAD; vị trí sonar và IMU vẫn là ƯỚC LƯỢNG.
+     LiDAR/sonar positions from CAD; sonar yaw/channel mapping and IMU remain provisional.
      ========================================================================= -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
@@ -75,16 +75,17 @@
   </gazebo>
 
   <!-- =========================== SR04T x4 =========================== -->
-  <!-- Range frames point along local +X. All four SR04T sit at the four
-       corners of the chassis, each facing diagonally outward (yaw = +-45 deg
-       from the corner's bisector). Positions are temporary until measured
-       on the finished chassis. -->
+  <!-- Range frames point along local +X. CAD Point2/3/5/4 map to the existing
+       front-left/front-right/rear-left/rear-right frame convention below.
+       Electrical channel mapping and diagonal yaw still require confirmation.
+       All four sensors pitch DOWN 4 degrees, confirmed by the user.
+       Measurements and remaining checks: robot/docs/cad-sensor-mounts.md. -->
   <xacro:property name="sonar_body_depth" value="0.025"/>
   <xacro:property name="sonar_body_width" value="0.045"/>
   <xacro:property name="sonar_body_height" value="0.025"/>
-  <xacro:property name="sonar_mount_z" value="0.0"/>
+  <xacro:property name="sonar_mount_pitch" value="0.06981317007977318"/>
 
-  <xacro:macro name="sr04t_link" params="name x y yaw material">
+  <xacro:macro name="sr04t_link" params="name x y z yaw material">
     <link name="${name}">
       <visual>
         <!-- Link origin is the acoustic face; body extends into the chassis. -->
@@ -99,36 +100,28 @@
     <joint name="${name}_joint" type="fixed">
       <parent link="base_link"/>
       <child link="${name}"/>
-      <origin xyz="${x} ${y} ${sonar_mount_z}" rpy="0 0 ${yaw}"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 ${sonar_mount_pitch} ${yaw}"/>
     </joint>
   </xacro:macro>
 
-  <!-- Schematic SONAR1 (PB0/PB1): front-left corner, facing +45 deg (out
-       to front-left diagonal). -->
+  <!-- Point2, front-left. SONAR1 (PB0/PB1) mapping and +45 deg yaw provisional. -->
   <xacro:sr04t_link name="sonar1_link"
-                     x="${base_collision_x + base_length/2}"
-                     y="${base_collision_y + base_width/2}"
+                     x="0.388507690" y="0.268345645" z="0.009502289"
                      yaw="0.78539816340" material="green"/>
 
-  <!-- Schematic SONAR2 (PB11/PB12): front-right corner, facing -45 deg (out
-       to front-right diagonal). -->
+  <!-- Point3, front-right. SONAR2 (PB11/PB12) mapping and -45 deg yaw provisional. -->
   <xacro:sr04t_link name="sonar2_link"
-                     x="${base_collision_x + base_length/2}"
-                     y="${base_collision_y - base_width/2}"
+                     x="0.388407690" y="-0.268354355" z="0.009802289"
                      yaw="-0.78539816340" material="yellow"/>
 
-  <!-- Schematic SONAR3 (PB13/PB14): rear-left corner, facing 135 deg (out
-       to rear-left diagonal). -->
+  <!-- Point5, rear-left. SONAR3 (PB13/PB14) mapping and +135 deg yaw provisional. -->
   <xacro:sr04t_link name="sonar3_link"
-                     x="${base_collision_x - base_length/2}"
-                     y="${base_collision_y + base_width/2}"
+                     x="-0.388492310" y="0.268445645" z="0.009802289"
                      yaw="2.35619449019" material="blue"/>
 
-  <!-- Schematic SONAR4 (PB15/PA6): rear-right corner, facing -135 deg (out
-       to rear-right diagonal). -->
+  <!-- Point4, rear-right. SONAR4 (PB15/PA6) mapping and -135 deg yaw provisional. -->
   <xacro:sr04t_link name="sonar4_link"
-                     x="${base_collision_x - base_length/2}"
-                     y="${base_collision_y - base_width/2}"
+                     x="-0.388492310" y="-0.268354355" z="0.009502289"
                      yaw="-2.35619449019" material="orange"/>
 
   <!-- ============================== IMU =============================== -->

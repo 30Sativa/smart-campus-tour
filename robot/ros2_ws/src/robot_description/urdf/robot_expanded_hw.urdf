@@ -109,7 +109,7 @@
   <joint name="sonar1_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="sonar1_link"/>
-    <origin rpy="0 0 0.7853981634" xyz="0.4010999755 0.28144996699999997 0.0"/>
+    <origin rpy="0 0.06981317007977318 0.7853981634" xyz="0.38850769 0.268345645 0.009502289"/>
   </joint>
   <link name="sonar2_link">
     <visual>
@@ -124,7 +124,7 @@
   <joint name="sonar2_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="sonar2_link"/>
-    <origin rpy="0 0 -0.7853981634" xyz="0.4010999755 -0.281350021 0.0"/>
+    <origin rpy="0 0.06981317007977318 -0.7853981634" xyz="0.38840769 -0.268354355 0.009802289"/>
   </joint>
   <link name="sonar3_link">
     <visual>
@@ -139,7 +139,7 @@
   <joint name="sonar3_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="sonar3_link"/>
-    <origin rpy="0 0 2.35619449019" xyz="-0.4010999755 0.28144996699999997 0.0"/>
+    <origin rpy="0 0.06981317007977318 2.35619449019" xyz="-0.38849231 0.268445645 0.009802289"/>
   </joint>
   <link name="sonar4_link">
     <visual>
@@ -154,7 +154,7 @@
   <joint name="sonar4_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="sonar4_link"/>
-    <origin rpy="0 0 -2.35619449019" xyz="-0.4010999755 -0.281350021 0.0"/>
+    <origin rpy="0 0.06981317007977318 -2.35619449019" xyz="-0.38849231 -0.268354355 0.009502289"/>
   </joint>
   <!-- ============================== IMU =============================== -->
   <link name="imu_link">

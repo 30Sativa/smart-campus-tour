@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0.."
 
-set "IDE=C:\ST\STM32CubeIDE_2.1.1\STM32CubeIDE\plugins"
+set "IDE=C:\ST\STM32CubeIDE_2.2.0\STM32CubeIDE\plugins"
 set "MAKE=%IDE%\com.st.stm32cube.ide.mcu.externaltools.make.win32_2.2.200.202604021615\tools\bin"
 set "GCC=%IDE%\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.win32_1.0.100.202602081740\tools\bin"
 set "OCD_BIN=%IDE%\com.st.stm32cube.ide.mcu.externaltools.openocd.win32_2.4.500.202604080855\tools\bin"

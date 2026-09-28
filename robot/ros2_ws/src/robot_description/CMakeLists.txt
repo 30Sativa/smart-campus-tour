@@ -23,6 +23,10 @@ if(BUILD_TESTING)
     NAME robot_description_geometry_consistency
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/test_geometry_consistency.py"
   )
+  add_test(
+    NAME robot_description_sensor_mounts
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/test_sensor_mounts.py"
+  )
 endif()
 
 ament_package()

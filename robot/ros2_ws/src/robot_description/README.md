@@ -43,7 +43,9 @@ base_footprint
 - `urdf/sensors.xacro` — LiDAR 2D + IMU + bốn SR04T. LiDAR ở giữa nóc xe;
   4 sonar đặt ở 4 góc vuông của khung xe (SONAR1 trước-trái, SONAR2
   trước-phải, SONAR3 sau-trái, SONAR4 sau-phải), mỗi con nhìn chéo ra góc.
-  Đo lại vị trí thật trước khi dùng dữ liệu sonar cho tránh vật cản.
+  XYZ đã cập nhật theo CAD Point2–Point5; cả bốn chúc xuống 4°. Yaw chéo
+  và ánh xạ kênh SONAR1–4 vẫn cần xác nhận. Số đo camera Point1 và giới hạn
+  áp dụng nằm trong `robot/docs/cad-sensor-mounts.md`. Sonar layer vẫn tắt.
 - `urdf/ros2_control.xacro` — hardware interface (sim ⇄ hardware thật qua `use_sim`).
 - `config/diff_drive_controller.yaml` — controller (wheel_separation/radius **phải khớp** URDF).
 - `urdf/robot_expanded_sim.urdf` / `robot_expanded_hw.urdf` — URDF đã expand sẵn để tham khảo.

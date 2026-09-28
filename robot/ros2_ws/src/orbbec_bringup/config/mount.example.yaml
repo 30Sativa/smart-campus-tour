@@ -1,6 +1,9 @@
 # Copy this file to mount.yaml and fill in values measured from base_link.
 # ROS convention: x forward, y left, z up; rotation order is roll, pitch, yaw.
 # Do not use this file directly as a vendor camera-driver parameter file.
+# CAD Point1 is (0.394307690, 0.000445645, 0.066402289) m from base_link,
+# with a forward-facing camera. Point1 is a face reference, not yet a verified
+# driver camera_link origin. See robot/docs/cad-sensor-mounts.md before using it.
 camera_mount:
   parent_frame: base_link
   child_frame: camera_link
