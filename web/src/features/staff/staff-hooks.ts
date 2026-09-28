@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AmrStatus, StartConfirmation, TourCommand, TourFilters, TourOperationDetail } from '../../api/contracts/staff'
 import type { RealtimeConnectionState, StaffRealtimeEvent } from '../../api/contracts/staff-realtime'
 import { mockStaffApi } from '../../mocks/staff-mock'
+import { applyLivePoses } from './live-fleet'
 import { mockStaffRealtime } from '../../mocks/staff-realtime-mock'
 
 const api = mockStaffApi
@@ -66,7 +67,8 @@ export function useTour(id: string) {
 export function useStaffAmrs() {
   return useQuery<AmrStatus[]>({
     queryKey: staffQueryKeys.amrs,
-    queryFn: () => api.amrs(),
+    // A live pose from /hubs/fleet wins over whatever the list source says.
+    queryFn: async () => applyLivePoses(await api.amrs()),
     refetchInterval: LIVE_REFETCH_MS,
   })
 }
@@ -118,7 +120,7 @@ export function useStaffRealtimeSync(onAssistance?: (notice: AssistanceNotice) =
     return realtime.subscribe((event) => {
       switch (event.type) {
         case 'FleetUpdated':
-          queryClient.setQueryData(staffQueryKeys.amrs, event.robots)
+          queryClient.setQueryData(staffQueryKeys.amrs, applyLivePoses(event.robots))
           break
         case 'TourUpdated': {
           const cached = queryClient.getQueryData<TourOperationDetail>(staffQueryKeys.tour(event.tourId))

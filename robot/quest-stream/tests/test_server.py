@@ -2,13 +2,15 @@
 
     python3 -m unittest discover -s tests -v
 
-The end-to-end test uses tests/fake_adb.py (a simulated Quest 3) and needs
-ffmpeg with libx264; it is skipped when ffmpeg is missing.
+The end-to-end test uses tests/fake_adb.py (a simulated Quest 3) and an
+FFmpeg RTSP listener standing in for MediaMTX; it needs ffmpeg with libx264
+and is skipped when ffmpeg is missing.
 """
 
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -64,9 +66,54 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(len(out.stdout), 30 * 1280 * 720 * 3 // 2)  # 30 yuv420p frames
 
     def test_invalid_config_is_refused(self):
-        for bad in ({"eye": "both"}, {"crop_keep": 1.5}, {"width": 1279}, {"encoder": "x"}):
-            with self.assertRaises(SystemExit):
+        for bad in (
+            {"eye": "both"}, {"crop_keep": 1.5}, {"width": 1279}, {"encoder": "x"},
+            {"publish_url": "http://nuc/quest"}, {"publish_url": "rtsp://127.0.0.1:8554"},
+            {"keyframe_interval": 0},
+        ):
+            with self.assertRaises(SystemExit, msg=str(bad)):
                 cfg(**bad)
+
+
+class FfmpegCommandTests(unittest.TestCase):
+    def arg(self, cmd, flag):
+        return cmd[cmd.index(flag) + 1]
+
+    def test_publishes_rtsp_over_tcp_to_mediamtx(self):
+        cmd = server.build_ffmpeg_command(cfg())
+        self.assertEqual(cmd[-1], "rtsp://127.0.0.1:8554/quest")
+        self.assertEqual(self.arg(cmd, "-f") , "h264")  # input
+        self.assertEqual(cmd[-4:-1], ["rtsp", "-rtsp_transport", "tcp"])
+        self.assertNotIn("hls", cmd)
+
+    def test_webrtc_safe_h264(self):
+        cmd = server.build_ffmpeg_command(cfg())
+        self.assertEqual(self.arg(cmd, "-profile:v"), "baseline")
+        self.assertEqual(self.arg(cmd, "-bf"), "0")
+        self.assertEqual(self.arg(cmd, "-g"), "30")  # a keyframe every second
+        vaapi = server.build_ffmpeg_command(cfg(encoder="h264_vaapi"))
+        self.assertEqual(self.arg(vaapi, "-bf"), "0")
+
+    def test_keyframe_interval(self):
+        cmd = server.build_ffmpeg_command(cfg(keyframe_interval=2))
+        self.assertEqual(self.arg(cmd, "-g"), "60")
+
+    def test_path_endpoint_and_password_hiding(self):
+        c = cfg(publish_url="rtsp://pub:secret@10.0.0.5:8554/robot1/quest")
+        self.assertEqual(c.publish_endpoint, ("10.0.0.5", 8554))
+        self.assertEqual(c.path_name, "robot1/quest")
+        self.assertNotIn("secret", c.publish_url_safe)
+        self.assertNotIn("secret", json.dumps(server.Status().snapshot(c)))
+
+    def test_mediamtx_reachable(self):
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            s.listen(1)
+            port = s.getsockname()[1]
+            self.assertTrue(server.mediamtx_reachable(cfg(publish_url=f"rtsp://127.0.0.1:{port}/quest"))[0])
+        ok, why = server.mediamtx_reachable(cfg(publish_url=f"rtsp://127.0.0.1:{port}/quest"))
+        self.assertFalse(ok)
+        self.assertIn("MediaMTX", why)
 
 
 class AdbParsingTests(unittest.TestCase):
@@ -108,9 +155,7 @@ class AdbParsingTests(unittest.TestCase):
 class HttpTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        hls = Path(self.tmp.name) / "hls"
-        hls.mkdir()
-        self.cfg = cfg(hls_dir=hls, log_dir=Path(self.tmp.name) / "logs")
+        self.cfg = cfg(log_dir=Path(self.tmp.name) / "logs")
         self.status = server.Status()
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(self.cfg, self.status))
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -129,57 +174,130 @@ class HttpTests(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read()
 
-    def test_offline_playlist_is_503_with_reason_and_cors(self):
+    def test_status_reports_state_reason_and_whep_path(self):
         self.status.set("offline", "QUEST_NOT_CONNECTED: no ADB device attached")
-        code, headers, body = self.get("/hls/quest.m3u8")
-        self.assertEqual(code, 503)
-        self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
-        self.assertIn("QUEST_NOT_CONNECTED", json.loads(body)["reason"])
-
-    def test_live_playlist_is_served_uncached(self):
-        (self.cfg.hls_dir / "quest.m3u8").write_text("#EXTM3U\n")
-        self.status.set("live", "STREAM_STARTED")
-        code, headers, body = self.get("/hls/quest.m3u8")
+        code, headers, body = self.get("/status")
         self.assertEqual(code, 200)
-        self.assertEqual(headers["Content-Type"], "application/vnd.apple.mpegurl")
-        self.assertIn("no-store", headers["Cache-Control"])
         self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        data = json.loads(body)
+        self.assertEqual(data["state"], "offline")
+        self.assertIn("QUEST_NOT_CONNECTED", data["reason"])
+        self.assertEqual(data["whepPath"], "/quest/whep")
+        self.assertEqual(data["output"]["width"], 1280)
 
-    def test_stale_playlist_is_not_served_when_not_live(self):
-        (self.cfg.hls_dir / "quest.m3u8").write_text("#EXTM3U\n")
-        self.status.set("connecting", "STREAM_STALLED")
-        self.assertEqual(self.get("/hls/quest.m3u8")[0], 503)
-
-    def test_segment_type_and_cache(self):
-        (self.cfg.hls_dir / "quest_1_00001.ts").write_bytes(b"\x47" * 188)
-        code, headers, _ = self.get("/hls/quest_1_00001.ts")
-        self.assertEqual(code, 200)
-        self.assertEqual(headers["Content-Type"], "video/mp2t")
-        self.assertIn("max-age", headers["Cache-Control"])
-
-    def test_missing_segment_traversal_and_listing_are_404(self):
-        self.assertEqual(self.get("/hls/quest_x.ts")[0], 404)
-        self.assertEqual(self.get("/hls/../server.py")[0], 404)
-        self.assertEqual(self.get("/hls/")[0], 404)
-
-    def test_preflight_and_status(self):
-        code, headers, _ = self.get("/hls/quest.m3u8", method="OPTIONS")
+    def test_health_preflight_and_unknown(self):
+        self.assertEqual(self.get("/health")[0], 200)
+        code, headers, _ = self.get("/status", method="OPTIONS")
         self.assertEqual(code, 204)
         self.assertIn("GET", headers["Access-Control-Allow-Methods"])
-        code, _, body = self.get("/status")
-        self.assertEqual(code, 200)
-        self.assertEqual(json.loads(body)["output"]["width"], 1280)
+        self.assertEqual(self.get("/hls/quest.m3u8")[0], 404)  # no video served here any more
+        self.assertEqual(self.get("/../server.py")[0], 404)
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class FakeMediaMTX:
+    """Stands in for MediaMTX: accepts an RTSP publisher and records the video.
+
+    An FFmpeg RTSP listener would quit on the first bare TCP connect (the
+    server's reachability check), so a small front door accepts connections,
+    drops the ones that send nothing and hands the publisher to a fresh FFmpeg.
+    """
+
+    def __init__(self, port: int, out: Path):
+        self.out = out
+        self.procs = []
+        self.sock = socket.socket()
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", port))
+        self.sock.listen(8)
+        self.closed = False
+        threading.Thread(target=self._accept, daemon=True).start()
+
+    def _accept(self):
+        while not self.closed:
+            try:
+                conn, _ = self.sock.accept()
+            except OSError:
+                return
+            threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
+
+    def _serve(self, conn):
+        with conn:
+            first = conn.recv(65536)
+            if not first:
+                return  # a reachability check
+            inner = free_port()
+            proc = subprocess.Popen(
+                ["ffmpeg", "-v", "error", "-y", "-rtsp_flags", "listen", "-timeout", "60",
+                 "-i", f"rtsp://127.0.0.1:{inner}/quest", "-c", "copy", "-f", "mpegts", str(self.out)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            self.procs.append(proc)
+            upstream = None
+            for _ in range(100):
+                try:
+                    upstream = socket.create_connection(("127.0.0.1", inner), timeout=5)
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            if upstream is None:
+                return
+            upstream.settimeout(None)  # an RTSP publish is quiet in one direction
+            with upstream:
+                upstream.sendall(first)
+
+                def pipe(a, b):
+                    try:
+                        while True:
+                            data = a.recv(65536)
+                            if not data:
+                                break
+                            b.sendall(data)
+                    except OSError:
+                        pass
+                    for x in (a, b):
+                        try:
+                            x.shutdown(socket.SHUT_RDWR)
+                        except OSError:
+                            pass
+
+                t = threading.Thread(target=pipe, args=(upstream, conn), daemon=True)
+                t.start()
+                pipe(conn, upstream)
+                t.join(timeout=5)
+
+    def stop(self):
+        self.closed = True
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)  # wakes the blocked accept()
+        except OSError:
+            pass
+        self.sock.close()
+        for proc in self.procs:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg not installed")
 class EndToEndWithSimulatedQuest(unittest.TestCase):
-    """fake adb -> screenrecord H.264 -> server.py -> HLS -> probe the result."""
+    """fake adb -> server.py -> RTSP publish -> fake MediaMTX -> probe the result."""
 
-    def test_stream_disconnect_and_recover(self):
+    def test_publish_mediamtx_down_disconnect_and_recover(self):
         with tempfile.TemporaryDirectory() as tmp:
-            state = Path(tmp) / "adb-state"
+            tmp = Path(tmp)
+            state = tmp / "adb-state"
             state.write_text("device")
-            port = 18080 + os.getpid() % 1000
+            port, rtsp_port = free_port(), free_port()
             env = dict(
                 os.environ,
                 QUEST_ADB=str(HERE / "fake_adb.py"),
@@ -187,8 +305,8 @@ class EndToEndWithSimulatedQuest(unittest.TestCase):
                 FAKE_ADB_SIZE="1920x1008",
                 QUEST_STREAM_HOST="127.0.0.1",
                 QUEST_STREAM_PORT=str(port),
-                QUEST_HLS_DIR=str(Path(tmp) / "hls"),
-                QUEST_LOG_DIR=str(Path(tmp) / "logs"),
+                QUEST_PUBLISH_URL=f"rtsp://127.0.0.1:{rtsp_port}/quest",
+                QUEST_LOG_DIR=str(tmp / "logs"),
                 QUEST_X264_PRESET="ultrafast",
             )
             proc = subprocess.Popen(
@@ -197,47 +315,62 @@ class EndToEndWithSimulatedQuest(unittest.TestCase):
             )
             base = f"http://127.0.0.1:{port}"
 
-            def state_of():
+            def status():
                 try:
                     with urllib.request.urlopen(base + "/status", timeout=2) as r:
-                        return json.loads(r.read())["state"]
+                        return json.loads(r.read())
                 except OSError:
-                    return None
+                    return {}
 
-            def wait_for(target, timeout):
+            def wait_for(target, timeout, reason=None):
                 end = time.time() + timeout
                 while time.time() < end:
-                    if state_of() == target:
+                    s = status()
+                    if s.get("state") == target and (reason is None or reason in s.get("reason", "")):
                         return True
-                    time.sleep(0.5)
+                    time.sleep(0.3)
                 return False
 
+            mtx = None
             try:
-                self.assertTrue(wait_for("live", 30), "stream never went live")
-                time.sleep(3)
+                # 1. MediaMTX not running yet: say so, do not start anything.
+                self.assertTrue(wait_for("error", 15, "MEDIAMTX_ERROR"), status())
+
+                # 2. MediaMTX up: the stream publishes.
+                mtx = FakeMediaMTX(rtsp_port, tmp / "take1.ts")
+                self.assertTrue(wait_for("live", 30), f"never went live: {status()}")
+                time.sleep(4)
+                mtx.stop()
                 probe = subprocess.run(
-                    ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-                     "stream=width,height,sample_aspect_ratio,r_frame_rate", "-of", "json",
-                     base + "/hls/quest.m3u8"],
+                    ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
+                     "stream=codec_name,profile,width,height,sample_aspect_ratio,r_frame_rate,"
+                     "has_b_frames,nb_read_frames", "-of", "json", str(tmp / "take1.ts")],
                     capture_output=True, text=True, timeout=30,
                 )
                 s = json.loads(probe.stdout)["streams"][0]
+                self.assertEqual(s["codec_name"], "h264")
+                self.assertEqual(s["profile"], "Constrained Baseline")
+                self.assertEqual(s["has_b_frames"], 0)
                 self.assertEqual((s["width"], s["height"]), (1280, 720))
                 self.assertEqual(s["r_frame_rate"], "30/1")
                 self.assertEqual(s["sample_aspect_ratio"], "1:1")
+                self.assertGreater(int(s["nb_read_frames"]), 60)
 
-                state.write_text("none")  # pull the cable
-                self.assertTrue(wait_for("offline", 10), "unplug not detected")
-                with self.assertRaises(urllib.error.HTTPError) as ctx:
-                    urllib.request.urlopen(base + "/hls/quest.m3u8", timeout=2)
-                self.assertEqual(ctx.exception.code, 503)
+                # 3. MediaMTX went away (restart): noticed, and back when it returns.
+                self.assertTrue(wait_for("error", 20, "MEDIAMTX_ERROR"), status())
+                mtx = FakeMediaMTX(rtsp_port, tmp / "take2.ts")
+                self.assertTrue(wait_for("live", 30), f"did not republish: {status()}")
 
-                state.write_text("device")  # plug it back
-                self.assertTrue(wait_for("live", 30), "did not recover after replug")
+                # 4. Pull the USB cable, then plug it back.
+                state.write_text("none")
+                self.assertTrue(wait_for("offline", 10, "QUEST_NOT_CONNECTED"), status())
+                state.write_text("device")
+                self.assertTrue(wait_for("live", 30), f"did not recover after replug: {status()}")
             finally:
+                if mtx:
+                    mtx.stop()
                 proc.terminate()
                 proc.wait(timeout=15)
-            self.assertEqual(list((Path(tmp) / "hls").glob("*.ts")), [], "segments left behind")
 
 
 if __name__ == "__main__":

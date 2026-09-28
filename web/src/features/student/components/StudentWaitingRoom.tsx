@@ -78,9 +78,9 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
         </div>
       )}
 
-      {/* Dark band with campus photo, like the home hero */}
+      {/* Campus image connects the waiting room with the join screen. */}
       <section className="st-band">
-        <img src="/images/login-bg.jpg" alt="" aria-hidden="true" />
+        <img src="/images/student-campus.png" alt="" aria-hidden="true" />
         <div className="st-band__top">
           <div className="st-kicker">Phòng chờ trực tuyến</div>
           <span className="st-pill-time">

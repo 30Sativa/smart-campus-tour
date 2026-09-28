@@ -9,6 +9,7 @@ import { ConsoleSidebar } from '../staff/ConsoleSidebar'
 import { useMobileNav } from '../staff/use-mobile-nav'
 import { PageSkeleton } from './components/RepUi'
 import { REP_NAV, REP_NAV_SECTIONS, repActivePath } from './rep-nav'
+import './representative.css'
 
 /**
  * The school representative's area (flow review §4): overview, the Tours a
@@ -32,7 +33,7 @@ export default function RepresentativeShell() {
   const title = REP_NAV.find(({ path }) => path === current)?.label ?? 'Đại diện trường'
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#1e293b]">
+    <div className="rep-app flex min-h-[100dvh] bg-[#f8fafc] text-[#1e293b]">
       {menuOpen && <button type="button" onClick={closeMenu} className="fixed inset-0 z-30 cursor-default bg-[#0f172a]/25 backdrop-blur-[2px] lg:hidden" aria-label="Đóng menu" />}
 
       <ConsoleSidebar
@@ -51,7 +52,7 @@ export default function RepresentativeShell() {
       />
 
       <div className="flex min-h-[100dvh] min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-[#e5e9f0] bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-10">
+        <header className="rep-topbar sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-[#e5e9f0] bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-10">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
@@ -63,6 +64,7 @@ export default function RepresentativeShell() {
             <Menu size={21} aria-hidden="true" />
           </button>
           <p className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[#0f172a]">{title}</p>
+          <span className="rep-topbar-tag ml-auto hidden text-xs font-semibold tracking-[0.12em] uppercase sm:block">Cổng tham quan từ xa</span>
         </header>
         <p className="border-b border-[#eef1f5] bg-white px-4 py-1.5 text-xs text-[#64748b] sm:px-6 lg:px-10">
           {MOCK_MODE_LABEL}. Đăng ký, duyệt và email đều được mô phỏng, không lưu sau khi tải lại trang.

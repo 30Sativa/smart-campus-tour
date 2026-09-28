@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useLocation, useParams } from 'react-router'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
 import { StudentJoinForm } from '../../features/student/components/StudentJoinForm'
@@ -23,6 +24,12 @@ export default function StudentTourPage() {
 
   const { data: snapshot, isLoading: isSnapshotLoading } = useStudentSnapshot(activeTourId)
   const joinMutation = useStudentJoinMutation()
+
+  // A student may submit the join form near the bottom of the page. Bring the
+  // status of the next screen into view when the session or Tour state changes.
+  useEffect(() => {
+    window.scrollTo?.({ top: 0, behavior: 'auto' })
+  }, [session?.sessionToken, snapshot?.tourState])
 
   const handleLeave = () => {
     clearSession()

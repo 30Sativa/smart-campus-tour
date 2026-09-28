@@ -1,0 +1,18 @@
+# MediaMTX: takes the Quest video from quest-stream (RTSP, localhost) and
+# serves it to browsers over WebRTC. Installed by scripts/install-services.sh,
+# which replaces __DIR__ and __USER__.
+[Unit]
+Description=MediaMTX media server (Quest 3 -> WebRTC, Smart Campus Tour)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+EnvironmentFile=-__DIR__/mediamtx.env
+ExecStart=/usr/local/bin/mediamtx /usr/local/etc/mediamtx.yml
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

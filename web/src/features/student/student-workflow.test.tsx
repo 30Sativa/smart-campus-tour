@@ -77,10 +77,12 @@ describe('Student Tour workflow (Scope Mục 5 & UC-05)', () => {
 
     const statusElements = await screen.findAllByText(/Đang giới thiệu/i)
     expect(statusElements.length).toBeGreaterThan(0)
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
 
     expect(screen.getAllByText(/Thuyết minh điểm dừng/i)[0]).toBeInTheDocument()
     expect(screen.getAllByText(/Bản đồ 2D/i)[0]).toBeInTheDocument()
     expect(screen.getAllByText(/Trợ lý AI/i)[0]).toBeInTheDocument()
+    expect(screen.getAllByText('Video minh họa')[0]).toBeInTheDocument()
   })
 
   it('joins tour-102 (Scheduled) and enters Waiting Room with audio test', async () => {

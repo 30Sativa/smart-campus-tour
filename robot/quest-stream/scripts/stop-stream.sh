@@ -11,5 +11,5 @@ if kill -0 "$PID" 2>/dev/null; then
   for _ in $(seq 1 20); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done
   kill -0 "$PID" 2>/dev/null && { echo "Did not stop in 10 s, killing."; kill -KILL "$PID"; }
 fi
-rm -f "$PIDFILE" public/hls/*.ts public/hls/*.m3u8 public/hls/*.tmp 2>/dev/null
+rm -f "$PIDFILE"
 echo "STREAM_STOPPED"

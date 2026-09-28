@@ -23,7 +23,7 @@ import { panelBase } from '../rep-classes'
 
 export function RepPage({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
   return (
-    <div className="min-h-full px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
+    <div className="rep-page min-h-full px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-8 lg:pb-12">
       <div className={`mx-auto w-full ${narrow ? 'max-w-[1040px]' : 'max-w-[1200px]'}`}>{children}</div>
     </div>
   )
@@ -38,7 +38,7 @@ export function RepPageHeader({ back, title, description, badges, action }: {
   action?: ReactNode
 }) {
   return (
-    <header className="mb-7">
+    <header className="rep-page-header mb-7">
       {back && (
         <Link to={back.to} className="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-[#475569] transition-colors hover:text-[#1d4ed8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
           <ArrowLeft size={16} aria-hidden="true" />{back.label}
@@ -63,7 +63,7 @@ export function Panel({ title, action, children, className = '', padded = true, 
   const autoId = useId()
   const headingId = id ?? autoId
   return (
-    <section className={`${panelBase} ${className}`} aria-labelledby={title ? headingId : undefined}>
+    <section className={`rep-panel ${panelBase} ${className}`} aria-labelledby={title ? headingId : undefined}>
       {title && (
         <div className={`flex flex-wrap items-center justify-between gap-3 ${padded ? 'px-5 pt-5 sm:px-6' : 'border-b border-[#eef1f5] px-5 py-4 sm:px-6'}`}>
           <h2 id={headingId} className="text-base font-semibold tracking-[-0.01em] text-[#0f172a]">{title}</h2>
