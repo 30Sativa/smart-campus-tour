@@ -2,7 +2,7 @@
 /**/person_perception:
   ros__parameters:
     # Absolute path to the exported OpenVINO IR. Export on a laptop:
-    #   yolo export model=yolo26n.pt format=openvino imgsz=320 int8=True
+    # Export YOLO26n on a development machine; record the artifact/runtime hash.
     model_xml: ""
     device: "CPU"            # try "GPU" once; HD 630 is Gen9.5 and often fails
     imgsz: 320
@@ -13,10 +13,15 @@
 
     camera_name: "camera"
     base_frame: "base_link"
-    stale_after_s: 1.5
+    stale_after_s: 1.0
+    future_stamp_tolerance_s: 0.05
 
-    publish_speed_limit: true
-    slow_zone_m: 3.0         # person nearer than this, inside the cone -> slow
-    cone_half_deg: 35.0      # roughly the RGB horizontal half-FOV
-    slow_speed_percent: 40.0 # never 0 - see _policy() in the node
+    bbox_only: false
+    publish_speed_limit: false
+    slow_speed_percent: 50.0
+    slow_enter_x_m: 2.0
+    slow_exit_x_m: 2.5
+    corridor_half_width_m: 0.8
+    clear_hold_s: 1.0
+    clear_max_gap_s: 0.4
     report_period: 5.0

@@ -53,6 +53,9 @@ services:
       # Lưu map RA NGOÀI container: map robot build được nằm ở host, KHÔNG mất
       # khi container tắt/update image. Trỏ vào package robot_navigation/maps.
       - ./robot_maps:/maps
+      # TEST model artifact directory. Copy the exported .xml/.bin and manifest
+      # to this host directory (or set PERSON_MODEL_DIR); container is read-only.
+      - ${PERSON_MODEL_DIR:-./models}:/opt/models:ro
       # Source mount live (giống service ros2-debug): pull code trên host rồi
       # `colcon build` TRONG container, khỏi phải rebuild + push image mỗi lần
       # sửa một dòng. Không có dòng này thì mọi sửa trong container sẽ MẤT khi

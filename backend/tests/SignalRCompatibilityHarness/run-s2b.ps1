@@ -8,6 +8,7 @@ $certDirectory = Join-Path $tempDirectory 'certs'
 $certPasswordText = 's2b-local-harness-only'
 $certPassword = ConvertTo-SecureString $certPasswordText -AsPlainText -Force
 $rosImage = 'ros@sha256:1813d3c85d7f96ff7d3012d865204583255740182db5d0065f8f8cd029a83138'
+$clientImage = "signalr-compat-s2b-client:$PID"
 $serverImage = "signalr-compat-s2b:$PID"
 $network = "signalr-s2b-$PID"
 $serverName = "signalr-s2b-server-$PID"
@@ -49,7 +50,9 @@ try {
     if ($LASTEXITCODE -ne 0) { docker pull $rosImage; if ($LASTEXITCODE -ne 0) { throw 'Could not pull the pinned ROS Humble image.' } }
     docker build -f (Join-Path $PSScriptRoot 'Dockerfile') -t $serverImage $PSScriptRoot
     if ($LASTEXITCODE -ne 0) { throw 'Could not build Linux .NET test Hub image.' }
-    docker network create $network | Out-Null
+    docker build -f (Join-Path $clientDirectory 'Dockerfile.pysignalr') -t $clientImage $clientDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the pinned ROS Humble pysignalr client image.' }
+    docker network create --subnet 172.30.0.0/24 $network | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not create isolated test network.' }
 
     $rosMetadata = docker image inspect $rosImage --format '{{index .RepoDigests 0}} {{.Id}}'
@@ -57,7 +60,7 @@ try {
     Write-Host "ROS image: $rosMetadata"
     Write-Host ".NET ASP.NET image: $dotnetMetadata"
 
-    docker run -d --name $serverName --network $network --network-alias compat-server `
+    docker run -d --name $serverName --network $network --network-alias compat-server --ip 172.30.0.10 `
         --mount "type=bind,source=$(Join-Path $certDirectory 'server.pfx'),target=/certs/server.pfx,readonly" `
         --mount "type=bind,source=$controlDirectory,target=/s2-control" `
         -e S2_CONTROL_DIR=/s2-control -e S1_EXPECTED_TOKEN=s2b-valid `
@@ -65,20 +68,44 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not start Linux .NET test Hub.' }
     Wait-File (Join-Path $controlDirectory 'server-ready.json') 90
 
-    $clientName = "signalr-s2b-client-$PID"
-    docker run -d --name $clientName --network $network `
+    $evidencePath = Join-Path $controlDirectory 's2b-pysignalr-last-run.json'
+    docker run --rm --network $network --add-host compat-server:172.30.0.10 `
         --mount "type=bind,source=$clientDirectory,target=/s2b,readonly" `
         --mount "type=bind,source=$(Join-Path $certDirectory 'server.pem'),target=/certs/server.pem,readonly" `
         --mount "type=bind,source=$controlDirectory,target=/s2b-control" `
         -e S2B_CONTROL_DIR=/s2b-control -e S2B_URL=https://compat-server:5443/hubs/compatibility `
-        -e S2B_CA=/certs/server.pem $rosImage bash -lc 'apt-get update -qq && apt-get install -y -qq python3-pip ca-certificates >/dev/null && python3 -m pip install --quiet --no-cache-dir -r /s2b/requirements-pysignalr.txt && python3 /s2b/s2b_client.py'
-    if ($LASTEXITCODE -ne 0) { throw 'Could not start the pysignalr client container.' }
+        -e S2B_CA=/certs/server.pem $clientImage python3 /s2b/s2b_client.py --stage0
+    if ($LASTEXITCODE -ne 0) { throw 'pysignalr Stage 0 client failed.' }
+    $stage0 = Get-Content -LiteralPath $evidencePath -Raw | ConvertFrom-Json
+    if ($stage0.verdict -ne 'STAGE0_PASS') { throw 'Stage 0 did not pass; reliability stages must not run.' }
 
-    $evidencePath = Join-Path $controlDirectory 's2b-pysignalr-last-run.json'
+    docker stop $serverName | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not stop the test Hub before Stage 1.' }
+    Remove-Item (Join-Path $controlDirectory 'server-ready.json') -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $controlDirectory 'client-started.json') -Force -ErrorAction SilentlyContinue
+
+    $clientName = "signalr-s2b-client-$PID"
+    docker run -d --name $clientName --network $network --add-host compat-server:172.30.0.10 `
+        --mount "type=bind,source=$clientDirectory,target=/s2b,readonly" `
+        --mount "type=bind,source=$(Join-Path $certDirectory 'server.pem'),target=/certs/server.pem,readonly" `
+        --mount "type=bind,source=$controlDirectory,target=/s2b-control" `
+        -e S2B_CONTROL_DIR=/s2b-control -e S2B_URL=https://compat-server:5443/hubs/compatibility `
+        -e S2B_CA=/certs/server.pem $clientImage python3 /s2b/s2b_client.py --reliability
+    if ($LASTEXITCODE -ne 0) { throw 'Could not start Stage 1 Python client process.' }
+
     $clientStartedPath = Join-Path $controlDirectory 'client-started.json'
     $reliabilityServerStarted = $false
+    $clientStateAfterBackendStart = 'not-started'
     $deadline = (Get-Date).AddMinutes(50)
     while ((Get-Date) -lt $deadline) {
+        if (-not $reliabilityServerStarted -and (Test-Path -LiteralPath $clientStartedPath)) {
+            Start-Sleep -Seconds 8
+            New-Item -ItemType File -Path (Join-Path $controlDirectory 'server-was-absent-8s') -Force | Out-Null
+            Start-TestServer
+            $reliabilityServerStarted = $true
+            $clientStateAfterBackendStart = (docker inspect $clientName --format '{{.State.Status}}' 2>$null).Trim()
+        }
+
         $clientState = docker inspect $clientName --format '{{.State.Status}}' 2>$null
         if ($LASTEXITCODE -ne 0 -or $clientState.Trim() -in @('exited', 'dead')) {
             if (-not (Test-Path -LiteralPath $evidencePath)) {
@@ -86,13 +113,6 @@ try {
                 throw "pysignalr client exited with state $clientState without evidence"
             }
             break
-        }
-
-        if (-not $reliabilityServerStarted -and (Test-Path -LiteralPath $clientStartedPath)) {
-            Start-Sleep -Seconds 8
-            New-Item -ItemType File -Path (Join-Path $controlDirectory 'server-was-absent-8s') -Force | Out-Null
-            Start-TestServer
-            $reliabilityServerStarted = $true
         }
 
         foreach ($action in @('stop', 'restart', 'killrestart', 'pause')) {
@@ -146,12 +166,17 @@ try {
     $evidence | Add-Member -NotePropertyName 'dotnetImage' -NotePropertyValue $dotnetMetadata.Split(' ')[0] -Force
     $evidence | Add-Member -NotePropertyName 'dotnetRuntime' -NotePropertyValue (docker run --rm --entrypoint dotnet $serverImage --list-runtimes | Out-String).Trim() -Force
     $evidence | Add-Member -NotePropertyName 'hubOs' -NotePropertyValue ((docker run --rm --entrypoint sh $serverImage -lc 'grep PRETTY_NAME /etc/os-release') -replace '^PRETTY_NAME=', '').Trim('"') -Force
+    $evidence | Add-Member -NotePropertyName 'backendStartedAfterClientStartSeconds' -NotePropertyValue 8 -Force
+    $evidence | Add-Member -NotePropertyName 'clientStateAfterBackendStart' -NotePropertyValue $clientStateAfterBackendStart -Force
+    $evidence | Add-Member -NotePropertyName 'clientConnectedAfterBackendAppearance' -NotePropertyValue ($evidence.openCallbacks -gt 1) -Force
     $evidence | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $repoRoot 'backend/tests/SignalRCompatibilityHarness/s2b-pysignalr-last-run.json') -Encoding utf8
     Get-Content -LiteralPath (Join-Path $repoRoot 'backend/tests/SignalRCompatibilityHarness/s2b-pysignalr-last-run.json') -Raw | Write-Host
+    if ($evidence.verdict -eq 'BLOCKED') { throw "S2B BLOCKED at $($evidence.failureStage). See s2b-pysignalr-last-run.json." }
 } finally {
     docker rm -f "signalr-s2b-client-$PID" 2>$null | Out-Null
     docker rm -f $serverName 2>$null | Out-Null
     docker network rm $network 2>$null | Out-Null
+    docker image rm $clientImage 2>$null | Out-Null
     docker image rm $serverImage 2>$null | Out-Null
     if ($certificate) { Remove-Item "Cert:\CurrentUser\My\$($certificate.Thumbprint)" -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $tempDirectory -Recurse -Force -ErrorAction SilentlyContinue

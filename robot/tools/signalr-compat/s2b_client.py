@@ -3,11 +3,9 @@ import json
 import os
 import platform
 import ssl
-import subprocess
 import time
 import threading
 import uuid
-import urllib.request
 from pathlib import Path
 
 from pysignalr.client import SignalRClient
@@ -23,7 +21,8 @@ LEG_ID = "22222222-2222-4222-8222-222222222222"
 metrics = {
     "candidate": "pysignalr",
     "version": "1.3.2",
-    "os": platform.platform(),
+    "os": platform.freedesktop_os_release().get("PRETTY_NAME", platform.platform()),
+    "kernel": platform.platform(),
     "python": platform.python_version(),
     "streamId": STREAM_ID,
     "handlersRegistered": 0,
@@ -135,7 +134,6 @@ async def stage0():
     command_received = asyncio.Event()
     command_ids = []
     invocation_error = asyncio.Event()
-    binding_error_observed = asyncio.Event()
     invocation_results = {}
 
     client = SignalRClient(
@@ -160,8 +158,6 @@ async def stage0():
         value = error_text(message)
         metrics["errorCallbacks"] += 1
         metrics["bindingErrors"].append(value)
-        if "seq" in value.lower() or "convert" in value.lower() or "number" in value.lower():
-            binding_error_observed.set()
 
     async def on_command(arguments):
         payload = arguments[0]
@@ -253,7 +249,7 @@ async def stage0():
             "field": "seq",
             "sentValue": "not-a-number",
             "completion": invocation_results["malformed"],
-            "errorCallbackObserved": binding_error_observed.is_set(),
+            "errorCallbackObserved": invocation_results["malformed"]["error"] in metrics["bindingErrors"],
             "invocationErrorObserved": invocation_error.is_set(),
             "errorCallbackMessages": metrics["bindingErrors"],
         }
@@ -271,6 +267,9 @@ async def main():
     if len(os.sys.argv) > 1 and os.sys.argv[1] == "--stream-probe":
         print(json.dumps({"streamId": str(uuid.uuid4()), "processId": os.getpid()}))
         return
+    if len(os.sys.argv) > 1 and os.sys.argv[1] == "--reliability":
+        await reliability()
+        return
     try:
         task = await stage0()
         await stop_task(task)
@@ -278,7 +277,9 @@ async def main():
         if len(os.sys.argv) <= 1 or os.sys.argv[1] != "--stage0":
             await reliability()
     except Exception as error:
-        metrics["exceptions"].append(f"{type(error).__name__}: {error}")
+        failure = f"{type(error).__name__}: {error}"
+        if failure not in metrics["exceptions"]:
+            metrics["exceptions"].append(failure)
         write_evidence("BLOCKED", metrics["exceptions"][-1])
         raise
 
@@ -310,6 +311,8 @@ async def reliability():
     global metrics
     evidence = CONTROL / "s2b-pysignalr-last-run.json"
     metrics = json.loads(evidence.read_text(encoding="utf-8"))
+    metrics["stage0StreamId"] = metrics.get("streamId")
+    metrics["streamId"] = STREAM_ID
     metrics.update({
         "initialRetry": {"attempts": 0, "elapsedSeconds": None, "retryDelaysSeconds": []},
         "disconnectObservedAt": [],
@@ -329,8 +332,6 @@ async def reliability():
     failures_before_first_open = 0
     callback_context = {}
     run_started = time.monotonic()
-
-    await request_runner("stop", {"reason": "stage1-start-before-backend"})
 
     def token_factory():
         token["calls"] += 1
@@ -430,9 +431,25 @@ async def reliability():
         done, _ = await asyncio.wait({open_wait, run_task}, timeout=45, return_when=asyncio.FIRST_COMPLETED)
         if open_wait not in done:
             if run_task.done():
-                run_task.result()
-                raise RuntimeError("pysignalr.run ended before the backend appeared")
-            raise TimeoutError("timed out waiting for backend appearance after client startup")
+                try:
+                    run_task.result()
+                    raise RuntimeError("pysignalr.run ended before the backend appeared")
+                except Exception as error:
+                    metrics["startupBeforeBackend"] = "BLOCKED"
+                    metrics["initialRetry"] = {
+                        "attempts": failures_before_first_open + 1,
+                        "elapsedSeconds": round(time.monotonic() - run_started, 3),
+                        "retryDelaysSeconds": [round(b - a, 3) for a, b in zip(retry_transitions, retry_transitions[1:])],
+                    }
+                    metrics["startupFailure"] = f"{type(error).__name__}: {error}"
+                    raise RuntimeError(f"Stage 1 startup-before-backend failed: {metrics['startupFailure']}") from error
+            metrics["startupBeforeBackend"] = "BLOCKED"
+            metrics["initialRetry"] = {
+                "attempts": failures_before_first_open,
+                "elapsedSeconds": round(time.monotonic() - run_started, 3),
+                "retryDelaysSeconds": [round(b - a, 3) for a, b in zip(retry_transitions, retry_transitions[1:])],
+            }
+            raise TimeoutError("Stage 1 startup-before-backend retry exceeded 45 seconds")
         open_wait.result()
         ensure_task_alive()
         metrics["initialRetry"] = {
@@ -465,18 +482,28 @@ async def reliability():
         metrics["stage2"] = "PASS"
         write_evidence("STAGE2_PASS")
     except Exception as error:
-        metrics.setdefault("exceptions", []).append(f"{type(error).__name__}: {error}")
-        metrics["stage2"] = "BLOCKED"
-        write_evidence("BLOCKED", metrics["exceptions"][-1])
+        failure = f"{type(error).__name__}: {error}"
+        exceptions = metrics.setdefault("exceptions", [])
+        if failure not in exceptions:
+            exceptions.append(failure)
+        if metrics.get("startupBeforeBackend") == "BLOCKED":
+            metrics["failureStage"] = "Stage 1 - client start before backend"
+            metrics["stage2"] = "NOT_RUN"
+        else:
+            metrics["failureStage"] = "Stage 2 - established backend stop/restart"
+            metrics["stage2"] = "BLOCKED"
+        write_evidence("BLOCKED", exceptions[-1])
         raise
     finally:
         await stop_task(run_task)
 
 
 def _callback_context():
+    loop = asyncio.get_running_loop()
     return {
         "thread": threading.current_thread().name,
-        "eventLoop": asyncio.get_running_loop().get_name(),
+        "eventLoopType": type(loop).__name__,
+        "eventLoopId": hex(id(loop)),
     }
 
 

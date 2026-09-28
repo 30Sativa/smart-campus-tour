@@ -6,33 +6,33 @@ discrete GPU.  Nav2 already lives on those threads.  Whether Phase 4 is even
 possible is a measurement, not an opinion -- and the answer decides the design,
 so it comes first.
 
-Two things this answers:
+The default run measures CPU only. GPU probing is opt-in because it is not part
+of the selected runtime policy:
 
-  1. How many milliseconds does one detection cost, at the resolution and
-     precision you actually plan to ship?
-  2. Does the HD Graphics 630 iGPU work at all?  It is Gen9.5 and the OpenVINO
-     GPU plugin is unreliable on that generation.  If it works, it is free
-     headroom that leaves the CPU to Nav2.  If it does not, you use CPU and
-     lower the frame rate.  Either way you find out in one minute instead of
-     after a week of integration.
+GPU is added only with `--include-gpu`.
 
-Export the model on your LAPTOP (needs ultralytics + torch, which never have
-to touch the robot):
+Export the first candidate on a development machine (ultralytics/torch are not
+needed on the robot). Precision is selected and recorded after export:
 
     pip install ultralytics
-    yolo export model=yolo26n.pt format=openvino imgsz=320 int8=True
-    # -> yolo26n_int8_openvino_model/yolo26n.xml  (+ .bin)
+    yolo export model=yolo26n.pt format=openvino imgsz=320
+    # -> yolo26n_openvino_model/yolo26n.xml  (+ .bin)
 
-Copy that folder to the mini PC, then here:
+Copy the exported folder to the host model directory mounted at `/opt/models`
+in Compose, then run in the robot container:
 
-    pip3 install "openvino>=2024.0"
-    python3 bench_detector.py yolo26n_int8_openvino_model/yolo26n.xml
+    python3 bench_detector.py /opt/models/yolo26n_openvino_model/yolo26n.xml \
+        --manifest-out /tmp/person-model-manifest.json
 
-Run it TWICE: once on an idle machine, once with the Phase 3 navigation stack
-running.  The second number is the real one.
+This is a microbenchmark only. The live pipeline rate, drops, and e2e latency
+must be measured with RGB, depth, Nav2, and DDS active.
 """
 
 import argparse
+import hashlib
+import json
+import os
+import platform
 import statistics
 import sys
 import time
@@ -55,6 +55,7 @@ def bench(xml_path, device, imgsz, threads, iters, warmup):
 
     try:
         model = core.read_model(xml_path)
+        model_precision = str(model.input(0).element_type)
         compiled = core.compile_model(model, device, cfg)
     except Exception as exc:  # noqa: BLE001
         return None, f'{type(exc).__name__}: {exc}'
@@ -84,7 +85,18 @@ def bench(xml_path, device, imgsz, threads, iters, warmup):
         'mean': statistics.fmean(times),
         'in_shape': tuple(shape),
         'out_shapes': out_shapes,
+        'input_dtype': str(blob.dtype),
+        'runtime_version': ov.__version__,
+        'model_input_precision': model_precision,
     }, None
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as model_file:
+        for block in iter(lambda: model_file.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def main():
@@ -96,15 +108,21 @@ def main():
     ap.add_argument('--iters', type=int, default=100)
     ap.add_argument('--warmup', type=int, default=10)
     ap.add_argument('--target-hz', type=float, default=5.0,
-                    help='Detection rate Phase 4 plans to run at.')
+                    help='Reference cycle rate; this script is still a synthetic tensor microbenchmark.')
+    ap.add_argument('--manifest-out', default='',
+                    help='Optional path to write measured runtime/model manifest JSON.')
+    ap.add_argument('--include-gpu', action='store_true',
+                    help='Also benchmark GPU explicitly; CPU remains the default candidate.')
     args = ap.parse_args()
 
+    print('MODE    : synthetic tensor microbenchmark (not camera pipeline evidence)')
     print(f'model   : {args.xml}')
     print(f'imgsz   : {args.imgsz}   threads(CPU): {args.threads}   iters: {args.iters}')
     print('-' * 62)
 
     results = {}
-    for dev in ('CPU', 'GPU'):
+    devices = ['CPU', 'GPU'] if args.include_gpu else ['CPU']
+    for dev in devices:
         r, err = bench(args.xml, dev, args.imgsz, args.threads, args.iters, args.warmup)
         if err:
             print(f'{dev:<4} : KHONG CHAY DUOC -- {err}')
@@ -113,12 +131,11 @@ def main():
                 print('        Khong sao -- dung CPU, day chinh la ly do phai do truoc.)')
             continue
         results[dev] = r
-        print(f'{dev:<4} : p50 {r["p50"]:6.1f} ms | p95 {r["p95"]:6.1f} ms | '
-              f'{1000.0/r["p50"]:5.1f} FPS toi da')
+        print(f'{dev:<4} : infer-call p50 {r["p50"]:6.1f} ms | p95 {r["p95"]:6.1f} ms')
 
     if not results:
         print('\nKhong device nao chay duoc. Kiem tra lai duong dan .xml va '
-              'pip3 install openvino.')
+              'xac nhan robot image co OpenVINO 2024.6.0 da pin.')
         return 1
 
     best_dev = min(results, key=lambda d: results[d]['p50'])
@@ -132,16 +149,25 @@ def main():
     print(f'   (1, N, 6) = model NMS-free (YOLO26) -> parser don gian')
     print(f'   (1, 84, N) = con phai chay NMS tren CPU -> cong them vai ms')
     print()
-    print(f'Chay o {args.target_hz:.0f} Hz tren {best_dev}: '
-          f'{best["p50"]:.1f} / {budget_ms:.0f} ms = {load:.0f}% ngan sach mot chu ky')
-    if load < 40:
-        print('  => THOAI MAI. Co the tang len 10 Hz hoac dung model to hon.')
-    elif load < 75:
-        print('  => VUA DU. Giu 5 Hz, dung tang do phan giai.')
-    else:
-        print('  => QUA NANG. Ha imgsz xuong 256, hoac doi sang model')
-        print('     person-detection-0202 cua Intel Open Model Zoo (nhe hon nhieu),')
-        print('     hoac ha target xuong 2-3 Hz.')
+    print(f'Reference cycle: {args.target_hz:.0f} Hz; tensor p50 uses {load:.0f}% of {budget_ms:.0f} ms.')
+    print('Unique RGB frame rate: NOT MEASURED (no camera input). Drops: NOT MEASURED.')
+    print('Camera/depth/ROS e2e latency: NOT MEASURED.')
+    print('This result cannot establish pipeline e2e latency, detector recall, or safe operating rate.')
+    model_files=[args.xml,os.path.splitext(args.xml)[0]+'.bin']
+    manifest={'mode':'synthetic_tensor_microbenchmark','model_xml':os.path.abspath(args.xml),
+      'model_files_sha256':{f:sha256(f) for f in model_files if os.path.isfile(f)},
+      'platform':platform.platform(),'python':sys.version,'device':best_dev,
+      'imgsz':args.imgsz,'batch':1,'threads':args.threads,'iterations':args.iters,
+      'warmup':args.warmup,'target_hz_reference':args.target_hz,'input_shape':best['in_shape'],
+      'input_dtype':best['input_dtype'],'output_shapes':best['out_shapes'],
+      'model_input_precision':best['model_input_precision'],
+      'openvino_version':best['runtime_version'],'inference_p50_ms':best['p50'],
+      'inference_p95_ms':best['p95'],'e2e_pipeline':'not measured',
+      'unique_frame_rate_hz':'not measured','drops':'not measured'}
+    if args.manifest_out:
+        with open(args.manifest_out,'w',encoding='utf-8') as mf:
+            json.dump(manifest,mf,indent=2)
+        print(f'Manifest: {os.path.abspath(args.manifest_out)}')
     print()
     print('Bay gio chay lai LAN NUA trong khi navigation.launch.py dang chay.')
     print('Con so do moi la con so that.')

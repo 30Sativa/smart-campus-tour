@@ -1,0 +1,10 @@
+FROM ros@sha256:1813d3c85d7f96ff7d3012d865204583255740182db5d0065f8f8cd029a83138
+
+RUN apt-get update -qq \
+    && apt-get install -y -qq python3-pip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-pysignalr.txt /tmp/requirements-pysignalr.txt
+RUN python3 -m pip install --quiet --no-cache-dir -r /tmp/requirements-pysignalr.txt
+
+WORKDIR /s2b

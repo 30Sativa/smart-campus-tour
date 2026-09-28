@@ -13,9 +13,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
+    python3-pip \
     python3-colcon-common-extensions \
     python3-rosdep \
     && rm -rf /var/lib/apt/lists/*
+
+# Pin the runtime used by robot_perception. Export tools (torch/ultralytics)
+# stay on a development machine and are intentionally absent from this image.
+RUN python3 -m pip install --no-cache-dir \
+    "numpy==1.26.4" \
+    "openvino==2024.6.0" \
+    "openvino-telemetry==2024.1.0"
 
 RUN if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then \
       rosdep init; \

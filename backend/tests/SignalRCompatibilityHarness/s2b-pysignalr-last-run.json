@@ -13,14 +13,14 @@
   },
   "errorCallbacks": 1,
   "exceptions": [
-    "TimeoutError: timed out waiting for backend appearance after client startup",
-    "TimeoutError: timed out waiting for backend appearance after client startup"
+    "RuntimeError: Stage 1 startup-before-backend failed: ClientConnectorError: Cannot connect to host compat-server:5443 ssl:default [Connect call failed ('172.30.0.10', 5443)]"
   ],
-  "failure": "TimeoutError: timed out waiting for backend appearance after client startup",
+  "failure": "RuntimeError: Stage 1 startup-before-backend failed: ClientConnectorError: Cannot connect to host compat-server:5443 ssl:default [Connect call failed ('172.30.0.10', 5443)]",
+  "failureStage": "Stage 1 - client start before backend",
   "handlersRegistered": 1,
   "initialRetry": {
-    "attempts": 0,
-    "elapsedSeconds": null,
+    "attempts": 1,
+    "elapsedSeconds": 3.08,
     "retryDelaysSeconds": []
   },
   "invalidAuth": {
@@ -28,12 +28,13 @@
     "opened": false,
     "runError": "AuthorizationError: "
   },
+  "kernel": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
   "nullPose": {
     "error": null,
     "result": true
   },
   "openCallbacks": 1,
-  "os": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "os": "Ubuntu 22.04.5 LTS",
   "python": "3.10.12",
   "reconnectCycles": 0,
   "reconnectedAt": [],
@@ -45,10 +46,13 @@
     "error": null,
     "result": true
   },
-  "stage2": "BLOCKED",
-  "startedAt": 1790315054.2449348,
+  "stage0StreamId": "87c8985e-da9f-4322-b005-d58d746821f7",
+  "stage2": "NOT_RUN",
+  "startedAt": 1790316367.135406,
+  "startupBeforeBackend": "BLOCKED",
+  "startupFailure": "ClientConnectorError: Cannot connect to host compat-server:5443 ssl:default [Connect call failed ('172.30.0.10', 5443)]",
   "stateSent": 1,
-  "streamId": "fc08b670-af6e-4638-85b7-9fc671cf16b7",
+  "streamId": "588dd02f-db41-46e6-8ce2-afb85005c545",
   "tlsUntrusted": {
     "errors": [],
     "opened": false,
@@ -63,7 +67,7 @@
     "errorCallbackMessages": [
       "Failed to invoke 'ReportState' due to an error on the server."
     ],
-    "errorCallbackObserved": false,
+    "errorCallbackObserved": true,
     "field": "seq",
     "invocationErrorObserved": true,
     "method": "ReportState",
@@ -75,5 +79,8 @@
   "humbleImage": "ros@sha256:1813d3c85d7f96ff7d3012d865204583255740182db5d0065f8f8cd029a83138",
   "dotnetImage": "mcr.microsoft.com/dotnet/aspnet@sha256:55e37c7795bfaf6b9cc5d77c155811d9569f529d86e20647704bc1d7dd9741d4",
   "dotnetRuntime": "Microsoft.AspNetCore.App 10.0.7 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\r\nMicrosoft.NETCore.App 10.0.7 [/usr/share/dotnet/shared/Microsoft.NETCore.App]",
-  "hubOs": "Ubuntu 24.04.4 LTS"
+  "hubOs": "Ubuntu 24.04.4 LTS",
+  "backendStartedAfterClientStartSeconds": 8,
+  "clientStateAfterBackendStart": "exited",
+  "clientConnectedAfterBackendAppearance": false
 }

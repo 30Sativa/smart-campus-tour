@@ -118,3 +118,42 @@ client`; error/close callback threading remains unverified.
 
 The current blocked result is compatibility evidence only. It does not revise
 ADR-0008 or authorize implementation of the production Fleet Bridge.
+
+## Candidate 2 — `pysignalr==1.3.2` / S2B
+
+This is a separate released-package candidate and separate evidence file. It
+does not replace the `signalrcore==1.0.2` S1/S2 history above. Reproduce from
+the repository root in PowerShell:
+
+```powershell
+pwsh -File backend/tests/SignalRCompatibilityHarness/run-s2b.ps1
+```
+
+The runner uses the same digest-pinned ROS Humble image and the Linux .NET 10
+Hub container used for S2. The client pins only `pysignalr==1.3.2` in
+`robot/tools/signalr-compat/requirements-pysignalr.txt`; it does not modify the
+candidate 1 requirements. Full machine-readable output is kept in
+`s2b-pysignalr-last-run.json`.
+
+Observed result:
+
+- Candidate 2: `pysignalr==1.3.2`, released PyPI package only.
+- Stage 0: PASS. Trusted TLS and valid auth connected; untrusted TLS and
+  invalid auth were rejected. Typed `ReportState`, `DummyGoTo`,
+  `ReportCommandResult`, and `pose=null` passed.
+- The direct typed `ReportState` call with `seq="not-a-number"` produced an
+  invocation callback with `CompletionMessage.error = "Failed to invoke
+  'ReportState' due to an error on the server."`; the registered global
+  `on_error` callback observed the same server error. No separate malformed
+  test method was used.
+- Stage 1: BLOCKED. The client process started while the Hub was stopped. The
+  test pinned `compat-server` to the Hub's reserved test-network IP so Docker
+  DNS behavior could not determine the result. The first negotiate attempt
+  failed with `ClientConnectorError: Cannot connect to host compat-server:5443
+  ... Connect call failed ('172.30.0.10', 5443)`. In the fresh Stage 1 client
+  process, the run task terminated after about 3.08 seconds on its first attempt,
+  with no observed retry delay. The runner still started the Hub after eight
+  seconds; the client container was already exited and did not connect.
+- Stage 2 and later reliability stages were not run after the required
+  startup-before-backend checkpoint failed. This candidate is not approved by
+  this spike. The result does not change ADR-0008 or select another transport.

@@ -111,6 +111,27 @@ is a single shared timer rather than a per-sensor health watchdog.
 **not** an independent collision monitor; `nav2_collision_monitor` is a later
 phase. Early runs are supervised, in a controlled area, at low speed.
 
+### Person perception contract (MVP)
+
+`robot_perception` pairs RGB and depth cloud observations by header timestamp
+(ApproximateTimeSynchronizer, 50 ms maximum delta), projects the cloud into the
+raw RGB image with validated CameraInfo K/D, and looks up TF at the source
+cloud timestamp. `people` remains a `PoseArray` in `base_frame`, stamped with
+the cloud observation time and without tracking IDs. It is published only for
+a valid fused observation; an empty array means the detector produced no
+person boxes in that observation and is not proof that the area is safe.
+Unknown/stale/error observations do not publish an empty `people` array.
+
+The node publishes `person_perception/diagnostics` (`DiagnosticArray`) with
+state/reason, source stamps, synchronization delta, observation age, inference
+latency and drop/error counters. Bbox-only mode publishes
+`person_perception/debug_image` with the RGB source stamp and cannot enable
+SpeedLimit. The optional `speed_limit` publisher is disabled by default. If
+explicitly enabled after hardware gates, startup/UNKNOWN/stale use 50%, a
+clear valid sequence can use 100%, and zero is never sent because Nav2 Humble
+defines zero as NO_SPEED_LIMIT. The policy is a slowdown only; it does not
+provide a protective stop or cover node/executor failure.
+
 The STM32G431 owns real-time stepping. ROS 2 sends wheel-speed commands over
 USB CDC serial and does not reach below that line.
 
@@ -766,7 +787,7 @@ out of scope.
 
 | Concern | Owner | Runs on | Responsibility |
 |---|---|---|---|
-| Person perception | WP3, `robot/ros2_ws/src/robot_perception/` | robot miniPC | RGB-D person detection and Nav2 speed limiting |
+| Person perception | WP3, `robot/ros2_ws/src/robot_perception/` | robot miniPC | Timestamped RGB-D person detection; optional, default-off Nav2 SpeedLimit |
 | Student AI Q&A | WP4, browser/cloud path and `ai-assistant/` | browser + server/cloud | private STT, LLM and TTS in one project language |
 
 The robot owns navigation, physical sensors, the fleet bridge and rotating-head

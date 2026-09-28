@@ -3,7 +3,7 @@
     ros2 launch robot_navigation navigation.launch.py \
         map:=... camera_enable_color:=true
     ros2 launch robot_perception person_perception.launch.py \
-        model_xml:=/opt/models/yolo26n_int8_openvino_model/yolo26n.xml
+        model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml
 
 RGB is off by default in Phase 3 on purpose (USB bandwidth), so Phase 4 has to
 ask for it back with camera_enable_color:=true.
@@ -19,7 +19,7 @@ from launch_ros.substitutions import FindPackageShare
 # Only these are overridable from the command line; everything else lives in
 # the yaml.  An empty value means "not given", so it must NOT reach the node -
 # an empty override would wipe a path the user set in the yaml.
-CLI_OVERRIDES = ('model_xml', 'device', 'publish_speed_limit')
+CLI_OVERRIDES = ('model_xml', 'device', 'publish_speed_limit', 'bbox_only')
 
 
 def _setup(context, *args, **kwargs):
@@ -28,9 +28,9 @@ def _setup(context, *args, **kwargs):
         value = LaunchConfiguration(name).perform(context)
         if value != '':
             overrides[name] = value
-    if 'publish_speed_limit' in overrides:
-        overrides['publish_speed_limit'] = \
-            overrides['publish_speed_limit'].lower() in ('1', 'true', 'yes', 'on')
+    for name in ('publish_speed_limit', 'bbox_only'):
+        if name in overrides:
+            overrides[name] = overrides[name].lower() in ('1', 'true', 'yes', 'on')
 
     return [Node(
         package='robot_perception',
@@ -61,7 +61,9 @@ def generate_launch_description():
             description='CPU or GPU. Empty = use the yaml.'),
         DeclareLaunchArgument(
             'publish_speed_limit', default_value='',
-            description='false = publish /people only and leave Nav2 alone. '
-                        'Run it like that the first time.'),
+            description='Explicitly enable Nav2 SpeedLimit policy (default false).'),
+        DeclareLaunchArgument(
+            'bbox_only', default_value='',
+            description='RGB detections/debug image only; incompatible with SpeedLimit.'),
         OpaqueFunction(function=_setup),
     ])
