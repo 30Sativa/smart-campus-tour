@@ -11,6 +11,7 @@ import { formatTime } from '../../features/staff/formatters'
 import { groupSummary, routeProgress } from '../../features/staff/attention'
 import { useNow } from '../../features/staff/use-now'
 import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
+import { RouteSchematic } from '../../features/staff/components/RouteSchematic'
 import { TourTimeline } from '../../features/staff/components/TourTimeline'
 import { OperationControls } from '../../features/staff/components/OperationControls'
 import { RunStatus } from '../../features/staff/components/RunStatus'
@@ -81,7 +82,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
   return (
     <StaffPage
       wide
-      className="!bg-[#f8fafc] [--ops-radius:1rem] [--ops-border:#e2e8f0] [--ops-shadow:none] [&_h2]:text-sm [&_section>div:first-child]:border-b-0"
+      className="!bg-[#f8fbff] [--ops-radius:1rem] [--ops-border:#d9e9f5] [--ops-shadow:none] [&_h2]:text-sm"
     >
       <PageHeader
         eyebrow={`Điều hành trực tiếp · ${tour.code}`}
@@ -122,12 +123,12 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
       )}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,2.08fr)_minmax(280px,1fr)]">
-        <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs lg:col-start-1 lg:row-start-1">
-          <OperationalTwin
-            robots={robots}
+        <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+          <RouteSchematic
             tour={tour}
+            robot={robot}
             selectedStopId={selectedStopId}
-            className="h-[clamp(390px,45vw,490px)] xl:h-[490px]"
+            onSelect={(id) => setSelectedStopId((value) => (value === id ? null : id))}
           />
         </div>
 

@@ -65,7 +65,7 @@ export default function AdminTourDetailPage() {
       <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">{tour.name}</h1>
+            <h1 className="text-[32px] leading-tight font-bold tracking-[-0.055em] text-[#123a59] sm:text-[42px]">Tour {tour.code}</h1>
             <TourStateBadge state={tour.state} size="md" />
           </div>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#64748b]">
@@ -77,6 +77,21 @@ export default function AdminTourDetailPage() {
         <TourActions tour={tour} onOpen={setDialog} />
       </header>
 
+      <section className="relative mb-4 min-h-[200px] overflow-hidden rounded-[20px] border border-[#cde4f5] bg-[#e9f5ff] p-6 sm:p-7" aria-label="Tóm tắt Tour">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-12 -bottom-24 size-72 rounded-full border border-[#beddf2]" />
+        <div aria-hidden="true" className="pointer-events-none absolute right-7 -bottom-16 size-48 rounded-full border border-[#beddf2]" />
+        <div className="relative">
+          <TourStateBadge state={tour.state} />
+          <h2 className="mt-6 max-w-[650px] text-[26px] font-bold leading-tight tracking-[-0.05em] text-[#123a59] sm:text-[32px]">{tour.name}</h2>
+          <p className="mt-2 text-[13px] text-[#5c7b91]">{tour.routeName} · {tour.route?.stops.length ?? 0} POI · {tour.counts.approved} đoàn đã duyệt · {tour.counts.submitted} đoàn chờ</p>
+        </div>
+      </section>
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Các chỉ số của Tour">
+        <Fact label="Đoàn đã duyệt" value={`${tour.counts.approved} đoàn`} />
+        <Fact label="Chờ xét duyệt" value={`${tour.counts.submitted} đoàn`} />
+        <Fact label="Lời mời chưa gửi" value={`${tour.invitationsPending} đoàn`} />
+        <Fact label="Điều kiện READY" value={`${tour.readyChecklist.filter((check) => check.passed).length} / ${tour.readyChecklist.length} đạt`} />
+      </div>
       <StateNotice tour={tour} />
 
       <div role="tablist" aria-label="Nội dung Tour" className="mb-5 flex gap-1 overflow-x-auto border-b border-[#e2e8f0]">
@@ -148,6 +163,10 @@ function TourActions({ tour, onOpen }: { tour: AdminTourDetail; onOpen: (dialog:
       {tour.state === 'Scheduled' && !finalize.allowed && <p id="finalize-why" className="max-w-md text-xs text-[#92400e] lg:text-right">Chưa chốt được: xem “Tình trạng chuẩn bị” bên dưới.</p>}
     </div>
   )
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-[#d9e9f5] bg-white px-4 py-3.5"><p className="text-[11px] text-[#859bad]">{label}</p><p className="mt-1 text-sm font-bold text-[#123a59]">{value}</p></div>
 }
 
 function StateNotice({ tour }: { tour: AdminTourDetail }) {

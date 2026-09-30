@@ -1,81 +1,58 @@
-import { Suspense, useCallback, useState } from 'react'
-import { Menu, School } from 'lucide-react'
-import { Outlet, useLocation } from 'react-router'
+import { Suspense, useState } from 'react'
+import { ArrowUpRight, LogOut, Menu, Search, X } from 'lucide-react'
+import { Link, Outlet, useLocation } from 'react-router'
 import { useLogout } from '../../auth/use-logout'
 import { MOCK_MODE_LABEL } from '../../mocks/mock-mode'
 import { currentRepresentativeProfile } from '../../mocks/representative-mock'
 import { useAuthStore } from '../../stores/auth-store'
-import { ConsoleSidebar } from '../staff/ConsoleSidebar'
-import { useMobileNav } from '../staff/use-mobile-nav'
 import { PageSkeleton } from './components/RepUi'
-import { REP_NAV, REP_NAV_SECTIONS, repActivePath } from './rep-nav'
+import { REP_NAV, repActivePath } from './rep-nav'
 import './representative.css'
 
-/**
- * The school representative's area (flow review §4): overview, the Tours a
- * school can join, and its own registrations.
- *
- * Same sidebar and palette as administration and operations (`ConsoleSidebar`),
- * so the product reads as one system. Below `lg` the sidebar becomes a drawer
- * opened from the header, which keeps the bottom of the screen free for each
- * page's main action.
- */
+/** The representative has a small three-destination workspace. */
 export default function RepresentativeShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const logout = useLogout()
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
-  const navRef = useMobileNav(menuOpen, closeMenu)
   const profile = currentRepresentativeProfile()
-
   const current = repActivePath(location.pathname)
-  const title = REP_NAV.find(({ path }) => path === current)?.label ?? 'Đại diện trường'
+  const name = profile.representativeName || user?.username || 'Đại diện'
+  const initials = name.split(/\s+/).slice(-2).map((part) => part[0]).join('').toUpperCase()
 
   return (
-    <div className="rep-app flex min-h-[100dvh] bg-[#f8fafc] text-[#1e293b]">
-      {menuOpen && <button type="button" onClick={closeMenu} className="fixed inset-0 z-30 cursor-default bg-[#0f172a]/25 backdrop-blur-[2px] lg:hidden" aria-label="Đóng menu" />}
-
-      <ConsoleSidebar
-        id="rep-navigation"
-        label="Khu vực đại diện trường"
-        navLabel="Điều hướng đại diện trường"
-        homePath="/dai-dien"
-        areaName="Đại diện trường"
-        sections={REP_NAV_SECTIONS}
-        currentPath={current}
-        user={{ name: profile.representativeName || user?.username || 'Đại diện', role: profile.schoolName || 'Đại diện trường', icon: School }}
-        onNavigate={closeMenu}
-        onLogout={() => void logout()}
-        open={menuOpen}
-        panelRef={navRef}
-      />
-
-      <div className="flex min-h-[100dvh] min-w-0 flex-1 flex-col">
-        <header className="rep-topbar sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-[#e5e9f0] bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-10">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-expanded={menuOpen}
-            aria-controls="rep-navigation"
-            className="-ml-1 grid size-10 place-items-center rounded-xl text-[#475569] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] lg:hidden"
-            aria-label="Mở menu"
-          >
-            <Menu size={21} aria-hidden="true" />
-          </button>
-          <p className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[#0f172a]">{title}</p>
-          <span className="rep-topbar-tag ml-auto hidden text-xs font-semibold tracking-[0.12em] uppercase sm:block">Cổng tham quan từ xa</span>
-        </header>
-        <p className="border-b border-[#eef1f5] bg-white px-4 py-1.5 text-xs text-[#64748b] sm:px-6 lg:px-10">
-          {MOCK_MODE_LABEL}. Đăng ký, duyệt và email đều được mô phỏng, không lưu sau khi tải lại trang.
-        </p>
-
-        <main className="flex-1">
-          <Suspense fallback={<PageSkeleton />}>
-            <Outlet />
-          </Suspense>
-        </main>
-      </div>
+    <div className="rep-app min-h-[100dvh]">
+      <div className="rep-demo-ribbon">CAMPUS TOUR · CỔNG ĐẠI DIỆN TRƯỜNG</div>
+      <header className="rep-site-header">
+        <div className="rep-site-header-inner">
+          <Link to="/dai-dien" className="rep-brand" onClick={() => setMenuOpen(false)} aria-label="CampusTour - Tổng quan đại diện">
+            <span className="rep-brand-mark" aria-hidden="true">✺</span>
+            <span><strong>CampusTour</strong><small>DT–AMR · Cổng đại diện</small></span>
+          </Link>
+          <nav id="rep-navigation" className={`rep-site-nav ${menuOpen ? 'is-open' : ''}`} aria-label="Điều hướng đại diện trường">
+            {REP_NAV.map(({ path, label, icon: Icon }) => (
+              <Link key={path} to={path} className="rep-nav-link" aria-current={current === path ? 'page' : undefined} onClick={() => setMenuOpen(false)}>
+                <Icon size={16} aria-hidden="true" />{label}
+              </Link>
+            ))}
+            <button type="button" className="rep-mobile-logout" onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />Đăng xuất</button>
+          </nav>
+          <div className="rep-header-actions">
+            <Link to="/dai-dien/buoi" className="rep-help-link"><Search size={15} aria-hidden="true" /> Tìm buổi</Link>
+            <div className="rep-profile" title={profile.schoolName || 'Đại diện trường'}>
+              <span className="rep-avatar">{initials}</span>
+              <span className="rep-profile-copy"><strong>{name}</strong><small>{profile.schoolName || 'Đại diện trường'}</small></span>
+            </div>
+            <button type="button" className="rep-logout" onClick={() => void logout()} aria-label="Đăng xuất" title="Đăng xuất"><LogOut size={18} aria-hidden="true" /></button>
+            <button type="button" className="rep-menu-toggle" aria-label={menuOpen ? 'Đóng menu' : 'Mở menu'} aria-controls="rep-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+              {menuOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+      </header>
+      {menuOpen && <button type="button" className="rep-menu-scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
+      <div className="rep-mock-note"><span className="rep-mock-note-dot" />{MOCK_MODE_LABEL}. Đăng ký, duyệt và email đang được mô phỏng; dữ liệu đặt lại khi tải trang.<ArrowUpRight size={12} aria-hidden="true" /></div>
+      <main id="rep-main" className="rep-main"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
     </div>
   )
 }

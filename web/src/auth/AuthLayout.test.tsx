@@ -49,7 +49,7 @@ describe('AuthLayout', () => {
   it('changes the copy over the photograph with the route', () => {
     const login = renderAt('/login')
     expect(login.container.querySelector('.auth-visual__title')?.textContent).toMatch(/Khám phá khuôn viên/)
-    expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-bg.jpg')
+    expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-smartbus.png')
     expect(screen.getByText(/© \d{4} Smart Campus Tour/)).toBeInTheDocument()
     login.unmount()
 
