@@ -197,7 +197,9 @@ production flow; the Capstone methodology remains in force.
 ### Review 1 target and current implementation gap
 
 The accepted group target in `docs/decisions/0009-review-1-tour-business-scope.md`
-requires personal email invitations, a single “Điểm xem chung” invitation row
+and its access update in `docs/decisions/0010-personal-access-code-entry.md`
+require email containing an ordinary Tour page URL and a personal access code,
+code validation before creating a session, a single “Điểm xem chung” invitation row
 for a shared projector room, one active browser session per invitation,
 revocation/reissue, Admin correction of one email while SCHEDULED, and
 representative branch requests accepted by Staff at a verified POI. Staff Start
@@ -206,6 +208,14 @@ statistics are P1; route geometry remains technically prepared/seeded. Command
 audit records decision-to-send, sent, and robot-response stages separately.
 These are target behaviors to implement and verify, not invariants in the
 current database.
+
+The URL alone grants no access. Resend keeps the same valid code and session;
+revoke/reissue invalidates the old code/session and sends a new code to the
+approved email, retaining invitation identity and expiry. Representative support
+is own-group only; Admin supports all groups; Staff-only has no recovery right.
+Shared-viewing data identifies its responsible person, not every student in the
+room; individual data requires individual rows. Code storage for safe resend,
+API binding, atomic admission and revocation remain implementation work.
 
 The current schema stores group-level registration and name/class roster rows;
 it does not persist per-row invitation tokens, browser sessions, revocation

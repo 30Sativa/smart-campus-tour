@@ -9,7 +9,7 @@
 
 Bản luồng màn hình được cập nhật 30/09/2026. Mô tả hành vi cần thiết kế, chưa phải xác nhận code đã chạy hoặc GVHD đã duyệt.
 
-Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
+Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật access code tại `docs/decisions/0010-personal-access-code-entry.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
 
 ## 1. Actor và cách biểu diễn
 
@@ -20,7 +20,7 @@ Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghi
 | Student | Tham quan từ xa và hỏi AI riêng | Join, phòng chờ, live, kết thúc |
 | Staff (Tour Operator / Campus Staff) | Kiểm tra, Start, giám sát và xử lý sự cố | Dashboard/Twin, kiểm tra trước Start, log |
 
-Admin, Staff và đại diện dùng cơ chế đăng nhập hiện có hoặc account demo được tạo sẵn. Student dùng quyền browser tạm, không có account, mật khẩu hoặc OTP. Account có thể mang cả Admin và Staff, nhưng quyền và điều kiện nghiệp vụ vẫn được kiểm tra riêng.
+Admin, Staff và đại diện dùng cơ chế đăng nhập hiện có hoặc account demo được tạo sẵn. Student nhập mã riêng từ email để có session browser; không có account, mật khẩu hoặc OTP bổ sung. Account có thể mang cả Admin và Staff, nhưng quyền và điều kiện nghiệp vụ vẫn được kiểm tra riêng.
 
 Khi vẽ, phân biệt:
 
@@ -39,14 +39,14 @@ Robot/Bridge không có screen web. Nếu Use Case Diagram lấy web/backend là
 ```text
 Admin cấp account đại diện/Staff theo cơ chế hệ thống
   → Tạo Tour SCHEDULED, chọn route/nhánh đã chuẩn bị
-  → Đại diện chọn buổi, đăng ký đoàn, upload Excel các dòng cá nhân và/hoặc điểm xem chung
+  → Đại diện chọn buổi, đăng ký đoàn, upload Excel LoaiDong + HoTen + Email
       ├─ Cá nhân: một dòng/email riêng cho mỗi người cần vào web
       └─ Điểm xem chung: một dòng/email người phụ trách mỗi máy chiếu
          Không cần tên/email từng học sinh ngồi xem; được trộn hai loại dòng
   → Admin xem dữ liệu → Reject + lý do hoặc Approve
-  → Sau Approve: gửi link riêng tới từng email đã duyệt
+  → Sau Approve: gửi link trang Tour + mã riêng tới từng email đã duyệt
       ├─ Thư lỗi: giữ APPROVED, cho gửi lại riêng
-      └─ Student bấm link → đúng trang Tour
+      └─ Student bấm link → nhập mã → server cấp/khôi phục session đúng Tour
            ├─ SCHEDULED/READY → Hiện lịch/phòng chờ
            └─ RUNNING → Live với tiến độ hiện tại
 
@@ -59,11 +59,11 @@ Admin kiểm tra nội dung/đăng ký → Chốt READY
       │    → Cập nhật phần tuyến còn lại; đi tiếp theo Hold/Next/dwell
       ├─ Đi hết tuyến hợp lệ, về và dừng điểm cuối → COMPLETED
       └─ Lỗi không phục hồi → Staff End Early → CANCELLED
-  → Đóng live/AI; nếu End Early, có video dự phòng tới hạn link
+  → Đóng live/AI; nếu End Early, có video dự phòng tới hạn lời mời/mã
   → Admin/Staff xem History/Log theo quyền
 ```
 
-Approve cấp quyền tham gia, không tự READY hoặc Start. Email và READY không có thứ tự cứng: gửi lỗi không đổi approval hoặc chặn READY. Student có thể xem lịch trước READY và dùng lại cùng link. Giờ trên lịch không tự Start; nhóm chốt Staff chỉ Start từ giờ công bố, server kiểm tra cùng readiness và quyền giữ robot.
+Approve cấp quyền tham gia, không tự READY hoặc Start. Email và READY không có thứ tự cứng: gửi lỗi không đổi approval hoặc chặn READY. Student nhập mã để vào phòng chờ trước READY; quay lại bằng session còn hợp lệ không nhập lại, hết session thì dùng lại mã còn hạn. Giờ trên lịch không tự Start; nhóm chốt Staff chỉ Start từ giờ công bố, server kiểm tra cùng readiness và quyền giữ robot.
 
 ## 3. Admin
 
@@ -107,9 +107,9 @@ Chốt READY cần Tour SCHEDULED, tên/giờ hợp lệ, route/nhánh/nội dun
 
 READY khóa nội dung/route và đăng ký; không nhận đăng ký mới hoặc sửa/hủy/duyệt registration. Không yêu cầu robot online, stream đang phát hoặc email đã gửi để READY. Kiểm tra thiết bị thuộc bước Start.
 
-Mở lại READY → SCHEDULED chỉ trước Start; giữ APPROVED của đoàn chưa sửa. Thay cả roster đưa đoàn đó về SUBMITTED; Admin sửa riêng email và xác nhận thì giữ approval của đoàn, không gửi lại link các dòng khác. Nếu state đã đổi bởi thao tác khác, báo không thực hiện được và cập nhật màn.
+Mở lại READY → SCHEDULED chỉ trước Start; giữ APPROVED của đoàn chưa sửa. Thay cả roster đưa đoàn đó về SUBMITTED; Admin sửa riêng email và xác nhận thì giữ approval của đoàn, không gửi lại mã các dòng khác. Nếu state đã đổi bởi thao tác khác, báo không thực hiện được và cập nhật màn.
 
-Sau duyệt, hệ thống gửi link riêng tới từng học sinh hoặc người phụ trách trình chiếu. Admin/đại diện sở hữu đoàn được gửi lại/cấp lại khi registration APPROVED và Tour SCHEDULED/READY/RUNNING; không sửa người nhận, approval hoặc roster. Thu hồi được phép cả khi chỉ còn quyền video dự phòng. Thư lỗi giữ APPROVED; dịch vụ chấp nhận thư không chứng minh đã đọc. Gửi lại không tạo thêm quyền/đá phiên cũ. Đổi giờ cập nhật trang và gửi thông báo, giữ link còn hiệu lực.
+Sau duyệt, hệ thống gửi link trang Tour + mã riêng tới từng học sinh hoặc người phụ trách trình chiếu. Admin/đại diện sở hữu đoàn được gửi lại/cấp lại khi registration APPROVED và Tour SCHEDULED/READY/RUNNING; không sửa người nhận, approval hoặc roster. Thu hồi được phép cả khi chỉ còn quyền video dự phòng. Thư lỗi giữ APPROVED; dịch vụ chấp nhận thư không chứng minh đã đọc. Gửi lại dùng đúng mã hiện hành còn hạn, không tạo thêm quyền/đá phiên cũ. Đổi giờ cập nhật trang và gửi thông báo, giữ mã còn hiệu lực.
 
 ### 3.4 Chức năng quản trị ngoài luồng live
 
@@ -117,7 +117,7 @@ Phiếu cập nhật còn nêu quản lý quyền truy cập operator/đại di�
 
 - Quyền truy cập: dùng cơ chế account/role hiện có; có thể tạo sẵn account demo. Chi tiết màn quản trị tài khoản phụ thuộc cơ chế đã chọn, không tự thêm permission builder hoặc quy trình đăng ký tài khoản mới.
 - Nội dung V1 đã chốt: kỹ thuật seed map/frame/tọa độ, tuyến/đường nối/nhánh sau kiểm chứng. Admin chọn tuyến/bật nhánh/dwell hợp lệ; form P1 sửa tên hiển thị/mô tả/upload audio, không sửa ID/tọa độ. Khóa khi bất kỳ Tour READY/RUNNING dùng POI/asset, kể cả nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; người cấu hình chỉnh nội dung hoặc dwell hợp lệ trước READY, backend chặn Chốt nếu chưa xử lý và kiểm tra khóa khi ghi. Giữ lịch sử nội dung Tour đã kết thúc. Không editor vẽ tuyến tự do.
-- Lịch sử: History/Log lưu actor/thời điểm/Tour/robot/tham chiếu/thao tác, không token bí mật. Audit append-only từ P0, API/UI và tài khoản DB app không UPDATE/DELETE; không tuyên bố chống DBA. Quyết định gửi cùng giao dịch DB; đã gửi và robot phản hồi là các dòng riêng khi có bằng chứng, tương quan cùng lệnh. Lỗi/chưa rõ giữ đúng, không tạo đủ ba mốc giả; nhận lệnh không phải hoàn thành.
+- Lịch sử: History/Log lưu actor/thời điểm/Tour/robot/tham chiếu/thao tác, không access code/token bí mật. Audit append-only từ P0, API/UI và tài khoản DB app không UPDATE/DELETE; không tuyên bố chống DBA. Quyết định gửi cùng giao dịch DB; đã gửi và robot phản hồi là các dòng riêng khi có bằng chứng, tương quan cùng lệnh. Lỗi/chưa rõ giữ đúng, không tạo đủ ba mốc giả; nhận lệnh không phải hoàn thành.
 - Thống kê P1: số Tour COMPLETED/CANCELLED; số lần gửi email dịch vụ chấp nhận/gửi lỗi (retry là lần gửi mới); số lời mời đã vào phòng thành công, một lần cho cùng dòng đã duyệt kể cả reload/reconnect/cấp lại. Phân biệt cá nhân/điểm xem chung, không attendance hay số người trong phòng. Chỉ đếm vào phòng sau backend cấp/khôi phục quyền thành công, không mở URL/email. Email đang chờ/chưa rõ không coi thành công; không ghi đã nhận/đã đọc.
 
 ## 4. School Representative / Đại diện
@@ -147,17 +147,17 @@ Register / Edit
 
 Một đại diện có thể có nhiều đăng ký cho các phòng/nhóm riêng trong cùng Tour; mỗi đăng ký có tên nhóm rõ. Gửi lại/hủy rồi đăng ký lại cùng đoàn cập nhật bản ghi đó, không nhân bản vì bấm lặp. Server kiểm tra owner, Tour và state; không tin registration ID truyền từ UI.
 
-Excel phải biểu diễn rõ dòng cá nhân và dòng “Điểm xem chung”; email cá nhân hoặc email người phụ trách là đích nhận lời mời. Nhóm chưa chốt tên cột/cấu trúc parser. Ít nhất một dòng, bỏ dòng trống, báo loại dòng/email sai/thiếu/trùng trong Tour; không suy đoán điểm xem chung từ tên người. Không đòi roster học sinh nếu chỉ xem máy chiếu; hỗn hợp được dùng trong cùng đăng ký. Import toàn bộ hoặc không nhập, không ghép file; giới hạn dung lượng/số dòng theo cấu hình.
+Excel: LoaiDong (`CA_NHAN`/`DIEM_XEM_CHUNG`), HoTen, Email bắt buộc; Lop tùy chọn. HoTen là tên cá nhân hoặc tên điểm xem chung. Ít nhất một dòng, bỏ dòng trống, báo loại dòng/email sai/thiếu/trùng trong Tour. Không đoán loại từ tên, không đòi roster học sinh nếu chỉ xem máy chiếu; hỗn hợp được dùng trong cùng đăng ký. Import toàn bộ hoặc không nhập, không ghép file; giới hạn dung lượng/số dòng theo cấu hình.
 
-Thay roster, đăng ký mới/hủy/gửi lại/duyệt chỉ khi SCHEDULED; READY phải Mở lại. Thay cả file cảnh báo thu hồi lời mời/phiên cũ toàn đoàn, duyệt/gửi lại; không matching tên. **Sửa riêng email:** Admin chọn đúng dòng → sửa → kiểm tra email trùng/định dạng → xác nhận → audit. Dòng APPROVED giữ định danh/approval, thu hồi link/phiên cũ của dòng đó, cấp/gửi link mới; các dòng khác giữ nguyên. Dòng chưa duyệt chỉ sửa dữ liệu, chờ approve mới gửi. Email mới gửi lỗi cho retry riêng, không phục hồi link cũ. RUNNING chặn sửa email, không cho đổi loại dòng hoặc mọi thông tin qua form này.
+Thay roster, đăng ký mới/hủy/gửi lại/duyệt chỉ khi SCHEDULED; READY phải Mở lại. Thay cả file cảnh báo thu hồi lời mời/phiên cũ toàn đoàn, duyệt/gửi lại; không matching tên. **Sửa riêng email:** Admin chọn đúng dòng → sửa → kiểm tra email trùng/định dạng → xác nhận → audit. Dòng APPROVED giữ định danh/approval, thu hồi mã/phiên cũ của dòng đó, cấp/gửi mã mới; các dòng khác giữ nguyên. Dòng chưa duyệt chỉ sửa dữ liệu, chờ approve mới gửi. Email mới gửi lỗi cho retry riêng, không phục hồi mã cũ. RUNNING chặn sửa email, không cho đổi loại dòng hoặc mọi thông tin qua form này.
 
 SUBMITTED/APPROVED/REJECTED có thể hủy khi SCHEDULED. REJECTED sửa và CANCELLED đăng ký lại về SUBMITTED. Hủy Tour không buộc đổi từng registration nhưng quyền luôn kiểm tra TourState.
 
-### 4.3 Hỗ trợ link trong lúc Tour đang chạy
+### 4.3 Hỗ trợ mã truy cập trong lúc Tour đang chạy
 
-Đại diện đã đăng nhập mở My Registration → Lời mời → chọn đúng học sinh → gửi lại hoặc thu hồi/cấp lại tới email đã duyệt. Thu hồi vô hiệu link và phiên cũ; cấp lại tạo link mới trong hạn hiện hành. Chỉ registration APPROVED, chỉ đoàn thuộc đại diện. Không yêu cầu Mở lại, không dừng Tour, không sửa email. Có log và thông báo kết quả; bấm lặp không tạo thêm quyền.
+Đại diện đã đăng nhập mở My Registration → Lời mời → chọn đúng học sinh. Mất thư: “Gửi lại email” gửi đúng mã hiện hành còn hạn, giữ phiên đang xem. Nghi lộ mã/không vào được do phiên khác: “Thu hồi và cấp mã mới” vô hiệu mã/session cũ, gửi mã mới tới email đã duyệt. Cấp lại giữ định danh lời mời và hạn hiện hành; gửi lỗi chỉ retry mã mới, không phục hồi mã cũ. Chỉ registration APPROVED, chỉ đoàn thuộc đại diện. Không yêu cầu Mở lại, không dừng Tour, không sửa email. Có log và thông báo kết quả; bấm lặp không tạo thêm quyền.
 
-Đại diện xem live bằng lời mời của chính mình hoặc điểm xem chung mình phụ trách, không dùng link của học sinh. Nếu email đã có lời mời thì dùng lời mời đó, không cấp thêm trùng email. Role Representative không tự cấp phiên Student hoặc xem chat riêng; không cần mở live để gửi yêu cầu. Staff không mặc nhiên được hỗ trợ lời mời.
+Đại diện xem live bằng lời mời của chính mình hoặc điểm xem chung mình phụ trách, không dùng mã của học sinh. Nếu email đã có lời mời thì dùng lời mời đó, không cấp thêm trùng email. Role Representative không tự cấp phiên Student hoặc xem chat riêng; không cần mở live để gửi yêu cầu. Staff không mặc nhiên được hỗ trợ lời mời.
 
 ### 4.4 Yêu cầu đổi nhánh
 
@@ -170,42 +170,44 @@ Gửi yêu cầu không tự Hold. Staff chỉ Accept tại đúng điểm khi r
 ### 5.1 Screen Flow
 
 ```text
-Link cá nhân trong email → Kiểm tra lời mời/phiên hiện hành
- ├─ Link sai/hết hạn/bị thu hồi → Thông báo + liên hệ đại diện
- ├─ Phiên khác đang hoạt động → Giữ phiên trước, từ chối browser đến sau
- └─ Quyền hợp lệ → Cùng trang Tour
-      ├─ SCHEDULED/READY → Lịch/phòng chờ → Staff Start → Live
-      ├─ RUNNING → Live, nhận tiến độ hiện tại
-      ├─ COMPLETED → Đã hoàn thành, không live/AI
-      └─ CANCELLED → Đã hủy/kết thúc sớm
-           → Nếu đã Start rồi End Early: video dự phòng tới hạn link
+Link trang Tour trong email → Kiểm tra session hiện hành
+ ├─ Session hợp lệ → Khôi phục quyền theo Tour/registration hiện hành
+ └─ Chưa có/hết session → Ô “Mã truy cập” + nút “Tham gia”
+      ├─ Mã sai/sai Tour/hết hạn/bị thu hồi → Lỗi + hướng dẫn liên hệ đại diện
+      ├─ Phiên khác đang hoạt động → Giữ phiên trước, từ chối browser đến sau
+      └─ Mã hợp lệ → Server tạo session
+           ├─ SCHEDULED/READY → Lịch/phòng chờ → Staff Start → Live
+           ├─ RUNNING → Live với tiến độ hiện tại
+           └─ COMPLETED/CANCELLED → Kết thúc/hủy; không live/AI
+                → Chỉ đã Start rồi End Early: video tới hạn lời mời/mã
 
-Đóng trang/đăng xuất → Mở cùng link còn hiệu lực → Kiểm tra lại như trên
+Đóng trang → Mở lại link → Còn session hợp lệ thì không nhập lại
+Đăng xuất/hết session → Mở link → Nhập lại mã còn hiệu lực
 Mất mạng ngắn → Reconnect, kiểm tra quyền và nhận snapshot mới
 ```
 
-Không nhập mã phòng/email/OTP/họ tên; không account Student. Một trang đổi nội dung theo state, không bắt bấm xin vào qua nhiều phòng. Vào muộn xem thời điểm hiện tại, không replay hành trình. Link chỉ thuộc đúng Tour; không chuyển quyền sang buổi mới.
+Chỉ nhập access code riêng; không thêm email/họ tên/lớp/mã phòng/OTP hoặc account Student. Cho sao chép/dán mã. Link là địa chỉ trang Tour, không chứa mã bí mật và không tự cấp quyền. Một trang đổi theo state, không nhiều bước xin vào. Vào muộn xem thời điểm hiện tại, không replay. Mã và session thuộc đúng Tour, không chuyển sang buổi mới.
 
 ### 5.2 Lời mời, phiên và phòng chờ
 
-Quyền gắn lời mời cá nhân, Tour và registration APPROVED hiện hành. Một phiên browser độc quyền còn hiệu lực hoặc trong khoảng giữ kết nối hữu hạn là phiên đang hoạt động; tab chung phiên không tính thêm người. Đăng xuất kết thúc phiên, không thu hồi lời mời. Reload/reconnect nhận lại phiên; đóng tab không được khóa mãi hoặc đồng nghĩa server biết đã đăng xuất.
+Quyền gắn lời mời của dòng Excel đã duyệt, Tour và registration APPROVED hiện hành. Một session browser độc quyền còn hiệu lực hoặc trong khoảng giữ kết nối hữu hạn là phiên đang hoạt động; tab chung session không tính thêm người. Đăng xuất kết thúc session, không thu hồi mã. Reload/reconnect khôi phục session; đóng tab không được khóa mãi hay đồng nghĩa server biết đã đăng xuất.
 
-Thay cả roster thu hồi lời mời/phiên cũ và duyệt lại; sửa riêng email chỉ thu hồi/cấp lại dòng đó sau Admin xác nhận; không đối chiếu lại theo tên. Student nhận lỗi chung và hướng dẫn, không thấy lý do Reject nội bộ hoặc roster. Token còn hạn không bỏ qua thu hồi/state server. Kết quả AI tới sau khi thu hồi bị chặn.
+Thay roster thu hồi lời mời/mã/session cũ toàn đoàn và duyệt lại; sửa email riêng chỉ cấp lại dòng đó sau Admin xác nhận. Không đối chiếu tên. Mã/token còn hạn không bỏ qua revoke/state server; AI tới sau revoke bị chặn. Mã sai có lỗi chung và hướng dẫn, không lộ roster/lý do Reject nội bộ; backend giới hạn thử sai.
 
-Phòng chờ hiển thị tên/lịch hiện hành, hướng dẫn kiểm tra âm thanh; chưa cấp live/AI. Link mở trước ngày vẫn dùng lại được. Khi Staff Start, trang tự cập nhật giao diện live; autoplay âm thanh theo browser, không hứa tự phát mọi thiết bị.
+Phòng chờ sau kiểm tra quyền hiển thị lịch và hướng dẫn âm thanh; chưa live/AI. Mã dùng trước ngày vẫn có thể dùng lại trong hạn. Staff Start chuyển trang sang live; autoplay theo browser. Chỉ mở URL không tính đã vào phòng thành công.
 
-Khi End Early sau Start, Tour CANCELLED cho xem video dự phòng tới đúng hạn link, miễn lời mời/registration chưa bị thu hồi. Không quyền sau kết thúc này cho COMPLETED hoặc hủy trước Start. Không tự mở lại live/AI. Giới hạn phiên áp dụng web; nếu media dùng URL công khai thì không tuyên bố ngăn được xem trực tiếp URL.
+Khi End Early sau Start, Tour CANCELLED cho video tới hạn lời mời/mã nếu chưa bị thu hồi. COMPLETED/hủy trước Start không có quyền này. Không mở lại live/AI; cấp mã mới không gia hạn buổi. Giới hạn session áp dụng web; media URL công khai không được tuyên bố đã ngăn xem trực tiếp.
 
-Đây là cấp quyền theo lời mời, không xác minh danh tính hoặc attendance; link chuyển tiếp vẫn có thể bị dùng trước. V1 chấp nhận giới hạn, hỗ trợ thu hồi/cấp lại qua đại diện.
+Người có mã bị chia sẻ vẫn có thể vào trước chủ email; không xác minh danh tính/attendance hay xác thực hai yếu tố. Excel cung cấp thông tin để liên hệ, mã chỉ gắn lượt vào với dòng đã duyệt. Một điểm xem chung chỉ có thông tin người phụ trách; muốn có dữ liệu từng học sinh ngồi xem phải bổ sung dòng cá nhân, không cần ép các em mở thiết bị riêng. Giữ mẫu Excel hiện tại, chưa thêm CRM/thu dữ liệu qua form Join.
 
 ### 5.3 Các màn và khối Live
 
 | Screen | Component / nội dung |
 |---|---|
-| Join | Mở link riêng, kiểm tra quyền tự động; không form nhập mã/tên; thông báo lỗi có hướng dẫn |
+| Join | Mở link trang Tour; ô mã + nút “Tham gia” nếu chưa có session; session còn hợp lệ thì khôi phục, không nhập lại; lỗi có hướng dẫn |
 | Waiting Room | Tên/lịch Tour, test âm thanh/thiết bị, chờ Staff Start; cùng trang tham quan |
 | Live | Video chung, map 2D, POI hiện tại/đích, narration, AI text/voice, trạng thái kết nối |
-| End | Hoàn thành hoặc hủy; video dự phòng sau End Early trong hạn link; live/AI đã đóng, không form feedback core |
+| End | Hoàn thành/hủy; video sau End Early trong hạn lời mời/mã; không live/AI, không feedback core |
 
 Map 2D hiển thị robot, hướng thân, tuyến và POI. Dữ liệu pose cũ giữ vị trí cuối và báo stale; không diễn robot di chuyển giả. Hướng camera không phải hướng thân robot. Không thêm ETA động, chọn POI đích hoặc điều khiển camera.
 
@@ -216,7 +218,7 @@ Live responsive: desktop có thể chia vùng; mobile xếp dọc hoặc dùng t
 | Điều kiện | Nhãn và hành vi |
 |---|---|
 | SCHEDULED / READY và quyền hợp lệ | Đang chờ buổi tham quan bắt đầu |
-| Roster thay thế hoặc lời mời bị thu hồi | Quyền cũ đã hết, hướng dẫn nhận link mới sau duyệt; không giữ quyền bằng matching tên |
+| Roster thay thế hoặc lời mời bị thu hồi | Quyền cũ đã hết, hướng dẫn nhận mã mới sau duyệt; không giữ quyền bằng matching tên |
 | RUNNING + NORMAL + navigation | Đang di chuyển tới [POI] |
 | Chuẩn bị góc nhìn | Đang chuẩn bị góc nhìn tại [POI] |
 | Quan sát / narration | Đang giới thiệu [POI] |
@@ -311,9 +313,9 @@ Không có nút chỉ xóa lỗi/đổi NORMAL rồi tiếp tục timer cũ. Kh�
 
 Mất nguồn stream chung khi đang navigation, nếu kênh robot còn mới và navigation bình thường, chặng hiện tại có thể hoàn tất rồi giữ; không suy robot đã dừng từ lỗi video. Staff xác nhận nguồn và chọn phục hồi phù hợp. Lỗi robot/mất trạng thái điều khiển áp dụng policy dừng riêng.
 
-End Early → CANCELLED, đóng live/AI và yêu cầu Cancel; Student có video dự phòng tới hạn link theo §5.2. CANCELLED không chứng minh robot dừng; giữ robot cần kiểm tra cho tới xác nhận phù hợp. Không gọi End Early là E-stop, không tự chạy về điểm cuối khi lỗi.
+End Early → CANCELLED, đóng live/AI và yêu cầu Cancel; Student có video dự phòng tới hạn lời mời/mã theo §5.2. CANCELLED không chứng minh robot dừng; giữ robot cần kiểm tra cho tới xác nhận phù hợp. Không gọi End Early là E-stop, không tự chạy về điểm cuối khi lỗi.
 
-Tour terminal không mở lại để chạy lần hai. Sau restart/End Early, tổ chức lại phải tạo Tour mới → registration/Excel → approve → lời mời mới → Student vào lại → READY/Start. Không tự chuyển quyền hoặc dùng lại link cũ để tiếp tục live.
+Tour terminal không mở lại để chạy lần hai. Sau restart/End Early, tổ chức lại phải tạo Tour mới → registration/Excel → approve → lời mời mới → Student vào lại → READY/Start. Không tự chuyển quyền hoặc dùng lại mã cũ để tiếp tục live.
 
 ## 7. Ma trận trạng thái dùng khi vẽ
 
@@ -325,7 +327,7 @@ TourState và RegistrationState là hai lifecycle độc lập. NORMAL/NEEDS_ASS
 | READY | Gửi lại/thu hồi/cấp lại, mở lại/hủy trước Start | Xem đăng ký, hỗ trợ lời mời; không sửa roster | Phòng chờ nếu đủ quyền | Kiểm tra và Start |
 | RUNNING | Xem/log và hỗ trợ lời mời, vận hành cần role Staff | Gửi yêu cầu nhánh; gửi lại/thu hồi/cấp lại trong đoàn; không sửa roster/email | Live/AI nếu đủ quyền | Accept/Reject, Hold/Next/Recovery/End Early theo state |
 | COMPLETED | Xem lịch sử | Xem kết quả | Màn hoàn thành, đóng live/AI | Xem log, tình trạng robot |
-| CANCELLED | Xem lịch sử/lý do, thu hồi quyền còn hiệu lực | Xem kết quả, thu hồi lời mời còn hiệu lực | Màn hủy; nếu End Early có video dự phòng tới hạn link | Log, kiểm tra và giải phóng robot khi đủ bằng chứng |
+| CANCELLED | Xem lịch sử/lý do, thu hồi quyền còn hiệu lực | Xem kết quả, thu hồi lời mời còn hiệu lực | Màn hủy; nếu End Early có video dự phòng tới hạn lời mời/mã | Log, kiểm tra và giải phóng robot khi đủ bằng chứng |
 
 ## 8. Bộ màn đề xuất để bắt đầu wireframe
 
@@ -369,9 +371,9 @@ Feedback/rating không có FR trong phiếu v1.2 đã đối chiếu, giữ Futu
 ### 10.2 Điểm còn mở và giới hạn cập nhật
 
 - Dữ liệu địa điểm còn mở: khảo sát Start/End/POI/nhánh thực trên tầng 6 NVH; Staff chỉ Start từ giờ công bố đã chốt, không còn là câu hỏi nghiệp vụ.
-- Nhóm chốt theo ADR-0009; GVHD xem lại các thay đổi tại Review 2. Form nội dung P1 không đồng nghĩa đã làm toàn bộ quản lý hình học route/POI của phiếu.
+- Nhóm chốt theo ADR-0009 và cập nhật mã truy cập ADR-0010; GVHD xem lại các thay đổi tại Review 2. Form nội dung P1 không đồng nghĩa đã làm toàn bộ quản lý hình học route/POI của phiếu.
 - Quyền đại diện và luật nhánh đã được mô tả trong scope/UI-FLOW; implementation vẫn phải chốt data/API và kiểm chứng concurrency, không suy từ bản vẽ.
-- Sửa email riêng do Admin khi SCHEDULED theo §4.2; không phải gửi lại link trong RUNNING. Email liên hệ đại diện là dữ liệu khác, chưa thêm luồng sửa ngoài quy tắc đăng ký.
+- Sửa email riêng do Admin khi SCHEDULED theo §4.2; không phải gửi lại mã trong RUNNING. Email liên hệ đại diện là dữ liệu khác, chưa thêm luồng sửa ngoài quy tắc đăng ký.
 - Contract readiness/stop/release, head và media phải được các phần tích hợp kiểm chứng. Không sửa research paper/benchmark trong lượt này.
 - Không audit lại toàn bộ frontend trong lượt sửa tài liệu 30/09; mục 10.3 là ghi nhận lịch sử của bản preview 21/09, không khẳng định luồng mới đã có code.
 

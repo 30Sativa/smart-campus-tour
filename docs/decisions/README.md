@@ -42,6 +42,7 @@ adding a test, bumping a patch version.
 | [0007](0007-smac2d-rpp-no-autonomous-reverse.md) | SmacPlanner2D + Regulated Pure Pursuit, with autonomous reverse disabled | accepted |
 | [0008](0008-production-fleet-transport.md) | SignalR fleet transport, separate Hubs, and navigation MVP semantics | accepted; Python compatibility gate pending |
 | [0009](0009-review-1-tour-business-scope.md) | Review 1: shared viewing rows, invitations, POI content, branches, Start time, fallback and audit | accepted by team; implementation pending; GVHD review at Review 2 |
+| [0010](0010-personal-access-code-entry.md) | Email a Tour page link and personal access code; enter code to create a browser session; resend versus revoke/reissue | accepted by team; supersedes ADR-0009 secret-link entry; implementation pending |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

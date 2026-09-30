@@ -24,7 +24,8 @@ shared rules; this file only covers what is specific to `web/`.
   - `/` and public routes: visitor-facing, no login required.
   - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
     Current code uses a group code and roster-name matching mock; the Review 1
-    target is a personal invitation link, with one shared-viewing row for a
+    target is an emailed Tour page link plus personal access code, exchanged
+    for a browser session (ADR-0010), with one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
     Current pages are mock-bound and still show the older shared group link;
@@ -169,12 +170,21 @@ The current frontend contains a legacy visitor registration/tour flow at
 `/visit/*`, plus a mock Student page at `/tour` and mock Representative pages at
 `/dai-dien/*`. The Student page currently matches a group code and name/class
 against mock roster data; the Representative page shares a group link/code.
-The Review 1 target instead sends a secret link to each personal invitation and
+The Review 1 target (ADR-0010) instead emails a Tour page link and personal
+access code; entering the code creates a session, and a valid existing session
+avoids repeat entry. The URL itself grants no access. The target
 uses one “Điểm xem chung” row/email for a projector room, without collecting a
 roster of students who only watch together. Students who need their own device
 and private Q&A need individual invitation rows. Treat the code and mock flows
 as implementation evidence, not as the target requirement; keep this scope
 distinction explicit when changing either flow.
+
+Shared-viewing rows only provide the responsible person's contact details. If
+the group needs data for every student, add their individual rows even when they
+watch the projector; do not infer a full roster from one viewing point. Resend
+keeps the current valid code/session; revoke/reissue invalidates both and emails
+a new code to the approved address. Representative support is own-group only;
+Admin supports all groups; Staff-only does not gain recovery permission.
 
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
