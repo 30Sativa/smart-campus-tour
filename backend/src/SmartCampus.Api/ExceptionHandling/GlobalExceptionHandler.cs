@@ -28,6 +28,10 @@ public sealed class GlobalExceptionHandler(
                 StatusCodes.Status401Unauthorized,
                 unauthorizedException.Message,
                 null),
+            ForbiddenException forbiddenException => (
+                StatusCodes.Status403Forbidden,
+                forbiddenException.Message,
+                null),
             NotFoundException notFoundException => (
                 StatusCodes.Status404NotFound,
                 notFoundException.Message,

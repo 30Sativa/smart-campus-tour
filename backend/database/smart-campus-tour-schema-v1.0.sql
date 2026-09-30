@@ -44,7 +44,7 @@ GO
 CREATE TABLE dbo.UserRoles
 (
     UserId                   UNIQUEIDENTIFIER          NOT NULL, -- Tài khoản liên quan, tham chiếu Users.Id.
-    Role                     VARCHAR(32)               NOT NULL, -- Vai trò: ADMIN, STAFF hoặc SCHOOL_REPRESENTATIVE; một tài khoản có thể có nhiều vai trò.
+    Role                     VARCHAR(32)               NOT NULL, -- ADMIN, STAFF hoặc SCHOOL_REPRESENTATIVE; V1 auth yêu cầu đúng một role được hỗ trợ trên mỗi account.
 
     CONSTRAINT PK_UserRoles PRIMARY KEY (UserId, Role),
     CONSTRAINT FK_UserRoles_UserId FOREIGN KEY (UserId) REFERENCES dbo.Users(Id)

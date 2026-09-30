@@ -56,7 +56,7 @@ CREATE TABLE dbo.Users
 GO
 
 
--- 02. UserRoles — Một tài khoản có thể có nhiều vai trò.
+-- 02. UserRoles — V1 auth yêu cầu đúng một role được hỗ trợ trên mỗi account; PK ghép hiện có giữ nguyên.
 CREATE TABLE dbo.UserRoles
 (
     UserId                   UNIQUEIDENTIFIER          NOT NULL, -- Tham chiếu Users.Id.

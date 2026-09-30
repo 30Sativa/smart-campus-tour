@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.Infrastructure;
@@ -21,6 +23,13 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(serviceProvider =>
             serviceProvider.GetRequiredService<ApplicationDbContext>());
+        services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
+        services.AddSingleton<IUsernameNormalizer, InvariantUsernameNormalizer>();
+        services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
+        services.AddSingleton<JwtTokenSettings>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<InitialAdminSeeder>();
 
         return services;
     }

@@ -236,6 +236,49 @@ Two further namespace notes, both load-bearing:
 
 ## 3. Backend-owned tour orchestration and fleet contract
 
+### 3.0 User account authentication API (implemented)
+
+The backend implements login and refresh-session endpoints for the three
+account roles `ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`. Each V1 account
+must have exactly one supported role. An account with no role, more than one
+role, or an unsupported role is denied with HTTP 403; a human who needs more
+than one application role uses separate accounts. This is an application
+authentication rule; the existing `(UserId, Role)` database primary key is
+unchanged. [ADR-0013](decisions/0013-single-application-role-per-account.md)
+records the reason for this single-role V1 contract. Student invitation access
+uses browser sessions, not an account role.
+
+| Endpoint | Request and success | Rejection behavior |
+|---|---|---|
+| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
+| `POST /api/auth/refresh` | No body; reads the refresh cookie. HTTP 200 returns the same response fields and re-sets the same refresh token with its stored expiry. Tokens are not rotated. | Missing, unknown, expired, or revoked refresh token: 401. Inactive account or invalid role assignment: 403. Rejected refresh clears the cookie. |
+| `POST /api/auth/logout` | No body; HTTP 204 and clears the cookie. A matching stored token is marked revoked. Missing, unknown, or already revoked tokens are an idempotent no-op. | An unexpected persistence failure uses the common error response and still clears the cookie. |
+
+Application exceptions use the common JSON envelope with `success: false`, a
+message, null data, and optional errors. Login failures do not create a refresh
+token. Refresh tokens are cryptographically random, stored only as SHA-256
+hashes in `RefreshTokens`, and live for 7 days. The cookie is named
+`campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
+`Path=/api/auth`. Access tokens are 15-minute HS256 JWTs with configured issuer
+and audience (defaults `SmartCampus.Api` and `SmartCampus.Web`); their user
+identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, or
+`Representative`), alongside registered issuer/audience/time claims. They
+contain no username, full name, email, or other personal data.
+
+Normal API startup requires `Authentication:Jwt:SigningKey` from environment,
+User Secrets, or another external configuration source. It must contain at
+least 32 UTF-8 bytes. The explicit initial-admin seed command exits before
+starting HTTP and does not require the signing key. Isolated development
+SimulationPreview also skips JWT middleware and persistence setup, so it does
+not validate that key; use normal API mode for auth endpoints. In Development,
+CORS allows the explicit
+`http://localhost:5173` origin with credentials; production origins must be
+configured explicitly, with no wildcard.
+
+These endpoints implement login/session issuance only. They do not implement
+account-management screens, authorization policies for future business APIs,
+or robot/fleet machine authentication.
+
 **Decided contract, implementation and compatibility checkpoint pending:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
 defines ownership; [ADR-0008](decisions/0008-production-fleet-transport.md)
@@ -544,11 +587,12 @@ execution are deferred under Section 5. Research requirements impose no
 constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
-The backend already has a development SimulationHub. Production fleet and
-operations Hubs, authentication, and dispatch remain unimplemented. A single
-backend process with per-robot latest state is the initial implementation
-baseline; multiple instances would require shared-state and connection-routing
-design, not just separate Hub names.
+The backend already has a development SimulationHub and the user login/session
+API in Section 3.0. Production fleet and operations Hubs, fleet dispatch,
+robot/machine authentication, and authorization for future business APIs remain
+unimplemented. A single backend process with per-robot latest state is the
+initial implementation baseline; multiple instances would require shared-state
+and connection-routing design, not just separate Hub names.
 
 ### 3.4 State and command-result semantics
 
@@ -676,8 +720,9 @@ authenticated reconnect, and backend restart. Outside that spike, before
 allowing navigation commands require TLS, a machine credential per robot, and
 a fleet-machine authorization policy. User/browser identities cannot submit
 robot state or use the fleet Hub. Operations requires separate user access.
-Reuse `Robot.CredentialHash`; auth implementation and credential lifecycle are
-later work, without adding PKI/mTLS or a device-management platform to the MVP.
+Reuse `Robot.CredentialHash`; robot credential verification and credential
+lifecycle are later work, without adding PKI/mTLS or a device-management
+platform to the MVP.
 
 After these docs are merged, the next task is a small Python SignalR client
 against an ASP.NET Core/.NET 10 test Hub. The acceptance checklist is in

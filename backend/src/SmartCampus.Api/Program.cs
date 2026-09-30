@@ -1,15 +1,24 @@
+using SmartCampus.Api;
 using SmartCampus.Application;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
+using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Api.Hubs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
-var builder = WebApplication.CreateBuilder(args);
+var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args);
+var builder = WebApplication.CreateBuilder(initialAdminSeedCommand.GetHostArguments());
 var simulationPreviewEnabled = builder.Environment.IsDevelopment() &&
     builder.Configuration.GetValue<bool>("SimulationPreview:Enabled");
 
+// Validate authentication configuration before the normal HTTP host starts.
+// The explicit seed command and isolated preview mode do not use HTTP auth.
+if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
+    _ = new JwtTokenSettings(builder.Configuration).CreateSigningKey();
+
 // Register application services and the selected persistence provider.
 builder.Services.AddApplication();
-if (!simulationPreviewEnabled)
+if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
     builder.Services.AddInfrastructure(builder.Configuration);
 
 // The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.
@@ -20,8 +29,60 @@ builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
+{
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    if (allowedOrigins.Length == 0)
+    {
+        policy.SetIsOriginAllowed(_ => false);
+        return;
+    }
 
-var app = builder.Build();
+    policy.WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+}));
+if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
+{
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new JwtTokenSettings(builder.Configuration)
+                .CreateValidationParameters();
+        });
+    builder.Services.AddAuthorization();
+}
+
+await using var app = builder.Build();
+
+if (initialAdminSeedCommand.Requested)
+{
+    var username = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:Username"], "InitialAdminSeed:Username");
+    var password = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:Password"], "InitialAdminSeed:Password");
+    var fullName = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:FullName"], "InitialAdminSeed:FullName");
+
+    try
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var result = await scope.ServiceProvider
+            .GetRequiredService<InitialAdminSeeder>()
+            .SeedAsync(username, password, fullName);
+
+        Console.WriteLine(result == InitialAdminSeedResult.Created
+            ? "Initial Admin seeded."
+            : "Initial Admin already exists; skipped.");
+    }
+    catch (InitialAdminSeedConflictException exception)
+    {
+        Console.Error.WriteLine($"Initial Admin seed conflict: {exception.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
 
 app.UseExceptionHandler();
 
@@ -37,9 +98,24 @@ if (app.Environment.IsDevelopment())
 if (!simulationPreviewEnabled)
     app.UseHttpsRedirection();
 
+app.UseCors("WebClient");
+if (!simulationPreviewEnabled)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
 // Applies preview-only loopback/origin checks and maps its Hub when enabled.
 app.UseSimulationPreview(simulationPreviewEnabled);
 
 app.MapControllers();
 
 app.Run();
+
+static string RequireInitialAdminSeedSetting(string? value, string key)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        throw new InvalidOperationException($"Required initial-admin seed setting '{key}' is missing or blank.");
+
+    return value;
+}

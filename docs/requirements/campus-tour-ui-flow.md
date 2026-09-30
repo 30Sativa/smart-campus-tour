@@ -9,7 +9,7 @@
 
 Bản luồng màn hình được cập nhật 30/09/2026. Mô tả hành vi cần thiết kế, chưa phải xác nhận code đã chạy hoặc GVHD đã duyệt.
 
-Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật access code tại `docs/decisions/0010-personal-access-code-entry.md` và giới hạn dữ liệu tại `docs/decisions/0011-student-data-use-for-tour.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
+Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật access code tại `docs/decisions/0010-personal-access-code-entry.md`, giới hạn dữ liệu tại `docs/decisions/0011-student-data-use-for-tour.md`, và role contract Auth V1 tại `docs/decisions/0013-single-application-role-per-account.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
 
 ## 1. Actor và cách biểu diễn
 
@@ -20,7 +20,7 @@ Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghi
 | Student | Tham quan từ xa và hỏi AI riêng | Join, phòng chờ, live, kết thúc |
 | Staff (Tour Operator / Campus Staff) | Kiểm tra, Start, giám sát và xử lý sự cố | Dashboard/Twin, kiểm tra trước Start, log |
 
-Admin, Staff và đại diện dùng cơ chế đăng nhập hiện có hoặc account demo được tạo sẵn. Student nhập mã riêng từ email để có session browser; không có account, mật khẩu hoặc OTP bổ sung. Account có thể mang cả Admin và Staff, nhưng quyền và điều kiện nghiệp vụ vẫn được kiểm tra riêng.
+Admin, Staff và đại diện dùng cơ chế đăng nhập hiện có hoặc account demo được tạo sẵn. Mỗi account V1 có đúng một role hệ thống; một người cần nhiều role dùng account riêng cho từng role. Student nhập mã riêng từ email để có session browser; không có account, mật khẩu hoặc OTP bổ sung.
 
 Khi vẽ, phân biệt:
 

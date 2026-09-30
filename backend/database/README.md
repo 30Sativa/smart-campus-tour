@@ -17,7 +17,7 @@ $env:SMARTCAMPUS_SCHEMA_TEST_CONNECTION = 'Server=localhost,1433;Integrated Secu
 bash scripts/verify backend
 ```
 
-Use a disposable development SQL Server, never a production connection. Each SQL test creates a database named `CampusTourSchemaTest_<random-guid>`, applies v1.1 and test fixtures, and drops only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. Without this environment variable, the five SQL tests explicitly report SKIPPED; a normal PASS with skips is not evidence v1.1 was tested.
+Use a disposable development SQL Server, never a production connection. Each SQL test creates a database named `CampusTourSchemaTest_<random-guid>`, applies v1.1 and test fixtures, and drops only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. SQL-backed tests explicitly report SKIPPED without this environment variable; a normal PASS with skips is not evidence v1.1 was tested.
 
 Coverage: execute the complete snapshot; reject duplicate business keys; allow legitimate historical/multi-registration rows; race two independent connections for one session; require closing an expired session before replacement; enforce pending/accepted branch limits; validate new stop FKs; preserve last actual arrival across a route change; enforce robot-claim uniqueness; apply permissions twice; demonstrate INSERT/SELECT succeeds and UPDATE/DELETE fails as a non-owner test user. Audit tests append request/result rows and count email attempts separately from log rows.
 

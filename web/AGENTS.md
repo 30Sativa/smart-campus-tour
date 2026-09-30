@@ -69,16 +69,18 @@ shared rules; this file only covers what is specific to `web/`.
 - Structure: **feature-based**. Code is grouped by what it does
   (`src/features/<feature>/`), not by file kind. Only genuinely shared UI goes
   in `src/components/`.
-- Planned production auth contract: **JWT access token + refresh token in an
-  HttpOnly cookie**. Current frontend still uses mock authentication (see
-  “Mock backend mode” below); these token rules are not evidence that backend
-  auth is implemented.
+- The backend now implements the login/session contract below; the frontend
+  still uses mock authentication (see “Mock backend mode”) and has not yet
+  switched its login UI to these endpoints. The exact server contract is in
+  [`docs/architecture.md` Section 3.0](../docs/architecture.md#30-user-account-authentication-api-implemented).
+  When connecting the frontend to this backend:
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
-    on every API request. Carries the user's role (`Visitor`, `Representative`,
-    `Staff`, `Admin`) as a claim; the area route guard reads the role from the decoded
-    token, not from a separate call. `auth/roles.ts` normalises recognized
-    spellings onto those four signed-in roles. Student invitation access is a
-    separate browser-session target, not another account role.
+    for authenticated API requests. The backend issues exactly one supported application role
+    per account: `Admin`, `Staff`, or `Representative`. `Visitor` remains a
+    frontend mock role; the backend does not issue a visitor account token.
+    Student invitation access is a separate browser-session target, not an
+    account role. A person who needs multiple application roles uses separate
+    accounts in V1.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
     access token when the old one expires, without forcing re-login.
@@ -88,14 +90,13 @@ shared rules; this file only covers what is specific to `web/`.
   - Token lifetimes: access token **15 minutes**, refresh token **7 days**
     (cookie, set by the backend — the frontend never reads or sets it
     directly).
-  - Claims on the access token: **`sub` (user id) and `role` only**. If a
-    display name or email is needed in the UI, fetch it separately (e.g.
-    `GET /api/auth/me`) — do not decode the JWT for anything beyond `role`
-    (and `sub` if needed for cache keys).
+  - The access token has `sub` and `role` identity claims plus registered JWT
+    issuer, audience, and time claims. It contains no personal data. No
+    `GET /api/auth/me` endpoint currently exists.
   - Endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`,
     `POST /api/auth/logout`.
   - Logout: call `POST /api/auth/logout` (revokes the refresh token
-    server-side — see `backend/AGENTS.md` Section 5), then clear local
+    server-side — see `docs/architecture.md` Section 3.0), then clear local
     in-memory auth state and redirect to the public app. Do not treat
     "clear local state" alone as logout — always call the endpoint first, or
     a stolen refresh token from that session stays valid.

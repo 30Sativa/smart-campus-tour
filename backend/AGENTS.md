@@ -88,7 +88,7 @@ backend/src/SmartCampus.Infrastructure/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
 │   └── Repositories/                future: specific implementations
-├── Authentication/                   future: JWT/password/token technology
+├── Authentication/                   JWT/password/token technology
 ├── Integrations/                     future: external adapters without Api/Hub references
 └── DependencyInjection.cs
 
@@ -320,26 +320,29 @@ export SMARTCAMPUS_DB_CONNECTION='<local SQL Server connection string>'
 bash backend/scripts/scaffold-db
 ```
 
-## 6. Planned authentication and realtime placement
+## 6. Authentication and realtime placement
 
-Auth is **not implemented**. Future auth use cases belong in
-`backend/src/SmartCampus.Application/Features/Auth/`, token/password/JWT
-technology in `backend/src/SmartCampus.Infrastructure/Authentication/`, and
-HTTP endpoints in `backend/src/SmartCampus.Api/Controllers/`. The planned
-contract is a 15-minute JWT access token in the login response and a 7-day
-refresh token set in an HttpOnly, Secure cookie, never a JSON body; access
-tokens are sent as Bearer tokens and contain only `sub` and `role`, no personal
-data. Planned endpoints
-are `POST /api/auth/login`, `POST /api/auth/refresh`, and
-`POST /api/auth/logout`. Passwords need a modern password hash. Refresh tokens
-are stored only as hashes and are revoked
-server-side on logout; refresh rejects unknown, expired, or revoked tokens.
-The current `RefreshTokens` table has a binary `TokenHash` and nullable
-`RevokedAt`, not a revoked flag. The schema's `UserRoles.Role` examples are
-`ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`; align the final JWT role contract
-with `web/` before implementing endpoints. Do not assume a visitor account
-exists in the current schema. Robot-control endpoints must require
-authorization.
+The backend implements `POST /api/auth/login`, `/api/auth/refresh`, and
+`/api/auth/logout` in `backend/src/SmartCampus.Api/Controllers/AuthController.cs`.
+Application owns the use cases, Infrastructure owns password hashing,
+username normalization, JWT and SQL token persistence, and Api owns HTTP and
+cookie handling. The current request/response, role, cookie, status, and JWT
+configuration contract is in
+[`docs/architecture.md` Section 3.0](../docs/architecture.md#30-user-account-authentication-api-implemented).
+Keep that contract factual and update it when public behavior changes. The
+schema has `RefreshTokens.TokenHash` as binary data and nullable `RevokedAt`,
+not a revoked flag. The application permits exactly one supported role per
+account in V1; the physical `UserRoles` primary key remains unchanged.
+
+These endpoints do not provide account management, authorization policies for
+future business routes, or robot/fleet machine authentication. Production fleet
+and operations Hubs remain pending; before robot navigation commands are
+enabled outside the local compatibility spike, require TLS, per-robot
+credentials using `Robot.CredentialHash`, and a fleet-machine policy distinct
+from user access. Browser/user credentials must not submit robot state. The
+local spike may bootstrap with dummy identity, but passing the checkpoint
+requires valid and invalid credentials, authenticated reconnect, and backend
+restart tests.
 
 SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/` when a realtime
 use case exists. Application must not depend on SignalR types; add an
