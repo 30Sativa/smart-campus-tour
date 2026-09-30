@@ -1,6 +1,9 @@
-# Architecture Decision Records
+# Decision Records
 
-One file per decision that someone will later ask "why is it like this?" about.
+One file per accepted architecture or product decision that someone will later
+ask "why is it like this?" about. Requirements, review feedback, and unresolved
+proposals belong in `docs/requirements/` or the relevant review artifact, not
+in this index.
 
 ## Format
 
@@ -35,8 +38,10 @@ adding a test, bumping a patch version.
 | [0003](0003-deploy-robot-via-docker-image.md) | The robot runs a prebuilt Docker image, not a build on the miniPC | accepted |
 | [0004](0004-external-fleet-emulator.md) | Use an external Fleet Emulator for fleet-scale validation | accepted |
 | [0005](0005-backend-authoritative-poi-per-leg-orchestration.md) | Backend owns authoritative POI navigation targets and per-leg tour orchestration | accepted |
+| [0006](0006-demo-first-tour-schema.md) | Use the demo-first SQL Server schema as the Database First persistence source | accepted |
 | [0007](0007-smac2d-rpp-no-autonomous-reverse.md) | SmacPlanner2D + Regulated Pure Pursuit, with autonomous reverse disabled | accepted |
 | [0008](0008-production-fleet-transport.md) | SignalR fleet transport, separate Hubs, and navigation MVP semantics | accepted; Python compatibility gate pending |
+| [0009](0009-review-1-tour-business-scope.md) | Review 1: shared viewing rows, invitations, POI content, branches, Start time, fallback and audit | accepted by team; implementation pending; GVHD review at Review 2 |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

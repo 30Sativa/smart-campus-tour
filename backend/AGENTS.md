@@ -7,6 +7,10 @@ business model. `docs/decisions/0005-backend-authoritative-poi-per-leg-orchestra
 defines the fleet ownership boundary. `docs/architecture.md` distinguishes the
 current persisted model from historical terminology and planned cross-system
 flows; review those contracts before implementing them.
+For the Review 1 product target, also read
+`docs/requirements/campus-tour-scope.md` and
+`docs/decisions/0009-review-1-tour-business-scope.md`. Those documents do not
+describe features already present in this backend.
 
 ## 1. Current stack and physical structure
 
@@ -189,6 +193,30 @@ next leg` is the current Remote Tour orchestration decision, not an independentl
 verified Capstone requirement; head/pan presets remain a V1 requirement.
 Research implementation/benchmark execution are deferred and do not gate this
 production flow; the Capstone methodology remains in force.
+
+### Review 1 target and current implementation gap
+
+The accepted group target in `docs/decisions/0009-review-1-tour-business-scope.md`
+requires personal email invitations, a single “Điểm xem chung” invitation row
+for a shared projector room, one active browser session per invitation,
+revocation/reissue, Admin correction of one email while SCHEDULED, and
+representative branch requests accepted by Staff at a verified POI. Staff Start
+is allowed from the published time only. Admin POI-content editing and summary
+statistics are P1; route geometry remains technically prepared/seeded. Command
+audit records decision-to-send, sent, and robot-response stages separately.
+These are target behaviors to implement and verify, not invariants in the
+current database.
+
+The current schema stores group-level registration and name/class roster rows;
+it does not persist per-row invitation tokens, browser sessions, revocation
+state, shared-viewing-point classification, email-send attempts, or branch
+requests. The current backend has only its development Simulation controller
+and Hub; the product use cases and endpoints above are not implemented. Do not
+infer that a group code/name match is equivalent to an approved personal
+invitation. Do not add schema, EF mappings, or endpoints as part of a
+documentation-only task; a feature implementation must first reconcile its
+public contracts in `docs/architecture.md` and include the appropriate schema
+and tests.
 
 ## 4. Request, persistence, and response flow
 
