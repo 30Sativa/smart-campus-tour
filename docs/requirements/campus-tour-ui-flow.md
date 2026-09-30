@@ -9,7 +9,7 @@
 
 Bản luồng màn hình được cập nhật 30/09/2026. Mô tả hành vi cần thiết kế, chưa phải xác nhận code đã chạy hoặc GVHD đã duyệt.
 
-Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật access code tại `docs/decisions/0010-personal-access-code-entry.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
+Nguồn đối chiếu: bản đặc tả Review 1 ngày 28/09 cập nhật nghiệp vụ 30/09 và phần nghiệp vụ/giới hạn của phiếu FA26SE184 v1.2 ngày 19/09 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf`. Nghiệp vụ được nhóm chốt ngày 30/09 tại `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật access code tại `docs/decisions/0010-personal-access-code-entry.md` và giới hạn dữ liệu tại `docs/decisions/0011-student-data-use-for-tour.md`; GVHD sẽ xem lại ở Review 2, chưa ghi nhận duyệt từng thay đổi. Feedback/rating không có FR trong phiếu v1.2, ngoài core. Không sửa phần research paper/benchmark trong lượt này.
 
 ## 1. Actor và cách biểu diễn
 
@@ -109,7 +109,7 @@ READY khóa nội dung/route và đăng ký; không nhận đăng ký mới ho�
 
 Mở lại READY → SCHEDULED chỉ trước Start; giữ APPROVED của đoàn chưa sửa. Thay cả roster đưa đoàn đó về SUBMITTED; Admin sửa riêng email và xác nhận thì giữ approval của đoàn, không gửi lại mã các dòng khác. Nếu state đã đổi bởi thao tác khác, báo không thực hiện được và cập nhật màn.
 
-Sau duyệt, hệ thống gửi link trang Tour + mã riêng tới từng học sinh hoặc người phụ trách trình chiếu. Admin/đại diện sở hữu đoàn được gửi lại/cấp lại khi registration APPROVED và Tour SCHEDULED/READY/RUNNING; không sửa người nhận, approval hoặc roster. Thu hồi được phép cả khi chỉ còn quyền video dự phòng. Thư lỗi giữ APPROVED; dịch vụ chấp nhận thư không chứng minh đã đọc. Gửi lại dùng đúng mã hiện hành còn hạn, không tạo thêm quyền/đá phiên cũ. Đổi giờ cập nhật trang và gửi thông báo, giữ mã còn hiệu lực.
+Sau duyệt, hệ thống gửi link trang Tour + mã riêng tới từng học sinh hoặc người phụ trách trình chiếu; nêu dữ liệu được dùng cho đăng ký/lời mời và đầu mối hỗ trợ quyền truy cập theo ADR-0011; không in mã đoàn. Admin/đại diện sở hữu đoàn được gửi lại/cấp lại khi registration APPROVED và Tour SCHEDULED/READY/RUNNING; không sửa người nhận, approval hoặc roster. Thu hồi được phép cả khi chỉ còn quyền video dự phòng. Thư lỗi giữ APPROVED; dịch vụ chấp nhận thư không chứng minh đã đọc. Gửi lại dùng đúng mã hiện hành còn hạn, không tạo thêm quyền/đá phiên cũ. Đổi giờ cập nhật trang và gửi thông báo, giữ mã còn hiệu lực.
 
 ### 3.4 Chức năng quản trị ngoài luồng live
 
@@ -135,9 +135,11 @@ Login bằng account Representative
       │    → Xem POI hiện tại, điểm phân nhánh được phép, lựa chọn
       │    → Gửi → PENDING → ACCEPTED / REJECTED / EXPIRED
       └─ COMPLETED/CANCELLED → Xem kết quả; không mở lại live
+           → CANCELLED sau End Early: thu hồi lời mời còn quyền xem video
 
 Register / Edit
- → Thông tin trường/nhóm/người liên hệ
+ → Thông tin trường/nhóm/người liên hệ + mục đích dữ liệu/đầu mối hỗ trợ
+ → Đại diện xác nhận quyền cung cấp thông tin đăng ký/lời mời
  → Upload Excel cá nhân và/hoặc điểm xem chung → Preview loại dòng/lỗi/email
    Chỉ xem chung: một dòng/điểm, không cần danh sách học sinh ngồi xem
  → Xác nhận thay thế khi có dữ liệu cũ → SUBMITTED → Admin duyệt lại
@@ -163,7 +165,7 @@ SUBMITTED/APPROVED/REJECTED có thể hủy khi SCHEDULED. REJECTED sửa và CA
 
 Panel chỉ cho gửi khi Tour RUNNING, registration APPROVED và có điểm phân nhánh đang dừng hoặc kế tiếp chưa đi qua. Hiện nhánh hợp lệ và thời lượng dự kiến đã cấu hình, không ETA động. Mỗi đại diện tối đa một PENDING cho Tour/lượt phân nhánh; thao tác lặp không tạo yêu cầu mới. Mỗi Tour tối đa một lần đổi nhánh được chấp nhận, kể cả Staff chọn trực tiếp; REJECTED/EXPIRED không tiêu lượt, retry không tăng. Sau khi chốt khóa yêu cầu đổi tiếp.
 
-Gửi yêu cầu không tự Hold. Staff chỉ Accept tại đúng điểm khi robot dừng, lượt còn mở và đủ điều kiện. Khi đóng lượt rời điểm, đã chốt nhánh khác, End Early hoặc vào NEEDS_ASSISTANCE, yêu cầu PENDING hết hạn; UI cập nhật EXPIRED và lý do. Đại diện không có nút lái robot, Next hoặc yêu cầu gia hạn thời gian riêng. Muốn xem lâu hơn Staff dùng Hold.
+Gửi yêu cầu không tự Hold. Staff chỉ Accept tại đúng điểm khi robot dừng, lượt còn mở và đủ điều kiện. Đóng lượt rời điểm chỉ làm hết hạn PENDING của **đúng lượt điểm phân nhánh đó**; rời POI trung gian giữ yêu cầu cho điểm sắp tới. End Early/NEEDS_ASSISTANCE hoặc đã dùng lượt đổi nhánh làm hết hạn mọi PENDING của Tour; mất quyền registration chỉ đóng yêu cầu của registration đó. UI cập nhật EXPIRED và lý do theo ADR-0009 §4, scope §6.2. Đại diện không có nút lái robot, Next hoặc yêu cầu gia hạn; Staff Hold khi cần xem lâu hơn.
 
 ## 5. Student
 
@@ -188,6 +190,8 @@ Mất mạng ngắn → Reconnect, kiểm tra quyền và nhận snapshot mới
 
 Chỉ nhập access code riêng; không thêm email/họ tên/lớp/mã phòng/OTP hoặc account Student. Cho sao chép/dán mã. Link là địa chỉ trang Tour, không chứa mã bí mật và không tự cấp quyền. Một trang đổi theo state, không nhiều bước xin vào. Vào muộn xem thời điểm hiện tại, không replay. Mã và session thuộc đúng Tour, không chuyển sang buổi mới.
 
+Copy trong email và UI Student thống nhất **“Mã truy cập”**; không hiển thị mã đoàn hoặc nhãn “access code”/“mã cá nhân” khác cho cùng trường nhập. Mở URL, kể cả do trình quét email, không tự tạo session; chỉ gửi mã hợp lệ mới xin phiên theo ADR-0010.
+
 ### 5.2 Lời mời, phiên và phòng chờ
 
 Quyền gắn lời mời của dòng Excel đã duyệt, Tour và registration APPROVED hiện hành. Một session browser độc quyền còn hiệu lực hoặc trong khoảng giữ kết nối hữu hạn là phiên đang hoạt động; tab chung session không tính thêm người. Đăng xuất kết thúc session, không thu hồi mã. Reload/reconnect khôi phục session; đóng tab không được khóa mãi hay đồng nghĩa server biết đã đăng xuất.
@@ -198,7 +202,7 @@ Phòng chờ sau kiểm tra quyền hiển thị lịch và hướng dẫn âm t
 
 Khi End Early sau Start, Tour CANCELLED cho video tới hạn lời mời/mã nếu chưa bị thu hồi. COMPLETED/hủy trước Start không có quyền này. Không mở lại live/AI; cấp mã mới không gia hạn buổi. Giới hạn session áp dụng web; media URL công khai không được tuyên bố đã ngăn xem trực tiếp.
 
-Người có mã bị chia sẻ vẫn có thể vào trước chủ email; không xác minh danh tính/attendance hay xác thực hai yếu tố. Excel cung cấp thông tin để liên hệ, mã chỉ gắn lượt vào với dòng đã duyệt. Một điểm xem chung chỉ có thông tin người phụ trách; muốn có dữ liệu từng học sinh ngồi xem phải bổ sung dòng cá nhân, không cần ép các em mở thiết bị riêng. Giữ mẫu Excel hiện tại, chưa thêm CRM/thu dữ liệu qua form Join.
+Người có mã bị chia sẻ vẫn có thể vào trước chủ email; không xác minh danh tính/attendance hay xác thực hai yếu tố. Theo ADR-0011, dữ liệu chỉ phục vụ đăng ký, lời mời và thống kê vận hành Tour; không liên hệ tuyển sinh sau Tour. Điểm xem chung chỉ có thông tin người phụ trách và một session, không cho biết số người trong phòng. Không thêm CRM, consent workflow hoặc yêu cầu dữ liệu cá nhân ở Join.
 
 ### 5.3 Các màn và khối Live
 
@@ -281,7 +285,7 @@ Dashboard có Twin 3D vùng chạy tầng 6, video preview, Tour/robot, thông t
 
 Chỉ nhận quyền dùng robot lúc Start; một robot không được hai Tour giữ cùng lúc. Kiểm tra này thuộc luồng cơ sở, không đợi demo emulator. Start thất bại không gửi chặng. Action có lý do disabled và phản hồi rõ, backend kiểm tra lại mọi điều kiện/quyền; log quyết định/lệnh/kết quả.
 
-Yêu cầu không tự dừng dwell. Hết dwell không Hold thì đi tuyến đang có hiệu lực. Đóng lượt trước FRONT/dispatch là hạn Accept; yêu cầu PENDING hết hiệu lực, không đợi robot lăn bánh. Accept/Next/Hold/timer phân xử nhất quán: không đổi mục tiêu sau khi đã đóng lượt, không phát hai chặng. End Early/NEEDS_ASSISTANCE đóng yêu cầu liên quan; reconnect không hồi sinh.
+Yêu cầu không tự dừng dwell. Hết dwell không Hold thì đi tuyến đang có hiệu lực. Đóng lượt trước FRONT/dispatch chỉ kết thúc hạn Accept/PENDING của đúng lượt điểm phân nhánh vừa đóng; không hủy yêu cầu cho điểm sắp tới khi rời POI trung gian. Các trường hợp hết hạn toàn Tour hoặc theo registration áp dụng §4.4. Accept/Next/Hold/timer phân xử nhất quán: không đổi mục tiêu sau đóng lượt, không phát hai chặng; reconnect không hồi sinh.
 
 Hold vẫn NORMAL, không đồng nghĩa NEEDS_ASSISTANCE và không phải E-stop. Khi muốn rời POI đang Hold, Staff bấm Next; không thêm Resume timer. Nếu Next đã đóng lượt trước khi Hold tới, UI báo đã chuyển bước.
 
@@ -371,10 +375,11 @@ Feedback/rating không có FR trong phiếu v1.2 đã đối chiếu, giữ Futu
 ### 10.2 Điểm còn mở và giới hạn cập nhật
 
 - Dữ liệu địa điểm còn mở: khảo sát Start/End/POI/nhánh thực trên tầng 6 NVH; Staff chỉ Start từ giờ công bố đã chốt, không còn là câu hỏi nghiệp vụ.
-- Nhóm chốt theo ADR-0009 và cập nhật mã truy cập ADR-0010; GVHD xem lại các thay đổi tại Review 2. Form nội dung P1 không đồng nghĩa đã làm toàn bộ quản lý hình học route/POI của phiếu.
+- Nhóm chốt theo ADR-0009, mã truy cập ADR-0010 và giới hạn dữ liệu đăng ký/thống kê Tour ADR-0011; GVHD xem lại các thay đổi tại Review 2. Form nội dung P1 không đồng nghĩa đã làm toàn bộ quản lý hình học route/POI của phiếu.
 - Quyền đại diện và luật nhánh đã được mô tả trong scope/UI-FLOW; implementation vẫn phải chốt data/API và kiểm chứng concurrency, không suy từ bản vẽ.
 - Sửa email riêng do Admin khi SCHEDULED theo §4.2; không phải gửi lại mã trong RUNNING. Email liên hệ đại diện là dữ liệu khác, chưa thêm luồng sửa ngoài quy tắc đăng ký.
 - Contract readiness/stop/release, head và media phải được các phần tích hợp kiểm chứng. Không sửa research paper/benchmark trong lượt này.
+- Trước dữ liệu thật, xác nhận quyền cung cấp và cấu hình thời gian giữ dữ liệu đăng ký không có Tour terminal theo ADR-0011; không có mục đích liên hệ tuyển sinh sau Tour trong V1.
 - Không audit lại toàn bộ frontend trong lượt sửa tài liệu 30/09; mục 10.3 là ghi nhận lịch sử của bản preview 21/09, không khẳng định luồng mới đã có code.
 
 ### 10.3 Phạm vi bản xem trước FE — ghi nhận lịch sử ngày 21/09

@@ -1,6 +1,6 @@
 # CampusTour DT-AMR — Phạm vi và nghiệp vụ chốt trong nhóm sau Review 1
 
-> Ngày biên soạn: 28/09/2026; chốt nghiệp vụ trong nhóm: 30/09/2026. GVHD giao nhóm tự quyết theo thông tin nhóm cung cấp và sẽ xem lại ở Review 2; chưa xác nhận GVHD đã duyệt từng thay đổi hoặc chức năng đã triển khai. Quyết định được lưu tại `docs/decisions/0009-review-1-tour-business-scope.md`; cập nhật mã truy cập tại `docs/decisions/0010-personal-access-code-entry.md`.
+> Ngày biên soạn: 28/09/2026; chốt nghiệp vụ trong nhóm: 30/09/2026, cập nhật phạm vi dữ liệu sau Review 1. GVHD giao nhóm tự quyết theo thông tin nhóm cung cấp và sẽ xem lại ở Review 2; chưa xác nhận GVHD đã duyệt từng thay đổi hoặc chức năng đã triển khai. Quyết định được lưu tại `docs/decisions/0009-review-1-tour-business-scope.md`, `docs/decisions/0010-personal-access-code-entry.md` và `docs/decisions/0011-student-data-use-for-tour.md`.
 >
 > Căn cứ: phạm vi 19/09/2026; ảnh ghi chú Review 1; phiếu FA26SE184 có lịch sử cập nhật v1.2 ngày 19/09/2026 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf` (tên file khác phiên bản nội dung); UI-FLOW 21/09 cập nhật cùng lượt này; `docs/architecture.md` đọc lại ngày 30/09. Đã đối chiếu phần nghiệp vụ, vai trò và giới hạn của phiếu, không suy thành bằng chứng GVHD đã duyệt mọi điều chỉnh.
 >
@@ -8,7 +8,7 @@
 >
 > Đây là **baseline nghiệp vụ của nhóm**, tách khỏi đặc tả kỹ thuật dài ngày 19/09. Bản gốc giữ để truy vết; dùng bảng mục 13 khi cập nhật đặc tả cũ, không ghép hai bộ quy tắc mâu thuẫn. Lượt này đồng bộ tài liệu và ADR trong repo; không triển khai code, không sửa phiếu đăng ký hoặc phần nghiên cứu.
 
-> **Quyết định phạm vi của nhóm:** giữ video dự phòng, hướng kiểm chứng nhiều Tour và phạm vi map đã đề xuất; loại nhiều robot cùng một Tour khỏi kế hoạch V1. Email sau duyệt gồm link trang Tour và access code riêng cho từng lời mời; một phòng xem qua máy chiếu chỉ cần một dòng **“Điểm xem chung”** và email người phụ trách, không bắt danh sách cá nhân chỉ để cấp quyền máy chiếu. Muốn lưu thông tin từng học sinh để liên hệ thì vẫn cần các dòng cá nhân theo mục 5.1. Người cần vào trên thiết bị riêng hoặc hỏi AI riêng cần lời mời cá nhân. Học sinh nhập access code khi chưa có phiên hợp lệ; không nhập thêm mã phòng/email/OTP hoặc tạo tài khoản Student riêng. Mỗi lời mời giữ tối đa một phiên hoạt động, có thu hồi/cấp lại; chấp nhận giới hạn mã có thể bị chuyển tiếp. Địa điểm demo nhóm xác nhận là **tầng 6 của NVH**. Đây là quyết định của nhóm cho bản scope, chưa phải xác nhận GVHD đã duyệt hoặc cho phép vận hành tại địa điểm. Chọn nhánh có đại diện/Staff là phương án cơ sở; nhóm xếp voting vào Optional/Future, không lên kế hoạch code V1.
+> **Quyết định phạm vi của nhóm:** giữ video dự phòng, hướng kiểm chứng nhiều Tour và phạm vi map đã đề xuất; loại nhiều robot cùng một Tour khỏi kế hoạch V1. Email sau duyệt gồm link trang Tour và access code riêng cho từng lời mời; một phòng xem qua máy chiếu chỉ cần một dòng **“Điểm xem chung”** và email người phụ trách, không bắt danh sách cá nhân chỉ để cấp quyền máy chiếu. Dữ liệu Excel chỉ phục vụ đăng ký, lời mời và thống kê vận hành Tour; V1 không liên hệ tuyển sinh sau Tour theo ADR-0011. Người cần vào trên thiết bị riêng hoặc hỏi AI riêng cần lời mời cá nhân. Học sinh nhập access code khi chưa có phiên hợp lệ; không nhập thêm mã phòng/email/OTP hoặc tạo tài khoản Student riêng. Mỗi lời mời giữ tối đa một phiên hoạt động, có thu hồi/cấp lại; chấp nhận giới hạn mã có thể bị chuyển tiếp. Địa điểm demo nhóm xác nhận là **tầng 6 của NVH**. Đây là quyết định của nhóm cho bản scope, chưa phải xác nhận GVHD đã duyệt hoặc cho phép vận hành tại địa điểm. Chọn nhánh có đại diện/Staff là phương án cơ sở; nhóm xếp voting vào Optional/Future, không lên kế hoạch code V1.
 
 ## 1. Kết luận đánh giá
 
@@ -135,7 +135,7 @@ Ví dụ đoàn 100 học sinh có 100 dòng/email đã duyệt và 100 mã riê
 
 Một khối xem bằng một máy chiếu dùng một dòng điểm xem chung. Người cần đồng thời xem/hỏi riêng trên điện thoại cần dòng cá nhân và mã riêng. AI trên máy chiếu là nội dung chung. Không phát mã trình chiếu cho nhiều điện thoại rồi vẫn tuyên bố một lời mời chỉ một phiên.
 
-**Dữ liệu học sinh:** Excel là nguồn thông tin để quản lý/liên hệ sau này; mã liên kết lượt vào với dòng đã duyệt, không tự thu thêm thông tin hoặc xác minh người thật. Dòng điểm xem chung chỉ lưu tên điểm/email người phụ trách, không cung cấp danh tính các em ngồi xem. Nếu cần thông tin từng em, đại diện phải cung cấp các dòng cá nhân tương ứng, kể cả các em chỉ ngồi xem chung; không bắt các em phải mở điện thoại. Chưa bổ sung CRM, gửi thư tuyển sinh tự động hoặc theo dõi attendance vào V1.
+**Dữ liệu học sinh:** theo ADR-0011, Excel chỉ phục vụ đăng ký, gửi/quản lý lời mời và thống kê vận hành Tour. V1 không liên hệ tuyển sinh sau Tour, không xây CRM, consent workflow hoặc hồ sơ học sinh. Mã chỉ liên kết lượt vào với dòng đã duyệt, không xác minh danh tính hay attendance. Điểm xem chung chỉ có dữ liệu người phụ trách; không suy số người trong phòng và không bắt roster người chỉ xem chung.
 
 Một đăng ký có thể trộn hai loại dòng; một đại diện có nhiều đăng ký/nhóm cho cùng Tour. Đây là danh sách cấp lời mời, không mặc định đầy đủ mọi người hiện diện. Không xây thêm cây tổ chức trường–khối–lớp hoặc loại dòng mới chỉ để thu dữ liệu.
 
@@ -143,8 +143,9 @@ Một đăng ký có thể trộn hai loại dòng; một đại diện có nhi�
 
 - Excel giữ `LoaiDong` (`CA_NHAN` hoặc `DIEM_XEM_CHUNG`), `HoTen`, `Email` bắt buộc; `Lop` tùy chọn. `HoTen` là tên cá nhân hoặc điểm xem chung. Kiểm tra loại dòng, email thiếu/sai/trùng trong Tour trước duyệt; không đoán loại từ tên, không coi định dạng email là xác minh chủ hộp thư. Mẫu này là yêu cầu mục tiêu, parser chưa được triển khai.
 - Backend tạo định danh dòng/lời mời; sau duyệt cấp mã riêng cho từng dòng. Hai người trùng tên/lớp nhưng email khác vẫn có mã riêng. Gửi từng thư riêng, không lộ roster hoặc mã người khác qua thư chung.
-- Chỉ để cấp quyền một máy chiếu, một dòng `DIEM_XEM_CHUNG` là đủ, không bắt roster học sinh hoặc số người. Máy chiếu + 5 em muốn hỏi riêng: một dòng điểm xem chung + 5 dòng cá nhân. Muốn lưu dữ liệu mọi em thì thêm các dòng cá nhân theo mục 5.1. Một email không nhận hai lời mời trùng trong cùng Tour; đại diện dùng lời mời của chính mình hoặc điểm mình phụ trách.
-- Email gồm tên/lịch Tour, nút “Mở trang tham gia”, **mã truy cập riêng**, hạn dùng và hướng dẫn hỗ trợ/không chia sẻ mã. Student chỉ cần mở trang, sao chép/dán mã và bấm “Tham gia”. Không tự nhúng mã vào URL để bỏ qua bước nhập đã chốt.
+- Chỉ để cấp quyền một máy chiếu, một dòng `DIEM_XEM_CHUNG` là đủ, không bắt roster học sinh hoặc số người. Máy chiếu + 5 em muốn hỏi riêng: một dòng điểm xem chung + 5 dòng cá nhân. Không thu dòng cá nhân chỉ nhằm liên hệ tuyển sinh sau Tour. Một email không nhận hai lời mời trùng trong cùng Tour; đại diện dùng lời mời của chính mình hoặc điểm mình phụ trách.
+- Email gồm tên/lịch Tour, nút “Mở trang tham gia”, nhãn **“Mã truy cập”**, hạn dùng và hướng dẫn hỗ trợ/không chia sẻ mã. Không in mã đoàn trong email/giao diện Student; mọi chỗ người xem nhập hoặc nhận mã đều dùng cùng nhãn này theo ADR-0010. Student mở trang, sao chép/dán mã và bấm “Tham gia”. Không nhúng mã hoặc dữ liệu cá nhân vào URL.
+- Form đăng ký và email mời nêu dữ liệu cần cho đăng ký/lời mời và đầu mối hỗ trợ quyền truy cập. Không có checkbox đồng ý tuyển sinh hoặc quy trình liên hệ sau Tour trong V1. Trước khi dùng dữ liệu thật, đơn vị vận hành xác nhận quyền cung cấp và thời gian giữ dữ liệu phù hợp; xem ADR-0011.
 - Approval và kết quả gửi thư độc lập: thư lỗi không chuyển APPROVED thành REJECTED. Admin/đại diện được gửi lại riêng; dịch vụ chấp nhận gửi không chứng minh thư tới inbox/được đọc. Hướng dẫn kiểm tra spam và vào phòng chờ sớm.
 - **Gửi lại** khi thất lạc thư: gửi đúng mã hiện hành còn hiệu lực tới email đã duyệt, không đổi mã, tạo thêm lời mời hoặc đá phiên đang xem. **Thu hồi/cấp mới** khi nghi lộ mã hay cần vô hiệu phiên cũ: thu hồi mã và session cũ, tạo mã mới cho cùng lời mời, gửi tới email đã duyệt. Nếu gửi thư mới lỗi, mã cũ vẫn bị thu hồi; retry gửi mã mới hiện hành, không xoay mã liên tục.
 - Mã phải khó đoán, có hạn và thu hồi được; giới hạn thử sai ở server. Không ghi mã/token vào log, URL, analytics hoặc prompt AI; không đưa roster vào prompt AI. Cách lưu/phân phối mã để hỗ trợ gửi lại phải được thiết kế an toàn khi triển khai; chưa chốt schema/API hoặc độ dài mã trong scope này.
@@ -191,6 +192,12 @@ Cùng một trang Tour đổi nội dung theo trạng thái. Khi chưa có sessi
 
 Kiểm chứng trước ngày/quay lại đúng ngày, đăng xuất/nhập lại, reconnect đúng lúc Start, vào muộn, kết thúc, mã sai và browser cạnh tranh. Độ dài/hạn mã, hạn session, khoảng giữ kết nối và giới hạn thử sai là thông số phải chốt trước diễn tập, không tự gán số trong tài liệu này.
 
+### 5.5 Mục đích và vòng đời dữ liệu
+
+Áp dụng ADR-0011. Họ tên/email trong Excel dùng để tổ chức đăng ký, cấp quyền lời mời và hỗ trợ buổi Tour; thống kê chỉ giữ số liệu tổng hợp không nhận diện cá nhân. V1 không dùng dữ liệu để liên hệ tuyển sinh sau Tour, không lưu lịch sử AI Q&A thành hồ sơ và không xây màn consent/yêu cầu dữ liệu.
+
+Chỉ giữ dữ liệu cá nhân trong thời gian cần cho đăng ký, quyền truy cập và hỗ trợ Tour theo cấu hình vận hành; xác định cấu hình trước khi dùng dữ liệu thật. Khi các mục đích này hết hạn, xóa/khử định danh dữ liệu cá nhân khi phù hợp; audit không ghi email/mã/roster và không được xóa log để thay việc xử lý dữ liệu nguồn. Demo dùng dữ liệu giả hoặc dữ liệu được cung cấp phù hợp.
+
 ## 6. Tuyến linh hoạt và quyền cấu hình của Admin
 
 ### 6.1 Chuẩn bị trước Tour
@@ -236,9 +243,9 @@ Thêm POI/tọa độ/map/đường nối thuộc chuẩn bị kỹ thuật. For
 
 **Quyền cuối cùng:** đại diện gửi yêu cầu; Staff phụ trách Tour quyết định; Admin cấu hình trước buổi, không dùng màn sửa tuyến để đổi hành trình RUNNING. Backend kiểm tra quyền/state trước thực thi. Muốn quan sát lâu hơn Staff dùng Hold tại POI, không có loại yêu cầu gia hạn thời gian từ đại diện.
 
-**Luật yêu cầu:** `PENDING → ACCEPTED / REJECTED / EXPIRED`. Mỗi đại diện có tối đa một yêu cầu PENDING cho cùng Tour/lượt phân nhánh; gửi lặp không tạo bản mới. Sau một quyết định nhánh được chốt, các yêu cầu còn chờ của lượt đó đóng EXPIRED với lý do đã quyết định. Đây là trạng thái của yêu cầu nghiệp vụ, không thêm TourState hoặc lệnh ROS.
+**Luật yêu cầu:** `PENDING → ACCEPTED / REJECTED / EXPIRED`. Mỗi đại diện có tối đa một yêu cầu PENDING cho cùng Tour/lượt phân nhánh; gửi lặp không tạo bản mới. Khi một nhánh được chấp nhận và dùng lượt đổi duy nhất, mọi yêu cầu PENDING còn lại của Tour đóng EXPIRED với lý do hết lượt đổi nhánh. Đây là trạng thái của yêu cầu nghiệp vụ, không thêm TourState hoặc lệnh ROS; quyết định gốc ở ADR-0009 §4.
 
-**Luật timer:** gửi yêu cầu không tự Hold/đặt lại dwell. Nếu cần thêm thời gian xử lý, Staff bấm Hold khi đang quan sát và lượt còn mở. Hết dwell mà không Hold thì backend đi tiếp theo tuyến có hiệu lực; các yêu cầu chưa xử lý hết hạn. Đóng lượt để rời điểm, End Early, chuyển NEEDS_ASSISTANCE hoặc mất quyền của registration gửi yêu cầu làm các yêu cầu PENDING liên quan hết hạn. Hạn Accept kết thúc ngay khi lượt đóng, trước bước FRONT/dispatch, không đợi bánh xe chuyển động.
+**Luật timer:** gửi yêu cầu không tự Hold/đặt lại dwell. Nếu cần thêm thời gian xử lý, Staff bấm Hold khi đang quan sát và lượt còn mở. Hết dwell không Hold thì đi tiếp theo tuyến có hiệu lực. Khi đóng lượt rời điểm, **chỉ** các PENDING gắn với đúng lượt điểm phân nhánh vừa đóng hết hạn, trước FRONT/dispatch. Yêu cầu cho điểm phân nhánh sắp tới vẫn PENDING khi robot rời một POI trung gian. End Early hoặc NEEDS_ASSISTANCE làm hết hạn mọi PENDING của Tour; mất quyền registration chỉ làm hết hạn các yêu cầu của registration đó. Không đợi bánh xe chuyển động mới đóng hạn Accept tại điểm tương ứng.
 
 Accept, Next, timer và Hold cạnh tranh phải được phân xử nhất quán tại server: hoặc nhánh mới được chốt trước và được dùng, hoặc lượt đã đóng thì Accept bị từ chối. Callback/reconnect không hồi sinh yêu cầu. Demo phải có một nhánh thay thế được thực hiện thật; không chỉ đổi marker.
 
@@ -288,6 +295,8 @@ Map tiếp tục thể hiện telemetry thật nếu còn mới; nếu mất d�
 **Tách quyền sau kết thúc:** End Early đóng live, realtime của Tour và Q&A. Với Tour đã Start rồi kết thúc sớm thành CANCELLED, lời mời chưa bị thu hồi chỉ xem video dự phòng **tới đúng hạn hết hiệu lực của lời mời/mã**, không có TTL video riêng. Giới hạn phiên web vẫn áp dụng; thu hồi lời mời/registration chặn xem. Không áp dụng quyền sau kết thúc này cho COMPLETED hoặc buổi hủy trước Start, không cấp lại live/AI hay quyền Tour mới. Video khi Tour còn RUNNING là fallback trong phiên, không phải ngoại lệ quyền sau kết thúc.
 
 Chỉ `COMPLETED` khi robot hoàn tất hành trình thực được Staff chấp nhận, gồm biến thể hợp lệ nếu đã chọn, và dừng ở điểm cuối. Nếu kết thúc phần live bằng End Early thì vẫn là `CANCELLED` dù người xem đã xem hết video. Báo cáo tách “hành trình robot” và “nội dung đã cung cấp”.
+
+**Giải phóng robot sau End Early/lỗi:** theo ADR-0009 §6 và `docs/architecture.md` §3.2, Staff kiểm tra thực tế rồi bấm “Xác nhận robot sẵn sàng”. Backend đối soát Tour cũ đã terminal, nhiệm vụ/lệnh cũ đã kết thúc/hủy, robot đã dừng và trạng thái mới đủ readiness trước khi bỏ khóa điều phối, ghi audit. Chưa đủ bằng chứng thì giữ khóa và nêu lý do; một báo cáo IDLE hoặc gửi Cancel thành công không đủ. Sau giải phóng, Tour mới được Start khi đạt đầy đủ điều kiện riêng; không mở lại Tour cũ, không tự Start. Nếu còn phục hồi trong Tour RUNNING thì dùng luồng recovery, không release để giao robot cho Tour khác.
 
 ## 8. Nhiều đoàn, nhiều Tour và nhiều robot
 
@@ -384,9 +393,9 @@ Các hàng sau là yêu cầu kiểm chứng tương lai, chưa có kết quả 
 | R1-05 | Một khối chỉ xem máy chiếu; thêm vài người xem bằng điện thoại | Một dòng điểm xem chung đủ đăng ký/duyệt/READY/xem, không đòi roster học sinh; các dòng cá nhân nhận mã riêng. Không attendance giả, chat trên máy chiếu là nội dung chung |
 | R1-06 | Hai đoàn cùng xem, hai học sinh hỏi khác nhau | Chung live/map, câu trả lời riêng; đại diện không xem/sửa đoàn khác |
 | R1-07 | Đại diện gửi nhánh từ My Registration, Staff Accept/Reject trên dashboard | Chỉ đúng đoàn/điểm/nhánh; ACCEPTED cập nhật tuyến, không tự bỏ Hold; robot thật thực hiện biến thể khi Next/dwell hợp lệ |
-| R1-08 | Accept giữa chặng/sau đóng lượt; Accept/Next/Hold/timer đồng thời; yêu cầu đổi lần hai | Chỉ chốt tại điểm hợp lệ còn mở; PENDING hết hạn trước FRONT/dispatch; không tự Hold; tối đa một lần được chấp nhận mỗi Tour, không phát hai chặng hoặc hồi sinh yêu cầu |
+| R1-08 | Gửi trước yêu cầu cho điểm phân nhánh B rồi rời POI trung gian A; Accept giữa chặng/sau đóng B; Accept/Next/Hold/timer đồng thời; yêu cầu đổi lần hai | Rời A giữ yêu cầu B; đóng lượt B mới làm PENDING của B hết hạn trước FRONT/dispatch. End Early/NEEDS_ASSISTANCE hoặc dùng hết lượt đóng mọi PENDING của Tour; mất quyền đoàn chỉ đóng yêu cầu đoàn đó. Chỉ Accept tại điểm hợp lệ; không tự Hold, không phát hai chặng/hồi sinh yêu cầu |
 | R1-09 | Mất nguồn live chung | Video ghi sẵn có nhãn; narration không chồng; không đổi vị trí robot theo video; policy chặng hiện tại được giữ đúng |
-| R1-10 | End Early sau Start; mở lại video khi mã còn hạn rồi hết hạn/thu hồi | Tour CANCELLED; video chỉ tới hạn lời mời/mã, live/AI đóng; không áp quyền sau kết thúc cho COMPLETED/hủy trước Start; robot chưa rõ dừng chưa được giải phóng |
+| R1-10 | End Early sau Start; mở lại video trong hạn/thu hồi; Staff xác nhận sẵn sàng khi thiếu và đủ bằng chứng; thử Start Tour mới | Tour CANCELLED; video chỉ trong hạn, không áp cho COMPLETED/hủy trước Start, không live/AI. Thiếu bằng chứng dừng/kết thúc nhiệm vụ thì giữ khóa. Xác nhận hợp lệ mới release/audit; xác nhận lặp không gây cấp trùng. Tour mới Start được khi đủ điều kiện, Tour cũ không mở lại |
 | R1-11 | Khôi phục nguồn live hoặc backend restart | Không tự chạy lại robot; phục hồi có xác nhận; restart giữ policy kết thúc sau kiểm tra, không hồi sinh timer |
 | R1-12 | Hai Tour–hai emulator; một Tour lỗi | Không lẫn command, tiến độ, subscription/media được gán hoặc AI; Tour kia tiếp tục độc lập |
 | R1-13 | Hai Tour tranh cùng robot | Chỉ một Start nhận robot; Tour còn lại có phản hồi rõ ràng |
@@ -410,7 +419,7 @@ Khi triển khai code, chạy `scripts/verify` theo hướng dẫn repo; bài na
 2. Hoàn thành đường Tour cơ sở end-to-end theo kiến trúc hiện tại; chuẩn bị dữ liệu campus, video dự phòng và các lựa chọn tuyến có thể kiểm chứng.
 3. Triển khai Excel có email, gửi link trang Tour và mã cá nhân trực tiếp và giới hạn phiên theo lựa chọn đã chốt; hỗ trợ gửi lại/thu hồi/cấp lại và hình thức trình chiếu chung; tích hợp fallback có quyền riêng sau kết thúc. Đây là thay đổi nghiệp vụ và tích hợp, không chỉ đổi màn hình login/player.
 4. Thêm yêu cầu thay đổi hành trình và quyết định của Staff; kiểm thử xung đột với timer/Next, sau đó thử biến thể trên robot thật.
-5. Chạy bài hai Tour emulator, bài tải viewer/AI và diễn tập sự cố; tiếp đó đánh giá trải nghiệm. Benchmark nghiên cứu theo kế hoạch được phê duyệt riêng.
+5. Chạy bài hai Tour emulator, bài tải viewer/AI và diễn tập sự cố; tiếp đó đánh giá trải nghiệm nếu GVHD giữ R1-15. Benchmark nghiên cứu theo kế hoạch được phê duyệt riêng.
 
 ### 12.1 Backlog P0/P1/P2 dự thảo cho Review 2
 
@@ -423,20 +432,20 @@ Khi triển khai code, chạy `scripts/verify` theo hướng dẫn repo; bài na
 | P0-03 | Tour cơ sở tự động: navigation, head, live và narration | Ít nhất 3 POI, 2 chặng thật, điểm cuối; Student 2D/Staff 3D cùng pose; cảnh 3D giới hạn vùng chạy tầng 6 được khảo sát |
 | P0-04 | Excel cá nhân/điểm xem chung → approve → email link + mã riêng → nhập mã → một phiên → revoke/cấp lại; Admin sửa email riêng | R1-01–05, R1-16–17, R1-21–22; cùng cơ chế invitation cho hai loại dòng; không nền tảng tài khoản mới |
 | P0-05 | Yêu cầu đổi nhánh qua đại diện/Staff | Phụ thuộc account/quyền mục 4, dữ liệu nạp mục 6.1 và luật timer mục 6.2; demo 6.5, R1-07–08; Hold dùng thao tác Staff hiện có, không thêm yêu cầu gia hạn |
-| P0-06 | Sự cố và video dự phòng | R1-09–11; nhãn ghi sẵn, không báo hoàn thành giả, không giải phóng robot chưa rõ dừng |
+| P0-06 | Sự cố, video dự phòng và xác nhận robot sẵn sàng sau End Early/lỗi | R1-09–11; Staff kiểm tra/xác nhận, backend đối soát nhiệm vụ cũ đã kết thúc và robot dừng/sẵn sàng mới release/audit; thiếu bằng chứng giữ khóa. Tour mới phải qua điều kiện Start; video ghi nhãn, không báo hoàn thành giả |
 | P0-07 | Q&A riêng bằng chữ, nội dung campus đã duyệt | R1-06, cách ly người hỏi và POI; text chỉ là bước tích hợp, chưa thay voice hoàn chỉnh |
 | P1-01 | TTS/STT một ngôn ngữ | Học sinh nói → STT → AI → TTS riêng; không thay bằng narration đã ghi sẵn |
 | P1-02 | Hai Tour–hai emulator độc lập | Mục 8.1, R1-12–13; R1-13 đã triển khai/kiểm tra từ P0-02 và thử lại với hai Tour; giới hạn emulator như 8.1, không đợi voting |
 | P1-03a | Kiểm chứng trải nghiệm máy chiếu và xem hỗn hợp | R1-05; không xây loại invitation riêng, không cần roster của người chỉ xem chung |
 | P1-03b | Kiểm thử tải viewer/AI | R1-14; ghi tải thực đã thử, không suy từ roster/emulator |
 | P1-03c | Đề xuất đánh giá trải nghiệm | R1-15; chỉ trở thành việc bắt buộc khi GVHD chốt giữ, không làm app rating |
-| P1-05 | Form Admin sửa nội dung POI và thống kê cơ sở | Mục 6.1, 10.2, R1-19–20; tên/mô tả/upload audio, khóa POI dùng chung, cảnh báo thời lượng/kiểm tra READY; thống kê và History/Log, không hoãn audit P0 |
-| P1-04 | Chạy đầy đủ hồi quy, diễn tập và thu bằng chứng | Các tiêu chí V1 đã chốt ở mục 11 và phần cứng/voice; R1-15 chỉ bắt buộc nếu GVHD chốt giữ; không cắt kiểm tra quyền/dừng robot để kịp Review 2 |
+| P1-04 | Form Admin sửa nội dung POI và thống kê cơ sở | Mục 6.1, 10.2, R1-19–20; tên/mô tả/upload audio, khóa POI dùng chung, cảnh báo thời lượng/kiểm tra READY; thống kê và History/Log, không hoãn audit P0 |
+| P1-05 | Chạy đầy đủ hồi quy, diễn tập và thu bằng chứng | Các tiêu chí V1 đã chốt ở mục 11 và phần cứng/voice; R1-15 chỉ bắt buộc nếu GVHD chốt giữ; không cắt kiểm tra quyền/dừng robot để kịp Review 2 |
 | P2-01 | Voting; sa bàn Student 3D; công cụ vẽ tuyến trên bản đồ; phân tích vượt mức cơ sở | Optional/Future; form nội dung POI và thống kê cơ sở đã thuộc P1 của V1 |
 
 Nghiên cứu chính thức là luồng công việc bắt buộc riêng theo phạm vi GVHD duyệt và thứ tự kiến trúc hiện hành; không đẩy vào P2 hoặc dùng demo hai emulator thay kết quả nghiên cứu. Phạm vi Review 2 cụ thể cần đối chiếu tiêu chí của thầy, không suy mọi mục P1 phải hoàn thành tại mốc chưa được cung cấp.
 
-Thứ tự P0: nhánh robot 01 → 02 → 03 → 05; phần lỗi/an toàn 06 đi cùng từng bước trước chạy thật. Invitation 04 và AI chữ 07 có thể làm song song, ghép vào demo trước nghiệm thu. Đây là tổ chức công việc, không hạ yêu cầu chức năng.
+Thứ tự P0: nhánh robot 01 → 02 → 03 → 05; phần lỗi/an toàn 06 đi cùng từng bước trước chạy thật. Invitation 04 và AI chữ 07 có thể làm song song, ghép vào demo trước nghiệm thu. Xác nhận quyền cung cấp dữ liệu và cấu hình thời gian giữ trước khi dùng dữ liệu thật theo ADR-0011; đây là điều kiện vận hành, không phải module P0 riêng. Đây là tổ chức công việc, không hạ yêu cầu chức năng.
 
 ### 12.2 Giới hạn implementation invitation
 
@@ -448,7 +457,7 @@ Kịch bản trình bày chỉ minh họa một lượt mở link/nhập mã và
 
 ### 12.3 Phần còn mở và việc triển khai tiếp
 
-- Nhóm đã chốt bảy quyết định ở ADR-0009 và cập nhật mã truy cập ở ADR-0010; không còn chờ chọn giữa form nội dung và seed, hoặc chờ chọn luật Start. GVHD sẽ xem lại tại Review 2, chưa ghi nhận đã duyệt từng thay đổi.
+- Nhóm đã chốt bảy quyết định ở ADR-0009, mã truy cập ở ADR-0010 và giới hạn dữ liệu đăng ký/thống kê Tour ở ADR-0011; không còn chờ chọn giữa form nội dung và seed, hoặc chờ chọn luật Start. GVHD sẽ xem lại tại Review 2, chưa ghi nhận đã duyệt từng thay đổi.
 - Dữ liệu địa điểm còn mở: khảo sát tầng 6 NVH, Start/End, POI thật/điểm bố trí, đường nối/nhánh và vùng được vận hành; ví dụ A–D không phải dữ liệu đo đạc.
 - Trước diễn tập vẫn phải điền các thông số mục 11 và chuyển nghiệp vụ thành data/API/test. Chốt nghiệp vụ không chứng minh đã triển khai hoặc chỉ còn khảo sát là xong hệ thống.
 - Phần nghiên cứu nằm ngoài lượt rà soát 30/09 theo yêu cầu nhóm; các đoạn giữ lại chưa được giải quyết bởi bảng sửa này.
@@ -457,7 +466,7 @@ Kịch bản trình bày chỉ minh họa một lượt mở link/nhập mã và
 
 Đề xuất phản hồi với thầy:
 
-> Nhóm đã chốt email gồm link trang Tour và mã riêng; nhập mã để tạo session; một dòng điểm xem chung đủ quyền máy chiếu nhưng chỉ lưu thông tin người phụ trách; để liên hệ từng em, đại diện vẫn gửi các dòng cá nhân. Admin sửa riêng email khi SCHEDULED; form nội dung POI và thống kê cơ sở ở P1, hình học tuyến vẫn do kỹ thuật chuẩn bị. Đại diện yêu cầu, Staff chấp nhận tối đa một lần đổi nhánh tại điểm hợp lệ; Staff chỉ Start từ giờ công bố. Video dự phòng dùng lúc live lỗi và sau End Early theo hạn lời mời, không làm giả kết quả robot. Nhóm trình các quyết định này để GVHD xem lại ở Review 2; không coi emulator là bằng chứng nhiều robot thật.
+> Nhóm đã chốt email gồm link trang Tour và mã riêng; nhập mã để tạo session; một dòng điểm xem chung đủ quyền máy chiếu nhưng chỉ lưu thông tin người phụ trách. Dữ liệu Excel chỉ phục vụ đăng ký, lời mời và thống kê Tour; không liên hệ tuyển sinh sau Tour. Admin sửa riêng email khi SCHEDULED; form nội dung POI và thống kê cơ sở ở P1, hình học tuyến vẫn do kỹ thuật chuẩn bị. Đại diện yêu cầu, Staff chấp nhận tối đa một lần đổi nhánh tại điểm hợp lệ; Staff chỉ Start từ giờ công bố. Video dự phòng dùng lúc live lỗi và sau End Early theo hạn lời mời, không làm giả kết quả robot. Nhóm trình các quyết định này để GVHD xem lại ở Review 2; không coi emulator là bằng chứng nhiều robot thật.
 
 ## 13. Bảng thay thế nội dung bản 19/09 khi cập nhật đặc tả chi tiết
 
@@ -473,6 +482,6 @@ Kịch bản trình bày chỉ minh họa một lượt mở link/nhập mã và
 | 13; 15; 17.2; 19 | Giữ truy vết nghĩa vụ nghiên cứu; cập nhật đối chiếu kiến trúc và không áp lại lịch/benchmark cũ khi chưa thống nhất | Mục 10 và 12 |
 | 16; 20–22 | Thêm tiêu chí quyền truy cập, fallback, biến thể tuyến, hai Tour, tải và đánh giá trải nghiệm | Mục 11 |
 
-Đồng bộ UI-FLOW 21/09 trong cùng lượt sửa: §3.3 email từng cá nhân hoặc người phụ trách điểm xem chung và panel quyền; §3.4 seed hình học và form nội dung P1 đã chốt; §4 nhiều đăng ký/Tour, Excel `LoaiDong`/`HoTen`/`Email`, sửa email riêng, yêu cầu nhánh và hỗ trợ mã truy cập trong RUNNING; §5 mở link, nhập mã, khôi phục session/video dự phòng; §6 Staff Accept/Reject và hạn yêu cầu; §7 ma trận quyền tương ứng. Cấu trúc Excel là mẫu nghiệp vụ mục tiêu, parser chưa được triển khai; các thay đổi tài liệu không xác nhận frontend đã triển khai. Bản canonical trong repo là `docs/requirements/campus-tour-ui-flow.md`; file nguồn bên ngoài được giữ nguyên.
+Đồng bộ UI-FLOW 21/09 trong cùng lượt sửa: §3.3 email từng cá nhân hoặc người phụ trách điểm xem chung và panel quyền; §3.4 seed hình học và form nội dung P1 đã chốt; §4 nhiều đăng ký/Tour, Excel `LoaiDong`/`HoTen`/`Email`, sửa email riêng, yêu cầu nhánh và hỗ trợ mã truy cập trong RUNNING; §5 mở link, nhập mã, khôi phục session/video dự phòng; §6 Staff Accept/Reject và hạn yêu cầu; §7 ma trận quyền tương ứng. Cấu trúc Excel là mẫu nghiệp vụ mục tiêu, parser chưa được triển khai; các thay đổi tài liệu không xác nhận frontend đã triển khai. Bản canonical trong repo là `docs/requirements/campus-tour-ui-flow.md`; bản sao trong thư mục đồ án được đồng bộ từ bản canonical này.
 
 Các chi tiết kỹ thuật không bị thay ở trên, như tương quan command/leg, chống callback trùng, quay FRONT trước navigation, phân biệt lỗi media với lỗi điều khiển và local stop, vẫn cần giữ khi hợp nhất. Không dùng bản scope này để tự đổi ROS interface hoặc tự khẳng định client/bridge/media đã được kiểm chứng.

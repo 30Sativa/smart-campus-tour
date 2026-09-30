@@ -26,9 +26,21 @@ work, and out-of-scope work are not interchangeable.
 - ADR-0009 records the Review 1 business decisions selected by the group.
   ADR-0010 replaces its secret-link entry with a Tour page link and personal
   access code, exchanged for a browser session after validation.
+  ADR-0011 limits student data to registration, invitations, and Tour
+  operational statistics; it excludes post-Tour admissions contact and CRM.
   The advisor will review them at Review 2; do not describe that as prior
   approval. The live-versus-video experience evaluation remains optional and
   pending confirmation as described in the detailed scope.
 - When implementation, schema, scope, or technical contracts conflict, report
   the exact mismatch. Do not silently claim a target feature already exists or
   implement a proposal that the scope marks pending.
+
+## Updating decisions without duplicating policy
+
+Record a changed decision in its owning ADR first, or in a successor when the
+decision is superseded. Keep the detailed scope's affected acceptance criteria
+and the UI's affected user actions consistent, with references to that ADR.
+The short summary is a reading aid. Do not copy a full policy into every file
+or create a new ADR merely for wording fixes; do not leave stale user-visible
+rules just because another file contains a reference. A mismatch must be
+reconciled explicitly under the authority rules above.

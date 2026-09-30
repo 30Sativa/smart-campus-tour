@@ -7,7 +7,9 @@
 
 ## Context
 
-Nhóm muốn giữ Excel do đại diện gửi để có thông tin học sinh phục vụ quản lý/liên hệ, đồng thời cấp mã riêng cho từng người tham gia. Cần phân biệt buổi Tour với session browser, và phân biệt gửi lại thư bị mất với thu hồi mã bị lộ. Link bí mật tự cấp quyền ở quyết định trước không còn là luồng được chọn.
+Nhóm muốn giữ Excel do đại diện gửi để tổ chức đăng ký và cấp mã riêng cho từng lời mời; cách dùng dữ liệu được giới hạn thêm tại ADR-0011. Cần phân biệt buổi Tour với session browser, và phân biệt gửi lại thư bị mất với thu hồi mã bị lộ. Link bí mật tự cấp quyền ở quyết định trước không còn là luồng được chọn.
+
+Một số hệ thống bảo vệ email quét URL trước khi thư được giao, như [Microsoft Safe Links](https://learn.microsoft.com/en-us/defender-office-365/safe-links-about). Rủi ro thiết kế suy ra: **nếu** backend tự cấp/chiếm session ngay khi mở URL bí mật, lượt quét có thể chiếm phiên trước học sinh. Vì vậy, mở link trang Tour không tạo session; cần thao tác gửi mã hợp lệ. Đây là tránh rủi ro cấp phiên do mở URL tự động, không khẳng định mọi bộ lọc thư đều chiếm phiên hoặc mọi thiết kế magic link đều mắc lỗi này.
 
 ## Decision
 
@@ -23,6 +25,7 @@ Nhóm muốn giữ Excel do đại diện gửi để có thông tin học sinh 
 - Excel giữ `LoaiDong` (`CA_NHAN`/`DIEM_XEM_CHUNG`), `HoTen`, `Email` bắt buộc; `Lop` tùy chọn. Đây là mẫu mục tiêu, chưa phải parser đã có.
 - **Tour** là buổi tham quan; **lời mời** gắn dòng Excel đã duyệt với Tour; **access code** là bí mật riêng để xin quyền; **session** là phiên truy cập browser do server cấp. Không thêm một mã phòng chung làm điều kiện vào.
 - Link chỉ mở trang Tour, không chứa mã bí mật hoặc tự cấp quyền. Email gồm lịch, link, mã, hạn dùng và hướng dẫn hỗ trợ. Cho sao chép/dán mã; không nhập lại email/tên/lớp, không account Student hoặc OTP bổ sung.
+- Trong email và giao diện Student, thống nhất nhãn **“Mã truy cập”**, không in mã đoàn hoặc dùng nhiều tên cho cùng ô nhập. Tài liệu kỹ thuật có thể gọi là access code; đây vẫn là mã riêng của từng lời mời. Không đưa dữ liệu cá nhân vào URL.
 - Gửi ngay sau duyệt; mã dùng lại trong hạn lời mời, không hết hiệu lực chỉ vì đã nhập một lần hoặc mở trước ngày. Mã hợp lệ vẫn phải kiểm tra đúng Tour, approval, trạng thái, hạn và thu hồi tại server.
 - Session hợp lệ: reload/quay lại/reconnect không nhập mã lại. Logout/hết session: nhập lại mã còn hiệu lực. Mất mạng giữ session trong khoảng hữu hạn; đóng tab không đồng nghĩa logout.
 - Mỗi lời mời tối đa một session browser đang hoạt động. Giữ phiên trước, từ chối browser cạnh tranh; tab chung session không là người mới. Việc cấp phiên đồng thời phải nhất quán tại server.
@@ -45,7 +48,7 @@ Ghi actor, thời điểm, lời mời, thao tác/kết quả; không ghi access
 
 Excel là nguồn dữ liệu cá nhân; nhập mã chỉ liên kết lượt vào với dòng đã duyệt. Một dòng `DIEM_XEM_CHUNG` đủ quyền cho một máy chiếu, nhận một mã và một session; không phải một học sinh hay số người trong phòng.
 
-Điểm xem chung chỉ có thông tin người phụ trách. Nếu cần thông tin từng học sinh để liên hệ, đại diện phải thêm các dòng cá nhân tương ứng, kể cả các em chỉ xem máy chiếu. Các em không bắt buộc mở điện thoại. Giữ mẫu Excel hiện tại, không thêm loại dòng, CRM hoặc chiến dịch gửi thư tự động trong V1.
+Điểm xem chung chỉ có thông tin người phụ trách; không cần thêm dòng cá nhân cho học sinh chỉ xem máy chiếu. Dữ liệu trong Excel chỉ phục vụ đăng ký, lời mời và thống kê Tour theo [ADR-0011](0011-student-data-use-for-tour.md); không dùng mã/lời mời để suy ra attendance hoặc liên hệ tuyển sinh sau Tour.
 
 ## Consequences
 
