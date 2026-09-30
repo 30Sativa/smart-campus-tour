@@ -10,7 +10,7 @@
 
 - **Luồng chính:** Admin tạo lịch/tuyến → đại diện gửi Excel → Admin duyệt/email link + mã → READY → Staff Start từ giờ công bố → robot đi/kết thúc. Một dòng điểm xem chung đủ quyền máy chiếu; người vào riêng dùng dòng riêng.
 - **Hỗ trợ mã:** đại diện đúng đoàn/Admin gửi lại mã hiện hành nếu mất thư; nghi lộ thì thu hồi mã/session cũ, cấp mới tới email đã duyệt, giữ hạn và ID lời mời. Staff-only hướng dẫn. Admin sửa email riêng khi SCHEDULED (READY phải Mở lại), audit đúng dòng.
-- **Yêu cầu đổi nhánh:** đại diện dùng account riêng để gửi; Staff quyết định tại điểm hợp lệ. Đại diện xem bằng lời mời của mình/điểm mình phụ trách.
+- **Yêu cầu đổi nhánh:** đại diện dùng account riêng để gửi; mọi tài khoản đang hoạt động có role STAFF được quyết định/vận hành mọi Tour tại điểm hợp lệ; V1 không phân công Staff theo Tour (ADR-0012). Đại diện xem bằng lời mời của mình/điểm mình phụ trách.
 
 **Dữ liệu học sinh.** Theo ADR-0011, Excel chỉ phục vụ đăng ký, lời mời và thống kê vận hành Tour; không liên hệ tuyển sinh sau Tour, không CRM hay consent workflow. Một dòng điểm xem chung chỉ đại diện một máy chiếu/session, không cho biết số người trong phòng. Demo dùng dữ liệu giả hoặc dữ liệu được cung cấp phù hợp.
 
@@ -20,7 +20,7 @@
 
 **Sự cố.** Khi RUNNING mà live lỗi, dùng video ghi rõ “ghi sẵn”; map dùng telemetry thật hoặc báo cũ. Sau kết thúc, chỉ Tour đã Start rồi End Early (CANCELLED) được xem tiếp video tới hạn lời mời chưa bị thu hồi; không áp dụng COMPLETED/hủy trước Start, không mở live/AI. Không tự resume sau restart. Staff kiểm tra và xác nhận robot sẵn sàng; backend chỉ release khi nhiệm vụ cũ đã kết thúc, robot dừng và đủ readiness. Tour mới vẫn phải qua điều kiện Start; ADR-0009 §6.
 
-**Quản trị.** Kỹ thuật seed tọa độ/đường nối/nhánh đã thử. Form P1 cho Admin sửa tên hiển thị, mô tả/upload audio POI; khóa khi có Tour READY/RUNNING dùng, gồm nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; xử lý chênh lệch trước READY, backend kiểm tra. Thống kê P1: Tour hoàn thành/hủy, kết quả dịch vụ gửi email theo lần gửi, lời mời vào phòng thành công tính một lần cho cùng dòng (reload/cấp lại không tăng), phân biệt điểm xem chung, không attendance. Audit append-only từ P0: quyết định gửi, đã gửi, robot phản hồi ghi riêng khi có bằng chứng; lỗi/chưa rõ không tạo thành công giả. Không ghi email đã nhận/đã đọc.
+**Quản trị.** Theo ADR-0012, kỹ thuật seed tọa độ/đường nối/nhánh và dwell cố định đã thử; Admin không chỉnh dwell theo từng Tour. Audio phải phù hợp dwell; đổi dwell cần kỹ thuật kiểm chứng lại. Form P1 cho Admin sửa tên hiển thị, mô tả/upload audio POI; khóa khi có Tour READY/RUNNING dùng, gồm nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; xử lý chênh lệch trước READY, backend kiểm tra. Thống kê P1: Tour hoàn thành/hủy, kết quả dịch vụ gửi email theo lần gửi, lời mời vào phòng thành công tính một lần cho cùng dòng (reload/cấp lại không tăng), phân biệt điểm xem chung, không attendance. Audit append-only từ P0: quyết định gửi, đã gửi, robot phản hồi ghi riêng khi có bằng chứng; lỗi/chưa rõ không tạo thành công giả. Không ghi email đã nhận/đã đọc.
 
 **Multi-tour.** Demo phần mềm: Tour A ↔ Emulator A và Tour B ↔ Emulator B chạy đồng thời; gây lỗi A, chứng minh B tiếp tục và command/progress/Q&A không lẫn. Media mẫu phải ghi nhãn. Bài này không chứng minh fleet vật lý tránh va chạm hoặc thay nghiên cứu chính thức.
 

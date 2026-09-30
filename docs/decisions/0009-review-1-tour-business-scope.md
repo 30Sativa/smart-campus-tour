@@ -6,6 +6,8 @@
 
 > **Cập nhật cùng ngày:** cơ chế link bí mật trong quyết định ban đầu được thay bằng link trang Tour + access code riêng nhập để tạo session theo [ADR-0010](0010-personal-access-code-entry.md). Các quyết định còn lại giữ nguyên; quy tắc hiện hành về mã/gửi lại/cấp mới xem ADR-0010 và scope §5.
 
+> **Cập nhật ADR-0012:** dwell cố định do kỹ thuật seed/kiểm chứng, Admin không chỉnh theo Tour; mọi Staff được vận hành mọi Tour. Các đoạn về chỉnh thời gian bên dưới được đọc theo quyết định mới trong docs/decisions/0012-v1-1-schema-and-operation-scope.md.
+
 ## Context
 
 Review 1 yêu cầu làm rõ cách vào Tour, giá trị tương tác với robot, quyền vận hành và xử lý sự cố. Ban đầu nhóm chọn link bí mật gửi trực tiếp qua email sau duyệt, dùng lại trong hạn; không account Student, mã phòng hoặc OTP. Một lời mời giữ tối đa một phiên browser hoạt động, giữ phiên trước và từ chối phiên khác đến sau. Reload/reconnect nhận lại phiên theo chính sách giữ kết nối hữu hạn. Link vẫn có thể bị chuyển tiếp; đây không phải xác minh danh tính hay điểm danh.

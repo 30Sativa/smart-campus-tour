@@ -80,7 +80,7 @@ Với vài nhánh định sẵn, video tương tác cũng cho phép chọn nhán
 
 Đại diện đăng nhập bằng tài khoản vai trò **Representative**, được cấp qua cơ chế account/role của hệ thống như hướng UI-FLOW; mã/phiên Student không cấp quyền quản lý đoàn. Tại **My Registration/Đăng ký của tôi**, khối **Lời mời** hỗ trợ truy cập; khi Tour RUNNING có khối **Yêu cầu đổi nhánh** hiển thị POI hiện tại, điểm phân nhánh được phép yêu cầu, lựa chọn hợp lệ và trạng thái yêu cầu. Backend kiểm tra tài khoản sở hữu đúng registration APPROVED của Tour, không tin ID do browser gửi. Đây là đặc tả cần triển khai/kiểm chứng, không khẳng định màn/API đã tồn tại.
 
-Đại diện xem live bằng lời mời cá nhân của chính mình hoặc lời mời điểm xem chung mình phụ trách; không dùng mã của học sinh. Vai trò Representative không tự tạo Student session. Không cần mở live để gửi yêu cầu từ My Registration. Staff xử lý tại dashboard của Tour mình phụ trách.
+Đại diện xem live bằng lời mời cá nhân của chính mình hoặc lời mời điểm xem chung mình phụ trách; không dùng mã của học sinh. Vai trò Representative không tự tạo Student session. Không cần mở live để gửi yêu cầu từ My Registration. Mọi tài khoản đang hoạt động có role STAFF được xử lý mọi Tour trên dashboard; V1 không phân công Staff theo Tour (ADR-0012).
 
 Luồng chính:
 
@@ -103,7 +103,7 @@ Giữ các trạng thái Tour `SCHEDULED → READY → RUNNING → COMPLETED/CAN
 
 ### 4.1 Quyền Start và giờ công bố — quyết định của nhóm
 
-Giữ phân công hiện tại: Admin quản lý lịch/duyệt/chốt buổi; Staff phụ trách buổi kiểm tra robot, nguồn hình và vùng chạy rồi bấm Start. Không chuyển Start sang Admin chỉ vì Admin là người duyệt danh sách. Một người có thể kiêm cả hai vai nếu được cấp quyền, nhưng quyền quản trị không tự bỏ qua điều kiện vận hành.
+Giữ phân công hiện tại: Admin quản lý lịch/duyệt/chốt buổi; Staff có role hợp lệ kiểm tra robot, nguồn hình và vùng chạy rồi bấm Start; mọi Staff được vận hành mọi Tour, không có quyền sở hữu buổi riêng. Không chuyển Start sang Admin chỉ vì Admin là người duyệt danh sách. Một người có thể kiêm cả hai vai nếu được cấp quyền, nhưng quyền quản trị không tự bỏ qua điều kiện vận hành.
 
 **Nhóm quyết định V1:** cho vào phòng chờ và kiểm tra thiết bị trước giờ; chỉ bắt đầu hành trình chính thức từ giờ đã công bố trở đi. Ví dụ lịch 09:00: 08:45 Staff chuẩn bị, học sinh xem lịch/kiểm tra âm thanh; từ 09:00 Staff được Start khi Tour READY và hệ thống đủ điều kiện. Đủ giờ không tự chạy robot, thiếu readiness vẫn không được Start. Đã đến giờ mà chưa Start thì trang tiếp tục báo chưa bắt đầu, không hiển thị live giả hoặc vòng chờ không giải thích.
 
@@ -202,9 +202,11 @@ Chỉ giữ dữ liệu cá nhân trong thời gian cần cho đăng ký, quyề
 
 ### 6.1 Chuẩn bị trước Tour
 
+**Cập nhật theo ADR-0012 (30/09/2026):** nhóm chọn dwell cố định theo tuyến trong seed và mọi Staff vận hành mọi Tour; không thêm bảng dwell theo Tour hoặc phân công operator. Đây là quyết định thiết kế, chưa xác nhận backend/UI đã triển khai.
+
 Đội kỹ thuật tạo POI và các tuyến/nhánh có đường nối đã thử, kèm map, điểm dừng, hướng quan sát, narration và thời lượng dự kiến. Admin chọn một tuyến và các biến thể được phép, xem trước POI/thời lượng rồi chốt buổi. Admin có thể sửa mô tả buổi khi SCHEDULED; thay đổi cấu hình ảnh hưởng đường chạy phải qua kiểm chứng kỹ thuật.
 
-**Cách nạp V1 đã chốt:** đội kỹ thuật dùng seed/script có kiểm soát nạp map/frame, tọa độ và hướng quan sát, tuyến/thứ tự POI/Start/End, đường nối/nhánh đã thử và giới hạn thời lượng vào DB. DB là nguồn điều phối, không sửa hình học giữa Tour. Admin trên web chọn tuyến, bật/tắt nhánh và thời gian dừng hợp lệ. **Form P1** cho Admin sửa tên hiển thị, mô tả và upload/thay audio thuyết minh của POI; không sửa ID/tọa độ, không vẽ tuyến. P1 vẫn thuộc V1 bắt buộc, thực hiện sau luồng P0. Phạm vi quản lý hình học tuyến vẫn thu hẹp so với phiếu; form nội dung không đồng nghĩa đã làm toàn bộ CRUD route/POI.
+**Cách nạp V1 đã chốt:** đội kỹ thuật dùng seed/script có kiểm soát nạp map/frame, tọa độ và hướng quan sát, tuyến/thứ tự POI/Start/End, đường nối/nhánh đã thử và giới hạn thời lượng vào DB. DB là nguồn điều phối, không sửa hình học giữa Tour. Admin trên web chọn tuyến, bật/tắt nhánh và xem thời gian dừng cố định theo tuyến. Dwell do kỹ thuật seed và kiểm chứng; V1 không có cấu hình dwell riêng theo Tour (ADR-0012). **Form P1** cho Admin sửa tên hiển thị, mô tả và upload/thay audio thuyết minh của POI; không sửa ID/tọa độ, không vẽ tuyến. P1 vẫn thuộc V1 bắt buộc, thực hiện sau luồng P0. Phạm vi quản lý hình học tuyến vẫn thu hẹp so với phiếu; form nội dung không đồng nghĩa đã làm toàn bộ CRUD route/POI.
 
 Không cần editor vẽ đường tự do. Admin cũng không được tùy ý đảo mọi POI chỉ vì các POI riêng lẻ đã hợp lệ: đường nối và thứ tự mới có thể chưa được kiểm chứng. Nếu UI cho chọn thứ tự thì chỉ chấp nhận những tổ hợp đã được phê chuẩn.
 
@@ -228,10 +230,10 @@ Hai nhánh đều phải được thử đường chạy, có nội dung và th�
 | Nhập tên, lịch dự kiến, mô tả buổi | Sửa khi SCHEDULED; giờ đến không tự Start |
 | Chọn tuyến từ danh sách và xem map/thứ tự POI | Ví dụ chọn tuyến mặc định ở trên; không tự kéo điểm tới tọa độ mới |
 | Bật/tắt lựa chọn nhánh đã chuẩn bị cho buổi | Ví dụ cho phép chọn D tại A, hoặc giữ tuyến mặc định |
-| Chọn thời gian dừng trong khoảng cấu hình hợp lệ | Không ngắn hơn phần narration/góc quay cần thiết; không kéo dài vượt giới hạn buổi đã công bố |
+| Xem thời gian dừng cố định theo tuyến | Kỹ thuật seed và chạy thử dwell cùng narration/góc quay, trong giới hạn buổi đã công bố; Admin không chỉnh dwell theo Tour |
 | Xem lại và Chốt nội dung | READY khóa cấu hình. Thay nhánh hợp lệ lúc chạy do Staff xử lý, không phải mở editor sửa tuyến |
 
-Thêm POI/tọa độ/map/đường nối thuộc chuẩn bị kỹ thuật. Form nội dung có phân quyền Admin, khóa khi bất kỳ Tour READY/RUNNING dùng POI/asset đó, gồm cả nhánh cho phép; backend kiểm tra lại lúc ghi để tránh đổi đồng thời với READY. Giữ truy vết nội dung buổi đã kết thúc. Khi đổi audio, hiện thời lượng và cảnh báo nếu dài hơn dwell tại các cấu hình đang dùng; người cấu hình phải chỉnh audio hoặc dwell trong giới hạn hợp lệ trước Chốt READY. Chưa xử lý thì backend chặn READY kèm lý do. Không cần tự tối ưu thời gian hoặc dùng Hold trong live để thay việc chuẩn bị.
+Thêm POI/tọa độ/map/đường nối thuộc chuẩn bị kỹ thuật. Form nội dung có phân quyền Admin, khóa khi bất kỳ Tour READY/RUNNING dùng POI/asset đó, gồm cả nhánh cho phép; backend kiểm tra lại lúc ghi để tránh đổi đồng thời với READY. Giữ truy vết nội dung buổi đã kết thúc: mỗi lần upload audio tạo asset/URL mới, giữ asset cũ còn cần cho lịch sử; khi kích hoạt narration ghi snapshot AudioUrl, NarrationText và NarrationSeconds đã dùng trong TourEvents theo ADR-0012. Khi đổi audio, hiện thời lượng và cảnh báo nếu dài hơn dwell tại các cấu hình đang dùng; Admin phải chỉnh audio cho phù hợp dwell cố định trước Chốt READY. Nếu cần đổi dwell, kỹ thuật sửa cấu hình seed và kiểm chứng lại, không sửa cấu hình đang được Tour READY/RUNNING dùng. Chưa xử lý thì backend chặn READY kèm lý do. Không cần tự tối ưu thời gian hoặc dùng Hold trong live để thay việc chuẩn bị.
 
 ### 6.2 Yêu cầu đổi nhánh trong buổi
 
@@ -241,13 +243,13 @@ Thêm POI/tọa độ/map/đường nối thuộc chuẩn bị kỹ thuật. For
 4. Accept chốt phần tuyến còn lại và cập nhật viewer, ghi người quyết định/tuyến trước–sau. **Accept không tự cho robot đi hoặc bỏ Hold**; rời điểm vẫn theo Next/dwell hợp lệ. ACCEPTED không chứng minh robot đã tới POI.
 5. Trước đi phải đóng lượt cũ, hoàn tất FRONT và kiểm tra vận hành. Mỗi Tour tối đa một lần đổi nhánh được chấp nhận, kể cả Staff chọn trực tiếp; REJECTED/EXPIRED không tiêu lượt, retry không tính thêm. Sau khi chốt không nhận thay đổi nhánh mới, không đổi đi đổi lại.
 
-**Quyền cuối cùng:** đại diện gửi yêu cầu; Staff phụ trách Tour quyết định; Admin cấu hình trước buổi, không dùng màn sửa tuyến để đổi hành trình RUNNING. Backend kiểm tra quyền/state trước thực thi. Muốn quan sát lâu hơn Staff dùng Hold tại POI, không có loại yêu cầu gia hạn thời gian từ đại diện.
+**Quyền cuối cùng:** đại diện gửi yêu cầu; mọi tài khoản đang hoạt động có role STAFF được quyết định trên mọi Tour; Admin cấu hình trước buổi, không dùng màn sửa tuyến để đổi hành trình RUNNING. Backend kiểm tra quyền/state trước thực thi. Muốn quan sát lâu hơn Staff dùng Hold tại POI, không có loại yêu cầu gia hạn thời gian từ đại diện.
 
 **Luật yêu cầu:** `PENDING → ACCEPTED / REJECTED / EXPIRED`. Mỗi đại diện có tối đa một yêu cầu PENDING cho cùng Tour/lượt phân nhánh; gửi lặp không tạo bản mới. Khi một nhánh được chấp nhận và dùng lượt đổi duy nhất, mọi yêu cầu PENDING còn lại của Tour đóng EXPIRED với lý do hết lượt đổi nhánh. Đây là trạng thái của yêu cầu nghiệp vụ, không thêm TourState hoặc lệnh ROS; quyết định gốc ở ADR-0009 §4.
 
 **Luật timer:** gửi yêu cầu không tự Hold/đặt lại dwell. Nếu cần thêm thời gian xử lý, Staff bấm Hold khi đang quan sát và lượt còn mở. Hết dwell không Hold thì đi tiếp theo tuyến có hiệu lực. Khi đóng lượt rời điểm, **chỉ** các PENDING gắn với đúng lượt điểm phân nhánh vừa đóng hết hạn, trước FRONT/dispatch. Yêu cầu cho điểm phân nhánh sắp tới vẫn PENDING khi robot rời một POI trung gian. End Early hoặc NEEDS_ASSISTANCE làm hết hạn mọi PENDING của Tour; mất quyền registration chỉ làm hết hạn các yêu cầu của registration đó. Không đợi bánh xe chuyển động mới đóng hạn Accept tại điểm tương ứng.
 
-Accept, Next, timer và Hold cạnh tranh phải được phân xử nhất quán tại server: hoặc nhánh mới được chốt trước và được dùng, hoặc lượt đã đóng thì Accept bị từ chối. Callback/reconnect không hồi sinh yêu cầu. Demo phải có một nhánh thay thế được thực hiện thật; không chỉ đổi marker.
+Accept, Next, timer và Hold cạnh tranh phải được phân xử nhất quán tại server. RowVersion chỉ là token; backend phải dùng ghi có điều kiện, xử lý conflict và chỉ phát lệnh từ quyết định đã commit thắng cạnh tranh: hoặc nhánh mới được chốt trước và được dùng, hoặc lượt đã đóng thì Accept bị từ chối. Callback/reconnect không hồi sinh yêu cầu. Demo phải có một nhánh thay thế được thực hiện thật; không chỉ đổi marker.
 
 Nhiều đoàn cùng Tour xem chung hành trình sau thay đổi. Muốn tuyến độc lập cần hai Tour với hai robot khả dụng hoặc hai khung giờ; một robot không thực hiện hai hành trình đồng thời.
 
@@ -378,7 +380,7 @@ Nguồn: phiếu FA26SE184 v1.2, mục 3.2(b)–(d), trang 2–4 và 3.2(h), tra
 - Thống kê cơ sở: số Tour COMPLETED/CANCELLED; số lần gửi email dịch vụ chấp nhận/gửi lỗi (retry là lần gửi mới, không phải số người); số lời mời đã vào phòng thành công. Lời mời tính một lần cho cùng dòng đã duyệt, reload/reconnect/cấp lại mã không tăng, phân biệt cá nhân/điểm xem chung. Backend phải cấp/khôi phục quyền vào phòng thành công; mở URL đơn thuần không đủ. Đây không phải attendance hoặc thống kê đọc email.
 - Audit chỉ append; API/UI không sửa/xóa, tài khoản DB ứng dụng không có quyền UPDATE/DELETE log. Không tuyên bố bất biến trước DBA đặc quyền. Ghi actor, thời điểm, Tour/robot, thao tác, tham chiếu và kết quả; không access code/token bí mật.
 - Mỗi lệnh có các mốc riêng: **đã quyết định gửi → đã gửi → robot đã phản hồi**. Quyết định và thay đổi DB liên quan cùng giao dịch; gửi tới robot không nằm trong giao dịch đó. Ghi gửi/phản hồi khi thực sự có bằng chứng, tương quan cùng lệnh; lỗi/chưa rõ giữ đúng trạng thái, không tạo đủ ba mốc giả. Phản hồi nhận lệnh không phải hoàn thành; ghi đúng kết quả robot cung cấp.
-- Email chỉ ghi “dịch vụ chấp nhận gửi” hoặc “gửi lỗi” khi có kết quả; đang chờ/chưa rõ không suy thành thành công. Không ghi “đã nhận/đã đọc”. Form thống kê thuộc P1; phát sinh audit vận hành phải có từ P0.
+- Email chỉ ghi “dịch vụ chấp nhận gửi” hoặc “gửi lỗi” khi có kết quả; đang chờ/chưa rõ không suy thành thành công. Mỗi lần gửi có CorrelationId riêng: append EMAIL_SEND_REQUESTED/PENDING rồi dòng EMAIL_SEND_RESULT cùng ID khi có kết quả ACCEPTED/FAILED/UNKNOWN; không UPDATE dòng cũ. Retry gửi là attempt mới, thống kê kết quả xác nhận theo attempt, không đếm lặp các dòng log. Không ghi “đã nhận/đã đọc”. Form thống kê thuộc P1; phát sinh audit vận hành phải có từ P0.
 
 ## 11. Tiêu chí nghiệm thu bổ sung
 

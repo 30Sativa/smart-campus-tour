@@ -141,6 +141,15 @@ do not create one service per handler.
 
 ## 3. Current model and fleet boundary
 
+The separately reviewed v1.1 empty-database snapshot is
+`backend/database/smart-campus-tour-schema-v1.1.sql`; its decisions are in
+`docs/decisions/0012-v1-1-schema-and-operation-scope.md` and usage/testing in
+`backend/database/README.md`. It has not replaced the generated v1.0 EF model
+below. Do not manually edit generated entities to pretend adoption is complete.
+V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
+no per-Tour dwell editor or operator assignment. Invitation/branch use cases,
+roster locking and retention cleanup remain implementation work.
+
 `backend/database/smart-campus-tour-schema-v1.0.sql` and the scaffolded entities
 currently contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`,
 `RouteStop`, `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `TourEvent`, and
