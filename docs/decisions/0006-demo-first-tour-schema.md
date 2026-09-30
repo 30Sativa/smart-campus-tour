@@ -1,5 +1,7 @@
 # ADR-0006: Adopt the demo-first campus tour schema
 
+> Historical baseline: ADR-0012 supersedes v1.0 as the current SQL/EF schema. The v1.0 snapshot is retained for comparison and was not migrated into v1.1.
+
 ## Context
 
 The original backend scaffold modeled visitor bookings and feedback around a

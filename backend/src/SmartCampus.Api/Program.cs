@@ -21,6 +21,7 @@ builder.Services.AddCors(options => options.AddPolicy("SimulationPreview", polic
 
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -32,6 +33,8 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+        options.SwaggerEndpoint("/openapi/v1.json", "SmartCampus API v1"));
 }
 
 if (!simulationPreview) app.UseHttpsRedirection();

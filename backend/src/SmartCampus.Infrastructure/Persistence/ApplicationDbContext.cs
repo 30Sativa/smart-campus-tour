@@ -14,7 +14,13 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
 
+    public virtual DbSet<BranchRequest> BranchRequests { get; set; }
+
+    public virtual DbSet<BrowserSession> BrowserSessions { get; set; }
+
     public virtual DbSet<GroupRegistration> GroupRegistrations { get; set; }
+
+    public virtual DbSet<Invitation> Invitations { get; set; }
 
     public virtual DbSet<Poi> Pois { get; set; }
 
@@ -28,7 +34,11 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<RouteStop> RouteStops { get; set; }
 
+    public virtual DbSet<RouteVariant> RouteVariants { get; set; }
+
     public virtual DbSet<Tour> Tours { get; set; }
+
+    public virtual DbSet<TourAllowedBranch> TourAllowedBranches { get; set; }
 
     public virtual DbSet<TourEvent> TourEvents { get; set; }
 
@@ -40,15 +50,113 @@ public partial class ApplicationDbContext : DbContext
     {
         modelBuilder.Entity<AuditLog>(entity =>
         {
-            entity.Property(e => e.Action).HasMaxLength(50);
+            entity.HasIndex(e => new { e.CorrelationId, e.OccurredAt, e.Id }, "IX_AuditLogs_Correlation").HasFilter("([CorrelationId] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAt, e.Id }, "IX_AuditLogs_EntityTime");
+
+            entity.Property(e => e.Action).HasMaxLength(80);
             entity.Property(e => e.EntityId).HasMaxLength(100);
             entity.Property(e => e.EntityType).HasMaxLength(50);
             entity.Property(e => e.OccurredAt).HasPrecision(3);
+            entity.Property(e => e.ResultCode)
+                .HasMaxLength(30)
+                .IsUnicode(false);
 
             entity.HasOne(d => d.ActorUser).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.ActorUserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_AuditLogs_ActorUserId");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.AuditLogs)
+                .HasForeignKey(d => d.RobotId)
+                .HasConstraintName("FK_AuditLogs_RobotId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.AuditLogs)
+                .HasForeignKey(d => d.TourId)
+                .HasConstraintName("FK_AuditLogs_TourId");
+        });
+
+        modelBuilder.Entity<BranchRequest>(entity =>
+        {
+            entity.HasIndex(e => e.TourId, "UX_BranchRequests_OneAccepted")
+                .IsUnique()
+                .HasFilter("([State]='ACCEPTED')");
+
+            entity.HasIndex(e => new { e.TourId, e.RequestedByUserId, e.BranchPointRouteStopId }, "UX_BranchRequests_OnePending")
+                .IsUnique()
+                .HasFilter("([State]='PENDING')");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.DecisionReason).HasMaxLength(1000);
+            entity.Property(e => e.ExpiredReason)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.RequestSource)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.RequestedAt).HasPrecision(3);
+            entity.Property(e => e.ResolvedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.State)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.BranchPointRouteStop).WithMany(p => p.BranchRequests)
+                .HasForeignKey(d => d.BranchPointRouteStopId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BranchRequests_BranchPointRouteStopId");
+
+            entity.HasOne(d => d.Registration).WithMany(p => p.BranchRequests)
+                .HasForeignKey(d => d.RegistrationId)
+                .HasConstraintName("FK_BranchRequests_RegistrationId");
+
+            entity.HasOne(d => d.RequestedByUser).WithMany(p => p.BranchRequestRequestedByUsers)
+                .HasForeignKey(d => d.RequestedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BranchRequests_RequestedByUserId");
+
+            entity.HasOne(d => d.ResolvedByUser).WithMany(p => p.BranchRequestResolvedByUsers)
+                .HasForeignKey(d => d.ResolvedByUserId)
+                .HasConstraintName("FK_BranchRequests_ResolvedByUserId");
+
+            entity.HasOne(d => d.TourAllowedBranch).WithMany(p => p.BranchRequests)
+                .HasForeignKey(d => d.TourAllowedBranchId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BranchRequests_TourAllowedBranchId");
+
+            // Only ACCEPTED rows are unique by TourId; other request states can be many per Tour.
+            entity.HasOne(d => d.Tour).WithMany(p => p.BranchRequests)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BranchRequests_TourId");
+        });
+
+        modelBuilder.Entity<BrowserSession>(entity =>
+        {
+            entity.HasIndex(e => e.SessionTokenHash, "UQ_BrowserSessions_Token").IsUnique();
+
+            entity.HasIndex(e => e.InvitationId, "UX_BrowserSessions_OneOpen")
+                .IsUnique()
+                .HasFilter("([EndedAt] IS NULL)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.EndReason)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.EndedAt).HasPrecision(3);
+            entity.Property(e => e.ExpiresAt).HasPrecision(3);
+            entity.Property(e => e.LastSeenAt).HasPrecision(3);
+            entity.Property(e => e.SessionTokenHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+
+            // Only open sessions are unique by InvitationId; ended sessions remain as history.
+            entity.HasOne(d => d.Invitation).WithMany(p => p.BrowserSessions)
+                .HasForeignKey(d => d.InvitationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_BrowserSessions_InvitationId");
         });
 
         modelBuilder.Entity<GroupRegistration>(entity =>
@@ -58,10 +166,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.ContactEmail).HasMaxLength(254);
             entity.Property(e => e.ContactName).HasMaxLength(150);
             entity.Property(e => e.CreatedAt).HasPrecision(3);
-            entity.Property(e => e.GroupCodeHash)
-                .HasMaxLength(32)
-                .IsFixedLength();
-            entity.Property(e => e.InvitationSentAt).HasPrecision(3);
+            entity.Property(e => e.GroupName).HasMaxLength(200);
             entity.Property(e => e.RejectionReason).HasMaxLength(1000);
             entity.Property(e => e.ReviewedAt).HasPrecision(3);
             entity.Property(e => e.RowVersion)
@@ -89,12 +194,38 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_GroupRegistrations_TourId");
         });
 
+        modelBuilder.Entity<Invitation>(entity =>
+        {
+            entity.HasIndex(e => e.AccessCodeHash, "UQ_Invitations_CodeHash").IsUnique();
+
+            entity.HasIndex(e => e.RosterRowId, "UQ_Invitations_RosterRow").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.AccessCodeHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.CodeIssuedAt).HasPrecision(3);
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.ExpiresAt).HasPrecision(3);
+            entity.Property(e => e.RevokedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.RosterRow).WithOne(p => p.Invitation)
+                .HasForeignKey<Invitation>(d => d.RosterRowId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Invitations_RosterRowId");
+        });
+
         modelBuilder.Entity<Poi>(entity =>
         {
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.AudioUrl).HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(1000);
             entity.Property(e => e.MapFrame).HasMaxLength(100);
             entity.Property(e => e.MapKey).HasMaxLength(100);
             entity.Property(e => e.Name).HasMaxLength(150);
@@ -106,6 +237,8 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<RefreshToken>(entity =>
         {
+            entity.HasIndex(e => e.TokenHash, "UQ_RefreshTokens_Token").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.ExpiresAt).HasPrecision(3);
@@ -122,6 +255,12 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Robot>(entity =>
         {
+            entity.HasIndex(e => e.RobotCode, "UQ_Robots_RobotCode").IsUnique();
+
+            entity.HasIndex(e => e.CurrentTourId, "UX_Robots_CurrentTour")
+                .IsUnique()
+                .HasFilter("([CurrentTourId] IS NOT NULL)");
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.CredentialHash).HasMaxLength(256);
@@ -136,8 +275,8 @@ public partial class ApplicationDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
-            entity.HasOne(d => d.CurrentTour).WithMany(p => p.Robots)
-                .HasForeignKey(d => d.CurrentTourId)
+            entity.HasOne(d => d.CurrentTour).WithOne(p => p.Robot)
+                .HasForeignKey<Robot>(d => d.CurrentTourId)
                 .HasConstraintName("FK_Robots_CurrentTourId");
         });
 
@@ -145,9 +284,16 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.ClassName).HasMaxLength(100);
-            entity.Property(e => e.FullName).HasMaxLength(150);
-            entity.Property(e => e.NormalizedClassName).HasMaxLength(100);
-            entity.Property(e => e.NormalizedFullName).HasMaxLength(150);
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.DisplayName).HasMaxLength(150);
+            entity.Property(e => e.Email).HasMaxLength(254);
+            entity.Property(e => e.RowType)
+                .HasMaxLength(30)
+                .IsUnicode(false);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
             entity.HasOne(d => d.Registration).WithMany(p => p.RosterRows)
                 .HasForeignKey(d => d.RegistrationId)
@@ -177,6 +323,8 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<RouteStop>(entity =>
         {
+            entity.HasIndex(e => new { e.RouteId, e.StopOrder }, "UQ_RouteStops_Order").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
 
             entity.HasOne(d => d.Poi).WithMany(p => p.RouteStops)
@@ -188,6 +336,35 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.RouteId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RouteStops_RouteId");
+        });
+
+        modelBuilder.Entity<RouteVariant>(entity =>
+        {
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.BaseRoute).WithMany(p => p.RouteVariantBaseRoutes)
+                .HasForeignKey(d => d.BaseRouteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteVariants_BaseRouteId");
+
+            entity.HasOne(d => d.BranchPointRouteStop).WithMany(p => p.RouteVariantBranchPointRouteStops)
+                .HasForeignKey(d => d.BranchPointRouteStopId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteVariants_BranchPointRouteStopId");
+
+            entity.HasOne(d => d.VariantBranchStop).WithMany(p => p.RouteVariantVariantBranchStops)
+                .HasForeignKey(d => d.VariantBranchStopId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteVariants_VariantBranchStopId");
+
+            entity.HasOne(d => d.VariantRoute).WithMany(p => p.RouteVariantVariantRoutes)
+                .HasForeignKey(d => d.VariantRouteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteVariants_VariantRouteId");
         });
 
         modelBuilder.Entity<Tour>(entity =>
@@ -207,6 +384,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.DwellDeadlineAt).HasPrecision(3);
             entity.Property(e => e.EndReason).HasMaxLength(1000);
             entity.Property(e => e.EndedAt).HasPrecision(3);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(1000);
             entity.Property(e => e.Name).HasMaxLength(150);
             entity.Property(e => e.OperationalStatus)
                 .HasMaxLength(30)
@@ -222,6 +400,11 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.StopVisitClosedAt).HasPrecision(3);
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
+            entity.HasOne(d => d.ActiveRoute).WithMany(p => p.TourActiveRoutes)
+                .HasForeignKey(d => d.ActiveRouteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Tours_ActiveRouteId");
+
             entity.HasOne(d => d.AssignedRobot).WithMany(p => p.Tours)
                 .HasForeignKey(d => d.AssignedRobotId)
                 .HasConstraintName("FK_Tours_AssignedRobotId");
@@ -231,10 +414,40 @@ public partial class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Tours_CreatedByUserId");
 
-            entity.HasOne(d => d.Route).WithMany(p => p.Tours)
+            entity.HasOne(d => d.CurrentRouteStop).WithMany(p => p.TourCurrentRouteStops)
+                .HasForeignKey(d => d.CurrentRouteStopId)
+                .HasConstraintName("FK_Tours_CurrentRouteStopId");
+
+            entity.HasOne(d => d.LastArrivedRouteStop).WithMany(p => p.TourLastArrivedRouteStops)
+                .HasForeignKey(d => d.LastArrivedRouteStopId)
+                .HasConstraintName("FK_Tours_LastArrivedRouteStopId");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.TourRoutes)
                 .HasForeignKey(d => d.RouteId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Tours_RouteId");
+        });
+
+        modelBuilder.Entity<TourAllowedBranch>(entity =>
+        {
+            entity.HasIndex(e => new { e.TourId, e.RouteVariantId }, "UQ_TourAllowedBranches_Variant").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.RouteVariant).WithMany(p => p.TourAllowedBranches)
+                .HasForeignKey(d => d.RouteVariantId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourAllowedBranches_RouteVariantId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourAllowedBranches)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourAllowedBranches_TourId");
         });
 
         modelBuilder.Entity<TourEvent>(entity =>
@@ -260,6 +473,10 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.RobotId)
                 .HasConstraintName("FK_TourEvents_RobotId");
 
+            entity.HasOne(d => d.Route).WithMany(p => p.TourEvents)
+                .HasForeignKey(d => d.RouteId)
+                .HasConstraintName("FK_TourEvents_RouteId");
+
             entity.HasOne(d => d.TargetPoi).WithMany(p => p.TourEvents)
                 .HasForeignKey(d => d.TargetPoiId)
                 .HasConstraintName("FK_TourEvents_TargetPoiId");
@@ -272,6 +489,8 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
+            entity.HasIndex(e => e.NormalizedUsername, "UQ_Users_NormalizedUsername").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.FullName).HasMaxLength(150);

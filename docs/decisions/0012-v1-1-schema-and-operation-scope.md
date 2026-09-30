@@ -1,7 +1,7 @@
 # ADR-0012: Schema v1.1, dwell cố định và quyền vận hành Staff
 
 - Ngày: 30/09/2026.
-- Trạng thái: **nhóm chấp nhận để triển khai** theo quyết định sau review schema; chưa xác nhận GVHD phê duyệt hoặc các use case đã chạy.
+- Trạng thái: **nhóm chấp nhận; snapshot đã apply/scaffold trên SQL Server local 30/09/2026**; GVHD xem lại ở Review 2; các use case nghiệp vụ chưa triển khai.
 - Phạm vi: snapshot SQL v1.1 và hợp đồng nghiệp vụ backend/web. Thay lựa chọn Admin chỉnh dwell theo Tour và cách diễn đạt Staff chỉ vận hành Tour được phân công. Không thay contract ROS/fleet.
 
 ## Context
@@ -39,6 +39,7 @@ Theo ADR-0011, lập danh sách xử lý thực tế: RosterRows.DisplayName/Ema
 
 ## Consequences
 
-- v1.1 là full snapshot cho DB trống và được kiểm chứng riêng; không tự apply vào DB đang dùng. EF/runtime vẫn là v1.0 theo ADR-0006 cho đến task adoption/migration và re-scaffold riêng. Không sửa POCO/mapping v1.0 bằng tay để giả lập adoption.
+- v1.1 là full snapshot cho DB trống, hiện được apply vào `SmartCampusTourV11` trên `localhost,1433` và scaffold sang Domain/Infrastructure. Không apply đè lên DB có dữ liệu. Snapshot chưa migrate v1.0 data; runtime local dùng User Secrets trỏ vào SQL Server này.
+- EF Scaffold suy ra BranchRequest→Tour một-một từ filtered unique index ACCEPTED, và BrowserSession→Invitation một-một từ index một session mở mỗi Invitation; hai mapping đã được chỉnh về một-nhiều vì nhiều request/session lịch sử được phép. Khi scaffold lại phải giữ và rà các mapping này.
 - Không có bảng TourStopSettings, Operator assignment, Visit hay EmailAttempts mới. Quy tắc cấp session/đổi nhánh/email/locking/khử định danh vẫn cần use case và integration tests khi triển khai API.
 - Bộ test SQL thực thi snapshot, kiểm tra ràng buộc và role log trên database kiểm thử dùng một lần. Không coi test schema là kiểm chứng robot, concurrency nghiệp vụ hoặc quyền HTTP đã triển khai.

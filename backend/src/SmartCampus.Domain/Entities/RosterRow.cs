@@ -11,13 +11,23 @@ public partial class RosterRow
 
     public int RowNumber { get; set; }
 
-    public string FullName { get; set; } = null!;
+    public string RowType { get; set; } = null!;
+
+    public string DisplayName { get; set; } = null!;
+
+    public string Email { get; set; } = null!;
 
     public string? ClassName { get; set; }
 
-    public string NormalizedFullName { get; set; } = null!;
+    public bool IsActive { get; set; }
 
-    public string? NormalizedClassName { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    public byte[] RowVersion { get; set; } = null!;
+
+    public virtual Invitation? Invitation { get; set; }
 
     public virtual GroupRegistration Registration { get; set; } = null!;
 }

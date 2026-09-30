@@ -27,7 +27,7 @@ describe features already present in this backend.
 backend/
 ├── AGENTS.md
 ├── SmartCampus.slnx
-├── database/smart-campus-tour-schema-v1.0.sql
+├── database/smart-campus-tour-schema-v1.1.sql
 ├── scripts/
 │   ├── verify
 │   └── scaffold-db
@@ -141,22 +141,29 @@ do not create one service per handler.
 
 ## 3. Current model and fleet boundary
 
-The separately reviewed v1.1 empty-database snapshot is
-`backend/database/smart-campus-tour-schema-v1.1.sql`; its decisions are in
-`docs/decisions/0012-v1-1-schema-and-operation-scope.md` and usage/testing in
-`backend/database/README.md`. It has not replaced the generated v1.0 EF model
-below. Do not manually edit generated entities to pretend adoption is complete.
+The current SQL source and generated EF model are
+`backend/database/smart-campus-tour-schema-v1.1.sql`; the local scaffold target
+is the empty database `SmartCampusTourV11` on the local SQL Server instance
+`localhost,1433`.
+Decisions and operating notes are in
+`docs/decisions/0012-v1-1-schema-and-operation-scope.md` and
+`backend/database/README.md`. This did not migrate v1.0 data. Do not manually
+edit generated entities to stand in for a SQL schema change.
 V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
 no per-Tour dwell editor or operator assignment. Invitation/branch use cases,
 roster locking and retention cleanup remain implementation work.
 
-`backend/database/smart-campus-tour-schema-v1.0.sql` and the scaffolded entities
-currently contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`,
-`RouteStop`, `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `TourEvent`, and
-`AuditLog`. A `Tour` stores scheduling and execution state; group registration
-and roster rows model school participation. `Robot` and `Tour` retain assignment
-references. `TourEvent` stores meaningful execution events. `RowVersion` on
-`Robot`, `Tour`, and `GroupRegistration` is a SQL Server concurrency token.
+`backend/database/smart-campus-tour-schema-v1.1.sql` and the scaffolded entities
+contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`, `RouteStop`,
+`RouteVariant`, `Robot`, `Tour`, `TourAllowedBranch`, `GroupRegistration`,
+`RosterRow`, `Invitation`, `BrowserSession`, `BranchRequest`, `TourEvent`, and
+`AuditLog`. A `Tour` stores scheduling/execution state and route-stop references;
+invitation/session records represent student access; BranchRequests represent
+proposed route changes. `RowVersion` is a SQL Server concurrency token on
+`Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`, and
+`TourAllowedBranch`. Database uniqueness enforces selected invariants, while
+session/request workflows and cross-row consistency still need application code.
+`RowVersion` also appears on `BranchRequest`.
 
 `TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
 design, **not current tables or entities**. A navigation leg remains a
@@ -226,16 +233,14 @@ Shared-viewing data identifies its responsible person, not every student in the
 room; individual data requires individual rows. Code storage for safe resend,
 API binding, atomic admission and revocation remain implementation work.
 
-The current schema stores group-level registration and name/class roster rows;
-it does not persist per-row invitation tokens, browser sessions, revocation
-state, shared-viewing-point classification, email-send attempts, or branch
-requests. The current backend has only its development Simulation controller
-and Hub; the product use cases and endpoints above are not implemented. Do not
-infer that a group code/name match is equivalent to an approved personal
-invitation. Do not add schema, EF mappings, or endpoints as part of a
-documentation-only task; a feature implementation must first reconcile its
-public contracts in `docs/architecture.md` and include the appropriate schema
-and tests.
+The current v1.1 schema persists invitation/session records, shared-viewing
+classification and branch requests; email attempts remain append-only audit
+records, and their delivery/revocation workflows remain application logic. The
+backend still has only its development Simulation controller and Hub; product
+use cases and endpoints above are not implemented. Do not infer that a group
+code/name match is equivalent to an approved personal invitation. A future
+feature change must reconcile its public contracts in `docs/architecture.md`
+and include the appropriate schema and tests.
 
 ## 4. Request, persistence, and response flow
 
@@ -296,9 +301,12 @@ after verifying the schema dropped them.
 
 For a schema change: write an ADR under `docs/decisions/` first; update the
 SQL source; apply the database change through the project's database process;
-re-scaffold; review generated changes and tests. The current v1.0 SQL script
+re-scaffold; review generated changes and tests. The current v1.1 SQL script
 creates tables in an **empty** selected database and does not migrate old data.
-Do not treat a re-scaffold as a database migration.
+Do not treat a re-scaffold as a database migration. EF may infer a filtered
+unique index as a one-to-one relationship even when other rows allow many
+records (currently BranchRequest→Tour and BrowserSession→Invitation); review
+and correct navigation cardinality after each scaffold.
 
 Runtime reads `ConnectionStrings:DefaultConnection`, for example from
 `ConnectionStrings__DefaultConnection` or .NET User Secrets; never track a

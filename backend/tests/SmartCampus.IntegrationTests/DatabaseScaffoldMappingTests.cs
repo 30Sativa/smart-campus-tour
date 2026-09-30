@@ -9,7 +9,7 @@ public sealed class DatabaseScaffoldMappingTests
 {
     private static readonly DbContextOptions<ApplicationDbContext> Options =
         new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=SmartCampusModelTests;Trusted_Connection=True;")
+            .UseSqlServer("Server=localhost,1433;Database=SmartCampusModelTests;Trusted_Connection=True;TrustServerCertificate=True;")
             .Options;
 
     [Fact]
@@ -25,9 +25,10 @@ public sealed class DatabaseScaffoldMappingTests
         Assert.Equal(
             new[]
             {
-                "AuditLogs", "GroupRegistrations", "Pois", "RefreshTokens",
-                "Robots", "RosterRows", "Routes", "RouteStops", "TourEvents",
-                "Tours", "UserRoles", "Users"
+                "AuditLogs", "BranchRequests", "BrowserSessions", "GroupRegistrations",
+                "Invitations", "Pois", "RefreshTokens", "Robots", "RosterRows",
+                "Routes", "RouteStops", "RouteVariants", "TourAllowedBranches",
+                "TourEvents", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
             tables);
     }
@@ -39,17 +40,23 @@ public sealed class DatabaseScaffoldMappingTests
 
         var tokenHash = context.Model.FindEntityType(typeof(RefreshToken))!
             .FindProperty(nameof(RefreshToken.TokenHash))!;
-        var groupCodeHash = context.Model.FindEntityType(typeof(GroupRegistration))!
-            .FindProperty(nameof(GroupRegistration.GroupCodeHash))!;
+        var accessCodeHash = context.Model.FindEntityType(typeof(Invitation))!
+            .FindProperty(nameof(Invitation.AccessCodeHash))!;
+        var sessionTokenHash = context.Model.FindEntityType(typeof(BrowserSession))!
+            .FindProperty(nameof(BrowserSession.SessionTokenHash))!;
 
         Assert.Equal(typeof(byte[]), tokenHash.ClrType);
         Assert.Equal(32, tokenHash.GetMaxLength());
-        Assert.Equal(typeof(byte[]), groupCodeHash.ClrType);
-        Assert.Equal(32, groupCodeHash.GetMaxLength());
+        Assert.Equal(typeof(byte[]), accessCodeHash.ClrType);
+        Assert.Equal(32, accessCodeHash.GetMaxLength());
+        Assert.Equal(typeof(byte[]), sessionTokenHash.ClrType);
+        Assert.Equal(32, sessionTokenHash.GetMaxLength());
 
         foreach (var entityType in new[]
                  {
-                     typeof(Robot), typeof(Tour), typeof(GroupRegistration)
+                     typeof(Robot), typeof(Tour), typeof(GroupRegistration),
+                     typeof(RosterRow), typeof(Invitation), typeof(BranchRequest),
+                     typeof(TourAllowedBranch)
                  })
         {
             var rowVersion = context.Model.FindEntityType(entityType)!
@@ -75,8 +82,28 @@ public sealed class DatabaseScaffoldMappingTests
             context, nameof(RosterRow.RegistrationId));
         AssertForeignKey<Tour, Robot>(
             context, nameof(Tour.AssignedRobotId));
+        AssertForeignKey<Tour, RouteStop>(
+            context, nameof(Tour.CurrentRouteStopId));
+        AssertForeignKey<Tour, RouteStop>(
+            context, nameof(Tour.LastArrivedRouteStopId));
         AssertForeignKey<Robot, Tour>(
             context, nameof(Robot.CurrentTourId));
+        AssertForeignKey<BranchRequest, RouteStop>(
+            context, nameof(BranchRequest.BranchPointRouteStopId));
+
+        var branchRequests = context.Model.FindEntityType(typeof(BranchRequest))!;
+        var tourRequestRelationship = Assert.Single(branchRequests.GetForeignKeys(), foreignKey =>
+            foreignKey.PrincipalEntityType.ClrType == typeof(Tour)
+            && foreignKey.Properties.Select(property => property.Name)
+                .SequenceEqual(new[] { nameof(BranchRequest.TourId) }));
+        Assert.False(tourRequestRelationship.IsUnique);
+
+        var browserSessions = context.Model.FindEntityType(typeof(BrowserSession))!;
+        var invitationSessionRelationship = Assert.Single(browserSessions.GetForeignKeys(), foreignKey =>
+            foreignKey.PrincipalEntityType.ClrType == typeof(Invitation)
+            && foreignKey.Properties.Select(property => property.Name)
+                .SequenceEqual(new[] { nameof(BrowserSession.InvitationId) }));
+        Assert.False(invitationSessionRelationship.IsUnique);
     }
 
     private static void AssertForeignKey<TDependent, TPrincipal>(

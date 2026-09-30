@@ -17,8 +17,11 @@ the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
 The current backend persistence model is defined by
-`backend/database/smart-campus-tour-schema-v1.0.sql` and
-[ADR-0006](decisions/0006-demo-first-tour-schema.md). This document also
+`backend/database/smart-campus-tour-schema-v1.1.sql` and
+[ADR-0012](decisions/0012-v1-1-schema-and-operation-scope.md). It is scaffolded
+to EF and applied to the local development database `SmartCampusTourV11` on
+SQL Server `localhost,1433`; it does not migrate existing data. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
+records the superseded v1.0 baseline. This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
 
@@ -327,11 +330,14 @@ for history. This invariant does not introduce a MapVersion subsystem.
 
 ### 3.2 Current persistence model and planned tour flow
 
-The current SQL relationships are:
+The current v1.1 SQL relationships include:
 
 ```text
 Route --< RouteStop >-- Poi          Tour --> Route
 Tour --< GroupRegistration --< RosterRow
+RosterRow -- Invitation -- BrowserSession
+Tour --< TourAllowedBranch           Tour --< BranchRequest
+RouteVariant -- TourAllowedBranch    RouteVariant --< BranchRequest
 Tour --< TourEvent                   User --< UserRole
 User --< RefreshToken               User --< AuditLog
 Tour -- AssignedRobotId --> Robot    Robot -- CurrentTourId --> Tour
@@ -339,8 +345,11 @@ Tour -- AssignedRobotId --> Robot    Robot -- CurrentTourId --> Tour
 
 `GroupRegistration.TourId` references a **Tour**, not a Route.
 `RosterRow.RegistrationId` references its `GroupRegistration`; roster rows
-represent students without individual user accounts. A registration also
-references a representative `User` and optionally a reviewing `User`.
+represent invited students without individual user accounts. An invitation
+references one roster row; browser sessions reference invitations. A
+registration also references a representative `User` and optionally a reviewing
+`User`. A branch request references a Tour, its selected TourAllowedBranch, its
+branch-point RouteStop and optionally a registration.
 `Tour.CreatedByUserId`, `TourEvent.ActorUserId`, and `AuditLog.ActorUserId`
 link their records to users. The diagram omits other optional event links to
 `Robot` and `Poi` for readability.
@@ -358,9 +367,16 @@ individual `Booking` table. It does not establish a capacity policy.
 `Tour.AssignedRobotId` records the assigned robot, while
 `Robot.CurrentTourId` records the tour currently holding that robot. Both are
 nullable foreign keys, and `Tour.AssignedRobotId` may remain after a tour
-ends. The database checks that referenced rows exist; it does not enforce
-agreement between these two fields or uniqueness of active assignments.
+ends. A UNIQUE filtered index on `Robot.CurrentTourId` enforces at most one
+current robot holder for each Tour, and the single scalar field lets one Robot
+hold at most one Tour. The database does not enforce agreement between these
+two assignment fields, readiness, or safe release.
 `Robot.NeedsInspection` and `IsDispatchEnabled` are persisted dispatch inputs.
+Filtered unique indexes limit each Tour to one current robot holder, one
+accepted branch request, and each invitation to one open browser session while
+allowing multiple other request/session records. EF initially inferred
+singular Tour-to-BranchRequest and Invitation-to-BrowserSession navigations
+from the filtered indexes; both mappings are corrected to one-to-many.
 In a future fleet implementation, live pose, connection, battery, and external
 execution state are transient fleet telemetry, separate from persisted tour
 business state and `TourEvent`.
@@ -369,10 +385,9 @@ business state and `TourEvent`.
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
 the fleet gateway, handles arrival and the configured POI dwell/interaction,
 then decides whether to send another leg or complete the tour. The selected
-operational rules below are not backend implementations. Requirements such as
-one active assignment per robot and ignoring stale or duplicate results need
-explicit application/persistence
-enforcement; the v1.0 schema does not provide those guarantees by itself.
+operational rules below are not backend implementations. Ignoring stale or
+duplicate results, eligibility checks and reconciling release still need
+application enforcement beyond the claim uniqueness indexes.
 
 FleetHub transport is not tour orchestration. The later Application work owns:
 
@@ -397,7 +412,7 @@ shared transport does not erase source or validation boundaries.
 #### Remote Tour operational rules (planned Application behavior)
 
 These rules make explicit the existing remote-tour intent in
-`backend/database/smart-campus-tour-schema-v1.0.sql`,
+`backend/database/smart-campus-tour-schema-v1.1.sql`,
 `web/docs/staff-operations.md`, `web/src/api/contracts/staff.ts`, and
 `web/src/features/staff/reason.ts`. The web mock illustrates the flow; it is not
 an implemented persistence/concurrency guarantee. Backend evaluates allowed
@@ -453,10 +468,12 @@ migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 
 #### v1.1 snapshot and accepted implementation target (ADR-0012)
 
-`backend/database/smart-campus-tour-schema-v1.1.sql` is the reviewed empty-DB
-snapshot for invitation/session/branch storage. It does not migrate the current
-database or replace the v1.0 generated EF model in this change. Adoption requires
-the Database First apply/scaffold process and feature integration tests.
+`backend/database/smart-campus-tour-schema-v1.1.sql` is the current empty-DB
+snapshot for invitation/session/branch storage. It is applied to the local
+SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
+Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
+production data. Database setup/scaffolding were exercised locally; product use
+cases remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
 seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to

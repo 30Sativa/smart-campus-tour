@@ -27,6 +27,8 @@ public partial class Poi
 
     public int? NarrationSeconds { get; set; }
 
+    public string? FallbackVideoUrl { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

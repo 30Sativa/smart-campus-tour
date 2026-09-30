@@ -37,5 +37,13 @@ public partial class Route
 
     public virtual ICollection<RouteStop> RouteStops { get; set; } = new List<RouteStop>();
 
-    public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();
+    public virtual ICollection<RouteVariant> RouteVariantBaseRoutes { get; set; } = new List<RouteVariant>();
+
+    public virtual ICollection<RouteVariant> RouteVariantVariantRoutes { get; set; } = new List<RouteVariant>();
+
+    public virtual ICollection<Tour> TourActiveRoutes { get; set; } = new List<Tour>();
+
+    public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
+
+    public virtual ICollection<Tour> TourRoutes { get; set; } = new List<Tour>();
 }

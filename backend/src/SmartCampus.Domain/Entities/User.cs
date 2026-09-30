@@ -23,6 +23,10 @@ public partial class User
 
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
+    public virtual ICollection<BranchRequest> BranchRequestRequestedByUsers { get; set; } = new List<BranchRequest>();
+
+    public virtual ICollection<BranchRequest> BranchRequestResolvedByUsers { get; set; } = new List<BranchRequest>();
+
     public virtual ICollection<GroupRegistration> GroupRegistrationRepresentativeUsers { get; set; } = new List<GroupRegistration>();
 
     public virtual ICollection<GroupRegistration> GroupRegistrationReviewedByUsers { get; set; } = new List<GroupRegistration>();
