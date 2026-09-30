@@ -12,6 +12,8 @@ Review 1 yêu cầu làm rõ cách vào Tour, giá trị tương tác với robo
 
 Mục tiêu là phục vụ cả người xem riêng và cả lớp xem qua máy chiếu mà không thu danh sách cá nhân không cần thiết. Các quyết định dưới đây thay quy tắc cũ bắt thay cả roster khi sai một email, đăng ký riêng cho hình thức trình chiếu và cấu hình nội dung hoàn toàn bằng seed. Nghiên cứu, benchmark và telemetry contract không thay đổi trong ADR này.
 
+Mục đích sử dụng dữ liệu được giới hạn tại [ADR-0011](0011-student-data-use-for-tour.md): đăng ký, lời mời và thống kê Tour; không liên hệ tuyển sinh sau Tour.
+
 ## Decision
 
 ### 1. Một danh sách cấp lời mời cho cá nhân và điểm xem chung
@@ -42,9 +44,9 @@ Khóa sửa POI/asset dùng chung khi bất kỳ Tour READY/RUNNING nào sử d�
 
 Đại diện đăng nhập tài khoản riêng, gửi từ My Registration cho đoàn APPROVED của mình. Xem live bằng lời mời của chính mình hoặc điểm xem chung mình phụ trách. Yêu cầu áp dụng cho điểm phân nhánh hiện tại nếu đang dừng và còn được chọn, hoặc điểm phân nhánh sắp tới. Staff chỉ Accept tại đúng điểm khi robot dừng và lượt còn mở.
 
-Yêu cầu không Hold/reset dwell. Staff dùng Hold nếu cần xem lâu hơn; không thêm yêu cầu “ở lại thêm”. Backend đóng cửa sổ Accept và cho PENDING hết hạn ngay khi chốt rời điểm, trước FRONT/phát lệnh, không đợi robot chuyển động. Accept/Next/Hold/timer phải phân xử nhất quán. Accept cập nhật tuyến còn lại, không tự bỏ Hold hoặc phát chặng.
+Yêu cầu không Hold/reset dwell. Staff dùng Hold nếu cần xem lâu hơn; không thêm yêu cầu “ở lại thêm”. Khi chốt rời điểm, backend chỉ đóng cửa sổ Accept và cho PENDING hết hạn đối với **đúng lượt điểm phân nhánh vừa đóng**, trước FRONT/phát lệnh. Rời POI trung gian không hủy yêu cầu gửi trước cho điểm phân nhánh sắp tới. End Early hoặc NEEDS_ASSISTANCE làm hết hạn mọi PENDING của Tour; mất quyền registration chỉ làm hết hạn yêu cầu của registration đó. Accept/Next/Hold/timer phải phân xử nhất quán. Accept cập nhật tuyến còn lại, không tự bỏ Hold hoặc phát chặng.
 
-Mỗi Tour tối đa **một lần đổi nhánh được chấp nhận**, kể cả Staff chọn trực tiếp; yêu cầu bị từ chối/hết hạn không tiêu lượt, retry không tính thêm. Sau khi chốt, không nhận thay đổi nhánh mới. Chỉ dùng nhánh đã kiểm chứng, không đổi giữa chặng. Voting ngoài V1.
+Mỗi Tour tối đa **một lần đổi nhánh được chấp nhận**, kể cả Staff chọn trực tiếp; yêu cầu bị từ chối/hết hạn không tiêu lượt, retry không tính thêm. Khi đã dùng lượt này, mọi PENDING còn lại của Tour hết hạn với lý do hết lượt đổi nhánh; không nhận thay đổi nhánh mới. Chỉ dùng nhánh đã kiểm chứng, không đổi giữa chặng. Voting ngoài V1.
 
 ### 5. Staff Start từ giờ công bố
 
@@ -53,6 +55,8 @@ Học sinh được mở link, nhập mã (hoặc khôi phục session hợp l�
 ### 6. Video dự phòng
 
 Khi RUNNING mà live lỗi, được xem video dự phòng có nhãn ghi sẵn; không làm giả pose hay kết quả robot. Sau kết thúc, chỉ Tour **đã Start rồi End Early** (CANCELLED) được xem tiếp video tới hạn lời mời, với quyền chưa bị thu hồi. COMPLETED và hủy trước Start không có quyền này. Không mở lại live/AI. Robot chưa xác nhận dừng không được giải phóng cho Tour khác.
+
+Sau End Early/lỗi cần kiểm tra, Staff dùng “Xác nhận robot sẵn sàng” sau kiểm tra thực tế. Backend chỉ giải phóng khi Tour cũ đã terminal, nhiệm vụ/lệnh cũ được đối soát là kết thúc/hủy, robot đã dừng, trạng thái còn mới và đủ điều kiện sẵn sàng; thiếu bằng chứng thì giữ khóa và báo lý do. Ghi audit và xử lý xác nhận lặp nhất quán. Giải phóng không chạy lại Tour cũ hoặc tự Start buổi mới; Tour mới phải qua đầy đủ điều kiện Start. Đây là làm rõ bước release đã có trong `docs/architecture.md` §3.2, chưa xác nhận code/phần cứng đã thực hiện.
 
 ### 7. Thống kê cơ sở và audit
 

@@ -40,6 +40,14 @@ integration semantics, not implemented API or persistence guarantees. The curren
 schema and mock name/class entry still need a dedicated implementation with
 documented contracts, storage, concurrency and revocation tests.
 
+[ADR-0011](decisions/0011-student-data-use-for-tour.md) limits student data to
+registration, invitations and aggregate Tour operational statistics. V1 excludes
+post-Tour admissions contact, CRM and per-person consent workflows. Invitation
+records remain operational data; aggregate counts must not be presented as
+attendance, individual interest or the number of people in a shared viewing room.
+Retention configuration for real deployments remains an operational requirement;
+this decision does not define a new endpoint or schema.
+
 ---
 
 ## 1. Components and ownership
