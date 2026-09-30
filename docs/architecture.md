@@ -451,6 +451,51 @@ The SQL file is the Database First source: it was scaffolded into Domain
 entities and Infrastructure `ApplicationDbContext`. There is no normal EF
 migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 
+#### v1.1 snapshot and accepted implementation target (ADR-0012)
+
+`backend/database/smart-campus-tour-schema-v1.1.sql` is the reviewed empty-DB
+snapshot for invitation/session/branch storage. It does not migrate the current
+database or replace the v1.0 generated EF model in this change. Adoption requires
+the Database First apply/scaffold process and feature integration tests.
+
+Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
+seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to
+fit, with no per-Tour dwell editor. Every active STAFF account may operate every
+Tour. There is no operator assignment field or takeover screen; all state,
+readiness, time and robot-claim checks still apply. Admin-only cannot operate and
+Staff-only cannot recover invitation codes. RowVersion must be checked on writes;
+only a committed winning decision may lead to robot dispatch.
+
+In v1.1, CurrentRouteStopId replaces CurrentStopOrder and must belong to the
+active route. Accept maps it to the verified equivalent VariantBranchStopId.
+LastArrivedRouteStopId replaces LastArrivedStopOrder but retains the last actual
+arrival, potentially on the old route, until another arrival is confirmed.
+These are SQL fields, not changes to public navigation DTOs or ROS interfaces.
+BranchRequests stores BranchPointRouteStopId derived from the allowed variant;
+the backend must validate Tour/route/stop consistency and expire old requests
+atomically on visit closure or NEEDS_ASSISTANCE before recovery. No future-visit
+GUID allocation is required; CurrentStopVisitId still correlates execution attempts.
+
+Unique keys protect one invitation per roster row, one open session per
+invitation, one accepted branch per Tour and one pending request per
+Tour/requester/branch point. HMAC-SHA256 access-code hashes are globally unique,
+with the key outside SQL; code lookup still verifies the Tour. Expired sessions
+must be closed transactionally before replacement. Every roster-changing path,
+including approval and single-email correction, must lock the parent Tour with
+UPDLOCK before normalized-email duplicate checks and hold it through commit.
+These application transactions are not implemented by the snapshot's indexes.
+
+Narration activation records AudioUrl/NarrationText/NarrationSeconds snapshots
+in TourEvents.DataJson with POI/visit context; replacement uploads use new assets
+and preserve old assets needed for history. Each email attempt uses its own
+CorrelationId: append EMAIL_SEND_REQUESTED/PENDING and subsequent
+EMAIL_SEND_RESULT/ACCEPTED, FAILED or UNKNOWN evidence. No in-place audit update;
+statistics count confirmed attempt outcomes rather than rows. Retry sends are new
+attempts. `backend/database/smart-campus-tour-permissions.sql` supplies the
+restricted log role; it does not provision production users or make an owner/admin
+account append-only. Retention/identity cleanup remains application work under
+ADR-0011/0012, not an implemented background job.
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data

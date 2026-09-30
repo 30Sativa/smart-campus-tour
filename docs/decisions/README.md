@@ -44,6 +44,7 @@ adding a test, bumping a patch version.
 | [0009](0009-review-1-tour-business-scope.md) | Review 1: shared viewing rows, invitations, POI content, branches, Start time, fallback and audit | accepted by team; implementation pending; GVHD review at Review 2 |
 | [0010](0010-personal-access-code-entry.md) | Email a Tour page link and personal access code; enter code to create a browser session; resend versus revoke/reissue | accepted by team; supersedes ADR-0009 secret-link entry; implementation pending |
 | [0011](0011-student-data-use-for-tour.md) | Use student data only for Tour registration, invitations, and operational statistics; no post-Tour admissions contact | accepted by team; implementation pending |
+| [0012](0012-v1-1-schema-and-operation-scope.md) | v1.1 SQL snapshot, fixed seeded dwell, all Staff operate all Tours, stop references and append-only audit | accepted by team; separate from v1.0 runtime; use cases pending |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

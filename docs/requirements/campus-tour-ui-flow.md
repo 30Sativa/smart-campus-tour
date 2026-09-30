@@ -116,9 +116,9 @@ Sau duyệt, hệ thống gửi link trang Tour + mã riêng tới từng học 
 Phiếu cập nhật còn nêu quản lý quyền truy cập operator/đại diện, nội dung tour được chuẩn bị và lịch sử vận hành. Phải ghi cách đáp ứng trong thiết kế:
 
 - Quyền truy cập: dùng cơ chế account/role hiện có; có thể tạo sẵn account demo. Chi tiết màn quản trị tài khoản phụ thuộc cơ chế đã chọn, không tự thêm permission builder hoặc quy trình đăng ký tài khoản mới.
-- Nội dung V1 đã chốt: kỹ thuật seed map/frame/tọa độ, tuyến/đường nối/nhánh sau kiểm chứng. Admin chọn tuyến/bật nhánh/dwell hợp lệ; form P1 sửa tên hiển thị/mô tả/upload audio, không sửa ID/tọa độ. Khóa khi bất kỳ Tour READY/RUNNING dùng POI/asset, kể cả nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; người cấu hình chỉnh nội dung hoặc dwell hợp lệ trước READY, backend chặn Chốt nếu chưa xử lý và kiểm tra khóa khi ghi. Giữ lịch sử nội dung Tour đã kết thúc. Không editor vẽ tuyến tự do.
+- Nội dung V1 đã chốt: kỹ thuật seed map/frame/tọa độ, tuyến/đường nối/nhánh sau kiểm chứng. Admin chọn tuyến/bật nhánh và xem dwell cố định do kỹ thuật seed/kiểm chứng theo ADR-0012, không chỉnh dwell riêng theo Tour; form P1 sửa tên hiển thị/mô tả/upload audio, không sửa ID/tọa độ. Khóa khi bất kỳ Tour READY/RUNNING dùng POI/asset, kể cả nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; Admin chỉnh audio cho phù hợp dwell trước READY; đổi dwell phải nhờ kỹ thuật sửa seed và kiểm chứng lại, backend chặn Chốt nếu chưa xử lý và kiểm tra khóa khi ghi. Giữ lịch sử nội dung Tour đã kết thúc bằng asset/URL audio mới khi upload, giữ asset cũ và snapshot nội dung đã phát trong TourEvents theo ADR-0012. Không editor vẽ tuyến tự do.
 - Lịch sử: History/Log lưu actor/thời điểm/Tour/robot/tham chiếu/thao tác, không access code/token bí mật. Audit append-only từ P0, API/UI và tài khoản DB app không UPDATE/DELETE; không tuyên bố chống DBA. Quyết định gửi cùng giao dịch DB; đã gửi và robot phản hồi là các dòng riêng khi có bằng chứng, tương quan cùng lệnh. Lỗi/chưa rõ giữ đúng, không tạo đủ ba mốc giả; nhận lệnh không phải hoàn thành.
-- Thống kê P1: số Tour COMPLETED/CANCELLED; số lần gửi email dịch vụ chấp nhận/gửi lỗi (retry là lần gửi mới); số lời mời đã vào phòng thành công, một lần cho cùng dòng đã duyệt kể cả reload/reconnect/cấp lại. Phân biệt cá nhân/điểm xem chung, không attendance hay số người trong phòng. Chỉ đếm vào phòng sau backend cấp/khôi phục quyền thành công, không mở URL/email. Email đang chờ/chưa rõ không coi thành công; không ghi đã nhận/đã đọc.
+- Thống kê P1: số Tour COMPLETED/CANCELLED; số lần gửi email dịch vụ chấp nhận/gửi lỗi (retry là lần gửi mới); số lời mời đã vào phòng thành công, một lần cho cùng dòng đã duyệt kể cả reload/reconnect/cấp lại. Phân biệt cá nhân/điểm xem chung, không attendance hay số người trong phòng. Chỉ đếm vào phòng sau backend cấp/khôi phục quyền thành công, không mở URL/email. Email đang chờ/chưa rõ không coi thành công; không ghi đã nhận/đã đọc. Backend append mốc yêu cầu gửi và kết quả thành các dòng riêng cùng CorrelationId của attempt, không sửa log; UI lấy kết quả đã xác nhận, retry gửi tính attempt mới.
 
 ## 4. School Representative / Đại diện
 
@@ -251,6 +251,8 @@ Student không có Start/Hold/Next, điều khiển robot/head, chọn điểm �
 
 ## 6. Staff
 
+Theo ADR-0012, mọi tài khoản đang hoạt động có role STAFF được vận hành mọi Tour; V1 không có màn phân công/tiếp quản Staff. Admin-only không có quyền vận hành. Nhiều Staff thao tác cạnh tranh phải nhận conflict rõ ràng và tải lại dữ liệu; có RowVersion không tự bảo đảm chỉ một lệnh robot được gửi.
+
 ### 6.1 Screen Flow
 
 ```text
@@ -274,7 +276,7 @@ Dashboard có Twin 3D vùng chạy tầng 6, video preview, Tour/robot, thông t
 | Action | Điều kiện và phản hồi |
 |---|---|
 | Start | READY; Staff xác nhận định vị/nguồn/FRONT/stream; server kiểm tra readiness và atomically giữ robot cho duy nhất một Tour, còn đoàn APPROVED; ghi audit. Server chặn Start trước giờ công bố theo quyết định scope 4.1 |
-| Accept/Reject nhánh | Đúng Tour được phụ trách, yêu cầu PENDING, đúng điểm dừng/lượt còn mở, chưa rời điểm, NORMAL/readiness đạt; Accept kiểm tra Tour chưa dùng lượt đổi nhánh, chốt nhánh và cập nhật UI, không tự bỏ Hold/dispatch; đóng các yêu cầu cạnh tranh; Reject ghi lý do |
+| Accept/Reject nhánh | Tài khoản đang hoạt động có role STAFF (được vận hành mọi Tour), yêu cầu PENDING, đúng điểm dừng/lượt còn mở, chưa rời điểm, NORMAL/readiness đạt; Accept kiểm tra Tour chưa dùng lượt đổi nhánh, chốt nhánh và cập nhật UI, không tự bỏ Hold/dispatch; đóng các yêu cầu cạnh tranh; Reject ghi lý do |
 | Hold | Tại POI, lượt còn mở và đúng bước cho phép; ngăn tự Next; khi robot đang di chuyển nút Hold bị disabled, kèm lý do |
 | Next | RUNNING + NORMAL, đúng lượt/bước; đóng lượt, xóa Hold, yêu cầu FRONT; chỉ navigation khi FRONT hoàn tất |
 | Thử lại chặng | NEEDS_ASSISTANCE ở chặng; xác nhận robot dừng và lệnh cũ đã kết thúc/hủy |
