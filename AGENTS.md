@@ -8,10 +8,13 @@ Repo-wide instructions for coding agents. Read this first, then read the
 ## 1. Project Overview
 
 **CampusTour DT-AMR** — a remote campus-tour system: a School Representative
-registers a group and uploads its roster; an autonomous mobile robot (AMR)
-guides the tour while students join through a browser. Students receive a
-livestream, 2D robot position, approved pre-generated narration and private AI
-Q&A. Campus staff schedule and monitor tours through the Digital Twin.
+registers a group and submits invitation rows; a row may invite one student to
+their own device or represent one shared projector room. A shared-room row does
+not list the students merely watching that screen. An autonomous mobile robot
+(AMR) guides the tour while invited viewers join through a browser. They receive
+a livestream, 2D robot position, approved pre-generated narration and private AI
+Q&A when they have an individual invitation. Campus staff schedule and monitor
+tours through the Digital Twin.
 
 Repo này chứa toàn bộ hệ thống CampusTour DT-AMR: robot, digital twin, backend, ai-assistant và web. Không có phần nào của hệ thống tách sang repo khác.
 
@@ -28,7 +31,7 @@ build, its own verification, and its own `AGENTS.md`.
 | `digital-twin/` | Fleet Emulator, load experiments and synchronization research tooling (WP4) | simulation workstation/server | `digital-twin/AGENTS.md` |
 | `backend/` | Group registration, scheduling & dispatch API | AWS EC2 | `backend/AGENTS.md` |
 | `ai-assistant/` | Single-project-language STT, dialogue/LLM and TTS service (WP4) | server/cloud, not the robot miniPC | `ai-assistant/AGENTS.md` |
-| `web/` | Student browser experience + Staff Operations (WP4) | Vercel | `web/AGENTS.md` |
+| `web/` | Public site, Representative, remote Student Tour, Staff Operations and Admin (WP4) | Vercel | `web/AGENTS.md` |
 | `docs/` | System-level architecture and decisions | — | `docs/architecture.md` |
 | `scripts/` | Cross-folder entry points | — | — |
 
@@ -41,6 +44,25 @@ Rules that follow from this layout:
 - **Every path written in a doc, a comment, or a commit message is relative to
   the repo root**, e.g. `robot/ros2_ws/src/robot_control/`.
 
+## Documentation authority
+
+Start at [`docs/README.md`](docs/README.md) for the document map and reading
+order. `docs/requirements/` describes target business behavior, with the status
+of each decision stated in the document; the detailed scope outranks its short
+summary, and the UI flow projects that scope onto screens. Source code and SQL
+describe the current implementation and schema, not automatically the target.
+`docs/architecture.md` and `docs/decisions/` describe cross-system technical
+boundaries and accepted decisions.
+
+The Review 1 group baseline is recorded in
+[`docs/decisions/0009-review-1-tour-business-scope.md`](docs/decisions/0009-review-1-tour-business-scope.md).
+The group expects the advisor to review it at Review 2; this does not mean the
+advisor has already approved it. Do not implement items explicitly marked
+PENDING or requiring approval. If business scope, current implementation,
+schema, and a technical contract conflict, report the conflict and identify
+which document/status applies; do not silently treat a target as implemented
+or change a public contract to make the documents agree.
+
 ---
 
 ## 3. Working on a Task
@@ -50,8 +72,9 @@ Before changing code:
 1. Identify which top-level folder the task belongs to. Read that folder's
    `AGENTS.md`.
 2. Read the existing implementation before proposing a change.
-3. Read the relevant doc: `docs/architecture.md` for cross-system behaviour,
-   the folder's own README/docs for local behaviour.
+3. Read `docs/README.md`, then the applicable business requirement in
+   `docs/requirements/`, `docs/architecture.md` for cross-system behavior, and
+   the folder's own README/docs for local behavior.
 4. Inspect existing tests for the code you are about to touch.
 5. Identify the **smallest** change that satisfies the task.
 

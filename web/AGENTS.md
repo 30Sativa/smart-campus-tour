@@ -1,7 +1,8 @@
 # AGENTS.md — `web/`
 
-Public site, legacy visitor app, student browser experience, tour operations console and administration for
-CampusTour DT-AMR (Work Package 4). Read the repo-root `AGENTS.md` first for the
+Public site, legacy visitor app, student remote-Tour page, school Representative
+area, tour operations console and administration for CampusTour DT-AMR (Work
+Package 4). Read the repo-root `AGENTS.md` first for the
 shared rules; this file only covers what is specific to `web/`.
 
 ---
@@ -16,27 +17,38 @@ shared rules; this file only covers what is specific to `web/`.
   **Zustand**. Do not put server data (bookings, robot status, ...) in
   Zustand — that belongs to TanStack Query's cache.
 - Package manager: **npm** (no workspaces needed — see below).
-- Codebase shape: **one app, one deploy, four areas**. Public, the visitor app,
-  operations and administration live in the same React app, same Vercel project,
-  same domain. They are split by route + role, not by separate apps:
+- Codebase shape: **one app, one deploy, several route areas**. Public, legacy
+  visitor, Student remote Tour, Representative, operations and administration
+  live in the same React app and Vercel project. They are split by route and
+  role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
+  - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
+    Current code uses a group code and roster-name matching mock; the Review 1
+    target is an emailed Tour page link plus personal access code, exchanged
+    for a browser session (ADR-0010), with one shared-viewing row for a
+    projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
+  - `/dai-dien/*`: school Representative registration and invitation support.
+    Current pages are mock-bound and still show the older shared group link;
+    they do not implement the personal-email invitation target.
   - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
     run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
     check and Start, live operations on the operational twin (Hold / Next /
     End Early / recovery), the robot, the session log. Scope: the remote-tour
-    specification of 19/09/2026; screen map in `web/docs/staff-operations.md`.
+    Review 1 target in `docs/requirements/campus-tour-scope.md`; current screen
+    map in `web/docs/staff-operations.md`.
     `CampusStaff` and `TourOperator` were merged into the one
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
   - `/admin/*`: Tour administration, `Admin` only: create/edit a Tour while
     Scheduled, pick a prepared route, review groups (approve / reject with a
-    reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
-    Start, and read finished Tours. Admin never starts, holds, advances or ends
-    a run and never controls a robot; no fleet, analytics, route editor or
-    scenario tools here. Screen map: `web/docs/admin-tours.md`.
-  - Both signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
+     reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
+     Start, and read finished Tours. Admin never starts, holds, advances or ends
+     a run and never controls a robot. Review 1 target adds a limited P1
+     completion/email/invitation-entry summary and POI-content form; neither is
+     proof of current implementation. Screen map: `web/docs/admin-tours.md`.
+  - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
   - **Renamed on 2026-09-17.** Operations used to live at `/admin/*` back when
@@ -57,12 +69,16 @@ shared rules; this file only covers what is specific to `web/`.
 - Structure: **feature-based**. Code is grouped by what it does
   (`src/features/<feature>/`), not by file kind. Only genuinely shared UI goes
   in `src/components/`.
-- Auth mechanism: **JWT access token + refresh token in an HttpOnly cookie**.
+- Planned production auth contract: **JWT access token + refresh token in an
+  HttpOnly cookie**. Current frontend still uses mock authentication (see
+  “Mock backend mode” below); these token rules are not evidence that backend
+  auth is implemented.
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
-    on every API request. Carries the user's role (`Visitor`, `Staff`,
-    `Admin`) as a claim; the area route guard reads the role from the decoded
-    token, not from a separate call. `auth/roles.ts` normalises whatever
-    spelling arrives onto those three.
+    on every API request. Carries the user's role (`Visitor`, `Representative`,
+    `Staff`, `Admin`) as a claim; the area route guard reads the role from the decoded
+    token, not from a separate call. `auth/roles.ts` normalises recognized
+    spellings onto those four signed-in roles. Student invitation access is a
+    separate browser-session target, not another account role.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
     access token when the old one expires, without forcing re-login.
@@ -108,7 +124,9 @@ web/
     │                     asserts guards, legacy redirects and /admin precedence
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
-    │   ├── visitor/      visitor pages ("/visit/*"), all lazy-loaded
+    │   ├── visitor/      legacy visitor pages ("/visit/*"), lazy-loaded
+    │   ├── student/      StudentTourPage.tsx ("/tour", "/tour/:tourId")
+    │   ├── representative/  Representative pages ("/dai-dien/*")
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
     │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
@@ -135,11 +153,11 @@ web/
     └── test/             setup.ts (Vitest + jest-dom)
 ```
 
-There are four implemented entry points: `/` (public landing page), `/visit/*`
-(legacy visitor app, behind the visitor guard), `/staff/*` (operations, behind
-the staff guard) and `/admin/*` (administration, behind the admin guard).
-The `/visit/*` booking flow is existing implementation, not the current student
-product baseline described below.
+Current route entry points include `/` (public), `/tour` and `/tour/:tourId`
+(Student), `/dai-dien/*` (Representative), `/visit/*` (legacy visitor),
+`/staff/*` (operations), and `/admin/*` (administration). Only the signed-in
+areas use role guards; the Student route has no account guard. The `/visit/*`
+booking flow is legacy implementation, not the current Student product target.
 
 **Who may enter what is written in exactly one place: `src/auth/access.ts`.**
 The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
@@ -149,12 +167,24 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
 The current frontend contains a legacy visitor registration/tour flow at
-`/visit/*`, but it is not the current product baseline. For this milestone,
-School Representatives register groups and upload rosters; students join
-remotely in the browser for livestream, 2D robot position, approved narration
-and private AI Q&A. Do not treat visitor self-booking or the existing mock flow
-as product scope. Keep the implementation unchanged in documentation-only
-scope-alignment work.
+`/visit/*`, plus a mock Student page at `/tour` and mock Representative pages at
+`/dai-dien/*`. The Student page currently matches a group code and name/class
+against mock roster data; the Representative page shares a group link/code.
+The Review 1 target (ADR-0010) instead emails a Tour page link and personal
+access code; entering the code creates a session, and a valid existing session
+avoids repeat entry. The URL itself grants no access. The target
+uses one “Điểm xem chung” row/email for a projector room, without collecting a
+roster of students who only watch together. Students who need their own device
+and private Q&A need individual invitation rows. Treat the code and mock flows
+as implementation evidence, not as the target requirement; keep this scope
+distinction explicit when changing either flow.
+
+Shared-viewing rows only provide the responsible person's contact details. If
+the group needs data for every student, add their individual rows even when they
+watch the projector; do not infer a full roster from one viewing point. Resend
+keeps the current valid code/session; revoke/reissue invalidates both and emails
+a new code to the approved address. Representative support is own-group only;
+Admin supports all groups; Staff-only does not gain recovery permission.
 
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
@@ -182,8 +212,8 @@ branch was never exercised.
   not know which one it has. The binding is named once, in
   `features/staff/staff-hooks.ts`;
 - `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised.
-  There are exactly two accounts, one per signed-in role: `admin/admin` is an
-  `Admin`, `staff/staff` is a `Staff`. Sign-up mints a `Visitor`. It is not
+  Four demo accounts exist: `admin/admin`, `staff/staff`, `visitor/visitor`,
+  and `daidien/daidien` (`Representative`). Sign-up mints a `Visitor`. It is not
   authentication and grants nothing server-side;
 - mock data is disclosed, but out of the way: a one-line badge in each shell and
   on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
@@ -214,8 +244,10 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
   will guess the URL", and never rely on simply not rendering a nav link.
 - **No dead navigation.** A nav item must open a page that does something with
   real data. Administration's entries are exactly the scope's Admin work
-  (`features/administration/admin-nav.ts`); do not add robot, fleet, analytics
-  or editor entries there.
+  (`features/administration/admin-nav.ts`); do not add robot, fleet, free-route
+  editor or scenario controls there. The Review 1 target includes a bounded P1
+  summary (Tour completion/cancellation, email send results, invitation entry);
+  current mock dashboard values do not satisfy it.
 - **No backend enum reaches a screen.** The API speaks `InProgress`, `Live`,
   `Critical`; people read Vietnamese. Everything a person sees goes through
   `features/staff/status.ts`, which also assigns the tone (ok / info /
@@ -277,8 +309,11 @@ requirement, not a nicety - see §1), then delete `src/mocks/`.
     are deliberate and few: `StatusBadge` tones (`features/staff/status.ts`),
     the access matrix's yes/no, the READY checklist ✓/✕, the pending-review
     figure and the overview charts, whose series use the same status tones and
-    always print their counts. Charts draw only what the API returned: no seeded
-    series, no trend deltas, no ratings (feedback is PENDING GVHD).
+    always print their counts. Current dashboard figures are mock-backed, not
+    live system-wide statistics. The Review 1 P1 target is limited to Tour
+    completed/cancelled, email service accepted/failed per send attempt, and
+    invitations that entered the room (once per invitation). Do not imply
+    attendance, email-open tracking, trend analytics or ratings are included.
   - A screen's summary row counts rows the API already returned, for the labels
     on that same screen. That is presentation. Anything genuinely derived still
     comes from the backend (Section 3).

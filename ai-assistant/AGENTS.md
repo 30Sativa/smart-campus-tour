@@ -14,6 +14,17 @@ Read the repo-root `AGENTS.md` first; this file covers only this deploy unit.
 This folder owns STT, campus knowledge/retrieval, dialogue/LLM orchestration,
 TTS and conversational session behaviour.
 
+The Review 1 target in `docs/requirements/campus-tour-scope.md` and
+`docs/decisions/0009-review-1-tour-business-scope.md` is private Q&A scoped to
+the authorized invitation, browser session, Tour, and a snapshot of the
+currently permitted POI context at question time. Recheck current invitation
+and Tour access when accepting a question and before returning its answer; a
+revoked invitation must not receive a late response or start a new Q&A request.
+Each student's Q&A stays private. A “Điểm xem chung” uses one shared
+screen/session, so any answer shown there is shared with that room; it is not a
+count or identity for the students watching. The assistant must never control
+robot movement. This target is not implemented by the current skeleton.
+
 It does not own person detection, obstacle avoidance, navigation goals, speed
 limits or any other movement decision. Those belong to `robot/`. In
 particular, `robot/ros2_ws/src/robot_perception/` is WP3 navigation perception,

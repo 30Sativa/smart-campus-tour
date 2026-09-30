@@ -9,12 +9,44 @@ inside that folder.
 - Backend internals: [`backend/AGENTS.md`](../backend/AGENTS.md)
 - AI tour-guide internals: [`ai-assistant/README.md`](../ai-assistant/README.md)
 - Frontend internals: [`web/AGENTS.md`](../web/AGENTS.md)
+- Business requirements: [`requirements/README.md`](requirements/README.md)
+
+This is the cross-system technical source. For business actors, scope, and
+acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
+the UI flow does not override that scope. Public technical contracts and
+implementation status remain governed here and by the relevant ADR.
 
 The current backend persistence model is defined by
 `backend/database/smart-campus-tour-schema-v1.0.sql` and
 [ADR-0006](decisions/0006-demo-first-tour-schema.md). This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
+
+The group-selected business decisions are recorded in
+[ADR-0009](decisions/0009-review-1-tour-business-scope.md); see the detailed
+scope for their status and user-facing rules. Those decisions do not change the
+public fleet contracts here or the research requirements.
+
+[ADR-0010](decisions/0010-personal-access-code-entry.md) supersedes the earlier
+secret-link entry choice. Planned browser entry is: approved Excel row -> email
+with ordinary Tour page URL and personal access code -> code validation -> one
+active browser session per invitation. A valid existing session avoids repeated
+code entry; the URL alone grants no access. Resending sends the same valid code
+without terminating the session; revoke/reissue invalidates the old code and
+session and sends a new code to the approved email, retaining invitation identity
+and expiry. Representative support is limited to owned groups; Admin supports
+all groups; Staff-only has no recovery privilege. These are planned backend/web
+integration semantics, not implemented API or persistence guarantees. The current
+schema and mock name/class entry still need a dedicated implementation with
+documented contracts, storage, concurrency and revocation tests.
+
+[ADR-0011](decisions/0011-student-data-use-for-tour.md) limits student data to
+registration, invitations and aggregate Tour operational statistics. V1 excludes
+post-Tour admissions contact, CRM and per-person consent workflows. Invitation
+records remain operational data; aggregate counts must not be presented as
+attendance, individual interest or the number of people in a shared viewing room.
+Retention configuration for real deployments remains an operational requirement;
+this decision does not define a new endpoint or schema.
 
 ---
 
