@@ -25,6 +25,21 @@ Scenario orchestration, what-if analysis, replay engines, predictive
 simulation, Isaac Sim, and a stress-test scenario editor are future/stretch
 work, not core requirements.
 
+### Review 1 functional multi-Tour demo target
+
+The accepted product target in `docs/requirements/campus-tour-scope.md` and
+`docs/decisions/0009-review-1-tour-business-scope.md` also calls for one bounded
+functional demo: Tour A is paired with Emulator A and Tour B with Emulator B;
+start both, issue `GoTo`/`Cancel` through the external contract, inject a
+deterministic failure into A, and show that B continues. Each robot identity
+must report synthetic pose, progress and command result correlated to its own
+Tour/robot, without shared mutable progress or cross-Tour commands. This is a
+product demonstration, not a load benchmark or evidence of physical collision
+avoidance, Nav2 quality, or multiple real robots. The current `Program.cs` is a
+runnable skeleton and does not implement this behavior. Before implementing it,
+use the external contract in `docs/architecture.md`; keep this target separate
+from the deferred research tooling below.
+
 ---
 
 ## 2. Stack and layout
@@ -34,8 +49,10 @@ Its future external robot/backend connection will use the official
 `Microsoft.AspNetCore.SignalR.Client` package. Tests live under
 `tests/FleetEmulator.Tests/` and are run through `SmartCampus.DigitalTwin.slnx`.
 
-The current entry point is intentionally only a runnable skeleton. Do not add
-emulator behaviour or research tooling until the external contract is ready.
+The current entry point is intentionally only a runnable skeleton. Functional
+emulator behavior remains a planned Review 1 target; do not start it until the
+external contract is ready. Do not add research tooling or benchmark behavior
+as part of that functional target.
 Research implementation and benchmark execution are deferred until the
 production Remote Tour end-to-end path works. The Capstone documents, including
 the Register's research methodology, remain authoritative and unchanged. All

@@ -9,12 +9,23 @@ inside that folder.
 - Backend internals: [`backend/AGENTS.md`](../backend/AGENTS.md)
 - AI tour-guide internals: [`ai-assistant/README.md`](../ai-assistant/README.md)
 - Frontend internals: [`web/AGENTS.md`](../web/AGENTS.md)
+- Business requirements: [`requirements/README.md`](requirements/README.md)
+
+This is the cross-system technical source. For business actors, scope, and
+acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
+the UI flow does not override that scope. Public technical contracts and
+implementation status remain governed here and by the relevant ADR.
 
 The current backend persistence model is defined by
 `backend/database/smart-campus-tour-schema-v1.0.sql` and
 [ADR-0006](decisions/0006-demo-first-tour-schema.md). This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
+
+The group-selected business decisions are recorded in
+[ADR-0009](decisions/0009-review-1-tour-business-scope.md); see the detailed
+scope for their status and user-facing rules. Those decisions do not change the
+public fleet contracts here or the research requirements.
 
 ---
 
