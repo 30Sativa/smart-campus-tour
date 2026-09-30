@@ -280,8 +280,9 @@ Application persistence abstraction -> Application `PagedResult<T>` -> Api
 validator is implemented yet.
 
 `GlobalExceptionHandler` in Api currently maps Domain and FluentValidation
-exceptions to 400, `NotFoundException` to 404, `ConflictException` to 409,
-and unexpected exceptions to 500. HTTP errors use a `BaseResponse` envelope.
+exceptions to 400, `UnauthorizedException` to 401, `NotFoundException` to
+404, `ConflictException` to 409, and unexpected exceptions to 500. HTTP errors
+use a `BaseResponse` envelope.
 Do not expose stack traces, SQL details, secrets, or visitor personal data in
 responses or logs. Domain and Application code must not throw HTTP-specific
 exceptions.
