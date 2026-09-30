@@ -80,7 +80,7 @@ export default function RepDashboardPage() {
           ) : open.length === 0 ? (
             <EmptyState icon={CalendarDays} title="Chưa có buổi nào đang nhận đăng ký" description="Buổi mới do Admin mở sẽ xuất hiện ở đây. Bạn vẫn xem được các đăng ký đã gửi." />
           ) : (
-            <div className="space-y-3">{open.map((t) => <TourCard key={t.id} tour={t} compact />)}</div>
+            <div className="rep-dashboard-tour-grid">{open.map((t, index) => <TourCard key={t.id} tour={t} visualIndex={index} compact />)}</div>
           )}
         </section>
 

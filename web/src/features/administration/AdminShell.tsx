@@ -30,7 +30,7 @@ export default function AdminShell() {
   const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị Tour'
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#1e293b]">
+    <div className="flex min-h-[100dvh] bg-[#f8fbff] text-[#173b59]">
       <MobileNavToggle open={menuOpen} controls="admin-navigation" label="Mở điều hướng quản trị" closeLabel="Đóng điều hướng quản trị" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
 
       <ConsoleSidebar
@@ -54,8 +54,8 @@ export default function AdminShell() {
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white/85 px-5 backdrop-blur-md lg:px-8">
-          <p className="truncate text-sm font-semibold tracking-[-0.01em] text-[#1e293b]">{title}</p>
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#dbe9f4] bg-white/95 px-5 backdrop-blur-md lg:px-9">
+          <p className="truncate text-sm font-semibold tracking-[-0.01em] text-[#3d6481]">CampusTour <span className="mx-1.5 text-[#a7b8aa]">/</span> {title}</p>
         </header>
 
         <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>

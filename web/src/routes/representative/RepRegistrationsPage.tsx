@@ -20,11 +20,17 @@ export default function RepRegistrationsPage() {
     <RepPage>
       <RepPageHeader
         title="Đăng ký của tôi"
-        description="Mỗi buổi tham quan có một đăng ký của bạn. Mở đăng ký để xem trạng thái duyệt, danh sách học sinh và thông tin tham gia."
+        description="Theo dõi trạng thái xét duyệt, danh sách học sinh và thông tin tham gia của từng đoàn."
         action={<Link to="/dai-dien/buoi" className={buttonClass('secondary', 'lg')}>Xem buổi tham quan</Link>}
       />
 
-      <div className="mb-5">
+      <div className="rep-registration-summary" aria-label="Tổng quan đăng ký">
+        <div><span>Tổng đăng ký</span><strong>{all.length.toString().padStart(2, '0')}</strong></div>
+        <div><span>Chờ duyệt</span><strong>{all.filter((r) => r.state === 'Submitted').length.toString().padStart(2, '0')}</strong></div>
+        <div><span>Đã duyệt</span><strong>{all.filter((r) => r.state === 'Approved').length.toString().padStart(2, '0')}</strong></div>
+      </div>
+
+      <div className="rep-registration-filters mb-5">
         <FilterChips<string>
           label="Lọc theo trạng thái đăng ký"
           value={filter.slug}

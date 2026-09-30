@@ -25,6 +25,10 @@ const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: 
 
 const errorText = (error: unknown) => (error instanceof ApiError && error.body ? error.body : 'Không bắt đầu được buổi. Kiểm tra kết nối rồi thử lại.')
 
+function Fact({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-[#d9e9f5] bg-white px-4 py-3.5"><p className="text-[11px] text-[#859bad]">{label}</p><p className="mt-1 truncate text-sm font-bold text-[#123a59]">{value}</p></div>
+}
+
 /**
  * Pre-start check (scope §5.3). READY was decided by Admin ("Chốt buổi"):
  * content and groups are locked. Here Staff looks at the device side - the
@@ -76,62 +80,58 @@ export default function StartCheckPage() {
         action={<StatusBadge value={data.state} size="md" />}
       />
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]">
-        <div className="space-y-5">
-          <section className={panelClass} aria-label="Robot">
-            <PanelHead title="Robot sẽ nhận khi bắt đầu" description="Buổi không giữ robot trước; backend nhận robot tại thời điểm Start." />
-            <div className="p-5">
-              {robot ? (
-                <>
-                  <RobotHeader robot={robot} />
-                  <div className="mt-3"><RobotTelemetry robot={robot} now={now} /></div>
-                </>
-              ) : <p className="text-sm text-[#8a98ac]">Chưa có dữ liệu robot.</p>}
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Tóm tắt trước khi Start">
+        <Fact label="Tour" value={data.name} />
+        <Fact label="Đoàn đã duyệt" value={`${groups.groups} đoàn`} />
+        <Fact label="Robot" value={robot?.name ?? 'Chưa có'} />
+        <Fact label="Nguồn" value={robot?.source ?? 'Chưa rõ'} />
+      </div>
+
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.85fr)]">
+        <section className={panelClass} aria-label="Điều kiện bắt đầu">
+          <PanelHead title="Điều kiện Start" action={<span className={`rounded-full px-3 py-1 text-xs font-extrabold tabular-nums ${passed === data.startChecks.length ? 'bg-[#e7f4ff] text-[#1f7a55]' : 'bg-[#fff2d9] text-[#8a5a06]'}`}>{passed}/{data.startChecks.length} đạt</span>} />
+          <div className="p-4"><StartChecklist checks={data.startChecks} /></div>
+          <fieldset className="border-t border-[#e0edf6] p-5">
+            <legend className="sr-only">Xác nhận kiểm tra thực tế</legend>
+            <p className="mb-3 text-[11px] font-bold tracking-[0.12em] text-[#859bad] uppercase">Staff xác nhận tại chỗ</p>
+            <div className="space-y-2">
+              {CONFIRMATIONS.map(({ key, label, hint }) => (
+                <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${confirmation[key] ? 'border-[#cde8f6] bg-[#f5faff]' : 'border-[#d9e9f5] hover:border-[#a8cde6]'}`}>
+                  <input type="checkbox" checked={confirmation[key]} onChange={(event) => setConfirmation((value) => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#5b9dc9]" />
+                  <span><span className="block text-[13px] font-bold text-[#173b59]">{label}</span><span className="block text-xs text-[#859bad]">{hint}</span></span>
+                </label>
+              ))}
             </div>
-          </section>
-          <section className={panelClass} aria-label="Đoàn đăng ký">
-            <PanelHead title="Đoàn đã đăng ký" description="Danh sách đã được Admin chốt; Staff chỉ xem." />
-            <div className="p-5"><RegistrationList registrations={data.registrations} /></div>
-          </section>
-        </div>
+          </fieldset>
+          <div className="border-t border-[#e0edf6] p-5">
+            <button type="button" disabled={!canStart || start.isPending} onClick={() => setConfirming(true)} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby={`start-reason-${data.id}`}>
+              <Play size={18} aria-hidden="true" />Bắt đầu buổi
+            </button>
+            <p id={`start-reason-${data.id}`} className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#1f7a55]' : 'text-[#8a5a06]'}`}>
+              {canStart ? `Đủ điều kiện. Khi bắt đầu, backend nhận ${robot?.name ?? 'robot'} và gửi chặng đầu.` : !gate.allowed ? `Chưa thể bắt đầu: ${gate.reason}` : 'Đánh dấu đủ 3 xác nhận tại chỗ để bắt đầu.'}
+            </p>
+          </div>
+        </section>
 
         <aside className="space-y-5">
           <section className={panelClass} aria-label="Preview nguồn hình">
-            <PanelHead title="Preview nguồn hình" action={<StatusBadge value={data.livestream.state} />} />
+            <PanelHead title="Camera / Twin xem trước" action={<StatusBadge value={data.livestream.state} />} />
             <div className="p-4">
-              {QUEST_WHEP_URL ? <QuestLiveVideo label={robot?.name} /> : <LiveCameraPreview livestream={data.livestream} robotName={robot?.name} />}
+              {QUEST_WHEP_URL
+                ? <QuestLiveVideo label={robot?.name} className="!bg-[#edf7ff] [&_[role=status]]:!text-[#285c7d] [&_[role=status]_p]:!text-[#285c7d] [&_[role=status]_svg]:!text-[#5b9dc9] [&_button]:!bg-white [&_button]:!text-[#2d719e] [&_figcaption_span:last-child]:!bg-white [&_figcaption_span:last-child]:!text-[#285c7d]" />
+                : <LiveCameraPreview livestream={data.livestream} robotName={robot?.name} className="!bg-[#edf7ff] [&_div]:!text-[#285c7d] [&_p]:!text-[#285c7d]" />}
             </div>
           </section>
-
-          <section className={panelClass} aria-label="Điều kiện bắt đầu">
-            <PanelHead title="Điều kiện thiết bị" action={<span className={`text-sm font-extrabold tabular-nums ${passed === data.startChecks.length ? 'text-[#1f7a55]' : 'text-[#8a5a06]'}`}>{passed}/{data.startChecks.length} đạt</span>} />
-            <div className="p-4"><StartChecklist checks={data.startChecks} /></div>
-
-            <fieldset className="border-t border-[#edf2fa] p-5">
-              <legend className="sr-only">Xác nhận kiểm tra thực tế</legend>
-              <p className="mb-3 text-[11px] font-bold tracking-[0.06em] text-[#8a98ac] uppercase">Staff xác nhận tại chỗ</p>
-              <div className="space-y-2">
-                {CONFIRMATIONS.map(({ key, label, hint }) => (
-                  <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${confirmation[key] ? 'border-[#cde9dc] bg-[#f5fcf8]' : 'border-[#dce9fb] hover:border-[#b9d3f7]'}`}>
-                    <input type="checkbox" checked={confirmation[key]} onChange={(event) => setConfirmation((value) => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2f62b8]" />
-                    <span><span className="block text-[13px] font-bold text-[#1f314d]">{label}</span><span className="block text-xs text-[#8a98ac]">{hint}</span></span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <div className="border-t border-[#edf2fa] p-5">
-              <button type="button" disabled={!canStart || start.isPending} onClick={() => setConfirming(true)} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby={`start-reason-${data.id}`}>
-                <Play size={18} aria-hidden="true" />Bắt đầu buổi
-              </button>
-              <p id={`start-reason-${data.id}`} className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#1f7a55]' : 'text-[#8a5a06]'}`}>
-                {canStart ? `Đủ điều kiện. Khi bắt đầu, backend nhận ${robot?.name ?? 'robot'} và gửi chặng đầu.` : !gate.allowed ? `Chưa thể bắt đầu: ${gate.reason}` : 'Đánh dấu đủ 3 xác nhận tại chỗ để bắt đầu.'}
-              </p>
-            </div>
+          <section className={panelClass} aria-label="Robot">
+            <PanelHead title="Robot sẽ nhận khi bắt đầu" description="Backend giữ robot tại thời điểm Start." />
+            <div className="p-5">{robot ? <><RobotHeader robot={robot} /><div className="mt-3"><RobotTelemetry robot={robot} now={now} /></div></> : <p className="text-sm text-[#859bad]">Chưa có dữ liệu robot.</p>}</div>
+          </section>
+          <section className={panelClass} aria-label="Đoàn đăng ký">
+            <PanelHead title="Đoàn đã đăng ký" description="Admin đã chốt; Staff chỉ xem." />
+            <div className="p-5"><RegistrationList registrations={data.registrations} /></div>
           </section>
         </aside>
       </div>
-
       <ConfirmationDialog
         open={confirming}
         title={`Bắt đầu ${data.code}?`}

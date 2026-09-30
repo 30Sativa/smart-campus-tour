@@ -11,8 +11,8 @@ const VISUAL = {
     lead: 'Một tài khoản để đặt tour và theo dõi lịch tham quan của bạn.',
   },
   default: {
-    title: 'Khám phá khuôn viên. Trải nghiệm tương lai.',
-    lead: 'Tham quan cùng robot tự hành, khám phá qua bản đồ trực quan và kết nối với khuôn viên thông minh.',
+    title: 'Khám phá khuôn viên từ một điểm chạm.',
+    lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
   },
 } as const
 
@@ -57,12 +57,14 @@ export function AuthLayout() {
       </div>
 
       <section className="auth-visual" aria-hidden="true">
-        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-bg.jpg'} alt="" className="auth-visual__img" fetchPriority="high" />
+        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-smartbus.png'} alt="" className="auth-visual__img" fetchPriority="high" />
         <div className="auth-visual__scrim" />
         <div className="auth-visual__inner">
+          {!onRegister && <p className="auth-visual__eyebrow">CAMPUS TOUR <span /> SMARTBUS</p>}
           <p className="auth-visual__title">{visual.title}</p>
           <p className="auth-visual__lead">{visual.lead}</p>
         </div>
+        {!onRegister && <p className="auth-visual__note">01 / BẮT ĐẦU HÀNH TRÌNH</p>}
       </section>
 
       {/* Development only. A production bundle drops this branch entirely, so
@@ -70,9 +72,10 @@ export function AuthLayout() {
           warning for a production build that still runs on mocks goes to the
           console from `mock-mode.ts`. */}
       {import.meta.env.DEV && (
-        <p className="auth-devbadge" data-dev-only="true">
-          DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.
-        </p>
+        <details className="auth-devbadge" data-dev-only="true">
+          <summary>Dữ liệu mẫu</summary>
+          <p>DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.</p>
+        </details>
       )}
     </main>
   )

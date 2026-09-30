@@ -53,7 +53,7 @@ export default function StaffShell() {
   }, [toast])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fafc] text-[#0f172a]">
+    <div className="flex min-h-[100dvh] bg-[#f8fbff] text-[#173b59]">
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
       <ConsoleSidebar
@@ -78,15 +78,15 @@ export default function StaffShell() {
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white/95 px-5 backdrop-blur-md lg:px-8">
-          <p className="text-sm font-bold text-[#0f172a] lg:hidden">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#dbe9f4] bg-white/95 px-5 backdrop-blur-md lg:px-9">
+          <p className="text-sm font-bold text-[#173b59] lg:hidden">
             {STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'}
           </p>
           <span
             role="status"
             className={`hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-bold sm:inline-flex ${
               connection === 'connected'
-                ? 'bg-[#ecfdf5] text-[#16a34a] border border-[#a7f3d0]'
+                ? 'bg-[#e7f4ff] text-[#2b80ac] border border-[#cfe7c4]'
                 : connection === 'disconnected'
                 ? 'bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]'
                 : 'bg-[#fffbeb] text-[#d97706] border border-[#fde68a]'
@@ -101,7 +101,7 @@ export default function StaffShell() {
             <Link
               to={runningTour ? `/staff/live/${runningTour.id}` : '/staff/live'}
               aria-label={assistCount > 0 ? `Điều hành trực tiếp, ${assistCount} buổi cần hỗ trợ` : 'Điều hành trực tiếp'}
-              className="relative grid size-9.5 shrink-0 place-items-center rounded-xl border border-[#e2e8f0] bg-white text-[#64748b] hover:border-[#cbd5e1] hover:text-[#2563eb] hover:bg-[#f8fafc] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]"
+              className="relative grid size-9.5 shrink-0 place-items-center rounded-xl border border-[#d9e9f5] bg-white text-[#607f93] hover:border-[#a8cde6] hover:text-[#2d78a9] hover:bg-[#f1f8fe] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]"
             >
               <Bell size={17} aria-hidden="true" />
               {assistCount > 0 && (
@@ -116,7 +116,7 @@ export default function StaffShell() {
 
             {/* The signed-in account, top right. Sign-out stays in the sidebar. */}
             <div role="group" className="flex min-w-0 items-center gap-2.5 border-l border-[#e2e8f0] pl-3" aria-label="Tài khoản đang đăng nhập">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Radio size={16} aria-hidden="true" /></span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#e3f2ff] text-[#2b6c98]"><Radio size={16} aria-hidden="true" /></span>
               <div className="hidden min-w-0 sm:block">
                 <p className="max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username || 'Nhân viên vận hành'}</p>
                 <p className="max-w-40 truncate text-[11px] leading-tight text-[#94a3b8]">{roleLabel(user?.role)}</p>

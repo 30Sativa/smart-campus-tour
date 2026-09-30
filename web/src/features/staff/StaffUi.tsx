@@ -7,7 +7,7 @@ import { dotClass, statusInfo, toneClass, type StatusTone } from './status'
 import { buttonClass, inputClass } from './ui-classes'
 
 export const panelClass =
-  'overflow-hidden rounded-2xl border border-[var(--ops-border,#e2e8f0)] bg-white shadow-xs transition-[box-shadow,border-color] duration-200'
+  'overflow-hidden rounded-[18px] border border-[var(--ops-border,#d9e9f5)] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[box-shadow,border-color] duration-200'
 
 /**
  * The page's own heading. Eyebrow, title and supporting line each say something new.
@@ -29,17 +29,17 @@ export function PageHeader({
   return (
     <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
       <div>
-        <p className={`font-bold tracking-[0.12em] text-[#2563eb] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>
+        <p className={`font-bold tracking-[0.15em] text-[#4388b4] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>
           {eyebrow}
         </p>
         <h1
-          className={`mt-1.5 font-bold tracking-tight text-[#0f172a] ${
-            console_ ? 'text-[26px] leading-[1.15] sm:text-[30px] lg:text-[32px]' : 'text-2xl sm:text-[26px]'
+          className={`mt-1.5 font-bold tracking-[-0.055em] text-[#123a59] ${
+            console_ ? 'text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]' : 'text-[28px] sm:text-[34px]'
           }`}
         >
           {title}
         </h1>
-        <p className={`mt-1.5 max-w-3xl text-[#64748b] ${console_ ? 'text-sm sm:text-[15px] leading-relaxed' : 'text-sm leading-6'}`}>
+        <p className={`mt-1.5 max-w-3xl text-[#738da2] ${console_ ? 'text-sm sm:text-[15px] leading-relaxed' : 'text-sm leading-6'}`}>
           {description}
         </p>
       </div>
@@ -149,7 +149,7 @@ export function StaffPage({
   className?: string
 }) {
   return (
-    <div className={`min-h-full bg-[#f8fafc] px-4 py-6 sm:px-6 lg:px-8 lg:py-7 ${className}`}>
+    <div className={`min-h-full bg-[#f8fbff] px-4 py-6 sm:px-6 lg:px-9 lg:py-8 ${className}`}>
       <div
         className={`mx-auto w-full transition-[opacity,translate] duration-300 ease-out starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-none ${
           wide ? 'max-w-[1600px]' : 'max-w-[1440px]'
@@ -330,13 +330,13 @@ export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: st
       {hint && <span className="mt-1.5 block truncate text-xs text-[#94a3b8]">{hint}</span>}
     </>
   )
-  const shape = 'block rounded-xl px-3 py-3'
+  const shape = 'block rounded-2xl border border-[#d9e9f5] bg-white px-4 py-4 shadow-[0_12px_32px_-30px_#285c7d]'
   if (!to) return <div className={shape}>{body}</div>
   return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#f8fafc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]`}>{body}</Link>
 }
 
 export function StatStrip({ label, children, columns = 'sm:grid-cols-3 xl:grid-cols-6' }: { label: string; children: ReactNode; columns?: string }) {
-  return <section aria-label={label} className={`grid grid-cols-2 gap-1 rounded-2xl border border-[#e2e8f0] bg-white p-2 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${columns}`}>{children}</section>
+  return <section aria-label={label} className={`grid grid-cols-2 gap-3 ${columns}`}>{children}</section>
 }
 
 /** A section title that sits above its panel, so the panel itself carries no header chrome. */
