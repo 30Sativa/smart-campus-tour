@@ -27,6 +27,19 @@ The group-selected business decisions are recorded in
 scope for their status and user-facing rules. Those decisions do not change the
 public fleet contracts here or the research requirements.
 
+[ADR-0010](decisions/0010-personal-access-code-entry.md) supersedes the earlier
+secret-link entry choice. Planned browser entry is: approved Excel row -> email
+with ordinary Tour page URL and personal access code -> code validation -> one
+active browser session per invitation. A valid existing session avoids repeated
+code entry; the URL alone grants no access. Resending sends the same valid code
+without terminating the session; revoke/reissue invalidates the old code and
+session and sends a new code to the approved email, retaining invitation identity
+and expiry. Representative support is limited to owned groups; Admin supports
+all groups; Staff-only has no recovery privilege. These are planned backend/web
+integration semantics, not implemented API or persistence guarantees. The current
+schema and mock name/class entry still need a dedicated implementation with
+documented contracts, storage, concurrency and revocation tests.
+
 ---
 
 ## 1. Components and ownership

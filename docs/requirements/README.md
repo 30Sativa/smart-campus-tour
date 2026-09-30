@@ -24,6 +24,8 @@ work, and out-of-scope work are not interchangeable.
   contracts and accepted decisions. A business change that alters a public
   technical contract must be reconciled there before implementation.
 - ADR-0009 records the Review 1 business decisions selected by the group.
+  ADR-0010 replaces its secret-link entry with a Tour page link and personal
+  access code, exchanged for a browser session after validation.
   The advisor will review them at Review 2; do not describe that as prior
   approval. The live-versus-video experience evaluation remains optional and
   pending confirmation as described in the detailed scope.
