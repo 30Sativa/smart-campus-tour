@@ -3,7 +3,7 @@ using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Persistence;
 
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.Seeding;
 
 public enum InitialAdminSeedResult
 {

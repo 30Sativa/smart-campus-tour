@@ -2,7 +2,6 @@ import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
-import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { areaById, type AreaId } from '../../auth/access'
@@ -84,6 +83,10 @@ function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
 }
 
+function AuthSessionFallback() {
+  return <div className="min-h-[100dvh] grid place-items-center" role="status" aria-live="polite">Đang kiểm tra phiên đăng nhập...</div>
+}
+
 /**
  * Real navigation block, not a hidden nav link.
  *
@@ -98,9 +101,11 @@ function ShellFallback({ background }: { background: string }) {
  */
 function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isAuthReady = useAuthStore((state) => state.isAuthReady)
   const role = useAuthStore((state) => state.user?.role)
   const location = useLocation()
 
+  if (!isAuthReady) return <AuthSessionFallback />
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (!areaById(area).allows(role)) return <Navigate to={homePathForRole(role)} replace />
   return <>{children}</>
@@ -164,13 +169,11 @@ export const routes = [
       </Suspense>
     ),
   },
-  // One layout, two children: the photograph and the brand stay mounted while
-  // the form swaps, which is what the sign-in/sign-up crossfade animates.
+  // Keep the sign-in composition mounted while its route content renders.
   {
     element: <AuthLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
     ],
   },
   // Students: join with the group code, then waiting room, live and end (no account).

@@ -372,7 +372,7 @@ Feedback/rating không có FR trong phiếu v1.2 đã đối chiếu, giữ Futu
 - Mọi mutation bị từ chối do dữ liệu/quyền/state đã đổi phải hiển thị thông báo, tải lại dữ liệu và cho người dùng kiểm tra trước khi thử lại. Áp dụng cả Approve, READY, Hủy/Start và sửa roster.
 - Hoàn thành bình thường: backend giải phóng robot sau bằng chứng tới điểm cuối, dừng và sẵn sàng. UI hiển thị trạng thái robot mới; không cần Staff bấm hoàn tất mỗi buổi.
 - Sau End Early/lỗi: Dashboard hiện robot cần kiểm tra. Action “Xác nhận robot sẵn sàng” yêu cầu Staff xác nhận thực tế; backend phải đối chiếu nhiệm vụ cũ đã kết thúc/hủy, robot đã dừng và đủ điều kiện trước khi giải phóng. Không phải nút gỡ khóa vô điều kiện. Đây là lựa chọn thiết kế bổ sung; hợp đồng với robot/backend chưa triển khai.
-- Dùng quản trị account tối thiểu để Admin tạo/cấp quyền Staff/đại diện và khóa/mở. Demo dùng account trong bộ nhớ, không thay thế xác thực thật. Không thêm đăng ký account Student.
+- Dùng quản trị account tối thiểu để Admin tạo/cấp quyền Staff/đại diện và khóa/mở. Không thêm đăng ký account Student.
 
 ### 10.2 Điểm còn mở và giới hạn cập nhật
 

@@ -3,8 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Persistence;
-using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication.PasswordHashing;
+using SmartCampus.Infrastructure.Authentication.Seeding;
+using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 using SmartCampus.Infrastructure.Persistence;
+using SmartCampus.Infrastructure.Persistence.Repositories;
 
 namespace SmartCampus.Infrastructure;
 
@@ -29,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<InitialAdminSeeder>();
 
         return services;

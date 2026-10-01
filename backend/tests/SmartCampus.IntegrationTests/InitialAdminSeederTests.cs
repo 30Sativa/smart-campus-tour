@@ -5,7 +5,9 @@ using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Domain.Entities;
-using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Authentication.PasswordHashing;
+using SmartCampus.Infrastructure.Authentication.Seeding;
+using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.IntegrationTests;

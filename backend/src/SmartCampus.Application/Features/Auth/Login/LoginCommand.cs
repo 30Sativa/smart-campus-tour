@@ -2,6 +2,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Auth.Login;
@@ -33,7 +34,7 @@ public sealed class LoginCommandHandler(
         if (!user.IsActive)
             throw new ForbiddenException("Account cannot access the system.");
 
-        var role = AuthRole.Resolve(user.UserRoles.Select(userRole => userRole.Role));
+        var role = ApplicationRoles.Resolve(user.UserRoles.Select(userRole => userRole.Role));
         var now = timeProvider.GetUtcNow();
         var refreshToken = authTokenService.CreateRefreshToken();
         var refreshExpiresAt = now.Add(RefreshTokenLifetime);

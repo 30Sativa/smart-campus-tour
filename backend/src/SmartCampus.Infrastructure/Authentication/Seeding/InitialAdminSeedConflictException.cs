@@ -1,4 +1,4 @@
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.Seeding;
 
 public sealed class InitialAdminSeedConflictException(string message)
     : InvalidOperationException(message);

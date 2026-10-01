@@ -16,21 +16,19 @@ npm run dev               # http://localhost:5173
 
 | Variable | Meaning | Example |
 |---|---|---|
-| `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `http://localhost:5000` |
+| `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `http://localhost:5246` |
 
-The auth and operations endpoints do not exist yet, so **every screen runs on the
-labelled fixtures in `src/mocks/`**. There is no flag: the switch was removed on
-2026-09-18 because it only ever had one working position. `VITE_API_BASE_URL` is
-still read by `src/api/client.ts` and the SignalR hub factory, so set it once the
-backend exists. Turning the real path back on is one binding in
-`src/features/staff/staff-hooks.ts` plus the auth calls - see
-`src/mocks/mock-mode.ts`.
+Login, refresh and logout use the backend through `/api/auth/*`; configure
+`VITE_API_BASE_URL` for the API host. Access tokens stay in memory and the
+backend refresh cookie restores a session after reload. Business features that
+do not yet have live API bindings continue to use labelled fixtures in
+`src/mocks/`.
 
 Fixtures are a data source, not a fallback: nothing here is served in response to
 a failed request.
 
-Sample accounts, mock mode only: `admin/admin` lands on `/admin`, `staff/staff`
-lands on `/staff`. Sign-up mints a Visitor and lands on `/`.
+Sign-in requires an account provisioned by the system. There is no public
+self-registration route. The business fixtures do not provide login accounts.
 
 `VITE_*` values ship to the browser, so never put a secret in one.
 
@@ -47,8 +45,8 @@ lands on `/staff`. Sign-up mints a Visitor and lands on `/`.
 
 ## Robot simulator preview
 
-Open `/staff/digital-twin` after signing in with the local demo account
-`staff/staff`. The preview shows the supplied campus map and `robot_01` following
+Open `/staff/digital-twin` after signing in with a provisioned Staff account.
+The preview shows the supplied campus map and `robot_01` following
 a synthetic circular route. Playback starts paused; play/pause, reset,
 0.5×/1×/2× playback and an overhead camera are available. These controls only
 affect the browser preview and send no robot commands. A WebGL-capable browser

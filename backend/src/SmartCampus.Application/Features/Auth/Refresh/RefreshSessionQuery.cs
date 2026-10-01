@@ -2,6 +2,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Common.Authentication;
 
 namespace SmartCampus.Application.Features.Auth.Refresh;
 
@@ -35,7 +36,7 @@ public sealed class RefreshSessionQueryHandler(
         if (!user.IsActive)
             throw new ForbiddenException("Account cannot access the system.");
 
-        var role = AuthRole.Resolve(user.UserRoles.Select(userRole => userRole.Role));
+        var role = ApplicationRoles.Resolve(user.UserRoles.Select(userRole => userRole.Role));
         return new AuthSessionResult(
             user.Id,
             user.Username,

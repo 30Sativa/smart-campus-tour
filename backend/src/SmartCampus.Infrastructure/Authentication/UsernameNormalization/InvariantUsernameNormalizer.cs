@@ -1,6 +1,6 @@
 using SmartCampus.Application.Common.Abstractions.Authentication;
 
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 
 public sealed class InvariantUsernameNormalizer : IUsernameNormalizer
 {

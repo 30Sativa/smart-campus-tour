@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.PasswordHashing;
 
 public sealed class IdentityPasswordHasher : IPasswordHasher
 {

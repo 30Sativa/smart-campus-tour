@@ -2,7 +2,8 @@ using SmartCampus.Api;
 using SmartCampus.Application;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
-using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 

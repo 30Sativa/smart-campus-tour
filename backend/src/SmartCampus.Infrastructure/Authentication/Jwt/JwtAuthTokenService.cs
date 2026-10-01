@@ -5,7 +5,7 @@ using System.Text;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using Microsoft.IdentityModel.Tokens;
 
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.Jwt;
 
 public sealed class JwtAuthTokenService(JwtTokenSettings settings) : IAuthTokenService
 {

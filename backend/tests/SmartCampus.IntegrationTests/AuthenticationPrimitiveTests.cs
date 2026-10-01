@@ -1,5 +1,7 @@
 using SmartCampus.Application.Common.Abstractions.Authentication;
-using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication.PasswordHashing;
+using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 
 namespace SmartCampus.IntegrationTests;
 

@@ -269,15 +269,51 @@ Normal API startup requires `Authentication:Jwt:SigningKey` from environment,
 User Secrets, or another external configuration source. It must contain at
 least 32 UTF-8 bytes. The explicit initial-admin seed command exits before
 starting HTTP and does not require the signing key. Isolated development
-SimulationPreview also skips JWT middleware and persistence setup, so it does
-not validate that key; use normal API mode for auth endpoints. In Development,
-CORS allows the explicit
+SimulationPreview also skips JWT middleware and persistence setup. Repository-
+dependent Application handlers fail service validation before the host starts
+in this mode, so it does not serve Auth or account API controllers; use normal
+API mode for those endpoints. In Development, CORS allows the explicit
 `http://localhost:5173` origin with credentials; production origins must be
 configured explicitly, with no wildcard.
 
-These endpoints implement login/session issuance only. They do not implement
-account-management screens, authorization policies for future business APIs,
-or robot/fleet machine authentication.
+### 3.0.1 Admin account management (V1)
+
+The following endpoints require the `Admin` role:
+
+| Endpoint | Request and success | Rejection behavior |
+|---|---|---|
+| `GET /api/admin/accounts` | Optional `search`, `sort`, `page`, and `size` query parameters; HTTP 200 with safe account summaries and pagination metadata. | Invalid page, size, sort, or non-empty `expand`: 400. Anonymous: 401. Non-Admin: 403. |
+| `POST /api/admin/accounts` | JSON `{ "username": "...", "fullName": "...", "role": "Staff", "initialPassword": "..." }`; HTTP 200 with the created account summary. | Invalid input or unsupported role: 400. Anonymous: 401. Non-Admin: 403. Duplicate normalized username: 409. |
+| `POST /api/admin/accounts/{id}/deactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
+| `POST /api/admin/accounts/{id}/reactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
+
+For example: `GET /api/admin/accounts?page=1&size=20`. The response pagination
+metadata calls this value `pageSize`.
+
+Account listing searches only username and full name. It accepts one sort key:
+`username`, `fullName`, `role`, `isActive`, `createdAt`, or `updatedAt`; prefix
+the key with `-` for descending order. `page` defaults to 1; `size` defaults to
+20 and is limited to 1–100. The default ordering is `createdAt` ascending, then
+`id` ascending. Every explicit sort also uses `id` ascending as a tie-breaker;
+role sorting uses the stored role code. A non-empty `expand` is rejected with
+400. Fields/select, expansion, and OData are not supported.
+
+Each valid account has exactly one supported role. If a stored role assignment
+is missing, has multiple roles, or contains an unsupported role code, listing
+still succeeds and returns `role: null` for that row. Lifecycle operations on
+such a row fail closed with 403. Admin accounts are provisioned only through
+`InitialAdminSeeder`; the API does not create or lifecycle-manage Admin
+accounts. The initial password is entered by Admin and handed off outside the
+system; password reset, forced change, forgot-password, and email provisioning
+are not provided.
+
+Deactivation blocks future login and refresh and revokes active refresh tokens.
+Authenticated requests do not query account state: an already-issued access
+JWT may remain usable until its natural expiry (about 15 minutes plus validation
+clock skew). This is the accepted V1 limitation; no token version or blacklist
+is used.
+
+### 3.1 Fleet contract
 
 **Decided contract, implementation and compatibility checkpoint pending:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
@@ -355,7 +391,7 @@ The navigation MVP has no manual drive, raw `/cmd_vel`, cloud E-stop, or Head
 command. Head support remains separate despite the existing frontend/schema
 references; this MVP does not complete the full remote-tour feature set.
 
-### 3.1 POI target invariant
+#### 3.1.1 POI target invariant
 
 Production target poses belong to backend-managed `Route` and `Poi` data.
 `Route` stores its map key/frame and start pose, plus an end mode and optional

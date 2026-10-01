@@ -2,7 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
-namespace SmartCampus.Infrastructure.Authentication;
+namespace SmartCampus.Infrastructure.Authentication.Jwt;
 
 public sealed class JwtTokenSettings(IConfiguration configuration)
 {

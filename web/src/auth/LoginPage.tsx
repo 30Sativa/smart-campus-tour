@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { CircleAlert } from 'lucide-react'
-import { ApiError } from '../api/client'
+import { ArrowRight, CircleAlert } from 'lucide-react'
+import { ApiError, login } from '../api/client'
 import { useAuthStore } from '../stores/auth-store'
 import { landingPathAfterLogin } from './access'
-import { MockAuthError, mockLogin } from '../mocks/auth-mock'
 import { AuthField, AuthPasswordField } from './AuthFields'
 import { prepareSplitExit } from './split-exit'
 
@@ -40,7 +39,7 @@ export default function LoginPage() {
     try {
       setApiError('')
       setInvalidCredentials(false)
-      const response = await mockLogin(username, password)
+      const response = await login(username, password)
 
       setAuth(response.accessToken, {
         userId: response.userId,
@@ -55,7 +54,7 @@ export default function LoginPage() {
       const split = prepareSplitExit()
       navigate(landingPathAfterLogin(response.role, from), { replace: true, viewTransition: split })
     } catch (error) {
-      if (error instanceof MockAuthError || (error instanceof ApiError && error.status === 401)) {
+      if (error instanceof ApiError && error.status === 401) {
         setInvalidCredentials(true)
         setApiError('Tên đăng nhập hoặc mật khẩu không chính xác.')
       } else if (error instanceof ApiError && error.status === 403) {
@@ -70,8 +69,9 @@ export default function LoginPage() {
 
   return (
     <>
-      <h1 className="auth-title">Chào mừng bạn trở lại</h1>
-      <p className="auth-lead">Đăng nhập để tiếp tục sử dụng Smart Campus Tour.</p>
+      <p className="auth-form-eyebrow"><span /> CỔNG TRẢI NGHIỆM CAMPUS</p>
+      <h1 className="auth-title" aria-label="Chào mừng bạn trở lại"><span>Chào mừng bạn </span><span>trở lại</span></h1>
+      <p className="auth-lead">Đăng nhập để tiếp tục hành trình cùng CampusTour.</p>
 
       {apiError && (
         <div id="login-error" ref={alertRef} role="alert" tabIndex={-1} className="auth-alert auth-alert--login">
@@ -120,12 +120,10 @@ export default function LoginPage() {
         <button type="submit" className="auth-submit" disabled={isSubmitting} aria-busy={isSubmitting}>
           {isSubmitting && <span className="auth-spinner" aria-hidden="true" />}
           {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          {!isSubmitting && <ArrowRight size={19} strokeWidth={2} aria-hidden="true" />}
         </button>
       </form>
 
-      <p className="auth-switch">
-        Chưa có tài khoản? <Link to="/register" viewTransition>Đăng ký</Link>
-      </p>
     </>
   )
 }

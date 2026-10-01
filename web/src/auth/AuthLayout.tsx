@@ -1,27 +1,16 @@
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet } from 'react-router'
 import { ArrowLeft } from 'lucide-react'
-import { MOCK_ACCOUNTS_HINT } from '../mocks/auth-mock'
 import '../features/landing/landing.css'
 import './auth.css'
 
-/** Copy over the photograph, per route. One sentence, no technical vocabulary. */
 const VISUAL = {
-  '/register': {
-    title: 'Bắt đầu hành trình khám phá khuôn viên.',
-    lead: 'Một tài khoản để đặt tour và theo dõi lịch tham quan của bạn.',
-  },
-  default: {
-    title: 'Khám phá khuôn viên. Trải nghiệm tương lai.',
-    lead: 'Tham quan cùng robot tự hành, khám phá qua bản đồ trực quan và kết nối với khuôn viên thông minh.',
-  },
+  title: 'Khám phá khuôn viên từ một điểm chạm.',
+  lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
 } as const
 
 /**
- * The shell both auth pages share, so sign-in and sign-up cannot drift apart.
- *
- * It is a *route layout*: `/login` and `/register` render into the `Outlet`, so
- * moving between them leaves the photograph and the brand mounted and only the
- * form changes.
+ * The sign-in shell shares the brand, photograph and theme tokens with the
+ * public landing page.
  *
  * Split screen: the form column on the left, one full-bleed campus photograph
  * on the right (from `lg`). The photograph is decorative, so it is
@@ -32,12 +21,8 @@ const VISUAL = {
  * light/dark switch come from.
  */
 export function AuthLayout() {
-  const { pathname } = useLocation()
-  const onRegister = pathname === '/register'
-  const visual = onRegister ? VISUAL['/register'] : VISUAL.default
-
   return (
-    <main className="lp auth" data-page={onRegister ? 'register' : 'login'}>
+    <main className="lp auth" data-page="login">
       <div className="auth-panel">
         <div className="auth-col">
           <Link to="/" className="auth-brand">
@@ -57,22 +42,23 @@ export function AuthLayout() {
       </div>
 
       <section className="auth-visual" aria-hidden="true">
-        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-bg.jpg'} alt="" className="auth-visual__img" fetchPriority="high" />
+        <img src="/images/login-smartbus.png" alt="" className="auth-visual__img" fetchPriority="high" />
         <div className="auth-visual__scrim" />
         <div className="auth-visual__inner">
-          <p className="auth-visual__title">{visual.title}</p>
-          <p className="auth-visual__lead">{visual.lead}</p>
+          <p className="auth-visual__eyebrow">CAMPUS TOUR <span /> SMARTBUS</p>
+          <p className="auth-visual__title">{VISUAL.title}</p>
+          <p className="auth-visual__lead">{VISUAL.lead}</p>
         </div>
+        <p className="auth-visual__note">01 / BẮT ĐẦU HÀNH TRÌNH</p>
       </section>
 
-      {/* Development only. A production bundle drops this branch entirely, so
-          no visitor ever sees build state in the sign-in UI. The equivalent
-          warning for a production build that still runs on mocks goes to the
-          console from `mock-mode.ts`. */}
+      {/* Business fixtures remain visible during development; sign-in itself
+          uses the backend. */}
       {import.meta.env.DEV && (
-        <p className="auth-devbadge" data-dev-only="true">
-          DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.
-        </p>
+        <details className="auth-devbadge" data-dev-only="true">
+          <summary>Dữ liệu nghiệp vụ mẫu</summary>
+          <p>DEV: các màn nghiệp vụ chưa nối backend vẫn dùng dữ liệu mẫu.</p>
+        </details>
       )}
     </main>
   )

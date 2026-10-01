@@ -6,8 +6,7 @@
  * prefers reduced motion, the navigation simply happens without it.
  *
  * The attribute on <html> is what gives the two halves their transition
- * names, so the split only runs for this navigation and never for the
- * sign-in / sign-up switch.
+ * names, so the split only runs for this navigation.
  */
 const SPLIT_MS = 1200
 

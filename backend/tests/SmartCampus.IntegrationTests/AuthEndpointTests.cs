@@ -9,7 +9,9 @@ using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication.PasswordHashing;
+using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.IntegrationTests;

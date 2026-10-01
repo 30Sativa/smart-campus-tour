@@ -452,9 +452,8 @@ _to_delete/
 # Machine-local, never commit — see robot/docker-compose.yml comments.
 .env
 
-# Backend machine-local development configuration. Keep secrets and local
-# connection strings out of Git; production settings come from environment variables.
-/backend/src/SmartCampus.Api/appsettings.Development.json
+# Backend machine-local development configuration may contain secrets.
+# Store them in User Secrets or environment variables.
 
 # Repository-owned campus model assets (not Visual Studio build output).
 !robot/ros2_ws/src/simulation/models/campus_map/model.sdf
