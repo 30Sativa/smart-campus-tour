@@ -29,7 +29,7 @@ export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   json?: unknown
 }
 
-type RefreshResponse = {
+export type AuthResponse = {
   accessToken: string
   userId: string
   username: string
@@ -41,20 +41,42 @@ type RefreshResponse = {
  * promise is what callers await, so a failed refresh rejects every waiter
  * instead of leaving them pending forever.
  */
-let refreshInFlight: Promise<string> | null = null
+let refreshInFlight: Promise<AuthResponse> | null = null
 
-async function refreshAccessToken(): Promise<string> {
+async function requestRefresh(): Promise<AuthResponse> {
   // credentials: 'include' sends the HttpOnly refresh cookie.
   const response = await fetch(apiUrl('/api/auth/refresh'), { method: 'POST', credentials: 'include' })
   if (!response.ok) throw new ApiError(response.status, await response.text().catch(() => ''))
 
-  const data = (await response.json()) as RefreshResponse
+  const data = (await response.json()) as AuthResponse
+  if (!isAuthResponse(data)) throw new Error('Invalid authentication response')
   useAuthStore.getState().setAuth(data.accessToken, {
     userId: data.userId,
     username: data.username,
     role: data.role,
   })
-  return data.accessToken
+  return data
+}
+
+function refreshSession(): Promise<AuthResponse> {
+  refreshInFlight = refreshInFlight ?? requestRefresh().finally(() => { refreshInFlight = null })
+  return refreshInFlight
+}
+
+function isAuthResponse(value: unknown): value is AuthResponse {
+  if (typeof value !== 'object' || value === null) return false
+  const response = value as Partial<AuthResponse>
+  return typeof response.accessToken === 'string'
+    && response.accessToken.length > 0
+    && typeof response.userId === 'string'
+    && response.userId.length > 0
+    && typeof response.username === 'string'
+    && response.username.length > 0
+    && ['Admin', 'Staff', 'Representative'].includes(response.role ?? '')
+}
+/** Re-derive the in-memory session from the HttpOnly cookie after a page load. */
+export async function restoreAuthSession(): Promise<void> {
+  await refreshSession()
 }
 
 export async function apiClient<T>(
@@ -76,8 +98,7 @@ export async function apiClient<T>(
 
   if (response.status === 401 && !path.startsWith('/api/auth/')) {
     try {
-      refreshInFlight = refreshInFlight ?? refreshAccessToken().finally(() => { refreshInFlight = null })
-      response = await doRequest(await refreshInFlight)
+      response = await doRequest((await refreshSession()).accessToken)
     } catch {
       useAuthStore.getState().logout()
     }
@@ -93,4 +114,15 @@ export async function apiClient<T>(
 
   const body = await response.text()
   return body.trim() ? (JSON.parse(body) as T) : (undefined as T)
+}
+
+/** Authenticate an account and accept only the three roles supported by Auth V1. */
+export async function login(username: string, password: string): Promise<AuthResponse> {
+  const response = await apiClient<unknown>('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    json: { username, password },
+  })
+  if (!isAuthResponse(response)) throw new Error('Invalid authentication response')
+  return response
 }

@@ -17,8 +17,11 @@ the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
 The current backend persistence model is defined by
-`backend/database/smart-campus-tour-schema-v1.0.sql` and
-[ADR-0006](decisions/0006-demo-first-tour-schema.md). This document also
+`backend/database/smart-campus-tour-schema-v1.1.sql` and
+[ADR-0012](decisions/0012-v1-1-schema-and-operation-scope.md). It is scaffolded
+to EF and applied to the local development database `SmartCampusTourV11` on
+SQL Server `localhost,1433`; it does not migrate existing data. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
+records the superseded v1.0 baseline. This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
 
@@ -233,6 +236,93 @@ Two further namespace notes, both load-bearing:
 
 ## 3. Backend-owned tour orchestration and fleet contract
 
+### 3.0 User account authentication API (implemented)
+
+The backend implements login and refresh-session endpoints for the three
+account roles `ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`. Each V1 account
+must have exactly one supported role. An account with no role, more than one
+role, or an unsupported role is denied with HTTP 403; a human who needs more
+than one application role uses separate accounts. This is an application
+authentication rule; the existing `(UserId, Role)` database primary key is
+unchanged. [ADR-0013](decisions/0013-single-application-role-per-account.md)
+records the reason for this single-role V1 contract. Student invitation access
+uses browser sessions, not an account role.
+
+| Endpoint | Request and success | Rejection behavior |
+|---|---|---|
+| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
+| `POST /api/auth/refresh` | No body; reads the refresh cookie. HTTP 200 returns the same response fields and re-sets the same refresh token with its stored expiry. Tokens are not rotated. | Missing, unknown, expired, or revoked refresh token: 401. Inactive account or invalid role assignment: 403. Rejected refresh clears the cookie. |
+| `POST /api/auth/logout` | No body; HTTP 204 and clears the cookie. A matching stored token is marked revoked. Missing, unknown, or already revoked tokens are an idempotent no-op. | An unexpected persistence failure uses the common error response and still clears the cookie. |
+
+Login and account creation require usernames to be non-empty, at most 100
+characters, and contain no Unicode whitespace, including leading/trailing
+spaces, tabs, and non-breaking spaces. Initial Admin provisioning also rejects
+whitespace in its configured username. These entry points reject whitespace
+rather than trimming it. Username lookup remains case-insensitive;
+passwords are passed unchanged. Existing stored usernames are not migrated by
+this change; a username containing whitespace cannot be used in a login request.
+
+Application exceptions use the common JSON envelope with `success: false`, a
+message, null data, and optional errors. Login failures do not create a refresh
+token. Refresh tokens are cryptographically random, stored only as SHA-256
+hashes in `RefreshTokens`, and live for 7 days. The cookie is named
+`campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
+`Path=/api/auth`. Access tokens are 15-minute HS256 JWTs with configured issuer
+and audience (defaults `SmartCampus.Api` and `SmartCampus.Web`); their user
+identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, or
+`Representative`), alongside registered issuer/audience/time claims. They
+contain no username, full name, email, or other personal data.
+
+Normal API startup requires `Authentication:Jwt:SigningKey` from environment,
+User Secrets, or another external configuration source. It must contain at
+least 32 UTF-8 bytes. The explicit initial-admin seed command exits before
+starting HTTP and does not require the signing key. Isolated development
+SimulationPreview also skips JWT middleware and persistence setup. Repository-
+dependent Application handlers fail service validation before the host starts
+in this mode, so it does not serve Auth or account API controllers; use normal
+API mode for those endpoints. In Development, CORS allows the explicit
+`http://localhost:5173` origin with credentials; production origins must be
+configured explicitly, with no wildcard.
+
+### 3.0.1 Admin account management (V1)
+
+The following endpoints require the `Admin` role:
+
+| Endpoint | Request and success | Rejection behavior |
+|---|---|---|
+| `GET /api/admin/accounts` | Optional `search`, `sort`, `page`, and `size` query parameters; HTTP 200 with safe account summaries and pagination metadata. | Invalid page, size, sort, or non-empty `expand`: 400. Anonymous: 401. Non-Admin: 403. |
+| `POST /api/admin/accounts` | JSON `{ "username": "...", "fullName": "...", "role": "Staff", "initialPassword": "..." }`; HTTP 200 with the created account summary. | Invalid input or unsupported role: 400. Anonymous: 401. Non-Admin: 403. Duplicate normalized username: 409. |
+| `POST /api/admin/accounts/{id}/deactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
+| `POST /api/admin/accounts/{id}/reactivate` | No body; HTTP 200 after a state change or idempotent no-op. | Anonymous: 401. Non-Admin or forbidden target: 403. Missing target: 404. |
+
+For example: `GET /api/admin/accounts?page=1&size=20`. The response pagination
+metadata calls this value `pageSize`.
+
+Account listing searches only username and full name. It accepts one sort key:
+`username`, `fullName`, `role`, `isActive`, `createdAt`, or `updatedAt`; prefix
+the key with `-` for descending order. `page` defaults to 1; `size` defaults to
+20 and is limited to 1–100. The default ordering is `createdAt` ascending, then
+`id` ascending. Every explicit sort also uses `id` ascending as a tie-breaker;
+role sorting uses the stored role code. A non-empty `expand` is rejected with
+400. Fields/select, expansion, and OData are not supported.
+
+Each valid account has exactly one supported role. If a stored role assignment
+is missing, has multiple roles, or contains an unsupported role code, listing
+still succeeds and returns `role: null` for that row. Lifecycle operations on
+such a row fail closed with 403. Admin accounts are provisioned only through
+`InitialAdminSeeder`; the API does not create or lifecycle-manage Admin
+accounts. The initial password is entered by Admin and handed off outside the
+system; password reset, forced change, forgot-password, and email provisioning
+are not provided.
+
+Deactivation blocks future login and refresh and revokes active refresh tokens.
+Authenticated requests do not query account state: an already-issued access
+JWT may remain usable until its natural expiry (about 15 minutes plus validation
+clock skew). This is the accepted V1 limitation; no token version or blacklist
+is used.
+
+### 3.1 Fleet contract
+
 **Decided contract, implementation and compatibility checkpoint pending:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
 defines ownership; [ADR-0008](decisions/0008-production-fleet-transport.md)
@@ -309,7 +399,7 @@ The navigation MVP has no manual drive, raw `/cmd_vel`, cloud E-stop, or Head
 command. Head support remains separate despite the existing frontend/schema
 references; this MVP does not complete the full remote-tour feature set.
 
-### 3.1 POI target invariant
+#### 3.1.1 POI target invariant
 
 Production target poses belong to backend-managed `Route` and `Poi` data.
 `Route` stores its map key/frame and start pose, plus an end mode and optional
@@ -327,11 +417,14 @@ for history. This invariant does not introduce a MapVersion subsystem.
 
 ### 3.2 Current persistence model and planned tour flow
 
-The current SQL relationships are:
+The current v1.1 SQL relationships include:
 
 ```text
 Route --< RouteStop >-- Poi          Tour --> Route
 Tour --< GroupRegistration --< RosterRow
+RosterRow -- Invitation -- BrowserSession
+Tour --< TourAllowedBranch           Tour --< BranchRequest
+RouteVariant -- TourAllowedBranch    RouteVariant --< BranchRequest
 Tour --< TourEvent                   User --< UserRole
 User --< RefreshToken               User --< AuditLog
 Tour -- AssignedRobotId --> Robot    Robot -- CurrentTourId --> Tour
@@ -339,8 +432,11 @@ Tour -- AssignedRobotId --> Robot    Robot -- CurrentTourId --> Tour
 
 `GroupRegistration.TourId` references a **Tour**, not a Route.
 `RosterRow.RegistrationId` references its `GroupRegistration`; roster rows
-represent students without individual user accounts. A registration also
-references a representative `User` and optionally a reviewing `User`.
+represent invited students without individual user accounts. An invitation
+references one roster row; browser sessions reference invitations. A
+registration also references a representative `User` and optionally a reviewing
+`User`. A branch request references a Tour, its selected TourAllowedBranch, its
+branch-point RouteStop and optionally a registration.
 `Tour.CreatedByUserId`, `TourEvent.ActorUserId`, and `AuditLog.ActorUserId`
 link their records to users. The diagram omits other optional event links to
 `Robot` and `Poi` for readability.
@@ -358,9 +454,16 @@ individual `Booking` table. It does not establish a capacity policy.
 `Tour.AssignedRobotId` records the assigned robot, while
 `Robot.CurrentTourId` records the tour currently holding that robot. Both are
 nullable foreign keys, and `Tour.AssignedRobotId` may remain after a tour
-ends. The database checks that referenced rows exist; it does not enforce
-agreement between these two fields or uniqueness of active assignments.
+ends. A UNIQUE filtered index on `Robot.CurrentTourId` enforces at most one
+current robot holder for each Tour, and the single scalar field lets one Robot
+hold at most one Tour. The database does not enforce agreement between these
+two assignment fields, readiness, or safe release.
 `Robot.NeedsInspection` and `IsDispatchEnabled` are persisted dispatch inputs.
+Filtered unique indexes limit each Tour to one current robot holder, one
+accepted branch request, and each invitation to one open browser session while
+allowing multiple other request/session records. EF initially inferred
+singular Tour-to-BranchRequest and Invitation-to-BrowserSession navigations
+from the filtered indexes; both mappings are corrected to one-to-many.
 In a future fleet implementation, live pose, connection, battery, and external
 execution state are transient fleet telemetry, separate from persisted tour
 business state and `TourEvent`.
@@ -369,10 +472,9 @@ business state and `TourEvent`.
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
 the fleet gateway, handles arrival and the configured POI dwell/interaction,
 then decides whether to send another leg or complete the tour. The selected
-operational rules below are not backend implementations. Requirements such as
-one active assignment per robot and ignoring stale or duplicate results need
-explicit application/persistence
-enforcement; the v1.0 schema does not provide those guarantees by itself.
+operational rules below are not backend implementations. Ignoring stale or
+duplicate results, eligibility checks and reconciling release still need
+application enforcement beyond the claim uniqueness indexes.
 
 FleetHub transport is not tour orchestration. The later Application work owns:
 
@@ -397,7 +499,7 @@ shared transport does not erase source or validation boundaries.
 #### Remote Tour operational rules (planned Application behavior)
 
 These rules make explicit the existing remote-tour intent in
-`backend/database/smart-campus-tour-schema-v1.0.sql`,
+`backend/database/smart-campus-tour-schema-v1.1.sql`,
 `web/docs/staff-operations.md`, `web/src/api/contracts/staff.ts`, and
 `web/src/features/staff/reason.ts`. The web mock illustrates the flow; it is not
 an implemented persistence/concurrency guarantee. Backend evaluates allowed
@@ -453,10 +555,12 @@ migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 
 #### v1.1 snapshot and accepted implementation target (ADR-0012)
 
-`backend/database/smart-campus-tour-schema-v1.1.sql` is the reviewed empty-DB
-snapshot for invitation/session/branch storage. It does not migrate the current
-database or replace the v1.0 generated EF model in this change. Adoption requires
-the Database First apply/scaffold process and feature integration tests.
+`backend/database/smart-campus-tour-schema-v1.1.sql` is the current empty-DB
+snapshot for invitation/session/branch storage. It is applied to the local
+SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
+Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
+production data. Database setup/scaffolding were exercised locally; product use
+cases remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
 seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to
@@ -527,11 +631,12 @@ execution are deferred under Section 5. Research requirements impose no
 constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
-The backend already has a development SimulationHub. Production fleet and
-operations Hubs, authentication, and dispatch remain unimplemented. A single
-backend process with per-robot latest state is the initial implementation
-baseline; multiple instances would require shared-state and connection-routing
-design, not just separate Hub names.
+The backend already has a development SimulationHub and the user login/session
+API in Section 3.0. Production fleet and operations Hubs, fleet dispatch,
+robot/machine authentication, and authorization for future business APIs remain
+unimplemented. A single backend process with per-robot latest state is the
+initial implementation baseline; multiple instances would require shared-state
+and connection-routing design, not just separate Hub names.
 
 ### 3.4 State and command-result semantics
 
@@ -659,8 +764,9 @@ authenticated reconnect, and backend restart. Outside that spike, before
 allowing navigation commands require TLS, a machine credential per robot, and
 a fleet-machine authorization policy. User/browser identities cannot submit
 robot state or use the fleet Hub. Operations requires separate user access.
-Reuse `Robot.CredentialHash`; auth implementation and credential lifecycle are
-later work, without adding PKI/mTLS or a device-management platform to the MVP.
+Reuse `Robot.CredentialHash`; robot credential verification and credential
+lifecycle are later work, without adding PKI/mTLS or a device-management
+platform to the MVP.
 
 After these docs are merged, the next task is a small Python SignalR client
 against an ASP.NET Core/.NET 10 test Hub. The acceptance checklist is in

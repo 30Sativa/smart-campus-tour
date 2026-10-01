@@ -1,6 +1,5 @@
 import { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router'
-import { MOCK_ACCOUNTS_HINT } from '../../mocks/auth-mock'
 import { USE_MOCK_API } from '../../mocks/mock-mode'
 import { VisitorNav } from './components/VisitorNav'
 import { VisitorFooter } from './components/VisitorFooter'
@@ -50,7 +49,7 @@ export default function VisitorShell() {
           the console instead for a production build still on mocks. */}
       {import.meta.env.DEV && USE_MOCK_API && (
         <p className="vs-devbadge" data-dev-only="true">
-          DEV: running on sample data. {MOCK_ACCOUNTS_HINT}.
+          DEV: running on sample business data.
         </p>
       )}
     </div>

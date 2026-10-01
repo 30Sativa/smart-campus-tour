@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { ArrowRight, CircleAlert } from 'lucide-react'
+
+import { ApiError, login } from '../api/client'
+
 import { ApiError } from '../api/client'
+
 import { useAuthStore } from '../stores/auth-store'
 import { landingPathAfterLogin } from './access'
-import { MockAuthError, mockLogin } from '../mocks/auth-mock'
 import { AuthField, AuthPasswordField } from './AuthFields'
 import { prepareSplitExit } from './split-exit'
 
@@ -40,7 +43,7 @@ export default function LoginPage() {
     try {
       setApiError('')
       setInvalidCredentials(false)
-      const response = await mockLogin(username, password)
+      const response = await login(username, password)
 
       setAuth(response.accessToken, {
         userId: response.userId,
@@ -55,7 +58,7 @@ export default function LoginPage() {
       const split = prepareSplitExit()
       navigate(landingPathAfterLogin(response.role, from), { replace: true, viewTransition: split })
     } catch (error) {
-      if (error instanceof MockAuthError || (error instanceof ApiError && error.status === 401)) {
+      if (error instanceof ApiError && error.status === 401) {
         setInvalidCredentials(true)
         setApiError('Tên đăng nhập hoặc mật khẩu không chính xác.')
       } else if (error instanceof ApiError && error.status === 403) {
@@ -104,7 +107,11 @@ export default function LoginPage() {
           aria-describedby={apiError ? 'login-error' : undefined}
           disabled={isSubmitting}
           error={errors.username?.message}
-          {...register('username', { required: 'Vui lòng nhập tên đăng nhập' })}
+          {...register('username', {
+            required: 'Vui lòng nhập tên đăng nhập',
+            pattern: { value: /^\P{White_Space}+$/u, message: 'Tên đăng nhập không được chứa khoảng trắng.' },
+            maxLength: { value: 100, message: 'Tên đăng nhập tối đa 100 ký tự.' },
+          })}
         />
 
         <AuthPasswordField
@@ -125,9 +132,6 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="auth-switch">
-        Chưa có tài khoản? <Link to="/register" viewTransition>Đăng ký</Link>
-      </p>
     </>
   )
 }

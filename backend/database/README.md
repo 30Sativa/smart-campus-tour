@@ -2,8 +2,8 @@
 
 ## Status
 
-- `backend/database/smart-campus-tour-schema-v1.0.sql` still matches the generated EF entities/runtime (ADR-0006).
-- `backend/database/smart-campus-tour-schema-v1.1.sql` is the reviewed full snapshot for an **empty** SQL Server database, under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`. It is not an ALTER migration and does not switch the runtime to v1.1.
+- `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
+- The local DB was created empty. v1.1 is not an ALTER migration and did not migrate v1.0 or production data.
 - `backend/database/smart-campus-tour-permissions.sql` creates the `campus_tour_app` database role and grants SELECT/INSERT, denies UPDATE/DELETE on TourEvents/AuditLogs. Apply after the schema in the intended database. A deployment administrator provisions the runtime user and adds it to this role; the script does not create a login or change existing user memberships. Business-table permissions remain feature-specific.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
@@ -13,17 +13,17 @@ No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced
 From the repository root in PowerShell, using a local SQL Server test instance with CREATE DATABASE permission:
 
 ```powershell
-$env:SMARTCAMPUS_SCHEMA_TEST_CONNECTION = 'Server=(localdb)\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true'
+$env:SMARTCAMPUS_SCHEMA_TEST_CONNECTION = 'Server=localhost,1433;Integrated Security=true;TrustServerCertificate=true'
 bash scripts/verify backend
 ```
 
-Use a disposable development SQL Server, never a production connection. Each SQL test creates a database named `CampusTourSchemaTest_<random-guid>`, applies v1.1 and test fixtures, and drops only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. Without this environment variable, the five SQL tests explicitly report SKIPPED while the normal v1.0 backend tests still run. A normal PASS with skips is not evidence v1.1 was tested.
+Use a disposable development SQL Server, never a production connection. Each SQL test creates a database named `CampusTourSchemaTest_<random-guid>`, applies v1.1 and test fixtures, and drops only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. SQL-backed tests explicitly report SKIPPED without this environment variable; a normal PASS with skips is not evidence v1.1 was tested.
 
 Coverage: execute the complete snapshot; reject duplicate business keys; allow legitimate historical/multi-registration rows; race two independent connections for one session; require closing an expired session before replacement; enforce pending/accepted branch limits; validate new stop FKs; preserve last actual arrival across a route change; enforce robot-claim uniqueness; apply permissions twice; demonstrate INSERT/SELECT succeeds and UPDATE/DELETE fails as a non-owner test user. Audit tests append request/result rows and count email attempts separately from log rows.
 
 ## Apply/adopt later
 
-Apply v1.1 only to a deliberately selected empty database using a SQL client that handles GO batches, then apply the permission script. Do not run it over v1.0 data. For adoption, prepare any required data migration, run `backend/scripts/scaffold-db` against the selected v1.1 database, review generated entity/mapping changes and update persistence/use-case tests together. This snapshot change intentionally does not scaffold the current app from a disposable test database.
+The current local target is `SmartCampusTourV11` on `localhost,1433`; the local API User Secret `ConnectionStrings:DefaultConnection` points to it using Windows Integrated Security. Runtime configuration is per developer; the shared repository contains no connection string. To scaffold again, set `SMARTCAMPUS_DB_CONNECTION` to this target and run `bash backend/scripts/scaffold-db` from Git Bash. Never point that script at a database with data whose schema does not match the snapshot. After every re-scaffold, review the filtered unique index relationships: EF scaffold inferred `BranchRequest.TourId` as one-to-one from the one-accepted-per-Tour index, and `BrowserSession.InvitationId` as one-to-one from the one-open-session-per-invitation index. Both relations are one-to-many because other request/session rows are allowed; the backend mappings and inverse collections were corrected accordingly.
 
 ## Application invariants still to implement
 

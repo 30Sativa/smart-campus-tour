@@ -15,7 +15,7 @@ public sealed class InfrastructureDependencyInjectionTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] =
-                    "Server=(localdb)\\mssqllocaldb;Database=SmartCampusTests;Trusted_Connection=True;"
+                    "Server=localhost,1433;Database=SmartCampusTests;Trusted_Connection=True;TrustServerCertificate=True;"
             })
             .Build();
         var services = new ServiceCollection();

@@ -7,7 +7,13 @@ public partial class AuditLog
 {
     public long Id { get; set; }
 
-    public Guid ActorUserId { get; set; }
+    public Guid? ActorUserId { get; set; }
+
+    public Guid? TourId { get; set; }
+
+    public Guid? RobotId { get; set; }
+
+    public Guid? CorrelationId { get; set; }
 
     public string Action { get; set; } = null!;
 
@@ -15,9 +21,15 @@ public partial class AuditLog
 
     public string EntityId { get; set; } = null!;
 
-    public string? ChangesJson { get; set; }
+    public string? ResultCode { get; set; }
+
+    public string? DataJson { get; set; }
 
     public DateTimeOffset OccurredAt { get; set; }
 
-    public virtual User ActorUser { get; set; } = null!;
+    public virtual User? ActorUser { get; set; }
+
+    public virtual Robot? Robot { get; set; }
+
+    public virtual Tour? Tour { get; set; }
 }

@@ -1,67 +1,122 @@
+using SmartCampus.Api;
 using SmartCampus.Application;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
+using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Api.Hubs;
-using SmartCampus.Application.Features.Simulation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
-var builder = WebApplication.CreateBuilder(args);
-var simulationPreview = builder.Environment.IsDevelopment() &&
+var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args);
+var builder = WebApplication.CreateBuilder(initialAdminSeedCommand.GetHostArguments());
+var simulationPreviewEnabled = builder.Environment.IsDevelopment() &&
     builder.Configuration.GetValue<bool>("SimulationPreview:Enabled");
-var previewOrigins = new[] { "http://localhost:5173", "http://127.0.0.1:5173" };
 
-// Add services to the container.
+// Validate authentication configuration before the normal HTTP host starts.
+// The explicit seed command and isolated preview mode do not use HTTP auth.
+if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
+    _ = new JwtTokenSettings(builder.Configuration).CreateSigningKey();
 
+// Register application services and the selected persistence provider.
 builder.Services.AddApplication();
-if (!simulationPreview) builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddSignalR();
-builder.Services.AddSingleton<SimulationBroadcaster>();
-builder.Services.AddSingleton<ISimulationPosePublisher>(services => services.GetRequiredService<SimulationBroadcaster>());
-builder.Services.AddCors(options => options.AddPolicy("SimulationPreview", policy =>
-    policy.WithOrigins(previewOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
+    builder.Services.AddInfrastructure(builder.Configuration);
 
+// The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.
+builder.Services.AddSimulationPreview();
+
+// Register HTTP endpoints, error responses, and the development API document.
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
+{
+    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    if (allowedOrigins.Length == 0)
+    {
+        policy.SetIsOriginAllowed(_ => false);
+        return;
+    }
 
-var app = builder.Build();
+    policy.WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+}));
+if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
+{
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new JwtTokenSettings(builder.Configuration)
+                .CreateValidationParameters();
+        });
+    builder.Services.AddAuthorization();
+}
+
+await using var app = builder.Build();
+
+if (initialAdminSeedCommand.Requested)
+{
+    var username = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:Username"], "InitialAdminSeed:Username");
+    var password = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:Password"], "InitialAdminSeed:Password");
+    var fullName = RequireInitialAdminSeedSetting(builder.Configuration["InitialAdminSeed:FullName"], "InitialAdminSeed:FullName");
+
+    try
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var result = await scope.ServiceProvider
+            .GetRequiredService<InitialAdminSeeder>()
+            .SeedAsync(username, password, fullName);
+
+        Console.WriteLine(result == InitialAdminSeedResult.Created
+            ? "Initial Admin seeded."
+            : "Initial Admin already exists; skipped.");
+    }
+    catch (InitialAdminSeedConflictException exception)
+    {
+        Console.Error.WriteLine($"Initial Admin seed conflict: {exception.Message}");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
 
 app.UseExceptionHandler();
 
-// Configure the HTTP request pipeline.
+// Expose API documentation only in Development.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+        options.SwaggerEndpoint("/openapi/v1.json", "SmartCampus API v1"));
 }
 
-if (!simulationPreview) app.UseHttpsRedirection();
+// The local Gazebo preview uses HTTP; other API runs redirect to HTTPS.
+if (!simulationPreviewEnabled)
+    app.UseHttpsRedirection();
 
-// This unauthenticated, read-only preview is explicit opt-in and never a
-// production telemetry endpoint. Docker exposes its port on host loopback only.
-app.Use(async (context, next) =>
+app.UseCors("WebClient");
+if (!simulationPreviewEnabled)
 {
-    var ingestion = context.Request.Path.StartsWithSegments("/api/simulation");
-    var preview = ingestion || context.Request.Path.StartsWithSegments("/hubs/simulation");
-    if (preview)
-    {
-        if (!SimulationPreviewAccess.IsAllowed(simulationPreview, app.Environment.IsDevelopment(),
-                ingestion, context.Connection.RemoteIpAddress))
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            return;
-        }
-        var origin = context.Request.Headers.Origin.ToString();
-        if (origin.Length > 0 && !previewOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return;
-        }
-    }
-    await next(context);
-});
-app.UseCors("SimulationPreview");
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
+// Applies preview-only loopback/origin checks and maps its Hub when enabled.
+app.UseSimulationPreview(simulationPreviewEnabled);
 
 app.MapControllers();
-if (simulationPreview) app.MapHub<SimulationHub>("/hubs/simulation");
 
 app.Run();
+
+static string RequireInitialAdminSeedSetting(string? value, string key)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        throw new InvalidOperationException($"Required initial-admin seed setting '{key}' is missing or blank.");
+
+    return value;
+}

@@ -15,6 +15,8 @@ public partial class TourEvent
 
     public Guid? RobotId { get; set; }
 
+    public Guid? RouteId { get; set; }
+
     public Guid? LegId { get; set; }
 
     public string? LegKind { get; set; }
@@ -48,6 +50,8 @@ public partial class TourEvent
     public virtual User? ActorUser { get; set; }
 
     public virtual Robot? Robot { get; set; }
+
+    public virtual Route? Route { get; set; }
 
     public virtual Poi? TargetPoi { get; set; }
 

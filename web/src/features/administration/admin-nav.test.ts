@@ -16,6 +16,7 @@ describe('administration navigation', () => {
     ['/admin/registrations', '/admin/registrations'],
     ['/admin/registrations/pending', '/admin/registrations/pending'],
     ['/admin/history', '/admin/history'],
+    ['/admin/accounts', '/admin/accounts'],
     ['/admin/roles', null],
   ])('lights the right entry for %s', (path, expected) => {
     expect(adminActivePath(path)).toBe(expected)

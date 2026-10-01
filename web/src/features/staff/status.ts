@@ -24,6 +24,11 @@ type Entry = { label: string; tone: StatusTone }
 
 /** Keyed by the enum value lowercased, so casing from the API never matters. */
 const STATUS: Record<string, Entry> = {
+  // Account-management states (presentation keys, not backend enum values).
+  'account-active': { label: 'Đang hoạt động', tone: 'ok' },
+  'account-inactive': { label: 'Ngừng hoạt động', tone: 'muted' },
+  'invalid-role': { label: 'Vai trò không hợp lệ', tone: 'danger' },
+
   // Tour session / booking
   scheduled: { label: 'Đã lên lịch', tone: 'info' },
   pending: { label: 'Chờ điều phối', tone: 'muted' },

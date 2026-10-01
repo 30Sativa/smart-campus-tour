@@ -13,6 +13,8 @@ public partial class GroupRegistration
 
     public string SchoolName { get; set; } = null!;
 
+    public string GroupName { get; set; } = null!;
+
     public string ContactName { get; set; } = null!;
 
     public string ContactEmail { get; set; } = null!;
@@ -25,14 +27,6 @@ public partial class GroupRegistration
 
     public string? RejectionReason { get; set; }
 
-    public byte[] GroupCodeHash { get; set; } = null!;
-
-    public byte[] GroupCodeProtected { get; set; } = null!;
-
-    public DateTimeOffset? InvitationSentAt { get; set; }
-
-    public int AccessVersion { get; set; }
-
     public DateTimeOffset SubmittedAt { get; set; }
 
     public DateTimeOffset? CancelledAt { get; set; }
@@ -42,6 +36,8 @@ public partial class GroupRegistration
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public byte[] RowVersion { get; set; } = null!;
+
+    public virtual ICollection<BranchRequest> BranchRequests { get; set; } = new List<BranchRequest>();
 
     public virtual User RepresentativeUser { get; set; } = null!;
 

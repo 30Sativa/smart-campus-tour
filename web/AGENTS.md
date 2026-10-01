@@ -62,23 +62,22 @@ shared rules; this file only covers what is specific to `web/`.
     independent**. Operations screens at `/staff/*` call `/api/staff/*`, and
     that is fine. Do not rename an API because a route moved.
 - Local run: `cd web && npm install && npm run dev` (Vite, port 5173).
-- Backend base URL: **`VITE_API_BASE_URL`** (see `.env.example`, e.g.
-  `http://localhost:5000`). Read it only through `src/api/client.ts` — never
+- Backend base URL: **`VITE_API_BASE_URL`** (declared empty in `web/.env`; set in
+  ignored `web/.env.local` or the deployment build environment, e.g.
+  `https://localhost:7092`). Read it only through `src/api/client.ts` — never
   hard-code a backend URL in a component.
 - Realtime transport: **SignalR** (`@microsoft/signalr`) — see Section 4.
 - Structure: **feature-based**. Code is grouped by what it does
   (`src/features/<feature>/`), not by file kind. Only genuinely shared UI goes
   in `src/components/`.
-- Planned production auth contract: **JWT access token + refresh token in an
-  HttpOnly cookie**. Current frontend still uses mock authentication (see
-  “Mock backend mode” below); these token rules are not evidence that backend
-  auth is implemented.
+- Backend Auth V1 is connected through **JWT access token + refresh token in an
+  HttpOnly cookie**. Login, refresh-cookie session restore and logout use the
+  real `/api/auth/*` endpoints. Business features without a backend binding
+  continue to use labelled fixtures (see “Business fixtures” below).
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
-    on every API request. Carries the user's role (`Visitor`, `Representative`,
-    `Staff`, `Admin`) as a claim; the area route guard reads the role from the decoded
-    token, not from a separate call. `auth/roles.ts` normalises recognized
-    spellings onto those four signed-in roles. Student invitation access is a
-    separate browser-session target, not another account role.
+    on authenticated API requests. Carries one supported account role
+    (`Admin`, `Staff`, or `Representative`) as a claim. Student invitation
+    access is a separate browser-session target, not another account role.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
     access token when the old one expires, without forcing re-login.
@@ -88,10 +87,9 @@ shared rules; this file only covers what is specific to `web/`.
   - Token lifetimes: access token **15 minutes**, refresh token **7 days**
     (cookie, set by the backend — the frontend never reads or sets it
     directly).
-  - Claims on the access token: **`sub` (user id) and `role` only**. If a
-    display name or email is needed in the UI, fetch it separately (e.g.
-    `GET /api/auth/me`) — do not decode the JWT for anything beyond `role`
-    (and `sub` if needed for cache keys).
+  - The access token has `sub` and `role` identity claims plus registered JWT
+    issuer, audience, and time claims. It contains no personal data. No
+    `GET /api/auth/me` endpoint currently exists.
   - Endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`,
     `POST /api/auth/logout`.
   - Logout: call `POST /api/auth/logout` (revokes the refresh token
@@ -111,7 +109,8 @@ web/
 ├── index.html
 ├── package.json          dev / build / lint / typecheck / test
 ├── vite.config.ts        Vite + Tailwind + Vitest config
-├── .env.example          VITE_API_BASE_URL, VITE_USE_MOCK_API
+├── .env                  empty shared declarations, no secrets or host values
+├── .env.local            ignored machine-specific values
 ├── scripts/verify
 └── src/
     ├── main.tsx          StrictMode -> QueryProvider -> ThemeProvider -> RouterProvider
@@ -145,7 +144,7 @@ web/
     │                     invitation + Chốt/Mở lại/Hủy dialogs)
     ├── api/              client.ts (the one HTTP client), signalr.ts (hub
     │                     factory), contracts/ (endpoint DTOs + calls)
-    ├── auth/             AuthLayout + LoginPage/RegisterPage/AuthFields,
+    ├── auth/             AuthBootstrap, AuthLayout + LoginPage/AuthFields,
     │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
@@ -198,40 +197,37 @@ than one consumer.
 
 Tests live next to the code they cover (`*.test.ts(x)`).
 
-### Mock backend mode
+### Business fixtures
 
-The auth/booking/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
-`/api/staff/*` do not exist. The app runs on the labelled fixtures in
-`src/mocks/`. There is no toggle: `VITE_USE_MOCK_API` and every
-`USE_MOCK_API ? mock : http` ternary were removed on 2026-09-18, because with no
-backend to point it at the switch only ever had one position and the other
-branch was never exercised.
+Authentication uses the real `/api/auth/*` endpoints. Login, refresh-cookie
+session restore and logout are wired to the backend. Auth responses accept one
+supported role: `Admin`, `Staff` or `Representative`; the legacy Visitor area
+remains in the frontend route model, but real Auth does not issue a Visitor
+account. Student invitation access is a separate browser-session target.
+
+Business features without a live backend binding continue to use labelled
+fixtures in `src/mocks/`. There is no toggle: `VITE_USE_MOCK_API` and every
+`USE_MOCK_API ? mock : http` ternary were removed on 2026-09-18; do not restore
+a dead switch.
 
 - `mocks/staff-mock.ts` implements the `StaffApi` contract, the same
   type `api/contracts/staff.ts` implements over HTTP, so feature code does
   not know which one it has. The binding is named once, in
   `features/staff/staff-hooks.ts`;
-- `mocks/auth-mock.ts` issues a fake token so the area guards can be exercised.
-  Four demo accounts exist: `admin/admin`, `staff/staff`, `visitor/visitor`,
-  and `daidien/daidien` (`Representative`). Sign-up mints a `Visitor`. It is not
-  authentication and grants nothing server-side;
-- mock data is disclosed, but out of the way: a one-line badge in each shell and
-  on the auth screens, rendered only when `import.meta.env.DEV` is true, plus a
-  `console.warn` from `mocks/mock-mode.ts` that fires in every build. Do not put
-  build state back into the middle of a screen someone works in all day.
+- mock business data is disclosed with a one-line badge in the shells, rendered
+  only when `import.meta.env.DEV` is true, plus a `console.warn` from
+  `mocks/mock-mode.ts` that fires in every build. Do not put build state back
+  into the middle of a screen someone works in all day.
 
 This is a **data source, not a fallback**. Mock data must never be served in
 response to a failed request, and no screen may branch on where its rows came
 from.
 
-`src/api/` stays: `client.ts` (HTTP client, token refresh, `ApiError`, `apiUrl`),
-`signalr.ts` (hub factory) and the `staffApi` implementation in
-`contracts/staff.ts` are the written record of the endpoints this frontend
-expects. They are **deliberately unwired**, not dead code, and an import sweep
-will say otherwise - do not delete them. When the backend lands: bind
-`staffApi` in `staff-hooks.ts`, restore the `/api/auth/*` calls in
-`LoginPage`/`RegisterPage`/`use-logout` (the logout call is a security
-requirement, not a nicety - see §1), then delete `src/mocks/`.
+`src/api/` contains the HTTP client, Auth calls/session refresh, `ApiError`,
+`apiUrl`, the SignalR hub factory, and endpoint contracts. Auth is wired;
+`staffApi` remains deliberately unwired until the corresponding backend
+features are ready. Keep business fixtures until each feature has a real
+backend binding; never use them as fallback after a failed HTTP request.
 
 ## 3. Development Rules
 

@@ -75,10 +75,10 @@ Với vài nhánh định sẵn, video tương tác cũng cho phép chọn nhán
 | Đại diện đoàn | Đăng ký danh sách cấp lời mời; hỗ trợ gửi lại/thu hồi/cấp lại trong đoàn kể cả RUNNING; gửi yêu cầu nhánh. Sửa email riêng do Admin thực hiện khi SCHEDULED theo mục 5.2 |
 | Student | Xem trực tiếp hoặc nội dung dự phòng, theo dõi map, hỏi AI riêng khi có quyền |
 | Staff | Kiểm tra trước Start, vận hành, quyết định yêu cầu thay đổi, xử lý lỗi và kết thúc buổi |
-| Người hỗ trợ tại chỗ | Kiểm tra robot/vùng chạy và can thiệp vật lý khi cần; có thể kiêm Staff nếu điều kiện buổi thử cho phép |
+| Người hỗ trợ tại chỗ | Kiểm tra robot/vùng chạy và can thiệp vật lý khi cần; có thể đảm nhiệm công việc Staff nếu điều kiện buổi thử cho phép |
 | Đội kỹ thuật | Khảo sát và kiểm chứng map/POI/đường nối; nạp hình học tuyến/nhánh bằng seed/script ngoài web. Admin sửa nội dung qua form P1; không có editor tọa độ tự do |
 
-Đại diện đăng nhập bằng tài khoản vai trò **Representative**, được cấp qua cơ chế account/role của hệ thống như hướng UI-FLOW; mã/phiên Student không cấp quyền quản lý đoàn. Tại **My Registration/Đăng ký của tôi**, khối **Lời mời** hỗ trợ truy cập; khi Tour RUNNING có khối **Yêu cầu đổi nhánh** hiển thị POI hiện tại, điểm phân nhánh được phép yêu cầu, lựa chọn hợp lệ và trạng thái yêu cầu. Backend kiểm tra tài khoản sở hữu đúng registration APPROVED của Tour, không tin ID do browser gửi. Đây là đặc tả cần triển khai/kiểm chứng, không khẳng định màn/API đã tồn tại.
+Mỗi account V1 chỉ có đúng một role hệ thống: Admin, Representative hoặc Staff. Nếu một người cần nhiều role hệ thống thì dùng account riêng cho từng role. Đại diện đăng nhập bằng tài khoản vai trò **Representative**, được cấp qua cơ chế account/role của hệ thống như hướng UI-FLOW; mã/phiên Student không cấp quyền quản lý đoàn. Tại **My Registration/Đăng ký của tôi**, khối **Lời mời** hỗ trợ truy cập; khi Tour RUNNING có khối **Yêu cầu đổi nhánh** hiển thị POI hiện tại, điểm phân nhánh được phép yêu cầu, lựa chọn hợp lệ và trạng thái yêu cầu. Backend kiểm tra tài khoản sở hữu đúng registration APPROVED của Tour, không tin ID do browser gửi. Đây là đặc tả cần triển khai/kiểm chứng, không khẳng định màn/API đã tồn tại.
 
 Đại diện xem live bằng lời mời cá nhân của chính mình hoặc lời mời điểm xem chung mình phụ trách; không dùng mã của học sinh. Vai trò Representative không tự tạo Student session. Không cần mở live để gửi yêu cầu từ My Registration. Mọi tài khoản đang hoạt động có role STAFF được xử lý mọi Tour trên dashboard; V1 không phân công Staff theo Tour (ADR-0012).
 
@@ -103,7 +103,7 @@ Giữ các trạng thái Tour `SCHEDULED → READY → RUNNING → COMPLETED/CAN
 
 ### 4.1 Quyền Start và giờ công bố — quyết định của nhóm
 
-Giữ phân công hiện tại: Admin quản lý lịch/duyệt/chốt buổi; Staff có role hợp lệ kiểm tra robot, nguồn hình và vùng chạy rồi bấm Start; mọi Staff được vận hành mọi Tour, không có quyền sở hữu buổi riêng. Không chuyển Start sang Admin chỉ vì Admin là người duyệt danh sách. Một người có thể kiêm cả hai vai nếu được cấp quyền, nhưng quyền quản trị không tự bỏ qua điều kiện vận hành.
+Giữ phân công hiện tại: Admin quản lý lịch/duyệt/chốt buổi; Staff có role hợp lệ kiểm tra robot, nguồn hình và vùng chạy rồi bấm Start; mọi Staff được vận hành mọi Tour, không có quyền sở hữu buổi riêng. Không chuyển Start sang Admin chỉ vì Admin là người duyệt danh sách. Nếu một người cần làm cả việc Admin và Staff thì được cấp hai account riêng; quyền quản trị không tự bỏ qua điều kiện vận hành. Quy tắc một role trên mỗi account trong Auth V1 được ghi tại [ADR-0013](../decisions/0013-single-application-role-per-account.md).
 
 **Nhóm quyết định V1:** cho vào phòng chờ và kiểm tra thiết bị trước giờ; chỉ bắt đầu hành trình chính thức từ giờ đã công bố trở đi. Ví dụ lịch 09:00: 08:45 Staff chuẩn bị, học sinh xem lịch/kiểm tra âm thanh; từ 09:00 Staff được Start khi Tour READY và hệ thống đủ điều kiện. Đủ giờ không tự chạy robot, thiếu readiness vẫn không được Start. Đã đến giờ mà chưa Start thì trang tiếp tục báo chưa bắt đầu, không hiển thị live giả hoặc vòng chờ không giải thích.
 

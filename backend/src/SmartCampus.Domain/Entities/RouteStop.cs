@@ -17,7 +17,17 @@ public partial class RouteStop
 
     public string HeadStepsJson { get; set; } = null!;
 
+    public virtual ICollection<BranchRequest> BranchRequests { get; set; } = new List<BranchRequest>();
+
     public virtual Poi Poi { get; set; } = null!;
 
     public virtual Route Route { get; set; } = null!;
+
+    public virtual ICollection<RouteVariant> RouteVariantBranchPointRouteStops { get; set; } = new List<RouteVariant>();
+
+    public virtual ICollection<RouteVariant> RouteVariantVariantBranchStops { get; set; } = new List<RouteVariant>();
+
+    public virtual ICollection<Tour> TourCurrentRouteStops { get; set; } = new List<Tour>();
+
+    public virtual ICollection<Tour> TourLastArrivedRouteStops { get; set; } = new List<Tour>();
 }

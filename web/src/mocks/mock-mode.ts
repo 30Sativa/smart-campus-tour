@@ -1,20 +1,18 @@
 /**
- * Mock backend mode.
+ * Business fixture mode.
  *
- * The auth/booking/ops backend was removed (`7d0a17e`), so `/api/auth/*` and
- * `/api/staff/*` do not exist. The app therefore runs on the labelled fixtures
- * in this folder, and every screen that uses them says so.
+ * Authentication uses the real `/api/auth/*` endpoints. Business features
+ * without a live backend binding still use the labelled fixtures in this
+ * folder, and every shell that uses them says so.
  *
  * This used to be a runtime choice: `VITE_USE_MOCK_API` picked between these
  * fixtures and the HTTP implementation, and every call site carried a ternary.
- * The flag and those ternaries are gone (2026-09-18) - with no backend to point
- * the other branch at, the switch only ever had one position, and a branch that
- * is never taken is a branch nobody is testing.
+ * The flag and those ternaries are gone (2026-09-18); do not restore a dead
+ * toggle while these features have only one configured implementation.
  *
  * It is still a mode, not a fallback: nothing here is reached by a failed
- * request. `src/api/` keeps the HTTP client and the endpoint contract, unwired,
- * so restoring the real path is a re-import rather than a rewrite - see the
- * header of `src/api/contracts/staff.ts`.
+ * request. Auth is wired through `src/api/client.ts`; staff endpoint contracts
+ * remain until the corresponding business API is implemented.
  */
 export const MOCK_MODE_LABEL = 'Dữ liệu mẫu · backend vận hành chưa sẵn sàng'
 
@@ -30,7 +28,7 @@ export const USE_MOCK_API = true
  */
 if (typeof console !== 'undefined') {
   console.warn(
-    '[CampusTour] Running on mock data: /api/auth/* and /api/staff/* are served by src/mocks, not by a backend.',
+    '[CampusTour] Some business features are running on sample data from src/mocks.',
   )
 }
 

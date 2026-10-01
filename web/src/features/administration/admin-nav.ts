@@ -1,4 +1,4 @@
-import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, Route } from 'lucide-react'
+import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, Route, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../staff/staff-nav'
 
 /**
@@ -24,6 +24,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   { label: 'Tuyến', items: [{ label: 'Danh mục tuyến', path: '/admin/routes', icon: Route }] },
+  { label: 'Quản lý tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
   { label: 'Lịch sử', items: [{ label: 'Lịch sử Tour', path: '/admin/history', icon: History }] },
 ]
 

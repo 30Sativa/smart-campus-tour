@@ -29,6 +29,8 @@ public partial class Robot
 
     public byte[] RowVersion { get; set; } = null!;
 
+    public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
     public virtual Tour? CurrentTour { get; set; }
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();

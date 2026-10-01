@@ -2,7 +2,6 @@ import { Suspense, lazy } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, createBrowserRouter, useLocation } from 'react-router'
 import LoginPage from '../../auth/LoginPage'
-import RegisterPage from '../../auth/RegisterPage'
 import { AuthLayout } from '../../auth/AuthLayout'
 import { useAuthStore } from '../../stores/auth-store'
 import { areaById, type AreaId } from '../../auth/access'
@@ -78,10 +77,15 @@ const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPag
 const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
+const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
+}
+
+function AuthSessionFallback() {
+  return <div className="min-h-[100dvh] grid place-items-center" role="status" aria-live="polite">Đang kiểm tra phiên đăng nhập...</div>
 }
 
 /**
@@ -98,9 +102,11 @@ function ShellFallback({ background }: { background: string }) {
  */
 function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isAuthReady = useAuthStore((state) => state.isAuthReady)
   const role = useAuthStore((state) => state.user?.role)
   const location = useLocation()
 
+  if (!isAuthReady) return <AuthSessionFallback />
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (!areaById(area).allows(role)) return <Navigate to={homePathForRole(role)} replace />
   return <>{children}</>
@@ -164,13 +170,11 @@ export const routes = [
       </Suspense>
     ),
   },
-  // One layout, two children: the photograph and the brand stay mounted while
-  // the form swaps, which is what the sign-in/sign-up crossfade animates.
+  // Keep the sign-in composition mounted while its route content renders.
   {
     element: <AuthLayout />,
     children: [
       { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
     ],
   },
   // Students: join with the group code, then waiting room, live and end (no account).
@@ -268,6 +272,7 @@ export const routes = [
       { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
       { path: 'routes', element: <AdminRouteCatalogPage /> },
       { path: 'history', element: <AdminTourHistoryPage /> },
+      { path: 'accounts', element: <AdminAccountsPage /> },
       { path: 'roles', element: <RolesPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },

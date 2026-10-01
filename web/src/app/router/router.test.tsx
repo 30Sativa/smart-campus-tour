@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from './index'
 import { useAuthStore } from '../../stores/auth-store'
+import { AuthBootstrap } from '../../auth/AuthBootstrap'
 
 /**
  * The route table as a whole: who may enter each area, where a blocked
@@ -18,6 +19,7 @@ function signIn(role: string) {
   useAuthStore.setState({
     accessToken: 'mock-access-token.test',
     isAuthenticated: true,
+    isAuthReady: true,
     user: { userId: 'test-user', username: 'test', role },
   })
 }
@@ -32,11 +34,74 @@ function renderAt(path: string) {
   return router
 }
 
+function renderWithBootstrapAt(path: string) {
+  const router = createMemoryRouter(routes, { initialEntries: [path] })
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AuthBootstrap><RouterProvider router={router} /></AuthBootstrap>
+    </QueryClientProvider>,
+  )
+  return router
+}
+
 const settled = (router: ReturnType<typeof createMemoryRouter>, path: string) =>
   waitFor(() => expect(router.state.location.pathname).toBe(path))
 
 describe('route table', () => {
-  afterEach(() => useAuthStore.setState({ accessToken: null, user: null, isAuthenticated: false }))
+  beforeEach(() => useAuthStore.getState().setAuthReady())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    useAuthStore.getState().logout()
+  })
+
+  it('restores an Admin session before rendering the requested protected area', async () => {
+    useAuthStore.setState({ isAuthReady: false, accessToken: null, user: null, isAuthenticated: false })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/auth/refresh')) {
+        return new Response(JSON.stringify({
+          accessToken: 'restored-admin-token',
+          userId: 'admin-id',
+          username: 'admin',
+          role: 'Admin',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({ success: true, data: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const router = renderWithBootstrapAt('/admin')
+
+    await settled(router, '/admin')
+    expect(await screen.findByRole('heading', { name: /Tổng quan quản trị/i, level: 1 })).toBeInTheDocument()
+    expect(useAuthStore.getState().user?.role).toBe('Admin')
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
+      method: 'POST',
+      credentials: 'include',
+    })
+  })
+
+  it('sends a protected route to login when session restoration fails', async () => {
+    useAuthStore.setState({ isAuthReady: false, accessToken: null, user: null, isAuthenticated: false })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })))
+    const router = renderWithBootstrapAt('/admin')
+
+    await settled(router, '/login')
+    expect(await screen.findByRole('heading', { name: 'Chào mừng bạn trở lại' })).toBeInTheDocument()
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+  })
+
+  it('waits for session restoration before redirecting a protected route', async () => {
+    useAuthStore.setState({ isAuthReady: false, accessToken: null, user: null, isAuthenticated: false })
+    const router = renderAt('/admin')
+
+    expect(router.state.location.pathname).toBe('/admin')
+    expect(screen.getByRole('status')).toHaveTextContent('Đang kiểm tra phiên đăng nhập')
+
+    act(() => useAuthStore.getState().setAuthReady())
+    await settled(router, '/login')
+  })
 
   describe('guards', () => {
     it('sends a signed-out visitor from /staff to sign in', async () => {
@@ -52,6 +117,12 @@ describe('route table', () => {
     it('sends an operator who types /admin back to their own console', async () => {
       signIn('Staff')
       const router = renderAt('/admin')
+      await settled(router, '/staff')
+    })
+
+    it('keeps Admin Accounts behind the Admin route guard', async () => {
+      signIn('Staff')
+      const router = renderAt('/admin/accounts')
       await settled(router, '/staff')
     })
 
@@ -94,6 +165,11 @@ describe('route table', () => {
   })
 
   describe('tour administration', () => {
+    beforeAll(async () => {
+      // Cold Windows transforms can exceed the UI query timeout before React renders.
+      await import('../../routes/admin/AdminRegistrationsPage')
+    }, 30_000)
+
     it.each([
       ['/admin/tours', /Quản lý Tour/],
       ['/admin/tours/new', /Tạo Tour mới/],
@@ -105,15 +181,19 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt(path)
       await settled(router, path)
-      expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: heading, level: 1 }, { timeout: 10_000 })).toBeInTheDocument()
     })
 
     it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
       signIn('Admin')
       const router = renderAt('/admin/tours/tour-03')
       await settled(router, '/admin/tours/tour-03')
+
+      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 1 })).toBeInTheDocument()
+
       expect(await screen.findByRole('heading', { name: /Tour T-03/i, level: 1 })).toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
+
     })
 
     it('keeps a mistyped admin path inside administration', async () => {
@@ -142,6 +222,11 @@ describe('route table', () => {
 
   it('sends an unknown path back to the public page', async () => {
     const router = renderAt('/khong-ton-tai')
+    await settled(router, '/')
+  })
+
+  it('does not expose the removed public self-registration route', async () => {
+    const router = renderAt('/register')
     await settled(router, '/')
   })
 })

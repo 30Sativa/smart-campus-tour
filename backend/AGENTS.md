@@ -27,7 +27,7 @@ describe features already present in this backend.
 backend/
 ├── AGENTS.md
 ├── SmartCampus.slnx
-├── database/smart-campus-tour-schema-v1.0.sql
+├── database/smart-campus-tour-schema-v1.1.sql
 ├── scripts/
 │   ├── verify
 │   └── scaffold-db
@@ -88,7 +88,7 @@ backend/src/SmartCampus.Infrastructure/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
 │   └── Repositories/                future: specific implementations
-├── Authentication/                   future: JWT/password/token technology
+├── Authentication/                   JWT/password/token technology
 ├── Integrations/                     future: external adapters without Api/Hub references
 └── DependencyInjection.cs
 
@@ -141,22 +141,29 @@ do not create one service per handler.
 
 ## 3. Current model and fleet boundary
 
-The separately reviewed v1.1 empty-database snapshot is
-`backend/database/smart-campus-tour-schema-v1.1.sql`; its decisions are in
-`docs/decisions/0012-v1-1-schema-and-operation-scope.md` and usage/testing in
-`backend/database/README.md`. It has not replaced the generated v1.0 EF model
-below. Do not manually edit generated entities to pretend adoption is complete.
+The current SQL source and generated EF model are
+`backend/database/smart-campus-tour-schema-v1.1.sql`; the local scaffold target
+is the empty database `SmartCampusTourV11` on the local SQL Server instance
+`localhost,1433`.
+Decisions and operating notes are in
+`docs/decisions/0012-v1-1-schema-and-operation-scope.md` and
+`backend/database/README.md`. This did not migrate v1.0 data. Do not manually
+edit generated entities to stand in for a SQL schema change.
 V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
 no per-Tour dwell editor or operator assignment. Invitation/branch use cases,
 roster locking and retention cleanup remain implementation work.
 
-`backend/database/smart-campus-tour-schema-v1.0.sql` and the scaffolded entities
-currently contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`,
-`RouteStop`, `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `TourEvent`, and
-`AuditLog`. A `Tour` stores scheduling and execution state; group registration
-and roster rows model school participation. `Robot` and `Tour` retain assignment
-references. `TourEvent` stores meaningful execution events. `RowVersion` on
-`Robot`, `Tour`, and `GroupRegistration` is a SQL Server concurrency token.
+`backend/database/smart-campus-tour-schema-v1.1.sql` and the scaffolded entities
+contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`, `RouteStop`,
+`RouteVariant`, `Robot`, `Tour`, `TourAllowedBranch`, `GroupRegistration`,
+`RosterRow`, `Invitation`, `BrowserSession`, `BranchRequest`, `TourEvent`, and
+`AuditLog`. A `Tour` stores scheduling/execution state and route-stop references;
+invitation/session records represent student access; BranchRequests represent
+proposed route changes. `RowVersion` is a SQL Server concurrency token on
+`Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`, and
+`TourAllowedBranch`. Database uniqueness enforces selected invariants, while
+session/request workflows and cross-row consistency still need application code.
+`RowVersion` also appears on `BranchRequest`.
 
 `TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
 design, **not current tables or entities**. A navigation leg remains a
@@ -226,16 +233,14 @@ Shared-viewing data identifies its responsible person, not every student in the
 room; individual data requires individual rows. Code storage for safe resend,
 API binding, atomic admission and revocation remain implementation work.
 
-The current schema stores group-level registration and name/class roster rows;
-it does not persist per-row invitation tokens, browser sessions, revocation
-state, shared-viewing-point classification, email-send attempts, or branch
-requests. The current backend has only its development Simulation controller
-and Hub; the product use cases and endpoints above are not implemented. Do not
-infer that a group code/name match is equivalent to an approved personal
-invitation. Do not add schema, EF mappings, or endpoints as part of a
-documentation-only task; a feature implementation must first reconcile its
-public contracts in `docs/architecture.md` and include the appropriate schema
-and tests.
+The current v1.1 schema persists invitation/session records, shared-viewing
+classification and branch requests; email attempts remain append-only audit
+records, and their delivery/revocation workflows remain application logic. The
+backend still has only its development Simulation controller and Hub; product
+use cases and endpoints above are not implemented. Do not infer that a group
+code/name match is equivalent to an approved personal invitation. A future
+feature change must reconcile its public contracts in `docs/architecture.md`
+and include the appropriate schema and tests.
 
 ## 4. Request, persistence, and response flow
 
@@ -275,8 +280,9 @@ Application persistence abstraction -> Application `PagedResult<T>` -> Api
 validator is implemented yet.
 
 `GlobalExceptionHandler` in Api currently maps Domain and FluentValidation
-exceptions to 400, `NotFoundException` to 404, `ConflictException` to 409,
-and unexpected exceptions to 500. HTTP errors use a `BaseResponse` envelope.
+exceptions to 400, `UnauthorizedException` to 401, `NotFoundException` to
+404, `ConflictException` to 409, and unexpected exceptions to 500. HTTP errors
+use a `BaseResponse` envelope.
 Do not expose stack traces, SQL details, secrets, or visitor personal data in
 responses or logs. Domain and Application code must not throw HTTP-specific
 exceptions.
@@ -296,9 +302,12 @@ after verifying the schema dropped them.
 
 For a schema change: write an ADR under `docs/decisions/` first; update the
 SQL source; apply the database change through the project's database process;
-re-scaffold; review generated changes and tests. The current v1.0 SQL script
+re-scaffold; review generated changes and tests. The current v1.1 SQL script
 creates tables in an **empty** selected database and does not migrate old data.
-Do not treat a re-scaffold as a database migration.
+Do not treat a re-scaffold as a database migration. EF may infer a filtered
+unique index as a one-to-one relationship even when other rows allow many
+records (currently BranchRequest→Tour and BrowserSession→Invitation); review
+and correct navigation cardinality after each scaffold.
 
 Runtime reads `ConnectionStrings:DefaultConnection`, for example from
 `ConnectionStrings__DefaultConnection` or .NET User Secrets; never track a
@@ -311,26 +320,29 @@ export SMARTCAMPUS_DB_CONNECTION='<local SQL Server connection string>'
 bash backend/scripts/scaffold-db
 ```
 
-## 6. Planned authentication and realtime placement
+## 6. Authentication and realtime placement
 
-Auth is **not implemented**. Future auth use cases belong in
-`backend/src/SmartCampus.Application/Features/Auth/`, token/password/JWT
-technology in `backend/src/SmartCampus.Infrastructure/Authentication/`, and
-HTTP endpoints in `backend/src/SmartCampus.Api/Controllers/`. The planned
-contract is a 15-minute JWT access token in the login response and a 7-day
-refresh token set in an HttpOnly, Secure cookie, never a JSON body; access
-tokens are sent as Bearer tokens and contain only `sub` and `role`, no personal
-data. Planned endpoints
-are `POST /api/auth/login`, `POST /api/auth/refresh`, and
-`POST /api/auth/logout`. Passwords need a modern password hash. Refresh tokens
-are stored only as hashes and are revoked
-server-side on logout; refresh rejects unknown, expired, or revoked tokens.
-The current `RefreshTokens` table has a binary `TokenHash` and nullable
-`RevokedAt`, not a revoked flag. The schema's `UserRoles.Role` examples are
-`ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`; align the final JWT role contract
-with `web/` before implementing endpoints. Do not assume a visitor account
-exists in the current schema. Robot-control endpoints must require
-authorization.
+The backend implements `POST /api/auth/login`, `/api/auth/refresh`, and
+`/api/auth/logout` in `backend/src/SmartCampus.Api/Controllers/AuthController.cs`.
+Application owns the use cases, Infrastructure owns password hashing,
+username normalization, JWT and SQL token persistence, and Api owns HTTP and
+cookie handling. The current request/response, role, cookie, status, and JWT
+configuration contract is in
+[`docs/architecture.md` Section 3.0](../docs/architecture.md#30-user-account-authentication-api-implemented).
+Keep that contract factual and update it when public behavior changes. The
+schema has `RefreshTokens.TokenHash` as binary data and nullable `RevokedAt`,
+not a revoked flag. The application permits exactly one supported role per
+account in V1; the physical `UserRoles` primary key remains unchanged.
+
+These endpoints do not provide account management, authorization policies for
+future business routes, or robot/fleet machine authentication. Production fleet
+and operations Hubs remain pending; before robot navigation commands are
+enabled outside the local compatibility spike, require TLS, per-robot
+credentials using `Robot.CredentialHash`, and a fleet-machine policy distinct
+from user access. Browser/user credentials must not submit robot state. The
+local spike may bootstrap with dummy identity, but passing the checkpoint
+requires valid and invalid credentials, authenticated reconnect, and backend
+restart tests.
 
 SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/` when a realtime
 use case exists. Application must not depend on SignalR types; add an
