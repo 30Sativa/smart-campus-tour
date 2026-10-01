@@ -19,6 +19,27 @@ public sealed class InitialAdminSeederTests
     private const string FullName = "System Administrator";
     internal const string TestJwtSigningKey = "integration-test-jwt-signing-key-32-bytes-minimum";
 
+    [Theory]
+    [InlineData(" system.admin")]
+    [InlineData("system.admin ")]
+    [InlineData("system admin")]
+    [InlineData("system\tadmin")]
+    [InlineData("system\u00a0admin")]
+    public async Task SeedAsync_RejectsUsernameWhitespaceBeforeAccessingDatabase(string username)
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer("Server=unreachable.invalid;Database=unused;Integrated Security=true")
+            .Options;
+        await using var context = new ApplicationDbContext(options);
+        var seeder = new InitialAdminSeeder(context, new IdentityPasswordHasher(), new InvariantUsernameNormalizer());
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => seeder.SeedAsync(username, Password, FullName));
+
+        Assert.Equal("username", exception.ParamName);
+        Assert.Contains("must not contain whitespace", exception.Message);
+    }
+
     [SchemaV11Fact]
     public async Task SeedAsync_CreatesAdminAndLeavesOtherTablesEmpty()
     {
@@ -62,7 +83,7 @@ public sealed class InitialAdminSeederTests
         var original = await database.GetOnlyUserAsync();
 
         var result = await database.SeedAsync(
-            " SYSTEM.ADMIN ",
+            "SYSTEM.ADMIN",
             "different-password-must-not-be-used",
             "Different Full Name");
 

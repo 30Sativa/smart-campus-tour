@@ -250,9 +250,17 @@ uses browser sessions, not an account role.
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
-| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
+| `POST /api/auth/login` | JSON `{ "username": "...", "password": "..." }`; HTTP 200 with `accessToken`, `userId`, `username`, and `role`, and sets the refresh cookie. | Invalid username (empty, over 100 characters, or containing whitespace): 400. Unknown username or incorrect password: 401. Inactive account or invalid role assignment: 403. |
 | `POST /api/auth/refresh` | No body; reads the refresh cookie. HTTP 200 returns the same response fields and re-sets the same refresh token with its stored expiry. Tokens are not rotated. | Missing, unknown, expired, or revoked refresh token: 401. Inactive account or invalid role assignment: 403. Rejected refresh clears the cookie. |
 | `POST /api/auth/logout` | No body; HTTP 204 and clears the cookie. A matching stored token is marked revoked. Missing, unknown, or already revoked tokens are an idempotent no-op. | An unexpected persistence failure uses the common error response and still clears the cookie. |
+
+Login and account creation require usernames to be non-empty, at most 100
+characters, and contain no Unicode whitespace, including leading/trailing
+spaces, tabs, and non-breaking spaces. Initial Admin provisioning also rejects
+whitespace in its configured username. These entry points reject whitespace
+rather than trimming it. Username lookup remains case-insensitive;
+passwords are passed unchanged. Existing stored usernames are not migrated by
+this change; a username containing whitespace cannot be used in a login request.
 
 Application exceptions use the common JSON envelope with `success: false`, a
 message, null data, and optional errors. Login failures do not create a refresh

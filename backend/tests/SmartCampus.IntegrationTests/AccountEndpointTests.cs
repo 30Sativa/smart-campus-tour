@@ -320,9 +320,23 @@ public sealed class AccountEndpointTests
         var token = await GetAccessTokenAsync(host.Client, "create.admin");
         const string rawPassword = "  initial password with spaces  ";
 
+        foreach (var username in new[] { " created.staff", "created.staff ", "created staff", "created\tstaff", "created\u00a0staff" })
+        {
+            using var invalidUsername = await CreateAccountAsync(host.Client, token, new
+            {
+                username,
+                fullName = "Created Staff",
+                role = "Staff",
+                initialPassword = rawPassword
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, invalidUsername.StatusCode);
+            Assert.Equal(1, await database.CountRowsAsync("dbo.Users"));
+            Assert.Equal(0, await database.CountRowsAsync("dbo.AuditLogs"));
+        }
+
         using var staffResponse = await CreateAccountAsync(host.Client, token, new
         {
-            username = "  created.staff  ",
+            username = "created.staff",
             fullName = " Created Staff ",
             role = "Staff",
             initialPassword = rawPassword
@@ -372,7 +386,7 @@ public sealed class AccountEndpointTests
 
         using var duplicateResponse = await CreateAccountAsync(host.Client, token, new
         {
-            username = "  CREATED.STAFF ",
+            username = "CREATED.STAFF",
             fullName = "Duplicate Staff",
             role = "Staff",
             initialPassword = "duplicate password"

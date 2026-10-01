@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from './index'
 import { useAuthStore } from '../../stores/auth-store'
 import { AuthBootstrap } from '../../auth/AuthBootstrap'
@@ -120,6 +120,12 @@ describe('route table', () => {
       await settled(router, '/staff')
     })
 
+    it('keeps Admin Accounts behind the Admin route guard', async () => {
+      signIn('Staff')
+      const router = renderAt('/admin/accounts')
+      await settled(router, '/staff')
+    })
+
     it('lets an operator into /staff', async () => {
       signIn('Staff')
       const router = renderAt('/staff')
@@ -159,6 +165,11 @@ describe('route table', () => {
   })
 
   describe('tour administration', () => {
+    beforeAll(async () => {
+      // Cold Windows transforms can exceed the UI query timeout before React renders.
+      await import('../../routes/admin/AdminRegistrationsPage')
+    }, 30_000)
+
     it.each([
       ['/admin/tours', /Quản lý Tour/],
       ['/admin/tours/new', /Tạo Tour mới/],

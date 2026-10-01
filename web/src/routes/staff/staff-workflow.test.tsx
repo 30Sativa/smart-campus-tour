@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StartCheckPage from './StartCheckPage'
 import ToursTodayPage from './ToursTodayPage'
 import { OperationControls } from '../../features/staff/components/OperationControls'
@@ -30,10 +30,14 @@ function renderAt(path: string, element: ReactNode, route: string) {
 
 describe('staff session workflow', () => {
   beforeEach(() => {
+    // Relative tour fixtures must stay on the same day even when run near midnight.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 1, 12))
     resetSim()
     useAuthStore.getState().setAuth('test-token', { userId: 'test-staff', username: 'staff', role: 'Staff' })
   })
   afterEach(() => {
+    vi.useRealTimers()
     resetSim()
     useAuthStore.getState().logout()
   })

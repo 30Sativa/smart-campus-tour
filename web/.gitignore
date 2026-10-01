@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Track empty shared declarations; machine-specific values stay ignored.
+!.env
+.env.*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

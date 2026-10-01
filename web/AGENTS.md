@@ -62,8 +62,9 @@ shared rules; this file only covers what is specific to `web/`.
     independent**. Operations screens at `/staff/*` call `/api/staff/*`, and
     that is fine. Do not rename an API because a route moved.
 - Local run: `cd web && npm install && npm run dev` (Vite, port 5173).
-- Backend base URL: **`VITE_API_BASE_URL`** (see `.env.example`, e.g.
-  `http://localhost:5246`). Read it only through `src/api/client.ts` — never
+- Backend base URL: **`VITE_API_BASE_URL`** (declared empty in `web/.env`; set in
+  ignored `web/.env.local` or the deployment build environment, e.g.
+  `https://localhost:7092`). Read it only through `src/api/client.ts` — never
   hard-code a backend URL in a component.
 - Realtime transport: **SignalR** (`@microsoft/signalr`) — see Section 4.
 - Structure: **feature-based**. Code is grouped by what it does
@@ -108,7 +109,8 @@ web/
 ├── index.html
 ├── package.json          dev / build / lint / typecheck / test
 ├── vite.config.ts        Vite + Tailwind + Vitest config
-├── .env.example          VITE_API_BASE_URL, optional Quest stream settings
+├── .env                  empty shared declarations, no secrets or host values
+├── .env.local            ignored machine-specific values
 ├── scripts/verify
 └── src/
     ├── main.tsx          StrictMode -> QueryProvider -> ThemeProvider -> RouterProvider

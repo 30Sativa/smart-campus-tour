@@ -14,17 +14,17 @@ public sealed class CreateAccountCommandHandler(
     IUsernameNormalizer usernameNormalizer,
     IPasswordHasher passwordHasher,
     TimeProvider timeProvider)
-    : IRequestHandler<CreateAccountCommand, CreateAccountResult>
+    : IRequestHandler<CreateAccountCommand, CreateAccountResponse>
 {
-    public async Task<CreateAccountResult> Handle(
-        CreateAccountCommand request,
+    public async Task<CreateAccountResponse> Handle(
+        CreateAccountCommand command,
         CancellationToken cancellationToken)
     {
-        var username = request.Username.Trim();
+        var username = command.Request.Username.Trim();
         var normalizedUsername = usernameNormalizer.Normalize(username);
         if (normalizedUsername.Length == 0)
             throw new DomainException("Username must not be blank.");
-        var storedRole = AccountRoles.ToStoredCreatableRole(request.Role);
+        var storedRole = AccountRoles.ToStoredCreatableRole(command.Request.Role);
 
         if (await accountRepository.NormalizedUsernameExistsAsync(
                 normalizedUsername,
@@ -40,8 +40,8 @@ public sealed class CreateAccountCommandHandler(
             Id = userId,
             Username = username,
             NormalizedUsername = normalizedUsername,
-            PasswordHash = passwordHasher.Hash(request.InitialPassword),
-            FullName = request.FullName.Trim(),
+            PasswordHash = passwordHasher.Hash(command.Request.InitialPassword),
+            FullName = command.Request.FullName.Trim(),
             IsActive = true,
             CreatedAt = now,
             UserRoles =
@@ -57,14 +57,14 @@ public sealed class CreateAccountCommandHandler(
         accountRepository.AddAccount(user);
         accountRepository.AddAuditLog(new AuditLog
         {
-            ActorUserId = request.ActorUserId,
+            ActorUserId = command.ActorId,
             Action = "ACCOUNT_CREATED",
             EntityType = "User",
             EntityId = user.Id.ToString("D"),
             OccurredAt = now
         });
 
-        return new CreateAccountResult(
+        return new CreateAccountResponse(
             user.Id,
             user.Username,
             user.FullName,

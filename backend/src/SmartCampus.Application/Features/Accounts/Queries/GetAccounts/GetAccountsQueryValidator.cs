@@ -1,4 +1,5 @@
 using FluentValidation;
+using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 
 namespace SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 
@@ -6,13 +7,20 @@ public sealed class GetAccountsQueryValidator : AbstractValidator<GetAccountsQue
 {
     public GetAccountsQueryValidator()
     {
-        RuleFor(query => query.Page).GreaterThanOrEqualTo(1);
-        RuleFor(query => query.PageSize).InclusiveBetween(1, 100);
-        RuleFor(query => query.Sort)
-            .Must(sort => AccountSortParser.TryParse(sort, out _))
-            .WithMessage("Sort must use a supported account field, optionally prefixed with '-'.");
-        RuleFor(query => query.Expand)
-            .Must(string.IsNullOrWhiteSpace)
-            .WithMessage("Account expansion is not supported.");
+        RuleFor(query => query.Request).NotNull();
+
+        When(query => query.Request is not null, () =>
+        {
+            RuleFor(query => query.Request.Page)
+                .GreaterThanOrEqualTo(1)
+                .OverridePropertyName(nameof(GetAccountsRequest.Page));
+            RuleFor(query => query.Request.Size)
+                .InclusiveBetween(1, 100)
+                .OverridePropertyName("PageSize");
+            RuleFor(query => query.Request.Sort)
+                .Must(sort => AccountSortParser.TryParse(sort, out _))
+                .WithMessage("Sort must use a supported account field, optionally prefixed with '-'.")
+                .OverridePropertyName(nameof(GetAccountsRequest.Sort));
+        });
     }
 }

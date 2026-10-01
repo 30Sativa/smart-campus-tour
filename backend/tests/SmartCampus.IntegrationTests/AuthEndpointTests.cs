@@ -63,9 +63,18 @@ public sealed class AuthEndpointTests
             Assert.Equal(HttpStatusCode.Unauthorized, missingRefresh.StatusCode);
             AssertRefreshCookieCleared(missingRefresh);
 
+            foreach (var username in new[] { " SYSTEM.ADMIN", "SYSTEM.ADMIN ", "SYSTEM ADMIN", "system\tadmin", "system\u00a0admin" })
+            {
+                using var invalidUsername = await client.PostAsJsonAsync(
+                    "/api/auth/login", new { username, password = Password });
+                Assert.Equal(HttpStatusCode.BadRequest, invalidUsername.StatusCode);
+                Assert.False(invalidUsername.Headers.Contains("Set-Cookie"));
+                Assert.Equal(0, await database.CountRowsAsync("dbo.RefreshTokens"));
+            }
+
             using var login = await client.PostAsJsonAsync(
                 "/api/auth/login",
-                new { username = " SYSTEM.ADMIN ", password = Password });
+                new { username = "SYSTEM.ADMIN", password = Password });
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
             var loginBody = await login.Content.ReadFromJsonAsync<AuthResponse>();
             Assert.NotNull(loginBody);
@@ -202,7 +211,7 @@ public sealed class AuthEndpointTests
 
             using var login = await client.PostAsJsonAsync(
                 "/api/auth/login",
-                new { username = " SYSTEM.ADMIN ", password = Password });
+                new { username = "SYSTEM.ADMIN", password = Password });
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
             var response = await login.Content.ReadFromJsonAsync<AuthResponse>();
             Assert.NotNull(response);

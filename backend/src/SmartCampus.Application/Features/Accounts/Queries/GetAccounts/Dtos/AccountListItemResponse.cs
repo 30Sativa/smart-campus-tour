@@ -1,6 +1,6 @@
 namespace SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 
-public sealed record AccountListItem(
+public sealed record AccountListItemResponse(
     Guid Id,
     string Username,
     string FullName,

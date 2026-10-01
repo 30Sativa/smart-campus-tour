@@ -77,6 +77,7 @@ const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPag
 const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
+const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 function ShellFallback({ background }: { background: string }) {
@@ -271,6 +272,7 @@ export const routes = [
       { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
       { path: 'routes', element: <AdminRouteCatalogPage /> },
       { path: 'history', element: <AdminTourHistoryPage /> },
+      { path: 'accounts', element: <AdminAccountsPage /> },
       { path: 'roles', element: <RolesPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },

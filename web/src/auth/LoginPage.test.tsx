@@ -67,6 +67,48 @@ describe('LoginPage', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each(['   ', ' staff', 'staff ', 'staff user', 'staff\tuser', 'staff\u00a0user', 'staff\u0085user'])('rejects whitespace in a username before calling the API', async (value) => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value } })
+    fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tên đăng nhập không được chứa khoảng trắng.')
+    expect(screen.getByLabelText('Tên đăng nhập')).toHaveAttribute('aria-invalid', 'true')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves password whitespace exactly', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(authResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'staff' } })
+    fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: ' password ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveTextContent('/staff'))
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: JSON.stringify({ username: 'staff', password: ' password ' }),
+    }))
+  })
+
+  it('rejects an overlong username and allows correction to the backend length limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(authResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'a'.repeat(101) } })
+    fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tên đăng nhập tối đa 100 ký tự.')
+    expect(fetchMock).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'a'.repeat(100) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
+    await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveTextContent('/staff'))
+  })
+
   it('posts credentials to the backend with the refresh cookie enabled', async () => {
     const fetchMock = vi.fn().mockResolvedValue(authResponse())
     vi.stubGlobal('fetch', fetchMock)

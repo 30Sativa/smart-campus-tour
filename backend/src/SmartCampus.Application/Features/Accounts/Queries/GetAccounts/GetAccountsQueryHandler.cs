@@ -7,12 +7,13 @@ using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 namespace SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 
 public sealed class GetAccountsQueryHandler(IAccountRepository accountRepository)
-    : IRequestHandler<GetAccountsQuery, PagedResult<AccountListItem>>
+    : IRequestHandler<GetAccountsQuery, PagedResult<AccountListItemResponse>>
 {
-    public async Task<PagedResult<AccountListItem>> Handle(
-        GetAccountsQuery request,
+    public async Task<PagedResult<AccountListItemResponse>> Handle(
+        GetAccountsQuery query,
         CancellationToken cancellationToken)
     {
+        var request = query.Request;
         if (!AccountSortParser.TryParse(request.Sort, out var sort))
             throw new InvalidOperationException(
                 "Validated GetAccountsQuery contained invalid sort input.");
@@ -21,12 +22,12 @@ public sealed class GetAccountsQueryHandler(IAccountRepository accountRepository
             string.IsNullOrWhiteSpace(request.Search) ? null : request.Search.Trim(),
             sort,
             request.Page,
-            request.PageSize,
+            request.Size,
             cancellationToken);
 
         var items = page.Items.Select(account =>
         {
-            return new AccountListItem(
+            return new AccountListItemResponse(
                 account.Id,
                 account.Username,
                 account.FullName,
@@ -36,7 +37,7 @@ public sealed class GetAccountsQueryHandler(IAccountRepository accountRepository
                 account.UpdatedAt);
         }).ToArray();
 
-        return new PagedResult<AccountListItem>(items, page.Page, page.PageSize, page.TotalItems);
+        return new PagedResult<AccountListItemResponse>(items, page.Page, page.PageSize, page.TotalItems);
     }
 
     private static string? ResolveListRole(string? roleCode, int roleCount)

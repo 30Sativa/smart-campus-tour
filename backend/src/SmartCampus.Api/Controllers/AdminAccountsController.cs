@@ -1,11 +1,11 @@
 using System.Security.Claims;
+using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
-using SmartCampus.Api.Features.Accounts.Requests;
-using SmartCampus.Api.Features.Accounts.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount;
@@ -13,6 +13,7 @@ using SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 using SmartCampus.Application.Features.Accounts.Commands.DeactivateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.ReactivateAccount;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
+using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -24,29 +25,30 @@ public sealed class AdminAccountsController(
 {
     [HttpGet]
     public async Task<ActionResult<PagedResponse<AccountListItemResponse>>> List(
-        [FromQuery] CollectionQueryParameters request,
+        [FromQuery] CollectionQueryParameters parameters,
         CancellationToken cancellationToken = default)
     {
+        if (!string.IsNullOrWhiteSpace(parameters.Expand))
+        {
+            throw new ValidationException(
+            [
+                new ValidationFailure(nameof(parameters.Expand), "Account expansion is not supported.")
+            ]);
+        }
+
+        var request = new GetAccountsRequest(
+            parameters.Search,
+            parameters.Sort,
+            parameters.Page,
+            parameters.Size);
         var result = await sender.Send(
-            new GetAccountsQuery(
-                request.Search,
-                request.Sort,
-                request.Page,
-                request.Size,
-                request.Expand),
+            new GetAccountsQuery(request),
             cancellationToken);
         return Ok(new PagedResponse<AccountListItemResponse>
         {
             Success = true,
             Message = "Accounts retrieved.",
-            Data = result.Items.Select(account => new AccountListItemResponse(
-                account.Id,
-                account.Username,
-                account.FullName,
-                account.Role,
-                account.IsActive,
-                account.CreatedAt,
-                account.UpdatedAt)).ToArray(),
+            Data = result.Items,
             Pagination = new PaginationMetadata(
                 result.Page,
                 result.PageSize,
@@ -60,27 +62,15 @@ public sealed class AdminAccountsController(
         [FromBody] CreateAccountRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await sender.Send(
-            new CreateAccountCommand(
-                request.Username,
-                request.FullName,
-                request.Role,
-                request.InitialPassword,
-                GetActorUserId()),
+        var response = await sender.Send(
+            new CreateAccountCommand(GetActorUserId(), request),
             cancellationToken);
 
         return Ok(new BaseResponse<CreateAccountResponse>
         {
             Success = true,
             Message = "Account created.",
-            Data = new CreateAccountResponse(
-                result.Id,
-                result.Username,
-                result.FullName,
-                result.Role,
-                result.IsActive,
-                result.CreatedAt,
-                result.UpdatedAt)
+            Data = response
         });
     }
 

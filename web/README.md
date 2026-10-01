@@ -8,7 +8,7 @@ rules that apply here.
 
 ```bash
 npm install
-cp .env.example .env      # then edit VITE_API_BASE_URL if the backend is elsewhere
+cp .env .env.local        # set VITE_API_BASE_URL=https://localhost:7092 locally
 npm run dev               # http://localhost:5173
 ```
 
@@ -16,7 +16,22 @@ npm run dev               # http://localhost:5173
 
 | Variable | Meaning | Example |
 |---|---|---|
-| `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `http://localhost:5246` |
+| `VITE_API_BASE_URL` | Backend API base URL, used by `src/api/client.ts` and the SignalR hub factory | `https://localhost:7092` |
+| `VITE_QUEST_WHEP_URL` | Optional Quest WebRTC endpoint; empty keeps the current video source | `http://10.80.192.207:8889/quest/whep` |
+| `VITE_QUEST_ICE_SERVERS` | Optional comma-separated STUN URLs | `stun:stun.l.google.com:19302` |
+
+`web/.env` is tracked with empty values as the shared list of variables.
+`web/.env.local` holds machine-specific values and is ignored by Git. Local
+values override the shared declarations. An empty `VITE_API_BASE_URL` sends
+requests to the frontend origin, which requires a same-origin API or proxy;
+local Vite does not provide one. Use the backend's HTTPS URL directly because
+its HTTP URL redirects to HTTPS, including CORS preflight requests.
+
+For deployment, set the variables in that environment's build settings (for
+example, Vercel environment variables). Variables already present in the build
+environment take priority over the files. Vite embeds `VITE_*` values at build
+time, so rebuild/redeploy after changing them. Keep secrets in the backend or
+service environment, never in frontend variables or the tracked file.
 
 Login, refresh and logout use the backend through `/api/auth/*`; configure
 `VITE_API_BASE_URL` for the API host. Access tokens stay in memory and the

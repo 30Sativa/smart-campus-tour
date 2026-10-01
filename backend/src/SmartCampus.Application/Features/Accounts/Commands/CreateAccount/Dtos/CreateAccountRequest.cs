@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SmartCampus.Api.Features.Accounts.Requests;
+namespace SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CreateAccountRequest(

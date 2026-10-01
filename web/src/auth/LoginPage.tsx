@@ -103,7 +103,11 @@ export default function LoginPage() {
           aria-describedby={apiError ? 'login-error' : undefined}
           disabled={isSubmitting}
           error={errors.username?.message}
-          {...register('username', { required: 'Vui lòng nhập tên đăng nhập' })}
+          {...register('username', {
+            required: 'Vui lòng nhập tên đăng nhập',
+            pattern: { value: /^\P{White_Space}+$/u, message: 'Tên đăng nhập không được chứa khoảng trắng.' },
+            maxLength: { value: 100, message: 'Tên đăng nhập tối đa 100 ký tự.' },
+          })}
         />
 
         <AuthPasswordField

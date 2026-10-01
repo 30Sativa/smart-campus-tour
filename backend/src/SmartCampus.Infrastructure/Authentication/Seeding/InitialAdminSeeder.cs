@@ -27,6 +27,8 @@ public sealed class InitialAdminSeeder(
         ArgumentException.ThrowIfNullOrWhiteSpace(username);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
         ArgumentException.ThrowIfNullOrWhiteSpace(fullName);
+        if (username.Any(char.IsWhiteSpace))
+            throw new ArgumentException("Initial Admin username must not contain whitespace.", nameof(username));
 
         var trimmedUsername = username.Trim();
         var trimmedFullName = fullName.Trim();

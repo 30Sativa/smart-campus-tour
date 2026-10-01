@@ -112,12 +112,14 @@ describe('QuestLiveVideo (WebRTC / WHEP)', () => {
   })
 
   it('reports offline when there is no stream yet (404) and reconnects by itself', async () => {
+    // Install the fake clock before the failed connection schedules its retry.
+    vi.useFakeTimers()
     fetchMock.mockImplementationOnce(async () => answer(404))
     render(<QuestLiveVideo src={WHEP_URL} />)
-    await waitFor(() => expect(screen.getByText('Không có tín hiệu từ kính Quest')).toBeInTheDocument())
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(screen.getByText('Không có tín hiệu từ kính Quest')).toBeInTheDocument()
     expect(pcs[0].closed).toBe(true)
 
-    vi.useFakeTimers()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(retryDelayMs(0))
     })
