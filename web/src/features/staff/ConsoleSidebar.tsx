@@ -53,23 +53,23 @@ export function ConsoleSidebar({
       ref={panelRef}
       tabIndex={-1}
       aria-label={label}
-      className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-64 flex-col border-r border-[#e2e8f0] bg-white transition-transform duration-300 ease-out lg:sticky lg:translate-x-0 motion-reduce:transition-none focus-visible:outline-none ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)] lg:shadow-none' : '-translate-x-full'}`}
+      className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-[216px] flex-col border-r border-[#dbe9f4] bg-white transition-transform duration-300 ease-out lg:sticky lg:translate-x-0 motion-reduce:transition-none focus-visible:outline-none ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)] lg:shadow-none' : '-translate-x-full'}`}
     >
-      <div className="flex h-16 items-center border-b border-[#f1f5f9] px-4">
-        <Link to={homePath} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
-          <span className="grid size-9 place-items-center rounded-xl bg-[#2563eb] text-white"><Bot size={19} aria-hidden="true" /></span>
+      <div className="flex h-20 items-center px-5">
+        <Link to={homePath} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
+          <span className="grid size-9 place-items-center rounded-xl bg-[#ccecff] text-[#26638c]"><Bot size={19} aria-hidden="true" /></span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-bold tracking-[-0.02em] text-[#1e293b]">CampusTour</span>
-            <span className="block text-[11px] font-medium text-[#64748b]">{areaName}</span>
+            <span className="block truncate text-sm font-bold tracking-[-0.04em] text-[#173b59]">CampusTour</span>
+            <span className="block text-[10px] font-semibold tracking-[0.06em] text-[#879faf]">{areaName}</span>
           </span>
         </Link>
         <button ref={closeRef} type="button" onClick={onNavigate} className="grid size-9 place-items-center rounded-xl text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] lg:hidden" aria-label="Đóng menu"><X size={19} /></button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
+      <nav className="flex-1 overflow-y-auto px-4 py-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
         {sections.map((section, index) => (
           <div key={section.label ?? index} className={index ? 'mt-5' : ''}>
-            {section.label && <p className="mb-1 px-3 text-[11px] font-semibold text-[#94a3b8]">{section.label}</p>}
+            {section.label && <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#86a7ba]">{section.label}</p>}
             <div className="space-y-0.5">
               {section.items.map(({ label: itemLabel, path, icon: Icon }) => {
                 const active = currentPath === path
@@ -80,10 +80,9 @@ export function ConsoleSidebar({
                     to={path}
                     onClick={onNavigate}
                     aria-current={active ? 'page' : undefined}
-                    className={`group relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] ${active ? 'bg-[#eff6ff] text-[#1d4ed8]' : 'text-[#475569] hover:bg-[#f8fafc] hover:text-[#1e293b]'}`}
+                    className={`group relative flex min-h-10 items-center gap-3 rounded-xl px-3 text-[13px] font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${active ? 'bg-[#e5f3ff] text-[#174b70]' : 'text-[#54738a] hover:bg-[#f1f8fe] hover:text-[#174b70]'}`}
                   >
-                    <span aria-hidden="true" className={`absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-[#2563eb] transition-opacity duration-200 ${active ? 'opacity-100' : 'opacity-0'}`} />
-                    <Icon size={17} strokeWidth={1.9} aria-hidden="true" className={active ? 'text-[#2563eb]' : 'text-[#94a3b8] transition-colors group-hover:text-[#334155]'} />
+                    <Icon size={17} strokeWidth={1.9} aria-hidden="true" className={active ? 'text-[#4d93bd]' : 'text-[#7fa9c4] transition-colors group-hover:text-[#4d93bd]'} />
                     <span className="min-w-0 flex-1 truncate">{itemLabel}</span>
                     {badge && badge.value > 0 && <span className="rounded-full bg-[#fdecea] px-1.5 text-[11px] font-semibold text-[#b23e31] tabular-nums" aria-label={badge.label}>{badge.value}</span>}
                   </Link>
@@ -94,9 +93,9 @@ export function ConsoleSidebar({
         ))}
 
         {secondary && secondary.length > 0 && (
-          <div className="mt-6 space-y-0.5 border-t border-[#f1f5f9] pt-4">
+          <div className="mt-6 space-y-0.5 border-t border-[#e1edf5] pt-4">
             {secondary.map(({ to, label: linkLabel, icon: Icon, current }) => (
-              <Link key={to} to={to} onClick={onNavigate} aria-current={current ? 'page' : undefined} className={`flex min-h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] ${current ? 'bg-[#eff6ff] text-[#1d4ed8]' : 'text-[#6b7688] hover:bg-[#f8fafc] hover:text-[#1e293b]'}`}>
+              <Link key={to} to={to} onClick={onNavigate} aria-current={current ? 'page' : undefined} className={`flex min-h-9 items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${current ? 'bg-[#e5f3ff] text-[#174b70]' : 'text-[#6c879b] hover:bg-[#f1f8fe] hover:text-[#174b70]'}`}>
                 <Icon size={16} strokeWidth={1.9} aria-hidden="true" />
                 {linkLabel}
               </Link>
@@ -105,10 +104,10 @@ export function ConsoleSidebar({
         )}
       </nav>
 
-      <div className="border-t border-[#f1f5f9] p-3">
+      <div className="border-t border-[#e1edf5] p-3">
         {showUser && (
           <div className="mb-1 flex items-center gap-2.5 rounded-lg px-2 py-2">
-            <span className="grid size-8 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><UserIcon size={15} aria-hidden="true" /></span>
+            <span className="grid size-8 place-items-center rounded-full bg-[#e3f2ff] text-[#2b6c98]"><UserIcon size={15} aria-hidden="true" /></span>
             <div className="min-w-0">
               <p className="truncate text-[13px] font-semibold text-[#1e293b]">{user.name}</p>
               <p className="truncate text-[11px] text-[#94a3b8]">{user.role}</p>

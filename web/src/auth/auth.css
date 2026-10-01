@@ -706,3 +706,433 @@ html[data-auth-exit='split']::view-transition-old(auth-split-right) {
     transform: translateX(100%);
   }
 }
+
+/* Login: an editorial gateway paired with the SmartBus campus image. */
+.auth[data-page='login'] {
+  --auth-panel-bg: #f6f8f3;
+  --auth-field-bg: #ffffff;
+  --auth-field-line: rgba(27, 61, 54, 0.18);
+  --lp-ink: #14332f;
+  --lp-ink-2: #526964;
+  --lp-ink-3: #6a807a;
+  --lp-accent: #276451;
+  --lp-accent-soft: rgba(39, 100, 81, 0.12);
+  --lp-accent-shadow: rgba(39, 100, 81, 0.22);
+  --lp-line: rgba(27, 61, 54, 0.16);
+  --lp-line-strong: rgba(27, 61, 54, 0.3);
+  background: var(--auth-panel-bg);
+}
+
+html.dark .auth[data-page='login'] {
+  --auth-panel-bg: #0e1c1c;
+  --auth-field-bg: #172929;
+  --auth-field-line: rgba(219, 241, 222, 0.2);
+  --lp-ink: #f0f6ed;
+  --lp-ink-2: #b5c8bd;
+  --lp-ink-3: #9aafa4;
+  --lp-accent: #d4ee93;
+  --lp-accent-soft: rgba(212, 238, 147, 0.14);
+  --lp-accent-shadow: rgba(212, 238, 147, 0.16);
+  --lp-line: rgba(219, 241, 222, 0.15);
+  --lp-line-strong: rgba(219, 241, 222, 0.3);
+}
+
+.auth[data-page='login'] .auth-panel {
+  align-items: stretch;
+  padding: 32px clamp(24px, 5vw, 76px) 26px;
+}
+
+.auth[data-page='login'] .auth-col {
+  max-width: none;
+  min-height: calc(100dvh - 58px);
+}
+
+.auth[data-page='login'] .auth-brand {
+  margin-bottom: 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.035em;
+}
+
+.auth[data-page='login'] .auth-brand__mark {
+  width: 39px;
+  height: 39px;
+  transition: transform 500ms var(--auth-ease);
+}
+
+.auth[data-page='login'] .auth-brand:hover .auth-brand__mark {
+  transform: rotate(-9deg) scale(1.06);
+}
+
+html.dark .auth[data-page='login'] .auth-brand__mark {
+  filter: brightness(0) invert(1);
+}
+
+.auth[data-page='login'] .auth-body {
+  width: min(100%, 438px);
+  margin: auto;
+  padding: 44px 0;
+}
+
+.auth-form-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 24px;
+  color: var(--lp-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.auth-form-eyebrow span {
+  width: 27px;
+  height: 1px;
+  background: currentColor;
+}
+
+.auth[data-page='login'] .auth-title {
+  max-width: none;
+  font-size: clamp(2.5rem, 3.3vw, 3.6rem);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+}
+
+.auth[data-page='login'] .auth-title span {
+  display: block;
+}
+
+.auth[data-page='login'] .auth-lead {
+  max-width: 37ch;
+  margin-top: 18px;
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.auth[data-page='login'] .auth-form {
+  margin-top: 42px;
+}
+
+.auth[data-page='login'] .auth-label {
+  margin-bottom: 9px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.auth[data-page='login'] .auth-input-wrap {
+  transition: transform 240ms var(--auth-ease);
+}
+
+.auth[data-page='login'] .auth-input-wrap:focus-within {
+  transform: translateY(-2px);
+}
+
+.auth[data-page='login'] .auth-input {
+  height: 54px;
+  border-radius: 14px;
+  box-shadow: 0 7px 20px -18px rgba(17, 51, 43, 0.55);
+}
+
+.auth[data-page='login'] .auth-error-slot {
+  min-height: 30px;
+}
+
+.auth[data-page='login'] .auth-reveal {
+  right: 6px;
+  width: 42px;
+  height: 42px;
+}
+
+.auth[data-page='login'] .auth-submit {
+  position: relative;
+  overflow: hidden;
+  height: 56px;
+  margin-top: 16px;
+  justify-content: space-between;
+  border-radius: 999px;
+  background: #d5f08f;
+  color: #183626;
+  font-size: 0.98rem;
+  font-weight: 800;
+  box-shadow: 0 18px 34px -18px rgba(104, 145, 37, 0.55);
+}
+
+.auth[data-page='login'] .auth-submit::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 -40%;
+  width: 32%;
+  transform: skewX(-24deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transition: left 580ms var(--auth-ease);
+  pointer-events: none;
+}
+
+.auth[data-page='login'] .auth-submit:hover:not(:disabled)::before {
+  left: 115%;
+}
+
+.auth[data-page='login'] .auth-submit svg {
+  flex: none;
+  transition: transform 280ms var(--auth-ease);
+}
+
+.auth[data-page='login'] .auth-submit:hover:not(:disabled) svg {
+  transform: translateX(5px);
+}
+
+.auth[data-page='login'] .auth-switch {
+  margin-top: 27px;
+  text-align: left;
+}
+
+.auth[data-page='login'] .auth-back {
+  align-self: flex-start;
+  margin-top: 0;
+  color: var(--lp-ink-2);
+}
+
+.auth[data-page='login'] .auth-footer {
+  margin-top: 16px;
+  text-align: left;
+}
+
+@media (min-width: 1024px) {
+  .auth[data-page='login'] {
+    grid-template-columns: minmax(440px, 0.91fr) minmax(0, 1.09fr);
+  }
+
+  .auth[data-page='login'] .auth-visual {
+    height: calc(100dvh - 28px);
+    margin: 14px 14px 14px 0;
+    border-radius: 22px;
+    box-shadow: 0 24px 60px -30px rgba(10, 38, 33, 0.45);
+  }
+}
+
+.auth[data-page='login'] .auth-visual__img {
+  object-position: 55% 50%;
+  transform: scale(1.01);
+  transition: transform 1100ms var(--auth-ease);
+}
+
+.auth[data-page='login'] .auth-visual:hover .auth-visual__img {
+  transform: scale(1.045);
+}
+
+.auth[data-page='login'] .auth-visual__scrim {
+  inset: 0;
+  height: auto;
+  background: linear-gradient(180deg, rgba(5, 29, 27, 0.68) 0%, rgba(5, 29, 27, 0.25) 42%, transparent 70%),
+    linear-gradient(90deg, rgba(5, 29, 27, 0.25), transparent 72%);
+}
+
+.auth[data-page='login'] .auth-visual__inner {
+  top: clamp(42px, 6vh, 88px);
+  bottom: auto;
+  left: clamp(32px, 4.5vw, 76px);
+  right: clamp(32px, 4vw, 70px);
+}
+
+.auth-visual__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 24px;
+  color: #d9f3a0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.auth-visual__eyebrow span {
+  width: 24px;
+  height: 1px;
+  background: currentColor;
+}
+
+.auth[data-page='login'] .auth-visual__title {
+  max-width: 11ch;
+  font-size: clamp(2.35rem, 4vw, 4.5rem);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+  text-shadow: 0 3px 22px rgba(4, 23, 20, 0.3);
+}
+
+.auth[data-page='login'] .auth-visual__lead {
+  max-width: 36ch;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1rem;
+  line-height: 1.65;
+  text-shadow: 0 2px 12px rgba(4, 23, 20, 0.35);
+}
+
+.auth-visual__note {
+  position: absolute;
+  bottom: 30px;
+  left: clamp(32px, 4.5vw, 76px);
+  margin: 0;
+  padding: 11px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  background: rgba(7, 36, 31, 0.24);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.auth .auth-devbadge {
+  padding: 0;
+  max-width: 310px;
+  background: rgba(246, 250, 246, 0.94);
+  box-shadow: 0 12px 32px -20px rgba(8, 34, 29, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.auth .auth-devbadge summary {
+  padding: 9px 13px;
+  color: #245746;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+  list-style: none;
+}
+
+.auth .auth-devbadge summary::-webkit-details-marker {
+  display: none;
+}
+
+.auth .auth-devbadge summary::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #73ac47;
+  vertical-align: 1px;
+}
+
+.auth .auth-devbadge p {
+  margin: 0;
+  padding: 0 13px 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1023px) {
+  .auth[data-page='login'] {
+    grid-template-rows: 168px 1fr;
+  }
+
+  .auth[data-page='login'] .auth-panel {
+    grid-row: 2;
+    padding-top: 26px;
+  }
+
+  .auth[data-page='login'] .auth-col {
+    min-height: 0;
+  }
+
+  .auth[data-page='login'] .auth-body {
+    margin: 0 auto;
+  }
+
+  .auth[data-page='login'] .auth-visual {
+    position: relative;
+    display: block;
+    grid-row: 1;
+    height: 168px;
+    overflow: hidden;
+  }
+
+  .auth[data-page='login'] .auth-visual__img {
+    object-position: 65% 78%;
+  }
+
+  .auth[data-page='login'] .auth-visual__inner,
+  .auth[data-page='login'] .auth-visual__note {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .auth[data-page='login'] {
+    grid-template-rows: 144px 1fr;
+  }
+
+  .auth[data-page='login'] .auth-panel {
+    padding: 24px 24px 30px;
+  }
+
+  .auth[data-page='login'] .auth-visual {
+    height: 144px;
+  }
+
+  .auth[data-page='login'] .auth-body {
+    padding: 48px 0 38px;
+  }
+
+  .auth[data-page='login'] .auth-title {
+    font-size: clamp(2.3rem, 9vw, 3rem);
+  }
+
+  .auth[data-page='login'] .auth-form {
+    margin-top: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth[data-page='login'] .auth-col {
+    animation: none;
+  }
+
+  .auth[data-page='login'] .auth-brand,
+  .auth[data-page='login'] .auth-form-eyebrow,
+  .auth[data-page='login'] .auth-title,
+  .auth[data-page='login'] .auth-lead,
+  .auth[data-page='login'] .auth-form,
+  .auth[data-page='login'] .auth-switch,
+  .auth[data-page='login'] .auth-back,
+  .auth[data-page='login'] .auth-footer {
+    animation: auth-login-enter 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .auth[data-page='login'] .auth-title { animation-delay: 80ms; }
+  .auth[data-page='login'] .auth-lead { animation-delay: 145ms; }
+  .auth[data-page='login'] .auth-form { animation-delay: 220ms; }
+  .auth[data-page='login'] .auth-switch { animation-delay: 300ms; }
+  .auth[data-page='login'] .auth-back,
+  .auth[data-page='login'] .auth-footer { animation-delay: 360ms; }
+  .auth[data-page='login'] .auth-visual__img {
+    animation: auth-image-enter 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .auth[data-page='login'] .auth-visual__inner,
+  .auth[data-page='login'] .auth-visual__note {
+    animation: auth-login-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) 270ms both;
+  }
+}
+
+@keyframes auth-login-enter {
+  from { opacity: 0; translate: 0 22px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes auth-image-enter {
+  from { opacity: 0.6; transform: scale(1.08); }
+  to { opacity: 1; transform: scale(1.01); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth[data-page='login'] .auth-brand__mark,
+  .auth[data-page='login'] .auth-input-wrap,
+  .auth[data-page='login'] .auth-submit::before,
+  .auth[data-page='login'] .auth-submit svg,
+  .auth[data-page='login'] .auth-visual__img {
+    animation: none;
+    transition: none;
+  }
+}

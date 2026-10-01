@@ -22,7 +22,7 @@ export function RegistrationCard({ registration: r }: { registration: Representa
   const note = tourNote(r)
   const needsFix = r.state === 'Rejected' && r.allowedActions.edit.allowed
   return (
-    <article className={`${panelBase} ${cardHover} grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center`}>
+    <article className={`rep-registration-card ${panelBase} ${cardHover} grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <RegistrationStatusBadge state={r.state} />
