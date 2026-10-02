@@ -106,6 +106,16 @@ Diagnostics include state/reason, image and cloud source stamps, sync delta,
 observation age, inference p50/p95, source-stamp-to-consumed-observation E2E
 p50/p95 (including RGB-D fusion), unique frame rate, drops, duplicates,
 errors, and policy.
+`fusion_p50_ms` / `fusion_p95_ms` measure elapsed `perf_counter` time around
+`_locate()`, over the last 100 calls with nonempty person boxes. The worker
+records successful and failed calls, including results later rejected as
+stale or replaced before consumption. The interval excludes inference, input
+deserialization/synchronization, mailbox waits, and output publication.
+Empty-bbox and bbox-only observations add no samples; neither do failures
+before `_locate()` is called (for example missing CameraInfo). Metrics are
+`unknown` until the first measured call. Empty observations retain previous
+samples instead of adding near-zero durations; this is a last-attempt window,
+not a time window.
 The cumulative `rgb_received` and `cloud_received` counters count messages
 delivered to Python callbacks, not all samples published by the camera.
 `pairs_accepted` counts synchronized pairs queued after timestamp/delta/order

@@ -163,6 +163,10 @@ state/reason, source stamps, synchronization delta, observation age, inference
 latency and drop/error counters. Additional cumulative `rgb_received` and
 `cloud_received` counters count Python input callback deliveries;
 `pairs_accepted` counts pairs queued after timestamp/delta/order validation.
+`fusion_p50_ms` and `fusion_p95_ms` summarize elapsed worker time around the
+last 100 actual `_locate()` calls with nonempty boxes, including failed calls
+and results later rejected as stale or replaced. Empty boxes and paths that
+do not call `_locate()` add no samples; metrics are unknown before any sample.
 Normal RGB-D inputs use DDS KEEP_LAST(1) and are sampled before rclpy takes
 messages at configured `rate_hz`; the synchronizer retains at most one
 message per stream. Accepted pairs require increasing timestamps from both

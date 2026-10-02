@@ -279,6 +279,7 @@ class PersonPerceptionNode(Node):
         self._calibration_signature=None
         self._counts={'dropped':0,'duplicate':0,'errors':0}; self._latencies=deque(maxlen=100)
         self._e2e_latencies=deque(maxlen=100); self._observation_times=deque(maxlen=100)
+        self._fusion_latencies=deque(maxlen=100)
         self._bbox_count=0; self._valid_fusion_count=0
         self._input_counts={'rgb_received':0,'cloud_received':0,'pairs_accepted':0}
         self._input_group=None
@@ -447,16 +448,24 @@ class PersonPerceptionNode(Node):
             except Exception as exc:
                 result=InferenceResult(snap,np.empty((0,4),np.float32),np.empty(0,np.float32),time.perf_counter()-t,str(exc))
 
+            fusion_duration=None
             if not result.error and not self.bbox_only:
                 try:
                     if snap.info is None: raise PerceptionError('missing CameraInfo')
-                    people=self._locate(snap,result.boxes)
+                    fusion_start=time.perf_counter() if len(result.boxes) else None
+                    try:
+                        people=self._locate(snap,result.boxes)
+                    finally:
+                        if fusion_start is not None:
+                            fusion_duration=time.perf_counter()-fusion_start
                     result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
                                            people=people)
                 except Exception as exc:
                     result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
                                            fusion_error=str(exc))
             with self._wake:
+                # Profile all nonempty _locate attempts, even failed/stale/replaced results.
+                if fusion_duration is not None: self._fusion_latencies.append(fusion_duration)
                 self._worker_busy=False
                 # A result still waiting for the executor is replaced by this newer one.
                 if self._result is not None:
@@ -633,6 +642,8 @@ class PersonPerceptionNode(Node):
         infer_p95=float(np.percentile(np.asarray(self._latencies),95)) if self._latencies else float('nan')
         e2e_p50=float(np.percentile(np.asarray(self._e2e_latencies),50)) if self._e2e_latencies else float('nan')
         e2e_p95=float(np.percentile(np.asarray(self._e2e_latencies),95)) if self._e2e_latencies else float('nan')
+        with self._wake: fusion=tuple(self._fusion_latencies)
+        fusion_p50,fusion_p95=np.percentile(fusion,[50,95]) if fusion else (float('nan'),float('nan'))
         unique_hz=((len(self._observation_times)-1)/(self._observation_times[-1]-self._observation_times[0])
                    if len(self._observation_times)>1 and self._observation_times[-1]>self._observation_times[0]
                    else float('nan'))
@@ -641,6 +652,8 @@ class PersonPerceptionNode(Node):
                  'errors':str(self._counts['errors']),
                  'inference_p50_ms':f'{infer_p50*1000:.2f}' if math.isfinite(infer_p50) else 'unknown',
                  'inference_p95_ms':f'{infer_p95*1000:.2f}' if math.isfinite(infer_p95) else 'unknown',
+                 'fusion_p50_ms':f'{fusion_p50*1000:.2f}' if math.isfinite(fusion_p50) else 'unknown',
+                 'fusion_p95_ms':f'{fusion_p95*1000:.2f}' if math.isfinite(fusion_p95) else 'unknown',
                 'bbox_count':str(self._bbox_count),'valid_fusion_count':str(self._valid_fusion_count),
                  'e2e_p50_ms':f'{e2e_p50*1000:.2f}' if math.isfinite(e2e_p50) else 'unknown',
                  'e2e_p95_ms':f'{e2e_p95*1000:.2f}' if math.isfinite(e2e_p95) else 'unknown',

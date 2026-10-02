@@ -95,6 +95,7 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node.info = None
     node._latencies = []
     node._e2e_latencies = []
+    node._fusion_latencies = P.deque(maxlen=100)
     node._observation_times = []
     node._bbox_count = 0
     node._valid_fusion_count = 0
@@ -139,6 +140,118 @@ def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=No
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
+    def test_worker_profiles_nonempty_locate_success_error_stale_and_replaced_results(self):
+        cases = (
+            ('success/replaced', False, True, '', True, 10.1, True),
+            ('fusion error', False, True, 'fusion failed', True, 10.1, False),
+            ('stale result', False, True, '', True, 12.0, False),
+            ('empty boxes', False, False, '', True, 10.1, False),
+            ('bbox only', True, True, '', True, 10.1, False),
+            ('missing info before locate', False, True, '', False, 10.1, False),
+        )
+        for name, bbox_only, has_boxes, error, has_info, now, replaced in cases:
+            with self.subTest(name=name):
+                node = make_node(now=now, bbox_only=bbox_only)
+                raw = (np.array([[[0., 0., 1., 1., .9, 0.]]], np.float32)
+                       if has_boxes else np.empty((1, 0, 6), np.float32))
+                node.net = types.SimpleNamespace(infer=lambda _inputs: {0: raw})
+                node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+                node._locate = mock.Mock(
+                    return_value=[np.array([1., 0., 0.])] if has_boxes else [],
+                    side_effect=RuntimeError(error) if error else None)
+                node._pending = P.Snapshot(
+                    image(10.0), message(10.0, cloud=True),
+                    object() if has_info else None, 10.0, 10.0, time.monotonic())
+                if replaced:
+                    node._result = inference_result(9.9, 9.9)
+                measured = has_boxes and has_info and not bbox_only
+                # Existing statistics must survive an empty-bbox observation.
+                if not has_boxes:
+                    node._fusion_latencies.append(.7)
+                initial = list(node._fusion_latencies)
+                clock_ticks = [1., 1.1, 5., 5.25] if measured else [1., 1.1]
+                fake_cv2 = types.ModuleType('cv2')
+                fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+                thread = threading.Thread(target=node._worker_loop, daemon=True)
+                with mock.patch.dict(sys.modules, {'cv2': fake_cv2}), \
+                        mock.patch.object(P.time, 'perf_counter', side_effect=clock_ticks) as timer:
+                    try:
+                        thread.start()
+                        with node._wake:
+                            self.assertTrue(node._wake.wait_for(
+                                lambda: node._result is not None
+                                and node._result.snapshot.image_stamp == 10.0
+                                and not node._worker_busy, timeout=1))
+                            result = node._result
+                        self.assertAlmostEqual(result.latency_s, .1)
+                        self.assertEqual(timer.call_count, 4 if measured else 2)
+                    finally:
+                        with node._wake:
+                            node._stopping = True
+                            node._wake.notify_all()
+                        thread.join(timeout=1)
+                self.assertFalse(thread.is_alive())
+                expected = initial + ([.25] if measured else [])
+                self.assertEqual(list(node._fusion_latencies), expected)
+                if not bbox_only and has_info:
+                    node._locate.assert_called_once()
+                else:
+                    node._locate.assert_not_called()
+                self.assertEqual(result.fusion_error,
+                                 error or ('missing CameraInfo' if not has_info else ''))
+                if replaced:
+                    self.assertEqual(node._counts['dropped'], 1)
+                node._consume(result)
+                self.assertEqual(list(node._fusion_latencies), expected)
+                if now == 12.0:
+                    self.assertIn('STALE/INVALID', node._status_reason)
+                    self.assertEqual(node._counts['errors'], 1)
+                elif error or not has_info:
+                    self.assertEqual(node._status_reason, result.fusion_error)
+                    self.assertEqual(node._counts['errors'], 1)
+                else:
+                    self.assertEqual(node._status_reason, 'BBOX_ONLY_VALID' if bbox_only else 'VALID')
+                    if not has_boxes:
+                        self.assertEqual(node._valid_fusion_count, 0)
+                        self.assertEqual(node.published_people, [])
+
+    def test_fusion_diagnostics_percentiles_unknown_and_last_100_attempts(self):
+        class DiagnosticArray:
+            def __init__(self):
+                self.header = types.SimpleNamespace(stamp=None)
+
+        class DiagnosticStatus:
+            OK = 0
+            ERROR = 2
+
+        node = make_node(bbox_only=False)
+        node._latencies = [.106, .124]
+        node._e2e_latencies = [.65, .9]
+
+        def diagnostics():
+            with mock.patch.multiple(
+                    P, DiagnosticArray=DiagnosticArray, DiagnosticStatus=DiagnosticStatus,
+                    KeyValue=lambda **kwargs: types.SimpleNamespace(**kwargs)):
+                P.PersonPerceptionNode._publish_diagnostics(node)
+            return {value.key: value.value for value in node.diag_pub.messages[-1].status[0].values}
+
+        original = diagnostics()
+        self.assertEqual(original['fusion_p50_ms'], 'unknown')
+        self.assertEqual(original['fusion_p95_ms'], 'unknown')
+        node._fusion_latencies.extend([.1, .2, .3, .4])
+        profiled = diagnostics()
+        self.assertEqual(profiled['fusion_p50_ms'], '250.00')
+        self.assertEqual(profiled['fusion_p95_ms'], '385.00')
+        self.assertEqual(
+            {key: value for key, value in original.items() if not key.startswith('fusion_')},
+            {key: value for key, value in profiled.items() if not key.startswith('fusion_')})
+        node._fusion_latencies.clear()
+        node._fusion_latencies.extend(i / 1000 for i in range(101))
+        self.assertEqual(len(node._fusion_latencies), 100)
+        latest = diagnostics()
+        self.assertEqual(latest['fusion_p50_ms'], '50.50')
+        self.assertEqual(latest['fusion_p95_ms'], '95.05')
+
     def test_sample_group_limits_each_reader_before_take_and_keeps_latest(self):
         class Reader:
             def __init__(self):
