@@ -4,6 +4,7 @@ import threading
 import time
 import types
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -45,8 +46,9 @@ class Harness:
     def _publish_debug(self, *_args):
         self.debug_published = True
 
-    def _publish_people(self, *_args):
+    def _publish_people(self, people, *_args):
         self.people_published = True
+        self.published_people = list(people)
 
     def _locate(self, _snapshot, _boxes):
         return []
@@ -130,6 +132,29 @@ def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=No
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
+    def test_locate_empty_boxes_skips_cloud_tf_and_projection(self):
+        info = types.SimpleNamespace(
+            width=2, height=2,
+            header=types.SimpleNamespace(frame_id='camera_optical'),
+            k=[1., 0., 0., 0., 1., 0., 0., 0., 1.],
+            d=[0., 0., 0., 0., 0.],
+            distortion_model='plumb_bob')
+        snapshot = P.Snapshot(image(10.0), message(10.0, cloud=True), info,
+                              10.0, 10.0, 0.0)
+        tf_calls = []
+        node = types.SimpleNamespace(
+            _calibration_signature=None,
+            base_frame='base_link',
+            _tf=lambda *_args: tf_calls.append(True))
+
+        with mock.patch.object(P, 'cloud_xyz', side_effect=AssertionError('cloud decoded')), \
+                mock.patch.object(P, 'project_points', side_effect=AssertionError('cloud projected')):
+            people = P.PersonPerceptionNode._locate(
+                node, snapshot, np.empty((0, 4), dtype=np.float32))
+
+        self.assertEqual(people, [])
+        self.assertEqual(tf_calls, [])
+
     def test_sync_accepts_40ms_and_rejects_60ms(self):
         node = make_node()
         node._enqueue(image(10.0), message(10.04, cloud=True), None)
@@ -314,6 +339,12 @@ class PersonPerceptionNodeTests(unittest.TestCase):
             node._consume(result)
             self.assertEqual(node._status_reason, 'VALID')
             self.assertTrue(node.people_published)
+            self.assertEqual(node.published_people, [])
+            self.assertEqual(node._valid_fusion_count, 0)
+            self.assertEqual(node._pending_policy, ([], 10.0))
+            node._policy_tick()
+            self.assertIsNone(node._pending_policy)
+            self.assertEqual(node.last_diagnostic_percent, 50.0)
 
             failed = inference_result(10.01, 10.01, fusion_error='TF lookup failed')
             node._consume(failed)

@@ -494,6 +494,8 @@ class PersonPerceptionNode(Node):
             self._calibration_signature=signature
             raise PerceptionError('CameraInfo calibration changed; waiting for a new observation')
         self._calibration_signature=signature
+        if len(boxes) == 0:
+            return []
         pts=cloud_xyz(cloud)
         if not len(pts):
             if len(boxes): raise PerceptionError('no valid cloud points')
