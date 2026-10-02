@@ -116,6 +116,26 @@ before `_locate()` is called (for example missing CameraInfo). Metrics are
 `unknown` until the first measured call. Empty observations retain previous
 samples instead of adding near-zero durations; this is a last-attempt window,
 not a time window.
+Fusion breakdown uses independent `deque(maxlen=100)` histories and
+`perf_counter` timing for these phases:
+
+| Metrics | Timed work |
+|---|---|
+| `cloud_decode_p50_ms` / `cloud_decode_p95_ms` | `cloud_xyz(cloud)` |
+| `transform_p50_ms` / `transform_p95_ms` | Both TF lookups, cloud transform to color frame, and Z filtering |
+| `projection_p50_ms` / `projection_p95_ms` | K preparation, projection, and in-image mask |
+| `roi_p50_ms` / `roi_p95_ms` | Entire bbox loop: ROI/core selection, median, and person transform to base frame |
+
+A phase records one sample in `finally` whether it finishes or raises.
+Completed phases retain their samples when a later phase fails; unentered
+phases add nothing. Empty boxes and calibration failures before the first
+phase add no samples. Collection happens in the worker, including attempts
+whose results are later stale/replaced. Each metric is `unknown` before its
+first sample and retains its history when skipped. The windows can contain
+different attempts; phase percentiles should not be summed to obtain fusion
+percentiles. Calibration checks and profiling bookkeeping remain part of
+total fusion timing, outside the phase intervals.
+
 The cumulative `rgb_received` and `cloud_received` counters count messages
 delivered to Python callbacks, not all samples published by the camera.
 `pairs_accepted` counts synchronized pairs queued after timestamp/delta/order

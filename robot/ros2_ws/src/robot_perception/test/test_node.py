@@ -41,6 +41,7 @@ class Harness:
     _publish_limit = P.PersonPerceptionNode._publish_limit
     _record_error = P.PersonPerceptionNode._record_error
     _tf = P.PersonPerceptionNode._tf
+    _profile_phase = P.PersonPerceptionNode._profile_phase
     _worker_loop = P.PersonPerceptionNode._worker_loop
 
     def _publish_diagnostics(self, percent=None):
@@ -96,6 +97,8 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node._latencies = []
     node._e2e_latencies = []
     node._fusion_latencies = P.deque(maxlen=100)
+    node._fusion_phase_latencies = {phase: P.deque(maxlen=100) for phase in P.FUSION_PHASES}
+    node._calibration_signature = None
     node._observation_times = []
     node._bbox_count = 0
     node._valid_fusion_count = 0
@@ -140,6 +143,86 @@ def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=No
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
+    def test_locate_phase_timing_success_exceptions_guards_and_empty_boxes(self):
+        cases = (
+            ('success', 4, ''),
+            ('decode error', 1, 'decode failed'),
+            ('no points', 1, 'no valid cloud points'),
+            ('transform error', 2, 'TF failed'),
+            ('no front points', 2, 'no cloud points in front of camera'),
+            ('projection error', 3, 'projection failed'),
+            ('roi error on second box', 4, 'ROI failed'),
+            ('invalid calibration', 0, 'invalid CameraInfo K'),
+            ('empty boxes', 0, ''),
+        )
+        for name, completed_or_attempted, error in cases:
+            with self.subTest(name=name):
+                node = make_node(bbox_only=False)
+                info = types.SimpleNamespace(
+                    width=2, height=2,
+                    header=types.SimpleNamespace(frame_id='camera_optical'),
+                    k=[1., 0., 1., 0., 1., 1., 0., 0., 1.],
+                    d=[0., 0., 0., 0., 0.], distortion_model='plumb_bob')
+                cloud = test_math.cloud([[(0., 0., 2.)] * 24])
+                cloud.header = types.SimpleNamespace(
+                    stamp=stamp(10.0), frame_id='camera_depth_optical')
+                snapshot = P.Snapshot(image(10.0), cloud, info, 10.0, 10.0, 0.0)
+                boxes = np.array([[0., 0., 2., 2.], [0., 0., 2., 2.]])
+                node._tf = mock.Mock(side_effect=[
+                    (np.eye(3), np.zeros(3)), (np.eye(3), np.array([1., 2., 3.]))])
+                ticks = [tick for i in range(completed_or_attempted)
+                         for tick in (float(i), float(i) + (i + 1) / 100)]
+                with mock.patch.object(P, 'cloud_xyz', wraps=P.cloud_xyz) as decode, \
+                        mock.patch.object(P, 'project_points', return_value=np.ones((24, 2))) as project, \
+                        mock.patch.object(P, 'range_core', wraps=P.range_core) as roi, \
+                        mock.patch.object(P.time, 'perf_counter', side_effect=ticks) as timer:
+                    if name == 'decode error':
+                        decode.side_effect = P.PerceptionError(error)
+                    elif name == 'no points':
+                        decode.return_value = np.empty((0, 3))
+                    elif name == 'transform error':
+                        node._tf.side_effect = P.PerceptionError(error)
+                    elif name == 'no front points':
+                        node._tf.side_effect = [
+                            (np.eye(3), np.array([0., 0., -4.])),
+                            (np.eye(3), np.array([1., 2., 3.]))]
+                    elif name == 'projection error':
+                        project.side_effect = P.PerceptionError(error)
+                    elif name == 'roi error on second box':
+                        roi.side_effect = [
+                            (2., np.ones(24, dtype=bool), np.ones(24, dtype=bool)),
+                            P.PerceptionError(error)]
+                    elif name == 'invalid calibration':
+                        info.k[0] = 0.
+                    elif name == 'empty boxes':
+                        boxes = np.empty((0, 4))
+
+                    if error:
+                        with self.assertRaisesRegex(P.PerceptionError, error):
+                            P.PersonPerceptionNode._locate(node, snapshot, boxes)
+                    else:
+                        people = P.PersonPerceptionNode._locate(node, snapshot, boxes)
+                        if name == 'empty boxes':
+                            self.assertEqual(people, [])
+                        else:
+                            np.testing.assert_allclose(people, [[1., 2., 5.], [1., 2., 5.]])
+                    self.assertEqual(timer.call_count, 2 * completed_or_attempted)
+                    if completed_or_attempted < 1:
+                        decode.assert_not_called()
+                    if completed_or_attempted < 2:
+                        node._tf.assert_not_called()
+                    if completed_or_attempted < 3:
+                        project.assert_not_called()
+                    if completed_or_attempted < 4:
+                        roi.assert_not_called()
+                    if name == 'roi error on second box':
+                        self.assertEqual(roi.call_count, 2)
+                for i, phase in enumerate(P.FUSION_PHASES):
+                    samples = node._fusion_phase_latencies[phase]
+                    self.assertEqual(len(samples), int(i < completed_or_attempted))
+                    if samples:
+                        self.assertAlmostEqual(samples[0], (i + 1) / 100)
+
     def test_worker_profiles_nonempty_locate_success_error_stale_and_replaced_results(self):
         cases = (
             ('success/replaced', False, True, '', True, 10.1, True),
@@ -238,6 +321,10 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         original = diagnostics()
         self.assertEqual(original['fusion_p50_ms'], 'unknown')
         self.assertEqual(original['fusion_p95_ms'], 'unknown')
+        phases = ('cloud_decode', 'transform', 'projection', 'roi')
+        for phase in phases:
+            self.assertEqual(original[f'{phase}_p50_ms'], 'unknown')
+            self.assertEqual(original[f'{phase}_p95_ms'], 'unknown')
         node._fusion_latencies.extend([.1, .2, .3, .4])
         profiled = diagnostics()
         self.assertEqual(profiled['fusion_p50_ms'], '250.00')
@@ -251,6 +338,22 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         latest = diagnostics()
         self.assertEqual(latest['fusion_p50_ms'], '50.50')
         self.assertEqual(latest['fusion_p95_ms'], '95.05')
+        for factor, phase in enumerate(phases, start=1):
+            samples = node._fusion_phase_latencies[phase]
+            samples.extend(factor * value for value in (.1, .2, .3, .4))
+            measured = diagnostics()
+            self.assertEqual(measured[f'{phase}_p50_ms'], f'{250 * factor:.2f}')
+            self.assertEqual(measured[f'{phase}_p95_ms'], f'{385 * factor:.2f}')
+            samples.clear()
+            samples.extend(factor * i / 1000 for i in range(101))
+            self.assertEqual(len(samples), 100)
+            measured = diagnostics()
+            self.assertEqual(measured[f'{phase}_p50_ms'], f'{50.5 * factor:.2f}')
+            self.assertEqual(measured[f'{phase}_p95_ms'], f'{95.05 * factor:.2f}')
+        phase_keys = {f'{phase}_p{percentile}_ms' for phase in phases for percentile in (50, 95)}
+        self.assertEqual(
+            {key: value for key, value in latest.items() if key not in phase_keys},
+            {key: value for key, value in measured.items() if key not in phase_keys})
 
     def test_sample_group_limits_each_reader_before_take_and_keeps_latest(self):
         class Reader:
@@ -359,16 +462,19 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         tf_calls = []
         node = types.SimpleNamespace(
             _calibration_signature=None,
+            _fusion_phase_latencies={phase: P.deque(maxlen=100) for phase in P.FUSION_PHASES},
             base_frame='base_link',
             _tf=lambda *_args: tf_calls.append(True))
 
-        with mock.patch.object(P, 'cloud_xyz', side_effect=AssertionError('cloud decoded')), \
+        with mock.patch.object(P.time, 'perf_counter', side_effect=AssertionError('empty boxes profiled')), \
+                mock.patch.object(P, 'cloud_xyz', side_effect=AssertionError('cloud decoded')), \
                 mock.patch.object(P, 'project_points', side_effect=AssertionError('cloud projected')):
             people = P.PersonPerceptionNode._locate(
                 node, snapshot, np.empty((0, 4), dtype=np.float32))
 
         self.assertEqual(people, [])
         self.assertEqual(tf_calls, [])
+        self.assertTrue(all(not samples for samples in node._fusion_phase_latencies.values()))
 
     def test_sync_accepts_40ms_and_rejects_60ms(self):
         node = make_node()

@@ -6,6 +6,7 @@ results and enforce stale-data policy. No output is a protective stop.
 """
 
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 import math
 import threading
@@ -26,6 +27,7 @@ from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
 PERSON_CLASS_ID = 0
+FUSION_PHASES = ('cloud_decode', 'transform', 'projection', 'roi')
 
 
 class PerceptionError(ValueError):
@@ -280,6 +282,7 @@ class PersonPerceptionNode(Node):
         self._counts={'dropped':0,'duplicate':0,'errors':0}; self._latencies=deque(maxlen=100)
         self._e2e_latencies=deque(maxlen=100); self._observation_times=deque(maxlen=100)
         self._fusion_latencies=deque(maxlen=100)
+        self._fusion_phase_latencies={phase:deque(maxlen=100) for phase in FUSION_PHASES}
         self._bbox_count=0; self._valid_fusion_count=0
         self._input_counts={'rgb_received':0,'cloud_received':0,'pairs_accepted':0}
         self._input_group=None
@@ -544,6 +547,15 @@ class PersonPerceptionNode(Node):
         if not np.isfinite(translation).all(): raise PerceptionError('non-finite TF translation')
         return quat_to_matrix(q.x,q.y,q.z,q.w),translation
 
+    @contextmanager
+    def _profile_phase(self,phase):
+        started=time.perf_counter()
+        try:
+            yield
+        finally:
+            duration=time.perf_counter()-started
+            with self._wake: self._fusion_phase_latencies[phase].append(duration)
+
     def _locate(self,snap,boxes):
         cloud,info=snap.cloud,snap.info
         if cloud is None or info is None: raise PerceptionError('missing cloud/CameraInfo')
@@ -563,25 +575,29 @@ class PersonPerceptionNode(Node):
         self._calibration_signature=signature
         if len(boxes) == 0:
             return []
-        pts=cloud_xyz(cloud)
+        with self._profile_phase('cloud_decode'):
+            pts=cloud_xyz(cloud)
         if not len(pts):
             if len(boxes): raise PerceptionError('no valid cloud points')
             return []
-        Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id)
-        Rb,Tb=self._tf(self.base_frame,info.header.frame_id)
-        cam=pts@Rc.T+Tc; valid=cam[:,2]>0.05; cam=cam[valid]
+        with self._profile_phase('transform'):
+            Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id)
+            Rb,Tb=self._tf(self.base_frame,info.header.frame_id)
+            cam=pts@Rc.T+Tc; valid=cam[:,2]>0.05; cam=cam[valid]
         if not len(cam):
             if len(boxes): raise PerceptionError('no cloud points in front of camera')
             return []
-        k=np.asarray(info.k,dtype=np.float64).reshape(3,3)
-        uv=project_points(cam,k,d)
-        in_img=(uv[:,0]>=0)&(uv[:,0]<info.width)&(uv[:,1]>=0)&(uv[:,1]<info.height)
-        out=[]
-        for box in boxes:
-            rng,mask,core=range_core(uv[in_img,0],uv[in_img,1],cam[in_img,2],box)
-            selected=cam[in_img][mask][core]
-            p_color=np.median(selected,axis=0)
-            out.append(Rb@p_color+Tb)
+        with self._profile_phase('projection'):
+            k=np.asarray(info.k,dtype=np.float64).reshape(3,3)
+            uv=project_points(cam,k,d)
+            in_img=(uv[:,0]>=0)&(uv[:,0]<info.width)&(uv[:,1]>=0)&(uv[:,1]<info.height)
+        with self._profile_phase('roi'):
+            out=[]
+            for box in boxes:
+                rng,mask,core=range_core(uv[in_img,0],uv[in_img,1],cam[in_img,2],box)
+                selected=cam[in_img][mask][core]
+                p_color=np.median(selected,axis=0)
+                out.append(Rb@p_color+Tb)
         return out
 
     def _publish_people(self,people,stamp):
@@ -642,7 +658,9 @@ class PersonPerceptionNode(Node):
         infer_p95=float(np.percentile(np.asarray(self._latencies),95)) if self._latencies else float('nan')
         e2e_p50=float(np.percentile(np.asarray(self._e2e_latencies),50)) if self._e2e_latencies else float('nan')
         e2e_p95=float(np.percentile(np.asarray(self._e2e_latencies),95)) if self._e2e_latencies else float('nan')
-        with self._wake: fusion=tuple(self._fusion_latencies)
+        with self._wake:
+            fusion=tuple(self._fusion_latencies)
+            phase_samples={phase:tuple(samples) for phase,samples in self._fusion_phase_latencies.items()}
         fusion_p50,fusion_p95=np.percentile(fusion,[50,95]) if fusion else (float('nan'),float('nan'))
         unique_hz=((len(self._observation_times)-1)/(self._observation_times[-1]-self._observation_times[0])
                    if len(self._observation_times)>1 and self._observation_times[-1]>self._observation_times[0]
@@ -662,6 +680,10 @@ class PersonPerceptionNode(Node):
                 'image_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[0]),
                 'cloud_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[1]),
                 'policy_state':'SLOW' if self.policy.slowing else 'CLEAR','speed_limit_percent':str(percent if percent is not None else (self.policy.slow if self.policy.slowing else 100.0))}
+        for phase,samples in phase_samples.items():
+            p50,p95=np.percentile(samples,[50,95]) if samples else (float('nan'),float('nan'))
+            values[f'{phase}_p50_ms']=f'{p50*1000:.2f}' if math.isfinite(p50) else 'unknown'
+            values[f'{phase}_p95_ms']=f'{p95*1000:.2f}' if math.isfinite(p95) else 'unknown'
         with self._wake: values.update(self._input_counts)
         s.values=[KeyValue(key=k,value=str(v)) for k,v in values.items()]; d.status=[s]; self.diag_pub.publish(d)
 

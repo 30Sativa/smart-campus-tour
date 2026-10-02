@@ -167,6 +167,13 @@ latency and drop/error counters. Additional cumulative `rgb_received` and
 last 100 actual `_locate()` calls with nonempty boxes, including failed calls
 and results later rejected as stale or replaced. Empty boxes and paths that
 do not call `_locate()` add no samples; metrics are unknown before any sample.
+Breakdown metrics use `{phase}_p50_ms` / `{phase}_p95_ms` for `cloud_decode`,
+`transform` (TF lookups plus cloud transform/Z filter), `projection`
+(projection plus in-image mask), and `roi` (the entire bbox fusion loop).
+Each has an independent last-100-attempt window; a phase that raises is
+included, unentered phases add nothing, and no samples means unknown.
+Completed phases remain recorded if later processing fails or the result is
+rejected/replaced. Empty boxes add no samples.
 Normal RGB-D inputs use DDS KEEP_LAST(1) and are sampled before rclpy takes
 messages at configured `rate_hz`; the synchronizer retains at most one
 message per stream. Accepted pairs require increasing timestamps from both
