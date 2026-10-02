@@ -438,9 +438,9 @@ class PersonPerceptionNode(Node):
         except Exception as exc:
             self._counts['errors']+=1; self._set_unknown(str(exc))
 
-    def _tf(self,target,source,stamp):
+    def _tf(self,target,source):
         if not target or not source: raise PerceptionError('missing TF frame id')
-        t=self.tf_buffer.lookup_transform(target,source,rclpy.time.Time(seconds=int(stamp),nanoseconds=int((stamp%1)*1e9)))
+        t=self.tf_buffer.lookup_transform(target,source,rclpy.time.Time())
         q=t.transform.rotation; tr=t.transform.translation
         translation=np.array([tr.x,tr.y,tr.z],dtype=np.float64)
         if not np.isfinite(translation).all(): raise PerceptionError('non-finite TF translation')
@@ -468,8 +468,8 @@ class PersonPerceptionNode(Node):
         if not len(pts):
             if len(boxes): raise PerceptionError('no valid cloud points')
             return []
-        Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id,snap.cloud_stamp)
-        Rb,Tb=self._tf(self.base_frame,info.header.frame_id,snap.cloud_stamp)
+        Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id)
+        Rb,Tb=self._tf(self.base_frame,info.header.frame_id)
         cam=pts@Rc.T+Tc; valid=cam[:,2]>0.05; cam=cam[valid]
         if not len(cam):
             if len(boxes): raise PerceptionError('no cloud points in front of camera')

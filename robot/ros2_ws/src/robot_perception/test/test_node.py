@@ -257,7 +257,7 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         node._health_tick()
         self.assertEqual(node._status_reason, 'MODEL_ERROR: model unavailable')
 
-    def test_tf_lookup_uses_source_stamp_and_missing_tf_is_not_hidden(self):
+    def test_tf_lookup_uses_latest_transform_and_missing_tf_is_not_hidden(self):
         class Transform:
             transform = types.SimpleNamespace(
                 rotation=types.SimpleNamespace(x=0., y=0., z=0., w=1.),
@@ -274,15 +274,15 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         FakeTime.calls = []
         try:
             node = types.SimpleNamespace(tf_buffer=Buffer())
-            P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical', 12.345)
+            P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical')
             self.assertEqual(node.tf_buffer.calls[0][:2], ('base_link', 'camera_optical'))
-            self.assertEqual(FakeTime.calls[-1], (12, 345000000))
+            self.assertEqual(FakeTime.calls[-1], (0, 0))
 
             class MissingBuffer:
-                def lookup_transform(self, *_args): raise LookupError('no transform at source time')
+                def lookup_transform(self, *_args): raise LookupError('no latest transform')
             node.tf_buffer = MissingBuffer()
-            with self.assertRaisesRegex(LookupError, 'source time'):
-                P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical', 12.345)
+            with self.assertRaisesRegex(LookupError, 'latest transform'):
+                P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical')
         finally:
             P.rclpy.time.Time = old_time
 
