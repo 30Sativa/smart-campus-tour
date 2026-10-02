@@ -37,10 +37,16 @@ describe('AuthLayout', () => {
     expect(badge).not.toBeNull()
     expect(container.querySelector('.auth-col [data-dev-only]')).toBeNull()
     expect(container.querySelector('form [data-dev-only]')).toBeNull()
+    expect(badge?.querySelectorAll('summary')).toHaveLength(1)
+    expect(badge).toHaveTextContent('Dữ liệu nghiệp vụ mẫu')
+    expect(badge).toHaveTextContent('các màn nghiệp vụ chưa nối backend vẫn dùng dữ liệu mẫu')
   })
 
   it('renders the sign-in copy over the photograph', () => {
     const login = renderAt('/login')
+    expect(login.container.querySelectorAll('.auth-visual__img')).toHaveLength(1)
+    expect(login.container.querySelectorAll('.auth-visual__title')).toHaveLength(1)
+    expect(login.container.querySelectorAll('.auth-visual__lead')).toHaveLength(1)
     expect(login.container.querySelector('.auth-visual__title')?.textContent).toMatch(/Khám phá khuôn viên/)
     expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-smartbus.png')
     expect(screen.getByText(/© \d{4} Smart Campus Tour/)).toBeInTheDocument()
