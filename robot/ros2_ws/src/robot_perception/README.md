@@ -10,8 +10,15 @@ only mode. It does not publish velocity commands or provide a protective stop.
 - RGB and cloud use `ApproximateTimeSynchronizer` with queue 5 and 50 ms slop.
   CameraInfo is cached and checked for frame, resolution,
   intrinsics, and supported `plumb_bob` distortion.
-- A single daemon worker handles inference. It keeps one active frame and at
-  most one newest pending frame. Executor timers continue while inference runs.
+- A single daemon worker handles inference and RGB-D fusion. It keeps one
+  active snapshot and at most one newest pending snapshot; a one-slot result
+  mailbox keeps the newest result until the executor consumes it. The worker
+  starts no faster than configured `rate_hz`. Cloud decoding, TF lookup, and
+  projection stay off the ROS executor.
+- `dropped` counts both pending snapshots replaced by newer input and completed
+  results replaced before the executor consumes them. The worker never waits
+  for an unconsumed result, and it does not build a frame backlog. Replaced
+  model/fusion failures still increment `errors`.
 - Outputs retain the source sensor stamp. Unsupported model output, missing
   depth, invalid calibration, stale data, or TF failure is `UNKNOWN`; it never
   publishes an empty `people` array as a clear observation.
@@ -80,8 +87,9 @@ an empty array is valid only for a successfully processed observation and is
 not a safety guarantee. UNKNOWN does not publish a people array.
 
 Diagnostics include state/reason, image and cloud source stamps, sync delta,
-observation age, inference p50/p95, source-stamp-to-detection E2E p50/p95,
-unique frame rate, drops, duplicates, errors, and policy.
+observation age, inference p50/p95, source-stamp-to-consumed-observation E2E
+p50/p95 (including RGB-D fusion), unique frame rate, drops, duplicates,
+errors, and policy.
 Heartbeat does not refresh observation freshness. A timer inside this node
 cannot handle total process or executor failure.
 

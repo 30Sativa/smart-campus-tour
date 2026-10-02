@@ -35,6 +35,7 @@ class Harness:
     _policy_tick = P.PersonPerceptionNode._policy_tick
     _set_unknown = P.PersonPerceptionNode._set_unknown
     _publish_limit = P.PersonPerceptionNode._publish_limit
+    _record_error = P.PersonPerceptionNode._record_error
     _tf = P.PersonPerceptionNode._tf
     _worker_loop = P.PersonPerceptionNode._worker_loop
 
@@ -112,16 +113,20 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node.imgsz = 2
     node.conf = 0.45
     node.iou = 0.5
+    node._inference_period = 0.0
     return node
 
 
-def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=None):
+def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=None,
+                     people=None, fusion_error=''):
     snapshot = P.Snapshot(
         image=image(image_s), cloud=message(cloud_s, cloud=True) if cloud_s is not None else None,
         info=object() if cloud_s is not None else None, image_stamp=image_s,
         cloud_stamp=cloud_s, queued_at=queued_at)
     boxes = np.empty((0, 4), np.float32) if boxes is None else boxes
-    return P.InferenceResult(snapshot, boxes, np.zeros(len(boxes), np.float32), 0.01, error)
+    if people is None and cloud_s is not None and not fusion_error: people=[]
+    return P.InferenceResult(snapshot, boxes, np.zeros(len(boxes), np.float32), 0.01,
+                             error, people, fusion_error)
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
@@ -208,6 +213,129 @@ class PersonPerceptionNodeTests(unittest.TestCase):
             else:
                 sys.modules['cv2'] = previous_cv2
         self.assertFalse(thread.is_alive())
+
+    def test_worker_replaces_unconsumed_result_and_processes_only_latest_pending(self):
+        entered = threading.Event()
+        release = threading.Event()
+        calls = []
+        call_times = []
+
+        class SlowFirstModel:
+            def infer(self, _inputs):
+                calls.append(len(calls) + 1)
+                call_times.append(time.monotonic())
+                if len(calls) == 1:
+                    entered.set()
+                    release.wait(timeout=5)
+                return {0: np.empty((1, 0, 6), np.float32)}
+
+        node = make_node(now=10.0)
+        node._inference_period = 0.05
+        node.net = SlowFirstModel()
+        node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+        node._pending = P.Snapshot(image(10.0), None, None, 10.0, None, time.monotonic())
+        node._result = inference_result(9.95, error='MODEL_ERROR: previous frame failed')
+        fake_cv2 = types.ModuleType('cv2')
+        fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+        previous_cv2 = sys.modules.get('cv2')
+        sys.modules['cv2'] = fake_cv2
+        thread = threading.Thread(target=node._worker_loop, name='test-inference', daemon=True)
+        try:
+            thread.start()
+            self.assertTrue(entered.wait(timeout=1))
+            node._enqueue(image(10.1), None, None)
+            node._enqueue(image(10.2), None, None)
+            node._enqueue(image(10.3), None, None)
+            self.assertEqual(node._counts['dropped'], 2)
+            self.assertEqual(node._pending.image_stamp, 10.3)
+
+            release.set()
+            with node._wake:
+                self.assertTrue(node._wake.wait_for(
+                    lambda: node._result is not None
+                    and node._result.snapshot.image_stamp == 10.3
+                    and not node._worker_busy,
+                    timeout=2))
+
+            self.assertEqual(calls, [1, 2])
+            self.assertGreaterEqual(call_times[1] - call_times[0], 0.04)
+            self.assertIsNone(node._pending)
+            # Two overwritten pending snapshots and two replaced completed results.
+            self.assertEqual(node._counts['dropped'], 4)
+            # A replaced failed result still contributes to the error counter.
+            self.assertEqual(node._counts['errors'], 1)
+        finally:
+            release.set()
+            with node._wake:
+                node._stopping = True
+                node._wake.notify_all()
+            thread.join(timeout=1)
+            if previous_cv2 is None:
+                sys.modules.pop('cv2', None)
+            else:
+                sys.modules['cv2'] = previous_cv2
+        self.assertFalse(thread.is_alive())
+
+    def test_idle_worker_exits_when_shutdown_notifies_condition(self):
+        node = make_node()
+        thread = threading.Thread(target=node._worker_loop, name='test-idle-worker', daemon=True)
+        thread.start()
+        time.sleep(0.01)
+        with node._wake:
+            node._stopping = True
+            node._wake.notify_all()
+        thread.join(timeout=1)
+        self.assertFalse(thread.is_alive())
+
+    def test_rgbd_fusion_runs_on_worker_and_fusion_errors_remain_unknown(self):
+        fusion_threads = []
+        node = make_node(now=10.1, bbox_only=False)
+        node.net = types.SimpleNamespace(
+            infer=lambda _inputs: {0: np.empty((1, 0, 6), np.float32)})
+        node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+        node._locate = lambda _snap, _boxes: (
+            fusion_threads.append(threading.current_thread().name) or [])
+        node._pending = P.Snapshot(image(10.0), message(10.0, cloud=True), object(),
+                                   10.0, 10.0, time.monotonic())
+        fake_cv2 = types.ModuleType('cv2')
+        fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+        previous_cv2 = sys.modules.get('cv2')
+        sys.modules['cv2'] = fake_cv2
+        thread = threading.Thread(target=node._worker_loop, name='person-inference-test', daemon=True)
+        try:
+            thread.start()
+            with node._wake:
+                self.assertTrue(node._wake.wait_for(
+                    lambda: node._result is not None and not node._worker_busy,
+                    timeout=1))
+                result = node._result
+                node._result = None
+            self.assertEqual(fusion_threads, ['person-inference-test'])
+            node._consume(result)
+            self.assertEqual(node._status_reason, 'VALID')
+            self.assertTrue(node.people_published)
+
+            failed = inference_result(10.01, 10.01, fusion_error='TF lookup failed')
+            node._consume(failed)
+            self.assertEqual(node._status_reason, 'TF lookup failed')
+            self.assertEqual(node._counts['errors'], 1)
+        finally:
+            with node._wake:
+                node._stopping = True
+                node._wake.notify_all()
+            thread.join(timeout=1)
+            if previous_cv2 is None:
+                sys.modules.pop('cv2', None)
+            else:
+                sys.modules['cv2'] = previous_cv2
+        self.assertFalse(thread.is_alive())
+
+    def test_future_rgb_or_cloud_timestamp_is_still_unknown(self):
+        for result in (inference_result(10.06, 10.0),
+                       inference_result(10.0, 10.06)):
+            node = make_node(now=10.0, bbox_only=False)
+            node._consume(result)
+            self.assertIn('STALE/INVALID', node._status_reason)
 
     def test_model_load_failure_is_reported(self):
         logs = []

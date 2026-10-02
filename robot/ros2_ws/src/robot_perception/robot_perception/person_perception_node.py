@@ -1,8 +1,8 @@
 """Timestamped RGB-D person perception with an optional Nav2 speed policy.
 
-Inference runs on one daemon worker. ROS callbacks retain only the newest
-immutable synchronized snapshot, while executor timers remain free to publish
-health and enforce stale-data policy. No output is a protective stop.
+Inference and RGB-D fusion run on one daemon worker. ROS callbacks retain only
+the newest immutable synchronized snapshot, while executor timers publish
+results and enforce stale-data policy. No output is a protective stop.
 """
 
 from collections import deque
@@ -47,6 +47,8 @@ class InferenceResult:
     scores: np.ndarray
     latency_s: float
     error: str = ''
+    people: list | None = None
+    fusion_error: str = ''
 
 
 def stamp_seconds(stamp):
@@ -264,8 +266,9 @@ class PersonPerceptionNode(Node):
         self.net=self._load_model() if self.config_error is None else None
         if self.config_error: self.get_logger().error(self.config_error)
         if self.net is None and not self.config_error: self._status_reason='MODEL_ERROR'
-        self._worker=threading.Thread(target=self._worker_loop,name='person-inference',daemon=True); self._worker.start()
         rate=max(1.0,float(safe['rate_hz']))
+        self._inference_period=1.0/rate
+        self._worker=threading.Thread(target=self._worker_loop,name='person-inference',daemon=True); self._worker.start()
         self.create_timer(1.0/rate,self._health_tick)
         self.create_timer(0.2,self._policy_tick)
         self.create_timer(float(safe['report_period']),self._report)
@@ -359,11 +362,21 @@ class PersonPerceptionNode(Node):
             self._set_unknown(str(exc))
 
     def _worker_loop(self):
+        next_start=0.0
         while True:
             with self._wake:
-                self._wake.wait_for(lambda:self._stopping or (self._pending is not None and self._result is None))
+                while not self._stopping:
+                    if self._pending is None:
+                        self._wake.wait()
+                        continue
+                    delay=next_start-time.monotonic()
+                    if delay>0:
+                        self._wake.wait(timeout=delay)
+                        continue
+                    snap=self._pending; self._pending=None; self._worker_busy=True
+                    next_start=time.monotonic()+self._inference_period
+                    break
                 if self._stopping:return
-                snap=self._pending; self._pending=None; self._worker_busy=True
             t=time.perf_counter()
             try:
                 if self.net is None: raise PerceptionError('MODEL_ERROR: model unavailable')
@@ -379,8 +392,23 @@ class PersonPerceptionNode(Node):
                 result=InferenceResult(snap,boxes,scores,time.perf_counter()-t)
             except Exception as exc:
                 result=InferenceResult(snap,np.empty((0,4),np.float32),np.empty(0,np.float32),time.perf_counter()-t,str(exc))
+
+            if not result.error and not self.bbox_only:
+                try:
+                    if snap.info is None: raise PerceptionError('missing CameraInfo')
+                    people=self._locate(snap,result.boxes)
+                    result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
+                                           people=people)
+                except Exception as exc:
+                    result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
+                                           fusion_error=str(exc))
             with self._wake:
                 self._worker_busy=False
+                # A result still waiting for the executor is replaced by this newer one.
+                if self._result is not None:
+                    self._counts['dropped']+=1
+                    if self._result.error or self._result.fusion_error:
+                        self._counts['errors']+=1
                 self._result=result
                 self._wake.notify_all()
 
@@ -408,12 +436,12 @@ class PersonPerceptionNode(Node):
         age=max(image_age,cloud_age)
         tolerance=float(self.cfg['future_stamp_tolerance_s'])
         if min(image_age,cloud_age) < -tolerance or age>self.stale:
-            self._counts['errors']+=1; self._set_unknown('STALE/INVALID RGB or cloud source timestamp'); return
+            self._record_error(); self._set_unknown('STALE/INVALID RGB or cloud source timestamp'); return
         if self._last_pair_stamp is not None and snap.image_stamp<=self._last_pair_stamp:
             self._counts['duplicate']+=1; self._set_unknown('out-of-order inference result'); return
         self._last_pair_stamp=snap.image_stamp
         if result.error:
-            self._counts['errors']+=1
+            self._record_error()
             reason=result.error if result.error.startswith('MODEL_ERROR') else f'MODEL_ERROR: {result.error}'
             self._set_unknown(reason); return
         self._latencies.append(result.latency_s)
@@ -424,19 +452,22 @@ class PersonPerceptionNode(Node):
             self._publish_debug(snap.image,result.boxes,result.scores)
             self._status_reason='BBOX_ONLY_VALID'; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
             return
-        try:
-            if snap.info is None: raise PerceptionError('missing CameraInfo')
-            people=self._locate(snap,result.boxes)
-            self._valid_fusion_count=len(people)
-            # Any detected person without reliable depth makes the entire policy UNKNOWN.
-            self._publish_people(people,snap.cloud.header.stamp)
-            self._last_people=people; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
-            self._status_reason='VALID'
-            self._last_sync_delta=abs(snap.image_stamp-snap.cloud_stamp)
-            self._last_source=(snap.image_stamp,snap.cloud_stamp)
-            self._pending_policy=(people,snap.cloud_stamp)
-        except Exception as exc:
-            self._counts['errors']+=1; self._set_unknown(str(exc))
+        if result.fusion_error:
+            self._record_error(); self._set_unknown(result.fusion_error); return
+        if result.people is None:
+            self._record_error(); self._set_unknown('missing RGB-D fusion result'); return
+        people=result.people
+        self._valid_fusion_count=len(people)
+        # Any detected person without reliable depth makes the entire policy UNKNOWN.
+        self._publish_people(people,snap.cloud.header.stamp)
+        self._last_people=people; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
+        self._status_reason='VALID'
+        self._last_sync_delta=abs(snap.image_stamp-snap.cloud_stamp)
+        self._last_source=(snap.image_stamp,snap.cloud_stamp)
+        self._pending_policy=(people,snap.cloud_stamp)
+
+    def _record_error(self):
+        with self._wake: self._counts['errors']+=1
 
     def _tf(self,target,source):
         if not target or not source: raise PerceptionError('missing TF frame id')
@@ -461,7 +492,6 @@ class PersonPerceptionNode(Node):
         signature=(info.header.frame_id,info.width,info.height,tuple(info.k),tuple(info.d),info.distortion_model)
         if self._calibration_signature is not None and signature!=self._calibration_signature:
             self._calibration_signature=signature
-            self.policy.unknown()
             raise PerceptionError('CameraInfo calibration changed; waiting for a new observation')
         self._calibration_signature=signature
         pts=cloud_xyz(cloud)

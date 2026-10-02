@@ -150,11 +150,12 @@ phase. Early runs are supervised, in a controlled area, at low speed.
 
 `robot_perception` pairs RGB and depth cloud observations by header timestamp
 (ApproximateTimeSynchronizer, 50 ms maximum delta), projects the cloud into the
-raw RGB image with validated CameraInfo K/D, and looks up TF at the source
-cloud timestamp. `people` remains a `PoseArray` in `base_frame`, stamped with
-the cloud observation time and without tracking IDs. It is published only for
-a valid fused observation; an empty array means the detector produced no
-person boxes in that observation and is not proof that the area is safe.
+raw RGB image with validated CameraInfo K/D, and uses the latest available TF
+for rigid camera/robot extrinsics. `people` remains a `PoseArray` in
+`base_frame`, stamped with the cloud observation time and without tracking
+IDs. It is published only for a valid fused observation; an empty array means
+the detector produced no person boxes in that observation and is not proof
+that the area is safe.
 Unknown/stale/error observations do not publish an empty `people` array.
 
 The node publishes `person_perception/diagnostics` (`DiagnosticArray`) with

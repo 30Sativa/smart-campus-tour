@@ -24,10 +24,14 @@ calibration is verified by this document.
 RGB and PointCloud2 are paired with `ApproximateTimeSynchronizer` (queue 5,
 slop 0.05 s, header stamps required). CameraInfo is cached independently and
 validated against image frame/resolution and raw-image K/D. Only tested
-`plumb_bob` (or zero-distortion pinhole) is accepted. TF is looked up at the
-cloud source timestamp. The detector runs in one worker with one active and
-one replaceable latest pending snapshot; health/policy timers run on the ROS
-executor.
+`plumb_bob` (or zero-distortion pinhole) is accepted. The rigid sensor/robot
+extrinsics use the latest available TF; source sensor timestamps remain on
+the observations and outputs. One worker performs inference and cloud fusion
+at no more than configured `rate_hz`, with one active and one replaceable
+latest pending snapshot. A one-slot result mailbox retains the newest
+completed result; replacing pending input or an unconsumed result increments
+`dropped`. Health and policy timers run on the ROS executor, while cloud
+decoding, TF lookup, and projection stay on the worker.
 
 The bbox ROI is shrunk by 0.5. Range uses p25, a ±0.4 m band, then median XYZ
 of core cloud points. At least 20 ROI points and 10 core points are required.
@@ -39,7 +43,8 @@ Relative outputs are `people` (`PoseArray`), `people_markers`,
 `person_perception/diagnostics`, and `person_perception/debug_image` in
 bbox-only mode. PoseArray uses the cloud timestamp and `base_frame`; debug
 image uses the RGB timestamp. PoseArray has no tracking ID. Diagnostics report
-state/reason, both source stamps, sync delta, age, latency and counters.
+state/reason, both source stamps, sync delta, age, inference latency,
+end-to-end latency through RGB-D fusion, and counters.
 
 ## Slowdown policy (disabled by default)
 
