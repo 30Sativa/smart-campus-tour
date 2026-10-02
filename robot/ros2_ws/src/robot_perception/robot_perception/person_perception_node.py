@@ -215,13 +215,31 @@ def range_core(u, v, z, box, shrink=0.5, band=0.4, min_roi=20, min_core=10):
 
 
 def project_points(points, k, distortion):
-    """Project camera-frame XYZ using raw-image intrinsics and plumb_bob D."""
-    import cv2
-    points=np.asarray(points,dtype=np.float64).reshape(-1,1,3)
+    """Project camera-frame XYZ like cv2.projectPoints(rvec=0, tvec=0, K, D).
+
+    plumb_bob D with 0, 4 or 5 coefficients is evaluated in float64 with
+    OpenCV's formula and operation order (fx, fy, cx, cy; skew ignored, as
+    OpenCV does). The Python cv2.projectPoints binding always returns a
+    2N x 15 float64 Jacobian, which dominated full-cloud projection time.
+    Any other D length is delegated to OpenCV unchanged.
+    """
+    points=np.asarray(points,dtype=np.float64).reshape(-1,3)
     intrinsic=np.asarray(k,dtype=np.float64).reshape(3,3)
-    distortion=np.asarray(distortion,dtype=np.float64)
-    uv,_=cv2.projectPoints(points,np.zeros(3),np.zeros(3),intrinsic,distortion)
-    return uv.reshape(-1,2)
+    distortion=np.asarray(distortion,dtype=np.float64).reshape(-1)
+    if distortion.size not in (0,4,5):
+        import cv2
+        uv,_=cv2.projectPoints(points.reshape(-1,1,3),np.zeros(3),np.zeros(3),intrinsic,distortion)
+        return uv.reshape(-1,2)
+    k1,k2,p1,p2,k3=np.concatenate((distortion,np.zeros(5-distortion.size)))
+    z=points[:,2]
+    with np.errstate(divide='ignore'):
+        inv_z=np.where(z!=0,1.0/z,1.0)  # OpenCV: z = z ? 1/z : 1
+    x=points[:,0]*inv_z; y=points[:,1]*inv_z
+    r2=x*x+y*y; r4=r2*r2
+    cdist=1+k1*r2+k2*r4+k3*(r4*r2)
+    xd=x*cdist+p1*(2*x*y)+p2*(r2+2*x*x)
+    yd=y*cdist+p1*(r2+2*y*y)+p2*(2*x*y)
+    return np.stack((xd*intrinsic[0,0]+intrinsic[0,2],yd*intrinsic[1,1]+intrinsic[1,2]),axis=1)
 
 
 class SlowdownPolicy:
@@ -592,10 +610,13 @@ class PersonPerceptionNode(Node):
             uv=project_points(cam,k,d)
             in_img=(uv[:,0]>=0)&(uv[:,0]<info.width)&(uv[:,1]>=0)&(uv[:,1]<info.height)
         with self._profile_phase('roi'):
+            # Select in-image points once, not once per box; same rows and order.
+            idx=np.flatnonzero(in_img)
+            u,v,z=uv[idx,0],uv[idx,1],cam[idx,2]
             out=[]
             for box in boxes:
-                rng,mask,core=range_core(uv[in_img,0],uv[in_img,1],cam[in_img,2],box)
-                selected=cam[in_img][mask][core]
+                rng,mask,core=range_core(u,v,z,box)
+                selected=cam[idx[mask][core]]
                 p_color=np.median(selected,axis=0)
                 out.append(Rb@p_color+Tb)
         return out

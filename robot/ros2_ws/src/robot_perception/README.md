@@ -124,7 +124,7 @@ Fusion breakdown uses independent `deque(maxlen=100)` histories and
 | `cloud_decode_p50_ms` / `cloud_decode_p95_ms` | `cloud_xyz(cloud)` |
 | `transform_p50_ms` / `transform_p95_ms` | Both TF lookups, cloud transform to color frame, and Z filtering |
 | `projection_p50_ms` / `projection_p95_ms` | K preparation, projection, and in-image mask |
-| `roi_p50_ms` / `roi_p95_ms` | Entire bbox loop: ROI/core selection, median, and person transform to base frame |
+| `roi_p50_ms` / `roi_p95_ms` | In-image point indexing (once per call) and the entire bbox loop: ROI/core selection, median, and person transform to base frame |
 
 A phase records one sample in `finally` whether it finishes or raises.
 Completed phases retain their samples when a later phase fails; unentered
@@ -135,6 +135,26 @@ first sample and retains its history when skipped. The windows can contain
 different attempts; phase percentiles should not be summed to obtain fusion
 percentiles. Calibration checks and profiling bookkeeping remain part of
 total fusion timing, outside the phase intervals.
+
+Projection still covers every cloud point in front of the colour camera; there
+is no sampling and no depth-pixel/RGB-pixel alignment assumption. Points go
+through the depth->colour TF and the raw-image colour K/D. `plumb_bob` D with 0,
+4 or 5 coefficients is evaluated in vectorized float64 using OpenCV's
+formula and operation order (fx, fy, cx, cy; skew ignored as OpenCV does).
+Other D lengths still call `cv2.projectPoints`. The Python `cv2.projectPoints`
+binding always computes a 2N x 15 float64 Jacobian, about 70 MB for a
+640x480 cloud, and that dominated the earlier projection phase. In-image
+indexing used to run once per box inside the `roi` phase; it now runs once per
+call in the same phase. Both metrics keep their definitions, so samples
+before and after this change are comparable.
+`test/test_projection_regression.py` checks the current path against a frozen
+copy of the earlier path on a deterministic synthetic Astra-like scene. The same
+scene gives an offline per-phase benchmark (no ROS graph, camera or tf2 lookup):
+
+```bash
+cd robot/ros2_ws/src/robot_perception/test
+PYTHONPATH=.. python3 fusion_scene.py --iterations 30
+```
 
 The cumulative `rgb_received` and `cloud_received` counters count messages
 delivered to Python callbacks, not all samples published by the camera.
