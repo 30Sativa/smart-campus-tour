@@ -7,7 +7,14 @@ only mode. It does not publish velocity commands or provide a protective stop.
 
 ## Runtime behavior
 
-- RGB and cloud use `ApproximateTimeSynchronizer` with queue 5 and 50 ms slop.
+- Normal RGB-D subscriptions use DDS `KEEP_LAST(1)` and a sampled callback
+  group. The existing health timer grants one take per input subscription at
+  configured `rate_hz`; missed ticks do not accumulate permits. Humble's
+  executor checks the group before `rcl_take` and conversion to Python, so
+  this reduces PointCloud2 takes/deserialization rather than dropping clouds
+  after callbacks receive them. RGB and cloud still use
+  `ApproximateTimeSynchronizer`, with queue 1 and the same 50 ms slop.
+  Accepted pairs require strictly increasing RGB and cloud timestamps.
   CameraInfo is cached and checked for frame, resolution,
   intrinsics, and supported `plumb_bob` distortion.
 - A single daemon worker handles inference and RGB-D fusion. It keeps one
@@ -19,14 +26,23 @@ only mode. It does not publish velocity commands or provide a protective stop.
   results replaced before the executor consumes them. The worker never waits
   for an unconsumed result, and it does not build a frame backlog. Replaced
   model/fusion failures still increment `errors`.
+  Samples overwritten in DDS or unmatched by the synchronizer are not included
+  in `dropped`; it is not a total camera-frame-loss counter.
 - Outputs retain the source sensor stamp. Unsupported model output, missing
   depth, invalid calibration, stale data, or TF failure is `UNKNOWN`; it never
   publishes an empty `people` array as a clear observation.
 - The optional policy defaults OFF. When explicitly enabled, startup/UNKNOWN/
   stale produce 50%, a clear sequence of fresh observations can reach 100%,
   and the node never publishes zero (Nav2 defines zero as no speed limit).
-- `bbox_only:=true` needs RGB and a model, publishes an overlay image, and
-  cannot be combined with SpeedLimit.
+- `bbox_only:=true` retains its ungated RGB subscription, needs RGB and a
+  model, publishes an overlay image, and cannot be combined with SpeedLimit.
+
+Sampling does not reduce the camera's publish rate, UDP traffic, or all native
+DDS receive/reassembly costs. A busy executor can sample below `rate_hz`;
+the reader retains the latest sample instead of draining an old queue.
+If hardware still shows transport pressure with about five cloud callbacks
+per second, the next benchmark is a dedicated perception cloud stream sampled
+on the native host, keeping the original cloud stream for Nav2.
 
 ## Launch
 
@@ -75,7 +91,7 @@ python3 robot/ros2_ws/src/robot_perception/scripts/bench_detector.py \
 ```
 
 Use `person_perception/diagnostics` during P3 for live end-to-end latency,
-unique frame rate, and dropped-frame counters. Neither measurement exists yet.
+unique frame rate, and dropped-frame counters.
 
 ## Topics
 
@@ -90,6 +106,14 @@ Diagnostics include state/reason, image and cloud source stamps, sync delta,
 observation age, inference p50/p95, source-stamp-to-consumed-observation E2E
 p50/p95 (including RGB-D fusion), unique frame rate, drops, duplicates,
 errors, and policy.
+The cumulative `rgb_received` and `cloud_received` counters count messages
+delivered to Python callbacks, not all samples published by the camera.
+`pairs_accepted` counts synchronized pairs queued after timestamp/delta/order
+validation, not successfully fused observations. At 30 Hz camera input and
+`rate_hz=5`, RGB-D callback counts should grow by about five per second;
+bbox-only RGB callbacks remain at the source rate and cloud/pair counts stay
+zero. Duplicate or out-of-order cloud stamps now increment `duplicates` and
+make the observation UNKNOWN, just as repeated RGB stamps already did.
 Heartbeat does not refresh observation freshness. A timer inside this node
 cannot handle total process or executor failure.
 

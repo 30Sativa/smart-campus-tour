@@ -21,9 +21,12 @@ calibration is verified by this document.
 
 ## Data contract
 
-RGB and PointCloud2 are paired with `ApproximateTimeSynchronizer` (queue 5,
-slop 0.05 s, header stamps required). CameraInfo is cached independently and
-validated against image frame/resolution and raw-image K/D. Only tested
+RGB and PointCloud2 are sampled before rclpy takes/converts them, using
+DDS `KEEP_LAST(1)` and one callback-group permit per subscription on each
+`rate_hz` health tick. They are paired with `ApproximateTimeSynchronizer`
+(queue 1, slop 0.05 s, header stamps required); neither source timestamp may
+be reused or move backwards in an accepted pair. CameraInfo is cached
+independently and validated against image frame/resolution and raw-image K/D. Only tested
 `plumb_bob` (or zero-distortion pinhole) is accepted. The rigid sensor/robot
 extrinsics use the latest available TF; source sensor timestamps remain on
 the observations and outputs. One worker performs inference and cloud fusion
@@ -45,6 +48,12 @@ bbox-only mode. PoseArray uses the cloud timestamp and `base_frame`; debug
 image uses the RGB timestamp. PoseArray has no tracking ID. Diagnostics report
 state/reason, both source stamps, sync delta, age, inference latency,
 end-to-end latency through RGB-D fusion, and counters.
+Additional cumulative counters `rgb_received` / `cloud_received` measure
+Python callback deliveries, and `pairs_accepted` counts pairs queued after
+timestamp validation. `dropped` retains its pending/result replacement
+meaning; DDS overwrites and unmatched sync samples are not counted.
+Sampling reduces Python takes/conversion/sync work, while camera publication
+and native DDS receive/UDP traffic remain unchanged.
 
 ## Slowdown policy (disabled by default)
 

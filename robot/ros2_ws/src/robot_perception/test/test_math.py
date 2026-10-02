@@ -3,6 +3,7 @@ import struct
 import sys
 import types
 import unittest
+import weakref
 
 import numpy as np
 try:
@@ -21,6 +22,11 @@ def _stub(name, attrs=()):
 
 r=_stub('rclpy'); r.time=types.SimpleNamespace(Time=object)
 _stub('rclpy.node',['Node'])
+class StubCallbackGroup:
+    def __init__(self): self.entities=set()
+    def add_entity(self,entity): self.entities.add(weakref.ref(entity))
+
+_stub('rclpy.callback_groups').CallbackGroup=StubCallbackGroup
 q=_stub('rclpy.qos')
 for n in ('QoSProfile','ReliabilityPolicy','HistoryPolicy'):
     setattr(q,n,type(n,(),{'BEST_EFFORT':0,'KEEP_LAST':1}))

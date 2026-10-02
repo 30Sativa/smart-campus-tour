@@ -160,7 +160,15 @@ Unknown/stale/error observations do not publish an empty `people` array.
 
 The node publishes `person_perception/diagnostics` (`DiagnosticArray`) with
 state/reason, source stamps, synchronization delta, observation age, inference
-latency and drop/error counters. Bbox-only mode publishes
+latency and drop/error counters. Additional cumulative `rgb_received` and
+`cloud_received` counters count Python input callback deliveries;
+`pairs_accepted` counts pairs queued after timestamp/delta/order validation.
+Normal RGB-D inputs use DDS KEEP_LAST(1) and are sampled before rclpy takes
+messages at configured `rate_hz`; the synchronizer retains at most one
+message per stream. Accepted pairs require increasing timestamps from both
+streams. DDS overwrites and unmatched sync samples are excluded from
+`dropped`, which counts pending/result mailbox replacements.
+Bbox-only mode retains its ungated RGB subscription and publishes
 `person_perception/debug_image` with the RGB source stamp and cannot enable
 SpeedLimit. The optional `speed_limit` publisher is disabled by default. If
 explicitly enabled after hardware gates, startup/UNKNOWN/stale use 50%, a

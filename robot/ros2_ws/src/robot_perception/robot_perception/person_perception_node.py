@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import math
 import threading
 import time
+import weakref
 
 import numpy as np
 import rclpy
@@ -17,6 +18,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Pose, PoseArray
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 from nav2_msgs.msg import SpeedLimit
+from rclpy.callback_groups import CallbackGroup
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
@@ -28,6 +30,39 @@ PERSON_CLASS_ID = 0
 
 class PerceptionError(ValueError):
     """An observation cannot be interpreted safely."""
+
+
+class SampledInputGroup(CallbackGroup):
+    """Permit one take per subscription per sample tick, before deserialization."""
+
+    def __init__(self):
+        super().__init__()
+        self._lock = threading.Lock()
+        self._allowed = set()
+        self._active = None
+
+    def release(self):
+        with self._lock:
+            # Replace permits; missed ticks never accumulate a catch-up burst.
+            self._allowed = self.entities.copy()
+
+    def can_execute(self, entity):
+        with self._lock:
+            return self._active is None and weakref.ref(entity) in self._allowed
+
+    def beginning_execution(self, entity):
+        with self._lock:
+            ref = weakref.ref(entity)
+            if self._active is not None or ref not in self._allowed:
+                return False
+            self._allowed.remove(ref)
+            self._active = entity
+            return True
+
+    def ending_execution(self, entity):
+        with self._lock:
+            assert self._active is entity
+            self._active = None
 
 
 @dataclass(frozen=True)
@@ -237,7 +272,7 @@ class PersonPerceptionNode(Node):
         self.tf_buffer=Buffer(); self.tf_listener=TransformListener(self.tf_buffer,self)
         self._lock=threading.Lock(); self._wake=threading.Condition(self._lock)
         self._pending=None; self._result=None; self._worker_busy=False; self._stopping=False
-        self._last_image_stamp=None; self._last_pair_stamp=None; self._last_valid_mono=None
+        self._last_image_stamp=None; self._last_cloud_stamp=None; self._last_pair_stamp=None; self._last_valid_mono=None
         self._last_obs_ros=None; self._status_reason='STARTUP'; self._last_people=[]
         self._pending_policy=None; self._last_sync_delta=float('nan')
         self._last_source=('unknown','unknown')
@@ -245,11 +280,19 @@ class PersonPerceptionNode(Node):
         self._counts={'dropped':0,'duplicate':0,'errors':0}; self._latencies=deque(maxlen=100)
         self._e2e_latencies=deque(maxlen=100); self._observation_times=deque(maxlen=100)
         self._bbox_count=0; self._valid_fusion_count=0
+        self._input_counts={'rgb_received':0,'cloud_received':0,'pairs_accepted':0}
+        self._input_group=None
         qos=QoSProfile(depth=5,history=HistoryPolicy.KEEP_LAST,reliability=ReliabilityPolicy.BEST_EFFORT)
         if not self.bbox_only:
-            self.image_sub=Subscriber(self,Image,f'{self.cam}/color/image_raw',qos_profile=qos)
-            self.cloud_sub=Subscriber(self,PointCloud2,f'{self.cam}/depth/points',qos_profile=qos)
-            self.sync=ApproximateTimeSynchronizer([self.image_sub,self.cloud_sub],5,0.05,allow_headerless=False)
+            self._input_group=SampledInputGroup()
+            input_qos=QoSProfile(depth=1,history=HistoryPolicy.KEEP_LAST,reliability=ReliabilityPolicy.BEST_EFFORT)
+            self.image_sub=Subscriber(self,Image,f'{self.cam}/color/image_raw',
+                                      qos_profile=input_qos,callback_group=self._input_group)
+            self.cloud_sub=Subscriber(self,PointCloud2,f'{self.cam}/depth/points',
+                                      qos_profile=input_qos,callback_group=self._input_group)
+            self.image_sub.registerCallback(self._count_input,'rgb_received')
+            self.cloud_sub.registerCallback(self._count_input,'cloud_received')
+            self.sync=ApproximateTimeSynchronizer([self.image_sub,self.cloud_sub],1,0.05,allow_headerless=False)
             self.sync.registerCallback(self._on_pair)
             self.create_subscription(CameraInfo,f'{self.cam}/color/camera_info',self._on_info,qos)
         else:
@@ -340,7 +383,11 @@ class PersonPerceptionNode(Node):
     def _on_pair(self,image,cloud):
         self._enqueue(image,cloud,self.info)
 
+    def _count_input(self,_msg,key):
+        with self._wake: self._input_counts[key]+=1
+
     def _on_bbox_image(self,image):
+        self._count_input(image,'rgb_received')
         self._enqueue(image,None,None)
 
     def _enqueue(self,image,cloud,info):
@@ -354,7 +401,14 @@ class PersonPerceptionNode(Node):
                     self._counts['duplicate']+=1
                     self._set_unknown('duplicate/out-of-order image timestamp')
                     return
+                if cts is not None and self._last_cloud_stamp is not None and cts<=self._last_cloud_stamp:
+                    self._counts['duplicate']+=1
+                    self._set_unknown('duplicate/out-of-order cloud timestamp')
+                    return
                 self._last_image_stamp=ts
+                if cts is not None:
+                    self._last_cloud_stamp=cts
+                    self._input_counts['pairs_accepted']+=1
                 snap=Snapshot(image,cloud,info,ts,cts,time.monotonic())
                 if self._pending is not None: self._counts['dropped']+=1
                 self._pending=snap; self._wake.notify()
@@ -421,12 +475,16 @@ class PersonPerceptionNode(Node):
         if self._last_obs_ros is not None and now_ros < self._last_obs_ros:
             with self._wake:
                 self._last_image_stamp=None
+                self._last_cloud_stamp=None
                 self._last_pair_stamp=None
             if not self._status_reason.startswith('MODEL_ERROR'):
                 self._set_unknown('ROS clock moved backwards')
         if self._last_valid_mono is None or time.monotonic()-self._last_valid_mono > self.stale:
             if not self._status_reason.startswith('MODEL_ERROR'):
                 self._set_unknown('STALE: no fresh valid observation')
+        # This existing timer runs at rate_hz. rclpy checks the group before
+        # taking a message; DDS KEEP_LAST(1) retains only the latest input.
+        if self._input_group is not None: self._input_group.release()
 
     def _consume(self,result):
         snap=result.snapshot
@@ -591,6 +649,7 @@ class PersonPerceptionNode(Node):
                 'image_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[0]),
                 'cloud_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[1]),
                 'policy_state':'SLOW' if self.policy.slowing else 'CLEAR','speed_limit_percent':str(percent if percent is not None else (self.policy.slow if self.policy.slowing else 100.0))}
+        with self._wake: values.update(self._input_counts)
         s.values=[KeyValue(key=k,value=str(v)) for k,v in values.items()]; d.status=[s]; self.diag_pub.publish(d)
 
     def _report(self):

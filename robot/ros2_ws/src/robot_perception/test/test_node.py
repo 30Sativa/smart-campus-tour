@@ -30,6 +30,9 @@ class FakeTime:
 
 
 class Harness:
+    _on_pair = P.PersonPerceptionNode._on_pair
+    _on_bbox_image = P.PersonPerceptionNode._on_bbox_image
+    _count_input = P.PersonPerceptionNode._count_input
     _enqueue = P.PersonPerceptionNode._enqueue
     _consume = P.PersonPerceptionNode._consume
     _health_tick = P.PersonPerceptionNode._health_tick
@@ -81,11 +84,15 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node._worker_busy = False
     node._stopping = False
     node._last_image_stamp = None
+    node._last_cloud_stamp = None
     node._last_pair_stamp = None
     node._last_valid_mono = None
     node._last_obs_ros = None
     node._pending_policy = None
     node._counts = {'dropped': 0, 'duplicate': 0, 'errors': 0}
+    node._input_counts = {'rgb_received': 0, 'cloud_received': 0, 'pairs_accepted': 0}
+    node._input_group = None if bbox_only else P.SampledInputGroup()
+    node.info = None
     node._latencies = []
     node._e2e_latencies = []
     node._observation_times = []
@@ -132,6 +139,101 @@ def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=No
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
+    def test_sample_group_limits_each_reader_before_take_and_keeps_latest(self):
+        class Reader:
+            def __init__(self):
+                self.latest = None  # models DDS KEEP_LAST(1), not a Python message queue
+                self.takes = 0
+
+            def dispatch(self, group):
+                if self.latest is None or not group.can_execute(self):
+                    return None
+                if not group.beginning_execution(self):
+                    return None
+                try:
+                    self.takes += 1  # take/deserialization happens only after permission
+                    msg, self.latest = self.latest, None
+                    return msg
+                finally:
+                    group.ending_execution(self)
+
+        group = P.SampledInputGroup()
+        rgb, cloud = Reader(), Reader()
+        group.add_entity(rgb)
+        group.add_entity(cloud)
+        for frame in range(6):
+            rgb.latest = cloud.latest = frame
+            self.assertIsNone(rgb.dispatch(group))
+            self.assertIsNone(cloud.dispatch(group))
+        self.assertEqual(cloud.takes, 0)
+        group.release()
+        self.assertEqual(rgb.dispatch(group), 5)
+        self.assertEqual(cloud.dispatch(group), 5)
+        for frame in range(6, 12):
+            rgb.latest = cloud.latest = frame
+            self.assertIsNone(rgb.dispatch(group))
+            self.assertIsNone(cloud.dispatch(group))
+        group.release()
+        self.assertEqual(rgb.dispatch(group), 11)
+        self.assertEqual(cloud.dispatch(group), 11)
+        self.assertEqual((rgb.takes, cloud.takes), (2, 2))
+
+    def test_sample_group_missed_ticks_do_not_accumulate_or_allow_concurrent_takes(self):
+        class Entity:
+            pass
+
+        group = P.SampledInputGroup()
+        rgb, cloud = Entity(), Entity()
+        group.add_entity(rgb)
+        group.add_entity(cloud)
+        for _ in range(10):
+            group.release()
+        self.assertTrue(group.can_execute(rgb))
+        self.assertTrue(group.can_execute(cloud))
+        self.assertTrue(group.beginning_execution(rgb))
+        self.assertFalse(group.beginning_execution(rgb))
+        self.assertFalse(group.beginning_execution(cloud))
+        group.ending_execution(rgb)
+        self.assertFalse(group.can_execute(rgb))
+        self.assertTrue(group.beginning_execution(cloud))
+        group.ending_execution(cloud)
+        self.assertFalse(group.can_execute(cloud))
+
+    def test_health_tick_releases_normal_inputs_but_bbox_only_stays_ungated(self):
+        class Entity:
+            pass
+
+        node = make_node(bbox_only=False)
+        reader = Entity()
+        node._input_group.add_entity(reader)
+        self.assertFalse(node._input_group.can_execute(reader))
+        node._health_tick()
+        self.assertTrue(node._input_group.can_execute(reader))
+
+        node = make_node(bbox_only=True)
+        node._on_bbox_image(image(10.0))
+        node._on_bbox_image(image(10.1))
+        self.assertIsNone(node._input_group)
+        self.assertEqual(node._pending.image_stamp, 10.1)
+        self.assertEqual(node._input_counts,
+                         {'rgb_received': 2, 'cloud_received': 0, 'pairs_accepted': 0})
+
+    def test_rgbd_pending_is_latest_only_and_cloud_timestamps_cannot_be_reused(self):
+        node = make_node(bbox_only=False)
+        for ts in (10.0, 10.2, 10.4):
+            node._on_pair(image(ts), message(ts + .01, cloud=True))
+        self.assertEqual(node._pending.image_stamp, 10.4)
+        self.assertAlmostEqual(node._pending.cloud_stamp, 10.41)
+        self.assertEqual(node._counts['dropped'], 2)
+        self.assertEqual(node._input_counts['pairs_accepted'], 3)
+        node._pending = None
+        for image_ts, cloud_ts in ((10.42, 10.41), (10.43, 10.40)):
+            node._on_pair(image(image_ts), message(cloud_ts, cloud=True))
+            self.assertIsNone(node._pending)
+            self.assertEqual(node._status_reason, 'duplicate/out-of-order cloud timestamp')
+        self.assertEqual(node._counts['duplicate'], 2)
+        self.assertEqual(node._input_counts['pairs_accepted'], 3)
+
     def test_locate_empty_boxes_skips_cloud_tf_and_projection(self):
         info = types.SimpleNamespace(
             width=2, height=2,
@@ -191,10 +293,12 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         node._last_obs_ros = 100.0
         node._last_valid_mono = time.monotonic()
         node._last_image_stamp = 100.0
+        node._last_cloud_stamp = 100.0
         node._last_pair_stamp = 100.0
         node._health_tick()
         self.assertEqual(node._status_reason, 'ROS clock moved backwards')
         self.assertIsNone(node._last_image_stamp)
+        self.assertIsNone(node._last_cloud_stamp)
         self.assertIsNone(node._last_pair_stamp)
 
     def test_hung_worker_keeps_one_latest_pending_and_health_timer_runs(self):
