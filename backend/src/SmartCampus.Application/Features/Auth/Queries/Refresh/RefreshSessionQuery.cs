@@ -4,7 +4,7 @@ using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Common.Authentication;
 
-namespace SmartCampus.Application.Features.Auth.Refresh;
+namespace SmartCampus.Application.Features.Auth.Queries.Refresh;
 
 public sealed record RefreshSessionQuery(string? RefreshToken) : IQuery<AuthSessionResult>;
 

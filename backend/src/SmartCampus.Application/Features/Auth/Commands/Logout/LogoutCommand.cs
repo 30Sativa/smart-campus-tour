@@ -2,7 +2,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 
-namespace SmartCampus.Application.Features.Auth.Logout;
+namespace SmartCampus.Application.Features.Auth.Commands.Logout;
 
 public sealed record LogoutCommand(string? RefreshToken) : ICommand<Unit>;
 

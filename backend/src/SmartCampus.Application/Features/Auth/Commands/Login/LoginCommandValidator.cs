@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace SmartCampus.Application.Features.Auth.Login;
+namespace SmartCampus.Application.Features.Auth.Commands.Login;
 
 public sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
 {

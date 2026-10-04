@@ -33,20 +33,23 @@ backend/
 │   └── scaffold-db
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
-│   ├── SmartCampus.Application/     Common/, DependencyInjection.cs
-│   ├── SmartCampus.Infrastructure/  Persistence/, DependencyInjection.cs
+│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Pois,Simulation}/
+│   ├── SmartCampus.Infrastructure/  Authentication/, Persistence/{Repositories,Seeding}/
 │   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
 │                                    Properties/, Program.cs, appsettings.json
 └── tests/
     ├── SmartCampus.UnitTests/
-    └── SmartCampus.IntegrationTests/
+    ├── SmartCampus.IntegrationTests/
+    └── SignalRCompatibilityHarness/
 ```
 
-Current `backend/src/SmartCampus.Api/` has a development-only simulation
-controller and Hub; Application has the in-memory pose publisher used by that
-SimulationPreview path. The temporary robot pose endpoint and read-only fleet
+Current API controllers cover Auth, Admin account management, Admin POI
+management, and development SimulationPreview. Application has matching Auth,
+Accounts, and POI features plus the in-memory pose publisher used by
+SimulationPreview. Infrastructure has specific Auth, account, and POI
+management repositories. The temporary robot pose endpoint and read-only fleet
 pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
-cases, and feature repository abstractions remain unimplemented. An absent
+cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
 
 Compile-time dependencies: `Domain` has no project references; `Application`
@@ -72,31 +75,35 @@ backend/src/SmartCampus.Domain/
 backend/src/SmartCampus.Application/
 ├── Common/
 │   ├── Abstractions/
+│   │   ├── Authentication/          authentication use-case boundaries
 │   │   ├── Messaging/               ICommand<T>, IQuery<T>
-│   │   └── Persistence/             IApplicationDbContext; specific repository interfaces when needed
+│   │   └── Persistence/             commit boundary and feature repository interfaces
+│   ├── Authentication/              shared role resolution
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          Simulation exists; add other real use cases as needed
+├── Features/                          current: Accounts, Auth, Pois, Simulation
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
 │       └── Queries/<UseCase>/
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Infrastructure/
+├── Authentication/                   Jwt/, PasswordHashing/, Seeding/, UsernameNormalization/
 ├── Persistence/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
-│   └── Repositories/                future: specific implementations
-├── Authentication/                   JWT/password/token technology
+│   ├── Repositories/                 current Auth, Accounts, and POI management implementations
+│   └── Seeding/                      current demo POI seeding
 ├── Integrations/                     future: external adapters without Api/Hub references
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Api/
 ├── Common/{Requests,Responses}/
-├── Controllers/                      simulation exists; production HTTP endpoints future
+├── Controllers/                      AuthController, AdminAccountsController,
+│                                     AdminPoisController, SimulationController
 ├── ExceptionHandling/
-├── Hubs/                             Simulation exists; fleet/operations future
+├── Hubs/                             SimulationHub/Preview helpers; fleet/operations future
 ├── Properties/
 └── Program.cs
 ```
@@ -123,8 +130,9 @@ backend/src/SmartCampus.Api/
   access `DbContext` or external clients directly. Do not return Domain or EF
   entities directly from controllers.
 
-Organize Application **feature first**. Keep one use case and its validator,
-handler, and feature-local result together, for example:
+Organize Application **feature first**, with one canonical layout for every
+feature. Keep one use case and its validator, handler, and feature-local result
+together, for example:
 
 ```text
 backend/src/SmartCampus.Application/Features/Tours/
@@ -132,7 +140,14 @@ backend/src/SmartCampus.Application/Features/Tours/
 └── Queries/GetTour/{GetTourQuery,GetTourQueryHandler}.cs
 ```
 
-The example describes future placement, not existing files. Do not create
+Auth follows this same layout: `Commands/Login/`, `Commands/Logout/`, and
+`Queries/Refresh/`. Login persists a refresh-token hash and Logout can revoke a
+stored token, so both are commands. Refresh only reads the stored token/user,
+issues an access token, and returns the same refresh token and stored expiry; it
+does not mutate persistence, so it remains a query. The Auth session result
+stays feature-local under `Features/Auth/`.
+
+The Tours example describes future placement, not existing files. Do not create
 global `Features/Commands/`, `Features/Queries/`, `DTOs/`, `Validators/`,
 `Handlers/`, or `Services/` buckets. A MediatR handler is the default use-case
 orchestrator. Add an Application service near its capability only for meaningful
@@ -287,13 +302,21 @@ and `Expand`; it does not define `Select`. For a collection endpoint, validate
 sort whitelist, and expandable relations. Do not add a generic reflection
 query engine. The flow is Api `CollectionQueryParameters` -> feature query ->
 Application persistence abstraction -> Application `PagedResult<T>` -> Api
-`PagedResponse<T>` with `PaginationMetadata`. No collection endpoint or bounds
-validator is implemented yet.
+`PagedResponse<T>` with `PaginationMetadata`. `GET /api/admin/accounts` is the
+first implemented collection example: it supports `search`, `sort`, `page`,
+and `size`, validates page/size bounds and its sort whitelist, and rejects
+non-empty `expand`. Account search covers username and full name. The Admin POI
+list is another implemented collection endpoint. Do not add generic reflection
+search/sort/expand or OData.
 
 `GlobalExceptionHandler` in Api currently maps Domain and FluentValidation
-exceptions to 400, `UnauthorizedException` to 401, `NotFoundException` to
-404, `ConflictException` to 409, and unexpected exceptions to 500. HTTP errors
-use a `BaseResponse` envelope.
+exceptions to 400, `UnauthorizedException` to 401, `ForbiddenException` to
+403, `NotFoundException` to 404, `ConflictException` to 409, and unexpected
+exceptions to 500. HTTP errors
+from that handler and automatic `[ApiController]` model-state validation use
+the `BaseResponse` envelope. `AddProblemDetails()` remains registered as
+framework support; it is not a second response format for those API error
+paths.
 Do not expose stack traces, SQL details, secrets, or visitor personal data in
 responses or logs. Domain and Application code must not throw HTTP-specific
 exceptions.
@@ -335,9 +358,12 @@ bash backend/scripts/scaffold-db
 
 The backend implements `POST /api/auth/login`, `/api/auth/refresh`, and
 `/api/auth/logout` in `backend/src/SmartCampus.Api/Controllers/AuthController.cs`.
-Application owns the use cases, Infrastructure owns password hashing,
-username normalization, JWT and SQL token persistence, and Api owns HTTP and
-cookie handling. The current request/response, role, cookie, status, and JWT
+Application owns the use cases under `Features/Auth/Commands/` and
+`Features/Auth/Queries/`, Infrastructure owns password hashing, username
+normalization, JWT and SQL token persistence, and Api owns HTTP and cookie
+handling. Login persists a refresh-token hash; Logout revokes a matching stored
+token; Refresh reads without rotating or mutating it and returns the same token
+and expiry. The current request/response, role, cookie, status, and JWT
 configuration contract is in
 [`docs/architecture.md` Section 3.0](../docs/architecture.md#30-user-account-authentication-api-implemented).
 Keep that contract factual and update it when public behavior changes. The
@@ -345,12 +371,15 @@ schema has `RefreshTokens.TokenHash` as binary data and nullable `RevokedAt`,
 not a revoked flag. The application permits exactly one supported role per
 account in V1; the physical `UserRoles` primary key remains unchanged.
 
-These endpoints do not provide account management, authorization policies for
-future business routes, or robot/fleet machine authentication. Production fleet
-and operations Hubs remain pending; before robot navigation commands are
-enabled outside the local compatibility spike, require TLS, per-robot
-credentials using `Robot.CredentialHash`, and a fleet-machine policy distinct
-from user access. Browser/user credentials must not submit robot state. The
+The backend also implements Admin account and POI management. User JWT
+authentication and Admin role authorization for those management APIs are
+present. Authorization for future tour, registration, invitation, dispatch,
+and fleet business APIs, and robot/fleet machine authentication, remain
+unimplemented. Production fleet and operations Hubs remain pending; before
+robot navigation commands are enabled outside the local compatibility spike,
+require TLS and per-robot credentials using `Robot.CredentialHash`, with a
+fleet-machine policy distinct from user access. Browser/user credentials must
+not submit robot state. The
 local spike may bootstrap with dummy identity, but passing the checkpoint
 requires valid and invalid credentials, authenticated reconnect, and backend
 restart tests.

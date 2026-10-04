@@ -282,11 +282,16 @@ rather than trimming it. Username lookup remains case-insensitive;
 passwords are passed unchanged. Existing stored usernames are not migrated by
 this change; a username containing whitespace cannot be used in a login request.
 
-Application exceptions use the common JSON envelope with `success: false`, a
-message, null data, and optional errors. Login failures do not create a refresh
-token. Refresh tokens are cryptographically random, stored only as SHA-256
-hashes in `RefreshTokens`, and live for 7 days. The cookie is named
-`campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
+Application exceptions and automatic `[ApiController]` model-binding
+validation errors use the same JSON envelope with `success: false`, a message,
+null data, and optional errors. `AddProblemDetails()` remains registered for
+framework support; these API error paths return `BaseResponse`, not a second
+ProblemDetails shape. Login failures do not create a refresh token. Login
+creates a cryptographically random refresh token and stores only its SHA-256
+hash in `RefreshTokens`; it lives for 7 days. Refresh does not rotate or mutate
+the stored token: it returns the same refresh token and stored expiry while
+issuing a new access token. Logout revokes a matching stored token. The cookie
+is named `campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
 `Path=/api/auth`. Access tokens are 15-minute HS256 JWTs with configured issuer
 and audience (defaults `SmartCampus.Api` and `SmartCampus.Web`); their user
 identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, or
@@ -613,8 +618,12 @@ migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 snapshot for invitation/session/branch storage. It is applied to the local
 SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
-production data. Database setup/scaffolding were exercised locally; product use
-cases remain unimplemented.
+production data. Database setup/scaffolding were exercised locally. The current
+backend also implements Auth V1, Admin account management, Admin POI
+management, and development-only SimulationPreview; the relevant HTTP contracts
+are described in Sections 3.0–3.0.2. Tour execution/orchestration, group
+registration, invitation/session product APIs, branch-request use cases, fleet
+dispatch, and production fleet/operations Hubs remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
 seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to
@@ -685,12 +694,15 @@ execution are deferred under Section 5. Research requirements impose no
 constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
-The backend already has a development SimulationHub and the user login/session
-API in Section 3.0. Production fleet and operations Hubs, fleet dispatch,
-robot/machine authentication, and authorization for future business APIs remain
-unimplemented. A single backend process with per-robot latest state is the
-initial implementation baseline; multiple instances would require shared-state
-and connection-routing design, not just separate Hub names.
+The backend implements development SimulationPreview, user JWT login/session
+authentication, Admin account management, and Admin POI management. Admin role
+authorization is enforced for the account and POI management APIs. Authorization
+for future tour, registration, invitation, branch-request, and fleet business
+APIs remains unimplemented, as does robot/machine authentication. Production
+fleet and operations Hubs and fleet dispatch remain unimplemented. A single
+backend process with per-robot latest state is the initial implementation
+baseline; multiple instances would require shared-state and connection-routing
+design, not just separate Hub names.
 
 ### 3.4 State and command-result semantics
 

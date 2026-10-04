@@ -5,7 +5,7 @@ using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Domain.Entities;
 
-namespace SmartCampus.Application.Features.Auth.Login;
+namespace SmartCampus.Application.Features.Auth.Commands.Login;
 
 public sealed record LoginCommand(string Username, string Password) : ICommand<AuthSessionResult>;
 

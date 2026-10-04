@@ -33,7 +33,7 @@ if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
 builder.Services.AddSimulationPreview();
 
 // Register HTTP endpoints, error responses, and the development API document.
-builder.Services.AddControllers();
+builder.Services.AddControllers().UseBaseResponseForInvalidModelState();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
