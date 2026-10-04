@@ -160,10 +160,10 @@ contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`, `RouteStop`,
 `AuditLog`. A `Tour` stores scheduling/execution state and route-stop references;
 invitation/session records represent student access; BranchRequests represent
 proposed route changes. `RowVersion` is a SQL Server concurrency token on
-`Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`, and
-`TourAllowedBranch`. Database uniqueness enforces selected invariants, while
-session/request workflows and cross-row consistency still need application code.
-`RowVersion` also appears on `BranchRequest`.
+`Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`,
+`TourAllowedBranch`, `BranchRequest`, and `Poi`. Database uniqueness enforces
+selected invariants, while session/request workflows and cross-row consistency
+still need application code.
 
 `TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
 design, **not current tables or entities**. A navigation leg remains a
@@ -236,11 +236,13 @@ API binding, atomic admission and revocation remain implementation work.
 The current v1.1 schema persists invitation/session records, shared-viewing
 classification and branch requests; email attempts remain append-only audit
 records, and their delivery/revocation workflows remain application logic. The
-backend still has only its development Simulation controller and Hub; product
-use cases and endpoints above are not implemented. Do not infer that a group
-code/name match is equivalent to an approved personal invitation. A future
-feature change must reconcile its public contracts in `docs/architecture.md`
-and include the appropriate schema and tests.
+backend currently implements Auth V1, Admin account management, Admin POI
+management, and its development Simulation controller/Hub. The Review 1 tour,
+registration, invitation, dispatch, and production fleet endpoints above remain
+planned. Do not infer that a group code/name match is equivalent to an approved
+personal invitation. A future feature change must reconcile its public
+contracts in `docs/architecture.md` and include the appropriate schema and
+tests.
 
 ## 4. Request, persistence, and response flow
 
@@ -254,6 +256,15 @@ gateway boundary as needed -> Infrastructure implementation -> handler returns
 commit through that pipeline. The handler and repository normally do not save
 independently. External side effects and partial failures need explicit
 use-case design when implemented.
+
+Exception: Admin POI create, update, and availability commands are marked as POI
+mutations. `PoiMutationTransactionBehavior` wraps their normal UnitOfWork save
+in a POI-specific serializable SQL transaction so usage checks and POI/audit
+writes commit together. `FindForManagementAsync` takes an update lock on the POI
+row before checking its RowVersion; this makes simultaneous writes with the same
+version serialize into one success and one stale-version conflict. Do not move
+these commands to an independent save or remove the transaction without
+replacing that invariant.
 
 **Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
 `ValidationBehavior` -> Application query handler -> Application read boundary

@@ -3,19 +3,19 @@
 # docker-compose.preview.yml and is not a physical robot deployment path.
 #
 # MỌI service đều nằm sau một profile, nên `docker compose up` trần sẽ KHÔNG
-# khởi động gì cả. Đó là chủ ý: trên VMware không thể vô tình start service
+# khởi động gì cả. Đó là chủ ý: trên laptop không thể vô tình start service
 # hardware và gặp lỗi "/dev/ttyACM0: no such file or directory".
 #
 #   miniPC (phần cứng thật): docker compose --profile hardware pull && docker compose --profile hardware up -d --force-recreate
-#   VMware (RViz2 / debug) : docker compose --profile debug    up -d
-#   VMware (Gazebo / RViz2): docker compose --profile sim      up -d
+#   Ubuntu laptop (debug) : docker compose --profile debug up -d --build
+#   Ubuntu laptop (sim)   : docker compose --profile sim   up -d --build
 #
 # Chỉ service `robot-ros2` được phép khai báo `devices:`. Anchor bên dưới cố ý
 # chỉ chứa biến môi trường, không chứa devices/volumes, nên service debug/sim
 # không thể kế thừa serial device từ service hardware.
 
 x-ros2-common-env: &ros2-common-env
-  # miniPC và VMware PHẢI dùng cùng domain. Hệ thống này dùng 30.
+  # miniPC và laptop PHẢI dùng cùng domain. Hệ thống này dùng 30.
   ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-30}"
   RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
   ROS_LOCALHOST_ONLY: "${ROS_LOCALHOST_ONLY-0}"
@@ -56,22 +56,8 @@ services:
       # TEST model artifact directory. Copy the exported .xml/.bin and manifest
       # to this host directory (or set PERSON_MODEL_DIR); container is read-only.
       - ${PERSON_MODEL_DIR:-./models}:/opt/models:ro
-      # Source mount live (giống service ros2-debug): pull code trên host rồi
-      # `colcon build` TRONG container, khỏi phải rebuild + push image mỗi lần
-      # sửa một dòng. Không có dòng này thì mọi sửa trong container sẽ MẤT khi
-      # container bị recreate / miniPC tắt nguồn.
-      #
-      # LƯU Ý: chỉ `src` được mount, còn build/ install/ log/ nằm trong
-      # container. Sau `git pull` có đổi ROS code (hoặc sau recreate nếu
-      # source trên host mới hơn source đã bake trong image), phải:
-      #   cd /ros2_ws && colcon build --symlink-install
-      # Sau build, source install/setup.bash trong shell hiện tại hoặc mở một
-      # shell `docker exec` mới (được auto-source qua /root/.bashrc).
-      # Nếu không, launch vẫn chạy bản install cũ nướng trong image.
-      #
-      # KHI CHỐT PRODUCTION: bỏ dòng này ra và build image cuối, để cái đang
-      # chạy khớp đúng cái trong image.
-      - ./ros2_ws/src:/ros2_ws/src
+      # Production hardware contains the built install space. Iterative source
+      # rebuilds stay in debug/sim; update hardware by pulling/recreating CI images.
     stdin_open: true
     tty: true
     # KHÔNG hardcode một launch cụ thể ở đây. Container chỉ khởi động ROS env và
@@ -86,7 +72,7 @@ services:
     command: >
       bash -c ': "$${ROS_DISCOVERY_SERVER:?ROS_DISCOVERY_SERVER must be set in .env}"; sleep infinity'
 
-  # ---------------------------------------------------------------- VMware --
+  # --------------------------------------------------------------- laptop --
   # Chỉ để development/debug + RViz2. KHÔNG có `devices:`, không chạy driver
   # phần cứng. Nhìn thấy topic của miniPC qua LAN nhờ network_mode: host.
   ros2-debug:
@@ -94,7 +80,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: robot-ros2:dev
+      target: debug
+    image: robot-ros2:debug
     container_name: ros2-debug
     network_mode: host
     restart: "no"
@@ -105,10 +92,10 @@ services:
       QT_X11_NO_MITSHM: "1"
       LIBGL_ALWAYS_SOFTWARE: ${LIBGL_ALWAYS_SOFTWARE:-1}
     volumes:
-      # Source mount live: sửa code trên VM rồi colcon build trong container.
+      # Source mount live: sửa code trên laptop rồi colcon build trong container.
       - ./ros2_ws/src:/ros2_ws/src
       - ./robot_maps:/maps
-      # X11 socket của Ubuntu guest -> RViz2 hiện lên trên VM.
+      # X11 socket của Ubuntu host -> GUI hiện lên trên laptop.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     stdin_open: true
     tty: true
@@ -118,14 +105,15 @@ services:
     command: >
       bash -c ': "$${ROS_DISCOVERY_SERVER:?ROS_DISCOVERY_SERVER must be set in .env}"; sleep infinity'
 
-  # ----------------------------------------------------- VMware standalone --
+  # ----------------------------------------------------- laptop standalone --
   # Simulation độc lập với miniPC: DDS discovery local, không hardware devices.
   ros2-sim:
     profiles: [sim]
     build:
       context: .
       dockerfile: Dockerfile
-    image: robot-ros2:dev
+      target: sim
+    image: robot-ros2:sim
     container_name: ros2-sim
     network_mode: host
     restart: "no"

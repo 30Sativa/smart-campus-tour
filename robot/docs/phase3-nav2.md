@@ -119,8 +119,9 @@ sẽ trễ nhịp trên mini PC. Nếu driver không nhận 320×240, chạy
 
 ## 3. Chạy
 
-Các lệnh dưới đây dành cho development container/VM. Trên miniPC triển khai,
-build và chạy Nav2 trong `robot-ros2` container. Astra Pro là ngoại lệ native
+Các lệnh build dưới đây dành cho development container `ros2-debug`/VM.
+Trên miniPC triển khai, `robot-ros2` chỉ chạy Nav2 từ image CI; cập nhật bằng
+pull + recreate, không build source trong hardware container. Astra Pro là ngoại lệ native
 host: launch camera riêng trên host, rồi launch navigation trong container với
 `enable_camera:=false` để không khởi chạy camera thứ hai. Cả hai dùng chung
 ROS domain; không chạy `robot_control`, Nav2 hoặc STM32 bridge trên host.

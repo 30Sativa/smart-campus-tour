@@ -181,11 +181,10 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
   not authorize duplicate STM32, Nav2, or robot-control nodes outside the
   container.
   See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
-- **Exception, TEST phase only:** the `hardware` service currently bind-mounts
-  `./ros2_ws/src:/ros2_ws/src` so a fix can be built in the container without a
-  CI round trip. This is temporary and marked as such in `docker-compose.yml`.
-  Remove the mount before production so what runs matches the image. This
-  container overlay exception is separate from the native Astra Pro camera
-  bring-up described in ADR-0003.
+- Production `hardware` copies a non-symlink install space from the builder
+  and no longer mounts source in Compose. Update it by pulling/recreating CI
+  images. The former TEST source-overlay exception has ended; iterative builds
+  remain in debug/sim. This is separate from the Astra native-host exception
+  described in ADR-0003.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

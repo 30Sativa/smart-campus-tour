@@ -9,6 +9,7 @@ using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
+using SmartCampus.Infrastructure.Persistence.Seeding;
 
 namespace SmartCampus.Infrastructure;
 
@@ -34,7 +35,10 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IAuthRepository, EfAuthRepository>();
         services.AddScoped<IAccountRepository, EfAccountRepository>();
+        services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
+        services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
         services.AddScoped<InitialAdminSeeder>();
+        services.AddScoped<DemoPoiSeeder>();
 
         return services;
     }

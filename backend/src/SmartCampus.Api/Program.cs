@@ -8,7 +8,14 @@ using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args);
-var builder = WebApplication.CreateBuilder(initialAdminSeedCommand.GetHostArguments());
+var demoPoiSeedCommand = DemoPoiSeedCommand.Parse(initialAdminSeedCommand.GetHostArguments());
+var builder = WebApplication.CreateBuilder(demoPoiSeedCommand.GetHostArguments());
+if (demoPoiSeedCommand.Requested)
+{
+    Environment.ExitCode = await demoPoiSeedCommand.RunAsync(builder, initialAdminSeedCommand.Requested);
+    return;
+}
+
 var simulationPreviewEnabled = builder.Environment.IsDevelopment() &&
     builder.Configuration.GetValue<bool>("SimulationPreview:Enabled");
 

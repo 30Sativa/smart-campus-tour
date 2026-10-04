@@ -125,6 +125,13 @@ else
   fi
 fi
 
+section "Tier 1.6 - Docker dependency/profile contracts"
+if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+  skip "python3/PyYAML not available" "Docker profile contracts"
+else
+  if python3 -B docker/test_image_profiles.py; then ok; else fail; fi
+fi
+
 # ---------------------------------------------------------------- TIER 2
 
 section "Tier 2 - colcon build + test"

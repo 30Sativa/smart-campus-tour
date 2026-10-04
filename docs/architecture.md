@@ -341,6 +341,40 @@ JWT may remain usable until its natural expiry (about 15 minutes plus validation
 clock skew). This is the accepted V1 limitation; no token version or blacklist
 is used.
 
+### 3.0.2 Admin POI management (V1)
+
+The POI endpoints require the `Admin` role. They implement the Admin POI slice
+selected in [ADR-0014](decisions/0014-admin-poi-management.md):
+
+| Endpoint | Request and success | Rejection behavior |
+|---|---|---|
+| `GET /api/admin/pois` | Optional `search`, `sort`, `page`, `size`, and `isActive`; HTTP 200 with POI summaries and pagination. | Invalid page/size/sort or non-empty `expand`: 400. Anonymous: 401. Non-Admin: 403. |
+| `GET /api/admin/pois/{id}` | HTTP 200 with POI details, base64 `rowVersion`, and current usage/editability flags. | Missing POI: 404. Anonymous: 401. Non-Admin: 403. |
+| `POST /api/admin/pois` | JSON fields: `name`, `description`, `mapKey`, `mapFrame`, `x`, `y`, `yaw`, `narrationText`, `audioUrl`, `narrationSeconds`, `fallbackVideoUrl`; HTTP 200 with the new ID. New rows are inactive. | Invalid input: 400. Anonymous: 401. Non-Admin: 403. |
+| `PUT /api/admin/pois/{id}` | Same content/map/pose fields plus current base64 `expectedRowVersion`; HTTP 200. | Invalid input: 400. Missing POI: 404. Stale version, a live Tour lock, or editing referenced geometry: 409. |
+| `POST /api/admin/pois/{id}/activate` | JSON `{ "expectedRowVersion": "..." }`; HTTP 200. | Missing POI: 404. Stale version or a live Tour lock: 409. |
+| `POST /api/admin/pois/{id}/deactivate` | Same body as activate; HTTP 200. Existing route/history references remain intact. | Missing POI: 404. Stale version or a live Tour lock: 409. |
+
+List search covers name/description. Sort accepts `name`, `isActive`,
+`createdAt`, or `updatedAt`, with `-` for descending; `page` defaults to 1,
+`size` to 20 and is limited to 1–100. A non-empty `expand` is rejected. There
+is no delete endpoint. `IsActive` only means selectable for a newly prepared
+Route; it is not evidence of narration readiness or physical navigation
+verification.
+
+Content and availability remain editable for referenced POIs except while a
+`READY` or `RUNNING` Tour uses the POI through its base route, active route, or
+enabled branch. Map/frame/x/y/yaw can be changed only before any `RouteStop` or
+historical `TourEvent` references the POI. POI writes and audit rows commit
+together inside a POI-specific serializable SQL transaction. Updates and
+lifecycle operations require the current SQL Server `RowVersion`; the
+transaction takes an update lock on the POI row before reading that token, so
+concurrent requests with one version serialize into one success and one 409
+stale-version conflict. Stale writes preserve the stable POI ID. This scope
+does not implement audio upload, route editing, or a map picker. Existing v1.1
+databases need `backend/database/patches/add-poi-rowversion-v1.1.sql` before
+this API build.
+
 ### 3.1 Fleet contract
 
 **Decided contract, implementation and compatibility checkpoint pending:** the

@@ -27,6 +27,8 @@ const STATUS: Record<string, Entry> = {
   // Account-management states (presentation keys, not backend enum values).
   'account-active': { label: 'Đang hoạt động', tone: 'ok' },
   'account-inactive': { label: 'Ngừng hoạt động', tone: 'muted' },
+  'poi-active': { label: 'Khả dụng', tone: 'ok' },
+  'poi-inactive': { label: 'Không khả dụng', tone: 'muted' },
   'invalid-role': { label: 'Vai trò không hợp lệ', tone: 'danger' },
 
   // Tour session / booking

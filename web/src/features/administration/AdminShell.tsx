@@ -28,6 +28,7 @@ export default function AdminShell() {
   const current = adminActivePath(location.pathname)
   const onRoles = location.pathname.startsWith('/admin/roles')
   const onAccounts = location.pathname.startsWith('/admin/accounts')
+  const onPois = location.pathname.startsWith('/admin/pois')
   const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị Tour'
 
   return (
@@ -59,7 +60,7 @@ export default function AdminShell() {
           <p className="truncate text-sm font-semibold tracking-[-0.01em] text-[#3d6481]">CampusTour <span className="mx-1.5 text-[#a7b8aa]">/</span> {title}</p>
         </header>
 
-        {!onAccounts && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
+        {!onAccounts && !onPois && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>

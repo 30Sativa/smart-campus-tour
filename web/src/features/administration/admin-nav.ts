@@ -1,4 +1,4 @@
-import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, Route, UsersRound } from 'lucide-react'
+import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, Route, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../staff/staff-nav'
 
 /**
@@ -24,6 +24,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   { label: 'Tuyến', items: [{ label: 'Danh mục tuyến', path: '/admin/routes', icon: Route }] },
+  { label: 'Địa điểm', items: [{ label: 'Quản lý POI', path: '/admin/pois', icon: MapPinned }] },
   { label: 'Quản lý tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
   { label: 'Lịch sử', items: [{ label: 'Lịch sử Tour', path: '/admin/history', icon: History }] },
 ]
@@ -39,6 +40,7 @@ export function adminActivePath(pathname: string): string | null {
   const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
   if (ADMIN_NAV.some((item) => item.path === path)) return path
   if (path.startsWith('/admin/tours/')) return '/admin/tours'
+  if (path.startsWith('/admin/pois/')) return '/admin/pois'
   let best: string | null = null
   for (const item of ADMIN_NAV) {
     if (item.path !== '/admin' && path.startsWith(`${item.path}/`) && (!best || item.path.length > best.length)) best = item.path

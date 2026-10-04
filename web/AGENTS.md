@@ -45,9 +45,11 @@ shared rules; this file only covers what is specific to `web/`.
     Scheduled, pick a prepared route, review groups (approve / reject with a
      reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
      Start, and read finished Tours. Admin never starts, holds, advances or ends
-     a run and never controls a robot. Review 1 target adds a limited P1
-     completion/email/invitation-entry summary and POI-content form; neither is
-     proof of current implementation. Screen map: `web/docs/admin-tours.md`.
+    a run and never controls a robot. Review 1 target adds a limited P1
+    completion/email/invitation-entry summary and POI-content form. The Admin
+    POI catalog at `/admin/pois` is API-backed: it edits content and only edits
+    map/pose before route/history use (ADR-0014). P1 audio upload/dwell warning
+    remains separate. Screen map: `web/docs/admin-tours.md`.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.

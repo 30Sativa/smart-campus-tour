@@ -15,6 +15,8 @@ changing robot code.
   READY FOR HARDWARE TEST status before relying on the parameters.
 - [Camera mounts](cad-sensor-mounts.md) — measured CAD positions.
 - [miniPC deployment checklist](phase1-deploy-minipc.md) — operational setup.
+- [Docker dependencies and targets](docker-dependencies.md) — hardware/debug/sim
+  separation, native camera dependencies, image checks and size measurement.
 
 ## Phase records
 

@@ -35,13 +35,12 @@ There is no normal deployment path that runs `git pull` and builds the full ROS
 workspace on the naked miniPC host. The drivetrain, navigation, and main ROS
 runtime remain image-based.
 
-Temporary exception during bring-up: the `hardware` service bind-mounts
-`./ros2_ws/src:/ros2_ws/src`, so ROS source can be `git pull`-ed on the host
-and rebuilt *inside the container* (`colcon build --symlink-install`) without
-a CI round trip. The build still never runs on the naked host. The mount is
-marked in `docker-compose.yml` and is removed before production. Removing that
-test-phase mount makes the main runtime image-only; the Astra Pro camera-only
-native-host exception below remains in force.
+The former bring-up source-mount exception has ended: `robot-ros2` is an
+immutable production runtime with CI-built install artifacts, no source mount
+and no colcon development environment. Update it by pulling/recreating the CI
+image. Iterative `colcon build --symlink-install` belongs in `ros2-debug`, which
+retains the source mount and build tools. The Astra Pro camera-only native-host
+exception below remains in force.
 
 Maps are stored on the host and bind-mounted (`./robot_maps:/maps`) so a map
 the robot built survives an image update.

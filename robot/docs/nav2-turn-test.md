@@ -44,28 +44,21 @@ Nav2 velocity smoother, nên bộ thông số không làm teleop quay chậm hơ
 Đây là thay đổi source trong repo; không tự đồng bộ sang MiniPC hay publish image.
 Dừng navigation cũ và xác nhận robot đứng yên trước khi cập nhật/restart.
 
-- Deployment image: sau khi CI publish image có thay đổi này, pull và recreate
-  service hardware theo `robot/README.md`.
-- Ngoại lệ TEST hiện có: đưa source mới vào đúng clone bind-mounted trên MiniPC,
-  rồi build **trong `robot-ros2`**, không build trên host. Kiểm tra source trong
-  container đã có bảng giá trị mới trước khi build.
+Sau khi CI publish image có thay đổi này, trên MiniPC host pull và recreate
+service hardware. `robot-ros2` không còn source mount/môi trường colcon;
+không rebuild tương tác trong container production. Build thử source thuộc
+`ros2-debug`; kiểm tra phần cứng vẫn dùng image CI đã cập nhật.
 
-MiniPC host, mở shell:
+MiniPC host, sau khi đã dừng stack cũ:
 
 ```bash
+docker compose --profile hardware pull robot-ros2
+docker compose --profile hardware up -d --force-recreate robot-ros2
 docker exec -it robot-ros2 bash
 ```
 
-Trong container, chỉ với flow TEST source mount:
-
-```bash
-cd /ros2_ws
-colcon build --symlink-install --packages-select robot_control
-source /ros2_ws/install/setup.bash
-```
-
-Chỉ tiếp tục khi build thành công. Các package khác phải đã được build trong
-image/workspace hiện tại. Không chạy một launch thứ hai chồng lên launch cũ.
+Các package phải đã được build trong image CI. Không chạy một launch thứ hai
+chồng lên launch cũ.
 
 Trong container, kiểm tra map rồi launch:
 

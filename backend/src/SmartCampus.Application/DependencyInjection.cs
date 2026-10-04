@@ -18,6 +18,7 @@ namespace SmartCampus.Application
                 config.RegisterServicesFromAssembly(assembly);
 
                 config.AddOpenBehavior(typeof(ValidationBehavior<,>));
+                config.AddOpenBehavior(typeof(PoiMutationTransactionBehavior<,>));
                 config.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
             });
 

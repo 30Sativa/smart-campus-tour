@@ -122,19 +122,29 @@ của robot thật. Hai file giữ các mục đích riêng.
 | Profile | Máy | Service | Image | USB devices | GUI |
 |---|---|---|---|---|---|
 | `hardware` | robot miniPC | `robot-ros2` | Prebuilt DockerHub image | STM32, LiDAR, gamepad | không |
-| `debug` | Ubuntu guest trong VMware | `ros2-debug` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
-| `sim` | Ubuntu guest trong VMware | `ros2-sim` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
+| `debug` | Laptop Ubuntu 22.04 native | `ros2-debug` | Target `debug` -> `robot-ros2:debug` | **không có** | X11 tới laptop |
+| `sim` | Laptop Ubuntu 22.04 native | `ros2-sim` | Target `sim` -> `robot-ros2:sim` | **không có** | X11 tới laptop |
 
 Mọi service đều nằm sau profile, nên `docker compose up` trần sẽ không khởi
-động gì. Nhờ vậy trên VMware không thể vô tình start service hardware và gặp
+động gì. Nhờ vậy trên laptop không thể vô tình start service hardware và gặp
 lỗi `error gathering device information ... /dev/ttyACM0: no such file or directory`.
 
 `devices:` chỉ tồn tại trong service `robot-ros2`. Anchor
 `x-ros2-common-env` dùng chung chỉ chứa biến môi trường ROS, không chứa
 devices, nên service debug/sim không thể kế thừa serial port.
 
-Cả ba service dùng chung một Dockerfile và entrypoint: `debug` và `sim` build
-tại chỗ, còn `hardware` chạy image prebuilt mà CI build từ đúng Dockerfile đó.
+Cả ba service dùng chung một Dockerfile và entrypoint, nhưng dependency tách
+theo target: `base` giữ ROS CLI/rosbag/Fast DDS; `dependencies` và `builder`
+giữ build tools, test deps và source; `runtime` chỉ cài manifest runtime deps.
+`hardware` copy install space và OpenVINO/NumPy runtime; `debug` và `sim`
+giữ development dependencies và copy toàn bộ workspace từ development-builder để tiếp
+tục build source. GUI/Gazebo được cài trước lớp source để giữ dependency cache.
+`hardware` là target cuối/mặc định để CI hiện
+tại vẫn publish đúng image; service hardware tiếp tục chỉ pull image prebuilt.
+Debug và sim có tag riêng để không ghi đè image của nhau. Xem audit dependency,
+host setup và kiểm tra image tại
+[robot/docs/docker-dependencies.md](docs/docker-dependencies.md).
+
 Khi mở shell mới bằng `docker exec -it <container> bash`, `/root/.bashrc` tự
 source ROS 2 Humble trước, sau đó source `/ros2_ws/install/setup.bash` nếu
 workspace đã được build. Không cần source tay trong shell mới.
@@ -144,8 +154,9 @@ workspace đã được build. Không cần source tay trong shell mới.
 profile `hardware` dùng image prebuilt, behavior này chỉ có trên miniPC sau
 khi CI build lại image và `docker compose --profile hardware pull`.
 
-Bind mount `./ros2_ws/src:/ros2_ws/src` chỉ thay source, không tự build lại
-workspace. Sau `git pull` có thay đổi ROS code, chạy
+Hardware production không còn source bind mount/môi trường colcon; cập nhật bằng
+image CI. Bind mount `./ros2_ws/src:/ros2_ws/src` ở debug/sim chỉ thay source,
+không tự build lại workspace. Sau `git pull` có thay đổi ROS code, chạy
 `cd /ros2_ws && colcon build --symlink-install`. Shell đang chạy build vẫn cần
 `source /ros2_ws/install/setup.bash` một lần để nhận overlay vừa build, hoặc
 thoát ra và mở shell `docker exec` mới để `.bashrc` tự source.
@@ -192,17 +203,17 @@ ros2 launch robot_control manual_mapping.launch.py \
   port:=$SERIAL_PORT lidar_serial_port:=$LIDAR_PORT
 ```
 
-### Chạy trên VMware (debug + RViz2)
+### Chạy trên laptop Ubuntu 22.04 (debug + RViz2)
 
 ```bash
 cd robot
 cp .env.vmware.example .env
-xhost +local:docker       # cho container nói chuyện với X server của VM
+xhost +local:docker       # cho container nói chuyện với X server của laptop
 docker compose --profile debug up -d --build
 docker exec -it ros2-debug bash
 ```
 
-VMware lấy Discovery Server từ `.env.vmware.example`:
+Laptop lấy Discovery Server từ `.env.vmware.example` (giữ tên file cũ):
 
 ```text
 ROS_DISCOVERY_SERVER=amr-minipc:11811
@@ -225,15 +236,15 @@ Mở RViz2:
 rviz2
 ```
 
-Source được mount live tại `/ros2_ws/src`, nên có thể sửa code trên VM rồi
+Source được mount live tại `/ros2_ws/src`, nên có thể sửa code trên laptop rồi
 build lại trong container:
 
 ```bash
 colcon build --symlink-install && source /ros2_ws/install/setup.bash
 ```
 
-Không launch stack điều khiển robot thật từ container debug. VMware chỉ dùng
-cho `rviz2`, `ros2 topic`, `ros2 service`, `tf2_echo` và các thao tác chỉ đọc,
+Không launch stack điều khiển robot thật từ container debug. Laptop dùng
+`rviz2`, `rqt`, PlotJuggler, rosbag2 và các thao tác inspect ROS,
 trong khi miniPC sở hữu phần cứng.
 
 Khi xong, thu hồi quyền X11:
@@ -242,7 +253,7 @@ Khi xong, thu hồi quyền X11:
 xhost -local:docker
 ```
 
-### Chạy trên VMware (simulation standalone)
+### Chạy trên laptop Ubuntu 22.04 (simulation standalone)
 
 ```bash
 cd robot
@@ -259,7 +270,7 @@ ros2 launch robot_navigation sim_navigation.launch.py rviz:=true
 ```
 
 Profile `sim` không map hardware device và không yêu cầu
-`ROS_DISCOVERY_SERVER`. Khi xong, chạy `xhost -local:docker` trên VMware.
+`ROS_DISCOVERY_SERVER`. Khi xong, chạy `xhost -local:docker` trên laptop.
 
 
 ## How To Build Docker Image Locally
@@ -270,6 +281,10 @@ docs in this repo target Humble.
 ```bash
 docker build -t robot-ros2:local .
 ```
+
+This defaults to the `hardware` target. For development tools or Gazebo, use
+`docker build --target debug -t robot-ros2:debug .` or
+`docker build --target sim -t robot-ros2:sim .` (build context `robot/`).
 
 Run the built image interactively:
 
