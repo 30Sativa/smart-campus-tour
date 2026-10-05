@@ -5,9 +5,9 @@ import { AdminErrorPanel, AdminPage, Notice } from '../../features/administratio
 import { poiRequestError } from '../../features/administration/pois/errors'
 import { useCreatePoi, usePoi, useSetPoiActive, useUpdatePoi } from '../../features/administration/pois/hooks'
 import type { CreatePoiInput, PoiDetails } from '../../features/administration/pois/types'
-import { ConfirmationDialog } from '../../features/staff/components/ConfirmationDialog'
-import { inputClass, labelClass, buttonClass } from '../../features/staff/ui-classes'
-import { PageHeader, LoadingPanel } from '../../features/staff/StaffUi'
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
+import { inputClass, labelClass, buttonClass } from '../../components/ui/ui-classes'
+import { PageHeader, LoadingPanel } from '../../components/ui/ConsolePrimitives'
 
 type PoiForm = {
   name: string

@@ -131,28 +131,58 @@ web/
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
     │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
-    │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
-    │   │                 sections/ (one component per landing section)
-    │   ├── staff/        StaffShell, staff-nav, use-mobile-nav, StaffUi
-    │   │                 (shared chrome), ui-classes, status/type vocabulary,
-    │   │                 formatters, reason, attention (next action per
-    │   │                 state, counts, "needs me now"), staff-hooks (query
-    │   │                 layer + realtime sync), components/ (run status,
-    │   │                 controls, route, robot, dialogs, operational twin)
-    │   └── administration/ AdminShell, AdminUi, admin-nav, admin-status
-    │                     (labels), admin-hooks (query layer), admin-attention
-    │                     (dashboard tasks), components/ (TourForm, RoutePreview,
-    │                     ReadyChecklist, registration table/drawer, roster,
-    │                     invitation + Chốt/Mở lại/Hủy dialogs)
-    ├── api/              client.ts (the one HTTP client), signalr.ts (hub
-    │                     factory), contracts/ (endpoint DTOs + calls)
+    │   ├── administration/ AdminShell, AdminUi, admin-nav/status/hooks,
+    │   │                   accounts/ and POI administration subfeatures,
+    │   │                   registration/Tour components
+    │   ├── digital-twin/  DigitalTwinCanvas, CampusModel, RobotModel,
+    │   │                  TwinScene, SimulatorPreview, demo motion/map config
+    │   ├── landing/       landing.css/content/motion and sections/
+    │   ├── quest-stream/  browser livestream capability (WebRTC/WHEP)
+    │   ├── representative/ registration/invitation UI, hooks, nav and format
+    │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
+    │   │                  reason, attention, query/realtime hooks and
+    │   │                  operation, route, robot and twin components
+    │   ├── student/       remote-Tour flow and student status vocabulary
+    │   └── visitor/       legacy visitor flow, content, format and map UI
+    ├── components/ui/    multi-feature neutral primitives and shared console
+    │                     chrome; tests remain next to their owner
+    ├── api/              client.ts, signalr.ts, shared transport envelopes;
+    │                     existing contracts/{admin,staff,representative,
+    │                     visitor,...}.ts remain during migration
     ├── auth/             AuthBootstrap, AuthLayout + LoginPage/AuthFields,
     │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
-    ├── three/            DigitalTwinCanvas.tsx (R3F canvas)
     └── test/             setup.ts (Vitest + jest-dom)
 ```
+
+### Ownership rules
+
+- `app/` owns providers and router composition only. `routes/` owns URL entry
+  points, route params/search params, and page composition; it is not a home for
+  API clients or reusable feature libraries.
+- `features/<capability>/` owns that capability's UI, hooks, state mapping,
+  feature API bindings, and local types. Keep page wrappers such as `StaffPage`,
+  `AdminPage`, and Representative wrappers with their feature.
+- `components/` is for neutral UI with real consumers in multiple features.
+  Put it in `components/ui/` only when it has no feature-specific business
+  vocabulary; do not create a generic bucket or move wrappers by default.
+- Remaining Admin-to-Staff imports are semantic data/components: `STAFF_NAV`
+  feeds the role matrix, while `eventTypeLabel` and `HEAD_LABEL` provide
+  operations vocabulary. Account/POI labels stay in `administration/admin-status.ts`;
+  operational status labels stay in `staff/status.ts`. Representative has no
+  remaining Staff UI dependency.
+- `api/` owns shared HTTP/SignalR transport and cross-feature wire primitives.
+  New feature-specific endpoint calls and contracts live under their owning
+  feature's `api/`. Existing `api/contracts/{admin,staff,representative,
+  visitor,...}.ts` files are a transition-era layout with current consumers;
+  keep them intact unless a later change can move all consumers mechanically.
+- `auth/` owns app-wide login, session, roles, and access. `stores/` owns only
+  app-global client/UI state; TanStack Query remains the owner of server data.
+- `mocks/` contains labelled fixtures/simulations, never an automatic fallback
+  after a production API failure. Bind a mock beside the consuming feature.
+- `test/` contains the global Vitest bootstrap; feature and shared-component
+  tests stay beside the code they cover.
 
 Current route entry points include `/` (public), `/tour` and `/tour/:tourId`
 (Student), `/dai-dien/*` (Representative), `/visit/*` (legacy visitor),
@@ -190,12 +220,11 @@ Admin supports all groups; Staff-only does not gain recovery permission.
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
 
-`src/components/` currently holds nothing: the landing page redesign on
-2026-09-17 gave the theme control its own landing-token styling inside
-`features/landing/sections/SiteNav.tsx`, which left `components/ui/ThemeToggle.tsx`
-with no consumer, and it was deleted with the rest of `_to_delete/` on
-2026-09-18. Re-create `src/components/` only when a component genuinely has more
-than one consumer.
+The shared presentation layer currently lives in `src/components/ui/`. It owns
+neutral primitives used across the operations, administration, Representative,
+and Digital Twin surfaces, including console chrome. It is not the destination
+for every component: keep business labels, status mapping, feature page frames,
+and one-feature controls with their owning feature.
 
 Tests live next to the code they cover (`*.test.ts(x)`).
 
@@ -225,10 +254,16 @@ This is a **data source, not a fallback**. Mock data must never be served in
 response to a failed request, and no screen may branch on where its rows came
 from.
 
-`src/api/` contains the HTTP client, Auth calls/session refresh, `ApiError`,
-`apiUrl`, the SignalR hub factory, and endpoint contracts. Auth is wired;
-`staffApi` remains deliberately unwired until the corresponding backend
-features are ready. Keep business fixtures until each feature has a real
+`src/api/` contains the HTTP client (`client.ts`), Auth calls/session refresh,
+`ApiError`, `apiUrl`, SignalR factory (`signalr.ts`), and shared transport
+envelopes in `contracts/shared.ts`. Auth is wired; `staffApi` remains
+deliberately unwired until the corresponding backend features are ready.
+Feature-specific account and POI API bindings already live under
+`features/administration/{accounts,pois}/api/`. New feature endpoint calls and
+contracts follow that placement. Existing top-level `contracts/admin.ts`,
+`staff.ts`, `representative.ts`, `visitor.ts` and related files are retained
+while current mock/API consumers share them; do not duplicate their types or
+move them piecemeal. Keep business fixtures until each feature has a real
 backend binding; never use them as fallback after a failed HTTP request.
 
 ## 3. Development Rules
@@ -292,16 +327,20 @@ backend binding; never use them as fallback after a failed HTTP request.
   short (150-300ms), on opacity/transform/colour only, and every overlay
   carries `motion-reduce:transition-none`. Visible copy uses no em/en dash:
   empty values print `-`, sentences use a comma, colon or full stop.
-  Both shells render `staff/ConsoleSidebar.tsx` (2026-09-22).
+  Both shells render `components/ui/ConsoleSidebar.tsx`.
   The two still differ in *priority* — administration has no alert bell and no
   live badge — which is the right axis to diverge on.
-  - Shared chrome lives in `features/staff/StaffUi.tsx` and is used by
-    both areas: `panelClass`, `PageHeader`, `PanelHead`, `SectionHeading`,
-    `StatStrip`/`StatTile`, `SearchField`, `Pagination` (+ `use-pagination.ts`),
-    `SummaryTile`, `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`,
-    `PageSkeleton`; `ui-classes.ts` holds `buttonClass`, `inputClass`,
-    `labelClass`, `thClass`/`tdClass`/`rowClass`.
-    Build a page out of those before writing new markup.
+  - Neutral shared UI lives in `components/ui/`: `ConsolePrimitives.tsx`
+    (`panelClass`, `PageHeader`, `PanelHead`, `SectionHeading`, `StatStrip`/
+    `StatTile`, `SearchField`, `Pagination`, `SummaryTile`, `CellIcon`,
+    `LoadingPanel`, `PageSkeleton`, `Field`, `FilterChips`), `ui-classes.ts`,
+    `use-pagination.ts`, `ConsoleSidebar.tsx`, `use-mobile-nav.ts`, and
+    `ConfirmationDialog.tsx`. `AdminPage`, `StaffPage`, Representative wrappers,
+    `ErrorPanel`, `EmptyPanel`, operational `StatusBadge`, and business status
+    mappings stay feature-owned. `components/ui/status-tone.ts` owns only the
+    neutral tone type and presentation classes; `features/staff/status.ts`
+    continues to own operational status/event translation. Build from shared
+    primitives before adding a second copy, but move only real multi-feature UI.
   - **One accent.** `SummaryTile` never tints itself by meaning, because colour
     on these screens already means severity on a `StatusBadge`. The exceptions
     are deliberate and few: `StatusBadge` tones (`features/staff/status.ts`),
@@ -412,7 +451,13 @@ can be derived during render.
 
 - No direct `fetch` from React components.
 - Backend URLs must not be hard-coded in features or components.
-- HTTP access stays behind `src/api/` and feature-level query/mutation hooks.
+- HTTP access stays behind `src/api/client.ts` and feature-level
+  query/mutation hooks. `src/api/` does not own feature query hooks or endpoint
+  orchestration.
+- Shared wire envelopes stay in `src/api/contracts/shared.ts`; new
+  feature-specific calls/contracts belong in `features/<owner>/api/`. Keep the
+  existing top-level endpoint contract files during the current migration
+  rather than duplicating or relocating types without all consumers.
 - SignalR transport details should not be scattered across UI components.
 - Raw transport DTOs should not leak through the whole component tree when a
   feature-specific view model is genuinely needed.

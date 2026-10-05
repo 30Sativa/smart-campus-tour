@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { usePagination } from './use-pagination'
-import { Pagination } from './StaffUi'
+import { Pagination } from './ConsolePrimitives'
 
 const rows = Array.from({ length: 23 }, (_, i) => i + 1)
 

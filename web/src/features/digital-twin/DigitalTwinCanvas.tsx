@@ -1,8 +1,8 @@
 import { Grid, Line, OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { DEMO_ROUTE, type RobotPose } from '../features/digital-twin/demo-motion'
-import { CampusModel } from '../features/digital-twin/CampusModel'
-import { RobotModel } from '../features/digital-twin/RobotModel'
+import { DEMO_ROUTE, type RobotPose } from './demo-motion'
+import { CampusModel } from './CampusModel'
+import { RobotModel } from './RobotModel'
 
 export function DigitalTwinCanvas({ pose, overhead }: { pose: RobotPose; overhead: boolean }) {
   return <div className="h-[clamp(340px,58vh,640px)] w-full bg-[#edf2fa]" role="img" aria-label="Khuôn viên minh họa 3D với robot chạy trên tuyến vòng tròn">

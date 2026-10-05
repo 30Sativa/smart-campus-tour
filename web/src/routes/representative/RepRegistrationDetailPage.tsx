@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { Download } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import type { RepresentativeRegistrationDetail } from '../../api/contracts/representative'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { buttonClass } from '../../components/ui/ui-classes'
 import {
   Callout,
   ConfirmationDialog,

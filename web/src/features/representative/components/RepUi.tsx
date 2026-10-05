@@ -1,11 +1,10 @@
 /**
  * Building blocks of the school representative area.
  *
- * They sit on the console design system (`staff/ui-classes.ts`,
- * `staff/status.ts` tones) so the representative, Admin and Staff areas share
- * one palette, one radius scale (16px panels, 12px controls, pill badges) and
- * one button hierarchy. Light theme only; motion is limited to hover/press
- * feedback and a fade for toasts and the dialog.
+ * Shared console presentation comes from `components/ui`, so the Representative,
+ * Admin and Staff areas use one palette, one radius scale (16px panels, 12px
+ * controls, pill badges) and one button hierarchy. Light theme only; motion is
+ * limited to hover/press feedback and a fade for toasts and the dialog.
  */
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
@@ -13,9 +12,9 @@ import { AlertCircle, ArrowLeft, CheckCircle2, CircleAlert, Info, Lock, RotateCc
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { ActionGate, RegistrationState, TourState } from '../../../api/contracts/representative'
-import type { StatusTone } from '../../staff/status'
-import { toneClass } from '../../staff/status'
-import { buttonClass } from '../../staff/ui-classes'
+import type { StatusTone } from '../../../components/ui/status-tone'
+import { toneClass } from '../../../components/ui/status-tone'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { REGISTRATION_LABEL, TOUR_LABEL } from '../rep-format'
 import { panelBase } from '../rep-classes'
 

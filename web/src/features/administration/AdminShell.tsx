@@ -4,9 +4,9 @@ import { Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
-import { PageSkeleton } from '../staff/StaffUi'
-import { useMobileNav } from '../staff/use-mobile-nav'
-import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../staff/ConsoleSidebar'
+import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
+import { useMobileNav } from '../../components/ui/use-mobile-nav'
+import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
 
 /**

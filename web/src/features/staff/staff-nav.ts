@@ -1,8 +1,5 @@
 import { Bot, CalendarDays, History, LayoutDashboard, ListChecks, MonitorPlay, ShieldCheck } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-
-export type NavItem = { label: string; path: string; icon: LucideIcon }
-export type NavSection = { label: string | null; items: NavItem[] }
+import type { NavItem, NavSection } from '../../components/ui/nav-types'
 
 /**
  * Staff navigation: only what an operator does around a remote tour - the

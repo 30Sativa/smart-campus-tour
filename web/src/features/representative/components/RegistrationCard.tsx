@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import type { RepresentativeRegistration } from '../../../api/contracts/representative'
-import { buttonClass } from '../../staff/ui-classes'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { cardHover, panelBase } from '../rep-classes'
 import { formatDate, formatRelative, formatTime, groupLabel } from '../rep-format'
 import { RegistrationStatusBadge } from './RepUi'

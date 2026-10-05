@@ -1,10 +1,10 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { AdminRoute, TourInput } from '../../../api/contracts/admin'
-import { panelClass, PanelHead } from '../../staff/StaffUi'
-import { buttonClass } from '../../staff/ui-classes'
+import { panelClass, PanelHead } from '../../../components/ui/ConsolePrimitives'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { fromLocalInput, toLocalInput } from '../admin-format'
-import { inputClass, labelClass } from '../admin-classes'
+import { inputClass, labelClass } from '../../../components/ui/ui-classes'
 import { Notice } from '../AdminUi'
 import { RoutePreview } from './RoutePreview'
 

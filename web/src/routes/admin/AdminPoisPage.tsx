@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { ArrowDownUp, MapPin, Plus } from 'lucide-react'
 import { Link } from 'react-router'
-import { AdminErrorPanel, AdminPage, EmptyState, Notice, TableFrame } from '../../features/administration/AdminUi'
+import { AdminErrorPanel, AdminPage, AdminStatusBadge, EmptyState, Notice, TableFrame } from '../../features/administration/AdminUi'
 import { useDebouncedValue } from '../../features/administration/accounts/use-debounced-value'
 import { poiRequestError } from '../../features/administration/pois/errors'
 import { usePois } from '../../features/administration/pois/hooks'
 import type { PoiSort, PoiSortField } from '../../features/administration/pois/types'
-import { PageHeader, Pagination, PanelHead, SearchField, StatusBadge, panelClass } from '../../features/staff/StaffUi'
-import { buttonClass, rowClass, tdClass, thClass } from '../../features/staff/ui-classes'
+import { PageHeader, Pagination, PanelHead, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 
 const PAGE_SIZE = 20
 type ActiveFilter = 'all' | 'active' | 'inactive'
@@ -89,7 +89,7 @@ export default function AdminPoisPage() {
                     <td className={`${tdClass} min-w-52`}><Link to={`/admin/pois/${poi.id}`} className="font-semibold text-[#1e293b] hover:text-[#2d719e] focus-visible:outline-2 focus-visible:outline-[#2563eb]">{poi.name}</Link><p className="mt-1 text-[11px] text-[#94a3b8]">ID giữ ổn định · pose chưa xác minh</p></td>
                     <td className={`${tdClass} text-xs text-[#475569]`}><p className="inline-flex items-center gap-1"><MapPin size={12} aria-hidden="true" />{poi.mapKey}</p><p className="mt-1 text-[#94a3b8]">{poi.mapFrame}</p></td>
                     <td className={`${tdClass} whitespace-nowrap font-mono text-xs tabular-nums text-[#475569]`}>{poi.x}, {poi.y}, {poi.yaw}</td>
-                    <td className={tdClass}><StatusBadge value={poi.isActive ? 'poi-active' : 'poi-inactive'} /></td>
+                    <td className={tdClass}><AdminStatusBadge status={poi.isActive ? 'poi-active' : 'poi-inactive'} /></td>
                     <td className={tdClass}><Link to={`/admin/pois/${poi.id}`} className={buttonClass('secondary', 'sm')}>Mở</Link></td>
                   </tr>
                 ))}</tbody>

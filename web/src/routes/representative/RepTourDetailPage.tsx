@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router'
 import type { RepresentativeTour } from '../../api/contracts/representative'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { Callout, ErrorState, InfoList, PageSkeleton, Panel, RegistrationStatusBadge, RepPage, RepPageHeader, TourStateBadge } from '../../features/representative/components/RepUi'
 import { useRepTour } from '../../features/representative/representative-hooks'
 import { formatDate, formatTime, readRepError } from '../../features/representative/rep-format'

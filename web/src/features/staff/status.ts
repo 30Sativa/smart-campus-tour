@@ -1,3 +1,5 @@
+import type { StatusTone } from '../../components/ui/status-tone'
+
 /**
  * Backend status vocabulary, translated once.
  *
@@ -18,19 +20,10 @@
  * Colour is never the only carrier: `StatusBadge` prints the label and, for the
  * two tones that mean "act now", an icon as well.
  */
-export type StatusTone = 'ok' | 'info' | 'warn' | 'danger' | 'muted'
-
 type Entry = { label: string; tone: StatusTone }
 
 /** Keyed by the enum value lowercased, so casing from the API never matters. */
 const STATUS: Record<string, Entry> = {
-  // Account-management states (presentation keys, not backend enum values).
-  'account-active': { label: 'Đang hoạt động', tone: 'ok' },
-  'account-inactive': { label: 'Ngừng hoạt động', tone: 'muted' },
-  'poi-active': { label: 'Khả dụng', tone: 'ok' },
-  'poi-inactive': { label: 'Không khả dụng', tone: 'muted' },
-  'invalid-role': { label: 'Vai trò không hợp lệ', tone: 'danger' },
-
   // Tour session / booking
   scheduled: { label: 'Đã lên lịch', tone: 'info' },
   pending: { label: 'Chờ điều phối', tone: 'muted' },
@@ -217,27 +210,4 @@ export function severityRank(value?: string | null): number {
     default:
       return 2
   }
-}
-
-/**
- * The one tone table. Every operational colour in the staff area resolves here,
- * so a status can never be given a colour that disagrees with its meaning.
- * It lives beside the tones rather than in the component file, which keeps that
- * file exporting components only.
- */
-/** Solid dot per tone; the one place a tone becomes a fill colour. */
-export const dotClass: Record<StatusTone, string> = {
-  ok: 'bg-[#2f8f6b]',
-  info: 'bg-[#5b91ed]',
-  warn: 'bg-[#d69412]',
-  danger: 'bg-[#c9534a]',
-  muted: 'bg-[#a8b6c9]',
-}
-
-export const toneClass: Record<StatusTone, string> = {
-  ok: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]',
-  info: 'border-[#cfe1fb] bg-[#eef5ff] text-[#2f62b8]',
-  warn: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]',
-  danger: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]',
-  muted: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]',
 }

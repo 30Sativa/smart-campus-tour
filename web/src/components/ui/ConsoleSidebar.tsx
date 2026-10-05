@@ -2,7 +2,7 @@ import type { ReactNode, Ref } from 'react'
 import { Bot, LogOut, Menu, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import type { NavSection } from './staff-nav'
+import type { NavSection } from './nav-types'
 
 /**
  * The sidebar both signed-in Vietnamese consoles share: brand, sectioned

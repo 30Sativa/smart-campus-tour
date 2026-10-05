@@ -1,6 +1,6 @@
 import { ArrowUpRight, CalendarDays, ClipboardList, Clock3, MailCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { EmptyState, ErrorState, Panel, RegistrationStatusBadge, RepPage, Skeleton } from '../../features/representative/components/RepUi'
 import { TourCard } from '../../features/representative/components/TourCard'
 import { useRepRegistrations, useRepTours } from '../../features/representative/representative-hooks'

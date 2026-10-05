@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import type { RosterRow } from '../../../api/contracts/representative'
-import { inputClass } from '../../staff/ui-classes'
+import { inputClass } from '../../../components/ui/ui-classes'
 
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase()
 

@@ -1,5 +1,5 @@
 import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, Route, UsersRound } from 'lucide-react'
-import type { NavItem, NavSection } from '../staff/staff-nav'
+import type { NavItem, NavSection } from '../../components/ui/nav-types'
 
 /**
  * Administration navigation: what Admin does before a Tour starts, and the

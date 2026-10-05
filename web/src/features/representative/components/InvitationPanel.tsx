@@ -1,6 +1,6 @@
 import { Check, Copy, Mail } from 'lucide-react'
 import type { RepresentativeRegistrationDetail } from '../../../api/contracts/representative'
-import { buttonClass } from '../../staff/ui-classes'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { panelBase } from '../rep-classes'
 import { formatDateTime, studentMessage } from '../rep-format'
 import { useCopy } from '../use-copy'

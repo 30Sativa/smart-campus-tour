@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import type { RegistrationInput, RegistrationState, RepresentativeErrorBody, RepresentativeRegistration, TourState } from '../../api/contracts/representative'
-import type { StatusTone } from '../staff/status'
+import type { StatusTone } from '../../components/ui/status-tone'
 
 /**
  * Words and formats of the representative area. The enums stay in code; only
