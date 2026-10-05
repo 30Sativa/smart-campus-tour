@@ -48,3 +48,28 @@ verified. This feature does not make POIs route-ready: route reachability,
 narration readiness, route stop order, and hardware validation remain separate
 checks. This is the implementation scope authorized for the POI feature; group
 and advisor review remains at Review 2.
+
+## Addendum: occupancy-map pose picker (2026-10-05)
+
+The next Admin workflow uses the actual ROS occupancy map, exported from
+`robot/robot_maps/map2.yaml` and its referenced image as static Web assets.
+The YAML origin/resolution and raster dimensions define pixel-to-ROS geometry;
+landmark calibration is needed for Student/Twin drawings, not this raster.
+`map2-v1` names an immutable map/frame snapshot. Source/derivative parity,
+coordinate round-trips, and pose API round-trips are automated checks.
+
+Create/Edit share position and heading selection, numeric fine-tuning, and
+zoom/pan. All existing usage locks and RowVersion semantics remain. Missing
+map assets do not alias other map keys; map changes require reselecting pose.
+Occupancy warnings are advisory. A stored pose remains physically unverified
+and `IsActive` still does not imply route/navigation readiness. No Map table,
+map endpoint, robot-pose lookup, or navigation command is introduced.
+
+The `map2.yaml` thresholds classify source gray 205 as free, not unknown.
+The Web derivative follows that interpretation; threshold review belongs to
+a separate robot-map task before operational POI entry. `map2-v1` stays a
+fixed snapshot; later threshold changes require a new key and POI review.
+Only zero origin yaw is accepted for navigation packages because Nav2 Humble
+StaticLayer and AMCL ignore the map origin orientation.
+The full asset/coordinate contract is recorded in
+`docs/architecture.md` section 3.0.2.1.

@@ -376,9 +376,56 @@ lifecycle operations require the current SQL Server `RowVersion`; the
 transaction takes an update lock on the POI row before reading that token, so
 concurrent requests with one version serialize into one success and one 409
 stale-version conflict. Stale writes preserve the stable POI ID. This scope
-does not implement audio upload, route editing, or a map picker. Existing v1.1
+does not implement audio upload or route editing. Existing v1.1
 databases need `backend/database/patches/add-poi-rowversion-v1.1.sql` before
 this API build.
+
+#### 3.0.2.1 Admin occupancy-map pose picker
+
+The Web picker uses a versioned static map package exported from
+`robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
+source files; Web owns the deployment derivative. `map2-v1`, frame `map`,
+identifies this snapshot; it is not an alias for demo, Student, or Twin maps.
+The exporter records source SHA-256 hashes, resolution, the full origin pose,
+dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
+same cell as the source pixel, with Nav2 Humble trinary classification. There
+is no crop, resize, rotation, or interpolation. Changed geometry or occupancy
+semantics requires a new MapKey. Web builds use committed assets and do not
+need the robot filesystem. Source parity is checked by `web/scripts/verify`.
+The exporter and Web catalog accept only zero origin yaw: Nav2 Humble's
+StaticLayer and AMCL use origin position without map orientation, so a rotated
+OccupancyGrid is outside this navigation package contract. Web resolves the
+static image path against Vite `BASE_URL` for both display and cell sampling.
+
+For continuous image coordinates `(u,v)`, measured from the top-left edge,
+let `(a,b) = resolution * (u, height-v)`. ROS position is
+`origin.xy + R(origin.yaw) * (a,b)`. Cell centers use half-pixel coordinates;
+continuous pointer positions do not receive an extra half-cell offset. Yaw is
+body heading in radians about +Z, positive counter-clockwise from +X. The Web
+picker quantizes newly edited x/y to four decimals and yaw to six; unchanged
+stored poses retain their values. Pixel conversion is separate from calibrated
+Student/Twin presentation transforms. With this map, ROS `(0,0)` projects to
+image `(306,427)`.
+
+Create/Edit share a picker with position, heading, numeric fine-tuning, and
+view-only zoom/pan when pose is locked. A missing MapKey/frame package never
+falls back to a different map. Selecting a different map clears the draft pose
+and requires a new position/heading. Existing POI endpoints, RowVersion,
+transactional locks, and inactive-on-create behavior are unchanged. Occupied
+and unknown cells produce advisory warnings, not navigation verification.
+The API still validates numeric precision/range, not map existence, bounds,
+occupancy, reachability, or loaded robot-map identity.
+
+Current source caveat: with `negate: 0` and `free_thresh: 0.25`, gray 205 is
+free (`1-205/255 < 0.25`). The source contains no unknown cells under these
+thresholds. Do not infer occupancy from the source image's appearance or alter
+robot thresholds as part of the picker. Deployment-map binding, current robot
+pose, navigation testing, and fleet integration remain separate work.
+`map2-v1` remains an immutable snapshot of the current thresholds. Robot-map
+semantics and the runtime-loaded map must be reviewed before entering
+operational POIs; a later threshold change needs a new key and explicit POI
+review. Source parity checks intentionally fail until that revision is
+registered and their target key is updated.
 
 ### 3.1 Fleet contract
 

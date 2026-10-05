@@ -5,6 +5,9 @@ import { AdminErrorPanel, AdminPage, Notice } from '../../features/administratio
 import { poiRequestError } from '../../features/administration/pois/errors'
 import { useCreatePoi, usePoi, useSetPoiActive, useUpdatePoi } from '../../features/administration/pois/hooks'
 import type { CreatePoiInput, PoiDetails } from '../../features/administration/pois/types'
+import { DEFAULT_POI_MAP, OCCUPANCY_MAPS, occupancyMapFor } from '../../features/administration/pois/map/catalog'
+import { PoiPosePicker, type PickerMode, type PickerPose } from '../../features/administration/pois/map/PoiPosePicker'
+import { cellAtPose } from '../../features/administration/pois/map/occupancy-grid'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass, buttonClass } from '../../components/ui/ui-classes'
 import { PageHeader, LoadingPanel } from '../../components/ui/ConsolePrimitives'
@@ -29,7 +32,7 @@ type PoiDraft = {
 }
 
 const EMPTY_FORM: PoiForm = {
-  name: '', description: '', mapKey: '', mapFrame: '', x: '', y: '', yaw: '',
+  name: '', description: '', mapKey: DEFAULT_POI_MAP.mapKey, mapFrame: DEFAULT_POI_MAP.frameId, x: '', y: '', yaw: '',
   narrationText: '', audioUrl: '', narrationSeconds: '', fallbackVideoUrl: '',
 }
 
@@ -84,7 +87,10 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   }))
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmAvailability, setConfirmAvailability] = useState(false)
+  const [pickerMode, setPickerMode] = useState<PickerMode>(isCreate ? 'position' : 'pan')
   const form = draft.form
+  const selectedMap = occupancyMapFor(form.mapKey, form.mapFrame)
+  const pickerPose: PickerPose = { x: numberValue(form.x), y: numberValue(form.y), yaw: numberValue(form.yaw) }
 
   const busy = create.isPending || update.isPending
   const editable = isCreate || poi.data?.usage.canEditContentAndAvailability === true
@@ -95,6 +101,26 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
       form: { ...current.form, [field]: value },
       rowVersion: current.rowVersion,
     }))
+    setFormError(null)
+    create.reset()
+    update.reset()
+    if (field === 'x' || field === 'y' || field === 'yaw') setPickerMode('pan')
+  }
+
+  const selectMap = (mapKey: string) => {
+    if (!poseEditable || busy) return
+    const map = OCCUPANCY_MAPS.find((entry) => entry.mapKey === mapKey)
+    if (!map) return
+    setDraft((current) => ({ ...current, form: { ...current.form, mapKey: map.mapKey, mapFrame: map.frameId, x: '', y: '', yaw: '' } }))
+    setPickerMode('position')
+    setFormError(null)
+    create.reset()
+    update.reset()
+  }
+
+  const changePose = (pose: PickerPose) => {
+    if (!poseEditable || busy) return
+    setDraft((current) => ({ ...current, form: { ...current.form, x: pose.x == null ? '' : String(pose.x), y: pose.y == null ? '' : String(pose.y), yaw: pose.yaw == null ? '' : String(pose.yaw) } }))
     setFormError(null)
     create.reset()
     update.reset()
@@ -110,6 +136,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     create.reset()
     update.reset()
     setFormError(null)
+    setPickerMode('pan')
   }
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -121,8 +148,16 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     const y = numberValue(form.y)
     const yaw = numberValue(form.yaw)
     if (x == null || y == null || yaw == null) return setFormError('Nhập x, y và yaw bằng số hợp lệ.')
+    if (poseEditable && pickerMode !== 'pan') return setFormError('Chốt vị trí và hướng, hoặc hủy thao tác chọn trên bản đồ trước khi lưu.')
     if (poseEditable && (Math.abs(x) > 999999.9999 || Math.abs(y) > 999999.9999)) return setFormError('x và y phải nằm trong giới hạn số của hệ thống.')
     if (poseEditable && (yaw < -3.141593 || yaw > 3.141593)) return setFormError('Yaw phải nằm trong khoảng −π đến π radian.')
+    const poseChanged = isCreate || !poi.data || form.mapKey !== poi.data.mapKey || form.mapFrame !== poi.data.mapFrame ||
+      x !== poi.data.x || y !== poi.data.y || yaw !== poi.data.yaw
+    if (poseEditable && poseChanged) {
+      if (Number(x.toFixed(4)) !== x || Number(y.toFixed(4)) !== y) return setFormError('X/Y chỉ nhận tối đa 4 chữ số thập phân.')
+      if (Number(yaw.toFixed(6)) !== yaw) return setFormError('Yaw chỉ nhận tối đa 6 chữ số thập phân.')
+      if (selectedMap && !cellAtPose(selectedMap, { x, y })) return setFormError('Pose nằm ngoài phạm vi bản đồ đã chọn.')
+    }
     const seconds = form.narrationSeconds.trim() ? numberValue(form.narrationSeconds) : null
     if (form.narrationSeconds.trim() && (seconds == null || !Number.isInteger(seconds) || seconds <= 0)) return setFormError('Thời lượng narration phải là số giây nguyên lớn hơn 0.')
 
@@ -155,6 +190,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
           if (result.data) {
             setDraft({ form: fromPoi(result.data), rowVersion: result.data.rowVersion })
           }
+          setPickerMode('pan')
         },
       })
     }
@@ -186,7 +222,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
       />
 
       <div className="mb-4 space-y-3">
-        <Notice tone="warn"><span className="font-semibold">Pose chưa được xác minh bằng robot thật.</span> Nhập map/frame/x/y/yaw trực tiếp chỉ lưu cấu hình vào DB. Map picker chưa bật vì chưa có transform pixel↔ROS được hiệu chuẩn.</Notice>
+        <Notice tone="warn"><span className="font-semibold">Pose chưa được xác minh bằng robot thật.</span> Chọn trên bản đồ ROS chỉ lưu vị trí và hướng thân. Ô trống chưa chứng minh robot có thể tới POI.</Notice>
         {!isCreate && poi.data!.usage.hasReadyOrRunningTours && <Notice tone="danger">Tour READY/RUNNING đang dùng POI này. Mọi thao tác cập nhật và bật/tắt đều bị khóa.</Notice>}
         {!isCreate && !poi.data!.usage.canEditPose && !poi.data!.usage.hasReadyOrRunningTours && <Notice tone="info">Map và pose đã khóa vì POI được Route hoặc lịch sử tham chiếu; tên, mô tả và nội dung vẫn sửa được.</Notice>}
         {formError && <Notice tone="danger">{formError}</Notice>}
@@ -194,7 +230,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
-        <form onSubmit={submit} className="space-y-5 rounded-[18px] border border-[#d9e9f5] bg-white p-5 shadow-[0_12px_32px_-30px_#285c7d]" aria-label={pageTitle}>
+        <form noValidate onSubmit={submit} className="space-y-5 rounded-[18px] border border-[#d9e9f5] bg-white p-5 shadow-[0_12px_32px_-30px_#285c7d]" aria-label={pageTitle}>
           <section className="space-y-4" aria-labelledby="poi-basic-heading">
             <div><h2 id="poi-basic-heading" className="font-bold text-[#173b59]">Thông tin POI</h2><p className="mt-1 text-xs text-[#7c94a7]">Tên là nhãn hiển thị; hệ thống giữ ID bất biến.</p></div>
             <Field label="Tên POI" htmlFor="poi-name"><input id="poi-name" maxLength={150} required disabled={!editable} value={form.name} onChange={(event) => change('name', event.target.value)} className={inputClass} /></Field>
@@ -203,13 +239,23 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
 
           <section className="space-y-4 border-t border-[#eef3f7] pt-5" aria-labelledby="poi-pose-heading">
             <div><h2 id="poi-pose-heading" className="font-bold text-[#173b59]">Map và pose</h2><p className="mt-1 text-xs text-[#7c94a7]">X/Y tính bằng mét; yaw bằng radian trong khoảng −π đến π.</p></div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="MapKey" htmlFor="poi-map-key"><input id="poi-map-key" maxLength={100} required disabled={!poseEditable} value={form.mapKey} onChange={(event) => change('mapKey', event.target.value)} className={inputClass} /></Field>
-              <Field label="MapFrame" htmlFor="poi-map-frame"><input id="poi-map-frame" maxLength={100} required disabled={!poseEditable} value={form.mapFrame} onChange={(event) => change('mapFrame', event.target.value)} className={inputClass} /></Field>
-              <Field label="X (m)" htmlFor="poi-x"><input id="poi-x" type="number" step="0.0001" required disabled={!poseEditable} value={form.x} onChange={(event) => change('x', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
-              <Field label="Y (m)" htmlFor="poi-y"><input id="poi-y" type="number" step="0.0001" required disabled={!poseEditable} value={form.y} onChange={(event) => change('y', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
-              <Field label="Yaw (rad)" htmlFor="poi-yaw"><input id="poi-yaw" type="number" step="0.000001" min="-3.141593" max="3.141593" required disabled={!poseEditable} value={form.yaw} onChange={(event) => change('yaw', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
-            </div>
+            <Field label="Bản đồ" htmlFor="poi-map"><select id="poi-map" disabled={!poseEditable || busy} value={selectedMap?.mapKey ?? '__stored__'} onChange={(event) => selectMap(event.target.value)} className={inputClass}>
+              {!selectedMap && <option value="__stored__">{form.mapKey} / {form.mapFrame} (chưa có bản đồ tương ứng)</option>}
+              {OCCUPANCY_MAPS.map((map) => <option key={map.mapKey} value={map.mapKey}>Map 2 ({map.mapKey}, frame {map.frameId})</option>)}
+            </select></Field>
+            {poseEditable && <p className="text-xs text-slate-500">Đổi bản đồ sẽ xóa pose trong bản nháp và yêu cầu chọn lại vị trí, hướng.</p>}
+            {selectedMap ? <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} /> : <Notice tone="info">Chưa có ảnh cho đúng map/frame này. Hệ thống giữ nguyên tọa độ đã lưu và không hiển thị chúng trên bản đồ khác.</Notice>}
+            <details open={isCreate || !selectedMap || !poseEditable} className="rounded-xl border border-slate-200 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Tinh chỉnh tọa độ</summary>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <Field label="MapKey" htmlFor="poi-map-key"><input id="poi-map-key" readOnly disabled={!poseEditable} value={form.mapKey} className={`${inputClass} bg-slate-50 font-mono`} /></Field>
+                <Field label="MapFrame" htmlFor="poi-map-frame"><input id="poi-map-frame" readOnly disabled={!poseEditable} value={form.mapFrame} className={`${inputClass} bg-slate-50 font-mono`} /></Field>
+                <Field label="X (m)" htmlFor="poi-x"><input id="poi-x" type="number" step="0.0001" required disabled={!poseEditable || busy} value={form.x} onChange={(event) => change('x', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
+                <Field label="Y (m)" htmlFor="poi-y"><input id="poi-y" type="number" step="0.0001" required disabled={!poseEditable || busy} value={form.y} onChange={(event) => change('y', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
+                <Field label="Yaw (rad)" htmlFor="poi-yaw"><input id="poi-yaw" type="number" step="0.000001" min="-3.141593" max="3.141593" required disabled={!poseEditable || busy} value={form.yaw} onChange={(event) => change('yaw', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
+              </div>
+            </details>
+            {poseEditable && pickerMode !== 'pan' && <p className="text-xs text-slate-600">Chốt pose trên bản đồ hoặc nhập tọa độ, yaw trong phần tinh chỉnh để lưu.</p>}
             {!poseEditable && <p className="rounded-xl bg-[#f4f8fb] px-3 py-2 text-xs text-[#647b8d]">Pose bị khóa theo lịch sử sử dụng, không chỉ theo trạng thái IsActive.</p>}
           </section>
 
@@ -225,7 +271,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-[#eef3f7] pt-4">
             <Link to="/admin/pois" className={buttonClass('secondary')}>Hủy</Link>
-            <button type="submit" disabled={busy || !editable} className={buttonClass('primary')}><Save size={15} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>
+            <button type="submit" disabled={busy || !editable || (poseEditable && pickerMode !== 'pan')} className={buttonClass('primary')}><Save size={15} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>
           </div>
         </form>
 

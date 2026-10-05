@@ -7,6 +7,9 @@ the business authority.
 
 ## Current local references
 
+- [POI map picker](poi-map-picker.md) — ROS raster geometry, Admin workflow,
+  map-package release and verification.
+
 - [Admin Tour screens](admin-tours.md) — implementation-facing Admin screen
   map. Business rules that predate Review 1 may be historical; follow the
   current detailed scope and UI flow.

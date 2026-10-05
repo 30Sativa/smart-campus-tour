@@ -6,6 +6,10 @@ import AdminPoiFormPage from '../../../routes/admin/AdminPoiFormPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import { poiQueryKeys } from './hooks'
 import type { PoiDetails } from './types'
+import { installSvgLayout, pointerAt } from './map/picker-test-support'
+
+vi.mock('./map/load-map-image', () => ({ loadMapImage: vi.fn(async () => ({ pixels: null })) }))
+let restoreLayout: () => void
 
 const firstVersion = 'AQIDBAUGBwg='
 const secondVersion = 'CAcGBQQDAgE='
@@ -54,14 +58,13 @@ function renderAt(path: string) {
 
 function fillCreateForm() {
   fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'New library' } })
-  fireEvent.change(screen.getByLabelText('MapKey'), { target: { value: 'campus-map-v1' } })
-  fireEvent.change(screen.getByLabelText('MapFrame'), { target: { value: 'map' } })
   fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '0' } })
   fireEvent.change(screen.getByLabelText('Y (m)'), { target: { value: '0' } })
 }
 
 describe('Admin POI form', () => {
   beforeEach(() => {
+    restoreLayout = installSvgLayout()
     useAuthStore.setState({
       accessToken: 'test-access-token', isAuthenticated: true, isAuthReady: true,
       user: { userId: 'admin-id', username: 'admin', role: 'Admin' },
@@ -69,6 +72,7 @@ describe('Admin POI form', () => {
   })
 
   afterEach(() => {
+    restoreLayout()
     vi.unstubAllGlobals()
     useAuthStore.getState().logout()
   })
@@ -95,12 +99,13 @@ describe('Admin POI form', () => {
     for (const value of ['0', '0.5', '1.570796', '-1.570796']) {
       fireEvent.change(yaw, { target: { value } })
       expect(yaw.validity.valid).toBe(true)
+      expect(yaw.closest('details')).toHaveAttribute('open')
     }
     fireEvent.change(yaw, { target: { value: '0' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
 
     await waitFor(() => expect(createPayload).not.toBeNull())
-    expect(createPayload).toMatchObject({ name: 'New library', yaw: 0 })
+    expect(createPayload).toMatchObject({ name: 'New library', mapKey: 'map2-v1', mapFrame: 'map', yaw: 0 })
   })
 
   it('keeps dirty fields through a query refetch and submits the original RowVersion on conflict', async () => {
@@ -144,6 +149,7 @@ describe('Admin POI form', () => {
 
   it('does not let a locked stored yaw block a content-only edit', async () => {
     const locked = poiDetails({
+      mapKey: 'map2-v1',
       yaw: 3.141593,
       usage: {
         hasRouteStopReferences: true, hasHistoricalTourReferences: false, hasReadyOrRunningTours: false,
@@ -170,5 +176,129 @@ describe('Admin POI form', () => {
 
     await waitFor(() => expect(updatePayload).not.toBeNull())
     expect(updatePayload).toMatchObject({ description: 'Updated copy', yaw: 3.141593 })
+  })
+
+  it('creates from map position and heading, saving the quantized ROS pose', async () => {
+    let payload: Record<string, unknown> | null = null
+    stubApi((url, init) => {
+      if (url.pathname === '/api/admin/pois' && init?.method === 'POST') {
+        payload = JSON.parse(String(init.body)) as Record<string, unknown>
+        return jsonResponse({ success: true, data: { id: 'created' } })
+      }
+      return jsonResponse({ success: true, data: poiDetails({ id: 'created', mapKey: 'map2-v1', x: 5.025, y: -5.025, yaw: 1.570796 }) })
+    })
+    renderAt('/admin/pois/new')
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+    fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Map-picked POI' } })
+    fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 527.5))
+    expect(screen.getByLabelText('X (m)')).toHaveValue(5.025)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(-5.025)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(null)
+    expect(screen.getByRole('button', { name: 'Tạo POI không khả dụng' })).toBeDisabled()
+    fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 507.5))
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(1.570796)
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
+    await waitFor(() => expect(payload).toMatchObject({ mapKey: 'map2-v1', mapFrame: 'map', x: 5.025, y: -5.025, yaw: 1.570796 }))
+  })
+
+  it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in the closed Edit disclosure', async (cancel) => {
+    const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1' }) }))
+    renderAt('/admin/pois/poi-1')
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+    const yaw = screen.getByLabelText('Yaw (rad)')
+    expect(yaw.closest('details')).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
+    fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 527.5))
+    expect(yaw).toHaveValue(null)
+    if (cancel === 'Escape') fireEvent.keyDown(svg, { key: 'Escape' })
+    else fireEvent.click(screen.getByRole('button', { name: 'Di chuyển bản đồ' }))
+    const save = screen.getByRole('button', { name: 'Lưu thay đổi' })
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    expect(await screen.findByText('Nhập x, y và yaw bằng số hợp lệ.')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('shows validation when a map rebind leaves the pose empty inside the closed Edit disclosure', async () => {
+    const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails() }))
+    renderAt('/admin/pois/poi-1')
+    await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    expect(screen.getByLabelText('Yaw (rad)').closest('details')).not.toHaveAttribute('open')
+    fireEvent.keyDown(svg, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(await screen.findByText('Nhập x, y và yaw bằng số hợp lệ.')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('keeps unsupported map and pose unchanged for content edits, requiring a new pose on map selection', async () => {
+    const original = poiDetails({ mapKey: 'demo-poi-baseline-v1', yaw: 3.141593 })
+    let payload: Record<string, unknown> | null = null
+    stubApi((_url, init) => {
+      if (init?.method === 'PUT') {
+        payload = JSON.parse(String(init.body)) as Record<string, unknown>
+        return jsonResponse({ success: true, data: null })
+      }
+      return jsonResponse({ success: true, data: original })
+    })
+    renderAt('/admin/pois/poi-1')
+    await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
+    expect(screen.queryByRole('group', { name: 'Bản đồ occupancy ROS' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Content correction' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(payload).toMatchObject({ mapKey: original.mapKey, x: original.x, y: original.y, yaw: 3.141593, expectedRowVersion: firstVersion }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled())
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
+    expect(screen.getByLabelText('X (m)')).toHaveValue(null)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(null)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(null)
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+  })
+
+  it('does not draw a map2 pose in the wrong frame', async () => {
+    stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1', mapFrame: 'odom' }) }))
+    renderAt('/admin/pois/poi-1')
+    await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
+    expect(screen.queryByRole('group', { name: 'Bản đồ occupancy ROS' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('MapFrame')).toHaveValue('odom')
+  })
+
+  it('blocks all mutations during a READY/RUNNING lock but leaves the map view usable', async () => {
+    stubApi(() => jsonResponse({ success: true, data: poiDetails({
+      mapKey: 'map2-v1',
+      usage: { hasRouteStopReferences: true, hasHistoricalTourReferences: false, hasReadyOrRunningTours: true, canEditPose: false, canEditContentAndAvailability: false },
+    }) }))
+    renderAt('/admin/pois/poi-1')
+    await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    expect(screen.getByLabelText('Tên POI')).toBeDisabled()
+    expect(screen.getByLabelText('Bản đồ')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Chọn vị trí' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Kích hoạt POI' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Phóng to' })).toBeEnabled()
+  })
+
+  it('allows content correction for a stored out-of-bounds pose, rejecting a new out-of-bounds pose', async () => {
+    const stored = poiDetails({ mapKey: 'map2-v1', x: 500, y: 500 })
+    let payload: Record<string, unknown> | null = null
+    stubApi((_url, init) => {
+      if (init?.method === 'PUT') {
+        payload = JSON.parse(String(init.body)) as Record<string, unknown>
+        return jsonResponse({ success: true, data: null })
+      }
+      return jsonResponse({ success: true, data: stored })
+    })
+    renderAt('/admin/pois/poi-1')
+    await screen.findByLabelText('Mô tả')
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Copy only' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    await waitFor(() => expect(payload).toMatchObject({ x: 500, y: 500, description: 'Copy only' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled())
+    payload = null
+    fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '501' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(await screen.findByText('Pose nằm ngoài phạm vi bản đồ đã chọn.')).toBeInTheDocument()
+    expect(payload).toBeNull()
   })
 })

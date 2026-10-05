@@ -1,0 +1,35 @@
+info:
+  name: 04 - Update POI
+  type: http
+  seq: 4
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/admin/pois/{{poiId}}"
+  body:
+    type: json
+    data: |-
+      {
+        "expectedRowVersion": "AAAAAAAAJxQ=",
+        "name": "[DEV] AI Lab Updated V3",
+        "description": "POI placeholder đã update lần 2 bằng Bruno.",
+        "mapKey": "demo-poi-baseline-v1",
+        "mapFrame": "map",
+        "x": -1.25,
+        "y": -5.25,
+        "yaw": 1.570796,
+        "narrationText": "Nội dung narration test.",
+        "audioUrl": null,
+        "narrationSeconds": 12,
+        "fallbackVideoUrl": null
+      }
+  auth:
+    type: bearer
+    token: "{{accessToken}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -22,8 +22,11 @@ robot, head and stream are checked by Staff at Start.
 
 POI `IsActive` means selectable for a newly prepared Route. It is not a
 verification state or proof the point is ready to navigate. The web form marks
-pose unverified and accepts numeric x/y/yaw because there is no calibrated map
-picker yet. Updates keep the same POI ID. There is no hard-delete action.
+pose unverified and provides an occupancy-map position/heading picker with
+numeric x/y/yaw fine-tuning. The map package is derived from ROS YAML/PGM, not
+the Student drawing or Twin model. Updates keep the same POI ID. There is no
+hard-delete action. See `web/docs/poi-map-picker.md` for the workflow and map
+release checks.
 
 ## Screens
 
@@ -38,7 +41,7 @@ picker yet. Updates keep the same POI ID. There is no hard-delete action.
 | `/admin/registrations` | All registrations, state filter |
 | `/admin/routes` | Danh mục tuyến (read-only) |
 | `/admin/pois` | POI catalog, search/status filter/paging; create inactive; content and eligible pose edits; usage lock details |
-| `/admin/pois/new` | Create POI; requires name, map/frame and numeric pose; optional narration/media metadata |
+| `/admin/pois/new` | Create inactive POI; select pose on the ROS occupancy map or fine-tune numerically; optional narration/media metadata |
 | `/admin/pois/:id` | Edit POI, inspect route/history/READY-RUNNING use, activate/deactivate with confirmation |
 | `/admin/history` | Lịch sử Tour: startedAt, endedAt, endReason |
 | `/admin/roles` | Role/area matrix (read-only reference, sidebar footer) |
