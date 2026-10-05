@@ -87,6 +87,7 @@ public sealed class GlobalExceptionHandlerTests
     {
         { new ValidationException([]), HttpStatusCode.BadRequest },
         { new DomainException("Domain rule failed."), HttpStatusCode.BadRequest },
+        { new UnauthorizedException("A valid account identity is required."), HttpStatusCode.Unauthorized },
         { new NotFoundException("Robot was not found."), HttpStatusCode.NotFound },
         { new ConflictException("Robot is already assigned."), HttpStatusCode.Conflict },
         { new Exception("Unexpected."), HttpStatusCode.InternalServerError }

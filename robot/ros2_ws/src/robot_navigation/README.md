@@ -69,7 +69,10 @@ từng sensor; chỉ đổi checkbox RViz không bật sonar vào navigation.
 Mở riêng RViz sau khi build/source package trên máy có desktop:
 
 ```bash
-ros2 run rviz2 rviz2 -d "$(ros2 pkg prefix --share robot_navigation)/rviz/navigation.rviz"
+# Robot chạy robot_id:=robot_01 (cách chạy chuẩn):
+ros2 run rviz2 rviz2 -d "$(ros2 pkg prefix --share robot_navigation)/rviz/navigation.rviz" \
+  --ros-args -r __ns:=/robot_01
+# Robot chạy không namespace (robot_id:=''): bỏ dòng --ros-args.
 ```
 
 Hoặc thêm `rviz:=true` vào lệnh launch navigation hiện tại. RViz vẫn OFF mặc định.
@@ -80,10 +83,14 @@ Rear Left / Rear Right có màu riêng và đều bỏ tick sẵn. Tick từng m
 Range khi test lại; các checkbox chỉ thay đổi hiển thị, không đổi costmap,
 publisher hay nguồn điện sensor. TF cũng có thể bật riêng để kiểm tra hướng.
 
-File dành cho phiên không namespace (`robot_id:=''`), dùng `/scan`,
-`/ultrasonic/sonar1/range`, ... . Nếu chạy `robot_id:=robot_01`, cần cấu hình
-topic/action tương ứng có tiền tố `/robot_01` cho RViz trước khi gửi goal;
-layout này chưa tự thêm tiền tố theo launch argument. Frame cố định vẫn là `map`.
+Mọi topic trong file là **tên tương đối** (`map`, `scan`, `initialpose`, ...),
+resolve theo namespace của RViz: `__ns:=/robot_01` → `/robot_01/map`,
+`/robot_01/initialpose`; không namespace → `/map`. Panel Navigation 2 cũng gửi
+`navigate_to_pose` trong cùng namespace. Một file dùng cho mọi robot, không cần
+sửa tay topic. `rviz:=true` trong `navigation.launch.py` tự gắn namespace theo
+`robot_id`. TF vẫn global (`/tf`), Fixed Frame vẫn là `map`.
+Dropdown chọn topic của RViz đưa ra tên tuyệt đối; nếu chọn rồi Save Config thì
+gõ lại dạng tương đối (test contract sẽ báo nếu file có topic bắt đầu bằng `/`).
 
 Các mô tả sonar bên dưới chỉ áp dụng khi layer được bật lại sau kiểm chứng.
 

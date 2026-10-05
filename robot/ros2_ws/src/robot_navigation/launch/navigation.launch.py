@@ -387,6 +387,8 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
+            # navigation.rviz uses relative topics; they resolve here.
+            namespace=robot_id,
             arguments=['-d', rviz_config],
             output='screen',
             condition=IfCondition(rviz),

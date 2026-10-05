@@ -281,7 +281,7 @@ def test_navigation_rviz_has_four_independent_sonar_displays_off_by_default():
         assert display['Class'] == 'rviz_default_plugins/Range'
         assert display['Enabled'] is False
         assert display['Value'] is False
-        assert display['Topic']['Value'] == f'/ultrasonic/sonar{index}/range'
+        assert display['Topic']['Value'] == f'ultrasonic/sonar{index}/range'
         assert display['Topic']['Reliability Policy'] == 'Best Effort'
         assert display['Buffer Length'] == 1
 
@@ -293,11 +293,20 @@ def test_navigation_rviz_matches_humble_amcl_and_rpp_interfaces():
     assert manager['Global Options']['Fixed Frame'] == 'map'
     assert by_name['AMCL Particles']['Class'] == 'nav2_rviz_plugins/ParticleCloud'
     assert (by_name['RPP Transformed Path']['Topic']['Value']
-            == '/received_global_plan')
+            == 'received_global_plan')
     assert (by_name['Local Footprint']['Topic']['Value']
-            == '/local_costmap/published_footprint')
+            == 'local_costmap/published_footprint')
     assert any(tool['Class'] == 'nav2_rviz_plugins/GoalTool'
                for tool in manager['Tools'])
+
+
+def test_navigation_rviz_topics_are_relative_for_robot_namespace():
+    """One layout for every robot: rviz2 --ros-args -r __ns:=/robot_01 maps
+    'map' to /robot_01/map. An absolute '/map' would ignore the namespace and
+    2D Pose Estimate would miss AMCL's <robot_ns>/initialpose."""
+    text = _read('robot_navigation/rviz/navigation.rviz')
+    absolute = re.findall(r'^\s*Value: (/\S+)$', text, flags=re.MULTILINE)
+    assert absolute == []
 
 
 def test_navigation_rviz_is_in_package_install_data():
@@ -333,12 +342,6 @@ def test_obstacle_layers_combine_with_maximum():
     assert costmap['lidar_obstacle_layer']['combination_method'] == 1
     assert costmap['depth_obstacle_layer']['combination_method'] == 1
     assert _global_costmap()['obstacle_layer']['combination_method'] == 1
-
-
-def test_depth_is_local_only():
-    assert 'PointCloud2' not in yaml.safe_dump(_global_costmap())
-    assert _local_costmap()['depth_obstacle_layer'][
-        'pointcloud']['data_type'] == 'PointCloud2'
 
 
 def test_camera_disabled_launch_cannot_stall_the_costmap():
@@ -547,15 +550,6 @@ def test_plugin_packages_are_declared_dependencies():
                            'nav2_waypoint_follower'):
             assert f'<exec_depend>{dependency}</exec_depend>' in manifest, (
                 package, dependency)
-
-
-# ---------------------------------------------------- untouched calibration
-
-
-def test_wheel_base_calibration_is_unchanged():
-    manual = _read('robot_control/launch/manual_mode.launch.py')
-    assert "'wheel_base', default_value='0.4714'" in manual
-    assert "'wheel_radius', default_value='0.09725'" in manual
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ import { AccountTable, type AccountLifecycleAction } from '../../features/admini
 import { CreateAccountDialog } from '../../features/administration/accounts/components/CreateAccountDialog'
 import { accountRequestError } from '../../features/administration/accounts/errors'
 import { useAccounts } from '../../features/administration/accounts/hooks'
-import { useDebouncedValue } from '../../features/administration/accounts/use-debounced-value'
+import { useDebouncedValue } from '../../features/administration/use-debounced-value'
 import type { AccountListItem, AccountSort, AccountSortField } from '../../features/administration/accounts/types'
 
 const PAGE_SIZE = 20

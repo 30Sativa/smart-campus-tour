@@ -1,3 +1,8 @@
+# Topics are RELATIVE on purpose: they resolve under RViz's own namespace.
+#   no namespace:  rviz2 -d navigation.rviz                          -> /map
+#   robot_01:      rviz2 -d navigation.rviz --ros-args -r __ns:=/robot_01 -> /robot_01/map
+# RViz's topic drop-down offers absolute names; re-type them relative before
+# saving. test_nav2_baseline_contract.py checks this.
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
@@ -24,7 +29,7 @@ Visualization Manager:
       Name: Map (saved)
       Enabled: true
       Topic:
-        Value: /map
+        Value: map
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Scheme: map
@@ -34,7 +39,7 @@ Visualization Manager:
       Enabled: true
       Alpha: 0.3
       Topic:
-        Value: /global_costmap/costmap
+        Value: global_costmap/costmap
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Scheme: costmap
@@ -44,7 +49,7 @@ Visualization Manager:
       Enabled: true
       Alpha: 0.6
       Topic:
-        Value: /local_costmap/costmap
+        Value: local_costmap/costmap
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Scheme: costmap
@@ -53,7 +58,7 @@ Visualization Manager:
       Name: LiDAR /scan
       Enabled: true
       Topic:
-        Value: /scan
+        Value: scan
         Reliability Policy: Best Effort
       Size (m): 0.03
       Color: 255; 255; 0
@@ -62,7 +67,7 @@ Visualization Manager:
       Name: Astra depth
       Enabled: true
       Topic:
-        Value: /camera/depth/points
+        Value: camera/depth/points
         Reliability Policy: Best Effort
       Size (m): 0.02
       Style: Points
@@ -77,7 +82,7 @@ Visualization Manager:
           Name: Sonar 1 - Front Left
           Enabled: false
           Topic:
-            Value: /ultrasonic/sonar1/range
+            Value: ultrasonic/sonar1/range
             Depth: 5
             History Policy: Keep Last
             Reliability Policy: Best Effort
@@ -90,7 +95,7 @@ Visualization Manager:
           Name: Sonar 2 - Front Right
           Enabled: false
           Topic:
-            Value: /ultrasonic/sonar2/range
+            Value: ultrasonic/sonar2/range
             Depth: 5
             History Policy: Keep Last
             Reliability Policy: Best Effort
@@ -103,7 +108,7 @@ Visualization Manager:
           Name: Sonar 3 - Rear Left
           Enabled: false
           Topic:
-            Value: /ultrasonic/sonar3/range
+            Value: ultrasonic/sonar3/range
             Depth: 5
             History Policy: Keep Last
             Reliability Policy: Best Effort
@@ -116,7 +121,7 @@ Visualization Manager:
           Name: Sonar 4 - Rear Right
           Enabled: false
           Topic:
-            Value: /ultrasonic/sonar4/range
+            Value: ultrasonic/sonar4/range
             Depth: 5
             History Policy: Keep Last
             Reliability Policy: Best Effort
@@ -129,7 +134,7 @@ Visualization Manager:
       Name: RobotModel
       Enabled: true
       Description Topic:
-        Value: /robot_description
+        Value: robot_description
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Value: true
@@ -141,7 +146,7 @@ Visualization Manager:
       Name: Global Path
       Enabled: true
       Topic:
-        Value: /plan
+        Value: plan
         Reliability Policy: Reliable
       Color: 0; 255; 0
       Value: true
@@ -149,7 +154,7 @@ Visualization Manager:
       Name: RPP Transformed Path
       Enabled: true
       Topic:
-        Value: /received_global_plan
+        Value: received_global_plan
         Reliability Policy: Reliable
       Color: 255; 0; 255
       Value: true
@@ -157,7 +162,7 @@ Visualization Manager:
       Name: Local Footprint
       Enabled: true
       Topic:
-        Value: /local_costmap/published_footprint
+        Value: local_costmap/published_footprint
         Reliability Policy: Reliable
         Durability Policy: Volatile
       Color: 0; 255; 255
@@ -166,7 +171,7 @@ Visualization Manager:
       Name: AMCL Particles
       Enabled: true
       Topic:
-        Value: /particle_cloud
+        Value: particle_cloud
         Reliability Policy: Best Effort
       Value: true
   Global Options:
@@ -181,7 +186,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Measure
     - Class: rviz_default_plugins/SetInitialPose
       Topic:
-        Value: /initialpose
+        Value: initialpose
     - Class: nav2_rviz_plugins/GoalTool
   Views:
     Current:

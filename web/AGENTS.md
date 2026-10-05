@@ -95,7 +95,8 @@ shared rules; this file only covers what is specific to `web/`.
   - Endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`,
     `POST /api/auth/logout`.
   - Logout: call `POST /api/auth/logout` (revokes the refresh token
-    server-side — see `backend/AGENTS.md` Section 5), then clear local
+    server-side — see [backend/AGENTS.md Section 6](../backend/AGENTS.md#6-authentication-and-realtime-placement),
+    then clear local
     in-memory auth state and redirect to the public app. Do not treat
     "clear local state" alone as logout — always call the endpoint first, or
     a stolen refresh token from that session stays valid.
@@ -164,6 +165,9 @@ web/
 - `features/<capability>/` owns that capability's UI, hooks, state mapping,
   feature API bindings, and local types. Keep page wrappers such as `StaffPage`,
   `AdminPage`, and Representative wrappers with their feature.
+- A helper reused by multiple subfeatures of the same feature should live at
+  that feature root before being promoted to app-wide shared code. For example,
+  use `features/administration/use-debounced-value.ts`.
 - `components/` is for neutral UI with real consumers in multiple features.
   Put it in `components/ui/` only when it has no feature-specific business
   vocabulary; do not create a generic bucket or move wrappers by default.
@@ -353,7 +357,8 @@ backend binding; never use them as fallback after a failed HTTP request.
     attendance, email-open tracking, trend analytics or ratings are included.
   - A screen's summary row counts rows the API already returned, for the labels
     on that same screen. That is presentation. Anything genuinely derived still
-    comes from the backend (Section 3).
+    comes from the backend
+    ([backend/AGENTS.md Section 3](../backend/AGENTS.md#3-current-model-and-fleet-boundary)).
 - **The visitor area is an English surface.** The public, staff and admin areas
   are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
   its status vocabulary in `features/visitor/visitor-status.ts`, which is the

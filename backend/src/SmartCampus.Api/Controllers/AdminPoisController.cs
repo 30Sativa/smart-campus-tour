@@ -1,13 +1,12 @@
-using System.Security.Claims;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
-using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Pois.Commands.CreatePoi;
 using SmartCampus.Application.Features.Pois.Commands.SetPoiAvailability;
 using SmartCampus.Application.Features.Pois.Commands.UpdatePoi;
@@ -66,7 +65,7 @@ public sealed class AdminPoisController(ISender sender) : ControllerBase
         [FromBody] CreatePoiRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await sender.Send(new CreatePoiCommand(GetActorUserId(), request), cancellationToken);
+        var result = await sender.Send(new CreatePoiCommand(User.GetRequiredUserId(), request), cancellationToken);
         return Ok(new BaseResponse<CreatePoiResponse>
         {
             Success = true,
@@ -81,7 +80,7 @@ public sealed class AdminPoisController(ISender sender) : ControllerBase
         [FromBody] UpdatePoiRequest request,
         CancellationToken cancellationToken)
     {
-        await sender.Send(new UpdatePoiCommand(id, GetActorUserId(), request), cancellationToken);
+        await sender.Send(new UpdatePoiCommand(id, User.GetRequiredUserId(), request), cancellationToken);
         return Ok(new BaseResponse<object?> { Success = true, Message = "POI updated.", Data = null });
     }
 
@@ -104,20 +103,12 @@ public sealed class AdminPoisController(ISender sender) : ControllerBase
         CancellationToken cancellationToken)
     {
         await sender.Send(new SetPoiAvailabilityCommand(
-            id, GetActorUserId(), request.ExpectedRowVersion, isActive), cancellationToken);
+            id, User.GetRequiredUserId(), request.ExpectedRowVersion, isActive), cancellationToken);
         return Ok(new BaseResponse<object?>
         {
             Success = true,
             Message = isActive ? "POI activated." : "POI deactivated.",
             Data = null
         });
-    }
-
-    private Guid GetActorUserId()
-    {
-        var subject = User.FindFirstValue("sub");
-        if (!Guid.TryParse(subject, out var actorUserId))
-            throw new UnauthorizedException("A valid account identity is required.");
-        return actorUserId;
     }
 }
