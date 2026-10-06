@@ -333,6 +333,31 @@ def test_navigation_rviz_has_four_independent_sonar_displays_off_by_default():
         assert display['Buffer Length'] == 1
 
 
+def test_navigation_rviz_starts_with_only_grid_and_saved_map():
+    """Keep the viewer light while AMCL waits for an operator's initial pose."""
+    config = yaml.safe_load(_read('robot_navigation/rviz/navigation.rviz'))
+    manager = config['Visualization Manager']
+    displays = {display['Name']: display for display in manager['Displays']
+                if display['Class'] != 'rviz_common/Group'}
+    enabled = {'Grid', 'Map (saved)'}
+    disabled = {
+        'Global Costmap', 'Local Costmap', 'LiDAR /scan', 'Astra depth',
+        'RobotModel', 'TF', 'Global Path', 'RPP Transformed Path',
+        'Local Footprint', 'AMCL Particles',
+    }
+    assert set(displays) == enabled | disabled
+    for name, display in displays.items():
+        assert display['Enabled'] is (name in enabled), name
+        assert display['Value'] is (name in enabled), name
+
+    assert manager['Global Options']['Fixed Frame'] == 'map'
+    initial_pose = next(tool for tool in manager['Tools']
+                        if tool['Class'] == 'rviz_default_plugins/SetInitialPose')
+    assert initial_pose['Topic']['Value'] == 'initialpose'
+    assert any(panel['Class'] == 'nav2_rviz_plugins/Navigation 2'
+               for panel in config['Panels'])
+
+
 def test_navigation_rviz_matches_humble_amcl_and_rpp_interfaces():
     config = yaml.safe_load(_read('robot_navigation/rviz/navigation.rviz'))
     manager = config['Visualization Manager']
