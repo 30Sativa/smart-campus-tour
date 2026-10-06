@@ -3,6 +3,8 @@
 #   robot_01:      rviz2 -d navigation.rviz --ros-args -r __ns:=/robot_01 -> /robot_01/map
 # RViz's topic drop-down offers absolute names; re-type them relative before
 # saving. test_nav2_baseline_contract.py checks this.
+# Start with Grid + Map while AMCL waits for 2D Pose Estimate.
+# Once map -> odom is available, enable other displays as needed.
 Panels:
   - Class: rviz_common/Displays
     Name: Displays
@@ -36,43 +38,43 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Map
       Name: Global Costmap
-      Enabled: true
+      Enabled: false
       Alpha: 0.3
       Topic:
         Value: global_costmap/costmap
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Scheme: costmap
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Map
       Name: Local Costmap
-      Enabled: true
+      Enabled: false
       Alpha: 0.6
       Topic:
         Value: local_costmap/costmap
         Durability Policy: Transient Local
         Reliability Policy: Reliable
       Color Scheme: costmap
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/LaserScan
       Name: LiDAR /scan
-      Enabled: true
+      Enabled: false
       Topic:
         Value: scan
         Reliability Policy: Best Effort
       Size (m): 0.03
       Color: 255; 255; 0
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/PointCloud2
       Name: Astra depth
-      Enabled: true
+      Enabled: false
       Topic:
         Value: camera/depth/points
         Reliability Policy: Best Effort
       Size (m): 0.02
       Style: Points
       Color Transformer: AxisColor
-      Value: true
+      Value: false
     # Checkboxes only control visualization; they do not enable costmap layers.
     - Class: rviz_common/Group
       Name: Sonar - display only
@@ -132,48 +134,48 @@ Visualization Manager:
           Value: false
     - Class: rviz_default_plugins/RobotModel
       Name: RobotModel
-      Enabled: true
+      Enabled: false
       Description Topic:
         Value: robot_description
         Durability Policy: Transient Local
         Reliability Policy: Reliable
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/TF
       Name: TF
       Enabled: false
       Value: false
     - Class: rviz_default_plugins/Path
       Name: Global Path
-      Enabled: true
+      Enabled: false
       Topic:
         Value: plan
         Reliability Policy: Reliable
       Color: 0; 255; 0
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Path
       Name: RPP Transformed Path
-      Enabled: true
+      Enabled: false
       Topic:
         Value: received_global_plan
         Reliability Policy: Reliable
       Color: 255; 0; 255
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Polygon
       Name: Local Footprint
-      Enabled: true
+      Enabled: false
       Topic:
         Value: local_costmap/published_footprint
         Reliability Policy: Reliable
         Durability Policy: Volatile
       Color: 0; 255; 255
-      Value: true
+      Value: false
     - Class: nav2_rviz_plugins/ParticleCloud
       Name: AMCL Particles
-      Enabled: true
+      Enabled: false
       Topic:
         Value: particle_cloud
         Reliability Policy: Best Effort
-      Value: true
+      Value: false
   Global Options:
     Background Color: 48; 48; 48
     Fixed Frame: map
