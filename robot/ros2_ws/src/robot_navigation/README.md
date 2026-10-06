@@ -396,8 +396,12 @@ Astra   /camera/depth/points -> local costmap CHỈ (depth_obstacle_layer)
 4x SR04T /ultrasonic/sonarN/range -> RViz khi bật display; sonar_layer hiện OFF
 ```
 
+
+`navigation.launch.py` tắt camera mặc định (`enable_camera:=false`) để giữ baseline LiDAR-only. Bộ số
+
 `navigation.launch.py` tắt camera mặc định (`enable_camera:=false`). Chỉ bật
 `enable_camera:=true` sau khi đã hiệu chuẩn vị trí gắn camera. Bộ số
+
 `camera_x/y/z/roll/pitch/yaw` **phải** là kết quả hiệu chỉnh của Phase 2 —
 xem `docs/phase2-perception.md` mục 3. Sai pitch là sàn biến thành tường.
 

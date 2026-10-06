@@ -438,6 +438,7 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
     launch = _read('robot_navigation/launch/navigation.launch.py')
     assert "'enable_camera', default_value='false'" in launch
     assert 'condition=IfCondition(enable_camera)' in launch
+    assert "package='robot_perception'" not in launch
 
 
 def test_scan_filter_parameters_match_the_launched_node_name():

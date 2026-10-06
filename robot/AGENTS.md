@@ -174,17 +174,13 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
   compose file depend on them.
 - The Docker build context is `robot/`. Paths inside `Dockerfile` are relative
   to `robot/`, not to the repo root.
-- The drivetrain, navigation, and main ROS runtime deploy as a Docker image:
-  build in CI, push to DockerHub, pull on the miniPC. There is no normal path
-  to build the full ROS stack on the naked miniPC host. The Astra Pro's native
-  host bring-up is a hardware exception for the camera package only; it does
-  not authorize duplicate STM32, Nav2, or robot-control nodes outside the
-  container.
-  See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
-- Production `hardware` copies a non-symlink install space from the builder
-  and no longer mounts source in Compose. Update it by pulling/recreating CI
-  images. The former TEST source-overlay exception has ended; iterative builds
-  remain in debug/sim. This is separate from the Astra native-host exception
-  described in ADR-0003.
+- The physical drivetrain, navigation, and main ROS runtime build and run natively
+  on Ubuntu 22.04 + ROS 2 Humble on the single miniPC. Use
+  `scripts/install-native`, `scripts/build-native`, and `scripts/source-minipc`;
+  do not start duplicate host/container nodes. Docker remains for CI image
+  builds, laptop debug, and simulation. See `docs/native-runtime.md`.
+- The physical miniPC has no Docker hardware service or source overlay. Native
+  builds use the checked-in workspace; debug/sim Docker profiles remain available
+  for development and CI/reference images.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

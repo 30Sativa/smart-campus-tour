@@ -12,7 +12,7 @@
 #   RPLiDAR   -> /scan                  -> local + global costmap
 #   Astra Pro -> /camera/depth/points   -> local costmap ONLY
 #   The camera covers what a single LiDAR plane misses: low boxes, pallet
-#   edges, overhangs. enable_camera:=false falls back to LiDAR-only.
+#   edges, overhangs. LiDAR-only is the default; enable_camera:=true opts in.
 #   camera_* args MUST be the values Phase 2 calibrated - see
 #   docs/phase2-perception.md section 3. Wrong pitch turns the floor into a wall.
 #

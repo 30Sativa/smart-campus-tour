@@ -46,12 +46,12 @@ on the native host, keeping the original cloud stream for Nav2.
 
 ## Launch
 
-Run in the robot ROS 2 Humble container after RGB is enabled by the existing
+Run on the native robot ROS 2 Humble runtime after RGB is enabled by the existing
 camera/navigation setup:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml"
 ```
 
 This is observation mode because `publish_speed_limit` defaults to false.
@@ -59,7 +59,7 @@ BBox-only mode:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml bbox_only:=true
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml" bbox_only:=true
 ```
 
 The SpeedLimit policy can be enabled only after P0–P4 hardware evidence and
@@ -67,16 +67,15 @@ operator review:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml \
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml" \
   publish_speed_limit:=true
 ```
 
 The model file above is an example path, not an artifact known to exist on the
 robot. Export YOLO26n on a development machine, then copy its `.xml`, `.bin`,
-and manifest into `robot/models/yolo26n_openvino_model/`. Compose mounts
-`PERSON_MODEL_DIR` (default `./models`, relative to `robot/`) read-only at
-`/opt/models`. The Docker image pins OpenVINO Runtime 2024.6.0; do not pip
-install runtime packages into a running container. Record artifact SHA-256 and
+and manifest into the machine-local directory referenced by `PERSON_MODEL_DIR`. Native setup pins OpenVINO Runtime 2024.6.0 via
+`robot/config/perception-requirements.txt`; do not pip install runtime packages
+into an active robot process. Record artifact SHA-256 and
 the exporter version in the manifest.
 YOLO11n is a conditional fallback only if YOLO26n cannot export/load or fails
 the measured P3 target. INT8 and iGPU are not assumed.
@@ -87,7 +86,7 @@ latency, unique RGB frame rate, and drops remain unmeasured there:
 
 ```bash
 python3 robot/ros2_ws/src/robot_perception/scripts/bench_detector.py \
-  /opt/models/<verified-model>/<model>.xml --manifest-out /tmp/person-model-manifest.json
+  ${PERSON_MODEL_DIR}/<verified-model>/<model>.xml --manifest-out /tmp/person-model-manifest.json
 ```
 
 Use `person_perception/diagnostics` during P3 for live end-to-end latency,

@@ -47,10 +47,9 @@ trách nhiệm `Backend fleet contract ↔ ROS navigation/state`. Package produc
 chưa tồn tại và không được phụ thuộc Gazebo/simulation. Transport, auth, wire
 schema và ROS mapping vẫn TBD trong `docs/architecture.md`.
 
-Các lệnh build toàn workspace bên dưới dành cho máy development hoặc
-container development. Trên miniPC triển khai, drivetrain/navigation/main ROS
-runtime dùng Docker image; chỉ Astra Pro có native-host overlay riêng như mô
-tả trong ADR-0003 và README của `orbbec_bringup`.
+Các lệnh build toàn workspace bên dưới dùng cho development và miniPC native.
+Docker chỉ cung cấp debug/simulation profiles; không chạy duplicate ROS nodes
+trên host và container.
 
 Phần arm trước đây (`arm_bridge`, `arm_description`) đã được bỏ khỏi workspace.
 

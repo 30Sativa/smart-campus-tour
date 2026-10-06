@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+packages=(ros-humble-tf2 ros-humble-tf2-ros ros-humble-rmw-fastrtps-cpp fastdds-tools)
+echo "Holding: ${packages[*]}"
+sudo apt-mark hold "${packages[@]}"
+echo 'Review and record a captured version report before using this on hardware.'

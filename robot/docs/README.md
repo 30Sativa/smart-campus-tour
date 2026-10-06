@@ -13,8 +13,13 @@ changing robot code.
   discovery and debugging.
 - [Nav2 turn test](nav2-turn-test.md) — hardware-test procedure; check its
   READY FOR HARDWARE TEST status before relying on the parameters.
+- [RViz / TF / Nav2 debug note](rviz-tf-nav2-debug-note.md) — operator-reported
+  observations, lifecycle/planner triage and Docker comparison plan; not a
+  verified hardware fix.
 - [Camera mounts](cad-sensor-mounts.md) — measured CAD positions.
 - [miniPC deployment checklist](phase1-deploy-minipc.md) — operational setup.
+- [Native runtime](native-runtime.md) — fresh miniPC provisioning, layered
+  bring-up, dependency snapshots and the deferred auto-start policy.
 - [Docker dependencies and targets](docker-dependencies.md) — hardware/debug/sim
   separation, native camera dependencies, image checks and size measurement.
 

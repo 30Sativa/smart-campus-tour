@@ -13,10 +13,12 @@ No second YOLO pipeline, person costmap layer, tracking, social navigation,
 Collision Monitor, firmware change, mode-manager change, or Nav2 speed increase
 belongs to this MVP. YOLO26n CPU 320 batch 1 is the first candidate. YOLO11n is
 a fallback only if YOLO26n cannot export/load or fails measured P3. INT8 and
-iGPU are not assumed. The robot image pins OpenVINO `2024.6.0`, numpy `1.26.4`,
-and openvino-telemetry `2024.1.0`; export tools such as torch/ultralytics stay
-off the robot. Compose mounts model artifacts read-only at `/opt/models`.
-Astra remains native on the MiniPC host. No runtime benchmark or camera
+iGPU are not assumed. The native runtime pins OpenVINO `2024.6.0`, numpy
+`1.26.4`, and openvino-telemetry `2024.1.0` through
+`robot/config/perception-requirements.txt`; export tools such as torch/ultralytics
+stay off the robot. Model artifacts live under the machine-local
+`PERSON_MODEL_DIR` set by `source-minipc`. Astra and perception run natively on
+the miniPC. No runtime benchmark or camera
 calibration is verified by this document.
 
 ## Data contract
@@ -110,14 +112,14 @@ Observation mode (default):
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml"
 ```
 
 Bbox-only debug mode:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml bbox_only:=true
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml" bbox_only:=true
 ```
 
 P5 is a supervised hardware test only after all earlier gates and operator
@@ -125,7 +127,7 @@ approval. Its command explicitly opts in:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml \
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml" \
   publish_speed_limit:=true
 ```
 

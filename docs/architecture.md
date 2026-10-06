@@ -1176,7 +1176,8 @@ paths; their final media transports remain undecided.
 
 | Unit | Built by | Deployed how | Target |
 |---|---|---|---|
-| `robot/` ROS 2 | GitHub Actions -> DockerHub | `docker compose --profile hardware pull robot-ros2 && docker compose --profile hardware up -d --force-recreate robot-ros2` | robot miniPC |
+| `robot/` ROS 2 physical runtime | Ubuntu 22.04 + ROS 2 Humble on miniPC | `robot/scripts/install-native`, `robot/scripts/build-native`, then native launch files | robot miniPC |
+| `robot/` Docker profiles | GitHub Actions / local Docker | `docker compose --profile debug` or `--profile sim` | development/simulation only |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
 | `backend/` | <!-- TODO(WP2) --> | <!-- TODO(WP2): docker image? dotnet publish? --> | AWS EC2 |
@@ -1185,3 +1186,8 @@ paths; their final media transports remain undecided.
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see
 [ADR-0002](decisions/0002-manual-stlink-flash-no-can-bootloader.md).
+
+
+### Physical robot deployment
+
+The single physical robot has one native ROS 2 runtime owner on the miniPC. Base/odom, STM32 bridge, LiDAR, EKF, localization and Nav2 are built and launched from `robot/ros2_ws` on Ubuntu 22.04. Astra USB setup is a separate native host step, and camera/perception are opt-in after the LiDAR-only baseline. Docker is retained for CI image reproducibility, laptop inspection and Gazebo simulation; the compose file has no hardware service.
