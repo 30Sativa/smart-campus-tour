@@ -273,15 +273,18 @@ firmware `STOP,<seq>` command.
 
 ## Important Tuning TODOs
 
-- `config/nav2_params.yaml`: `robot_radius=0.49` is the circumscribed radius of
-  the CAD chassis box in `robot_description/urdf/common_properties.xacro`
-  (0.8022 x 0.5628 m -> half-diagonal 0.490 m). The previous 0.47 came from a
-  74x55 cm estimate and was therefore SMALLER than the CAD body. This is a
-  costmap/footprint radius and has nothing to do with the odometry
-  `wheel_base=0.4714`. `inflation_radius=0.60` on both costmaps; inflation is
-  measured from the obstacle, so it must stay >= `robot_radius`.
-  TODO(hardware): measure the finished chassis envelope, including anything
-  that protrudes past the CAD box, and re-derive both numbers.
+- `robot/ros2_ws/src/robot_control/config/nav2_params.yaml`: both costmaps use
+  the rectangular polygon projected from the chassis collision box in
+  `robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`:
+  0.802199951 x 0.562799988 m, centred at XY (0, 0.000049973).
+  `footprint` is a Humble string parameter, with `footprint_padding=0.0`
+  to use the CAD envelope exactly. No `robot_radius` is configured.
+  This geometry is independent of the calibrated odometry `wheel_base=0.4714`.
+  Inflation stays at `inflation_radius=0.60`, `cost_scaling_factor=3.0` on both
+  costmaps. Humble derives the inscribed radius from the polygon (~0.28135 m);
+  inflation must cover that radius, but does not guarantee corner clearance.
+  Verify the published polygon, turns and obstacle clearance on hardware;
+  update the envelope only if a measured physical protrusion justifies it.
 - `config/nav2_params.yaml`: planner is `nav2_smac_planner/SmacPlanner2D`,
   controller is `RegulatedPurePursuitController` at 0.20 m/s with
   `allow_reversing: false`. Values marked `TUNE ON HARDWARE` in that file are
