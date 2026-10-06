@@ -17,6 +17,7 @@ import yaml
 
 
 SRC = Path(__file__).resolve().parents[2]
+ROBOT_ROOT = SRC.parents[1]
 
 PLANNER_PLUGIN = 'nav2_smac_planner/SmacPlanner2D'
 CONTROLLER_PLUGIN = (
@@ -47,6 +48,15 @@ def _local_costmap():
 
 def _global_costmap():
     return _nav2_params()['global_costmap']['global_costmap']['ros__parameters']
+
+
+def test_map2_does_not_classify_pgm_unknown_as_free():
+    """PGM gray 205 (50/255 occupancy) must remain unknown in trinary maps."""
+    unknown_occupancy = 50.0 / 255.0
+    params = yaml.safe_load(
+        (ROBOT_ROOT / 'robot_maps' / 'map2.yaml').read_text(encoding='utf-8'))
+    assert params['image'] == 'map_fix.pgm'
+    assert params['free_thresh'] <= unknown_occupancy
 
 
 def _follow_path():
@@ -401,8 +411,17 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
     depth = _local_costmap()['depth_obstacle_layer']['pointcloud']
     assert depth['expected_update_rate'] == 0.0
     launch = _read('robot_navigation/launch/navigation.launch.py')
-    assert "'enable_camera', default_value='true'" in launch
+    assert "'enable_camera', default_value='false'" in launch
     assert 'condition=IfCondition(enable_camera)' in launch
+
+
+def test_scan_filter_parameters_match_the_launched_node_name():
+    filter_config = yaml.safe_load(
+        _read('robot_control/config/scan_range_filter.yaml'))
+    assert list(filter_config) == ['/**/scan_range_filter']
+    launch = _read('robot_navigation/launch/navigation.launch.py')
+    assert "name='scan_range_filter'" in launch
+    assert "executable='scan_to_scan_filter_chain'" in launch
 
 
 # ------------------------------------------------------ footprint/inflation
