@@ -12,7 +12,7 @@
 #   RPLiDAR   -> /scan                  -> local + global costmap
 #   Astra Pro -> /camera/depth/points   -> local costmap ONLY
 #   The camera covers what a single LiDAR plane misses: low boxes, pallet
-#   edges, overhangs. enable_camera:=false falls back to LiDAR-only.
+#   edges, overhangs. LiDAR-only is the default; enable_camera:=true opts in.
 #   camera_* args MUST be the values Phase 2 calibrated - see
 #   docs/phase2-perception.md section 3. Wrong pitch turns the floor into a wall.
 #
@@ -163,7 +163,7 @@ def generate_launch_description():
         DeclareLaunchArgument('nav2_params_file',
                               default_value=default_nav2_params,
                               description='Nav2 parameter file.'),
-        DeclareLaunchArgument('enable_camera', default_value='true',
+        DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
                                           'local costmap.'),
         DeclareLaunchArgument(

@@ -426,8 +426,9 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
     depth = _local_costmap()['depth_obstacle_layer']['pointcloud']
     assert depth['expected_update_rate'] == 0.0
     launch = _read('robot_navigation/launch/navigation.launch.py')
-    assert "'enable_camera', default_value='true'" in launch
+    assert "'enable_camera', default_value='false'" in launch
     assert 'condition=IfCondition(enable_camera)' in launch
+    assert "package='robot_perception'" not in launch
 
 
 # ------------------------------------------------------ footprint/inflation

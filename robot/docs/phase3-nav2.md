@@ -108,7 +108,7 @@ mắt.
 | File | Thay đổi |
 |---|---|
 | `robot_control/config/nav2_params.yaml` | `local_costmap.obstacle_layer`: thêm source `pointcloud`. `global_costmap`: ghi rõ lý do **không** thêm |
-| `robot_navigation/launch/navigation.launch.py` | Thêm `enable_camera` (mặc định true) + `camera_x/y/z/roll/pitch/yaw`, include `orbbec_with_mount.launch.py` |
+| `robot_navigation/launch/navigation.launch.py` | Thêm `enable_camera` (historical default true; current default false) + `camera_x/y/z/roll/pitch/yaw`, include `orbbec_with_mount.launch.py` |
 | `orbbec_bringup/costmap_contrib_node.py` | Node mới đo A và B |
 | `orbbec_bringup/depth_check_node.py` | Phase 2: thêm mục 5 kiểm tra `depth/points` — đúng topic mà Phase 3 dùng |
 

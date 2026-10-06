@@ -124,12 +124,9 @@ ordinary source edits invalidate the build/workspace layer, not dependency
 installation. All targets share metadata/build cache; existing CI's GHA cache
 remains usable. A manifest change correctly invalidates dependency resolution.
 
-`hardware` MUST remain the last/default stage because current CI omits
-`--target`. Hardware Compose stays image-only and now removes the old TEST
-source mount: update hardware by pulling/recreating its CI image. The former
-in-container hardware rebuild workflow has ended. Debug/sim retain source mounts.
-Maps and `${PERSON_MODEL_DIR:-./models}:/opt/models:ro` remain unchanged.
-Model files stay external. `robot/.dockerignore` excludes models, recordings,
+`hardware` remains the last/default stage because current CI omits `--target`;
+it is a CI/reference image, not the physical runtime. The miniPC builds natively.
+Debug/sim retain source mounts. Model files stay external to Docker. `robot/.dockerignore` excludes models, recordings,
 old build/install/log, secrets and caches without dropping source/config/resources.
 
 ## Environment and native camera host

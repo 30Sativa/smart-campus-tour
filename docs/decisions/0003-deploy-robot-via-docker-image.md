@@ -1,3 +1,5 @@
+> **Superseded for physical deployment (2026-10):** the one physical robot now runs the complete ROS 2 runtime natively on Ubuntu 22.04. Docker remains useful for CI/reference images, laptop debug and simulation. See `robot/docs/native-runtime.md`. The historical rationale below is retained for traceability.
+
 # ADR-0003: The robot runs a prebuilt Docker image
 
 ## Context

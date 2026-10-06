@@ -1,4 +1,4 @@
-# Compose runtime/development chính: hardware, debug, and standalone sim.
+# Compose development/reference environments: debug and standalone sim.
 # Gazebo + backend SimulationPreview integration has its own
 # docker-compose.preview.yml and is not a physical robot deployment path.
 #
@@ -6,13 +6,12 @@
 # khởi động gì cả. Đó là chủ ý: trên laptop không thể vô tình start service
 # hardware và gặp lỗi "/dev/ttyACM0: no such file or directory".
 #
-#   miniPC (phần cứng thật): docker compose --profile hardware pull && docker compose --profile hardware up -d --force-recreate
 #   Ubuntu laptop (debug) : docker compose --profile debug up -d --build
 #   Ubuntu laptop (sim)   : docker compose --profile sim   up -d --build
 #
-# Chỉ service `robot-ros2` được phép khai báo `devices:`. Anchor bên dưới cố ý
-# chỉ chứa biến môi trường, không chứa devices/volumes, nên service debug/sim
-# không thể kế thừa serial device từ service hardware.
+# Physical hardware is intentionally absent here. Native miniPC runtime uses
+# robot/scripts/build-native and the launch files directly; this file is only
+# for development/reference images and simulation.
 
 x-ros2-common-env: &ros2-common-env
   # miniPC và laptop PHẢI dùng cùng domain. Hệ thống này dùng 30.
@@ -21,57 +20,6 @@ x-ros2-common-env: &ros2-common-env
   ROS_LOCALHOST_ONLY: "${ROS_LOCALHOST_ONLY-0}"
 
 services:
-  # ---------------------------------------------------------------- miniPC --
-  # Chạy phần cứng thật: STM32, RPLiDAR, gamepad.
-  robot-ros2:
-    profiles: [hardware]
-    # Image-only deployment: pull the published image before `up`. `--build`
-    # does not rebuild this service because it intentionally has no `build:`.
-    image: ${DOCKER_IMAGE:-307sativa/robot-ros2:latest}
-    container_name: robot-ros2
-    network_mode: host
-    # Giai đoạn TEST: tắt auto-restart để bạn hoàn toàn kiểm soát bật/tắt bằng tay.
-    # Khi CHỐT production (muốn robot tự chạy khi bật nguồn), đổi thành:
-    #   restart: unless-stopped
-    restart: "no"
-    environment:
-      <<: *ros2-common-env
-      # Fast DDS Discovery Server là bắt buộc cho hardware/debug.
-      # Dùng passthrough để required interpolation không chặn profile sim.
-      ROS_DISCOVERY_SERVER:
-      SERIAL_PORT: ${SERIAL_PORT:-/dev/ttyACM0}
-      BAUDRATE: ${BAUDRATE:-115200}
-      LIDAR_PORT: ${LIDAR_PORT:-/dev/ttyUSB0}
-    devices:
-      # STM32 (motor controller + odom + sonar)
-      - "${SERIAL_PORT:-/dev/ttyACM0}:${SERIAL_PORT:-/dev/ttyACM0}"
-      # RPLiDAR A3M1
-      - "${LIDAR_PORT:-/dev/ttyUSB0}:${LIDAR_PORT:-/dev/ttyUSB0}"
-      # Gamepad (joystick) - dùng để lái tay lúc build map
-      # - "${JOY_DEV:-/dev/input/js0}:${JOY_DEV:-/dev/input/js0}"
-    volumes:
-      # Lưu map RA NGOÀI container: map robot build được nằm ở host, KHÔNG mất
-      # khi container tắt/update image. Trỏ vào package robot_navigation/maps.
-      - ./robot_maps:/maps
-      # TEST model artifact directory. Copy the exported .xml/.bin and manifest
-      # to this host directory (or set PERSON_MODEL_DIR); container is read-only.
-      - ${PERSON_MODEL_DIR:-./models}:/opt/models:ro
-      # Production hardware contains the built install space. Iterative source
-      # rebuilds stay in debug/sim; update hardware by pulling/recreating CI images.
-    stdin_open: true
-    tty: true
-    # KHÔNG hardcode một launch cụ thể ở đây. Container chỉ khởi động ROS env và
-    # giữ sống, để bạn linh hoạt đổi chế độ (build map / auto explore / nav) bằng
-    # cách exec vào container. Camera Astra chạy NATIVE trên host (không đưa vào
-    # container) và vẫn nói chuyện được nhờ network_mode: host + cùng ROS_DOMAIN_ID.
-    #
-    # Chạy một chế độ:
-    #   docker exec -it robot-ros2 bash
-    #   ros2 launch robot_control manual_mapping.launch.py \
-    #     port:=$SERIAL_PORT lidar_serial_port:=$LIDAR_PORT
-    command: >
-      bash -c ': "$${ROS_DISCOVERY_SERVER:?ROS_DISCOVERY_SERVER must be set in .env}"; sleep infinity'
-
   # --------------------------------------------------------------- laptop --
   # Chỉ để development/debug + RViz2. KHÔNG có `devices:`, không chạy driver
   # phần cứng. Nhìn thấy topic của miniPC qua LAN nhờ network_mode: host.

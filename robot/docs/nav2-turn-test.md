@@ -44,26 +44,21 @@ Nav2 velocity smoother, nên bộ thông số không làm teleop quay chậm hơ
 Đây là thay đổi source trong repo; không tự đồng bộ sang MiniPC hay publish image.
 Dừng navigation cũ và xác nhận robot đứng yên trước khi cập nhật/restart.
 
-Sau khi CI publish image có thay đổi này, trên MiniPC host pull và recreate
-service hardware. `robot-ros2` không còn source mount/môi trường colcon;
-không rebuild tương tác trong container production. Build thử source thuộc
-`ros2-debug`; kiểm tra phần cứng vẫn dùng image CI đã cập nhật.
-
-MiniPC host, sau khi đã dừng stack cũ:
+Sau khi thay đổi source, trên miniPC dừng navigation cũ, xác nhận robot đứng
+yên, rồi build native và source lại môi trường:
 
 ```bash
-docker compose --profile hardware pull robot-ros2
-docker compose --profile hardware up -d --force-recreate robot-ros2
-docker exec -it robot-ros2 bash
+bash robot/scripts/build-native
+source robot/scripts/source-minipc
 ```
 
-Các package phải đã được build trong image CI. Không chạy một launch thứ hai
-chồng lên launch cũ.
+Workspace native phải đã build thành công. Không chạy một launch thứ hai chồng
+lên launch cũ.
 
-Trong container, kiểm tra map rồi launch:
+Trên miniPC, kiểm tra map rồi launch:
 
 ```bash
-test -r /maps/map2.yaml && test -r /maps/map_fix.pgm
+test -r "$ROBOT_MAP_DIR/map2.yaml" && test -r "$ROBOT_MAP_DIR/map_fix.pgm"
 ```
 
 Baseline `robot/robot_maps/map2.yaml` có `image: map_fix.pgm`. Khi hai file tồn tại:
@@ -71,7 +66,7 @@ Baseline `robot/robot_maps/map2.yaml` có `image: map_fix.pgm`. Khi hai file t�
 ```bash
 ros2 launch robot_navigation navigation.launch.py \
   robot_id:=robot_01 \
-  map:=/maps/map2.yaml \
+  map:="$ROBOT_MAP_DIR/map2.yaml" \
   enable_camera:=false
 ```
 

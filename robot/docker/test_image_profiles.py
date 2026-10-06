@@ -158,12 +158,9 @@ class ImageProfilesTest(unittest.TestCase):
 
     def test_compose_targets_tags_devices_and_networking(self):
         services = self.compose['services']
-        hardware = services['robot-ros2']
-        self.assertNotIn('build', hardware)
-        self.assertIn('devices', hardware)
-        self.assertNotIn('pull_policy', hardware)
-        self.assertNotIn('./ros2_ws/src:/ros2_ws/src', hardware['volumes'])
-        self.assertIn('${PERSON_MODEL_DIR:-./models}:/opt/models:ro', hardware['volumes'])
+        # The physical miniPC is native; Compose must not expose a second
+        # hardware startup path or serial device mapping.
+        self.assertNotIn('robot-ros2', services)
         for service, target in (('ros2-debug', 'debug'), ('ros2-sim', 'sim')):
             config = services[service]
             self.assertEqual(config['build']['target'], target)
@@ -176,7 +173,7 @@ class ImageProfilesTest(unittest.TestCase):
             self.assertEqual(service['environment']['RMW_IMPLEMENTATION'],
                              '${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}')
             self.assertEqual(service['environment']['ROS_LOCALHOST_ONLY'], '${ROS_LOCALHOST_ONLY-0}')
-        for name in ('robot-ros2', 'ros2-debug'):
+        for name in ('ros2-debug',):
             self.assertIsNone(services[name]['environment']['ROS_DISCOVERY_SERVER'])
             self.assertIn('ROS_DISCOVERY_SERVER must be set in .env', services[name]['command'])
         self.assertNotIn('ROS_DISCOVERY_SERVER', services['ros2-sim']['environment'])
