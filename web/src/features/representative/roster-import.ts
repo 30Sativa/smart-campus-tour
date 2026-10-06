@@ -1,30 +1,16 @@
-/**
- * Roster import for the representative (flow review §4.2, scope §3.3):
- *
- * - Template columns: `HoTen` (required), `Lop` (optional). Header matching
- *   ignores case, accents, spaces and underscores, so "Họ tên" or "HO_TEN" work.
- * - Fully blank rows are skipped; duplicates are kept (no merging by name).
- * - All or nothing: one bad row fails the whole file, with row / column / reason,
- *   and the current roster is left untouched.
- * - The result replaces the whole roster once confirmed; files never merge.
- * - Limits are the preview build's (§10.3): 2 MB and 1 000 students.
- *
- * Accepts .xlsx (first sheet) and .csv (UTF-8, comma or semicolon). Pure
- * functions over bytes, so they are tested without a browser.
- */
-import type { RosterRow } from '../../api/contracts/staff'
+import type { RosterRow } from './api/types'
 import { XlsxError, buildWorkbook, readFirstSheet } from './xlsx-lite'
 import type { SheetRow } from './xlsx-lite'
 
 export const ROSTER_MAX_BYTES = 2 * 1024 * 1024
 export const ROSTER_MAX_ROWS = 1000
-export const NAME_MAX = 100
-export const CLASS_MAX = 20
+export const NAME_MAX = 150
+export const CLASS_MAX = 100
 
 export type ImportIssue = {
   /** Row number as the spreadsheet shows it; null for a file-level problem. */
   row: number | null
-  column: 'HoTen' | 'Lop' | null
+  column: 'LoaiDong' | 'HoTen' | 'Email' | 'Lop' | null
   message: string
 }
 
@@ -53,6 +39,7 @@ export function parseCsv(text: string): SheetRow[] {
   let rowNumber = 1
   const endRow = () => {
     cells.push(cell)
+    if (cells.length > 256 || rows.length >= 10002) throw new XlsxError('CSV có quá nhiều dòng hoặc cột để xem trước.')
     rows.push({ rowNumber, cells })
     cells = []
     cell = ''
@@ -69,59 +56,79 @@ export function parseCsv(text: string): SheetRow[] {
     } else if (ch === '"') quoted = true
     else if (ch === delimiter) {
       cells.push(cell)
+      if (cells.length > 256) throw new XlsxError('CSV có quá nhiều cột để xem trước.')
       cell = ''
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && body[i + 1] === '\n') i += 1
       endRow()
     } else cell += ch
   }
+  if (quoted) throw new XlsxError('CSV có dấu ngoặc kép chưa đóng.')
   if (cell !== '' || cells.length) endRow()
   return rows
 }
 
 /* ── Rows → roster ────────────────────────────────────────────────────────── */
 
+/** Review 1: invitation rows, never a name-matching student roster. */
 export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
-  const isBlank = (row: SheetRow) => row.cells.every((cell) => !cell?.trim())
-  const headerAt = rows.findIndex((row) => !isBlank(row))
-  if (headerAt < 0) return fail(fileName, { row: null, column: null, message: 'File không có dữ liệu. Hãy dùng file mẫu và nhập danh sách học sinh.' })
-
+  const isBlank = (row: SheetRow) => row.cells.every(cell => !cell?.trim())
+  const headerAt = rows.findIndex(row => !isBlank(row))
+  if (headerAt < 0) return fail(fileName, { row: null, column: null, message: 'File không có dữ liệu.' })
   const header = rows[headerAt]
-  const keys = header.cells.map((cell) => fold(cell ?? ''))
-  const nameCol = keys.findIndex((key) => NAME_HEADERS.has(key))
-  const classCol = keys.findIndex((key) => CLASS_HEADERS.has(key))
-  if (nameCol < 0) {
-    return fail(fileName, { row: header.rowNumber, column: 'HoTen', message: 'Không tìm thấy cột HoTen ở dòng tiêu đề. Dùng file mẫu hoặc đặt tên cột đúng là HoTen và Lop.' })
-  }
-
+  const keys = header.cells.map(cell => fold(cell ?? ''))
+  const nameCol = keys.findIndex(key => NAME_HEADERS.has(key))
+  const classCol = keys.findIndex(key => CLASS_HEADERS.has(key))
+  const typeCol = keys.indexOf('loaidong')
+  const emailCol = keys.indexOf('email')
   const issues: ImportIssue[] = []
-  const roster: RosterRow[] = []
-  let skippedBlank = 0
-  for (const row of rows.slice(headerAt + 1)) {
-    if (isBlank(row)) {
-      skippedBlank += 1
-      continue
-    }
-    const name = (row.cells[nameCol] ?? '').trim().replace(/\s+/g, ' ')
-    const className = classCol >= 0 ? (row.cells[classCol] ?? '').trim() : ''
-    if (!name) issues.push({ row: row.rowNumber, column: 'HoTen', message: 'Thiếu họ tên học sinh.' })
-    else if (name.length > NAME_MAX) issues.push({ row: row.rowNumber, column: 'HoTen', message: `Họ tên dài quá ${NAME_MAX} ký tự.` })
-    else if (/^[\d\s.,-]+$/.test(name)) issues.push({ row: row.rowNumber, column: 'HoTen', message: 'Họ tên chỉ có số; kiểm tra lại cột.' })
-    if (className.length > CLASS_MAX) issues.push({ row: row.rowNumber, column: 'Lop', message: `Lớp dài quá ${CLASS_MAX} ký tự.` })
-    roster.push({ name, className: className || null })
-  }
-
-  if (roster.length === 0 && issues.length === 0) {
-    return fail(fileName, { row: null, column: null, message: 'Danh sách chưa có học sinh nào dưới dòng tiêu đề.' })
-  }
-  if (roster.length > ROSTER_MAX_ROWS) {
-    return fail(fileName, { row: null, column: null, message: `File có ${roster.length} học sinh, vượt giới hạn ${ROSTER_MAX_ROWS}.` })
+  for (const [column, index] of [['LoaiDong', typeCol], ['HoTen', nameCol], ['Email', emailCol]] as const) {
+    if (index < 0) issues.push({ row: header.rowNumber, column, message: `Thiếu cột ${column}. Dùng file mẫu mới.` })
+    else if (keys.filter(key => key === keys[index]).length > 1) issues.push({ row: header.rowNumber, column, message: `Cột ${column} bị trùng.` })
   }
   if (issues.length) return fail(fileName, ...issues)
-  return { ok: true, fileName, rows: roster, withClass: roster.filter((row) => row.className).length, skippedBlank }
+  const roster: RosterRow[] = []
+  const emails = new Set<string>()
+  const numbers = new Set<number>()
+  let skippedBlank = 0
+  for (const row of rows.slice(headerAt + 1)) {
+    if (isBlank(row)) { skippedBlank += 1; continue }
+    const displayName = (row.cells[nameCol] ?? '').trim()
+    const className = classCol >= 0 ? (row.cells[classCol] ?? '').trim() : ''
+    const email = (row.cells[emailCol] ?? '').trim().toLowerCase()
+    const type = (row.cells[typeCol] ?? '').trim().toUpperCase()
+    const issue = (column: ImportIssue['column'], message: string) => issues.push({ row: row.rowNumber, column, message })
+    if (!displayName) issue('HoTen', 'Thiếu tên cá nhân hoặc điểm xem chung.')
+    else if (displayName.length > NAME_MAX) issue('HoTen', `Tên dài quá ${NAME_MAX} ký tự.`)
+    if (className.length > CLASS_MAX) issue('Lop', `Lớp dài quá ${CLASS_MAX} ký tự.`)
+    if (!/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254) issue('Email', 'Email thiếu hoặc sai định dạng.')
+    else if (emails.has(email)) issue('Email', 'Email bị trùng trong danh sách.')
+    emails.add(email)
+    if (type !== 'CA_NHAN' && type !== 'DIEM_XEM_CHUNG') issue('LoaiDong', 'Chỉ nhận CA_NHAN hoặc DIEM_XEM_CHUNG.')
+    if (!Number.isInteger(row.rowNumber) || row.rowNumber < 1 || row.rowNumber > 1048576 || numbers.has(row.rowNumber)) issue(null, 'Số dòng không hợp lệ hoặc bị trùng.')
+    numbers.add(row.rowNumber)
+    roster.push({ rowNumber: row.rowNumber, rowType: type === 'CA_NHAN' ? 'INDIVIDUAL' : 'SHARED_VIEWING', displayName, email, className: className || null })
+  }
+  if (!roster.length) return fail(fileName, { row: null, column: null, message: 'Danh sách cần ít nhất một dòng lời mời.' })
+  if (roster.length > ROSTER_MAX_ROWS) return fail(fileName, { row: null, column: null, message: `Vượt giới hạn ${ROSTER_MAX_ROWS} dòng.` })
+  if (issues.length) return fail(fileName, ...issues)
+  return { ok: true, fileName, rows: roster, withClass: roster.filter(row => row.className).length, skippedBlank }
 }
 
 /* ── File entry point ─────────────────────────────────────────────────────── */
+
+/**
+ * Excel's plain "CSV" on Vietnamese Windows is an ANSI code page, not UTF-8.
+ * Decoding it leniently would silently store "Nguy?n" as an invitation name,
+ * so a CSV must be valid UTF-8 or it is refused before any row is read.
+ */
+function decodeCsv(bytes: ArrayBuffer | Uint8Array) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    throw new XlsxError('File CSV không ở dạng UTF-8 nên tên tiếng Việt có thể bị lỗi. Lưu lại bằng "CSV UTF-8" hoặc dùng file .xlsx.')
+  }
+}
 
 export async function importRosterBytes(fileName: string, bytes: ArrayBuffer | Uint8Array, size = bytes.byteLength): Promise<ImportResult> {
   if (size > ROSTER_MAX_BYTES) {
@@ -130,7 +137,7 @@ export async function importRosterBytes(fileName: string, bytes: ArrayBuffer | U
   const lower = fileName.toLowerCase()
   try {
     if (lower.endsWith('.xlsx')) return rowsToRoster(fileName, await readFirstSheet(bytes))
-    if (lower.endsWith('.csv')) return rowsToRoster(fileName, parseCsv(new TextDecoder().decode(bytes)))
+    if (lower.endsWith('.csv')) return rowsToRoster(fileName, parseCsv(decodeCsv(bytes)))
     if (lower.endsWith('.xls')) {
       return fail(fileName, { row: null, column: null, message: 'Định dạng .xls cũ chưa được hỗ trợ. Mở file và lưu lại dạng .xlsx (Excel Workbook).' })
     }
@@ -148,16 +155,16 @@ export async function importRosterFile(file: File): Promise<ImportResult> {
 
 /* ── Template ─────────────────────────────────────────────────────────────── */
 
-export const TEMPLATE_FILE_NAME = 'CampusTour-mau-danh-sach-hoc-sinh.xlsx'
+export const TEMPLATE_FILE_NAME = 'CampusTour-mau-loi-moi.xlsx'
 
 /** Header plus two openly fake example rows the representative overwrites. */
 export function rosterTemplateBytes(): Uint8Array {
-  return buildWorkbook('DanhSach', [['HoTen', 'Lop'], ['Nguyễn Văn An', '10A1'], ['Trần Thị Bình', '10A1']], [34, 12])
+  return buildWorkbook('DanhSach', [['LoaiDong', 'HoTen', 'Email', 'Lop'], ['CA_NHAN', 'Nguyễn Văn An', 'an@example.com', '10A1'], ['DIEM_XEM_CHUNG', 'Phòng xem trường A', 'phong@example.com', '']], [24, 34, 38, 12])
 }
 
 /** The current roster back as a workbook, so a replacement can start from it. */
 export function rosterWorkbookBytes(rows: RosterRow[]): Uint8Array {
-  return buildWorkbook('DanhSach', [['HoTen', 'Lop'], ...rows.map((row) => [row.name, row.className ?? ''])], [34, 12])
+  return buildWorkbook('DanhSach', [['LoaiDong', 'HoTen', 'Email', 'Lop'], ...rows.map(row => [row.rowType === 'INDIVIDUAL' ? 'CA_NHAN' : 'DIEM_XEM_CHUNG', row.displayName, row.email, row.className ?? ''])], [24, 34, 38, 12])
 }
 
 export function downloadBytes(fileName: string, bytes: Uint8Array) {

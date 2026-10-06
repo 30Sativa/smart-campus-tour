@@ -286,7 +286,9 @@ Application exceptions and automatic `[ApiController]` model-binding
 validation errors use the same JSON envelope with `success: false`, a message,
 null data, and optional errors. `AddProblemDetails()` remains registered for
 framework support; these API error paths return `BaseResponse`, not a second
-ProblemDetails shape. Login failures do not create a refresh token. Login
+ProblemDetails shape. Conflict responses that use a feature code expose
+`errors` as `{ code, fields }`; legacy generic conflicts keep `errors: null`
+for existing clients. Login failures do not create a refresh token. Login
 creates a cryptographically random refresh token and stores only its SHA-256
 hash in `RefreshTokens`; it lives for 7 days. Refresh does not rotate or mutate
 the stored token: it returns the same refresh token and stored expiry while
@@ -666,10 +668,11 @@ snapshot for invitation/session/branch storage. It is applied to the local
 SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
-backend also implements Auth V1, Admin account management, Admin POI
+backend also implements Representative submission/pre-approval registration,
+Auth V1, Admin account management, Admin POI
 management, and development-only SimulationPreview; the relevant HTTP contracts
-are described in Sections 3.0–3.0.2. Tour execution/orchestration, group
-registration, invitation/session product APIs, branch-request use cases, fleet
+are described in Sections 3.0–3.0.2 and 3.2.1. Tour execution/orchestration,
+Admin registration review, invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
@@ -710,6 +713,73 @@ restricted log role; it does not provision production users or make an owner/adm
 account append-only. Retention/identity cleanup remains application work under
 ADR-0011/0012, not an implemented background job.
 
+#### 3.2.1 Representative registration HTTP boundary (implemented)
+
+The Representative submission slice integrates `backend/` and `web/` using
+schema v1.1 without migrations. It implements pre-approval registration only:
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | /api/representative/tours | SCHEDULED Tours, paginated |
+| GET | /api/representative/tours/{id} | SCHEDULED or a Tour with an owned registration |
+| GET | /api/representative/registrations | Owned registrations; optional tourId/state |
+| GET | /api/representative/registrations/{id} | Owned details and active roster |
+| POST | /api/representative/tours/{id}/registrations | Create SUBMITTED; UUID Idempotency-Key required |
+| PUT | /api/representative/registrations/{id} | Replace SUBMITTED details and roster |
+| POST | /api/representative/registrations/{id}/resubmit | REJECTED/CANCELLED -> SUBMITTED, retaining ID |
+| POST | /api/representative/registrations/{id}/cancel | SUBMITTED/REJECTED -> CANCELLED |
+
+All routes require the Representative role. Ownership comes exclusively from
+JWT sub, never the request body. Unowned resources return 404. Collections use
+BaseResponse/PagedResponse with page/size/search/sort; expand is unsupported.
+Tour sort supports scheduledStartAt/name (optional '-' descending);
+registration sort supports updatedAt/submittedAt/groupName. State strings are
+the SQL uppercase values. There is no visitor capacity or one-group-per-Tour
+restriction. Dashboard counts use pagination.totalItems, not the page length.
+
+Create/replace JSON contains schoolName (200), groupName (200, required),
+contactName (150), contactEmail (254), expectedTourRowVersion, and roster rows
+{rowNumber, rowType, displayName (150), email (254), className (100, optional)}.
+Rows identify an INDIVIDUAL or SHARED_VIEWING invitation; a shared row identifies
+its responsible person, not all viewers. At least one row is required, including
+shared-only groups. The browser imports LoaiDong/HoTen/Email/Lop from Excel/CSV,
+with CA_NHAN/DIEM_XEM_CHUNG mapping to those row types. Technical upload limits
+are 2 MB and 1000 rows, not Tour capacity; worksheet preview also bounds XML
+expansion to 8 MB per part and 10002 source rows / 256 columns. JSON writes
+are limited to 4 MB and reject unknown properties. The API independently validates rows
+and source row numbers. Old two-column/group-code mocks are not this contract.
+
+Update/resubmit additionally require expectedRowVersion; cancel requires both
+versions. Tokens are opaque base64 SQL rowversions. Writes require SCHEDULED.
+APPROVED and registrations with invitation history are read-only in this slice;
+approved replace/cancel remains a future capability requiring atomic access
+revocation. Details return allowedActions with reasons. Clients retain the
+version of the draft they opened; refreshing does not authorize stale edits.
+Mutation responses carry an ID (create) or null; clients refetch committed data.
+400 reports input errors, 409 conflicts use `errors.code` values
+`STALE_VERSION`, `TOUR_LOCKED`, `STATE_CONFLICT`, `INVITATION_BOUNDARY`, or
+`EMAIL_RESERVED`; email conflicts also return `errors.fields` keyed by the
+incoming `Roster[i].Email` property without naming another registration.
+401/403 report auth failures.
+
+Registration transactions acquire an update lock on the Tour before locking a
+registration, checking effective emails and saving roster/registration/audit
+through the existing UnitOfWork. Active roster rows reserve normalized
+(trimmed, case-insensitive) emails across SUBMITTED/APPROVED registrations in
+the same Tour. REJECTED/CANCELLED release that reservation; resubmit rechecks.
+No alias canonicalization or name matching is applied. Conflicts do not expose
+another group's data. Replaced rows become inactive; no invitation is created.
+Future Admin review and Tour-state writers must follow the same Tour-first lock
+order and recheck effective emails before APPROVED.
+
+Create idempotency is durable: AuditLogs.CorrelationId is scoped by actor,
+Tour and REGISTRATION_SUBMITTED action, saved with the registration under the
+same lock/transaction. Replaying a committed key returns its original ID,
+even after a state change; it never edits the original registration. A fresh
+key creates another group. Audit contains identifiers/actions only, no roster
+PII. Invitation/email/session, Admin review, branch runtime and voting are
+outside this slice. Admin/Staff preview mocks do not review SQL registrations.
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data
@@ -742,9 +812,10 @@ constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
 The backend implements development SimulationPreview, user JWT login/session
-authentication, Admin account management, and Admin POI management. Admin role
+authentication, Representative owned registration management, Admin account
+management, and Admin POI management. Admin role
 authorization is enforced for the account and POI management APIs. Authorization
-for future tour, registration, invitation, branch-request, and fleet business
+for future Admin Tour/review, invitation, branch-request, and fleet business
 APIs remains unimplemented, as does robot/machine authentication. Production
 fleet and operations Hubs and fleet dispatch remain unimplemented. A single
 backend process with per-robot latest state is the initial implementation

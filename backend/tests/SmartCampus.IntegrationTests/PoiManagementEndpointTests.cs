@@ -275,7 +275,7 @@ public sealed class PoiManagementEndpointTests
     private static ApplicationDbContext CreateContext(string connectionString) =>
         new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connectionString).Options);
 
-    private sealed class ApiHost(Process process, int port) : IAsyncDisposable
+    internal sealed class ApiHost(Process process, int port) : IAsyncDisposable
     {
         private readonly Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
         private readonly Task<string> standardError = process.StandardError.ReadToEndAsync();

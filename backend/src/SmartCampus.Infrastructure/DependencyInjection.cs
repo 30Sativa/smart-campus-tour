@@ -37,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
         services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
+        services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
+        services.AddScoped<IRegistrationTransaction, EfRegistrationTransaction>();
         services.AddScoped<InitialAdminSeeder>();
         services.AddScoped<DemoPoiSeeder>();
 

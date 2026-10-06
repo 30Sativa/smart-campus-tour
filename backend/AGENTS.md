@@ -44,10 +44,13 @@ backend/
 ```
 
 Current API controllers cover Auth, Admin account management, Admin POI
-management, and development SimulationPreview. Application has matching Auth,
-Accounts, and POI features plus the in-memory pose publisher used by
-SimulationPreview. Infrastructure has specific Auth, account, and POI
-management repositories. The temporary robot pose endpoint and read-only fleet
+management, Representative submission/pre-approval registration, and development
+SimulationPreview. The Representative contract and Tour-first transaction are
+recorded in `docs/architecture.md` Section 3.2.1; invitation/session support and
+Admin review remain separate implementation work. Application has matching Auth,
+Accounts, POI and Representative features plus the in-memory pose publisher used by
+SimulationPreview. Infrastructure has specific Auth, account, POI
+management and Representative repositories. The temporary robot pose endpoint and read-only fleet
 pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
 cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
@@ -82,7 +85,7 @@ backend/src/SmartCampus.Application/
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          current: Accounts, Auth, Pois, Simulation
+├── Features/                          current: Accounts, Auth, Pois, Representative, Simulation
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
 │       └── Queries/<UseCase>/
@@ -93,7 +96,7 @@ backend/src/SmartCampus.Infrastructure/
 ├── Persistence/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
-│   ├── Repositories/                 current Auth, Accounts, and POI management implementations
+│   ├── Repositories/                 current Auth, Accounts, POI management and Representative implementations
 │   └── Seeding/                      current demo POI seeding
 ├── Integrations/                     future: external adapters without Api/Hub references
 └── DependencyInjection.cs
@@ -101,7 +104,8 @@ backend/src/SmartCampus.Infrastructure/
 backend/src/SmartCampus.Api/
 ├── Common/{Requests,Responses}/
 ├── Controllers/                      AuthController, AdminAccountsController,
-│                                     AdminPoisController, SimulationController
+│                                     AdminPoisController, RepresentativeController,
+│                                     SimulationController
 ├── ExceptionHandling/
 ├── Hubs/                             SimulationHub/Preview helpers; fleet/operations future
 ├── Properties/
@@ -252,9 +256,9 @@ The current v1.1 schema persists invitation/session records, shared-viewing
 classification and branch requests; email attempts remain append-only audit
 records, and their delivery/revocation workflows remain application logic. The
 backend currently implements Auth V1, Admin account management, Admin POI
-management, and its development Simulation controller/Hub. The Review 1 tour,
-registration, invitation, dispatch, and production fleet endpoints above remain
-planned. Do not infer that a group code/name match is equivalent to an approved
+management, and its development Simulation controller/Hub. Representative Tour reads and pre-approval registration are now implemented
+under Section 3.2.1 of `docs/architecture.md`. Admin review, invitation, dispatch,
+and production fleet endpoints remain planned. Do not infer that a group code/name match is equivalent to an approved
 personal invitation. A future feature change must reconcile its public
 contracts in `docs/architecture.md` and include the appropriate schema and
 tests.
@@ -280,6 +284,14 @@ row before checking its RowVersion; this makes simultaneous writes with the same
 version serialize into one success and one stale-version conflict. Do not move
 these commands to an independent save or remove the transaction without
 replacing that invariant.
+
+The Representative create, replace, resubmit and cancel commands follow the same
+shape as registration mutations: `RegistrationTransactionBehavior` wraps their
+UnitOfWork save in a read-committed SQL transaction, and each handler takes an
+update lock on the parent Tour before locking the registration, checking versions
+and effective emails, so roster/registration/audit rows commit together
+(`docs/architecture.md` Section 3.2.1). Future registration writers, including
+Admin review, must keep that Tour-first lock order.
 
 **Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
 `ValidationBehavior` -> Application query handler -> Application read boundary
@@ -371,11 +383,12 @@ schema has `RefreshTokens.TokenHash` as binary data and nullable `RevokedAt`,
 not a revoked flag. The application permits exactly one supported role per
 account in V1; the physical `UserRoles` primary key remains unchanged.
 
-The backend also implements Admin account and POI management. User JWT
-authentication and Admin role authorization for those management APIs are
-present. Authorization for future tour, registration, invitation, dispatch,
-and fleet business APIs, and robot/fleet machine authentication, remain
-unimplemented. Production fleet and operations Hubs remain pending; before
+The backend also implements Admin account and POI management, plus
+Representative Tour reads and owner-scoped registration submission/management.
+User JWT and role authorization for those APIs are present. Authorization for
+future Admin Tour/review, invitation, dispatch, and fleet business APIs, and
+robot/fleet machine authentication, remain unimplemented. Production fleet and
+operations Hubs remain pending; before
 robot navigation commands are enabled outside the local compatibility spike,
 require TLS and per-robot credentials using `Robot.CredentialHash`, with a
 fleet-machine policy distinct from user access. Browser/user credentials must

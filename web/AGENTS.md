@@ -28,8 +28,9 @@ shared rules; this file only covers what is specific to `web/`.
     for a browser session (ADR-0010), with one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
-    Current pages are mock-bound and still show the older shared group link;
-    they do not implement the personal-email invitation target.
+    Registration submission/pre-approval management is API-backed; see
+    `web/docs/representative-registration.md`. APPROVED is read-only in this
+    slice; personal-email invitation support remains future implementation.
   - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
     run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
@@ -202,9 +203,9 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
 The current frontend contains a legacy visitor registration/tour flow at
-`/visit/*`, plus a mock Student page at `/tour` and mock Representative pages at
+`/visit/*`, plus a mock Student page at `/tour` and live Representative submission pages at
 `/dai-dien/*`. The Student page currently matches a group code and name/class
-against mock roster data; the Representative page shares a group link/code.
+against mock roster data; the Representative submission area uses SQL registrations and Review 1 invitation rows; it issues no access code.
 The Review 1 target (ADR-0010) instead emails a Tour page link and personal
 access code; entering the code creates a session, and a valid existing session
 avoids repeat entry. The URL itself grants no access. The target
