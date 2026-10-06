@@ -1,0 +1,25 @@
+info:
+  name: 01 - List POIs
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/admin/pois?page=1&size=20"
+  params:
+    - name: page
+      value: "1"
+      type: query
+    - name: size
+      value: "20"
+      type: query
+  auth:
+    type: bearer
+    token: "{{accessToken}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

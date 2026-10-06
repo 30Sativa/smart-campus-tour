@@ -165,7 +165,8 @@ def generate_launch_description():
                               description='Nav2 parameter file.'),
         DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
-                                          'local costmap.'),
+                                          'local costmap. Enable only after the '
+                                          'camera mount has been calibrated.'),
         DeclareLaunchArgument(
             'rviz', default_value='false',
             description='Open RViz with the navigation layout. Default false: '

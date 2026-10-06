@@ -1,9 +1,9 @@
-import { Suspense, useState } from 'react'
-import { ArrowUpRight, LogOut, Menu, Search, X } from 'lucide-react'
+import { Suspense, useEffect, useState } from 'react'
+import { LogOut, Menu, Search, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { repQueryKeys } from './representative-hooks'
 import { useLogout } from '../../auth/use-logout'
-import { MOCK_MODE_LABEL } from '../../mocks/mock-mode'
-import { currentRepresentativeProfile } from '../../mocks/representative-mock'
 import { useAuthStore } from '../../stores/auth-store'
 import { PageSkeleton } from './components/RepUi'
 import { REP_NAV, repActivePath } from './rep-nav'
@@ -15,9 +15,22 @@ export default function RepresentativeShell() {
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const logout = useLogout()
-  const profile = currentRepresentativeProfile()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    function clearOwner(owner: string | undefined) {
+      if (!owner) return
+      void queryClient.cancelQueries({ queryKey: repQueryKeys.owner(owner) })
+      queryClient.removeQueries({ queryKey: repQueryKeys.owner(owner) })
+    }
+    const currentOwner = useAuthStore.getState().user?.userId
+    queryClient.removeQueries({ predicate: query => query.queryKey[0] === 'representative' && query.queryKey[1] !== currentOwner })
+    return useAuthStore.subscribe((state, previous) => {
+      if (state.user?.userId !== previous.user?.userId || state.user?.role !== previous.user?.role)
+        clearOwner(previous.user?.userId)
+    })
+  }, [queryClient])
   const current = repActivePath(location.pathname)
-  const name = profile.representativeName || user?.username || 'Đại diện'
+  const name = user?.username || 'Đại diện'
   const initials = name.split(/\s+/).slice(-2).map((part) => part[0]).join('').toUpperCase()
 
   return (
@@ -39,9 +52,9 @@ export default function RepresentativeShell() {
           </nav>
           <div className="rep-header-actions">
             <Link to="/dai-dien/buoi" className="rep-help-link"><Search size={15} aria-hidden="true" /> Tìm buổi</Link>
-            <div className="rep-profile" title={profile.schoolName || 'Đại diện trường'}>
+            <div className="rep-profile" title={'Đại diện trường'}>
               <span className="rep-avatar">{initials}</span>
-              <span className="rep-profile-copy"><strong>{name}</strong><small>{profile.schoolName || 'Đại diện trường'}</small></span>
+              <span className="rep-profile-copy"><strong>{name}</strong><small>{'Đại diện trường'}</small></span>
             </div>
             <button type="button" className="rep-logout" onClick={() => void logout()} aria-label="Đăng xuất" title="Đăng xuất"><LogOut size={18} aria-hidden="true" /></button>
             <button type="button" className="rep-menu-toggle" aria-label={menuOpen ? 'Đóng menu' : 'Mở menu'} aria-controls="rep-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
@@ -51,7 +64,6 @@ export default function RepresentativeShell() {
         </div>
       </header>
       {menuOpen && <button type="button" className="rep-menu-scrim" aria-label="Đóng menu" onClick={() => setMenuOpen(false)} />}
-      <div className="rep-mock-note"><span className="rep-mock-note-dot" />{MOCK_MODE_LABEL}. Đăng ký, duyệt và email đang được mô phỏng; dữ liệu đặt lại khi tải trang.<ArrowUpRight size={12} aria-hidden="true" /></div>
       <main id="rep-main" className="rep-main"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
     </div>
   )

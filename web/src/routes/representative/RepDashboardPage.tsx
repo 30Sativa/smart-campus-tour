@@ -1,116 +1,33 @@
-import { ArrowUpRight, CalendarDays, ClipboardList, Clock3, MailCheck, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
-import { buttonClass } from '../../components/ui/ui-classes'
-import { EmptyState, ErrorState, Panel, RegistrationStatusBadge, RepPage, Skeleton } from '../../features/representative/components/RepUi'
-import { TourCard } from '../../features/representative/components/TourCard'
 import { useRepRegistrations, useRepTours } from '../../features/representative/representative-hooks'
-import { formatRelative, lastActivity, readRepError } from '../../features/representative/rep-format'
-import { currentRepresentativeProfile } from '../../mocks/representative-mock'
+import { RepPage, RepPageHeader, Panel, ErrorState, EmptyState, PageSkeleton } from '../../features/representative/components/RepUi'
+import { TourCard } from '../../features/representative/components/TourCard'
+import { RegistrationCard } from '../../features/representative/components/RegistrationCard'
+import { readRepError } from '../../features/representative/rep-format'
+import { buttonClass } from '../../components/ui/ui-classes'
 
-/**
- * Representative overview: where the school's registrations stand, the next
- * Tours open for registration, and what changed recently. Deliberately small:
- * no charts, one primary action.
- */
 export default function RepDashboardPage() {
-  const tours = useRepTours()
-  const regs = useRepRegistrations()
-  const profile = currentRepresentativeProfile()
-
-  const list = regs.data ?? []
-  const count = (state: string) => list.filter((r) => r.state === state).length
-  const open = (tours.data ?? []).filter((t) => t.register.allowed).slice(0, 3)
-  const recent = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
-  const toFix = list.filter((r) => r.state === 'Rejected' && r.allowedActions.edit.allowed)
-
-  const stats = [
-    { label: 'Tổng đăng ký', value: list.length, to: '/dai-dien/dang-ky', icon: ClipboardList, tone: 'blue' },
-    { label: 'Chờ duyệt', value: count('Submitted'), to: '/dai-dien/dang-ky?trang-thai=cho-duyet', icon: Clock3, tone: 'amber' },
-    { label: 'Đã duyệt', value: count('Approved'), to: '/dai-dien/dang-ky?trang-thai=da-duyet', icon: MailCheck, tone: 'green' },
-    { label: 'Từ chối', value: count('Rejected'), to: '/dai-dien/dang-ky?trang-thai=tu-choi', icon: Sparkles, tone: 'rose' },
-  ]
-
-  return (
-    <RepPage>
-      <section className="rep-hero" aria-labelledby="rep-welcome">
-        <div className="rep-hero-image" aria-hidden="true" />
-        <div className="rep-hero-content">
-          <span className="rep-eyebrow"><span className="rep-eyebrow-dot" /> CAMPUS TOUR · CỔNG ĐẠI DIỆN</span>
-          <h1 id="rep-welcome">{profile.representativeName ? `Xin chào, ${profile.representativeName}` : 'Chào mừng trở lại'}</h1>
-          <p>{profile.schoolName ? `Cùng ${profile.schoolName} mở cánh cửa tham quan khuôn viên từ xa cho học sinh.` : 'Chuẩn bị một hành trình khám phá khuôn viên từ xa cho học sinh của bạn.'}</p>
-          <Link to="/dai-dien/buoi" className="rep-hero-cta">Xem buổi tham quan <ArrowUpRight size={18} aria-hidden="true" /></Link>
-        </div>
-        <span className="rep-hero-caption">Hành trình khám phá · Trải nghiệm trực tiếp</span>
-      </section>
-
-      <div className="rep-section-intro">
-        <div><span className="rep-overline">TỔNG QUAN</span><h2>Đăng ký của trường</h2></div>
-        <p>Theo dõi từng đoàn, từ lúc gửi danh sách đến khi nhận thông tin tham gia.</p>
-      </div>
-
-      <section aria-label="Số liệu đăng ký" className="rep-stats grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {stats.map((s) => (
-          <Link key={s.label} to={s.to} className={`rep-stat rep-stat-${s.tone}`}>
-            <span className="rep-stat-top"><s.icon size={19} strokeWidth={1.8} aria-hidden="true" /><ArrowUpRight size={16} aria-hidden="true" /></span>
-            {regs.isLoading ? <Skeleton className="mt-5 h-9 w-12" /> : <span className="rep-stat-value">{regs.isError ? '-' : s.value}</span>}
-            <span className="rep-stat-label">{s.label}</span>
-          </Link>
-        ))}
-      </section>
-
-      {toFix.length > 0 && (
-        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-[#f5c8c2] bg-[#fff5f3] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[15px] text-[#0f172a]"><b>{toFix.length} đăng ký bị từ chối</b> <span className="text-[#475569]">cần sửa và gửi lại trước khi buổi được chốt.</span></p>
-          <Link to={`/dai-dien/dang-ky/${toFix[0].id}`} className={`${buttonClass('secondary', 'sm')} shrink-0`}>Xem lý do từ chối</Link>
-        </div>
-      )}
-
-      <div className="mt-10 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <section aria-labelledby="open-tours">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 id="open-tours" className="text-lg font-semibold tracking-[-0.01em] text-[#0f172a]">Buổi đang nhận đăng ký</h2>
-            <Link to="/dai-dien/buoi" className={buttonClass('ghost', 'sm')}>Tất cả buổi</Link>
-          </div>
-          {tours.isLoading ? (
-            <div className="space-y-3" aria-busy="true" aria-label="Đang tải buổi tham quan">
-              {[0, 1].map((i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
-            </div>
-          ) : tours.isError ? (
-            <ErrorState title="Không tải được buổi tham quan" message={readRepError(tours.error).message} onRetry={() => void tours.refetch()} />
-          ) : open.length === 0 ? (
-            <EmptyState icon={CalendarDays} title="Chưa có buổi nào đang nhận đăng ký" description="Buổi mới do Admin mở sẽ xuất hiện ở đây. Bạn vẫn xem được các đăng ký đã gửi." />
-          ) : (
-            <div className="rep-dashboard-tour-grid">{open.map((t, index) => <TourCard key={t.id} tour={t} visualIndex={index} compact />)}</div>
-          )}
-        </section>
-
-        <Panel title="Hoạt động gần đây" action={<Link to="/dai-dien/dang-ky" className={buttonClass('ghost', 'sm')}>Đăng ký của tôi</Link>}>
-          {regs.isLoading ? (
-            <div className="space-y-3" aria-busy="true">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : regs.isError ? (
-            <p className="text-sm text-[#b23e31]" role="alert">{readRepError(regs.error).message}</p>
-          ) : recent.length === 0 ? (
-            <p className="py-4 text-sm leading-relaxed text-[#64748b]">Chưa có hoạt động. Chọn một buổi đang nhận đăng ký để gửi đăng ký đầu tiên.</p>
-          ) : (
-            <ol className="space-y-1">
-              {recent.map((r) => (
-                <li key={r.id}>
-                  <Link to={`/dai-dien/dang-ky/${r.id}`} className="-mx-2 flex items-start gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-[#f8fafc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-[#0f172a]">{lastActivity(r)}</p>
-                      <p className="mt-0.5 truncate text-[13px] text-[#64748b]">{r.tourName}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <RegistrationStatusBadge state={r.state} />
-                      <span className="text-xs text-[#94a3b8]">{formatRelative(r.updatedAt)}</span>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Panel>
-      </div>
-    </RepPage>
-  )
+  const tours = useRepTours({ size: 3 })
+  const registrations = useRepRegistrations({ size: 5 })
+  const pending = useRepRegistrations({ state: 'SUBMITTED', size: 1 })
+  if (tours.isPending || registrations.isPending || pending.isPending) return <PageSkeleton />
+  const error = tours.error ?? registrations.error ?? pending.error
+  if (error) return <RepPage><ErrorState title="Không tải được tổng quan" message={readRepError(error).message} onRetry={() => { void tours.refetch(); void registrations.refetch(); void pending.refetch() }} /></RepPage>
+  return <RepPage>
+    <RepPageHeader title="Tổng quan đại diện" description="Chuẩn bị đoàn, gửi danh sách lời mời và theo dõi đăng ký của bạn."
+      action={<Link className={buttonClass('primary')} to="/dai-dien/buoi">Xem buổi tham quan</Link>} />
+    <div className="rep-catalog-metrics">
+      <div className="rep-catalog-metric"><span>Buổi nhận đăng ký</span><strong>{tours.data?.pagination.totalItems}</strong></div>
+      <div className="rep-catalog-metric"><span>Đăng ký của tôi</span><strong>{registrations.data?.pagination.totalItems}</strong></div>
+      <div className="rep-catalog-metric"><span>Chờ duyệt</span><strong>{pending.data?.pagination.totalItems}</strong></div>
+    </div>
+    <Panel title="Buổi đang nhận đăng ký" className="mt-6" action={<Link to="/dai-dien/buoi">Xem tất cả</Link>}>
+      {tours.data?.data.length ? <div className="grid gap-5 md:grid-cols-3">{tours.data.data.map((tour, index) => <TourCard key={tour.id} tour={tour} compact visualIndex={index} />)}</div>
+        : <EmptyState title="Chưa có buổi nhận đăng ký" />}
+    </Panel>
+    <Panel title="Hoạt động gần đây" className="mt-6" action={<Link to="/dai-dien/dang-ky">Đăng ký của tôi</Link>}>
+      <div className="space-y-3">{registrations.data?.data.map(r => <RegistrationCard key={r.id} registration={r} />)}</div>
+      {!registrations.data?.data.length && <EmptyState title="Bạn chưa có đăng ký nào" />}
+    </Panel>
+  </RepPage>
 }

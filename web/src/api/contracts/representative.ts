@@ -1,14 +1,10 @@
 /**
- * Transport contract for the school representative (Đại diện trường):
- * the Tours open for registration, the one registration a representative
- * keeps per Tour, its roster and the participation details after approval.
+ * Legacy mock-preview contract for the school representative. Live HTTP types
+ * are under `features/representative/api/`; this file remains only for the
+ * historical Admin/Staff simulation consumers.
  *
- * Same arrangement as `admin.ts`: the TYPES are live and every screen in
- * `features/representative/` is written against them; the HTTP
- * implementations at the bottom are NOT wired. `/api/representative/*` does
- * not exist yet, so `representative-hooks.ts` binds the labelled mock
- * (`src/mocks/representative-mock.ts`), which shares its world with the Admin
- * and Staff mocks: a group sent here is the group Admin reviews.
+ * Do not use this file to infer the current registration API, ownership or
+ * state transitions. It predates the Review 1 live registration slice.
  *
  * Model: screen & user flow review (21/09/2026) §4, §7, §10; scope 19/09/2026 §3.
  *
@@ -18,8 +14,7 @@
  *                      Approved → Submitted        replace the roster (review again)
  *                      Cancelled → Submitted       register again
  *                      Submitted | Approved | Rejected → Cancelled
- *   Every change above only while the Tour is Scheduled. One registration per
- *   representative per Tour: sending again updates that record.
+ *   This transition table is retained for the legacy simulation only.
  *
  * Errors. A refused action is an `ApiError` whose body is JSON
  * `RepresentativeErrorBody`:

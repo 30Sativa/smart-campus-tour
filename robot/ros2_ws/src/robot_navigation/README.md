@@ -51,8 +51,8 @@ LUU Y robot that: KHONG co map mac dinh. Quen map:= se bao loi ro rang roi dung.
 
 Cờ chung: `rviz:=true` mở RViz (mặc định tắt); `camera_enable_color:=true` bật
 RGB cho Phase 4 (mặc định tắt để tiết kiệm băng thông USB). `enable_camera` mặc
-định true — Astra vào local costmap; `camera_x/y/z/roll/pitch/yaw` **phải** là bộ
-số Phase 2 đã hiệu chỉnh.
+định false — chỉ bật Astra sau khi mount đã được hiệu chuẩn; bộ
+`camera_x/y/z/roll/pitch/yaw` **phải** là số Phase 2 đã hiệu chỉnh.
 
 ## Nav2 baseline (A→B trên robot thật)
 
@@ -396,7 +396,12 @@ Astra   /camera/depth/points -> local costmap CHỈ (depth_obstacle_layer)
 4x SR04T /ultrasonic/sonarN/range -> RViz khi bật display; sonar_layer hiện OFF
 ```
 
+
 `navigation.launch.py` tắt camera mặc định (`enable_camera:=false`) để giữ baseline LiDAR-only. Bộ số
+
+`navigation.launch.py` tắt camera mặc định (`enable_camera:=false`). Chỉ bật
+`enable_camera:=true` sau khi đã hiệu chuẩn vị trí gắn camera. Bộ số
+
 `camera_x/y/z/roll/pitch/yaw` **phải** là kết quả hiệu chỉnh của Phase 2 —
 xem `docs/phase2-perception.md` mục 3. Sai pitch là sàn biến thành tường.
 

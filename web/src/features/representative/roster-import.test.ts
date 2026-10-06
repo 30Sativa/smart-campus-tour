@@ -10,12 +10,12 @@ afterEach(() => vi.unstubAllGlobals())
 describe('roster import (flow review §4.2)', () => {
   it('reads the template it offers for download', async () => {
     const rows = await readFirstSheet(rosterTemplateBytes())
-    expect(rows[0].cells).toEqual(['HoTen', 'Lop'])
+    expect(rows[0].cells).toEqual(['LoaiDong', 'HoTen', 'Email', 'Lop'])
     expect(rows).toHaveLength(3)
   })
 
   it('round-trips a roster through .xlsx, Vietnamese names included', async () => {
-    const roster = [{ name: 'Đặng Thị Ánh Nguyệt', className: '12A1' }, { name: 'Lê Văn Bình', className: null }]
+    const roster = [{ rowNumber: 2, rowType: 'INDIVIDUAL' as const, displayName: 'Đặng Thị Ánh Nguyệt', email: 'anh@example.com', className: '12A1' }, { rowNumber: 3, rowType: 'SHARED_VIEWING' as const, displayName: 'Phòng chung', email: 'room@example.com', className: null }]
     const result = await importRosterBytes('ds.xlsx', rosterWorkbookBytes(roster))
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -48,37 +48,56 @@ describe('roster import (flow review §4.2)', () => {
     expect(rows[0].cells).toEqual(['Họ tên', 'Lớp'])
     expect(rows[1]).toEqual({ rowNumber: 3, cells: ['Phạm Minh', 'Lớp'] })
     const result = rowsToRoster('ds.xlsx', rows)
-    expect(result.ok && result.rows).toEqual([{ name: 'Phạm Minh', className: 'Lớp' }])
+    expect(result.ok).toBe(false) // The ZIP reader works; this legacy two-column file is no longer a valid invitation roster.
   })
 
-  it('names the row and column of every problem and imports nothing', () => {
-    const result = rowsToRoster('ds.csv', parseCsv('HoTen,Lop\nNguyễn An,10A1\n,10A1\n12345,10A2\n'))
+  it('rejects every invalid invitation row with source row and column', () => {
+    const result = rowsToRoster('ds.csv', parseCsv('LoaiDong,HoTen,Email,Lop\nCA_NHAN,An,an@example.com,10A\nUNKNOWN,,bad,10A\nCA_NHAN,Binh,AN@EXAMPLE.COM,10A\n'))
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.issues).toEqual([
-        { row: 3, column: 'HoTen', message: 'Thiếu họ tên học sinh.' },
-        { row: 4, column: 'HoTen', message: 'Họ tên chỉ có số; kiểm tra lại cột.' },
-      ])
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ row: 3, column: 'HoTen' }), expect.objectContaining({ row: 3, column: 'Email' }),
+        expect.objectContaining({ row: 3, column: 'LoaiDong' }), expect.objectContaining({ row: 4, column: 'Email' }),
+      ]))
     }
   })
-
-  it('skips fully blank rows, keeps duplicates, accepts accented headers and semicolons', () => {
-    const result = rowsToRoster('ds.csv', parseCsv('﻿Họ tên;Lớp\r\nAn;10A1\r\n;\r\nAn;10A1\r\n"Bình, Lê";\r\n'))
+  it('skips blanks, keeps identical names and accepts a shared-only group', () => {
+    const result = rowsToRoster('ds.csv', parseCsv('﻿Loại dòng;Họ tên;Email;Lớp\r\nDIEM_XEM_CHUNG;Phòng A; ROOM@example.com ;\r\n;;;\r\nDIEM_XEM_CHUNG;Phòng A;other@example.com;\r\n'))
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.rows.map((row) => row.name)).toEqual(['An', 'An', 'Bình, Lê'])
+      expect(result.rows.map(row => row.displayName)).toEqual(['Phòng A', 'Phòng A'])
+      expect(result.rows.map(row => row.rowNumber)).toEqual([2, 4])
+      expect(result.rows[0].email).toBe('room@example.com')
+      expect(result.rows.every(row => row.rowType === 'SHARED_VIEWING')).toBe(true)
       expect(result.skippedBlank).toBe(1)
-      expect(result.withClass).toBe(2)
     }
   })
+  it('refuses a legacy header, empty roster, malformed CSV and one over the technical limit', () => {
+    const legacy = rowsToRoster('a.csv', parseCsv('HoTen,Lop\nAn,1'))
+    expect(legacy.ok).toBe(false)
+    if (!legacy.ok) expect(legacy.issues.map(i => i.column)).toEqual(['LoaiDong', 'Email'])
+    expect(rowsToRoster('b.csv', parseCsv('LoaiDong,HoTen,Email\n\n')).ok).toBe(false)
+    expect(() => parseCsv('LoaiDong,HoTen,Email\nCA_NHAN,"Unclosed')).toThrow()
+    const big = 'LoaiDong,HoTen,Email\n' + Array.from({ length: ROSTER_MAX_ROWS + 1 }, (_, i) => `CA_NHAN,HS ${i},hs${i}@example.com`).join('\n')
+    expect(rowsToRoster('c.csv', parseCsv(big)).ok).toBe(false)
+  })
+  it('refuses a non-UTF-8 CSV instead of storing garbled Vietnamese names', async () => {
+    // "Nguyên" saved by Excel's plain CSV on Vietnamese Windows (code page 1258): 0xEA is "ê".
+    const ansi = new Uint8Array([...enc.encode('LoaiDong,HoTen,Email\nCA_NHAN,Nguy'), 0xea, ...enc.encode('n An,an@example.com\n')])
+    const refused = await importRosterBytes('ds.csv', ansi)
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.issues).toEqual([expect.objectContaining({ row: null, message: expect.stringContaining('UTF-8') })])
+    const utf8 = await importRosterBytes('ds.csv', enc.encode('﻿LoaiDong,HoTen,Email\nCA_NHAN,Nguyên An,an@example.com\n'))
+    expect(utf8.ok && utf8.rows[0].displayName).toBe('Nguyên An')
+  })
 
-  it('refuses a file without a HoTen column, an empty list and one over the limit', () => {
-    const noName = rowsToRoster('a.csv', parseCsv('Ten hoc sinh x,Lop\nAn,1'))
-    expect(noName.ok || noName.issues[0].column).toBe('HoTen')
-    expect(rowsToRoster('b.csv', parseCsv('HoTen,Lop\n\n')).ok).toBe(false)
-    const big = 'HoTen\n' + Array.from({ length: ROSTER_MAX_ROWS + 1 }, (_, i) => `HS ${i}`).join('\n')
-    const over = rowsToRoster('c.csv', parseCsv(big))
-    expect(over.ok).toBe(false)
+  it('bounds decompressed XML before allocating a worksheet', async () => {
+    const zip = zipStored([{ name: 'xl/worksheets/sheet1.xml', data: enc.encode('<worksheet/>') }])
+    const view = new DataView(zip.buffer)
+    for (let i = zip.length - 22; i >= 0; i -= 1) {
+      if (view.getUint32(i, true) === 0x02014b50) { view.setUint32(i + 24, 9 * 1024 * 1024, true); break }
+    }
+    await expect(readFirstSheet(zip)).rejects.toThrow('quá lớn')
   })
 
   it('refuses old .xls, other types and files over 2 MB before reading them', async () => {

@@ -382,7 +382,12 @@ public sealed class InitialAdminSeederTests
 
     internal sealed class EmptySchemaDatabase : IAsyncDisposable
     {
-        private readonly string name = "CampusTourInitialAdminSeedTest_" + Guid.NewGuid().ToString("N");
+        private readonly string name;
+
+        private EmptySchemaDatabase(bool demo)
+        {
+            name = (demo ? "SmartCampusTourPoiDemo_" : "CampusTourInitialAdminSeedTest_") + Guid.NewGuid().ToString("N");
+        }
         private readonly SqlConnectionStringBuilder settings = new(
             Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")!)
         {
@@ -393,9 +398,9 @@ public sealed class InitialAdminSeederTests
 
         public string ConnectionString => settings.ConnectionString;
 
-        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql")
+        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql", bool demo = false)
         {
-            var database = new EmptySchemaDatabase();
+            var database = new EmptySchemaDatabase(demo);
             try
             {
                 await using (var master = new SqlConnection(database.settings.ConnectionString))

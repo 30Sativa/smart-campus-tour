@@ -144,14 +144,53 @@ public sealed class PoiManagementEndpointTests
         Assert.Equal(HttpStatusCode.OK, contentResponse.StatusCode);
     }
 
-    private static object CreateBody(decimal yaw) => new
+    [SchemaV11Fact]
+    public async Task PoiMapPickerPose_RoundTripsMapContextAndDecimalPrecision()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(isActive: true, username: "poi.map.admin", roles: ["ADMIN"]);
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var token = await GetAccessTokenAsync(host.Client, "poi.map.admin");
+
+        // Image (406.5, 527.5) in map2.yaml, with a +Y body heading.
+        using var create = CreateJsonRequest(HttpMethod.Post, "/api/admin/pois", token,
+            CreateBody(yaw: 1.570796m, x: 5.0250m, y: -5.0250m, mapKey: "map2-v1"));
+        using var created = await host.Client.SendAsync(create);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        using var document = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var id = document.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+        var initial = await GetPoiAsync(host.Client, token, id);
+        Assert.Equal("map2-v1", initial.GetProperty("mapKey").GetString());
+        Assert.Equal("map", initial.GetProperty("mapFrame").GetString());
+        Assert.Equal(5.0250m, initial.GetProperty("x").GetDecimal());
+        Assert.Equal(-5.0250m, initial.GetProperty("y").GetDecimal());
+        Assert.Equal(1.570796m, initial.GetProperty("yaw").GetDecimal());
+        Assert.False(initial.GetProperty("isActive").GetBoolean());
+
+        // Center of the top-left cell; preserve the API's inclusive rounded pi.
+        using var update = CreateJsonRequest(HttpMethod.Put, $"/api/admin/pois/{id:D}", token,
+            UpdateBody(initial.GetProperty("rowVersion").GetString()!, "Map pose updated",
+                x: -15.2750m, y: 21.3250m, yaw: 3.141593m, mapKey: "map2-v1"));
+        using var updated = await host.Client.SendAsync(update);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var latest = await GetPoiAsync(host.Client, token, id);
+        Assert.Equal(id, latest.GetProperty("id").GetGuid());
+        Assert.Equal("map2-v1", latest.GetProperty("mapKey").GetString());
+        Assert.Equal("map", latest.GetProperty("mapFrame").GetString());
+        Assert.Equal(-15.2750m, latest.GetProperty("x").GetDecimal());
+        Assert.Equal(21.3250m, latest.GetProperty("y").GetDecimal());
+        Assert.Equal(3.141593m, latest.GetProperty("yaw").GetDecimal());
+        Assert.NotEqual(initial.GetProperty("rowVersion").GetString(), latest.GetProperty("rowVersion").GetString());
+    }
+
+    private static object CreateBody(decimal yaw, decimal x = 1.25m, decimal y = -2.5m, string mapKey = "campus-map-v1") => new
     {
         name = "Library",
         description = (string?)null,
-        mapKey = "campus-map-v1",
+        mapKey,
         mapFrame = "map",
-        x = 1.25m,
-        y = -2.5m,
+        x,
+        y,
         yaw,
         narrationText = (string?)null,
         audioUrl = (string?)null,
@@ -159,16 +198,16 @@ public sealed class PoiManagementEndpointTests
         fallbackVideoUrl = (string?)null
     };
 
-    private static object UpdateBody(string expectedRowVersion, string name, decimal x = 1.25m) => new
+    private static object UpdateBody(string expectedRowVersion, string name, decimal x = 1.25m, decimal y = -2.5m, decimal yaw = 0m, string mapKey = "campus-map-v1") => new
     {
         expectedRowVersion,
         name,
         description = (string?)null,
-        mapKey = "campus-map-v1",
+        mapKey,
         mapFrame = "map",
         x,
-        y = -2.5m,
-        yaw = 0m,
+        y,
+        yaw,
         narrationText = (string?)null,
         audioUrl = (string?)null,
         narrationSeconds = (int?)null,
@@ -236,7 +275,7 @@ public sealed class PoiManagementEndpointTests
     private static ApplicationDbContext CreateContext(string connectionString) =>
         new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connectionString).Options);
 
-    private sealed class ApiHost(Process process, int port) : IAsyncDisposable
+    internal sealed class ApiHost(Process process, int port) : IAsyncDisposable
     {
         private readonly Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
         private readonly Task<string> standardError = process.StandardError.ReadToEndAsync();

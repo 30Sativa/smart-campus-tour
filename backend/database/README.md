@@ -45,7 +45,15 @@ runtime User Secrets remain unchanged.
 
 The current local target is `SmartCampusTourV11` on `localhost,1433`; the local API User Secret `ConnectionStrings:DefaultConnection` points to it using Windows Integrated Security. Runtime configuration is per developer; the shared repository contains no connection string. To scaffold again, set `SMARTCAMPUS_DB_CONNECTION` to this target and run `bash backend/scripts/scaffold-db` from Git Bash. Never point that script at a database with data whose schema does not match the snapshot; apply the additive POI RowVersion patch first. After every re-scaffold, review the filtered unique index relationships: EF scaffold inferred `BranchRequest.TourId` as one-to-one from the one-accepted-per-Tour index, and `BrowserSession.InvitationId` as one-to-one from the one-open-session-per-invitation index. Both relations are one-to-many because other request/session rows are allowed; the backend mappings and inverse collections were corrected accordingly.
 
-## Application invariants still to implement
+## Registration submission implementation
+
+The Representative submission API now enforces Tour-first locks, owned mutations,
+rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
+The schema is unchanged. See `web/docs/representative-registration.md` for the
+live slice, isolated Route/Tour fixture and verification. Admin approval, approved
+roster replacement and invitation/session revocation remain future implementation.
+
+## Remaining application invariants
 
 - Every roster import/replacement, registration approval and Admin email correction locks the same parent Tour with UPDLOCK **before** checking normalized email duplicates, holding the lock until commit. Define the same effective-row predicate and normalization in all paths; lowercasing only during import is insufficient.
 - Derive BranchPointRouteStopId from the selected variant and test rejection of mismatched Tour, registration, route and branch point. Close requests atomically on visit closure/NEEDS_ASSISTANCE; old requests stay terminal after recovery. FK existence and filtered UNIQUE do not implement this state machine.

@@ -47,14 +47,14 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
 
   const pick = () => inputRef.current?.click()
   const keptCount = accepted?.rows.length ?? inUse?.count ?? 0
-  const keptLabel = accepted ? `danh sách từ file ${accepted.fileName} (${accepted.rows.length} học sinh)` : inUse ? `danh sách hiện tại (${inUse.count} học sinh)` : null
+  const keptLabel = accepted ? `danh sách từ file ${accepted.fileName} (${accepted.rows.length} dòng lời mời)` : inUse ? `danh sách hiện tại (${inUse.count} dòng lời mời)` : null
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 rounded-2xl border border-[#e5e9f0] bg-[#f8fafc] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="text-sm leading-relaxed text-[#475569]">
           <p className="font-semibold text-[#0f172a]">Yêu cầu file danh sách</p>
-          <p className="mt-1">Cột <b className="text-[#0f172a]">HoTen</b> bắt buộc, cột <b className="text-[#0f172a]">Lop</b> không bắt buộc. File .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} học sinh.</p>
+          <p className="mt-1">Các cột <b className="text-[#0f172a]">LoaiDong, HoTen, Email</b> bắt buộc, cột <b className="text-[#0f172a]">Lop</b> không bắt buộc. LoaiDong: CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. File .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} dòng lời mời.</p>
         </div>
         <button type="button" className={`${buttonClass('secondary')} shrink-0`} onClick={() => downloadBytes(TEMPLATE_FILE_NAME, rosterTemplateBytes())}>
           <Download size={16} aria-hidden="true" />Tải file Excel mẫu
@@ -67,7 +67,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
             <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-[#1f7a55]" aria-hidden="true" />
             <div className="min-w-0">
               <p className="font-semibold break-all text-[#0f172a]">{accepted.fileName}</p>
-              <p className="mt-0.5 text-sm text-[#475569]">Đã xác nhận {accepted.rows.length} học sinh{accepted.withClass ? `, ${accepted.withClass} dòng có lớp` : ''}. Danh sách này sẽ được gửi.</p>
+              <p className="mt-0.5 text-sm text-[#475569]">Đã xác nhận {accepted.rows.length} dòng lời mời{accepted.withClass ? `, ${accepted.withClass} dòng có lớp` : ''}. Danh sách này sẽ được gửi.</p>
             </div>
           </div>
           <button type="button" className={`${buttonClass('secondary', 'sm')} shrink-0`} onClick={pick}>Chọn file khác</button>
@@ -86,7 +86,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
           className="sr-only"
           tabIndex={-1}
           accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-          aria-label="Chọn file Excel danh sách học sinh"
+          aria-label="Chọn file Excel danh sách lời mời"
           onChange={(event) => { void read(event.target.files?.[0]); event.target.value = '' }}
         />
         {phase.kind === 'validating' ? (
@@ -115,7 +115,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-[#0f172a]">File <span className="break-all">{phase.result.fileName}</span> chưa hợp lệ</p>
               <p className="mt-1 text-sm leading-relaxed text-[#475569]">
-                Chưa có học sinh nào được nhập{keptLabel ? `; vẫn giữ ${keptLabel}` : ''}. Sửa {phase.result.issues.length > 1 ? `${phase.result.issues.length} lỗi` : 'lỗi'} dưới đây rồi chọn lại file.
+                Chưa có dòng lời mời nào được nhập{keptLabel ? `; vẫn giữ ${keptLabel}` : ''}. Sửa {phase.result.issues.length > 1 ? `${phase.result.issues.length} lỗi` : 'lỗi'} dưới đây rồi chọn lại file.
               </p>
             </div>
           </div>
@@ -151,7 +151,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
           </div>
           <dl className="mt-4 grid grid-cols-3 gap-2">
             {[
-              ['Học sinh hợp lệ', phase.result.rows.length],
+              ['Dòng hợp lệ', phase.result.rows.length],
               ['Dòng có lớp', phase.result.withClass],
               ['Dòng trống bỏ qua', phase.result.skippedBlank],
             ].map(([label, value]) => (
@@ -163,7 +163,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
           </dl>
           <div className="mt-4"><RosterPreview rows={phase.result.rows} label="Xem trước danh sách" maxHeight="max-h-[300px]" /></div>
           {keptCount > 0 && (
-            <p className="mt-4 rounded-xl bg-[#fffaeb] px-3.5 py-2.5 text-sm text-[#7d5310]">Xác nhận sẽ thay toàn bộ {keptCount} học sinh đang có bằng {phase.result.rows.length} học sinh trong file này. Không ghép hai danh sách.</p>
+            <p className="mt-4 rounded-xl bg-[#fffaeb] px-3.5 py-2.5 text-sm text-[#7d5310]">Xác nhận sẽ thay toàn bộ {keptCount} dòng lời mời đang có bằng {phase.result.rows.length} dòng lời mời trong file này. Không ghép hai danh sách.</p>
           )}
           <div className="mt-4 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
             <button type="button" className={buttonClass('secondary')} onClick={pick}>Chọn file khác</button>

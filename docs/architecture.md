@@ -286,7 +286,9 @@ Application exceptions and automatic `[ApiController]` model-binding
 validation errors use the same JSON envelope with `success: false`, a message,
 null data, and optional errors. `AddProblemDetails()` remains registered for
 framework support; these API error paths return `BaseResponse`, not a second
-ProblemDetails shape. Login failures do not create a refresh token. Login
+ProblemDetails shape. Conflict responses that use a feature code expose
+`errors` as `{ code, fields }`; legacy generic conflicts keep `errors: null`
+for existing clients. Login failures do not create a refresh token. Login
 creates a cryptographically random refresh token and stores only its SHA-256
 hash in `RefreshTokens`; it lives for 7 days. Refresh does not rotate or mutate
 the stored token: it returns the same refresh token and stored expiry while
@@ -376,9 +378,56 @@ lifecycle operations require the current SQL Server `RowVersion`; the
 transaction takes an update lock on the POI row before reading that token, so
 concurrent requests with one version serialize into one success and one 409
 stale-version conflict. Stale writes preserve the stable POI ID. This scope
-does not implement audio upload, route editing, or a map picker. Existing v1.1
+does not implement audio upload or route editing. Existing v1.1
 databases need `backend/database/patches/add-poi-rowversion-v1.1.sql` before
 this API build.
+
+#### 3.0.2.1 Admin occupancy-map pose picker
+
+The Web picker uses a versioned static map package exported from
+`robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
+source files; Web owns the deployment derivative. `map2-v1`, frame `map`,
+identifies this snapshot; it is not an alias for demo, Student, or Twin maps.
+The exporter records source SHA-256 hashes, resolution, the full origin pose,
+dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
+same cell as the source pixel, with Nav2 Humble trinary classification. There
+is no crop, resize, rotation, or interpolation. Changed geometry or occupancy
+semantics requires a new MapKey. Web builds use committed assets and do not
+need the robot filesystem. Source parity is checked by `web/scripts/verify`.
+The exporter and Web catalog accept only zero origin yaw: Nav2 Humble's
+StaticLayer and AMCL use origin position without map orientation, so a rotated
+OccupancyGrid is outside this navigation package contract. Web resolves the
+static image path against Vite `BASE_URL` for both display and cell sampling.
+
+For continuous image coordinates `(u,v)`, measured from the top-left edge,
+let `(a,b) = resolution * (u, height-v)`. ROS position is
+`origin.xy + R(origin.yaw) * (a,b)`. Cell centers use half-pixel coordinates;
+continuous pointer positions do not receive an extra half-cell offset. Yaw is
+body heading in radians about +Z, positive counter-clockwise from +X. The Web
+picker quantizes newly edited x/y to four decimals and yaw to six; unchanged
+stored poses retain their values. Pixel conversion is separate from calibrated
+Student/Twin presentation transforms. With this map, ROS `(0,0)` projects to
+image `(306,427)`.
+
+Create/Edit share a picker with position, heading, numeric fine-tuning, and
+view-only zoom/pan when pose is locked. A missing MapKey/frame package never
+falls back to a different map. Selecting a different map clears the draft pose
+and requires a new position/heading. Existing POI endpoints, RowVersion,
+transactional locks, and inactive-on-create behavior are unchanged. Occupied
+and unknown cells produce advisory warnings, not navigation verification.
+The API still validates numeric precision/range, not map existence, bounds,
+occupancy, reachability, or loaded robot-map identity.
+
+Current source caveat: with `negate: 0` and `free_thresh: 0.25`, gray 205 is
+free (`1-205/255 < 0.25`). The source contains no unknown cells under these
+thresholds. Do not infer occupancy from the source image's appearance or alter
+robot thresholds as part of the picker. Deployment-map binding, current robot
+pose, navigation testing, and fleet integration remain separate work.
+`map2-v1` remains an immutable snapshot of the current thresholds. Robot-map
+semantics and the runtime-loaded map must be reviewed before entering
+operational POIs; a later threshold change needs a new key and explicit POI
+review. Source parity checks intentionally fail until that revision is
+registered and their target key is updated.
 
 ### 3.1 Fleet contract
 
@@ -619,10 +668,11 @@ snapshot for invitation/session/branch storage. It is applied to the local
 SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to Domain entities and
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
-backend also implements Auth V1, Admin account management, Admin POI
+backend also implements Representative submission/pre-approval registration,
+Auth V1, Admin account management, Admin POI
 management, and development-only SimulationPreview; the relevant HTTP contracts
-are described in Sections 3.0–3.0.2. Tour execution/orchestration, group
-registration, invitation/session product APIs, branch-request use cases, fleet
+are described in Sections 3.0–3.0.2 and 3.2.1. Tour execution/orchestration,
+Admin registration review, invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
@@ -663,6 +713,73 @@ restricted log role; it does not provision production users or make an owner/adm
 account append-only. Retention/identity cleanup remains application work under
 ADR-0011/0012, not an implemented background job.
 
+#### 3.2.1 Representative registration HTTP boundary (implemented)
+
+The Representative submission slice integrates `backend/` and `web/` using
+schema v1.1 without migrations. It implements pre-approval registration only:
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | /api/representative/tours | SCHEDULED Tours, paginated |
+| GET | /api/representative/tours/{id} | SCHEDULED or a Tour with an owned registration |
+| GET | /api/representative/registrations | Owned registrations; optional tourId/state |
+| GET | /api/representative/registrations/{id} | Owned details and active roster |
+| POST | /api/representative/tours/{id}/registrations | Create SUBMITTED; UUID Idempotency-Key required |
+| PUT | /api/representative/registrations/{id} | Replace SUBMITTED details and roster |
+| POST | /api/representative/registrations/{id}/resubmit | REJECTED/CANCELLED -> SUBMITTED, retaining ID |
+| POST | /api/representative/registrations/{id}/cancel | SUBMITTED/REJECTED -> CANCELLED |
+
+All routes require the Representative role. Ownership comes exclusively from
+JWT sub, never the request body. Unowned resources return 404. Collections use
+BaseResponse/PagedResponse with page/size/search/sort; expand is unsupported.
+Tour sort supports scheduledStartAt/name (optional '-' descending);
+registration sort supports updatedAt/submittedAt/groupName. State strings are
+the SQL uppercase values. There is no visitor capacity or one-group-per-Tour
+restriction. Dashboard counts use pagination.totalItems, not the page length.
+
+Create/replace JSON contains schoolName (200), groupName (200, required),
+contactName (150), contactEmail (254), expectedTourRowVersion, and roster rows
+{rowNumber, rowType, displayName (150), email (254), className (100, optional)}.
+Rows identify an INDIVIDUAL or SHARED_VIEWING invitation; a shared row identifies
+its responsible person, not all viewers. At least one row is required, including
+shared-only groups. The browser imports LoaiDong/HoTen/Email/Lop from Excel/CSV,
+with CA_NHAN/DIEM_XEM_CHUNG mapping to those row types. Technical upload limits
+are 2 MB and 1000 rows, not Tour capacity; worksheet preview also bounds XML
+expansion to 8 MB per part and 10002 source rows / 256 columns. JSON writes
+are limited to 4 MB and reject unknown properties. The API independently validates rows
+and source row numbers. Old two-column/group-code mocks are not this contract.
+
+Update/resubmit additionally require expectedRowVersion; cancel requires both
+versions. Tokens are opaque base64 SQL rowversions. Writes require SCHEDULED.
+APPROVED and registrations with invitation history are read-only in this slice;
+approved replace/cancel remains a future capability requiring atomic access
+revocation. Details return allowedActions with reasons. Clients retain the
+version of the draft they opened; refreshing does not authorize stale edits.
+Mutation responses carry an ID (create) or null; clients refetch committed data.
+400 reports input errors, 409 conflicts use `errors.code` values
+`STALE_VERSION`, `TOUR_LOCKED`, `STATE_CONFLICT`, `INVITATION_BOUNDARY`, or
+`EMAIL_RESERVED`; email conflicts also return `errors.fields` keyed by the
+incoming `Roster[i].Email` property without naming another registration.
+401/403 report auth failures.
+
+Registration transactions acquire an update lock on the Tour before locking a
+registration, checking effective emails and saving roster/registration/audit
+through the existing UnitOfWork. Active roster rows reserve normalized
+(trimmed, case-insensitive) emails across SUBMITTED/APPROVED registrations in
+the same Tour. REJECTED/CANCELLED release that reservation; resubmit rechecks.
+No alias canonicalization or name matching is applied. Conflicts do not expose
+another group's data. Replaced rows become inactive; no invitation is created.
+Future Admin review and Tour-state writers must follow the same Tour-first lock
+order and recheck effective emails before APPROVED.
+
+Create idempotency is durable: AuditLogs.CorrelationId is scoped by actor,
+Tour and REGISTRATION_SUBMITTED action, saved with the registration under the
+same lock/transaction. Replaying a committed key returns its original ID,
+even after a state change; it never edits the original registration. A fresh
+key creates another group. Audit contains identifiers/actions only, no roster
+PII. Invitation/email/session, Admin review, branch runtime and voting are
+outside this slice. Admin/Staff preview mocks do not review SQL registrations.
+
 ### 3.3 State storage and realtime delivery
 
 When the backend receives robot pose/state, it is transient latest-state data
@@ -695,9 +812,10 @@ constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
 The backend implements development SimulationPreview, user JWT login/session
-authentication, Admin account management, and Admin POI management. Admin role
+authentication, Representative owned registration management, Admin account
+management, and Admin POI management. Admin role
 authorization is enforced for the account and POI management APIs. Authorization
-for future tour, registration, invitation, branch-request, and fleet business
+for future Admin Tour/review, invitation, branch-request, and fleet business
 APIs remains unimplemented, as does robot/machine authentication. Production
 fleet and operations Hubs and fleet dispatch remain unimplemented. A single
 backend process with per-robot latest state is the initial implementation

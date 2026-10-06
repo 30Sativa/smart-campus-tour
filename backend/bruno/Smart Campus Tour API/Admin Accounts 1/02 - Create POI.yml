@@ -1,0 +1,34 @@
+info:
+  name: 02 - Create POI
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/admin/pois"
+  body:
+    type: json
+    data: |-
+      {
+        "name": "[DEV] AI Lab",
+        "description": "POI placeholder, chưa kiểm chứng bằng robot thật.",
+        "mapKey": "demo-poi-baseline-v1",
+        "mapFrame": "map",
+        "x": -1.5,
+        "y": -5.5,
+        "yaw": 0,
+        "narrationText": null,
+        "audioUrl": null,
+        "narrationSeconds": null,
+        "fallbackVideoUrl": null
+      }
+  auth:
+    type: bearer
+    token: "{{accessToken}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

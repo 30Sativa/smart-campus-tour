@@ -63,6 +63,36 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_RepresentativeConflict_ReturnsCodeAndFields()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+        var fields = new Dictionary<string, string[]> { ["Roster[0].Email"] = ["Email đã được đăng ký trong Tour này."] };
+
+        await handler.TryHandleAsync(context,
+            new ConflictException("Có email đã được đăng ký trong Tour này.", "EMAIL_RESERVED", fields),
+            CancellationToken.None);
+
+        using var response = await ReadResponseAsync(context);
+        var errors = response.RootElement.GetProperty("errors");
+        Assert.Equal("EMAIL_RESERVED", errors.GetProperty("code").GetString());
+        Assert.Equal("Email đã được đăng ký trong Tour này.",
+            errors.GetProperty("fields").GetProperty("Roster[0].Email")[0].GetString());
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_GenericConflict_PreservesNullErrors()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, new ConflictException("Robot is already assigned."), CancellationToken.None);
+
+        using var response = await ReadResponseAsync(context);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("errors").ValueKind);
+    }
+
+    [Fact]
     public async Task TryHandleAsync_UnexpectedException_DoesNotExposeDetails()
     {
         var context = CreateHttpContext();
