@@ -273,20 +273,54 @@ robot thật sự spawn đúng gốc world mà map sim được ghi từ đó.
 
 ## Footprint / inflation
 
-- `robot_radius: 0.49` — bán kính bao của box CAD trong
-  `robot_description/urdf/common_properties.xacro`
-  (`base_length 0.8022` × `base_width 0.5628` → nửa đường chéo 0.490 m).
-  Con số 0.47 cũ tính từ ước lượng 74×55 cm, tức là **nhỏ hơn thân xe theo CAD**.
-  Đây KHÔNG liên quan gì tới `wheel_base=0.4714` của odometry.
-- `inflation_radius: 0.60` (cả local lẫn global). Inflation đo **từ vật cản**,
-  không phải "lề thêm ngoài robot radius", nên nó phải `>= robot_radius`.
-  Bản cũ để local `0.35` < `robot_radius 0.47` — đó là bug.
-- Robot dùng **circular footprint** conservative, chưa dùng polygon. Polygon
-  chỉ nên làm khi đã đo thân xe hoàn thiện.
-- TODO(hardware): đo envelope xe thật, kể cả bumper / tay cầm / dây nhô ra
-  ngoài box CAD, rồi tính lại.
-- Nếu robot từ chối một cái cửa mà nó lọt được thật: hạ `inflation_radius`,
-  **đừng** hạ `robot_radius`.
+- Cả local/global costmap dùng cùng **polygon chữ nhật**, không cấu hình
+  `robot_radius`. Source of truth:
+  `robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`, được
+  collision box trong `robot/ros2_ws/src/robot_description/urdf/robot.urdf.xacro`
+  sử dụng: dài `0.802199951`, rộng `0.562799988` m, tâm XY
+  `(0, 0.000049973)`. Giữ offset Y của CAD để không thu nhỏ một cạnh.
+- Trong `base_footprint`, X hướng trước, Y hướng trái; `base_joint` chỉ dịch Z,
+  không xoay trục. Thứ tự điểm ngược chiều kim đồng hồ: trước-trái → sau-trái
+  → sau-phải → trước-phải. Humble đọc `footprint` dưới dạng **chuỗi**:
+
+  ```yaml
+  footprint: "[[0.4010999755, 0.281449967], [-0.4010999755, 0.281449967], [-0.4010999755, -0.281350021], [0.4010999755, -0.281350021]]"
+  footprint_padding: 0.0
+  ```
+
+  Padding bằng 0 để dùng đúng envelope, thay default Humble 0.01 m. Những chữ
+  số thêm giữ phép tính CAD, không khẳng định độ chính xác đo xe tới nanomet.
+- Collision primitive của bánh chính, caster và LiDAR nằm trong box XY này;
+  `camera_assembly.stl` cũng nằm trong envelope (X tối đa khoảng 0.39535 m).
+  Sonar chỉ có visual, chưa có collision geometry; yaw và ánh xạ kênh vẫn
+  provisional theo `robot/docs/cad-sensor-mounts.md`. Chưa có bằng chứng về
+  collision envelope nhô ra ngoài chassis để tăng footprint hay thêm margin.
+- Giữ `inflation_radius: 0.60` và `cost_scaling_factor: 3.0` ở cả hai costmap.
+  Humble tính inscribed radius từ khoảng cách gốc frame tới cạnh gần nhất
+  (~0.28135 m); inflation radius phải bao inscribed radius. Khoảng 0.60 m đo
+  **từ vật cản**, là phạm vi cost field, không phải clearance cố định quanh
+  chassis. Chuyển polygon tự làm thay đổi vùng cost inscribed và gradient;
+  chưa tune lại tham số inflation hay RPP.
+- **Giới hạn planner giữ nguyên:** SmacPlanner2D Humble kiểm tra cost tại tâm,
+  không kiểm tra polygon theo từng yaw. RPP kiểm tra polygon trên local
+  costmap; global path vẫn có thể đưa ra góc/lối mà controller từ chối.
+  Inflation không thay thế việc kiểm tra các góc khi xoay tại chỗ.
+- **READY FOR HARDWARE TEST:** dùng launch hiện có với map đã lưu:
+
+  ```bash
+  ros2 launch robot_navigation navigation.launch.py robot_id:=robot_01 map:=/maps/campus_map.yaml rviz:=true
+  ```
+
+  Thay map bằng file thực trên miniPC, chạy trong ROS runtime đã build bản sửa.
+  Kiểm tra `footprint` và `footprint_padding` trên cả
+  `/robot_01/local_costmap/local_costmap` và `/robot_01/global_costmap/global_costmap`.
+  Trong RViz, local/global `published_footprint` phải cùng chữ nhật đúng thân
+  xe (topic dùng frame odom/map, cần TF để so sánh), không còn circle gần 0.98 m.
+  Thử đi thẳng, xoay tại chỗ và gần góc/cửa với người giám sát/E-stop.
+  Theo dõi góc thân quét vào vật cản, polygon lệch trục, RPP dừng dù planner có
+  path, và khoảng cách/tốc độ thực khi gradient inflation thay đổi.
+  Không thu nhỏ footprint để ép robot qua lối hẹp; chỉ cập nhật envelope khi
+  có số đo nhô ra ngoài CAD được xác nhận.
 
 ## Nav2 namespace — root cause của lỗi cũ
 
@@ -378,7 +412,8 @@ Chi tiết trong `docs/phase3-nav2.md`.
   tối) — khớp với costmap trong `robot_control/config/nav2_params.yaml`
   (raytrace 15 / obstacle 12). Đổi LiDAR thì sửa cả hai chỗ.
 - Robot cắt cua → tăng `FollowPath.lookahead_dist`. Robot lượn rộng trong hành
-  lang → giảm. Đừng xuống dưới `robot_radius`.
+  lang → giảm. Giữ guard baseline: không xuống dưới khoảng cách tới góc xa
+  nhất của footprint (~0.490 m).
 - Planner từ chối lối hẹp → giảm `GridBased.cost_travel_multiplier`, rồi mới
   tới `inflation_radius`.
 

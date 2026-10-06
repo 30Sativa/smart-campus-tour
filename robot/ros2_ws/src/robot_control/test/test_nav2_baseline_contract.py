@@ -7,6 +7,7 @@ runtime behaviour - that is robot_navigation/README.md section "Acceptance
 tests on the real robot".
 """
 
+import json
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -50,6 +51,51 @@ def _global_costmap():
 
 def _follow_path():
     return _nav2_params()['controller_server']['ros__parameters']['FollowPath']
+
+
+def _footprint(costmap):
+    """Humble parses a string of XY pairs; nested YAML arrays are not valid params."""
+    configured = costmap['footprint']
+    assert isinstance(configured, str)
+    points = json.loads(configured)
+    assert isinstance(points, list) and len(points) == 4
+    for point in points:
+        assert isinstance(point, list) and len(point) == 2
+        assert all(type(value) in (int, float) and math.isfinite(value)
+                   for value in point)
+    assert len({tuple(point) for point in points}) == 4
+    return points
+
+
+def _footprint_edges(points):
+    return zip(points, points[1:] + points[:1])
+
+
+def _cross(start, end, point):
+    return ((end[0] - start[0]) * (point[1] - start[1]) -
+            (end[1] - start[1]) * (point[0] - start[0]))
+
+
+def _inscribed_radius(costmap):
+    """Distance from frame origin to the closest polygon edge (Humble inflation)."""
+    return min(abs(_cross(start, end, (0.0, 0.0))) /
+               math.hypot(end[0] - start[0], end[1] - start[1])
+               for start, end in _footprint_edges(_footprint(costmap)))
+
+
+def _cad_chassis_corners():
+    root = ET.fromstring(_read('robot_description/urdf/common_properties.xacro'))
+    properties = {item.attrib['name']: float(item.attrib['value'])
+                  for item in root.findall('{http://www.ros.org/wiki/xacro}property')
+                  if item.attrib['name'] in (
+                      'base_length', 'base_width', 'base_collision_x', 'base_collision_y')}
+    half_length = properties['base_length'] / 2.0
+    half_width = properties['base_width'] / 2.0
+    cx, cy = properties['base_collision_x'], properties['base_collision_y']
+    return [(cx + half_length, cy + half_width),
+            (cx - half_length, cy + half_width),
+            (cx - half_length, cy - half_width),
+            (cx + half_length, cy - half_width)]
 
 
 # --------------------------------------------------------------- planner
@@ -188,8 +234,9 @@ def test_progress_timeout_budgets_slow_half_turn_then_translation():
 
 def test_rpp_lookahead_is_not_shorter_than_the_robot():
     params = _follow_path()
-    robot_radius = _local_costmap()['robot_radius']
-    assert params['lookahead_dist'] >= robot_radius
+    # Preserve the existing geometric lookahead guard without a circular model.
+    furthest_corner = max(math.hypot(*point) for point in _footprint(_local_costmap()))
+    assert params['lookahead_dist'] >= furthest_corner
 
 
 def test_rpp_inflation_gain_matches_the_local_costmap():
@@ -361,31 +408,74 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
 # ------------------------------------------------------ footprint/inflation
 
 
-def test_local_inflation_radius_covers_the_robot():
+def test_local_inflation_radius_covers_the_inscribed_radius():
     costmap = _local_costmap()
     assert (costmap['inflation_layer']['inflation_radius'] >=
-            costmap['robot_radius'])
+            _inscribed_radius(costmap))
 
 
-def test_global_inflation_radius_covers_the_robot():
+def test_global_inflation_radius_covers_the_inscribed_radius():
     costmap = _global_costmap()
     assert (costmap['inflation_layer']['inflation_radius'] >=
-            costmap['robot_radius'])
+            _inscribed_radius(costmap))
 
 
-def test_costmaps_agree_on_robot_radius():
-    assert _local_costmap()['robot_radius'] == _global_costmap()['robot_radius']
+def test_inflation_settings_stay_at_the_existing_baseline():
+    """Changing shape does not authorize tuning the cost field."""
+    for costmap in (_local_costmap(), _global_costmap()):
+        assert costmap['inflation_layer']['inflation_radius'] == 0.60
+        assert costmap['inflation_layer']['cost_scaling_factor'] == 3.0
 
 
-def test_robot_radius_covers_the_cad_chassis_box():
-    """robot_radius must bound the CAD collision box, not the 74x55 estimate."""
-    xacro = _read('robot_description/urdf/common_properties.xacro')
-    length = float(re.search(
-        r'name="base_length"\s+value="([0-9.]+)"', xacro).group(1))
-    width = float(re.search(
-        r'name="base_width"\s+value="([0-9.]+)"', xacro).group(1))
-    circumscribed = ((length ** 2 + width ** 2) ** 0.5) / 2.0
-    assert _local_costmap()['robot_radius'] >= circumscribed - 1e-3
+def test_costmaps_use_polygon_without_radius_or_extra_padding():
+    for costmap in (_local_costmap(), _global_costmap()):
+        assert 'robot_radius' not in costmap
+        _footprint(costmap)
+        assert costmap['footprint_padding'] == 0.0
+
+
+def test_costmaps_agree_on_footprint_and_padding():
+    local, global_ = _local_costmap(), _global_costmap()
+    assert _footprint(local) == _footprint(global_)
+    assert local['footprint_padding'] == global_['footprint_padding']
+
+
+def test_chassis_collision_projection_uses_base_footprint_axes():
+    """The CAD XY box is valid in base_footprint only while this transform holds."""
+    root = ET.fromstring(_read('robot_description/urdf/robot.urdf.xacro'))
+    joint = root.find("joint[@name='base_joint']")
+    assert joint.find('parent').attrib['link'] == 'base_footprint'
+    assert joint.find('child').attrib['link'] == 'base_link'
+    assert joint.find('origin').attrib['xyz'] == '0 0 ${base_z}'
+    assert joint.find('origin').attrib['rpy'] == '0 0 0'
+    collision = root.find("link[@name='base_link']/collision")
+    assert collision.find('origin').attrib['xyz'] == (
+        '${base_collision_x} ${base_collision_y} ${base_collision_z}')
+    assert collision.find('origin').attrib['rpy'] == '0 0 0'
+    assert collision.find('geometry/box').attrib['size'] == (
+        '${base_length} ${base_width} ${base_height}')
+
+
+def test_footprints_are_convex_counter_clockwise_and_contain_frame_origin():
+    for costmap in (_local_costmap(), _global_costmap()):
+        points = _footprint(costmap)
+        for index, (start, end) in enumerate(_footprint_edges(points)):
+            assert _cross(start, end, points[(index + 2) % 4]) > 0.0
+            assert _cross(start, end, (0.0, 0.0)) > 0.0
+
+
+def test_footprints_match_and_fully_cover_the_current_cad_chassis_box():
+    """Include the CAD centre offset; no millimetre tolerance hiding undersizing."""
+    corners = _cad_chassis_corners()
+    for costmap in (_local_costmap(), _global_costmap()):
+        points = _footprint(costmap)
+        # Match the four corners without prescribing which corner comes first.
+        for corner in corners:
+            assert any(all(math.isclose(a, b, rel_tol=0.0, abs_tol=1e-12)
+                           for a, b in zip(corner, point)) for point in points)
+            # Check containment, not just the polygon's axis-aligned bounds.
+            for start, end in _footprint_edges(points):
+                assert _cross(start, end, corner) >= -1e-12
 
 
 # ---------------------------------------------------------------- namespace
