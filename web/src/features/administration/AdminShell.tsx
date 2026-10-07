@@ -8,14 +8,16 @@ import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
+import { AdminHeaderActions } from './AdminHeaderActions'
 
 /**
  * The administration shell: preparing Tours before they run.
  *
  * Same sidebar, same header height and the same palette as operations
  * (`ConsoleSidebar`), because the only account that crosses between the two
- * is an Admin and should not have to re-learn the chrome. It diverges in
- * priority only: no live badge and no alert bell.
+ * is an Admin and should not have to re-learn the chrome. Like operations,
+ * the account and a bell sit at the top right; the bell lists the same work
+ * the dashboard asks of Admin (no live badge in the sidebar).
  */
 export default function AdminShell() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -51,13 +53,15 @@ export default function AdminShell() {
         user={{ name: user?.username || 'Quản trị viên', role: roleLabel(user?.role), icon: ShieldCheck }}
         onNavigate={closeMenu}
         onLogout={handleLogout}
+        showUser={false}
         open={menuOpen}
         panelRef={navRef}
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#dbe9f4] bg-white/95 px-5 backdrop-blur-md lg:px-9">
-          <p className="truncate text-sm font-semibold tracking-[-0.01em] text-[#3d6481]">CampusTour <span className="mx-1.5 text-[#a7b8aa]">/</span> {title}</p>
+          <p className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-[#3d6481]">CampusTour <span className="mx-1.5 text-[#a7b8aa]">/</span> {title}</p>
+          <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
         </header>
 
         {!onAccounts && !onPois && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
