@@ -348,6 +348,16 @@ Mỗi transform có **đúng một** chủ. `stm32_bridge` chạy với `publish
 để không tranh `odom -> base_footprint` với EKF. Nav2 dùng `base_footprint` làm
 `robot_base_frame` ở mọi chỗ.
 
+**Launch scope của Astra.** ROS 2 include không tự cô lập launch arguments;
+`DeclareLaunchArgument` chỉ đặt default khi context chưa có giá trị. Trước đây
+include STM32 trong `manual_mode.launch.py` làm `publish_tf=false` rò tới
+`astra_pro.launch.py`, khiến default camera `true` không được áp dụng.
+Include STM32 hiện có `GroupAction(scoped=True)` riêng. Include camera trong
+navigation cũng có scope riêng và truyền rõ `publish_tf=true` qua
+`orbbec_with_mount.launch.py` tới driver. Camera không ghi đè các argument
+chung như `rviz` ở launch cha; `enable_camera=false` vẫn không chạy camera
+hay mount TF. Driver vendor và quyền sở hữu TF odometry không đổi.
+
 **Nav2 namespace + TF.** `nav2_bringup/navigation_launch.py` trên Humble remap
 `/tf -> tf` trong mọi node. Khi push namespace, cái đó thành `/robot_01/tf`,
 trong khi AMCL / EKF / robot_state_publisher vẫn broadcast lên `/tf` global →
