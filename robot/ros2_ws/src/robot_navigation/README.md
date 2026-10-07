@@ -48,6 +48,7 @@ LUU Y robot that: KHONG co map mac dinh. Quen map:= se bao loi ro rang roi dung.
 | `localization.launch.py` | map_server + AMCL + lifecycle manager; standalone cần truyền `map:=...` |
 | `navigation.launch.py` | Robot thật: bringup + LiDAR + AMCL + Nav2 trên map đã lưu |
 | `sim_navigation.launch.py` | Gazebo: mode_manager + relay + AMCL + Nav2 trên map đã lưu |
+| `remote_rviz.launch.py` | Laptop: relay TF cho remote debug; thêm `rviz:=true` để mở RViz |
 
 Cờ chung: `rviz:=true` mở RViz (mặc định tắt); `camera_enable_color:=true` bật
 RGB cho Phase 4 (mặc định tắt để tiết kiệm băng thông USB). `enable_camera` mặc
@@ -63,6 +64,57 @@ LiDAR và depth giữ nguyên. Bridge vẫn publish Range để quan sát; đây
 lệnh tắt nguồn cảm biến. Chưa áp dụng patch semantic bridge hoặc timeout policy.
 Trước khi nạp lại sonar vào costmap cần xử lý đồng thời hai vấn đề đó và test
 từng sensor; chỉ đổi checkbox RViz không bật sonar vào navigation.
+
+### Remote RViz trên laptop (workaround/debug)
+
+Trong A/B test trên routed Wi-Fi, `/tf` ở MiniPC vẫn đều nhưng subscriber
+RELIABLE trên laptop có lúc stall nhiều giây. RViz/TransformListener dùng
+RELIABLE, gây future extrapolation, LiDAR message filter `queue is full` và
+treo viewer khi Fixed Frame là `odom`. BEST_EFFORT ở laptop rồi relay local
+sang RELIABLE đã giúp RViz chạy ổn nhiều phút trong test của người vận hành.
+Đây là bằng chứng cho debug path này, chưa phải bảo đảm cho mọi mạng.
+
+Chỉ chạy launch này **trên cùng laptop với RViz**:
+
+```text
+MiniPC /tf --BEST_EFFORT qua mạng--> laptop tf_rviz_relay
+          --RELIABLE--> /robot_01/tf_rviz --> RViz
+MiniPC /tf_static --------------------------> RViz (giữ nguyên)
+```
+
+Trên laptop ROS 2 Humble, từ repo root, build/source package mới (cần có
+`rclpy`, `tf2_msgs`, `rviz2` và `nav2_rviz_plugins` trong môi trường ROS):
+
+```bash
+source /opt/ros/humble/setup.bash
+cd robot/ros2_ws
+colcon build --symlink-install --base-paths src/robot_navigation
+source install/setup.bash
+ros2 launch robot_navigation remote_rviz.launch.py robot_id:=robot_01 rviz:=true
+```
+
+Dùng cùng ROS domain/discovery với robot như môi trường remote debug đã hoạt
+động; launch không cấu hình network, systemd hoặc Tailscale. Không source
+`robot/scripts/source-minipc` trên laptop vì script đó nạp môi trường MiniPC.
+Nếu robot không namespace, bỏ `robot_id:=robot_01`: output là `/tf_rviz`.
+`robot_id` chỉ namespace relay output và topic RViz (`scan`, `map`,
+`initialpose`, ...); input luôn là global `/tf`, không prefix frame ID.
+Có thể truyền `rviz_config:=/path/to/custom.rviz`; `use_sim_time:=true` chỉ
+dùng khi debug simulation có `/clock`. Mặc định `rviz:=false` chạy relay thôi,
+theo quy ước launch headless của repo.
+
+Relay chuyển nguyên `TFMessage`, không sửa timestamp/frame/transform, dùng
+KEEP_LAST depth 100 và VOLATILE ở cả hai đầu (depth dynamic TF của Humble).
+Chỉ RViz trong launch riêng được remap `/tf`; `/tf_static` đi trực tiếp như
+cũ. Không include bringup/Nav2, không đổi publisher `/tf` gốc, không tăng queue
+RViz và không tự bật relay trong runtime MiniPC. Dừng launch là bỏ workaround.
+
+Kiểm tra thực tế: bật display LiDAR (mặc định OFF), dùng Fixed Frame `odom`,
+quan sát vài phút; kỳ vọng scan tiếp tục vẽ, không queue full/treo. Sau khi
+AMCL có initial pose và `map -> odom`, thử lại với `map`. BEST_EFFORT có thể
+mất TF; relay không sửa clock lệch, TF thiếu hoặc network outage. Chỉ chạy
+một relay cho mỗi output; output là topic ROS trong domain, không phải topic
+được DDS giới hạn truy cập local. Không nối Nav2 vào `tf_rviz`.
 
 ### RViz Nav2 và bật/tắt hiển thị từng sensor
 

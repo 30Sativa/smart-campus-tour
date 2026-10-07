@@ -1,0 +1,164 @@
+"""Package contract plus real Humble launch/QoS/message forwarding checks.
+
+Use a fresh interpreter for ROS checks: other packages' offline tests stub ROS.
+"""
+
+import os
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+import time
+from unittest import mock
+import xml.etree.ElementTree as ET
+
+import pytest
+import yaml
+
+
+PACKAGE = Path(__file__).resolve().parents[1]
+
+
+def test_relay_and_launch_are_installed(monkeypatch):
+    monkeypatch.chdir(PACKAGE)
+    with mock.patch('setuptools.setup') as setup:
+        runpy.run_path(str(PACKAGE / 'setup.py'))
+    metadata = setup.call_args.kwargs
+    assert 'robot_navigation' in metadata['packages']
+    assert metadata['entry_points']['console_scripts'] == [
+        'tf_rviz_relay = robot_navigation.tf_rviz_relay:main']
+    installed = dict(metadata['data_files'])
+    assert 'launch/remote_rviz.launch.py' in installed['share/robot_navigation/launch']
+    assert 'rviz/navigation.rviz' in installed['share/robot_navigation/rviz']
+    manifest = ET.parse(PACKAGE / 'package.xml').getroot()
+    dependencies = {entry.text for entry in manifest.findall('exec_depend')}
+    assert {'rclpy', 'tf2_msgs', 'rviz2', 'nav2_rviz_plugins'} <= dependencies
+
+
+def run_ros_probe(robot_id):
+    try:
+        import rclpy
+        from launch import LaunchContext
+        from launch.actions import DeclareLaunchArgument
+        from launch_ros.actions import Node as LaunchNode
+    except ImportError:
+        return 77
+
+    from geometry_msgs.msg import TransformStamped
+    from rclpy.executors import SingleThreadedExecutor
+    from rclpy.node import Node
+    from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+    sys.path.insert(0, str(PACKAGE))
+    from robot_navigation.tf_rviz_relay import TfRvizRelay
+    from tf2_msgs.msg import TFMessage
+
+    generate_launch_description = runpy.run_path(
+        str(PACKAGE / 'launch/remote_rviz.launch.py'))['generate_launch_description']
+    # Resolve the actual launch actions without starting RViz or any robot process.
+    for sim_time in ('false', 'true'):
+        description = generate_launch_description()
+        context = LaunchContext()
+        context.launch_configurations.update(robot_id=robot_id, use_sim_time=sim_time)
+        for action in description.entities:
+            if isinstance(action, DeclareLaunchArgument):
+                action.execute(context)
+        nodes = [action for action in description.entities if isinstance(action, LaunchNode)]
+        assert len(nodes) == 2
+        relay_action, rviz_action = nodes
+        for node in nodes:
+            node._perform_substitutions(context)
+            assert node.expanded_node_namespace == ('/' + robot_id if robot_id else '/')
+            [(params_file, is_file)] = node._Node__expanded_parameter_arguments
+            assert is_file
+            params = yaml.safe_load(Path(params_file).read_text())
+            assert list(params.values()) == [
+                {'ros__parameters': {'use_sim_time': sim_time == 'true'}}]
+        assert not relay_action.expanded_remapping_rules
+        assert rviz_action.expanded_remapping_rules == [('/tf', 'tf_rviz')]
+        assert not rviz_action.condition.evaluate(context)
+        context.launch_configurations['rviz'] = 'true'
+        assert rviz_action.condition.evaluate(context)
+
+    # Isolate even the global TF input from any real robot running on this host.
+    rclpy.init(args=['--ros-args', '-r', '__ns:=/' + robot_id,
+                    '-r', '/tf:=/remote_rviz_test_input'])
+    relay = TfRvizRelay()
+    peer = Node('remote_rviz_test_peer')
+    executor = SingleThreadedExecutor()
+    executor.add_node(relay)
+    executor.add_node(peer)
+
+    def spin_until(predicate, timeout=5.0):
+        deadline = time.monotonic() + timeout
+        while not predicate() and time.monotonic() < deadline:
+            executor.spin_once(timeout_sec=0.02)
+        assert predicate(), 'DDS discovery or delivery timed out'
+
+    try:
+        assert relay.subscription.topic_name == '/remote_rviz_test_input'
+        expected_output = ('/' + robot_id if robot_id else '') + '/tf_rviz'
+        assert relay.publisher.topic_name == expected_output
+        for endpoint, reliability in (
+                (relay.subscription, ReliabilityPolicy.BEST_EFFORT),
+                (relay.publisher, ReliabilityPolicy.RELIABLE)):
+            qos = endpoint.qos_profile
+            assert qos.reliability == reliability
+            assert qos.history == HistoryPolicy.KEEP_LAST
+            assert qos.depth == 100
+            assert qos.durability == DurabilityPolicy.VOLATILE
+        assert {sub.topic_name for sub in relay.subscriptions} == {'/remote_rviz_test_input'}
+        assert '/tf_static' not in {pub.topic_name for pub in relay.publishers}
+
+        received = []
+        listener = peer.create_subscription(
+            TFMessage, expected_output, received.append,
+            QoSProfile(depth=100, reliability=ReliabilityPolicy.RELIABLE))
+        spin_until(lambda: relay.publisher.get_subscription_count() == 1)
+        # Accept both the robot's reliable broadcaster and a best-effort test source.
+        for reliability in (ReliabilityPolicy.RELIABLE, ReliabilityPolicy.BEST_EFFORT):
+            source = peer.create_publisher(
+                TFMessage, '/tf', QoSProfile(depth=100, reliability=reliability))
+            spin_until(lambda: source.get_subscription_count() == 1)
+            transforms = []
+            for parent, child, nanos in [('odom', 'base_footprint', 123),
+                                         ('map', 'odom', 456)]:
+                transform = TransformStamped()
+                transform.header.frame_id = parent
+                transform.child_frame_id = child
+                transform.header.stamp.sec = 42
+                transform.header.stamp.nanosec = nanos
+                transform.transform.translation.x = -1.25
+                transform.transform.rotation.w = 1.0
+                transforms.append(transform)
+            sample = TFMessage(transforms=transforms)
+            received.clear()
+            source.publish(sample)
+            spin_until(lambda: len(received) > 0)
+            assert received == [sample], 'TF payload or timestamps changed'
+            peer.destroy_publisher(source)
+        peer.destroy_subscription(listener)
+    finally:
+        executor.shutdown()
+        peer.destroy_node()
+        relay.destroy_node()
+        rclpy.shutdown()
+    return 0
+
+
+@pytest.mark.parametrize('robot_id', ['', 'robot_01'])
+def test_remote_rviz_ros(robot_id):
+    env = os.environ.copy()
+    env.update(ROS_DOMAIN_ID=str(80 + os.getpid() % 20), ROS_LOCALHOST_ONLY='1')
+    for setting in ('ROS_DISCOVERY_SERVER', 'FASTDDS_DEFAULT_PROFILES_FILE',
+                    'FASTRTPS_DEFAULT_PROFILES_FILE'):
+        env.pop(setting, None)
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), robot_id],
+        env=env, capture_output=True, text=True, timeout=30)
+    if result.returncode == 77:
+        pytest.skip('ROS 2 rclpy/launch runtime unavailable')
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+if __name__ == '__main__':
+    sys.exit(run_ros_probe(sys.argv[1]))
