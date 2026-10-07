@@ -42,13 +42,23 @@ describe('AuthLayout', () => {
     expect(badge).toHaveTextContent('các màn nghiệp vụ chưa nối backend vẫn dùng dữ liệu mẫu')
   })
 
-  it('renders the sign-in copy over the photograph', () => {
-    const login = renderAt('/login')
-    expect(login.container.querySelectorAll('.auth-visual__img')).toHaveLength(1)
-    expect(login.container.querySelectorAll('.auth-visual__title')).toHaveLength(1)
-    expect(login.container.querySelectorAll('.auth-visual__lead')).toHaveLength(1)
-    expect(login.container.querySelector('.auth-visual__title')?.textContent).toMatch(/Khám phá khuôn viên/)
-    expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-smartbus.png')
+  it('draws the aurora backdrop and the campus caption as decoration only', () => {
+    const { container } = renderAt('/login')
+    const aurora = container.querySelector('.auth-aurora')
+    expect(aurora).toHaveAttribute('aria-hidden', 'true')
+    expect(aurora?.querySelectorAll('.auth-aurora__photo')).toHaveLength(1)
+    expect(aurora?.querySelectorAll('.auth-aurora__blob')).toHaveLength(3)
+    expect(aurora?.querySelector('a, button, input, [tabindex]')).toBeNull()
+
+    const caption = container.querySelector('.auth-caption')
+    expect(caption).toHaveAttribute('aria-hidden', 'true')
+    expect(caption?.querySelector('.auth-caption__title')?.textContent).toMatch(/Khám phá khuôn viên/)
+    expect(caption?.querySelectorAll('.auth-caption__lead')).toHaveLength(1)
     expect(screen.getByText(/© \d{4} Smart Campus Tour/)).toBeInTheDocument()
+  })
+
+  it('places the form on the glass card', () => {
+    const { container } = renderAt('/login')
+    expect(container.querySelector('.auth-stage .auth-card .auth-col .auth-body form')).not.toBeNull()
   })
 })
