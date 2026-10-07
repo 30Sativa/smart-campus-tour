@@ -1,4 +1,4 @@
-"""Run on the laptop: BEST_EFFORT TF input, local RELIABLE TF for RViz."""
+"""Laptop-only TF relay and scan projection outside RViz's UI thread."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -14,7 +14,10 @@ def generate_launch_description():
     use_sim_time = ParameterValue(
         LaunchConfiguration('use_sim_time'), value_type=bool)
     rviz_config = PathJoinSubstitution([
-        FindPackageShare('robot_navigation'), 'rviz', 'navigation.rviz',
+        FindPackageShare('robot_navigation'), 'rviz', 'remote_navigation.rviz',
+    ])
+    scan_params = PathJoinSubstitution([
+        FindPackageShare('robot_navigation'), 'config', 'scan_rviz.yaml',
     ])
 
     return LaunchDescription([
@@ -29,11 +32,21 @@ def generate_launch_description():
             description='Open the RViz window on this laptop; otherwise run only the relay.'),
         DeclareLaunchArgument(
             'rviz_config', default_value=rviz_config,
-            description='RViz config; defaults to the existing navigation layout.'),
+            description='Remote layout using scan_rviz PointCloud2; Fixed Frame must match '
+                        'target_frame in scan_params_file.'),
+        DeclareLaunchArgument(
+            'scan_params_file', default_value=scan_params,
+            description='Scan visualization parameters; target_frame must match RViz Fixed Frame.'),
         Node(
             package='robot_navigation', executable='tf_rviz_relay',
             namespace=robot_id, output='screen',
             parameters=[{'use_sim_time': use_sim_time}],
+        ),
+        Node(
+            package='robot_navigation', executable='scan_rviz',
+            namespace=robot_id, output='screen',
+            parameters=[LaunchConfiguration('scan_params_file'), {'use_sim_time': use_sim_time}],
+            remappings=[('/tf', 'tf_rviz')],
         ),
         Node(
             package='rviz2', executable='rviz2', name='rviz2',

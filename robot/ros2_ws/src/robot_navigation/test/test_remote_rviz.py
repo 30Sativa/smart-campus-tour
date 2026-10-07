@@ -26,13 +26,34 @@ def test_relay_and_launch_are_installed(monkeypatch):
     metadata = setup.call_args.kwargs
     assert 'robot_navigation' in metadata['packages']
     assert metadata['entry_points']['console_scripts'] == [
-        'tf_rviz_relay = robot_navigation.tf_rviz_relay:main']
+        'tf_rviz_relay = robot_navigation.tf_rviz_relay:main',
+        'scan_rviz = robot_navigation.scan_rviz:main']
     installed = dict(metadata['data_files'])
     assert 'launch/remote_rviz.launch.py' in installed['share/robot_navigation/launch']
     assert 'rviz/navigation.rviz' in installed['share/robot_navigation/rviz']
+    assert 'rviz/remote_navigation.rviz' in installed['share/robot_navigation/rviz']
+    assert 'config/scan_rviz.yaml' in installed['share/robot_navigation/config']
     manifest = ET.parse(PACKAGE / 'package.xml').getroot()
     dependencies = {entry.text for entry in manifest.findall('exec_depend')}
     assert {'rclpy', 'tf2_msgs', 'rviz2', 'nav2_rviz_plugins'} <= dependencies
+    assert {'tf2_ros_py', 'sensor_msgs', 'sensor_msgs_py', 'std_msgs'} <= dependencies
+
+
+def test_remote_cloud_frame_and_display_contract():
+    config = yaml.safe_load((PACKAGE / 'rviz/remote_navigation.rviz').read_text())
+    params = yaml.safe_load((PACKAGE / 'config/scan_rviz.yaml').read_text())
+    manager = config['Visualization Manager']
+    assert manager['Global Options']['Fixed Frame'] == params['/**']['ros__parameters']['target_frame']
+    assert not any(display['Class'] == 'rviz_default_plugins/LaserScan'
+                   for display in manager['Displays'])
+    [lidar] = [display for display in manager['Displays']
+               if display.get('Topic', {}).get('Value') == 'scan_rviz']
+    assert lidar['Class'] == 'rviz_default_plugins/PointCloud2'
+    assert lidar['Enabled']
+    assert lidar['Topic'] == {
+        'Value': 'scan_rviz', 'Depth': 1, 'History Policy': 'Keep Last',
+        'Reliability Policy': 'Best Effort', 'Durability Policy': 'Volatile'}
+    assert lidar['Decay Time'] == 0
 
 
 def run_ros_probe(robot_id):
@@ -63,17 +84,23 @@ def run_ros_probe(robot_id):
             if isinstance(action, DeclareLaunchArgument):
                 action.execute(context)
         nodes = [action for action in description.entities if isinstance(action, LaunchNode)]
-        assert len(nodes) == 2
-        relay_action, rviz_action = nodes
+        assert len(nodes) == 3
+        relay_action, scan_action, rviz_action = nodes
         for node in nodes:
             node._perform_substitutions(context)
             assert node.expanded_node_namespace == ('/' + robot_id if robot_id else '/')
-            [(params_file, is_file)] = node._Node__expanded_parameter_arguments
+            params_file, is_file = node._Node__expanded_parameter_arguments[-1]
             assert is_file
             params = yaml.safe_load(Path(params_file).read_text())
             assert list(params.values()) == [
                 {'ros__parameters': {'use_sim_time': sim_time == 'true'}}]
         assert not relay_action.expanded_remapping_rules
+        assert scan_action.expanded_remapping_rules == [('/tf', 'tf_rviz')]
+        scan_params_file, is_file = scan_action._Node__expanded_parameter_arguments[0]
+        assert is_file
+        params = yaml.safe_load(Path(scan_params_file).read_text())
+        assert params['/**']['ros__parameters']['target_frame'] == 'map'
+        assert context.launch_configurations['rviz_config'].endswith('/rviz/remote_navigation.rviz')
         assert rviz_action.expanded_remapping_rules == [('/tf', 'tf_rviz')]
         assert not rviz_action.condition.evaluate(context)
         context.launch_configurations['rviz'] = 'true'

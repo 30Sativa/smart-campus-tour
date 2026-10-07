@@ -32,9 +32,14 @@
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>topic_tools</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-yaml</test_depend>
+  <test_depend>geometry_msgs</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

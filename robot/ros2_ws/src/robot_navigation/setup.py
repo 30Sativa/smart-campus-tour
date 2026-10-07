@@ -38,6 +38,7 @@ setup(
     entry_points={
         'console_scripts': [
             'tf_rviz_relay = robot_navigation.tf_rviz_relay:main',
+            'scan_rviz = robot_navigation.scan_rviz:main',
         ],
     },
 )
