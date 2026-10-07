@@ -37,6 +37,7 @@ DRIVER_ARGS = [
     ('enable_depth', 'true'),
     ('enable_ir', 'false'),
     ('enable_point_cloud', 'true'),
+    ('publish_tf', 'true'),
     ('color_info_url', ''),
 ]
 

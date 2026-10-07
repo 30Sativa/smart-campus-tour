@@ -1,0 +1,4 @@
+/**:
+  ros__parameters:
+    # Must match Fixed Frame in the RViz config used by the remote viewer.
+    target_frame: map
