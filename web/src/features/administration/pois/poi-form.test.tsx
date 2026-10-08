@@ -284,6 +284,59 @@ describe('Admin POI form', () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
   })
 
+  it.each(['new', 'poi-1'])('imports YAML into a %s draft without sending a mutation until Save', async (id) => {
+    let payload: Record<string, unknown> | null = null
+    const fetchMock = stubApi((_url, init) => {
+      if (init?.method === 'POST' || init?.method === 'PUT') {
+        payload = JSON.parse(String(init.body)) as Record<string, unknown>
+        return jsonResponse({ success: true, data: { id: 'poi-1' } })
+      }
+      return jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) })
+    })
+    renderAt(`/admin/pois/${id}`)
+    const name = await screen.findByLabelText('Tên POI')
+    if (id === 'new') fireEvent.change(name, { target: { value: 'My POI' } })
+    const originalName = (name as HTMLInputElement).value
+    openPoseStep()
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
+    const file = new File(['id: START\nname: Imported name\nmap_yaml: map2.yaml\nframe_id: map\npose: {x: -0.319, y: -0.535, yaw: 0.077}\nverified: true'], 'poi_start.yaml')
+    fireEvent.change(screen.getByLabelText('Chọn file POI YAML'), { target: { files: [file] } })
+    expect(screen.getByLabelText('Bản đồ')).toBeDisabled()
+    expect(screen.getByLabelText('X (m)')).toBeDisabled()
+    if (id !== 'new') expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+    await screen.findByText(/Đã điền tọa độ từ poi_start.yaml/)
+    expect(screen.getByLabelText('X (m)')).toHaveValue(-0.319)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(-0.535)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(0.077)
+    expect(screen.getByLabelText('Tên POI')).toHaveValue(originalName)
+    expect(screen.getByLabelText('Bản đồ')).toHaveValue('map2-v2')
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT')).toHaveLength(0)
+    if (id === 'new') reviewCreate()
+    fireEvent.click(screen.getByRole('button', { name: id === 'new' ? 'Tạo POI không khả dụng' : 'Lưu thay đổi' }))
+    await waitFor(() => expect(payload).toMatchObject({ name: originalName, mapKey: 'map2-v2', mapFrame: 'map', x: -0.319, y: -0.535, yaw: 0.077 }))
+    if (id !== 'new') expect(payload).toMatchObject({ expectedRowVersion: firstVersion })
+    expect(payload).not.toHaveProperty('verified')
+    expect(payload).not.toHaveProperty('quaternion')
+  })
+
+  it('keeps the draft untouched on YAML errors and permits retrying the same file', async () => {
+    stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
+    renderAt('/admin/pois/poi-1')
+    await screen.findByLabelText('Tên POI')
+    openPoseStep()
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
+    const input = screen.getByLabelText('Chọn file POI YAML')
+    fireEvent.change(input, { target: { files: [new File(['map_yaml: map1.yaml\nframe_id: map\npose: {x: 0, y: 0, yaw: 0}'], 'poi.yaml')] } })
+    await screen.findByText(/map_yaml không khớp/)
+    expect(screen.getByLabelText('X (m)')).toHaveValue(1.25)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(-2.5)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(0)
+    fireEvent.change(input, { target: { files: [new File(['map_yaml: map2.yaml\nframe_id: map\npose: {x: 0, y: 0, yaw: 0}'], 'poi.yaml')] } })
+    await screen.findByText(/Đã điền tọa độ từ poi.yaml/)
+    expect(screen.queryByText(/map_yaml không khớp/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('X (m)')).toHaveValue(0)
+  })
+
   it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in map entry', async (cancel) => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1' }) }))
     renderAt('/admin/pois/poi-1')
@@ -366,6 +419,7 @@ describe('Admin POI form', () => {
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Kích hoạt POI' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Phóng to' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Nhập file YAML' })).not.toBeInTheDocument()
   })
 
   it('allows content correction for a stored out-of-bounds pose, rejecting a new out-of-bounds pose', async () => {
