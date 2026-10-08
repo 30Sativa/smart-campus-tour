@@ -257,29 +257,33 @@ def generate_launch_description():
         # 2b) Astra Pro -> /camera/depth/points, plus base_link -> camera_link.
         #     RGB stays off: the costmap only reads geometry, and dropping the
         #     colour stream is what keeps depth stable over one USB bus.
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(camera_launch),
-            condition=IfCondition(enable_camera),
-            launch_arguments={
-                'robot_id': robot_id,
-                'enable_color': LaunchConfiguration('camera_enable_color'),
-                'color_info_url': LaunchConfiguration('camera_color_info_url'),
-                'enable_ir': 'false',
-                'enable_point_cloud': 'true',
-                'depth_width': LaunchConfiguration('camera_depth_width'),
-                'depth_height': LaunchConfiguration('camera_depth_height'),
-                'depth_fps': LaunchConfiguration('camera_depth_fps'),
-                'parent_frame': 'base_link',
-                'child_frame': 'camera_link',
-                'x': LaunchConfiguration('camera_x'),
-                'y': LaunchConfiguration('camera_y'),
-                'z': LaunchConfiguration('camera_z'),
-                'roll': LaunchConfiguration('camera_roll'),
-                'pitch': LaunchConfiguration('camera_pitch'),
-                'yaw': LaunchConfiguration('camera_yaw'),
-                'rviz': 'false',
-            }.items(),
-        ),
+        # Scope generic driver/mount arguments (publish_tf, rviz, x, ...)
+        # to this camera include; do not overwrite sibling launch settings.
+        GroupAction(scoped=True, condition=IfCondition(enable_camera), actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(camera_launch),
+                launch_arguments={
+                    'robot_id': robot_id,
+                    'enable_color': LaunchConfiguration('camera_enable_color'),
+                    'color_info_url': LaunchConfiguration('camera_color_info_url'),
+                    'enable_ir': 'false',
+                    'enable_point_cloud': 'true',
+                    'publish_tf': 'true',
+                    'depth_width': LaunchConfiguration('camera_depth_width'),
+                    'depth_height': LaunchConfiguration('camera_depth_height'),
+                    'depth_fps': LaunchConfiguration('camera_depth_fps'),
+                    'parent_frame': 'base_link',
+                    'child_frame': 'camera_link',
+                    'x': LaunchConfiguration('camera_x'),
+                    'y': LaunchConfiguration('camera_y'),
+                    'z': LaunchConfiguration('camera_z'),
+                    'roll': LaunchConfiguration('camera_roll'),
+                    'pitch': LaunchConfiguration('camera_pitch'),
+                    'yaw': LaunchConfiguration('camera_yaw'),
+                    'rviz': 'false',
+                }.items(),
+            ),
+        ]),
 
         # 3) Localization on the saved map (replaces slam_toolbox).
         IncludeLaunchDescription(

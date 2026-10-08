@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -110,26 +110,30 @@ def generate_launch_description():
             }],
         ),
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(stm32_bridge_launch),
-            launch_arguments={
-                'robot_id': robot_id,
-                'port': port,
-                'baudrate': baudrate,
-                'wheel_base': wheel_base,
-                'wheel_radius': wheel_radius,
-                'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
-                'speed_scale': speed_scale,
-                'invert_left': invert_left,
-                'invert_right': invert_right,
-                'odom_invert_left': odom_invert_left,
-                'odom_invert_right': odom_invert_right,
-                'odom_frame': odom_frame,
-                'base_frame': base_frame,
-                'publish_odom': 'true',
-                'publish_tf': 'false',
-            }.items(),
-        ),
+        # Include arguments share the launch context unless explicitly scoped.
+        # Keep STM32 publish_tf=false local so it cannot disable camera TF.
+        GroupAction(scoped=True, actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(stm32_bridge_launch),
+                launch_arguments={
+                    'robot_id': robot_id,
+                    'port': port,
+                    'baudrate': baudrate,
+                    'wheel_base': wheel_base,
+                    'wheel_radius': wheel_radius,
+                    'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
+                    'speed_scale': speed_scale,
+                    'invert_left': invert_left,
+                    'invert_right': invert_right,
+                    'odom_invert_left': odom_invert_left,
+                    'odom_invert_right': odom_invert_right,
+                    'odom_frame': odom_frame,
+                    'base_frame': base_frame,
+                    'publish_odom': 'true',
+                    'publish_tf': 'false',
+                }.items(),
+            ),
+        ]),
 
         # The EKF is the only odom -> base_footprint TF owner on real hardware.
         # Input: wheel/odom (vx + vyaw) and imu/data (relative yaw).
