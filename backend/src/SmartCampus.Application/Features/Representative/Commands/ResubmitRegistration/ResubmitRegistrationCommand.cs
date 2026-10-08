@@ -1,6 +1,6 @@
+using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
-using SmartCampus.Application.Features.Representative.Dtos;
 
 namespace SmartCampus.Application.Features.Representative.Commands.ResubmitRegistration;
 

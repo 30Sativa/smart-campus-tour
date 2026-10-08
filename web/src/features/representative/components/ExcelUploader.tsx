@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, Download, FileSpreadsheet, Upload } from 'lu
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { ROSTER_MAX_ROWS, TEMPLATE_FILE_NAME, downloadBytes, importRosterFile, rosterTemplateBytes } from '../roster-import'
 import type { ImportResult } from '../roster-import'
-import { RosterPreview } from './RosterPreview'
+import { RosterPreview } from '../../registrations/RosterPreview'
 import { Spinner } from './RepUi'
 
 export type AcceptedRoster = Extract<ImportResult, { ok: true }>

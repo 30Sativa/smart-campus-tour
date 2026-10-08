@@ -6,7 +6,7 @@ import type { RegistrationInput, RepresentativeRegistration, RepresentativeTour 
 import { RepPage, RepPageHeader, Panel, InfoList, Callout, PageSkeleton, ErrorState, Spinner } from '../../features/representative/components/RepUi'
 import { ExcelUploader } from '../../features/representative/components/ExcelUploader'
 import type { AcceptedRoster } from '../../features/representative/components/ExcelUploader'
-import { RosterPreview } from '../../features/representative/components/RosterPreview'
+import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { RegistrationStepper } from '../../features/representative/components/RegistrationStepper'
 import { downloadBytes, rosterWorkbookBytes } from '../../features/representative/roster-import'
 import { formatDateTime, readRepError } from '../../features/representative/rep-format'

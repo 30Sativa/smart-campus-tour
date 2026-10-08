@@ -1,4 +1,5 @@
-using SmartCampus.Application.Features.Representative.Dtos;
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
+using SmartCampus.Application.Features.Registrations;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
 

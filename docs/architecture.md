@@ -669,10 +669,10 @@ SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to D
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
 backend also implements Representative submission/pre-approval registration,
-Auth V1, Admin account management, Admin POI
+Admin registration review, Auth V1, Admin account management, Admin POI
 management, and development-only SimulationPreview; the relevant HTTP contracts
-are described in Sections 3.0–3.0.2 and 3.2.1. Tour execution/orchestration,
-Admin registration review, invitation/session product APIs, branch-request use cases, fleet
+are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestration,
+invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
@@ -777,8 +777,83 @@ Tour and REGISTRATION_SUBMITTED action, saved with the registration under the
 same lock/transaction. Replaying a committed key returns its original ID,
 even after a state change; it never edits the original registration. A fresh
 key creates another group. Audit contains identifiers/actions only, no roster
-PII. Invitation/email/session, Admin review, branch runtime and voting are
-outside this slice. Admin/Staff preview mocks do not review SQL registrations.
+PII. Invitation/email/session, branch runtime and voting are
+outside this slice. Admin review is implemented separately below; Admin/Staff
+Tour preview mocks continue to use their own simulation records.
+
+#### 3.2.2 Admin registration review HTTP boundary (implemented)
+
+This integrates `backend/` and `web/` against the existing v1.1 schema; no
+schema change is required. All endpoints require the Admin JWT role.
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | /api/admin/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
+| GET | /api/admin/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
+| POST | /api/admin/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
+| POST | /api/admin/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
+
+Collections use BaseResponse/PagedResponse and page/size/search/sort; expand is
+unsupported. Search covers school, group, Representative full name and Tour name.
+Sort supports submittedAt (default, oldest first), updatedAt and groupName, with
+optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
+from/to are offset-qualified instants filtering Tour scheduled time, inclusive
+lower/exclusive upper bound; the web converts calendar dates using UTC+7.
+Unknown IDs return 404. Anonymous/non-Admin requests return 401/403.
+
+Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
+versions must be 8-byte base64 SQL rowversions, reason is required for rejection
+(nonblank, at most 1000 characters) and absent/blank for approval. Unknown JSON
+properties are rejected. Actor comes only from JWT sub. No roster is accepted in
+a review write: the decision always concerns the stored active rows.
+
+The existing RegistrationTransactionBehavior wraps the UnitOfWork commit.
+Shared registration persistence takes the Tour UPDLOCK first, then registration
+UPDLOCK, checks both versions, SCHEDULED/SUBMITTED and invitation history.
+Approval independently validates persisted contact/roster data and rechecks
+normalized effective emails against SUBMITTED/APPROVED groups under the same
+lock as Representative writes. Rejection can release an invalid roster for
+correction; Representative resubmit revalidates and clears review metadata.
+Review does not replace or deactivate roster rows, change Tour state or release
+an APPROVED email reservation. Concurrent review/edit/cancel of the same
+version has one winner; retries of a successful decision return 409 and cannot
+append a second review audit. Refetch committed detail to reconcile a lost reply.
+
+The decision, ReviewedByUserId/ReviewedAt/UpdatedAt and one append-only
+REGISTRATION_APPROVED or REGISTRATION_REJECTED audit commit atomically. Audit
+contains only actor/Tour/registration/action/result/time, no reason or roster
+PII. A failed audit rolls back the decision. Conflict codes match Section 3.2.1;
+EMAIL_RESERVED reports only indexed incoming roster fields. Detail queries
+retain a short read-only Tour UPDLOCK while projecting
+registration/version/roster, so a version cannot be paired with an older roster
+under read-committed isolation. They use the same Tour-first order as writers.
+Details expose a review gate with a reason; browser focus/reconnect cannot
+replace the review
+snapshot, and a 409 requires explicit reload before another decision.
+
+Approval is persisted eligibility for future access issuance. This slice does
+not issue an Invitation, access code, BrowserSession or email attempt, and
+never claims email delivery. This deliberately stops before the access workflow
+whose secure code storage/admission/revocation remains separate work. Any
+invitation history (including inactive/revoked rows) blocks review with
+INVITATION_BOUNDARY to avoid changing existing access without atomic revocation.
+APPROVED stays read-only to Representative. Admin email correction, approval
+reversal, READY/runtime, notifications and actual email remain outside scope.
+
+Live routes `/admin/registrations` and `/admin/registrations/pending` use only
+this HTTP contract, with no mock fallback. Owner-keyed live query caches are
+separate from demo caches. Existing Admin Tour/dashboard review drawers,
+invitation demos, Staff/Student simulations and legacy contracts remain mock;
+their links use the mock Tour review consumer rather than sending fixture IDs
+to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
+Representative lists/details refetch from SQL and show committed review state.
+
+Shared invariants/input validation/audit and mutation persistence are owned by
+`backend/src/SmartCampus.Application/Features/Registrations/` and its specific
+persistence boundary. Representative action policy and draft replacement remain
+under its Commands; read models/mapping remain near their Queries. Review use
+cases live under `backend/src/SmartCampus.Application/Features/RegistrationReview/`. The roster display shared by
+live Admin and Representative is under `web/src/features/registrations/`.
 
 ### 3.3 State storage and realtime delivery
 

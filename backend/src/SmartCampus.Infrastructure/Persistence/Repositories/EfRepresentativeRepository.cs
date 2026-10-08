@@ -1,9 +1,11 @@
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
+using SmartCampus.Application.Features.Representative.Queries.Tours;
+using SmartCampus.Application.Features.Representative.Queries.Lists;
+using SmartCampus.Application.Features.Registrations;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
-using SmartCampus.Application.Features.Representative;
-using SmartCampus.Application.Features.Representative.Dtos;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
 using SmartCampus.Domain.Entities;
 
@@ -17,7 +19,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
 
     public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, CancellationToken ct)
     {
-        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationRules.Scheduled);
+        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationConsistency.Scheduled);
         if (!string.IsNullOrWhiteSpace(request.Search))
             query = query.Where(t => t.Name.Contains(request.Search.Trim()) || t.Route.Name.Contains(request.Search.Trim()));
         var total = await query.LongCountAsync(ct);
@@ -35,7 +37,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     public async Task<TourReadModel?> GetTourAsync(Guid id, Guid owner, CancellationToken ct)
     {
         var tour = await context.Tours.AsNoTracking()
-            .Where(t => t.Id == id && (t.State == RegistrationRules.Scheduled || t.GroupRegistrations.Any(r => r.RepresentativeUserId == owner)))
+            .Where(t => t.Id == id && (t.State == RegistrationConsistency.Scheduled || t.GroupRegistrations.Any(r => r.RepresentativeUserId == owner)))
             .Include(t => t.Route).ThenInclude(r => r.RouteStops).ThenInclude(s => s.Poi).SingleOrDefaultAsync(ct);
         return tour is null ? null : MapTour(tour);
     }
@@ -65,7 +67,10 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     }
     public async Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, CancellationToken ct)
     {
-        // One SQL statement: the row version, roster and invitation-history gate agree.
+        var tourId = await context.GroupRegistrations.AsNoTracking().Where(r => r.Id == id && r.RepresentativeUserId == owner)
+            .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
+        if (tourId is null) return null;
+        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, tourId.Value, ct);
         var result = await context.GroupRegistrations.AsNoTracking()
             .Where(r => r.Id == id && r.RepresentativeUserId == owner)
             .Select(r => new
@@ -81,44 +86,5 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             result.RowVersion, result.TourVersion, result.RejectionReason, result.ReviewedAt, result.Rows,
             result.HasInvitations);
     }
-    public Task<Guid?> FindOwnedTourIdAsync(Guid id, Guid owner, CancellationToken ct) =>
-        context.GroupRegistrations.AsNoTracking().Where(r => r.Id == id && r.RepresentativeUserId == owner)
-            .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
-    public Task<Tour?> LockTourAsync(Guid id, CancellationToken ct) =>
-        context.Tours.FromSqlInterpolated($"SELECT * FROM dbo.Tours WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}").SingleOrDefaultAsync(ct);
-    public async Task<GroupRegistration?> LockRegistrationAsync(Guid id, Guid owner, CancellationToken ct)
-    {
-        var registration = await context.GroupRegistrations
-            .FromSqlInterpolated($"SELECT * FROM dbo.GroupRegistrations WITH (UPDLOCK, ROWLOCK) WHERE Id = {id} AND RepresentativeUserId = {owner}")
-            .SingleOrDefaultAsync(ct);
-        // Replacement only deactivates current rows; inactive history stays unloaded so repeated edits do not grow the tracked set.
-        if (registration is not null)
-            await context.Entry(registration).Collection(r => r.RosterRows).Query().Where(row => row.IsActive).LoadAsync(ct);
-        return registration;
-    }
-    public async Task<Guid?> FindSubmissionAsync(Guid owner, Guid tour, Guid key, CancellationToken ct)
-    {
-        var id = await context.AuditLogs.Where(a => a.ActorUserId == owner && a.TourId == tour &&
-            a.CorrelationId == key && a.Action == RegistrationRules.SubmittedAuditAction &&
-            a.EntityType == RegistrationRules.RegistrationEntityType)
-            .Select(a => a.EntityId).SingleOrDefaultAsync(ct);
-        return id is null ? null : Guid.Parse(id);
-    }
-    public Task<bool> HasInvitationsAsync(Guid registration, CancellationToken ct) =>
-        context.Invitations.AnyAsync(i => i.RosterRow.RegistrationId == registration, ct);
-    public async Task<IReadOnlyList<int>> ReservedEmailIndexesAsync(Guid tour, Guid? excludingRegistration,
-        IReadOnlyList<string> emails, CancellationToken ct)
-    {
-        var reserved = await context.RosterRows.AsNoTracking().Where(r => r.IsActive &&
-            r.Registration.TourId == tour && (excludingRegistration == null || r.RegistrationId != excludingRegistration) &&
-            (r.Registration.State == RegistrationRules.Submitted || r.Registration.State == RegistrationRules.Approved)).Select(r => r.Email).ToListAsync(ct);
-        var incoming = emails.Select(RegistrationRules.NormalizeEmail).ToHashSet(StringComparer.Ordinal);
-        var reservedSet = reserved.Select(RegistrationRules.NormalizeEmail).ToHashSet(StringComparer.Ordinal);
-        return emails.Select((email, index) => (email, index))
-            .Where(item => reservedSet.Contains(RegistrationRules.NormalizeEmail(item.email)))
-            .Select(item => item.index).ToArray();
-    }
-    public void AddRegistration(GroupRegistration registration) => context.GroupRegistrations.Add(registration);
-    public void AddAudit(AuditLog audit) => context.AuditLogs.Add(audit);
     private static int Offset(RepresentativeListRequest request) => (int)Math.Min((long)(request.Page - 1) * request.Size, int.MaxValue);
 }

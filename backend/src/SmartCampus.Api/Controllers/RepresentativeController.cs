@@ -1,3 +1,7 @@
+using SmartCampus.Application.Features.Representative.Queries.Tours;
+using SmartCampus.Application.Features.Representative.Queries.Lists;
+using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
+using SmartCampus.Application.Features.Registrations;
 using MediatR;
 using FluentValidation;
 using FluentValidation.Results;
@@ -8,7 +12,6 @@ using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Models;
-using SmartCampus.Application.Features.Representative.Dtos;
 using SmartCampus.Application.Features.Representative.Commands.SubmitRegistration;
 using SmartCampus.Application.Features.Representative.Commands.SubmitRegistration.Dtos;
 using SmartCampus.Application.Features.Representative.Commands.UpdateRegistration;
