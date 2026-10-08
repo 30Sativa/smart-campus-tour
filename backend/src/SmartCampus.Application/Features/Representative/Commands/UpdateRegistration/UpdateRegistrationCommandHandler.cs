@@ -1,10 +1,13 @@
+using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
+using SmartCampus.Application.Features.Representative.Commands;
+using SmartCampus.Application.Features.Registrations;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 
 namespace SmartCampus.Application.Features.Representative.Commands.UpdateRegistration;
 
-public sealed class UpdateRegistrationCommandHandler(IRepresentativeRepository repository, TimeProvider clock)
+public sealed class UpdateRegistrationCommandHandler(IRegistrationRepository repository, TimeProvider clock)
     : IRequestHandler<UpdateRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(UpdateRegistrationCommand command, CancellationToken ct)
@@ -12,10 +15,10 @@ public sealed class UpdateRegistrationCommandHandler(IRepresentativeRepository r
         var input = command.Request.Input;
         var (tour, registration) = await RegistrationMutation.LoadAsync(repository, command.Id, command.ActorUserId,
             command.Request.ExpectedRowVersion, input.ExpectedTourRowVersion, RegistrationOperation.Update, ct);
-        await RegistrationMutation.EnsureEmailsAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
+        await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
         var now = clock.GetUtcNow();
-        RegistrationRules.Replace(registration, input, now);
-        repository.AddAudit(RegistrationRules.Audit(registration, command.ActorUserId, RegistrationRules.UpdatedAuditAction, now));
+        RegistrationDraftWriter.Replace(registration, input, now);
+        repository.AddAudit(RegistrationAudit.Create(registration, command.ActorUserId, RegistrationAudit.UpdatedAuditAction, now));
         return Unit.Value;
     }
 }

@@ -22,7 +22,7 @@ The schema is v1.1, unchanged by this feature.
 
 Effective email reservation is an application policy: active rows in SUBMITTED
 and APPROVED reserve an email per Tour. REJECTED/CANCELLED release it; resubmit
-rechecks. Future Admin approval/email corrections must use the same normalization
+rechecks. Admin review uses the same normalization; future email corrections must also use it
 and parent lock. The 2 MB / 1000-row limits are technical import limits; preview also bounds
 XML expansion (8 MB per part), source rows (10002) and columns (256). The API
 limits JSON to 4 MB. Tour timestamps display in Vietnam time (UTC+7).
@@ -30,8 +30,10 @@ limits JSON to 4 MB. Tour timestamps display in Vietnam time (UTC+7).
 APPROVED or any registration with invitation history is read-only in this
 slice. Approved changes need revocation, so they are deferred together with
 invitation support. No personal access code/session is issued by submission.
-Admin review, email, branch requests and runtime are separate slices.
-Existing Admin/Staff/Student mocks do not see or review these SQL registrations.
+Admin review is implemented in the separate live registration pages; see
+`web/docs/admin-registration-review.md`. Email, branch requests and runtime
+remain separate slices. Existing Admin Tour/Staff/Student mocks do not see or
+review SQL registrations.
 
 The live area has no mock fallback, mock profile, group-code sharing or
 name-matching entry instructions. The unused legacy group-code invitation panel was removed. Historical contracts and simulations under
@@ -68,9 +70,10 @@ and a JWT signing key through environment/User Secrets.
 8. Sign in as the second Representative. Lists must contain only their groups;
    opening the first account's registration must fail with 404.
 
-Admin review has no live endpoint yet. SQL test fixtures cover REJECTED/APPROVED
-and Tour locks; changing them manually is only suitable for a disposable test
-database, not a substitute for Admin/runtime implementation.
+9. Sign in as Admin and open `/admin/registrations/pending`; inspect the SQL
+   roster, reject with a reason, then confirm Representative can resubmit.
+   Approve the resubmission and confirm Representative sees APPROVED/read-only.
+   No access code/session/email is issued by this review slice.
 
 ## Automated checks
 

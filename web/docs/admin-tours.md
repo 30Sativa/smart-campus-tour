@@ -4,6 +4,16 @@ Aligned on 2026-09-21 with **"CampusTour DT-AMR: Đặc tả phạm vi, nghiệp
 tích hợp tham quan từ xa" (19/09/2026)**, §2, §3, §5.2, §5.5, §11.1. The scope is
 the source of truth; this file maps it onto the web area.
 
+## Current implementation boundary
+
+`/admin/registrations` and `/admin/registrations/pending` now use the real SQL
+review API; see `web/docs/admin-registration-review.md`. Their row counts
+represent invitation rows, including shared viewing, rather than attendance.
+The Tour/dashboard/READY/invitation screens described below remain labelled
+simulation consumers. Their review drawer still reviews only demo records.
+Live review does not issue access codes or send email, and never falls back to
+that simulation. Admin account and POI screens also use their existing APIs.
+
 ## What Admin does (and does not)
 
 | Admin does | Not Admin's |

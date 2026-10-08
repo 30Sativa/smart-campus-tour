@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useRepRegistration, useCancelRegistration } from '../../features/representative/representative-hooks'
 import { RepPage, RepPageHeader, Panel, InfoList, Callout, GatedAction, RegistrationStatusBadge, TourStateBadge, ErrorState, PageSkeleton, ConfirmationDialog } from '../../features/representative/components/RepUi'
-import { RosterPreview } from '../../features/representative/components/RosterPreview'
+import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { formatDateTime, readRepError } from '../../features/representative/rep-format'
 
 export default function RepRegistrationDetailPage() {

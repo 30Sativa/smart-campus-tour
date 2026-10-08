@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.Representative.Commands;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
@@ -12,6 +13,9 @@ public sealed class GetRepresentativeRegistrationQueryHandler(IRepresentativeRep
     {
         var registration = await repository.GetRegistrationAsync(query.Id, query.Owner, ct)
             ?? throw new NotFoundException("Không tìm thấy dữ liệu.");
-        return RepresentativeResponseMapper.Registration(registration);
+        return new(registration.Summary,
+        registration.ContactName, registration.ContactEmail, Convert.ToBase64String(registration.RowVersion),
+        Convert.ToBase64String(registration.TourRowVersion), registration.RejectionReason, registration.ReviewedAt, registration.Roster,
+        RepresentativeRegistrationPolicy.Actions(registration.Summary.TourState, registration.Summary.State, registration.HasInvitations));
     }
 }

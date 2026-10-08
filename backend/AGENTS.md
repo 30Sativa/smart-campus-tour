@@ -44,13 +44,15 @@ backend/
 ```
 
 Current API controllers cover Auth, Admin account management, Admin POI
-management, Representative submission/pre-approval registration, and development
-SimulationPreview. The Representative contract and Tour-first transaction are
-recorded in `docs/architecture.md` Section 3.2.1; invitation/session support and
-Admin review remain separate implementation work. Application has matching Auth,
-Accounts, POI and Representative features plus the in-memory pose publisher used by
-SimulationPreview. Infrastructure has specific Auth, account, POI
-management and Representative repositories. The temporary robot pose endpoint and read-only fleet
+management, Representative submission/pre-approval registration, Admin
+registration review, and development SimulationPreview. The Representative
+contract and Tour-first transaction are recorded in `docs/architecture.md`
+Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation/session
+support remains separate implementation work. Application has matching Auth,
+Accounts, POI, Representative and RegistrationReview features, shared Registrations
+invariants, and the in-memory pose publisher used by SimulationPreview.
+Infrastructure has specific Auth, account, POI, Representative read and shared
+registration mutation/review repositories. The temporary robot pose endpoint and read-only fleet
 pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
 cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
@@ -257,7 +259,7 @@ classification and branch requests; email attempts remain append-only audit
 records, and their delivery/revocation workflows remain application logic. The
 backend currently implements Auth V1, Admin account management, Admin POI
 management, and its development Simulation controller/Hub. Representative Tour reads and pre-approval registration are now implemented
-under Section 3.2.1 of `docs/architecture.md`. Admin review, invitation, dispatch,
+under Section 3.2.1 of `docs/architecture.md`. Admin review is implemented under Section 3.2.2. Invitation, dispatch,
 and production fleet endpoints remain planned. Do not infer that a group code/name match is equivalent to an approved
 personal invitation. A future feature change must reconcile its public
 contracts in `docs/architecture.md` and include the appropriate schema and
@@ -386,7 +388,7 @@ account in V1; the physical `UserRoles` primary key remains unchanged.
 The backend also implements Admin account and POI management, plus
 Representative Tour reads and owner-scoped registration submission/management.
 User JWT and role authorization for those APIs are present. Authorization for
-future Admin Tour/review, invitation, dispatch, and fleet business APIs, and
+future Admin Tour, invitation, dispatch, and fleet business APIs, and
 robot/fleet machine authentication, remain unimplemented. Production fleet and
 operations Hubs remain pending; before
 robot navigation commands are enabled outside the local compatibility spike,

@@ -1,5 +1,5 @@
-using SmartCampus.Application.Features.Representative;
-using SmartCampus.Application.Features.Representative.Dtos;
+using SmartCampus.Application.Features.Representative.Commands;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTours;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
 using SmartCampus.Application.Common.Exceptions;
@@ -60,42 +60,42 @@ public sealed class RepresentativeValidationTests
     [Fact]
     public void RegistrationActionsAndMutationGateShareTheSameStateMatrix()
     {
-        var create = RegistrationRules.Gate(RegistrationRules.Scheduled, string.Empty, false, RegistrationOperation.Create);
+        var create = RepresentativeRegistrationPolicy.Gate(RegistrationConsistency.Scheduled, string.Empty, false, RegistrationOperation.Create);
         Assert.True(create.Allowed);
-        Assert.False(RegistrationRules.Gate("READY", string.Empty, false, RegistrationOperation.Create).Allowed);
+        Assert.False(RepresentativeRegistrationPolicy.Gate("READY", string.Empty, false, RegistrationOperation.Create).Allowed);
 
-        var submitted = RegistrationRules.Actions(RegistrationRules.Scheduled, RegistrationRules.Submitted, false);
+        var submitted = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Submitted, false);
         Assert.True(submitted.Edit.Allowed);
         Assert.True(submitted.Cancel.Allowed);
         Assert.False(submitted.Resubmit.Allowed);
 
-        var rejected = RegistrationRules.Actions(RegistrationRules.Scheduled, RegistrationRules.Rejected, false);
+        var rejected = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Rejected, false);
         Assert.True(rejected.Resubmit.Allowed);
         Assert.True(rejected.Cancel.Allowed);
         Assert.False(rejected.Edit.Allowed);
 
-        var cancelled = RegistrationRules.Actions(RegistrationRules.Scheduled, RegistrationRules.Cancelled, false);
+        var cancelled = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Cancelled, false);
         Assert.True(cancelled.Resubmit.Allowed);
         Assert.False(cancelled.Edit.Allowed);
         Assert.False(cancelled.Cancel.Allowed);
 
-        var withInvitations = RegistrationRules.Actions(RegistrationRules.Scheduled, RegistrationRules.Submitted, true);
+        var withInvitations = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Submitted, true);
         Assert.False(withInvitations.Edit.Allowed);
         Assert.False(withInvitations.Resubmit.Allowed);
         Assert.False(withInvitations.Cancel.Allowed);
 
-        var locked = RegistrationRules.Actions("RUNNING", RegistrationRules.Submitted, false);
+        var locked = RepresentativeRegistrationPolicy.Actions("RUNNING", RegistrationConsistency.Submitted, false);
         Assert.False(locked.Edit.Allowed);
         Assert.False(locked.Resubmit.Allowed);
         Assert.False(locked.Cancel.Allowed);
 
-        var approved = RegistrationRules.Actions(RegistrationRules.Scheduled, RegistrationRules.Approved, false);
+        var approved = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Approved, false);
         Assert.False(approved.Edit.Allowed);
         Assert.False(approved.Resubmit.Allowed);
         Assert.False(approved.Cancel.Allowed);
-        Assert.Equal(RegistrationRules.ApprovedBoundary, approved.Edit.Reason);
-        var exception = Assert.Throws<ConflictException>(() => RegistrationRules.RequireAllowed(
-            RegistrationRules.Scheduled, RegistrationRules.Approved, false, RegistrationOperation.Cancel));
+        Assert.Equal(RepresentativeRegistrationPolicy.ApprovedBoundary, approved.Edit.Reason);
+        var exception = Assert.Throws<ConflictException>(() => RepresentativeRegistrationPolicy.RequireAllowed(
+            RegistrationConsistency.Scheduled, RegistrationConsistency.Approved, false, RegistrationOperation.Cancel));
         Assert.Equal("INVITATION_BOUNDARY", exception.Code);
     }
 }
