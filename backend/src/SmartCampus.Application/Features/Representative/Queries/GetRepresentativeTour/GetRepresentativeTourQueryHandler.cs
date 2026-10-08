@@ -1,7 +1,7 @@
+using SmartCampus.Application.Features.Representative.Queries.Tours;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
-using SmartCampus.Application.Features.Representative.Dtos;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTour;
 
@@ -12,6 +12,6 @@ public sealed class GetRepresentativeTourQueryHandler(IRepresentativeRepository 
     {
         var tour = await repository.GetTourAsync(query.Id, query.Owner, ct)
             ?? throw new NotFoundException("Không tìm thấy dữ liệu.");
-        return RepresentativeResponseMapper.Tour(tour);
+        return TourResponseMapper.Map(tour);
     }
 }

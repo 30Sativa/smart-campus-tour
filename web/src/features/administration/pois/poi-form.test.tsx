@@ -105,7 +105,7 @@ describe('Admin POI form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
 
     await waitFor(() => expect(createPayload).not.toBeNull())
-    expect(createPayload).toMatchObject({ name: 'New library', mapKey: 'map2-v1', mapFrame: 'map', yaw: 0 })
+    expect(createPayload).toMatchObject({ name: 'New library', mapKey: 'map2-v2', mapFrame: 'map', yaw: 0 })
   })
 
   it('keeps dirty fields through a query refetch and submits the original RowVersion on conflict', async () => {
@@ -185,7 +185,7 @@ describe('Admin POI form', () => {
         payload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: true, data: { id: 'created' } })
       }
-      return jsonResponse({ success: true, data: poiDetails({ id: 'created', mapKey: 'map2-v1', x: 5.025, y: -5.025, yaw: 1.570796 }) })
+      return jsonResponse({ success: true, data: poiDetails({ id: 'created', mapKey: 'map2-v2', x: 5.025, y: -5.025, yaw: 1.570796 }) })
     })
     renderAt('/admin/pois/new')
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
@@ -198,7 +198,7 @@ describe('Admin POI form', () => {
     fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 507.5))
     expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(1.570796)
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
-    await waitFor(() => expect(payload).toMatchObject({ mapKey: 'map2-v1', mapFrame: 'map', x: 5.025, y: -5.025, yaw: 1.570796 }))
+    await waitFor(() => expect(payload).toMatchObject({ mapKey: 'map2-v2', mapFrame: 'map', x: 5.025, y: -5.025, yaw: 1.570796 }))
   })
 
   it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in the closed Edit disclosure', async (cancel) => {

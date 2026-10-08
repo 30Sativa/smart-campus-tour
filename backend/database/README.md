@@ -50,8 +50,9 @@ The current local target is `SmartCampusTourV11` on `localhost,1433`; the local 
 The Representative submission API now enforces Tour-first locks, owned mutations,
 rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
 The schema is unchanged. See `web/docs/representative-registration.md` for the
-live slice, isolated Route/Tour fixture and verification. Admin approval, approved
-roster replacement and invitation/session revocation remain future implementation.
+live slice, isolated Route/Tour fixture and verification. Admin approval/rejection now shares these locks and reservations; see
+`web/docs/admin-registration-review.md`. Approved roster replacement and
+invitation/session revocation remain future implementation.
 
 ## Remaining application invariants
 

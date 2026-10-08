@@ -29,7 +29,7 @@ export function buildAdminTasks(tours: AdminTour[], pending: AdminRegistration[]
       tone: 'warn',
       title: reg.resubmittedAfterApproval ? `${reg.schoolName} cập nhật danh sách, cần duyệt lại` : `${reg.schoolName} chờ duyệt`,
       detail: `${reg.tourCode} · ${reg.tourName}, ${reg.studentCount} học sinh`,
-      to: `/admin/registrations/pending?review=${reg.id}`,
+      to: `/admin/tours/${reg.tourId}?tab=registrations&review=${reg.id}`,
       actionLabel: 'Duyệt ngay',
       rank: 1,
       at: reg.submittedAt,

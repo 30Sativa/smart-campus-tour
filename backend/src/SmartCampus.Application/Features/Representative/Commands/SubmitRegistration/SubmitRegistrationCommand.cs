@@ -1,6 +1,6 @@
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Features.Representative.Commands.SubmitRegistration.Dtos;
-using SmartCampus.Application.Features.Representative.Dtos;
 
 namespace SmartCampus.Application.Features.Representative.Commands.SubmitRegistration;
 

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { useRepRegistration, useCancelRegistration } from '../../features/representative/representative-hooks'
 import { RepPage, RepPageHeader, Panel, InfoList, Callout, GatedAction, RegistrationStatusBadge, TourStateBadge, ErrorState, PageSkeleton, ConfirmationDialog } from '../../features/representative/components/RepUi'
-import { RosterPreview } from '../../features/representative/components/RosterPreview'
+import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { RegistrationTrack } from '../../features/representative/components/RegistrationTrack'
 import { formatDateTime, groupLabel, readRepError } from '../../features/representative/rep-format'
 
@@ -30,7 +30,7 @@ export default function RepRegistrationDetailPage() {
   const events = [
     { title: 'Bạn gửi đăng ký', text: `${summary.rowCount} dòng lời mời`, at: summary.submittedAt, color: '#87b661' },
     ...(summary.state === 'REJECTED' ? [{ title: 'Admin từ chối', text: r.rejectionReason || 'Không có lý do được lưu.', at: r.reviewedAt ?? summary.updatedAt, color: 'var(--rep-bad)' }]
-      : summary.state === 'APPROVED' ? [{ title: 'Admin duyệt đăng ký', text: 'Lời mời được xử lý cho học sinh trước buổi tham quan.', at: r.reviewedAt ?? summary.updatedAt, color: '#2c9a5f' }]
+      : summary.state === 'APPROVED' ? [{ title: 'Admin duyệt đăng ký', text: 'Hỗ trợ lời mời riêng sẽ được cung cấp trong bước tiếp theo.', at: r.reviewedAt ?? summary.updatedAt, color: '#2c9a5f' }]
       : summary.state === 'CANCELLED' ? [{ title: 'Đăng ký đã hủy', text: 'Đoàn không còn chờ duyệt.', at: summary.updatedAt, color: 'var(--rep-ink-3)' }]
       : [{ title: 'Đang chờ Admin duyệt', text: 'Bạn vẫn có thể sửa danh sách trong lúc chờ.', at: summary.updatedAt, color: '#d39a2c' }]),
   ]
@@ -43,7 +43,7 @@ export default function RepRegistrationDetailPage() {
       <span className="rep-stamp" aria-hidden="true">ĐÃ GỬI</span>
       <small>ĐÃ GỬI ĐĂNG KÝ</small>
       <h2>{group ? `${group}, ${summary.schoolName}` : summary.schoolName}</h2>
-      <p>Admin sẽ duyệt danh sách {summary.rowCount} dòng lời mời. Kết quả hiện ở đây và trong Đăng ký của tôi; lời mời chỉ được gửi tới học sinh sau khi duyệt.</p>
+      <p>Admin sẽ duyệt danh sách {summary.rowCount} dòng lời mời. Kết quả hiện ở đây và trong Đăng ký của tôi; hỗ trợ gửi lời mời riêng sẽ được cung cấp trong bước tiếp theo.</p>
     </div>}
     {message && <div style={{ marginBottom: 20 }}><Callout title={message} role="status" /></div>}
     {summary.state === 'APPROVED' && <div style={{ marginBottom: 20 }}><Callout tone="ok" title="Đăng ký đã được duyệt">Hỗ trợ lời mời riêng và chỉnh sửa sau duyệt sẽ được cung cấp trong bước tiếp theo.</Callout></div>}
@@ -58,7 +58,7 @@ export default function RepRegistrationDetailPage() {
         { label: 'Cập nhật', value: formatDateTime(summary.updatedAt) },
         { label: 'Admin duyệt', value: r.reviewedAt ? formatDateTime(r.reviewedAt) : '-' },
       ]} /></Panel>
-      <Panel title={`Danh sách ${summary.rowCount} lời mời`}><RosterPreview rows={r.roster} /></Panel>
+      <Panel title={`Danh sách ${summary.rowCount} lời mời`}><RosterPreview rows={r.roster} variant="representative" /></Panel>
     </div><aside className="rep-aside" aria-label="Thao tác và lịch sử">
       <h2>Thao tác</h2>
       <GatedAction gate={edit} label={summary.state === 'SUBMITTED' ? 'Sửa đăng ký' : summary.state === 'CANCELLED' ? 'Đăng ký lại' : 'Sửa và gửi lại'} to={`/dai-dien/dang-ky/${summary.id}/sua`} kind="primary" />

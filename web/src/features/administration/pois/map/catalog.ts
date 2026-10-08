@@ -1,4 +1,5 @@
-import map2Manifest from './map2-v1.generated.json'
+import map2Manifest from './map2-v2.generated.json'
+import map2LegacyManifest from './map2-v1.generated.json'
 import type { GridGeometry } from './occupancy-grid'
 
 export type OccupancyMap = GridGeometry & {
@@ -20,7 +21,7 @@ function registeredMap(value: typeof map2Manifest): OccupancyMap {
   return { ...value, imageUrl: `${import.meta.env.BASE_URL}${value.imageUrl.slice(1)}`, origin: [value.origin[0], value.origin[1], value.origin[2]] }
 }
 
-export const OCCUPANCY_MAPS = [registeredMap(map2Manifest)]
+export const OCCUPANCY_MAPS = [registeredMap(map2Manifest), registeredMap(map2LegacyManifest)]
 export const DEFAULT_POI_MAP = OCCUPANCY_MAPS[0]
 
 export function occupancyMapFor(mapKey: string, frameId: string): OccupancyMap | null {

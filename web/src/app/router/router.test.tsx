@@ -48,6 +48,8 @@ const settled = (router: ReturnType<typeof createMemoryRouter>, path: string) =>
   waitFor(() => expect(router.state.location.pathname).toBe(path))
 
 describe('route table', () => {
+  // Compile the dashboard's chart chunk before timing session/guard behavior.
+  beforeAll(async () => { await import('../../routes/admin/AdminDashboardPage') }, 30_000)
   beforeEach(() => useAuthStore.getState().setAuthReady())
   afterEach(() => {
     vi.unstubAllGlobals()

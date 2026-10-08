@@ -34,6 +34,7 @@ describe('ROS occupancy map export', () => {
 
   it('uses strict Nav2 thresholds, negate, and classifies gray 205 as free', () => {
     expect(classifyPixel(205, metadata)).toBe(255)
+    expect(classifyPixel(205, { ...metadata, free_thresh: 0.196 })).toBe(128)
     expect(classifyPixel(128, metadata)).toBe(128)
     expect(classifyPixel(0, metadata)).toBe(0)
     expect(classifyPixel(255, { ...metadata, negate: 1 })).toBe(0)
@@ -76,7 +77,9 @@ describe('ROS occupancy map export', () => {
   it('checks the committed real map package against the ROS source', () => {
     const manifest = exportMap({ check: true })
     expect([manifest.width, manifest.height]).toEqual([1419, 1949])
-    expect(manifest.cellCounts).toEqual({ free: 2732690, occupied: 32941, unknown: 0 })
+    expect(manifest.mapKey).toBe('map2-v2')
+    expect(manifest.freeThreshold).toBe(0.196)
+    expect(manifest.cellCounts).toEqual({ free: 442025, occupied: 32941, unknown: 2290665 })
     expect(manifest.source.pgmSha256).toBe('940df58b70e3280aec306776cf0c5ecf270361e2398911d8982b48007ed8abd7')
   })
 })

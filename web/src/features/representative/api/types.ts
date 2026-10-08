@@ -1,7 +1,9 @@
+import type { RosterRow } from '../../registrations/roster'
+export type { RosterRow } from '../../registrations/roster'
 export type TourState = 'SCHEDULED' | 'READY' | 'RUNNING' | 'COMPLETED' | 'CANCELLED'
 export type RegistrationState = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
 export type ActionGate = { allowed: boolean; reason: string | null }
-export type RosterRow = { rowNumber: number; rowType: 'INDIVIDUAL' | 'SHARED_VIEWING'; displayName: string; email: string; className: string | null }
+
 export type RepresentativeTour = {
   id: string; name: string; description: string | null; scheduledStartAt: string; state: TourState; rowVersion: string
   routeName: string; stops: { order: number; name: string; description: string | null }[]; register: ActionGate

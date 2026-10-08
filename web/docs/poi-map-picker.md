@@ -37,7 +37,8 @@ outside this slice.
 ## Source and geometry contract
 
 Source: `robot/robot_maps/map2.yaml` referencing `robot/robot_maps/map_fix.pgm`.
-Package key: `map2-v1`; frame: `map`. These are explicit registration values,
+Current package key: `map2-v2`; frame: `map`. `map2-v1` remains available for
+existing POIs. These are explicit registration values,
 not keys extracted from the YAML or aliases for demo/Twin maps.
 
 The image is 1419x1949 cells at 0.05 m/cell, origin `[-15.3,-76.1,0]`.
@@ -90,17 +91,17 @@ The palette is semantic, not an unchanged copy of source grayscale values.
 
 Generated outputs:
 
-- `web/src/features/administration/pois/map/map2-v1.generated.json` records
+- `web/src/features/administration/pois/map/map2-v2.generated.json` records
   dimensions, full origin, thresholds, source hashes and semantic fingerprint.
-- `web/public/maps/map2-v1/occupancy-72d43c1d265c59c8.png` is the current
+- `web/public/maps/map2-v2/occupancy-1d2cd4d1fec9fe1c.png` is the current
   fingerprinted deployment image.
 
 The exporter refuses changed geometry/occupancy under an existing key. For
-a new snapshot, run `npm run maps:export -- --map-key map2-v2`, register its
+a new snapshot, run `npm run maps:export -- --map-key map2-v3`, register its
 manifest in `web/src/features/administration/pois/map/catalog.ts`, and update
 the export/check default key (including `maps:check`) and real-source tests.
 The current check deliberately fails if the robot source changes under
-`map2-v1`; it must not silently accept a new source as that snapshot.
+the current `map2-v2`; it must not silently accept a new source as that snapshot.
 Retain old assets while POIs reference those keys;
 never bulk-relabel stored POIs. Verify source parity before releasing the Web
 package. Web builds consume committed outputs; exporting/checking requires the
@@ -113,13 +114,15 @@ authorized asset-delivery path.
 
 ## Current source caveat and verification
 
-Nav2 Humble classifies gray 205 as free with this source's `negate: 0` and
-`free_thresh: 0.25`. The current package has 2,732,690 free, 32,941 occupied,
-and zero unknown cells. The PNG follows that interpretation. Do not change
+Nav2 Humble classifies gray 205 as unknown with the current source's `negate: 0`
+and `free_thresh: 0.196`. `map2-v2` has 442,025 free, 32,941 occupied,
+and 2,290,665 unknown cells. The PNG follows that interpretation. Do not change
 robot thresholds or infer unknown space from grayscale appearance in this
 feature. Review map semantics separately before physical navigation.
-`map2-v1` is a fixed snapshot with these thresholds, not approval of their
-navigation suitability. Before entering operational POIs, the robot team must
+`map2-v1` remains a fixed snapshot with `free_thresh: 0.25`, where gray 205 is
+free and there are no unknown cells. Existing POIs keep that snapshot and are
+not relabeled automatically. Neither snapshot proves navigation suitability.
+Before entering operational POIs, the robot team must
 review the intended unknown/free semantics and verify the loaded map at
 runtime. Any subsequent threshold change follows the new-MapKey procedure;
 existing POIs require explicit review against that revision rather than a

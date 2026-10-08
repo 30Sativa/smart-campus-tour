@@ -1,10 +1,12 @@
+using SmartCampus.Application.Features.Representative.Commands;
+using SmartCampus.Application.Features.Registrations;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 
 namespace SmartCampus.Application.Features.Representative.Commands.CancelRegistration;
 
-public sealed class CancelRegistrationCommandHandler(IRepresentativeRepository repository, TimeProvider clock)
+public sealed class CancelRegistrationCommandHandler(IRegistrationRepository repository, TimeProvider clock)
     : IRequestHandler<CancelRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(CancelRegistrationCommand command, CancellationToken ct)
@@ -15,7 +17,7 @@ public sealed class CancelRegistrationCommandHandler(IRepresentativeRepository r
         registration.State = "CANCELLED";
         registration.CancelledAt = now;
         registration.UpdatedAt = now;
-        repository.AddAudit(RegistrationRules.Audit(registration, command.ActorUserId, RegistrationRules.CancelledAuditAction, now));
+        repository.AddAudit(RegistrationAudit.Create(registration, command.ActorUserId, RegistrationAudit.CancelledAuditAction, now));
         return Unit.Value;
     }
 }

@@ -64,7 +64,7 @@ export default function AdminShell() {
           </div>
         </header>
 
-        {!onAccounts && !onPois && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
+        {!onAccounts && !onPois && !location.pathname.startsWith('/admin/registrations') && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>

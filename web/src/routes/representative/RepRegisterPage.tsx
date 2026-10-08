@@ -6,7 +6,7 @@ import type { RegistrationInput, RepresentativeRegistration, RepresentativeTour 
 import { RepPage, RepPageHeader, Panel, InfoList, Callout, PageSkeleton, ErrorState, Spinner } from '../../features/representative/components/RepUi'
 import { ExcelUploader } from '../../features/representative/components/ExcelUploader'
 import type { AcceptedRoster } from '../../features/representative/components/ExcelUploader'
-import { RosterPreview } from '../../features/representative/components/RosterPreview'
+import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { RegistrationStepper } from '../../features/representative/components/RegistrationStepper'
 import { downloadBytes, rosterWorkbookBytes } from '../../features/representative/roster-import'
 import { formatDateTime, readRepError } from '../../features/representative/rep-format'
@@ -110,12 +110,12 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         {step === 1 && <div className="rep-pane" key="roster"><Panel title="Danh sách lời mời">
           {base.registration && <button type="button" className={repButton('secondary', 'sm')} style={{ marginBottom: 16 }} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(base.registration!.roster))}>Tải danh sách hiện tại</button>}
           <ExcelUploader accepted={accepted} onAccept={setAccepted} inUse={base.registration ? { count: base.registration.roster.length } : null} />
-          {base.registration && !accepted && <div style={{ marginTop: 20 }}><RosterPreview rows={rows} /></div>}
+          {base.registration && !accepted && <div style={{ marginTop: 20 }}><RosterPreview rows={rows} variant="representative" /></div>}
         </Panel></div>}
         {step === 2 && <div className="rep-pane rep-stack" key="review"><Panel title="Kiểm tra trước khi gửi">
           <InfoList items={fields.map(f => ({ label: f.label, value: values[f.key] }))} />
           <p className="rep-lead" style={{ marginTop: 18, fontSize: 14 }}><b className="num">{rows.filter(r => r.rowType === 'INDIVIDUAL').length}</b> lời mời cá nhân, <b className="num">{rows.filter(r => r.rowType === 'SHARED_VIEWING').length}</b> điểm xem chung.</p>
-        </Panel><Panel title="Danh sách gửi Admin"><RosterPreview rows={rows} /></Panel>
+        </Panel><Panel title="Danh sách gửi Admin"><RosterPreview rows={rows} variant="representative" /></Panel>
           <Callout title="Gửi để Admin duyệt">Chưa cấp mã truy cập khi gửi đăng ký. Học sinh không cần tài khoản ứng dụng; lời mời cá nhân và điểm xem chung sẽ được xử lý sau duyệt.</Callout>
           <Panel title="Mục đích dữ liệu">
             <p className="rep-lead" style={{ fontSize: 14 }}>Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
