@@ -1,5 +1,5 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, Check, ChevronDown, RotateCcw, Save, TriangleAlert } from 'lucide-react'
+import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { ArrowLeft, ArrowRight, Check, ChevronDown, FileText, MapPinned, Mic, RotateCcw, Save, TriangleAlert } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { AdminErrorPanel, AdminPage, Notice } from '../../features/administration/AdminUi'
 import { poiRequestError } from '../../features/administration/pois/errors'
@@ -40,6 +40,13 @@ const EMPTY_FORM: PoiForm = {
 
 /** Rough Vietnamese narration pace (~155 words per minute) for the duration hint. */
 const WORDS_PER_SECOND = 2.6
+
+const STEPS = [
+  { title: 'Thông tin', hint: 'Tên & mô tả' },
+  { title: 'Vị trí & hướng', hint: 'Chọn trên bản đồ' },
+  { title: 'Thuyết minh', hint: 'Không bắt buộc' },
+  { title: 'Kiểm tra & tạo', hint: 'Xem lại lần cuối' },
+]
 
 const cardClass = 'rounded-[20px] border border-[#d9e9f5] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[border-color,box-shadow] duration-300 focus-within:border-[#a8cde6] focus-within:shadow-[0_18px_40px_-30px_#285c7d]'
 
@@ -104,6 +111,28 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   const poseEditable = isCreate || poi.data?.usage.canEditPose === true
   const pageTitle = isCreate ? 'Tạo POI' : 'Chi tiết POI'
   const picking = poseEditable && pickerMode !== 'pan'
+  // Create walks the sections as steps; Edit shows the same sections as free tabs.
+  const [step, setStep] = useState(0)
+  const [reached, setReached] = useState(0)
+  const steps = isCreate ? STEPS : STEPS.slice(0, 3)
+  const lastStep = steps.length - 1
+  const topRef = useRef<HTMLDivElement>(null)
+  const openStep = (next: number) => {
+    setStep(next)
+    setReached((value) => Math.max(value, next))
+    requestAnimationFrame(() => topRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }))
+  }
+  /** Leaving a step forwards checks only the rules that belong to the steps before the target. */
+  const goNext = (target = step + 1) => {
+    const result = check()
+    if ('error' in result && result.step < target) {
+      setFormError(result.error)
+      openStep(result.step)
+      return
+    }
+    setFormError(null)
+    openStep(target)
+  }
   const change = (field: keyof PoiForm, value: string) => {
     setDraft((current) => ({
       form: { ...current.form, [field]: value },
@@ -147,41 +176,57 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     setPickerMode('pan')
   }
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setFormError(null)
-    if (!form.name.trim()) return setFormError('Nhập tên POI.')
-    if (!form.mapKey.trim() || !form.mapFrame.trim()) return setFormError('Nhập MapKey và MapFrame.')
+  /**
+   * Every rule the form enforces, in the order the user meets them. Each
+   * failure names the step (0 info, 1 map & pose, 2 narration) that owns it,
+   * so the wizard can send the user straight back there.
+   */
+  const check = (): { error: string; step: number } | { input: CreatePoiInput } => {
+    if (!form.name.trim()) return { error: 'Nhập tên POI.', step: 0 }
+    if (!form.mapKey.trim() || !form.mapFrame.trim()) return { error: 'Nhập MapKey và MapFrame.', step: 1 }
     const x = numberValue(form.x)
     const y = numberValue(form.y)
     const yaw = numberValue(form.yaw)
-    if (x == null || y == null || yaw == null) return setFormError('Nhập x, y và yaw bằng số hợp lệ.')
-    if (poseEditable && pickerMode !== 'pan') return setFormError('Chốt vị trí và hướng, hoặc hủy thao tác chọn trên bản đồ trước khi lưu.')
-    if (poseEditable && (Math.abs(x) > 999999.9999 || Math.abs(y) > 999999.9999)) return setFormError('x và y phải nằm trong giới hạn số của hệ thống.')
-    if (poseEditable && (yaw < -3.141593 || yaw > 3.141593)) return setFormError('Yaw phải nằm trong khoảng −π đến π radian.')
+    if (x == null || y == null || yaw == null) return { error: 'Nhập x, y và yaw bằng số hợp lệ.', step: 1 }
+    if (poseEditable && pickerMode !== 'pan') return { error: 'Chốt vị trí và hướng, hoặc hủy thao tác chọn trên bản đồ trước khi lưu.', step: 1 }
+    if (poseEditable && (Math.abs(x) > 999999.9999 || Math.abs(y) > 999999.9999)) return { error: 'x và y phải nằm trong giới hạn số của hệ thống.', step: 1 }
+    if (poseEditable && (yaw < -3.141593 || yaw > 3.141593)) return { error: 'Yaw phải nằm trong khoảng −π đến π radian.', step: 1 }
     const poseChanged = isCreate || !poi.data || form.mapKey !== poi.data.mapKey || form.mapFrame !== poi.data.mapFrame ||
       x !== poi.data.x || y !== poi.data.y || yaw !== poi.data.yaw
     if (poseEditable && poseChanged) {
-      if (Number(x.toFixed(4)) !== x || Number(y.toFixed(4)) !== y) return setFormError('X/Y chỉ nhận tối đa 4 chữ số thập phân.')
-      if (Number(yaw.toFixed(6)) !== yaw) return setFormError('Yaw chỉ nhận tối đa 6 chữ số thập phân.')
-      if (selectedMap && !cellAtPose(selectedMap, { x, y })) return setFormError('Pose nằm ngoài phạm vi bản đồ đã chọn.')
+      if (Number(x.toFixed(4)) !== x || Number(y.toFixed(4)) !== y) return { error: 'X/Y chỉ nhận tối đa 4 chữ số thập phân.', step: 1 }
+      if (Number(yaw.toFixed(6)) !== yaw) return { error: 'Yaw chỉ nhận tối đa 6 chữ số thập phân.', step: 1 }
+      if (selectedMap && !cellAtPose(selectedMap, { x, y })) return { error: 'Pose nằm ngoài phạm vi bản đồ đã chọn.', step: 1 }
     }
     const seconds = form.narrationSeconds.trim() ? numberValue(form.narrationSeconds) : null
-    if (form.narrationSeconds.trim() && (seconds == null || !Number.isInteger(seconds) || seconds <= 0)) return setFormError('Thời lượng narration phải là số giây nguyên lớn hơn 0.')
-
-    const input: CreatePoiInput = {
-      name: form.name.trim(),
-      description: optional(form.description),
-      mapKey: form.mapKey.trim(),
-      mapFrame: form.mapFrame.trim(),
-      x,
-      y,
-      yaw,
-      narrationText: optional(form.narrationText),
-      audioUrl: optional(form.audioUrl),
-      narrationSeconds: seconds,
-      fallbackVideoUrl: optional(form.fallbackVideoUrl),
+    if (form.narrationSeconds.trim() && (seconds == null || !Number.isInteger(seconds) || seconds <= 0)) return { error: 'Thời lượng narration phải là số giây nguyên lớn hơn 0.', step: 2 }
+    return {
+      input: {
+        name: form.name.trim(),
+        description: optional(form.description),
+        mapKey: form.mapKey.trim(),
+        mapFrame: form.mapFrame.trim(),
+        x,
+        y,
+        yaw,
+        narrationText: optional(form.narrationText),
+        audioUrl: optional(form.audioUrl),
+        narrationSeconds: seconds,
+        fallbackVideoUrl: optional(form.fallbackVideoUrl),
+      },
     }
+  }
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setFormError(null)
+    const result = check()
+    if ('error' in result) {
+      setFormError(result.error)
+      openStep(result.step)
+      return
+    }
+    const { input } = result
 
     if (isCreate) {
       create.mutate(input, {
@@ -229,20 +274,30 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   const words = form.narrationText.trim() ? form.narrationText.trim().split(/\s+/).length : 0
   const estimatedSeconds = words ? Math.max(1, Math.round(words / WORDS_PER_SECOND)) : null
   const checks: ReadinessItem[] = [
-    { target: 'poi-section-info', label: 'Tên POI', done: !!form.name.trim(), note: form.name.trim() || 'Bắt buộc' },
-    { target: 'poi-section-pose', label: 'Vị trí trên bản đồ', done: hasPosition, note: hasPosition ? `${x!.toFixed(2)}, ${y!.toFixed(2)}` : 'Bắt buộc' },
-    { target: 'poi-section-pose', label: 'Hướng thân (yaw)', done: hasYaw, note: hasYaw ? `${(yaw! * 180 / Math.PI).toFixed(0)}°` : picking ? 'Đang chọn' : 'Bắt buộc' },
-    { target: 'poi-section-content', label: 'Narration', done: words > 0, note: words ? `${words} từ` : 'Không bắt buộc', optional: true },
-    { target: 'poi-section-content', label: 'Audio', done: !!form.audioUrl.trim(), note: form.audioUrl.trim() ? 'Đã gắn' : 'Không bắt buộc', optional: true },
+    { target: 0, label: 'Tên POI', done: !!form.name.trim(), note: form.name.trim() || 'Bắt buộc' },
+    { target: 1, label: 'Vị trí trên bản đồ', done: hasPosition, note: hasPosition ? `${x!.toFixed(2)}, ${y!.toFixed(2)}` : 'Bắt buộc' },
+    { target: 1, label: 'Hướng thân (yaw)', done: hasYaw, note: hasYaw ? `${(yaw! * 180 / Math.PI).toFixed(0)}°` : picking ? 'Đang chọn' : 'Bắt buộc' },
+    { target: 2, label: 'Narration', done: words > 0, note: words ? `${words} từ` : 'Không bắt buộc', optional: true },
+    { target: 2, label: 'Audio', done: !!form.audioUrl.trim(), note: form.audioUrl.trim() ? 'Đã gắn' : 'Không bắt buộc', optional: true },
   ]
   const missing = checks.filter((item) => !item.optional && !item.done)
   const submitHint = !editable
     ? 'POI đang bị khóa, không thể lưu.'
-    : picking
+    : picking && step === 1
       ? 'Đang chọn trên bản đồ: chốt hướng thân hoặc bấm “Di chuyển bản đồ” để dừng chọn.'
       : missing.length
         ? `Còn thiếu: ${missing.map((item) => item.label).join(', ')}.`
         : isCreate ? 'POI mới được tạo ở trạng thái không khả dụng.' : 'Thay đổi được kiểm tra lại theo Route và Tour khi lưu.'
+
+  // The map step gets the full width; the preview column comes back afterwards.
+  const wide = step === 1
+  // Enter in a single-line field moves a Create draft forward instead of submitting early.
+  const keyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    const target = event.target as HTMLElement
+    if (event.key !== 'Enter' || !isCreate || step >= lastStep || target.tagName !== 'INPUT') return
+    event.preventDefault()
+    goNext()
+  }
 
   return (
     <AdminPage>
@@ -253,7 +308,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
         action={<Link to="/admin/pois" className={buttonClass('secondary')}><ArrowLeft size={16} aria-hidden="true" />Danh sách POI</Link>}
       />
 
-      <div className="mb-5 space-y-3">
+      <div ref={topRef} className="mb-5 scroll-mt-24 space-y-3">
         <Notice tone="warn"><span className="font-semibold">Pose chưa được xác minh bằng robot thật.</span> Chọn trên bản đồ ROS chỉ lưu vị trí và hướng thân. Ô trống chưa chứng minh robot có thể tới POI.</Notice>
         {!isCreate && poi.data!.usage.hasReadyOrRunningTours && <Notice tone="danger">Tour READY/RUNNING đang dùng POI này. Mọi thao tác cập nhật và bật/tắt đều bị khóa.</Notice>}
         {!isCreate && !poi.data!.usage.canEditPose && !poi.data!.usage.hasReadyOrRunningTours && <Notice tone="info">Map và pose đã khóa vì POI được Route hoặc lịch sử tham chiếu; tên, mô tả và nội dung vẫn sửa được.</Notice>}
@@ -261,9 +316,14 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
         {requestError && <Notice tone="danger" action={(update.isError || create.isError) && <button type="button" onClick={() => { void reload() }} className={buttonClass('secondary', 'sm')}><RotateCcw size={14} aria-hidden="true" />Tải lại</button>}>{requestError}</Notice>}
       </div>
 
-      <form noValidate onSubmit={submit} aria-label={pageTitle} className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <StepNav steps={steps} step={step} reached={reached} mode={isCreate ? 'steps' : 'tabs'} done={[!!form.name.trim(), hasPosition && hasYaw, words > 0, false]} onSelect={(next) => (isCreate && next > step ? goNext(next) : openStep(next))} />
+
+      <form
+        noValidate onSubmit={submit} onKeyDown={keyDown} aria-label={pageTitle}
+        className={`grid items-start gap-5 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}
+      >
         <div className="min-w-0 space-y-5">
-          <FormSection id="poi-section-info" step={1} done={!!form.name.trim()} title="Thông tin POI" description="Tên là nhãn hiển thị; hệ thống giữ ID bất biến." tag="Bắt buộc" delay={0}>
+          <FormSection id="poi-section-info" step={1} active={step === 0} done={!!form.name.trim()} title="Thông tin POI" description="Tên là nhãn hiển thị; hệ thống giữ ID bất biến." tag="Bắt buộc" delay={0}>
             <Field label="Tên POI" htmlFor="poi-name" extra={<span className="text-xs font-semibold text-[#dc2626]" aria-hidden="true">*</span>}>
               <div className="relative">
                 <input id="poi-name" maxLength={150} required disabled={!editable} value={form.name} onChange={(event) => change('name', event.target.value)} placeholder="Ví dụ: Thư viện trung tâm" className={`${inputClass} pr-16`} />
@@ -278,14 +338,16 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             </Field>
           </FormSection>
 
-          <FormSection id="poi-section-pose" step={2} done={hasPosition && hasYaw} title="Map và pose" description="X/Y tính bằng mét; yaw bằng radian trong khoảng −π đến π." tag="Bắt buộc" delay={60}>
+          <FormSection id="poi-section-pose" step={2} active={step === 1} done={hasPosition && hasYaw} title="Map và pose" description="X/Y tính bằng mét; yaw bằng radian trong khoảng −π đến π." tag="Bắt buộc" delay={60}>
             <Field label="Bản đồ" htmlFor="poi-map" hint={poseEditable ? 'Đổi bản đồ sẽ xóa pose trong bản nháp và yêu cầu chọn lại vị trí, hướng.' : undefined}>
               <select id="poi-map" disabled={!poseEditable || busy} value={selectedMap?.mapKey ?? '__stored__'} onChange={(event) => selectMap(event.target.value)} className={inputClass}>
                 {!selectedMap && <option value="__stored__">{form.mapKey} / {form.mapFrame} (chưa có bản đồ tương ứng)</option>}
                 {OCCUPANCY_MAPS.map((map) => <option key={map.mapKey} value={map.mapKey}>Map 2 ({map.mapKey}, frame {map.frameId})</option>)}
               </select>
             </Field>
-            {selectedMap ? <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} /> : <Notice tone="info">Chưa có ảnh cho đúng map/frame này. Hệ thống giữ nguyên tọa độ đã lưu và không hiển thị chúng trên bản đồ khác.</Notice>}
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(270px,1fr)]">
+            <div className="min-w-0">{selectedMap ? <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} /> : <Notice tone="info">Chưa có ảnh cho đúng map/frame này. Hệ thống giữ nguyên tọa độ đã lưu và không hiển thị chúng trên bản đồ khác.</Notice>}</div>
+            <div className="min-w-0 space-y-4">
 
             <div className="rounded-2xl border border-[#e2e8f0] bg-[#fbfdff] p-4">
               <YawDial yaw={yaw} disabled={!poseEditable || busy || !hasPosition} onChange={(value) => change('yaw', String(value))} />
@@ -305,10 +367,12 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
                 <div className="sm:col-span-2"><Field label="Yaw (rad)" htmlFor="poi-yaw"><input id="poi-yaw" type="number" step="0.000001" min="-3.141593" max="3.141593" required disabled={!poseEditable || busy} value={form.yaw} onChange={(event) => change('yaw', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field></div>
               </div>
             </details>
+            </div>
+            </div>
             {!poseEditable && <p className="rounded-xl bg-[#f4f8fb] px-3 py-2 text-xs text-[#647b8d]">Pose bị khóa theo lịch sử sử dụng, không chỉ theo trạng thái IsActive.</p>}
           </FormSection>
 
-          <FormSection id="poi-section-content" step={3} done={words > 0} title="Narration và nội dung" description="Các trường này không bắt buộc khi tạo POI; upload audio được để cho bước riêng." tag="Không bắt buộc" delay={120}>
+          <FormSection id="poi-section-content" step={3} active={step === 2} done={words > 0} title="Narration và nội dung" description="Các trường này không bắt buộc khi tạo POI; upload audio được để cho bước riêng." tag="Không bắt buộc" delay={120}>
             <Field label="Narration text" htmlFor="poi-narration"><textarea id="poi-narration" rows={5} disabled={!editable} value={form.narrationText} onChange={(event) => change('narrationText', event.target.value)} placeholder="Lời thuyết minh robot đọc khi dừng tại POI." className={`${inputClass} resize-y`} /></Field>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-[#f1f7fc] px-3 py-2.5 text-[12.5px] text-[#54738a] ${words ? 'poi-wave-on' : ''}`}>
               <span className="poi-wave" aria-hidden="true">{[0, 1, 2, 3, 4, 5].map((bar) => <i key={bar} style={{ animationDelay: `${bar * 0.1}s` }} />)}</span>
@@ -321,9 +385,35 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             </div>
             <Field label="Fallback video URL" htmlFor="poi-fallback-video" hint="Phát cho học sinh khi mất nguồn hình tại POI này."><input id="poi-fallback-video" maxLength={1000} disabled={!editable} value={form.fallbackVideoUrl} onChange={(event) => change('fallbackVideoUrl', event.target.value)} placeholder="https://…" className={`${inputClass} font-mono`} /></Field>
           </FormSection>
+
+          {isCreate && <FormSection id="poi-section-review" step={4} active={step === 3} done={false} title="Kiểm tra & tạo" description="Xem lại trước khi tạo. POI mới luôn ở trạng thái không khả dụng." tag="Bước cuối" delay={0}>
+            <ReviewRow icon={FileText} title="Thông tin POI" missing={!form.name.trim()} onEdit={() => openStep(0)} rows={[['Tên', form.name.trim() || 'Chưa nhập'], ['Mô tả', form.description.trim() || '—']]} />
+            <ReviewRow icon={MapPinned} title="Vị trí & hướng thân" missing={!(hasPosition && hasYaw)} onEdit={() => openStep(1)} rows={[
+              ['Bản đồ', `${form.mapKey} · frame ${form.mapFrame}`],
+              ['X, Y', x != null && y != null ? `${x.toFixed(4)} m, ${y.toFixed(4)} m` : 'Chưa chọn'],
+              ['Yaw', yaw != null ? `${yaw.toFixed(6)} rad (${(yaw * 180 / Math.PI).toFixed(1)}°)` : 'Chưa chọn'],
+            ]} />
+            <ReviewRow icon={Mic} title="Thuyết minh" optional={!words} onEdit={() => openStep(2)} rows={words || form.audioUrl.trim() || form.fallbackVideoUrl.trim() ? [
+              ['Lời thuyết minh', words ? `${words} từ · ${form.narrationSeconds.trim() ? `${form.narrationSeconds.trim()} giây` : 'chưa nhập thời lượng'}` : '—'],
+              ['Audio', form.audioUrl.trim() || '—'],
+              ['Video dự phòng', form.fallbackVideoUrl.trim() || '—'],
+            ] : [['', 'Chưa có. Có thể bổ sung sau khi tạo POI.']]} />
+          </FormSection>}
+
+          <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d9e9f5] bg-white/95 px-3 py-3 shadow-[0_-10px_30px_-24px_#285c7d] backdrop-blur-md">
+            {isCreate
+              ? <button type="button" onClick={() => openStep(step - 1)} className={`${buttonClass('secondary')} ${step === 0 ? 'invisible' : ''}`}><ArrowLeft size={15} aria-hidden="true" />Quay lại</button>
+              : <Link to="/admin/pois" className={buttonClass('secondary')}>Hủy</Link>}
+            <p id="poi-submit-hint" className="hidden min-w-0 flex-1 px-2 text-center text-xs leading-5 text-[#7c94a7] md:block">{isCreate ? `Bước ${step + 1} / ${steps.length} · ` : ''}{submitHint}</p>
+            <div className="flex flex-wrap gap-2">
+              {isCreate && step === 2 && !words && <button type="button" onClick={() => goNext(lastStep)} className={buttonClass('ghost')}>Bỏ qua bước này</button>}
+              {isCreate && step < lastStep && <button type="button" onClick={() => goNext()} className={buttonClass('primary')}>Tiếp tục<ArrowRight size={15} aria-hidden="true" /></button>}
+              <button type="submit" disabled={busy || !editable || (poseEditable && pickerMode !== 'pan')} aria-describedby="poi-submit-hint" className={`${buttonClass('primary')} ${isCreate && step < lastStep ? 'hidden' : ''}`}><Save size={16} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>
+            </div>
+          </div>
         </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-20" aria-label="Xem trước và kiểm tra">
+        <aside className={`space-y-4 xl:sticky xl:top-20 ${wide ? 'hidden' : ''}`} aria-label="Xem trước và kiểm tra">
           <PoiPreview map={selectedMap} name={form.name} description={form.description} pose={pickerPose} seconds={form.narrationSeconds} hasAudio={!!form.audioUrl.trim()} active={!isCreate && poi.data!.isActive} />
 
           <section className={`${cardClass} poi-rise p-4`} style={{ animationDelay: '120ms' }} aria-labelledby="poi-ready-heading">
@@ -331,7 +421,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             <ul className="my-3 space-y-0.5">
               {checks.map((item) => (
                 <li key={item.label}>
-                  <a href={`#${item.target}`} onClick={(event) => { event.preventDefault(); document.getElementById(item.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }} className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-[#173b59] transition-colors hover:bg-[#f1f7fc]">
+                  <a href={`#poi-section-${['info', 'pose', 'content'][item.target]}`} onClick={(event) => { event.preventDefault(); if (isCreate && item.target > step) goNext(item.target); else openStep(item.target) }} className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-[#173b59] transition-colors hover:bg-[#f1f7fc]">
                     <span className={`grid size-5.5 place-items-center rounded-full border-[1.5px] transition-all duration-300 ${item.done ? 'border-[#2f7a5b] bg-[#2f7a5b] text-white' : 'border-[#cbdbe8] text-transparent'}`} aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                     <span>{item.label}<span className="sr-only">{item.done ? ': đã xong' : item.optional ? ': không bắt buộc' : ': chưa xong'}</span></span>
                     <span className={`max-w-28 truncate text-[11px] font-semibold ${item.optional && !item.done ? 'text-[#a3b4c2]' : 'text-[#86a0b3]'}`} aria-hidden="true">{item.note}</span>
@@ -339,9 +429,6 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
                 </li>
               ))}
             </ul>
-            <button type="submit" disabled={busy || !editable || (poseEditable && pickerMode !== 'pan')} aria-describedby="poi-submit-hint" className={`${buttonClass('primary', 'lg')} w-full`}><Save size={16} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>
-            <p id="poi-submit-hint" className="mt-2 text-center text-xs leading-5 text-[#7c94a7]">{submitHint}</p>
-            <Link to="/admin/pois" className={`${buttonClass('secondary')} mt-2 w-full`}>Hủy</Link>
           </section>
 
           {!isCreate && <section className={`${cardClass} p-5`}>
@@ -383,12 +470,12 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   )
 }
 
-type ReadinessItem = { target: string; label: string; done: boolean; note: string; optional?: boolean }
+type ReadinessItem = { target: number; label: string; done: boolean; note: string; optional?: boolean }
 
-function FormSection({ id, step, done, title, description, tag, delay, children }: { id: string; step: number; done: boolean; title: string; description: string; tag: string; delay: number; children: ReactNode }) {
+function FormSection({ id, step, active, done, title, description, tag, delay, children }: { id: string; step: number; active: boolean; done: boolean; title: string; description: string; tag: string; delay: number; children: ReactNode }) {
   const headingId = `${id}-heading`
   return (
-    <section id={id} aria-labelledby={headingId} className={`${cardClass} poi-rise scroll-mt-24`} style={{ animationDelay: `${delay}ms` }}>
+    <section id={id} aria-labelledby={headingId} className={`${cardClass} poi-step-in scroll-mt-24 ${active ? '' : 'hidden'}`} style={{ animationDelay: `${delay}ms` }}>
       <header className="flex items-start gap-3.5 px-5 pt-5 sm:px-6">
         <span aria-hidden="true" className={`grid size-8.5 shrink-0 place-items-center rounded-[11px] border-[1.5px] font-mono text-[13px] font-semibold transition-all duration-300 ${done ? 'border-[#2d719e] bg-[#2d719e] text-white' : 'border-[#d9e9f5] bg-[#f1f7fc] text-[#54738a]'}`}>
           {done ? <Check size={16} strokeWidth={3} className="poi-pop" /> : String(step).padStart(2, '0')}
@@ -465,5 +552,59 @@ function PoiPreview({ map, name, description, pose, seconds, hasAudio, active }:
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * The step bar. Create walks it in order (later steps unlock once the earlier
+ * ones pass); Detail uses the same sections as free tabs.
+ */
+function StepNav({ steps, step, reached, mode, done, onSelect }: { steps: typeof STEPS; step: number; reached: number; mode: 'steps' | 'tabs'; done: boolean[]; onSelect: (step: number) => void }) {
+  return (
+    <nav aria-label={mode === 'steps' ? 'Các bước tạo POI' : 'Các phần của POI'} className="mb-5 rounded-[20px] border border-[#d9e9f5] bg-white px-3 py-3 shadow-[0_12px_32px_-30px_#285c7d] sm:px-4">
+      <ol className="flex items-center">
+        {steps.map((item, index) => {
+          const current = index === step
+          const complete = done[index] && !current && (mode === 'tabs' || index <= reached)
+          const locked = mode === 'steps' && index > reached + 1
+          return (
+            <li key={item.title} className="flex min-w-0 flex-1 items-center last:flex-none">
+              <button
+                type="button" disabled={locked} onClick={() => onSelect(index)}
+                aria-current={current ? 'step' : undefined}
+                className="flex min-w-0 items-center gap-2.5 rounded-xl p-1 text-left transition-colors hover:bg-[#f1f7fc] disabled:cursor-not-allowed disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]"
+              >
+                <span className={`grid size-8.5 shrink-0 place-items-center rounded-full border-2 font-mono text-[13px] font-bold transition-all duration-300 ${
+                  current ? 'border-[#2d719e] bg-white text-[#2d719e] shadow-[0_0_0_5px_rgba(45,113,158,0.14)]'
+                    : complete ? 'border-[#2d719e] bg-[#2d719e] text-white'
+                      : 'border-[#cbdbe8] bg-white text-[#86a0b3]'}`}>
+                  {complete ? <Check size={15} strokeWidth={3} aria-hidden="true" /> : index + 1}
+                </span>
+                <span className="hidden min-w-0 md:block">
+                  <span className={`block truncate text-[13px] font-bold ${current || complete ? 'text-[#173b59]' : 'text-[#54738a]'}`}>{item.title}</span>
+                  <span className="block truncate text-[11px] text-[#86a0b3]">{item.hint}</span>
+                </span>
+              </button>
+              {index < steps.length - 1 && <span aria-hidden="true" className="mx-2 h-0.5 min-w-3 flex-1 overflow-hidden rounded-full bg-[#cbdbe8] sm:mx-3"><span className={`block h-full origin-left bg-[#2d719e] transition-transform duration-500 ${index < step ? 'scale-x-100' : 'scale-x-0'}`} /></span>}
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}
+
+function ReviewRow({ icon: Icon, title, rows, missing = false, optional = false, onEdit }: { icon: typeof FileText; title: string; rows: Array<[string, string]>; missing?: boolean; optional?: boolean; onEdit: () => void }) {
+  return (
+    <div className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-3 rounded-2xl border p-3.5 ${missing ? 'border-[#f5c8c2] bg-[#fff4f2]' : 'border-[#e2e8f0]'}`}>
+      <span className={`grid size-8.5 place-items-center rounded-[11px] ${missing ? 'bg-white text-[#dc2626]' : optional ? 'bg-[#f1f7fc] text-[#86a0b3]' : 'bg-[#e5f3ff] text-[#2d78a9]'}`}><Icon size={16} aria-hidden="true" /></span>
+      <div className="min-w-0">
+        <p className="text-[13.5px] leading-[34px] font-bold text-[#173b59]">{title}</p>
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12.5px]">
+          {rows.map(([label, value]) => <div key={label + value} className="contents"><dt className="text-[#86a0b3]">{label}</dt><dd className="font-semibold break-words text-[#173b59]">{value}</dd></div>)}
+        </dl>
+      </div>
+      <button type="button" onClick={onEdit} className={buttonClass('ghost', 'sm')}>Sửa</button>
+    </div>
   )
 }

@@ -6,18 +6,20 @@ import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
-import { ADMIN_NAV, ADMIN_NAV_SECTIONS, adminActivePath } from './admin-nav'
+import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { ADMIN_NAV, adminActivePath } from './admin-nav'
 import { AdminHeaderActions } from './AdminHeaderActions'
+import { AdminSidebar } from './AdminSidebar'
+import { useAdminRegistrations } from './admin-hooks'
+
+const PENDING = { state: 'Submitted' as const }
 
 /**
  * The administration shell: preparing Tours before they run.
  *
- * Same sidebar, same header height and the same palette as operations
- * (`ConsoleSidebar`), because the only account that crosses between the two
- * is an Admin and should not have to re-learn the chrome. Like operations,
- * the account and a bell sit at the top right; the bell lists the same work
- * the dashboard asks of Admin (no live badge in the sidebar).
+ * Its own sidebar (logo, folding groups) and a quiet header with the bell and
+ * the account at the top right. The bell and the "Chờ duyệt" badge are where
+ * Admin learns of waiting work; the dashboard no longer repeats a task list.
  */
 export default function AdminShell() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -26,6 +28,8 @@ export default function AdminShell() {
   const handleLogout = useLogout()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const navRef = useMobileNav(menuOpen, closeMenu)
+  const pending = useAdminRegistrations(PENDING)
+  const pendingCount = Array.isArray(pending.data) ? pending.data.filter((reg) => reg.tourState === 'Scheduled').length : 0
 
   const current = adminActivePath(location.pathname)
   const onRoles = location.pathname.startsWith('/admin/roles')
@@ -34,34 +38,30 @@ export default function AdminShell() {
   const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị Tour'
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fbff] text-[#173b59]">
+    <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
       <MobileNavToggle open={menuOpen} controls="admin-navigation" label="Mở điều hướng quản trị" closeLabel="Đóng điều hướng quản trị" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
 
-      <ConsoleSidebar
+      <AdminSidebar
         id="admin-navigation"
-        label="Khu vực quản trị"
-        navLabel="Điều hướng quản trị"
-        homePath="/admin"
-        areaName="Quản trị Tour"
-        sections={ADMIN_NAV_SECTIONS}
         currentPath={current}
+        pendingCount={pendingCount}
         // Reference links, not tasks: both are read-only for an Admin-only account.
         secondary={[
           { to: '/admin/roles', label: 'Vai trò & quyền', icon: KeyRound, current: onRoles },
-          { to: '/staff', label: 'Khu vực vận hành (chỉ xem)', icon: Radio },
+          { to: '/staff', label: 'Khu vực vận hành', icon: Radio },
         ]}
-        user={{ name: user?.username || 'Quản trị viên', role: roleLabel(user?.role), icon: ShieldCheck }}
         onNavigate={closeMenu}
         onLogout={handleLogout}
-        showUser={false}
         open={menuOpen}
         panelRef={navRef}
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#dbe9f4] bg-white/95 px-5 backdrop-blur-md lg:px-9">
-          <p className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-[#3d6481]">CampusTour <span className="mx-1.5 text-[#a7b8aa]">/</span> {title}</p>
-          <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
+        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-9">
+          <div className="flex h-[62px] items-center justify-between gap-3 border-b border-[#e5e7eb]">
+            <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
+            <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
+          </div>
         </header>
 
         {!onAccounts && !onPois && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}

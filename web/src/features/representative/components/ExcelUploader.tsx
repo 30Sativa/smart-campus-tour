@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
-import { CheckCircle2, CircleAlert, Download, FileSpreadsheet, Upload } from 'lucide-react'
+import { CheckCircle2, CircleAlert, Download } from 'lucide-react'
 import { repButton } from '../rep-classes'
 import { ROSTER_MAX_ROWS, TEMPLATE_FILE_NAME, downloadBytes, importRosterFile, rosterTemplateBytes } from '../roster-import'
 import type { ImportResult } from '../roster-import'
 import { RosterPreview } from './RosterPreview'
-import { Spinner } from './RepUi'
+import { HoopDrop } from './HoopDrop'
 
 export type AcceptedRoster = Extract<ImportResult, { ok: true }>
 
@@ -17,7 +17,7 @@ type Phase =
 /**
  * Excel roster upload (flow review §4.2, scope §3.3):
  *
- *   choose / drop a file → validating → invalid: every row / column / reason,
+ *   choose / drop / throw a file → (into the hoop) → validating → invalid: every row / column / reason,
  *                                       nothing replaced, pick another file
  *                                     → valid: preview, then the explicit
  *                                       "Xác nhận sử dụng danh sách này"
@@ -35,7 +35,6 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
   error?: string
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
-  const [over, setOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const read = async (file: File | undefined) => {
@@ -74,37 +73,15 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
         </div>
       )}
 
-      <div
-        className={`rep-drop${over ? ' is-over' : ''}`}
-        onDragOver={(event) => { event.preventDefault(); setOver(true) }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(event) => { event.preventDefault(); setOver(false); void read(event.dataTransfer.files[0]) }}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          className="sr-only"
-          tabIndex={-1}
-          accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-          aria-label="Chọn file Excel danh sách lời mời"
-          onChange={(event) => { void read(event.target.files?.[0]); event.target.value = '' }}
-        />
-        {phase.kind === 'validating' ? (
-          <div style={{ display: 'grid', justifyItems: 'center', gap: 12 }} role="status">
-            <Spinner />
-            <p style={{ fontWeight: 650 }}>Đang kiểm tra <span className="break-all">{phase.fileName}</span>...</p>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', justifyItems: 'center', gap: 10 }}>
-            <span className="rep-drop-icon" aria-hidden="true"><Upload size={24} /></span>
-            <p className="rep-drop-title">Kéo thả file Excel vào đây</p>
-            <p className="rep-drop-or">hoặc</p>
-            <button type="button" onClick={pick} className={repButton(accepted ? 'secondary' : 'dark')}>
-              <FileSpreadsheet size={16} aria-hidden="true" />Chọn file Excel
-            </button>
-          </div>
-        )}
-      </div>
+      {/* The drop zone is a hoop: the file is read once it lands in the basket. */}
+      <HoopDrop
+        onFile={(file) => { void read(file) }}
+        inputRef={inputRef}
+        accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+        inputLabel="Chọn file Excel danh sách lời mời"
+        validating={phase.kind === 'validating' ? phase.fileName : null}
+        hasList={Boolean(accepted)}
+      />
 
       {error && phase.kind === 'idle' && <p className="rep-gate-reason" style={{ color: 'var(--rep-bad)' }} role="alert">{error}</p>}
 

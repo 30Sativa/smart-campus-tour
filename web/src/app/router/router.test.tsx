@@ -74,7 +74,7 @@ describe('route table', () => {
     const router = renderWithBootstrapAt('/admin')
 
     await settled(router, '/admin')
-    expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
       method: 'POST',
@@ -130,14 +130,14 @@ describe('route table', () => {
       signIn('Staff')
       const router = renderAt('/staff')
       await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tình hình điều hành/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
     it('lets an administrator into /staff as well', async () => {
       signIn('Admin')
       const router = renderAt('/staff')
       await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tình hình điều hành/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
     it('still accepts a token minted before the operations roles were merged', async () => {
@@ -152,8 +152,8 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt('/admin')
       await settled(router, '/admin')
-      expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: /Tình hình điều hành/i })).toBeNull()
+      expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /Tổng quan vận hành/i })).toBeNull()
     })
 
     it('keeps /admin/roles as a real route rather than a legacy redirect', async () => {

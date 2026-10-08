@@ -1,5 +1,6 @@
 import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, Route, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
+import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
  * Administration navigation: what Admin does before a Tour starts, and the
@@ -30,6 +31,9 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
 ]
 
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_SECTIONS.flatMap((section) => section.items)
+
+/** The same entries as the sidebar draws them: Quản lý Tour and Đăng ký đoàn fold; single pages are links. */
+export const ADMIN_NAV_ENTRIES: GroupedNavEntry[] = groupNavSections(ADMIN_NAV_SECTIONS, { 'Quản lý Tour': ListChecks, 'Đăng ký đoàn': ClipboardCheck })
 
 /**
  * The nav item a path belongs to. Exact match wins; otherwise the longest
