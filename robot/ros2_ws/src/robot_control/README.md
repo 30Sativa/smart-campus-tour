@@ -286,11 +286,25 @@ firmware `STOP,<seq>` command.
   Verify the published polygon, turns and obstacle clearance on hardware;
   update the envelope only if a measured physical protrusion justifies it.
 - `config/nav2_params.yaml`: planner is `nav2_smac_planner/SmacPlanner2D`,
-  controller is `RegulatedPurePursuitController` at 0.20 m/s with
+  controller is `RegulatedPurePursuitController` at 0.22 m/s for a supervised
+  forward-speed hardware trial (previously 0.20 m/s), with
   `allow_reversing: false`. Values marked `TUNE ON HARDWARE` in that file are
   the ones to touch after a real run - not before. Rationale in
   [ADR-0007](../../../../docs/decisions/0007-smac2d-rpp-no-autonomous-reverse.md);
   behaviour and limitations in `robot_navigation/README.md`.
+  Smoother forward ceiling is 0.22 m/s; reverse remains -0.20 m/s,
+  acceleration/deceleration and turn settings are unchanged. With the default
+  bridge `speed_scale=1.0` and 250 mm/s wheel limit, straight travel at 0.22
+  passes unchanged; turns can still trigger wheel-pair scaling. RPP regulation
+  and an active `speed_limit` can also reduce speed. This trial does not
+  diagnose or guarantee a fix for motor vibration/noise.
+  Hardware check: compare straight starts, steady travel, goal stops and
+  supervised obstacle stops at the same payload/route against 0.20 m/s; record
+  vibration/noise, driver alarms, drift and measured stopping clearance.
+  Verify runtime `FollowPath.desired_linear_vel=0.22` and smoother
+  `max_velocity=[0.22, 0.0, 0.40]` after rebuilding/restarting. If behaviour
+  worsens, stop and restore only these two forward values to 0.20, then
+  rebuild/restart; do not raise wheel limits to force 0.22 through a turn.
 - Any launch file that feeds `config/nav2_params.yaml` into
   `nav2_bringup/navigation_launch.py` MUST first
   `SetLaunchConfiguration('robot_ns', ...)` ('' or '/robot_01') and

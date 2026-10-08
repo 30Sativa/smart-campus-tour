@@ -160,8 +160,13 @@ def test_rpp_baseline_safety_flags():
 
 def test_rpp_speed_stays_at_the_supervised_baseline():
     params = _follow_path()
-    assert params['desired_linear_vel'] <= 0.20
+    # Explicitly authorized 0.22 m/s trial; catch either a stale 0.20 ceiling
+    # or an unintended increase beyond this trial.
+    assert params['desired_linear_vel'] == 0.22
     smoother = _nav2_params()['velocity_smoother']['ros__parameters']
+    assert smoother['max_velocity'][0] == params['desired_linear_vel']
+    assert smoother['min_velocity'][0] == -0.20  # Reverse limit is unchanged.
+    assert smoother['max_accel'] == [0.50, 0.0, 0.50]
     # The controller must never ask for more than the smoother will pass.
     assert params['desired_linear_vel'] <= smoother['max_velocity'][0]
     assert params['rotate_to_heading_angular_vel'] <= smoother['max_velocity'][2]
@@ -171,7 +176,7 @@ def test_rpp_speed_stays_at_the_supervised_baseline():
 def test_rpp_regulation_is_actually_active():
     """min_speed above desired_linear_vel silently disables regulation.
 
-    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.20 m/s
+    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.22 m/s
     baseline - leaving it unset would make curvature regulation a no-op.
     """
     params = _follow_path()

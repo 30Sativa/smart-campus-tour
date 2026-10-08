@@ -23,8 +23,11 @@ File: `robot/ros2_ws/src/robot_control/config/nav2_params.yaml`.
 | `velocity_smoother.min_velocity` | [-0.20, 0.0, -1.20] | [-0.20, 0.0, -0.40] |
 | `velocity_smoother.max_accel` | [0.50, 0.0, 2.50] | [0.50, 0.0, 0.50] |
 
-Giữ tốc độ tiến 0.20 m/s, lookahead, footprint, inflation, cost weights và
-sonar-OFF như baseline. Chạy với `enable_camera:=false`. Giữ giới hạn giảm tốc
+Đợt test quay này giữ tốc độ tiến 0.20 m/s. Cấu hình hiện tại có thử nghiệm
+riêng tăng tiến lên 0.22 m/s: `desired_linear_vel` và phần tử X của
+`max_velocity`; các giá trị quay trong bảng vẫn giữ nguyên. Khi so sánh riêng
+độ êm quay, dùng cùng tốc độ tiến giữa hai lượt. Giữ lookahead, footprint,
+inflation, cost weights và sonar-OFF như baseline. Chạy với `enable_camera:=false`. Giữ giới hạn giảm tốc
 `max_decel: [-0.50, 0.0, -2.50]`, timeout và cơ chế manual/e-stop.
 Không dùng đợt này để ép robot qua cửa hẹp.
 
