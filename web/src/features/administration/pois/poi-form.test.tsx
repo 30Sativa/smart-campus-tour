@@ -58,8 +58,19 @@ function renderAt(path: string) {
 
 function fillCreateForm() {
   fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'New library' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+  fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
   fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '0' } })
   fireEvent.change(screen.getByLabelText('Y (m)'), { target: { value: '0' } })
+}
+
+function reviewCreate() {
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+}
+
+function openPoseStep() {
+  fireEvent.click(screen.getByRole('button', { name: /Vị trí & hướng/ }))
 }
 
 describe('Admin POI form', () => {
@@ -92,6 +103,7 @@ describe('Admin POI form', () => {
     renderAt('/admin/pois/new')
 
     fillCreateForm()
+    expect(screen.queryByRole('button', { name: 'Tạo POI không khả dụng' })).not.toBeInTheDocument()
     const yaw = screen.getByLabelText('Yaw (rad)') as HTMLInputElement
     expect(yaw).toHaveAttribute('min', '-3.141593')
     expect(yaw).toHaveAttribute('max', '3.141593')
@@ -99,9 +111,10 @@ describe('Admin POI form', () => {
     for (const value of ['0', '0.5', '1.570796', '-1.570796']) {
       fireEvent.change(yaw, { target: { value } })
       expect(yaw.validity.valid).toBe(true)
-      expect(yaw.closest('details')).toHaveAttribute('open')
+      expect(yaw).toBeVisible()
     }
     fireEvent.change(yaw, { target: { value: '0' } })
+    reviewCreate()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
 
     await waitFor(() => expect(createPayload).not.toBeNull())
@@ -188,25 +201,97 @@ describe('Admin POI form', () => {
       return jsonResponse({ success: true, data: poiDetails({ id: 'created', mapKey: 'map2-v2', x: 5.025, y: -5.025, yaw: 1.570796 }) })
     })
     renderAt('/admin/pois/new')
-    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Map-picked POI' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 527.5))
     expect(screen.getByLabelText('X (m)')).toHaveValue(5.025)
     expect(screen.getByLabelText('Y (m)')).toHaveValue(-5.025)
     expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(null)
-    expect(screen.getByRole('button', { name: 'Tạo POI không khả dụng' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    expect(screen.getByText('Nhập x, y và yaw bằng số hợp lệ.')).toBeVisible()
+    expect(payload).toBeNull()
     fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 507.5))
     expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(1.570796)
+    reviewCreate()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
     await waitFor(() => expect(payload).toMatchObject({ mapKey: 'map2-v2', mapFrame: 'map', x: 5.025, y: -5.025, yaw: 1.570796 }))
   })
 
-  it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in the closed Edit disclosure', async (cancel) => {
+  it.each(['new', 'poi-1'])('preserves exact manual coordinates when switching methods for %s', async (id) => {
+    const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
+    renderAt(`/admin/pois/${id}`)
+    const name = await screen.findByLabelText('Tên POI')
+    if (id === 'new') fireEvent.change(name, { target: { value: 'Tour Start' } })
+    openPoseStep()
+    expect(screen.getByRole('radio', { name: 'Chọn trên bản đồ' })).toBeChecked()
+    expect(screen.getByLabelText('X (m)')).not.toBeVisible()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
+    expect(screen.queryByRole('group', { name: 'Bản đồ occupancy ROS' })).not.toBeInTheDocument()
+    for (const [field, value] of [['X (m)', '-0.319'], ['Y (m)', '-0.535'], ['Yaw (rad)', '0.077']]) {
+      expect(screen.getByLabelText(field)).toBeVisible()
+      fireEvent.change(screen.getByLabelText(field), { target: { value } })
+    }
+    fireEvent.click(screen.getByRole('radio', { name: 'Chọn trên bản đồ' }))
+    await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    expect(screen.getByRole('button', { name: 'Di chuyển bản đồ' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByLabelText('X (m)')).not.toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Nhập / chỉnh tọa độ' }))
+    expect(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' })).toBeChecked()
+    expect(screen.getByLabelText('X (m)')).toHaveValue(-0.319)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(-0.535)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(0.077)
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('finishes an incomplete map selection manually and saves the same position', async () => {
+    let payload: Record<string, unknown> | null = null
+    stubApi((_url, init) => {
+      if (init?.method === 'POST') {
+        payload = JSON.parse(String(init.body)) as Record<string, unknown>
+        return jsonResponse({ success: true, data: { id: 'created' } })
+      }
+      return jsonResponse({ success: true, data: poiDetails({ id: 'created' }) })
+    })
+    renderAt('/admin/pois/new')
+    fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Mixed entry' } })
+    openPoseStep()
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+    fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 527.5))
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(null)
+    fireEvent.change(screen.getByLabelText('Yaw (rad)'), { target: { value: '0.077' } })
+    reviewCreate()
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
+    await waitFor(() => expect(payload).toMatchObject({ x: 5.025, y: -5.025, yaw: 0.077 }))
+  })
+
+  it('keeps manual entry selected after changing maps and requires a new pose', async () => {
+    const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
+    renderAt('/admin/pois/poi-1')
+    await screen.findByLabelText('Tên POI')
+    openPoseStep()
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
+    expect(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' })).toBeChecked()
+    expect(screen.getByLabelText('X (m)')).toBeVisible()
+    expect(screen.getByLabelText('X (m)')).toHaveValue(null)
+    expect(screen.getByLabelText('Y (m)')).toHaveValue(null)
+    expect(screen.getByLabelText('Yaw (rad)')).toHaveValue(null)
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(await screen.findByText('Nhập x, y và yaw bằng số hợp lệ.')).toBeVisible()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
+  })
+
+  it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in map entry', async (cancel) => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1' }) }))
     renderAt('/admin/pois/poi-1')
+    await screen.findByLabelText('Tên POI')
+    openPoseStep()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     const yaw = screen.getByLabelText('Yaw (rad)')
-    expect(yaw.closest('details')).not.toHaveAttribute('open')
+    expect(yaw).not.toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
     fireEvent.pointerDown(svg, pointerAt(svg, 406.5, 527.5))
     expect(yaw).toHaveValue(null)
@@ -219,13 +304,14 @@ describe('Admin POI form', () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(0)
   })
 
-  it('shows validation when a map rebind leaves the pose empty inside the closed Edit disclosure', async () => {
+  it('shows validation when a map rebind leaves the pose empty in map entry', async () => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails() }))
     renderAt('/admin/pois/poi-1')
     await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
+    openPoseStep()
     fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
-    expect(screen.getByLabelText('Yaw (rad)').closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByLabelText('Yaw (rad)')).not.toBeVisible()
     fireEvent.keyDown(svg, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     expect(await screen.findByText('Nhập x, y và yaw bằng số hợp lệ.')).toBeInTheDocument()
@@ -249,6 +335,7 @@ describe('Admin POI form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     await waitFor(() => expect(payload).toMatchObject({ mapKey: original.mapKey, x: original.x, y: original.y, yaw: 3.141593, expectedRowVersion: firstVersion }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled())
+    openPoseStep()
     fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
     expect(screen.getByLabelText('X (m)')).toHaveValue(null)
     expect(screen.getByLabelText('Y (m)')).toHaveValue(null)
@@ -270,6 +357,8 @@ describe('Admin POI form', () => {
       usage: { hasRouteStopReferences: true, hasHistoricalTourReferences: false, hasReadyOrRunningTours: true, canEditPose: false, canEditContentAndAvailability: false },
     }) }))
     renderAt('/admin/pois/poi-1')
+    await screen.findByLabelText('Tên POI')
+    openPoseStep()
     await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
     expect(screen.getByLabelText('Tên POI')).toBeDisabled()
     expect(screen.getByLabelText('Bản đồ')).toBeDisabled()
@@ -296,6 +385,8 @@ describe('Admin POI form', () => {
     await waitFor(() => expect(payload).toMatchObject({ x: 500, y: 500, description: 'Copy only' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled())
     payload = null
+    openPoseStep()
+    fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
     fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '501' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     expect(await screen.findByText('Pose nằm ngoài phạm vi bản đồ đã chọn.')).toBeInTheDocument()
