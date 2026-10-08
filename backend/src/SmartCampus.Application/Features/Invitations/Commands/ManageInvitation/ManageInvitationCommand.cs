@@ -16,8 +16,8 @@ public sealed class ManageInvitationCommandValidator : AbstractValidator<ManageI
     public ManageInvitationCommandValidator()
     {
         RuleFor(c => c.Request.RequestId).NotEmpty();
-        RuleFor(c => c.Request.ExpectedRowVersion).Must(RegistrationConsistency.ValidVersion);
-        When(c => c.Operation == "issue", () => RuleFor(c => c.Request.ExpectedTourRowVersion).Must(RegistrationConsistency.ValidVersion));
+        RuleFor(c => c.Request.ExpectedRowVersion).Must(RowVersionToken.IsValid);
+        When(c => c.Operation == "issue", () => RuleFor(c => c.Request.ExpectedTourRowVersion).Must(RowVersionToken.IsValid));
     }
 }
 public sealed class ManageInvitationCommandHandler(IRegistrationRepository registrations, IInvitationRepository repository,
@@ -27,9 +27,8 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
     public async Task<Unit> Handle(ManageInvitationCommand command, CancellationToken ct)
     {
         if (!settings.Enabled) throw new ConflictException("Hỗ trợ lời mời chưa được bật.", "INVITATIONS_DISABLED");
-        var tourId = await registrations.FindTourIdAsync(command.RegistrationId, command.Owner, ct) ?? throw new NotFoundException("Không tìm thấy đăng ký.");
-        var tour = await registrations.LockTourAsync(tourId, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
-        var registration = await registrations.LockRegistrationAsync(command.RegistrationId, command.Owner, ct) ?? throw new NotFoundException("Không tìm thấy đăng ký.");
+        var (tour, registration) = await registrations.LockRegistrationAsync(command.RegistrationId, command.Owner, ct)
+            ?? throw new NotFoundException("Không tìm thấy đăng ký.");
         var entity = (command.InvitationId ?? registration.Id).ToString("D");
         var action = "INVITATION_" + command.Operation.ToUpperInvariant();
         var previous = await repository.FindRequestAsync(command.Request.RequestId, ct);
@@ -42,8 +41,8 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
         var now = clock.GetUtcNow();
         if (command.Operation == "issue")
         {
-            RegistrationConsistency.CheckVersion(registration.RowVersion, command.Request.ExpectedRowVersion);
-            RegistrationConsistency.CheckVersion(tour.RowVersion, command.Request.ExpectedTourRowVersion!);
+            RowVersionToken.EnsureCurrent(registration.RowVersion, command.Request.ExpectedRowVersion);
+            RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedTourRowVersion!);
             InvitationPolicy.Require(registration.State == "APPROVED" && tour.State is "SCHEDULED" or "READY" or "RUNNING");
             await issuer.IssueAsync(registration, tour, command.Actor, now, ct);
         }
@@ -51,7 +50,7 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
         {
             var invitation = (await repository.LoadAsync(registration.Id, ct)).SingleOrDefault(i => i.Id == command.InvitationId)
                 ?? throw new NotFoundException("Không tìm thấy lời mời.");
-            RegistrationConsistency.CheckVersion(invitation.RowVersion, command.Request.ExpectedRowVersion);
+            RowVersionToken.EnsureCurrent(invitation.RowVersion, command.Request.ExpectedRowVersion);
             InvitationPolicy.Require(command.Operation == "revoke"
                 ? InvitationPolicy.CanRevoke(tour, registration, invitation, now)
                 : command.Operation == "reissue" ? InvitationPolicy.CanReissue(tour, registration, invitation, now)

@@ -40,13 +40,10 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
 
     public async Task<InvitationReadModel?> ReadAsync(Guid registrationId, Guid? owner, CancellationToken ct)
     {
-        var tourId = await context.GroupRegistrations.AsNoTracking()
-            .Where(r => r.Id == registrationId && (owner == null || r.RepresentativeUserId == owner))
-            .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
-        if (tourId is null) return null;
-        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, tourId.Value, ct);
+        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, registrationId, owner, ct);
+        if (snapshot is null) return null;
         var registration = await context.GroupRegistrations.AsNoTracking().Include(r => r.Tour).Include(r => r.RosterRows)
-            .SingleAsync(r => r.Id == registrationId, ct);
+            .SingleAsync(r => r.Id == registrationId && (owner == null || r.RepresentativeUserId == owner), ct);
         var invitations = await context.Invitations.AsNoTracking().Include(i => i.RosterRow)
             .Where(i => i.RosterRow.RegistrationId == registrationId).ToArrayAsync(ct);
         var ids = invitations.Select(i => i.Id.ToString("D")).ToArray();

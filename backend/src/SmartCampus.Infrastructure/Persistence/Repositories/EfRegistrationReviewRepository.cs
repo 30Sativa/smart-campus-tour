@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Registrations;
-using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration;
-using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
+using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration.Dtos;
+using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
@@ -45,10 +45,8 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
 
     public async Task<ReviewReadModel?> GetAsync(Guid id, CancellationToken ct)
     {
-        var tourId = await context.GroupRegistrations.AsNoTracking().Where(r => r.Id == id)
-            .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
-        if (tourId is null) return null;
-        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, tourId.Value, ct);
+        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, id, owner: null, ct);
+        if (snapshot is null) return null;
         var read = await context.GroupRegistrations.AsNoTracking().Where(r => r.Id == id).Select(r => new
         {
             Summary = new ReviewListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,

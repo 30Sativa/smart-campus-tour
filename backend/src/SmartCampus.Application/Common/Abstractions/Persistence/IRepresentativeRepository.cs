@@ -1,9 +1,8 @@
-using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
-using SmartCampus.Application.Features.Representative.Queries.Tours;
-using SmartCampus.Application.Features.Representative.Queries.Lists;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
-using SmartCampus.Domain.Entities;
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
+using SmartCampus.Application.Features.Representative.Queries.Lists;
+using SmartCampus.Application.Features.Representative.Queries.Tours;
 
 namespace SmartCampus.Application.Common.Abstractions.Persistence;
 

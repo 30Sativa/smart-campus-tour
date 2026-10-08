@@ -5,9 +5,13 @@ using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
-using SmartCampus.Application.Features.RegistrationReview.Commands.ReviewRegistration;
+using SmartCampus.Application.Features.RegistrationReview.Commands;
+using SmartCampus.Application.Features.RegistrationReview.Commands.ApproveRegistration;
+using SmartCampus.Application.Features.RegistrationReview.Commands.RejectRegistration;
 using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration;
+using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration.Dtos;
 using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
+using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -34,16 +38,19 @@ public sealed class AdminRegistrationsController(ISender sender) : ControllerBas
         Ok(new BaseResponse<ReviewDetails> { Success = true, Message = "OK", Data = await sender.Send(new GetRegistrationQuery(id), ct) });
 
     [HttpPost("{id:guid}/approve")]
-    public Task<ActionResult<BaseResponse<object?>>> Approve(Guid id, [FromBody] ReviewRequest request, CancellationToken ct) =>
-        Review(id, true, request, ct);
+    public async Task<ActionResult<BaseResponse<object?>>> Approve(Guid id, [FromBody] ReviewRequest request, CancellationToken ct)
+    {
+        await sender.Send(new ApproveRegistrationCommand(id, User.GetRequiredUserId(), request), ct);
+        return Ok(Committed());
+    }
 
     [HttpPost("{id:guid}/reject")]
-    public Task<ActionResult<BaseResponse<object?>>> Reject(Guid id, [FromBody] ReviewRequest request, CancellationToken ct) =>
-        Review(id, false, request, ct);
-
-    private async Task<ActionResult<BaseResponse<object?>>> Review(Guid id, bool approve, ReviewRequest request, CancellationToken ct)
+    public async Task<ActionResult<BaseResponse<object?>>> Reject(Guid id, [FromBody] ReviewRequest request, CancellationToken ct)
     {
-        await sender.Send(new ReviewRegistrationCommand(id, User.GetRequiredUserId(), approve, request), ct);
-        return Ok(new BaseResponse<object?> { Success = true, Message = "OK", Data = null });
+        await sender.Send(new RejectRegistrationCommand(id, User.GetRequiredUserId(), request), ct);
+        return Ok(Committed());
     }
+
+    // Decisions return no data: clients refetch the committed detail.
+    private static BaseResponse<object?> Committed() => new() { Success = true, Message = "OK", Data = null };
 }

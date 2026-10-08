@@ -846,14 +846,23 @@ separate from demo caches. Existing Admin Tour/dashboard review drawers,
 invitation demos, Staff/Student simulations and legacy contracts remain mock;
 their links use the mock Tour review consumer rather than sending fixture IDs
 to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
-Representative lists/details refetch from SQL and show committed review state.
+The Admin sidebar "Chờ duyệt" badge links to the live queue, so it reads
+`pagination.totalItems` of the same SUBMITTED query; the dashboard and bell stay
+simulated. Representative lists/details refetch from SQL and show committed review state.
 
-Shared invariants/input validation/audit and mutation persistence are owned by
-`backend/src/SmartCampus.Application/Features/Registrations/` and its specific
-persistence boundary. Representative action policy and draft replacement remain
-under its Commands; read models/mapping remain near their Queries. Review use
-cases live under `backend/src/SmartCampus.Application/Features/RegistrationReview/`. The roster display shared by
-live Admin and Representative is under `web/src/features/registrations/`.
+`backend/src/SmartCampus.Application/Features/Registrations/` owns the shared
+registration invariants: state values, the SCHEDULED write window and conflict
+codes, rowversion tokens, email normalization/reservation, input validation and
+audit. `IRegistrationRepository.LockRegistrationAsync` is the single Tour-first
+lock entry for Representative, review and invitation writers. Each actor policy
+sits at its feature root because commands enforce it and detail queries project
+it: `backend/src/SmartCampus.Application/Features/Representative/RepresentativeRegistrationPolicy.cs`
+and `backend/src/SmartCampus.Application/Features/RegistrationReview/ReviewPolicy.cs`.
+Approve and reject are separate commands sharing
+`backend/src/SmartCampus.Application/Features/RegistrationReview/Commands/ReviewDecision.cs`; Representative
+draft replacement stays with its commands; read models stay in their query
+`Dtos/`. The roster display and SQL registration-state vocabulary shared by live
+Admin and Representative are under `web/src/features/registrations/`.
 
 #### 3.2.3 Invitations, Resend and Student entry (implemented, opt-in)
 

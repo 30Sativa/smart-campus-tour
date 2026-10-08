@@ -4,10 +4,15 @@ import { registrationsApi as api } from './api/registrations'
 import type { ReviewFilters, ReviewInput } from './types'
 
 const ownerKey = (id: string) => ['admin-registration-review', id] as const
-export function useRegistrationReviews(filters: ReviewFilters) {
+export function useRegistrationReviews(filters: ReviewFilters, enabled = true) {
   const owner = useAuthStore(s => s.user?.userId)
   return useQuery({ queryKey: [...ownerKey(owner ?? ''), 'list', filters], queryFn: ({ signal }) => api.list(filters, signal),
-    enabled: Boolean(owner), refetchInterval: 15000, retry: false })
+    enabled: enabled && Boolean(owner), refetchInterval: 15000, retry: false })
+}
+/** Live SUBMITTED total for navigation. Null while unknown or failed: never a mock or guessed number. */
+export function usePendingReviewCount() {
+  const query = useRegistrationReviews({ state: 'SUBMITTED', page: 1, size: 1 })
+  return query.isSuccess ? query.data.pagination.totalItems : null
 }
 export function useRegistrationReview(id: string) {
   const owner = useAuthStore(s => s.user?.userId)

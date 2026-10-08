@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminRegistrationsPage from '../../../routes/admin/AdminRegistrationsPage'
+import AdminShell from '../AdminShell'
 import { useAuthStore } from '../../../stores/auth-store'
 import { dateBoundary } from './presentation'
 import type { ReviewDetails, ReviewInput } from './types'
@@ -159,6 +160,39 @@ describe('Admin registration SQL HTTP boundary', () => {
     expect(await within(screen.getByRole('dialog', { name: 'Duyệt Đoàn A?' })).findByRole('alert')).toHaveTextContent('Không thực hiện được.')
     expect(registration.summary.state).toBe('SUBMITTED')
     expect(screen.queryByText('Quyết định đã được lưu.')).not.toBeInTheDocument()
+  })
+
+  it('explains an inverted Tour date range instead of sending a request that can only fail', async () => {
+    renderAt('/admin/registrations?from=2026-10-10&to=2026-10-09', 'all')
+    expect(await screen.findByText('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.')).toBeInTheDocument()
+    expect(requests.some(u => u.pathname === '/api/admin/registrations')).toBe(false)
+    expect(screen.queryByText('Không thể tải danh sách đăng ký.')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tour đến ngày (UTC+7)'), { target: { value: '2026-10-10' } })
+    await waitFor(() => expect(requests.some(u => u.searchParams.get('to') === '2026-10-10T17:00:00.000Z')).toBe(true))
+  })
+
+  it('counts the sidebar queue badge from the live SQL total, never from simulated registrations', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+    clients.push(client)
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
+      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    </Routes></MemoryRouter></QueryClientProvider>)
+    expect(await screen.findByLabelText('25 đoàn chờ duyệt')).toBeInTheDocument()
+    const count = requests.find(u => u.pathname === '/api/admin/registrations' && u.searchParams.get('size') === '1')
+    expect(count?.searchParams.get('state')).toBe('SUBMITTED')
+  })
+
+  it('hides the sidebar count when its SQL refresh fails instead of retaining a stale or simulated count', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+    clients.push(client)
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
+      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    </Routes></MemoryRouter></QueryClientProvider>)
+    await screen.findByLabelText('25 đoàn chờ duyệt')
+    failure = 'list'
+    await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-admin', 'list'] }) })
+    await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
+    expect(screen.getByRole('link', { name: 'Chờ duyệt' })).toBeInTheDocument()
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

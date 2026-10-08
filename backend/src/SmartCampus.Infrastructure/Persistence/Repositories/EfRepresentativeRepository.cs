@@ -1,12 +1,12 @@
-using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
-using SmartCampus.Application.Features.Representative.Queries.Tours;
-using SmartCampus.Application.Features.Representative.Queries.Lists;
-using SmartCampus.Application.Features.Registrations;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
+using SmartCampus.Application.Features.Representative.Queries.Lists;
+using SmartCampus.Application.Features.Representative.Queries.Tours;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
@@ -19,7 +19,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
 
     public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, CancellationToken ct)
     {
-        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationConsistency.Scheduled);
+        var query = context.Tours.AsNoTracking().Where(t => t.State == RegistrationGate.OpenTourState);
         if (!string.IsNullOrWhiteSpace(request.Search))
             query = query.Where(t => t.Name.Contains(request.Search.Trim()) || t.Route.Name.Contains(request.Search.Trim()));
         var total = await query.LongCountAsync(ct);
@@ -37,7 +37,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     public async Task<TourReadModel?> GetTourAsync(Guid id, Guid owner, CancellationToken ct)
     {
         var tour = await context.Tours.AsNoTracking()
-            .Where(t => t.Id == id && (t.State == RegistrationConsistency.Scheduled || t.GroupRegistrations.Any(r => r.RepresentativeUserId == owner)))
+            .Where(t => t.Id == id && (t.State == RegistrationGate.OpenTourState || t.GroupRegistrations.Any(r => r.RepresentativeUserId == owner)))
             .Include(t => t.Route).ThenInclude(r => r.RouteStops).ThenInclude(s => s.Poi).SingleOrDefaultAsync(ct);
         return tour is null ? null : MapTour(tour);
     }
@@ -67,10 +67,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     }
     public async Task<RegistrationReadModel?> GetRegistrationAsync(Guid id, Guid owner, CancellationToken ct)
     {
-        var tourId = await context.GroupRegistrations.AsNoTracking().Where(r => r.Id == id && r.RepresentativeUserId == owner)
-            .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
-        if (tourId is null) return null;
-        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, tourId.Value, ct);
+        await using var snapshot = await RegistrationReadSnapshot.BeginAsync(context, id, owner, ct);
+        if (snapshot is null) return null;
         var result = await context.GroupRegistrations.AsNoTracking()
             .Where(r => r.Id == id && r.RepresentativeUserId == owner)
             .Select(r => new

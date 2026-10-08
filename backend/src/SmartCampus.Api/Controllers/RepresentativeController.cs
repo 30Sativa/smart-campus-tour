@@ -21,6 +21,7 @@ using SmartCampus.Application.Features.Representative.Commands.CancelRegistratio
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTours;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTour;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
 

@@ -1,6 +1,6 @@
 using SmartCampus.Application.Common.Models;
-using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration;
-using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
+using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration.Dtos;
+using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
 
 namespace SmartCampus.Application.Common.Abstractions.Persistence;
 

@@ -197,6 +197,9 @@ public sealed class InvitationEndpointTests
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Get, Path(id), token: await LoginAsync(host.Client, "rep.two"))).Status);
+        // Writes take the shared owner-scoped Tour-first lock: another Representative cannot even locate the group.
+        Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()),
+            token: await LoginAsync(host.Client, "rep.two"))).Status);
         var staff = await LoginAsync(host.Client, "invite.staff");
         Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()), token: staff)).Status);

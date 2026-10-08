@@ -87,7 +87,8 @@ backend/src/SmartCampus.Application/
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          current: Accounts, Auth, Pois, Representative, Simulation
+├── Features/                          current: Accounts, Auth, Invitations, Pois, Registrations,
+│                                       RegistrationReview, Representative, Simulation
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
 │       └── Queries/<UseCase>/
@@ -293,8 +294,11 @@ shape as registration mutations: `RegistrationTransactionBehavior` wraps their
 UnitOfWork save in a read-committed SQL transaction, and each handler takes an
 update lock on the parent Tour before locking the registration, checking versions
 and effective emails, so roster/registration/audit rows commit together
-(`docs/architecture.md` Section 3.2.1). Future registration writers, including
-Admin review, must keep that Tour-first lock order.
+(`docs/architecture.md` Section 3.2.1). Admin approve/reject and invitation
+support use the same transaction. Writers of an existing registration acquire
+locks only through `IRegistrationRepository.LockRegistrationAsync`, which owns
+the Tour-first order; create and Tour-only writers lock the Tour first. Do not
+lock a registration or its rows by another path.
 
 **Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
 `ValidationBehavior` -> Application query handler -> Application read boundary

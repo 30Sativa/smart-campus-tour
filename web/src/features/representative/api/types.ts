@@ -1,7 +1,8 @@
+import type { RegistrationState } from '../../registrations/registration-state'
 import type { RosterRow } from '../../registrations/roster'
+export type { RegistrationState } from '../../registrations/registration-state'
 export type { RosterRow } from '../../registrations/roster'
 export type TourState = 'SCHEDULED' | 'READY' | 'RUNNING' | 'COMPLETED' | 'CANCELLED'
-export type RegistrationState = 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
 export type ActionGate = { allowed: boolean; reason: string | null }
 
 export type RepresentativeTour = {
