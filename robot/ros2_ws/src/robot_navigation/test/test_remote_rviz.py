@@ -56,6 +56,64 @@ def test_remote_cloud_frame_and_display_contract():
     assert lidar['Decay Time'] == 0
 
 
+def run_qt_layout_probe():
+    try:
+        from PyQt5 import QtCore, QtWidgets
+    except ImportError:
+        return 77
+
+    config = yaml.safe_load((PACKAGE / 'rviz/remote_navigation.rviz').read_text())
+    geometry = config['Window Geometry']
+    assert not geometry['Hide Left Dock']
+    assert not geometry['Hide Right Dock']
+    state = QtCore.QByteArray.fromHex(geometry['QMainWindow State'].encode())
+    app = QtWidgets.QApplication([])
+    expected = {'Displays': QtCore.Qt.LeftDockWidgetArea,
+                'Views': QtCore.Qt.RightDockWidgetArea,
+                'Navigation 2': QtCore.Qt.LeftDockWidgetArea}
+    # RViz Humble creates panels on the left, with objectName == panel Name,
+    # then calls QMainWindow.restoreState(). Repeat in a fresh window to check
+    # persistence, including a Qt save/restore round trip.
+    for _ in range(2):
+        window = QtWidgets.QMainWindow()
+        window.resize(geometry['Width'], geometry['Height'])
+        window.setCentralWidget(QtWidgets.QWidget())
+        toolbar = window.addToolBar('Tools')
+        toolbar.setObjectName('Tools')
+        docks = {}
+        for panel in config['Panels']:
+            name = panel['Name']
+            dock = QtWidgets.QDockWidget(name, window)
+            dock.setObjectName(name)
+            dock.setWidget(QtWidgets.QWidget())
+            window.addDockWidget(QtCore.Qt.LeftDockWidgetArea, dock)
+            docks[name] = dock
+        assert window.restoreState(state), 'Qt rejected the saved RViz docking state'
+        window.show()
+        app.processEvents()
+        assert set(docks) == set(expected)
+        for name, area in expected.items():
+            assert window.dockWidgetArea(docks[name]) == area, name
+            assert not docks[name].isFloating(), name
+            assert docks[name].isVisible(), name
+        assert docks['Displays'].geometry().right() < window.centralWidget().geometry().left()
+        assert window.centralWidget().geometry().right() < docks['Views'].geometry().left()
+        state = window.saveState()
+        window.close()
+    return 0
+
+
+def test_remote_rviz_docking_restores():
+    env = os.environ.copy()
+    env['QT_QPA_PLATFORM'] = 'offscreen'
+    result = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), '--qt-layout'],
+        env=env, capture_output=True, text=True, timeout=15)
+    if result.returncode == 77:
+        pytest.skip('PyQt5 unavailable; verify docking in RViz on the laptop')
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def run_ros_probe(robot_id):
     try:
         import rclpy
@@ -188,4 +246,4 @@ def test_remote_rviz_ros(robot_id):
 
 
 if __name__ == '__main__':
-    sys.exit(run_ros_probe(sys.argv[1]))
+    sys.exit(run_qt_layout_probe() if sys.argv[1] == '--qt-layout' else run_ros_probe(sys.argv[1]))

@@ -98,6 +98,7 @@ if _PKG_ROOT not in sys.path:
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_YAW_VARIANCE,
     DEFAULT_TWIST_COVARIANCE_DIAGONAL,
+    DEFAULT_WHEEL_BASE,
     Stm32BridgeNode,
     imu_yaw_variance,
     yaw_to_quaternion_z,
@@ -681,6 +682,21 @@ def test_wheel_pair_below_limit_is_unchanged():
 
     assert (node._left_mm_s, node._right_mm_s) == (200, 200)
     assert node._warnings == []
+
+
+def test_forward_speed_trial_passes_straight_and_keeps_turn_wheel_limit():
+    node = _command_harness()
+    node.wheel_base = DEFAULT_WHEEL_BASE  # Real-robot calibration, not CAD.
+    _send_command(node, linear_x=0.22, angular_z=0.0)
+    assert (node._left_mm_s, node._right_mm_s) == (220, 220)
+    assert node._warnings == []
+
+    # At the existing 0.40 rad/s ceiling the outer wheel exceeds 250 mm/s.
+    # Keep pair scaling: this trial must not raise the hardware wheel limit.
+    for angular_z, expected in [(0.40, (100, 250)), (-0.40, (250, 100))]:
+        _send_command(node, linear_x=0.22, angular_z=angular_z)
+        assert (node._left_mm_s, node._right_mm_s) == expected
+    assert len(node._warnings) == 2
 
 
 def test_straight_wheel_pair_above_limit_scales_equally():

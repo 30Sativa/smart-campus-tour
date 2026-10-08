@@ -145,6 +145,16 @@ ON, Fixed Frame `map`). Adapter lấy `target_frame: map` từ
 initial pose/`map -> odom`, scan có thể bị drop hết; đặt `2D Pose Estimate`
 đúng vị trí thật, không thêm static `map -> odom` để che lỗi.
 
+Layout remote lưu docking bằng `Window Geometry / QMainWindow State` của
+Qt 5 / RViz2 Humble: `Displays` và `Navigation 2` bên trái, bản đồ ở giữa,
+`Views` bên phải. Sau khi build/source bằng lệnh trên, mở launch, đóng rồi
+mở lại cùng lệnh để xác nhận layout được giữ trên laptop; `Astra depth`
+phải vẫn OFF. Test Qt offscreen kiểm tra restore và save/restore, chưa thay
+cho kiểm chứng GUI RViz thực tế hoặc bảo đảm mọi phiên bản Qt/RViz khác.
+Nếu cần chỉnh docking cho phiên bản khác, mở bản sao config trong RViz,
+kéo panel và dùng **File → Save Config**, rồi chỉ chép giá trị
+`QMainWindow State` về config remote để giữ nguyên Displays/topic/QoS/camera.
+
 Để debug trong `odom`, chuẩn bị bản config RViz với Fixed Frame `odom` và
 bản params với `target_frame: odom`, rồi truyền **cả hai**:
 
