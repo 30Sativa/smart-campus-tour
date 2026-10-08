@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, ChevronRight, Radio, ShieldAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Radio, ShieldAlert, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
@@ -7,9 +7,11 @@ import { isAdminRole, roleLabel } from '../../auth/roles'
 import { LiveDot } from './StaffUi'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { ConsoleSidebar, DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
-import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
+import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
+import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, activeNavPath } from './staff-nav'
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
+import { StaffBell } from './StaffBell'
 import { REASON_SHORT } from './reason'
 
 const TOAST_MS = 9_000
@@ -21,6 +23,11 @@ const CONNECTION_LABEL = {
   disconnected: 'Mất kết nối',
 } as const
 
+/**
+ * The operations shell: the shared grouped sidebar (logo, folding groups,
+ * the assistance badge on "Điều hành trực tiếp"), and a quiet header with the
+ * realtime state, the bell (everything that needs attention) and the account.
+ */
 export default function StaffShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState<AssistanceNotice | null>(null)
@@ -37,9 +44,9 @@ export default function StaffShell() {
   const connection = useStaffRealtimeSync(setToast)
   const today = useTours()
   const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
-  const runningTour = today.data?.find((tour) => tour.state === 'Running')
 
   const currentPath = activeNavPath(location.pathname)
+  const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
   useEffect(() => {
     if (!menuOpen) return
     const menuButton = menuButtonRef.current
@@ -54,73 +61,52 @@ export default function StaffShell() {
   }, [toast])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f8fbff] text-[#173b59]">
+    <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
-      <ConsoleSidebar
+      <GroupedSidebar
         id="staff-navigation"
         label="Khu vực vận hành"
         navLabel="Điều hướng vận hành"
         homePath="/staff"
-        areaName="Vận hành tour"
-        sections={STAFF_NAV_SECTIONS}
+        subtitle="DT-AMR · Vận hành"
+        entries={STAFF_NAV_ENTRIES}
         currentPath={currentPath}
-        badges={{ '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ` } }}
+        badges={{ '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ`, tone: 'danger' } }}
         // Only an Admin sees a way across, and only because that account
         // genuinely has the other area. An operator is not shown a door it cannot open.
         secondary={showAdminLink ? [{ to: '/admin', label: 'Khu vực quản trị', icon: ADMIN_LINK_ICON }] : undefined}
-        user={{ name: user?.username || 'Nhân viên vận hành', role: roleLabel(user?.role), icon: Radio }}
         onNavigate={closeMenu}
         onLogout={handleLogout}
-        showUser={false}
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#dbe9f4] bg-white/95 px-5 backdrop-blur-md lg:px-9">
-          <p className="text-sm font-bold text-[#173b59] lg:hidden">
-            {STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'}
-          </p>
-          <span
-            role="status"
-            className={`hidden items-center gap-2 rounded-full px-3 py-1 text-xs font-bold sm:inline-flex ${
-              connection === 'connected'
-                ? 'bg-[#e7f4ff] text-[#2b80ac] border border-[#cfe7c4]'
-                : connection === 'disconnected'
-                ? 'bg-[#fef2f2] text-[#dc2626] border border-[#fecaca]'
-                : 'bg-[#fffbeb] text-[#d97706] border border-[#fde68a]'
-            }`}
-          >
-            <LiveDot tone={connection === 'connected' ? 'ok' : connection === 'disconnected' ? 'danger' : 'warn'} />
-            {CONNECTION_LABEL[connection]}
-          </span>
-
-          <div className="ml-auto flex min-w-0 items-center gap-2.5">
-
-            <Link
-              to={runningTour ? `/staff/live/${runningTour.id}` : '/staff/live'}
-              aria-label={assistCount > 0 ? `Điều hành trực tiếp, ${assistCount} buổi cần hỗ trợ` : 'Điều hành trực tiếp'}
-              className="relative grid size-9.5 shrink-0 place-items-center rounded-xl border border-[#d9e9f5] bg-white text-[#607f93] hover:border-[#a8cde6] hover:text-[#2d78a9] hover:bg-[#f1f8fe] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]"
+        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-9">
+          <div className="flex h-[62px] items-center gap-3 border-b border-[#e5e7eb]">
+            <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
+            <span
+              role="status"
+              className={`hidden shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold sm:inline-flex ${
+                connection === 'connected' ? 'bg-[#ecfdf3] text-[#15803d]' : connection === 'disconnected' ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#fffbeb] text-[#b45309]'
+              }`}
             >
-              <Bell size={17} aria-hidden="true" />
-              {assistCount > 0 && (
-                <span
-                  className="absolute -top-1 -right-1 grid min-w-4.5 place-items-center rounded-full bg-[#dc2626] px-1 text-[10px] leading-4 font-bold text-white tabular-nums"
-                  aria-hidden="true"
-                >
-                  {assistCount}
-                </span>
-              )}
-            </Link>
+              <LiveDot tone={connection === 'connected' ? 'ok' : connection === 'disconnected' ? 'danger' : 'warn'} />
+              {CONNECTION_LABEL[connection]}
+            </span>
 
-            {/* The signed-in account, top right. Sign-out stays in the sidebar. */}
-            <div role="group" className="flex min-w-0 items-center gap-2.5 border-l border-[#e2e8f0] pl-3" aria-label="Tài khoản đang đăng nhập">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#e3f2ff] text-[#2b6c98]"><Radio size={16} aria-hidden="true" /></span>
-              <div className="hidden min-w-0 sm:block">
-                <p className="max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username || 'Nhân viên vận hành'}</p>
-                <p className="max-w-40 truncate text-[11px] leading-tight text-[#94a3b8]">{roleLabel(user?.role)}</p>
+            <div className="ml-auto flex min-w-0 items-center gap-1.5">
+              <StaffBell />
+              {/* The signed-in account, top right. Sign-out stays in the sidebar. */}
+              <div role="group" className="ml-1 flex min-w-0 items-center gap-2.5 border-l border-[#e5e7eb] pl-3.5" aria-label="Tài khoản đang đăng nhập">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#2d719e] text-white"><Radio size={15} aria-hidden="true" /></span>
+                <div className="hidden min-w-0 sm:block">
+                  <p className="max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username || 'Nhân viên vận hành'}</p>
+                  <p className="max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(user?.role)}</p>
+                </div>
+                <ChevronDown size={14} aria-hidden="true" className="hidden shrink-0 text-[#9ca3af] sm:block" />
               </div>
             </div>
           </div>
@@ -144,7 +130,7 @@ function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClos
   return (
     <div
       role="alert"
-      className="fixed right-5 bottom-20 z-40 w-[min(380px,calc(100vw-2.5rem))] rounded-2xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-white p-4 shadow-xl transition-[opacity,transform] duration-300 motion-reduce:transition-none ease-out starting:translate-y-3 starting:opacity-0 lg:bottom-5"
+      className="fixed right-5 bottom-20 z-40 w-[min(380px,calc(100vw-2.5rem))] rounded-xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-white p-4 shadow-xl transition-[opacity,transform] duration-300 motion-reduce:transition-none ease-out starting:translate-y-3 starting:opacity-0 lg:bottom-5"
     >
       <div className="flex items-start gap-3">
         <ShieldAlert size={20} className="mt-0.5 shrink-0 text-[#dc2626]" aria-hidden="true" />

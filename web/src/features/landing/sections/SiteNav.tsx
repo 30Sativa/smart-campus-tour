@@ -35,7 +35,10 @@ export function SiteNav({ onLockScroll }: Props) {
     if (!node || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver(
       ([entry]) => setStuck(!entry.isIntersecting),
-      { rootMargin: '-72px 0px 0px 0px' },
+      // The sentinel sits at the document top. A negative top root margin would
+      // place it outside the observer viewport on the first paint, making the
+      // navigation appear stuck before the visitor has scrolled.
+      { rootMargin: '0px' },
     )
     observer.observe(node)
     return () => observer.disconnect()

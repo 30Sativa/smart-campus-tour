@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router'
-import { FilterChips, PageHeader, Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
+import { PageHeader, Pagination, SearchField } from '../../components/ui/ConsolePrimitives'
+import { StageTabs } from '../../components/ui/StageTabs'
 import { buttonClass, inputClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
 import { useRegistrationReviews } from '../../features/administration/registrations/hooks'
@@ -8,6 +9,9 @@ import { dateBoundary, reviewTime, STATE_LABEL } from '../../features/administra
 import { ReviewStateBadge } from '../../features/administration/registrations/components/ReviewStateBadge'
 import type { RegistrationState } from '../../features/administration/registrations/types'
 import { useReviewParam } from '../../features/administration/use-review-param'
+import { cardClass } from '../../features/administration/admin-visual'
+
+const STATE_COLOR: Record<RegistrationState | 'all', string> = { all: '#64748b', SUBMITTED: '#d97706', APPROVED: '#16a34a', REJECTED: '#dc2626', CANCELLED: '#64748b' }
 
 export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'all' }) {
   const [params, setParams] = useSearchParams()
@@ -33,7 +37,7 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
   return <AdminPage>
     <PageHeader eyebrow="Đăng ký đoàn" title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
       description="Xem đăng ký từ đại diện và xét duyệt khi Tour còn nhận đăng ký. Mỗi quyết định được lưu cùng lịch sử thao tác." />
-    <section className={panelClass} aria-label="Danh sách đăng ký">
+    <section className={cardClass} aria-label="Danh sách đăng ký">
       <div className="space-y-3 border-b border-slate-100 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <SearchField value={search} onChange={q => update({ q: q || null })} label="Tìm theo trường, đoàn, đại diện hoặc Tour" placeholder="Tìm trường, đoàn, đại diện, Tour…" className="w-full lg:max-w-sm" />
@@ -43,8 +47,8 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
             <option value="submittedAt">Gửi trước duyệt trước</option><option value="-submittedAt">Mới gửi trước</option><option value="-updatedAt">Mới cập nhật trước</option><option value="groupName">Tên đoàn</option>
           </select></label>
         </div>
-        {mode === 'all' && <FilterChips<RegistrationState | 'all'> label="Lọc trạng thái đăng ký" value={state ?? 'all'} onChange={value => update({ state: value === 'all' ? null : value })}
-          options={[{ value: 'all', label: 'Tất cả' }, ...(Object.keys(STATE_LABEL) as RegistrationState[]).map(value => ({ value, label: STATE_LABEL[value] }))]} />}
+        {mode === 'all' && <StageTabs<RegistrationState | 'all'> label="Lọc trạng thái đăng ký" value={state ?? 'all'} onChange={value => update({ state: value === 'all' ? null : value })}
+          stages={[{ key: 'all', label: 'Tất cả', color: STATE_COLOR.all }, ...(Object.keys(STATE_LABEL) as RegistrationState[]).map(key => ({ key, label: STATE_LABEL[key], color: STATE_COLOR[key], separated: key === 'REJECTED' }))]} />}
       </div>
       {query.isError ? <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
         : query.isLoading ? <SkeletonRows rows={5} label="Đang tải đăng ký" /> : rows.length === 0 ? <EmptyState title="Không có đăng ký khớp bộ lọc." action={page > 1 ? <button className={buttonClass('secondary', 'sm')} onClick={() => update({ page: null })}>Về trang đầu</button> : undefined} />

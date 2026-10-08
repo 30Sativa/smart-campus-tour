@@ -386,8 +386,9 @@ this API build.
 
 The Web picker uses a versioned static map package exported from
 `robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
-source files; Web owns the deployment derivative. `map2-v1`, frame `map`,
-identifies this snapshot; it is not an alias for demo, Student, or Twin maps.
+source files; Web owns the deployment derivative. `map2-v2`, frame `map`,
+identifies the current snapshot; `map2-v1` remains registered for existing POIs.
+Neither key is an alias for demo, Student, or Twin maps.
 The exporter records source SHA-256 hashes, resolution, the full origin pose,
 dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
 same cell as the source pixel, with Nav2 Humble trinary classification. There
@@ -418,16 +419,16 @@ and unknown cells produce advisory warnings, not navigation verification.
 The API still validates numeric precision/range, not map existence, bounds,
 occupancy, reachability, or loaded robot-map identity.
 
-Current source caveat: with `negate: 0` and `free_thresh: 0.25`, gray 205 is
-free (`1-205/255 < 0.25`). The source contains no unknown cells under these
-thresholds. Do not infer occupancy from the source image's appearance or alter
-robot thresholds as part of the picker. Deployment-map binding, current robot
-pose, navigation testing, and fleet integration remain separate work.
-`map2-v1` remains an immutable snapshot of the current thresholds. Robot-map
-semantics and the runtime-loaded map must be reviewed before entering
-operational POIs; a later threshold change needs a new key and explicit POI
-review. Source parity checks intentionally fail until that revision is
-registered and their target key is updated.
+The current source uses `negate: 0` and `free_thresh: 0.196`; gray 205 is
+unknown (`1-205/255 > 0.196`). `map2-v2` records these thresholds and is the
+source-parity check target and default for new POIs. `map2-v1` remains an
+immutable snapshot with `free_thresh: 0.25`, where gray 205 is free and no
+cells are unknown. Existing POIs retain their key and raster; switching to
+the new map requires explicit pose review and never bulk-relabels stored POIs.
+Do not infer occupancy from the source image's appearance or alter robot
+thresholds as part of the picker. Deployment-map binding, current robot pose,
+navigation testing, and fleet integration remain separate work. A later
+threshold change requires a new key and source-parity check target.
 
 ### 3.1 Fleet contract
 

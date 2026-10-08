@@ -63,6 +63,18 @@ beforeEach(() => {
 afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals(); focusManager.setFocused(undefined) })
 
 describe('Admin registration SQL HTTP boundary', () => {
+  it('filters the redesigned tabs on the server and resets pagination', async () => {
+    renderAt('/admin/registrations?page=3', 'all')
+    await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
+    expect(requests[0].searchParams.get('page')).toBe('3')
+    fireEvent.click(screen.getByRole('button', { name: 'Đã duyệt' }))
+    await waitFor(() => expect(requests.some(u => u.searchParams.get('state') === 'APPROVED' && u.searchParams.get('page') === '1')).toBe(true))
+    expect(screen.queryByRole('button', { name: 'Gửi thông tin' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Đã gửi thông tin')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tour từ ngày (UTC+7)'), { target: { value: '2026-10-08' } })
+    await waitFor(() => expect(requests.some(u => u.searchParams.get('from') === '2026-10-07T17:00:00.000Z')).toBe(true))
+  })
+
   it('uses server filtering and totals, and distinguishes shared viewing from student counts', async () => {
     renderAt()
     expect(await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })).toBeInTheDocument()

@@ -10,7 +10,7 @@ import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { RegistrationStepper } from '../../features/representative/components/RegistrationStepper'
 import { downloadBytes, rosterWorkbookBytes } from '../../features/representative/roster-import'
 import { formatDateTime, readRepError } from '../../features/representative/rep-format'
-import { buttonClass, inputClass } from '../../components/ui/ui-classes'
+import { TOUR_IMAGES, repButton } from '../../features/representative/rep-classes'
 
 export default function RepRegisterPage() {
   const { tourId, registrationId } = useParams()
@@ -69,7 +69,8 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         ? resubmitMutation.mutateAsync({ id: base.registration.summary.id, input: next.input, version: base.registration.rowVersion })
         : update.mutateAsync({ id: base.registration.summary.id, input: next.input, version: base.registration.rowVersion })), base.registration.summary.id) :
         (await submit.mutateAsync({ tourId: base.tour.id, input: next.input, requestId: next.requestId })).id
-      navigate(`/dai-dien/dang-ky/${id}`, { replace: true })
+      // A new registration lands on its detail page with the "sent" ticket.
+      navigate(`/dai-dien/dang-ky/${id}`, { replace: true, state: base.registration ? undefined : { justSent: true } })
     } catch (failure) {
       const problem = readRepError(failure)
       // Only a definite refusal permits editing the intent. An uncertain create retries the same key and payload.
@@ -81,15 +82,16 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
       }) })
     }
   }
-  return <RepPage narrow>
+  return <RepPage>
     <RepPageHeader back={{ to: base.registration ? `/dai-dien/dang-ky/${base.registration.summary.id}` : `/dai-dien/buoi/${tour.id}`, label: 'Quay lại' }}
-      title={title} description={`${base.tour.name}, ${formatDateTime(base.tour.scheduledStartAt)}`} />
-    <div className="mb-7"><RegistrationStepper steps={['Thông tin đoàn', 'Danh sách lời mời', 'Kiểm tra và gửi']} current={step} onSelect={busy || attempt ? undefined : setStep} /></div>
-    {error && <div className="mb-5"><Callout tone="danger" title={error.message} role="alert"
-      actions={error.stale && !attempt ? <button type="button" className={buttonClass('secondary')} onClick={() => void onReload()}>Tải lại dữ liệu và bắt đầu lại</button> : undefined}>
+      kicker={base.registration ? 'Đăng ký của tôi' : 'Đăng ký đoàn'} title={title} description={`${base.tour.name}, ${formatDateTime(base.tour.scheduledStartAt)}`} />
+    <div className="rep-form-grid"><div style={{ minWidth: 0 }}>
+    <div><RegistrationStepper steps={['Thông tin đoàn', 'Danh sách lời mời', 'Kiểm tra và gửi']} current={step} onSelect={busy || attempt ? undefined : setStep} /></div>
+    {error && <div style={{ marginBottom: 20 }}><Callout tone="danger" title={error.message} role="alert"
+      actions={error.stale && !attempt ? <button type="button" className={repButton('secondary', 'sm')} onClick={() => void onReload()}>Tải lại dữ liệu và bắt đầu lại</button> : undefined}>
       {error.details?.length ? <ul>{error.details.map((d, i) => <li key={i}>{d}</li>)}</ul> : null}
     </Callout></div>}
-    {attempt && !busy && <div className="mb-5"><Callout title="Lần gửi trước chưa được xác nhận">Thử gửi lại với cùng thông tin để tránh tạo trùng đoàn.</Callout></div>}
+    {attempt && !busy && <div style={{ marginBottom: 20 }}><Callout title="Lần gửi trước chưa được xác nhận">Thử gửi lại với cùng thông tin để tránh tạo trùng đoàn.</Callout></div>}
     <form onSubmit={e => {
       e.preventDefault()
       if (busy) return
@@ -100,35 +102,46 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
       } else if (!confirmed) setError({ message: 'Xác nhận quyền cung cấp thông tin đăng ký trước khi gửi.' })
       else void send()
     }}>
-      <fieldset disabled={busy || Boolean(attempt)} className="min-w-0">
-        {step === 0 && <Panel title="Thông tin đoàn"><div className="grid gap-5 sm:grid-cols-2">{fields.map(f =>
-          <label key={f.key} className="block text-sm font-medium text-slate-700">{f.label}<span aria-hidden="true"> *</span>
-            <input required type={f.type ?? 'text'} maxLength={f.max} className={`${inputClass} mt-2`} value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))} />
-          </label>)}</div><p className="mt-4 text-sm text-slate-500">Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel>}
-        {step === 1 && <Panel title="Danh sách lời mời">
-          {base.registration && <button type="button" className={`${buttonClass('secondary')} mb-4`} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(base.registration!.roster))}>Tải danh sách hiện tại</button>}
+      <fieldset disabled={busy || Boolean(attempt)} style={{ minWidth: 0, border: 0, margin: 0, padding: 0 }}>
+        {step === 0 && <div className="rep-pane" key="contact"><Panel title="Thông tin đoàn"><div className="rep-fields">{fields.map(f =>
+          <label key={f.key} className="rep-field">{f.label}<span aria-hidden="true"> *</span>
+            <input required type={f.type ?? 'text'} maxLength={f.max} className="rep-input" value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))} />
+          </label>)}</div><p className="rep-hint" style={{ marginTop: 16 }}>Email liên hệ của đoàn không thay thế email riêng của từng dòng lời mời.</p></Panel></div>}
+        {step === 1 && <div className="rep-pane" key="roster"><Panel title="Danh sách lời mời">
+          {base.registration && <button type="button" className={repButton('secondary', 'sm')} style={{ marginBottom: 16 }} onClick={() => downloadBytes('CampusTour-danh-sach-hien-tai.xlsx', rosterWorkbookBytes(base.registration!.roster))}>Tải danh sách hiện tại</button>}
           <ExcelUploader accepted={accepted} onAccept={setAccepted} inUse={base.registration ? { count: base.registration.roster.length } : null} />
-          {base.registration && !accepted && <div className="mt-5"><RosterPreview rows={rows} /></div>}
-        </Panel>}
-        {step === 2 && <div className="space-y-5"><Panel title="Kiểm tra trước khi gửi">
+          {base.registration && !accepted && <div style={{ marginTop: 20 }}><RosterPreview rows={rows} variant="representative" /></div>}
+        </Panel></div>}
+        {step === 2 && <div className="rep-pane rep-stack" key="review"><Panel title="Kiểm tra trước khi gửi">
           <InfoList items={fields.map(f => ({ label: f.label, value: values[f.key] }))} />
-          <p className="mt-5 text-sm text-slate-600">{rows.filter(r => r.rowType === 'INDIVIDUAL').length} lời mời cá nhân, {rows.filter(r => r.rowType === 'SHARED_VIEWING').length} điểm xem chung.</p>
-        </Panel><Panel title="Danh sách gửi Admin"><RosterPreview rows={rows} /></Panel>
+          <p className="rep-lead" style={{ marginTop: 18, fontSize: 14 }}><b className="num">{rows.filter(r => r.rowType === 'INDIVIDUAL').length}</b> lời mời cá nhân, <b className="num">{rows.filter(r => r.rowType === 'SHARED_VIEWING').length}</b> điểm xem chung.</p>
+        </Panel><Panel title="Danh sách gửi Admin"><RosterPreview rows={rows} variant="representative" /></Panel>
           <Callout title="Gửi để Admin duyệt">Chưa cấp mã truy cập khi gửi đăng ký. Học sinh không cần tài khoản ứng dụng; lời mời cá nhân và điểm xem chung sẽ được xử lý sau duyệt.</Callout>
           <Panel title="Mục đích dữ liệu">
-            <p className="text-sm text-slate-600">Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
-            <label className="mt-4 flex items-start gap-3 text-sm font-medium text-slate-700">
-              <input type="checkbox" required className="mt-0.5 size-4 shrink-0" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+            <p className="rep-lead" style={{ fontSize: 14 }}>Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
+            <label className="rep-consent">
+              <input type="checkbox" required checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
               Tôi xác nhận có quyền cung cấp thông tin đăng ký và email lời mời trong danh sách này.
             </label>
           </Panel></div>}
       </fieldset>
-      <div className="mt-6 flex justify-between gap-3">
-        <button type="button" className={buttonClass('secondary')} disabled={busy || Boolean(attempt) || step === 0} onClick={() => { setError(null); setStep(s => s - 1) }}>Quay lại bước trước</button>
-        <button type="submit" className={buttonClass('primary')} disabled={busy || Boolean(error?.stale)}>
+      <div className="rep-form-foot">
+        <button type="button" className={repButton('secondary')} disabled={busy || Boolean(attempt) || step === 0} onClick={() => { setError(null); setStep(s => s - 1) }}>Quay lại bước trước</button>
+        <button type="submit" className={repButton('dark')} disabled={busy || Boolean(error?.stale)}>
           {busy && <Spinner />}{busy ? 'Đang gửi...' : step === 2 ? attempt ? 'Thử gửi lại' : base.registration ? resubmit ? 'Gửi lại đăng ký' : 'Lưu thay đổi' : 'Gửi đăng ký' : 'Tiếp tục'}
         </button>
       </div>
     </form>
+    </div>
+    <aside className="rep-aside" aria-label="Buổi tham quan đang đăng ký">
+      <img className="rep-aside-img" src={TOUR_IMAGES[0]} alt="" />
+      <h2>{base.tour.name}</h2>
+      <dl className="rep-info">
+        <div><dt>Thời gian dự kiến</dt><dd>{formatDateTime(base.tour.scheduledStartAt)}</dd></div>
+        <div><dt>Tuyến tham quan</dt><dd>{base.tour.routeName} · {base.tour.stops.length} điểm</dd></div>
+      </dl>
+      <p className="rep-hint">Ba bước: thông tin đoàn, file Excel danh sách, kiểm tra và gửi. Admin duyệt xong, lời mời mới được gửi tới học sinh.</p>
+    </aside>
+    </div>
   </RepPage>
 }

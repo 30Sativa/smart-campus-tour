@@ -169,6 +169,8 @@ describe('Representative real HTTP contract', () => {
     registration.allowedActions = Object.fromEntries(['edit', 'resubmit', 'cancel'].map(k => [k, { allowed: false, reason: 'Chức năng sau duyệt chưa được triển khai.' }])) as RepresentativeRegistration['allowedActions']
     renderAt('/dai-dien/dang-ky/registration')
     expect(await screen.findByText('Đăng ký đã được duyệt')).toBeInTheDocument()
+    expect(screen.getByText('Hỗ trợ lời mời riêng sẽ được cung cấp trong bước tiếp theo.')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
     expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/Mã đoàn|Sao chép mã|Nhập họ tên/)).not.toBeInTheDocument()
   })
