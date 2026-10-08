@@ -23,13 +23,14 @@ of invalid data; resubmit retains ID, rechecks emails and clears review metadata
 Detail projections use a short read-only Tour lock in the same order so tokens
 and roster agree under SQL read-committed. Only SCHEDULED/SUBMITTED may be reviewed.
 Any invitation history blocks review,
-including inactive or revoked rows, until access revocation is implemented.
+including inactive or revoked rows; replacing an approved roster is still deferred.
 APPROVED remains read-only for Representative.
 
-Approval does not issue an invitation/code/session or send email. No fake mail
-status, group code or demo Tour link appears in the live drawer. Admin email
-correction, approval reversal, Tour lifecycle and access issuance remain outside
-this task. Existing Tour/dashboard review and invitation simulation consumers
+Enabled approval atomically issues invitations and queues separate emails under
+ADR-0015; see backend/docs/invitations-resend.md. The approved drawer shares live
+invitation support with Representative detail. No fake email status, group code
+or fixture Tour link appears. Admin email correction, approval reversal and Tour
+lifecycle remain separate. Existing Tour/dashboard review and invitation simulation consumers
 remain intact with their own drawer and caches; they do not observe SQL data.
 
 Source ownership:

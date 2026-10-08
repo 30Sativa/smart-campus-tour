@@ -39,6 +39,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
     expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer admin-token')
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
+    if (url.pathname === '/api/registrations/registration/invitations')
+      return response({ enabled: false, canIssue: false, items: [] })
     expect(url.pathname).toMatch(/^\/api\/admin\/registrations/)
     if (options?.method === 'POST') {
       const action = url.pathname.endsWith('/approve') ? 'approve' : 'reject'
@@ -91,10 +93,10 @@ describe('Admin registration SQL HTTP boundary', () => {
     renderAt('/admin/registrations?review=registration', 'all')
     fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
     const dialog = await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })
-    expect(within(dialog).getByText(/cấp mã truy cập và gửi email chưa được triển khai/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/gửi email lỗi vẫn giữ đăng ký đã duyệt/i)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Duyệt' }))
     expect(await screen.findByText('Quyết định đã được lưu.')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('Đăng ký đã được duyệt. Cấp mã truy cập và gửi email chưa được triển khai.')).toBeInTheDocument())
+    await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })
     expect(decisions).toEqual([{ action: 'approve', input: { expectedRowVersion: firstVersion, expectedTourRowVersion: secondVersion } }])
     expect(screen.queryByRole('button', { name: 'Gửi thông tin' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Mã đoàn:/)).not.toBeInTheDocument()

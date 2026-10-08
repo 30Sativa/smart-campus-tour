@@ -8,7 +8,10 @@ the business authority.
 ## Current local references
 
 - [Representative registration](representative-registration.md) — real submission slice,
-  Excel contract, deferred invitation boundary and isolated end-to-end setup.
+  Excel contract, approved-roster boundary and isolated end-to-end setup.
+
+- [Invitation/email setup](../../backend/docs/invitations-resend.md) — real
+  shared support panel, Resend configuration and Student code/cookie entry.
 
 - [POI map picker](poi-map-picker.md) — ROS raster geometry, Admin workflow,
   map-package release and verification.

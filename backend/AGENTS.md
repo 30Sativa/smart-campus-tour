@@ -47,8 +47,8 @@ Current API controllers cover Auth, Admin account management, Admin POI
 management, Representative submission/pre-approval registration, Admin
 registration review, and development SimulationPreview. The Representative
 contract and Tour-first transaction are recorded in `docs/architecture.md`
-Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation/session
-support remains separate implementation work. Application has matching Auth,
+Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation issuance,
+Resend delivery and minimal Student sessions in Section 3.2.3. Application has matching Auth,
 Accounts, POI, Representative and RegistrationReview features, shared Registrations
 invariants, and the in-memory pose publisher used by SimulationPreview.
 Infrastructure has specific Auth, account, POI, Representative read and shared
@@ -171,7 +171,7 @@ Decisions and operating notes are in
 `backend/database/README.md`. This did not migrate v1.0 data. Do not manually
 edit generated entities to stand in for a SQL schema change.
 V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
-no per-Tour dwell editor or operator assignment. Invitation/branch use cases,
+no per-Tour dwell editor or operator assignment. Branch use cases,
 roster locking and retention cleanup remain implementation work.
 
 `backend/database/smart-campus-tour-schema-v1.1.sql` and the scaffolded entities
@@ -252,14 +252,15 @@ approved email, retaining invitation identity and expiry. Representative support
 is own-group only; Admin supports all groups; Staff-only has no recovery right.
 Shared-viewing data identifies its responsible person, not every student in the
 room; individual data requires individual rows. Code storage for safe resend,
-API binding, atomic admission and revocation remain implementation work.
+Secure code storage, API binding, atomic admission, Resend delivery and revocation
+are implemented under ADR-0015 with opt-in backend configuration.
 
 The current v1.1 schema persists invitation/session records, shared-viewing
 classification and branch requests; email attempts remain append-only audit
 records, and their delivery/revocation workflows remain application logic. The
 backend currently implements Auth V1, Admin account management, Admin POI
 management, and its development Simulation controller/Hub. Representative Tour reads and pre-approval registration are now implemented
-under Section 3.2.1 of `docs/architecture.md`. Admin review is implemented under Section 3.2.2. Invitation, dispatch,
+under Section 3.2.1 of `docs/architecture.md`. Admin review is implemented under Section 3.2.2; invitation/session support under Section 3.2.3. Dispatch
 and production fleet endpoints remain planned. Do not infer that a group code/name match is equivalent to an approved
 personal invitation. A future feature change must reconcile its public
 contracts in `docs/architecture.md` and include the appropriate schema and
@@ -388,7 +389,7 @@ account in V1; the physical `UserRoles` primary key remains unchanged.
 The backend also implements Admin account and POI management, plus
 Representative Tour reads and owner-scoped registration submission/management.
 User JWT and role authorization for those APIs are present. Authorization for
-future Admin Tour, invitation, dispatch, and fleet business APIs, and
+future Admin Tour, dispatch, and fleet business APIs, and
 robot/fleet machine authentication, remain unimplemented. Production fleet and
 operations Hubs remain pending; before
 robot navigation commands are enabled outside the local compatibility spike,

@@ -3,10 +3,13 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Registrations;
+using SmartCampus.Application.Common.Abstractions.Invitations;
+using SmartCampus.Application.Features.Invitations;
 
 namespace SmartCampus.Application.Features.RegistrationReview.Commands.ReviewRegistration;
 
-public sealed class ReviewRegistrationCommandHandler(IRegistrationRepository repository, TimeProvider clock)
+public sealed class ReviewRegistrationCommandHandler(IRegistrationRepository repository, TimeProvider clock,
+    InvitationSettings invitationSettings, InvitationIssuer invitationIssuer)
     : IRequestHandler<ReviewRegistrationCommand, Unit>
 {
     public async Task<Unit> Handle(ReviewRegistrationCommand command, CancellationToken ct)
@@ -35,6 +38,8 @@ public sealed class ReviewRegistrationCommandHandler(IRegistrationRepository rep
         registration.UpdatedAt = now;
         repository.AddAudit(RegistrationAudit.Create(registration, command.ActorUserId,
             command.Approve ? RegistrationAudit.ApprovedAuditAction : RegistrationAudit.RejectedAuditAction, now));
+        if (command.Approve && invitationSettings.Enabled)
+            await invitationIssuer.IssueAsync(registration, tour, command.ActorUserId, now, ct);
         return Unit.Value;
     }
 }

@@ -23,14 +23,14 @@ shared rules; this file only covers what is specific to `web/`.
   role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
   - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
-    Current code uses a group code and roster-name matching mock; the Review 1
-    target is an emailed Tour page link plus personal access code, exchanged
-    for a browser session (ADR-0010), with one shared-viewing row for a
+    SQL GUID Tour links use a personal access code exchanged for a browser
+    session (ADR-0010/0015); non-GUID fixtures retain the labelled group-code
+    mock. There is one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
     Registration submission/pre-approval management is API-backed; see
     `web/docs/representative-registration.md`. APPROVED is read-only in this
-    slice; personal-email invitation support remains future implementation.
+    roster; invitation support uses the real owner-scoped API (ADR-0015).
   - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
     run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
@@ -204,8 +204,9 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 
 The current frontend contains a legacy visitor registration/tour flow at
 `/visit/*`, plus a mock Student page at `/tour` and live Representative submission pages at
-`/dai-dien/*`. The Student page currently matches a group code and name/class
-against mock roster data; the Representative submission area uses SQL registrations and Review 1 invitation rows; it issues no access code.
+`/dai-dien/*`. Student fixture Tours match a group code/name/class; SQL GUID
+Tour links use real code/cookie entry. Representative registration and
+invitation support use SQL and the contract in docs/architecture.md Section 3.2.3.
 The Review 1 target (ADR-0010) instead emails a Tour page link and personal
 access code; entering the code creates a session, and a valid existing session
 avoids repeat entry. The URL itself grants no access. The target

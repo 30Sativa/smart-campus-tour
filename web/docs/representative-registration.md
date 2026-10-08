@@ -28,10 +28,11 @@ XML expansion (8 MB per part), source rows (10002) and columns (256). The API
 limits JSON to 4 MB. Tour timestamps display in Vietnam time (UTC+7).
 
 APPROVED or any registration with invitation history is read-only in this
-slice. Approved changes need revocation, so they are deferred together with
-invitation support. No personal access code/session is issued by submission.
+roster slice. Approved roster/email changes remain deferred; invitation support
+is implemented separately under ADR-0015. Submission itself issues no access code.
 Admin review is implemented in the separate live registration pages; see
-`web/docs/admin-registration-review.md`. Email, branch requests and runtime
+`web/docs/admin-registration-review.md`. See backend/docs/invitations-resend.md
+for real invitation/email setup; branch requests and runtime
 remain separate slices. Existing Admin Tour/Staff/Student mocks do not see or
 review SQL registrations.
 
@@ -73,7 +74,8 @@ and a JWT signing key through environment/User Secrets.
 9. Sign in as Admin and open `/admin/registrations/pending`; inspect the SQL
    roster, reject with a reason, then confirm Representative can resubmit.
    Approve the resubmission and confirm Representative sees APPROVED/read-only.
-   No access code/session/email is issued by this review slice.
+   When invitation support is enabled, approval issues/queues private codes
+   and emails; otherwise review continues without issuance.
 
 ## Automated checks
 
