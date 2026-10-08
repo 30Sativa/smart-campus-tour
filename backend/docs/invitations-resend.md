@@ -18,7 +18,7 @@ Use .NET User Secrets locally, or backend environment variables when hosted.
 | Invitations__ExpiryHoursAfterStart | 24 (default; range 1–168) |
 | Invitations__SessionIdleMinutes | 10 (default; range 1–60) |
 | Resend__ApiKey | backend-only Resend API key |
-| Resend__From | CampusTour <tour@your-verified-domain> |
+| Resend__From | CampusTour <noreply@your-verified-domain> |
 
 For User Secrets use colon-separated keys, e.g. Resend:ApiKey, for
 backend/src/SmartCampus.Api/SmartCampus.Api.csproj. Do not paste keys into chat,
@@ -34,6 +34,17 @@ The integration uses .NET HttpClient without an additional SDK package.
 Restart backend after configuration. CORS must include the exact FE origin.
 For future hosted BE change VITE_API_BASE_URL to its HTTPS URL and redeploy FE;
 PublicBaseUrl remains the FE domain. Crypto keys must survive host changes.
+
+## Invitation email appearance
+
+The branded HTML email uses a table layout, inline styles and a narrow-screen
+adjustment. It includes the Tour name, Vietnam-time schedule, selectable access
+code, expiry, a prominent Tour button, a visible fallback URL and a support
+mailto link. The plain-text alternative contains the same access instructions.
+Neither link includes the access code. No external images or fonts are required.
+The footer identifies an automated email and directs help to SupportEmail;
+setting a noreply sender does not create a receiving mailbox or route replies.
+Browser previews do not replace checks in the intended email clients.
 
 ## Operation and API
 
