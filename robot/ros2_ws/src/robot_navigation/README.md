@@ -255,8 +255,10 @@ Tham số ở `robot_control/config/nav2_params.yaml`. Những chỗ ghi
 `TUNE ON HARDWARE` là chỗ cần chỉnh sau khi có số liệu chạy thật — đừng chỉnh
 trước.
 
-Đợt test quay chậm sau phản hồi quay giật: RPP `0.35 rad/s`, recovery/smoother
-giới hạn `0.40 rad/s`, gia tốc tăng tốc góc `0.50 rad/s²`. Cách nạp, xác nhận
+Baseline thử nghiệm có giám sát: tiến RPP/smoother `0.24 m/s`, quay căn hướng
+RPP và recovery/smoother cùng trần `0.45 rad/s`; gia tốc tăng tốc góc giữ
+`0.50 rad/s²`. Giữ wheel cap `250 mm/s`: mức tiến/quay riêng đạt được về
+lệnh, nhưng vừa tiến vừa quay có thể bị bridge scale cả cặp bánh. Cách nạp, xác nhận
 parameter runtime, test và rollback: [robot/docs/nav2-turn-test.md](../../../docs/nav2-turn-test.md).
 Trạng thái **READY FOR HARDWARE TEST**, chưa xác nhận quay êm trên xe thật.
 

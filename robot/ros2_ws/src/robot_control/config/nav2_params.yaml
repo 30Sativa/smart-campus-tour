@@ -73,7 +73,7 @@ controller_server:
       required_movement_radius: 0.20
       # RPP rotates in place before moving off (use_rotate_to_heading), and an
       # in-place rotation counts as zero progress. Keep 15 s for the slower
-      # turn: pi/0.35 + 0.35/0.50 ~= 9.7 s before translation. The contract
+      # turn: pi/0.45 + 0.45/0.50 ~= 7.9 s before translation. The contract
       # test also budgets translation past required_movement_radius.
       movement_time_allowance: 15.0
 
@@ -100,9 +100,9 @@ controller_server:
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
 
-      # Supervised forward-speed trial: 0.20 -> 0.22 m/s. Keep the smoother's
+      # Supervised forward-speed trial: 0.22 -> 0.24 m/s. Keep the smoother's
       # forward ceiling in sync; acceleration and wheel limits stay unchanged.
-      desired_linear_vel: 0.22
+      desired_linear_vel: 0.24
 
       # Lookahead. Fixed (not velocity-scaled) for a predictable first run.
       # Keep 0.60 m beyond the footprint's furthest corner (~0.490 m), as in
@@ -120,10 +120,10 @@ controller_server:
       # allow_reversing - RPP force-disables reversing if both are true.
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      # Supervised turn test: ~20 deg/s. Recovery Spin and the smoother share
-      # a 0.40 rad/s ceiling so recovery cannot suddenly request a fast turn.
+      # Supervised turn test: ~26 deg/s. RPP, Recovery Spin and the smoother
+      # share a 0.45 rad/s ceiling; acceleration and braking stay unchanged.
       # Acceptance and rollback: robot/docs/nav2-turn-test.md.
-      rotate_to_heading_angular_vel: 0.35
+      rotate_to_heading_angular_vel: 0.45
       # Match smoother acceleration: +0.05 rad/s per controller tick at 10 Hz.
       # Actual smoothness still needs hardware measurement.
       max_angular_accel: 0.50
@@ -143,7 +143,7 @@ controller_server:
       use_cost_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.90
       # MUST stay below desired_linear_vel. The Humble default is 0.25, which
-      # is ABOVE our 0.22 m/s - leaving it at the default silently disables
+      # is ABOVE our 0.24 m/s - leaving it at the default silently disables
       # curvature regulation entirely.
       regulated_linear_scaling_min_speed: 0.10
       cost_scaling_dist: 0.60
@@ -414,7 +414,7 @@ behavior_server:
     # Recovery Spin has its own speed settings, separate from RPP heading
     # alignment. In Humble its acceleration parameter controls the stopping
     # speed calculation; the downstream smoother provides the startup ramp.
-    max_rotational_vel: 0.40
+    max_rotational_vel: 0.45
     min_rotational_vel: 0.10
     rotational_acc_lim: 0.50
 
@@ -436,8 +436,10 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     # Bound both rotation directions, including path turns and recovery.
-    max_velocity: [0.22, 0.0, 0.40]
-    min_velocity: [-0.20, 0.0, -0.40]
+    # The unchanged 250 mm/s bridge wheel cap passes straight 0.24 m/s and
+    # in-place 0.45 rad/s; combined commands may be pair-scaled downstream.
+    max_velocity: [0.24, 0.0, 0.45]
+    min_velocity: [-0.20, 0.0, -0.45]
     max_accel: [0.50, 0.0, 0.50]
     # Preserve braking limits for this test; lowering startup acceleration
     # must not also lengthen commanded stopping distance. This is not a

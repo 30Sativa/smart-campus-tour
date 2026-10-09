@@ -687,14 +687,20 @@ def test_wheel_pair_below_limit_is_unchanged():
 def test_forward_speed_trial_passes_straight_and_keeps_turn_wheel_limit():
     node = _command_harness()
     node.wheel_base = DEFAULT_WHEEL_BASE  # Real-robot calibration, not CAD.
-    _send_command(node, linear_x=0.22, angular_z=0.0)
-    assert (node._left_mm_s, node._right_mm_s) == (220, 220)
+    _send_command(node, linear_x=0.24, angular_z=0.0)
+    assert (node._left_mm_s, node._right_mm_s) == (240, 240)
     assert node._warnings == []
 
-    # At the existing 0.40 rad/s ceiling the outer wheel exceeds 250 mm/s.
+    # Pure turns reach the new angular ceiling without hitting the wheel cap.
+    for angular_z, expected in [(0.45, (-106, 106)), (-0.45, (106, -106))]:
+        _send_command(node, linear_x=0.0, angular_z=angular_z)
+        assert (node._left_mm_s, node._right_mm_s) == expected
+    assert node._warnings == []
+
+    # Combined maxima request an outer wheel of 346.065 mm/s, above 250.
     # Keep pair scaling: this trial must not raise the hardware wheel limit.
-    for angular_z, expected in [(0.40, (100, 250)), (-0.40, (250, 100))]:
-        _send_command(node, linear_x=0.22, angular_z=angular_z)
+    for angular_z, expected in [(0.45, (97, 250)), (-0.45, (250, 97))]:
+        _send_command(node, linear_x=0.24, angular_z=angular_z)
         assert (node._left_mm_s, node._right_mm_s) == expected
     assert len(node._warnings) == 2
 

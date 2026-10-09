@@ -126,9 +126,16 @@ stack fuses gyro yaw-rate.
 ### 2.0 Navigation baseline
 
 Planner `nav2_smac_planner/SmacPlanner2D`, controller
-`RegulatedPurePursuitController` at 0.20 m/s, autonomous reverse disabled in
+`RegulatedPurePursuitController`, autonomous reverse disabled in
 both the controller and the behaviour tree -
 [ADR-0007](decisions/0007-smac2d-rpp-no-autonomous-reverse.md).
+
+ADR-0007 records the original 0.20 m/s baseline. The current supervised speed
+trial sets RPP/smoother forward to 0.24 m/s and RPP heading/Spin/smoother
+rotation to 0.45 rad/s. Acceleration, braking, wheel caps and safety mechanisms
+are unchanged; combined forward/turn commands can still be wheel-pair scaled.
+This is READY FOR HARDWARE TEST, not measured robot performance; procedure and
+rollback are in [robot/docs/nav2-turn-test.md](../robot/docs/nav2-turn-test.md).
 
 RPP does path tracking plus collision checking against the local costmap. It is
 not a local trajectory planner and does not search for detours. So: an obstacle
