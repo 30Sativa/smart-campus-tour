@@ -1,14 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+namespace SmartCampus.Application.Common.Exceptions;
 
-namespace SmartCampus.Application.Common.Exceptions
+public sealed class ConflictException : Exception
 {
-    public sealed class ConflictException : Exception
+    public ConflictException(string message, string code = "CONFLICT",
+        IReadOnlyDictionary<string, string[]>? fieldErrors = null)
+        : base(message)
     {
-        public ConflictException(string message)
-            : base(message)
-        {
-        }
+        Code = code;
+        FieldErrors = fieldErrors;
     }
+
+    public string Code { get; }
+    public IReadOnlyDictionary<string, string[]>? FieldErrors { get; }
 }

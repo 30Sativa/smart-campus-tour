@@ -1,12 +1,12 @@
 /**
- * After a successful sign-in the auth screen splits in two: the form column
- * slides out to the left, the photograph to the right, and the destination
- * page is already underneath. Built on the native View Transitions API
- * (styles in auth.css, "Sign-in exit"); where the API is missing or the user
- * prefers reduced motion, the navigation simply happens without it.
+ * After a successful sign-in the glass card lifts away and dissolves while the
+ * aurora behind it fades, and the destination page is already underneath.
+ * Built on the native View Transitions API (styles in auth.css, "Sign-in
+ * exit"); where the API is missing or the user prefers reduced motion, the
+ * navigation simply happens without it.
  *
- * The attribute on <html> is what gives the two halves their transition
- * names, so the split only runs for this navigation.
+ * The attribute on <html> is what gives the card and the aurora their
+ * transition names, so the exit only runs for this navigation.
  */
 const SPLIT_MS = 1200
 

@@ -1,139 +1,208 @@
+import { useId } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarDays } from 'lucide-react'
-import type { TourOperation, TourState } from '../../../api/contracts/staff'
+import { Link } from 'react-router'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import type { TourOperation } from '../../../api/contracts/staff'
+import { REASON_SHORT } from '../reason'
+import { CARD, DONE, REST, studentsThroughDay, todayByState, type DayResult } from '../overview-data'
 
 /**
- * Overview charts. Every mark is a count of Tours the operations API returned;
- * nothing is seeded, averaged into a trend or filled in when a day is empty.
- * An empty day draws an empty column, and an empty dataset says so.
- *
- * Colours follow the status tones used on the badges (good / info / warning /
- * danger / muted), and every chart prints its numbers, so colour is never the
- * only carrier.
+ * Overview charts, drawn the way the Admin dashboard draws its own: flat white
+ * cards, one blue for what happened (#2d719e), a light blue for the rest
+ * (#8cc6ea) and navy for finished work. Red is kept for assistance only.
+ * Every chart writes its numbers out, so colour never carries meaning alone.
  */
+const reducedMotion = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const pad = (n: number) => String(n).padStart(2, '0')
+const hm = (value: number) => { const d = new Date(value); return `${pad(d.getHours())}:${pad(d.getMinutes())}` }
+const axisTick = { fontSize: 10, fill: '#6b7280' }
 
-const STATE_ORDER: Array<{ state: TourState; label: string; fill: string }> = [
-  { state: 'Completed', label: 'Hoàn thành', fill: 'bg-[#10b981]' },
-  { state: 'Running', label: 'Đang chạy', fill: 'bg-[#2563eb]' },
-  { state: 'Ready', label: 'Sẵn sàng', fill: 'bg-[#0ea5e9]' },
-  { state: 'Scheduled', label: 'Chờ Admin chốt', fill: 'bg-[#f59e0b]' },
-  { state: 'Cancelled', label: 'Đã hủy', fill: 'bg-[#ef4444]' },
-]
-
-const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-const dayKey = (value: string | Date) => {
-  const d = new Date(value)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-}
-
-/**
- * Tours run per day over the last 7 days (today included), split into
- * completed and ended early / cancelled. Read from today's list plus the
- * history the operations API returns.
- */
-export function TourActivityChart({ tours, history, now }: { tours: TourOperation[]; history: TourOperation[]; now: number }) {
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now)
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - (6 - i))
-    return d
-  })
-  const all = [...history, ...tours]
-  const rows = days.map((d) => {
-    const key = dayKey(d)
-    const onDay = all.filter((tour) => dayKey(tour.scheduledAt) === key)
-    return {
-      key,
-      label: i18nDay(d, now),
-      completed: onDay.filter((tour) => tour.state === 'Completed').length,
-      cancelled: onDay.filter((tour) => tour.state === 'Cancelled').length,
-    }
-  })
-  const max = Math.max(1, ...rows.map((row) => row.completed + row.cancelled))
-  const totalCompleted = rows.reduce((sum, row) => sum + row.completed, 0)
-  const totalCancelled = rows.reduce((sum, row) => sum + row.cancelled, 0)
-
+function CardHead({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
   return (
-    <div className="flex h-full flex-col">
-      <ChartHead title="Buổi đã chạy, 7 ngày" note={`${totalCompleted} hoàn thành, ${totalCancelled} kết thúc sớm hoặc hủy`} icon={<CalendarDays size={16} aria-hidden="true" />} />
-      {totalCompleted + totalCancelled === 0 ? (
-        <p className="my-auto py-10 text-center text-sm text-[#94a3b8]">Chưa có buổi nào kết thúc trong 7 ngày qua.</p>
-      ) : (
-        <>
-          <div className="mt-4 grid h-36 grid-cols-7 items-end gap-2 border-b border-[#e2e8f0]" role="img" aria-label={rows.map((row) => `${row.label}: ${row.completed} hoàn thành, ${row.cancelled} hủy`).join('; ')}>
-            {rows.map((row) => {
-              const total = row.completed + row.cancelled
-              return (
-                <div key={row.key} className="group flex h-full flex-col items-center justify-end gap-1" title={`${row.label}: ${row.completed} hoàn thành, ${row.cancelled} kết thúc sớm / hủy`}>
-                  <span className="text-[11px] font-semibold text-[#475569] tabular-nums opacity-0 transition-opacity group-hover:opacity-100 motion-reduce:transition-none">{total || ''}</span>
-                  <div className="flex w-full max-w-7 flex-col-reverse gap-0.5" style={{ height: `${(total / max) * 100}%` }}>
-                    {row.completed > 0 && <span className="w-full rounded-t-[4px] bg-[#10b981] transition-[height] duration-500" style={{ height: `${(row.completed / Math.max(1, total)) * 100}%` }} />}
-                    {row.cancelled > 0 && <span className="w-full rounded-t-[4px] bg-[#ef4444] transition-[height] duration-500" style={{ height: `${(row.cancelled / Math.max(1, total)) * 100}%` }} />}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="mt-2 grid grid-cols-7 gap-2 text-center text-[11px] text-[#64748b]" aria-hidden="true">
-            {rows.map((row) => <span key={row.key}>{row.label}</span>)}
-          </div>
-          <Legend items={[{ label: 'Hoàn thành', fill: 'bg-[#10b981]' }, { label: 'Kết thúc sớm / hủy', fill: 'bg-[#ef4444]' }]} />
-        </>
-      )}
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-5 py-3.5">
+      <h2 id={id} className="text-sm font-semibold tracking-[-0.01em] text-[#1f2937]">{title}</h2>
+      {children}
     </div>
   )
 }
 
-function i18nDay(d: Date, now: number) {
-  return dayKey(d) === dayKey(new Date(now)) ? 'Hôm nay' : WEEKDAY[d.getDay()]
+function LegendFigure({ color, value, label }: { color: string; value: number | string; label: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-2">
+      <span aria-hidden="true" className="size-[9px] self-center rounded-full border-[2.5px]" style={{ borderColor: color }} />
+      <b className="text-[26px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</b>
+      <span className="text-xs text-[#6b7280]">{label}</span>
+    </span>
+  )
 }
 
-/** Today's sessions by state, as one proportional bar with the counts written out. */
-export function TourStatusDistribution({ tours }: { tours: TourOperation[] }) {
-  const parts = STATE_ORDER.map((item) => ({ ...item, count: tours.filter((tour) => tour.state === item.state).length }))
-  const total = tours.length
+function Tip({ title, rows }: { title: string; rows: Array<{ color: string; label: string; value: ReactNode }> }) {
   return (
-    <div className="flex h-full flex-col">
-      <ChartHead title="Trạng thái buổi hôm nay" note={`${total} buổi`} />
-      {total === 0 ? (
-        <p className="my-auto py-10 text-center text-sm text-[#94a3b8]">Hôm nay chưa có buổi nào.</p>
-      ) : (
-        <>
-          <div className="mt-5 flex h-2.5 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={parts.filter((p) => p.count).map((p) => `${p.count} ${p.label.toLowerCase()}`).join(', ')}>
-            {parts.filter((p) => p.count > 0).map((p) => (
-              <span key={p.state} title={`${p.count} ${p.label.toLowerCase()}`} className={`h-full transition-[flex-grow] duration-500 ${p.fill}`} style={{ flexGrow: p.count }} />
-            ))}
-          </div>
-          <ul className="mt-5 space-y-2.5" aria-hidden="true">
-            {parts.map((p) => (
-              <li key={p.state} className="flex items-center justify-between gap-3 text-[13px]">
-                <span className="flex items-center gap-2 text-[#475569]"><span className={`size-2 rounded-full ${p.fill}`} />{p.label}</span>
-                <span className="font-semibold text-[#0f172a] tabular-nums">{p.count}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+    <div className="min-w-40 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5 text-xs shadow-[0_12px_30px_-10px_rgba(17,24,39,0.35)]">
+      <p className="font-semibold text-[#111827]">{title}</p>
+      {rows.map((row) => (
+        <p key={row.label} className="mt-1 flex justify-between gap-4 text-[#374151]"><span><span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: row.color }} />{row.label}</span><b className="tabular-nums">{row.value}</b></p>
+      ))}
     </div>
   )
 }
 
-function ChartHead({ title, note, icon }: { title: string; note?: string; icon?: ReactNode }) {
+/** A figure with its trend line underneath, the shape of the Admin KPI card. */
+export function SparkCard({ title, to, label, value, unit, note, series }: { title: string; to: string; label: string; value: ReactNode; unit: string; note: string; series: Array<number | null> }) {
+  const id = useId().replace(/:/g, '')
+  const data = series.map((v, i) => ({ i, v }))
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h3 className="text-[15px] font-semibold text-[#0f172a]">{title}</h3>
-        {note && <p className="mt-0.5 text-[13px] text-[#64748b]">{note}</p>}
+    <section className={`${CARD} flex flex-col`} aria-labelledby={`${id}-t`}>
+      <div className="px-5 pt-[18px]">
+        <h2 id={`${id}-t`} className="text-[15px] font-semibold text-[#1f2937]"><Link to={to} className="rounded hover:text-[#2d719e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">{title}</Link></h2>
+        <p className="mt-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-[#6b7280] uppercase">{label}</p>
+        <p className="mt-0.5 flex items-baseline gap-2"><span className="text-[30px] leading-tight font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</span><span className="text-[13px] font-semibold text-[#6b7280]">{unit}</span></p>
+        <p className="text-xs text-[#6b7280]">{note}</p>
       </div>
-      {icon && <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]">{icon}</span>}
-    </div>
+      <div className="mt-auto h-[76px] w-full" aria-hidden="true">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
+            <defs><linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.2} /><stop offset="1" stopColor={DONE} stopOpacity={0} /></linearGradient></defs>
+            <Area type="monotone" dataKey="v" stroke={DONE} strokeWidth={2} fill={`url(#${id}-g)`} connectNulls isAnimationActive={!reducedMotion()} dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
   )
 }
 
-function Legend({ items }: { items: Array<{ label: string; fill: string }> }) {
+/** The fourth tile: what needs a person now. The only place this page uses red. */
+export function AttentionCard({ tours, readyRobots, robotCount }: { tours: TourOperation[]; readyRobots: number; robotCount: number }) {
+  const assist = tours.filter((tour) => tour.operationalStatus === 'NeedsAssistance')
+  const waiting = tours.filter((tour) => tour.state === 'Scheduled').length
   return (
-    <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#475569]">
-      {items.map((item) => <span key={item.label} className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${item.fill}`} />{item.label}</span>)}
-    </p>
+    <section className={`${CARD} flex flex-col gap-2.5 px-5 py-[18px]`} aria-labelledby="ov-attention">
+      <h2 id="ov-attention" className="text-[15px] font-semibold text-[#1f2937]">Cần xử lý</h2>
+      {assist.length ? (
+        <Link to={`/staff/live/${assist[0].id}`} className="flex flex-col gap-1 rounded-[10px] bg-[#fef2f2] p-3 hover:bg-[#fee2e2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
+          <span className="text-[30px] leading-none font-bold text-[#b42318] tabular-nums">{assist.length}</span>
+          <span className="text-[13px] font-semibold text-[#9f1d16]">{assist[0].code} cần hỗ trợ{assist[0].reason ? ` · ${(REASON_SHORT[assist[0].reason] ?? assist[0].reason).toLowerCase()}` : ''}{assist.length > 1 ? ` · và ${assist.length - 1} buổi khác` : ''}</span>
+        </Link>
+      ) : (
+        <p className="flex flex-col gap-1 rounded-[10px] bg-[#f6f7f9] p-3"><span className="text-[30px] leading-none font-bold text-[#111827]">0</span><span className="text-[13px] text-[#4b5563]">Không có buổi nào cần hỗ trợ</span></p>
+      )}
+      <p className="text-xs text-[#6b7280]">{waiting} buổi chờ Admin chốt · robot rảnh {readyRobots}/{robotCount}</p>
+    </section>
+  )
+}
+
+/** Students through today: joined (solid) up to now, then the schedule (dashed). */
+export function StudentsThroughDay({ tours, now }: { tours: TourOperation[]; now: number }) {
+  const id = useId().replace(/:/g, '')
+  const day = studentsThroughDay(tours, now)
+  const running = tours.find((tour) => tour.state === 'Running')
+  const runningStudents = running ? running.registrations.filter((reg) => reg.state === 'Approved').reduce((s, reg) => s + reg.studentCount, 0) : 0
+  const ticks: number[] = []
+  for (let t = day.start; t <= day.end; t += 3_600_000) ticks.push(t)
+  return (
+    <section className={CARD} aria-labelledby="ov-day">
+      <CardHead id="ov-day" title="Học sinh trong ngày">
+        {running && (
+          <Link to={`/staff/live/${running.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#2563eb] hover:underline">
+            <span aria-hidden="true" className="size-[7px] animate-pulse rounded-full bg-current motion-reduce:animate-none" />{running.code} đang diễn ra · {runningStudents} HS
+          </Link>
+        )}
+      </CardHead>
+      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 pt-4">
+        <LegendFigure color={DONE} value={day.joined} label="đã tham gia" />
+        <LegendFigure color={REST} value={day.planned} label="theo lịch cả ngày" />
+      </p>
+      <div className="h-[240px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh trong ngày: ${day.joined} đã tham gia, ${day.planned} theo lịch`}>
+        {day.planned === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Hôm nay chưa có buổi nào.</p> : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={day.points} margin={{ top: 16, right: 16, bottom: 0, left: -12 }}>
+              <defs><linearGradient id={`${id}-a`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.22} /><stop offset="1" stopColor={DONE} stopOpacity={0.02} /></linearGradient></defs>
+              <CartesianGrid vertical={false} stroke="#f1f2f4" />
+              <XAxis dataKey="at" type="number" scale="time" domain={[day.start, day.end]} ticks={ticks} tickFormatter={hm} tickLine={false} axisLine={false} tick={axisTick} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
+              <Tooltip cursor={{ stroke: '#d1d5db', strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                const p = payload?.[0]?.payload as { at: number; joined?: number; planned?: number } | undefined
+                if (!active || !p) return null
+                return <Tip title={hm(p.at)} rows={[...(p.joined != null ? [{ color: DONE, label: 'Đã tham gia', value: p.joined }] : []), ...(p.planned != null ? [{ color: REST, label: 'Theo lịch', value: p.planned }] : [])]} />
+              }} />
+              <ReferenceLine x={now} stroke="#173b59" strokeDasharray="2 3" label={{ value: 'Bây giờ', position: 'top', fontSize: 10, fill: '#173b59' }} />
+              <Area type="stepAfter" dataKey="planned" stroke={REST} strokeWidth={2} strokeDasharray="5 5" fill="none" connectNulls={false} isAnimationActive={!reducedMotion()} dot={false} />
+              <Area type="stepAfter" dataKey="joined" stroke={DONE} strokeWidth={2.2} fill={`url(#${id}-a)`} connectNulls={false} isAnimationActive={!reducedMotion()} activeDot={{ r: 5, fill: '#fff', stroke: DONE, strokeWidth: 2.5 }} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** Today's sessions by state: one blue family, darker = further along. */
+export function TodayByState({ tours }: { tours: TourOperation[] }) {
+  const all = todayByState(tours)
+  const data = all.filter((d) => d.value > 0)
+  return (
+    <section className={CARD} aria-labelledby="ov-donut">
+      <CardHead id="ov-donut" title="Buổi hôm nay theo trạng thái" />
+      <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
+        <div className="relative size-[200px]" role="img" aria-label={`${tours.length} buổi: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ') || 'chưa có'}`}>
+          {data.length > 0 && (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}>
+                  {data.map((d) => <Cell key={d.state} fill={d.color} />)}
+                </Pie>
+                <Tooltip content={({ active, payload }) => {
+                  const p = payload?.[0]?.payload as { label: string; value: number; color: string } | undefined
+                  return active && p ? <Tip title={p.label} rows={[{ color: p.color, label: 'Số buổi', value: p.value }]} /> : null
+                }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+          <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
+            <span className="text-[28px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{tours.length}</span>
+            <span className="mt-1 text-xs text-[#6b7280]">buổi</span>
+          </div>
+        </div>
+        <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1">
+          {all.map((d) => (
+            <li key={d.state} className="inline-flex items-center gap-1.5 px-1 py-1 text-xs font-medium text-[#4b5563]">
+              <span aria-hidden="true" className="size-[9px] rounded-full" style={{ background: d.color, boxShadow: d.state === 'Cancelled' ? 'inset 0 0 0 1px #cbd5e1' : undefined }} />{d.label} <b className="text-[#111827] tabular-nums">{d.value}</b>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )
+}
+
+/** Completed vs ended early / cancelled, day by day, as paired bars. */
+export function RunResults({ days }: { days: DayResult[] }) {
+  const completed = days.reduce((s, d) => s + d.completed, 0)
+  const cancelled = days.reduce((s, d) => s + d.cancelled, 0)
+  return (
+    <section className={CARD} aria-labelledby="ov-results">
+      <CardHead id="ov-results" title="Kết quả buổi chạy · 7 ngày" />
+      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 pt-4">
+        <LegendFigure color={DONE} value={completed} label="hoàn thành" />
+        <LegendFigure color={REST} value={cancelled} label="kết thúc sớm / hủy" />
+      </p>
+      <div className="h-[230px] px-2 pt-2 pb-3" role="img" aria-label={days.map((d) => `${d.label}: ${d.completed} hoàn thành, ${d.cancelled} kết thúc sớm hoặc hủy`).join('; ')}>
+        {completed + cancelled === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Chưa có buổi nào kết thúc trong 7 ngày qua.</p> : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barGap={2} barCategoryGap="30%">
+              <CartesianGrid vertical={false} stroke="#f1f2f4" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} interval={0} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={axisTick} />
+              <Tooltip cursor={{ fill: '#f6f7f9' }} content={({ active, payload }) => {
+                const d = payload?.[0]?.payload as DayResult | undefined
+                return active && d ? <Tip title={d.label} rows={[{ color: DONE, label: 'Hoàn thành', value: d.completed }, { color: REST, label: 'Kết thúc sớm / hủy', value: d.cancelled }]} /> : null
+              }} />
+              <Bar dataKey="completed" name="Hoàn thành" fill={DONE} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} />
+              <Bar dataKey="cancelled" name="Kết thúc sớm / hủy" fill={REST} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </section>
   )
 }

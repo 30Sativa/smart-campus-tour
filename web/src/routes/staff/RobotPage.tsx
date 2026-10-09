@@ -4,12 +4,13 @@ import { Link } from 'react-router'
 import { ApiError } from '../../api/client'
 import type { AmrStatus } from '../../api/contracts/staff'
 import { useConfirmRobotReady, useStaffAmrs } from '../../features/staff/staff-hooks'
-import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, panelClass, StaffPage } from '../../features/staff/StaffUi'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { useNow } from '../../features/staff/use-now'
 import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
 import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
-import { ConfirmationDialog } from '../../features/staff/components/ConfirmationDialog'
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 
 /**
  * Robot & devices management. Monitors physical, Gazebo and emulator fleet.

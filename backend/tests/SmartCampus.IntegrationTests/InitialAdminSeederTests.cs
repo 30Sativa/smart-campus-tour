@@ -306,7 +306,8 @@ public sealed class InitialAdminSeederTests
         string[] arguments,
         int? port = null,
         string? jwtSigningKey = TestJwtSigningKey,
-        string environment = "Development")
+        string environment = "Development",
+        IReadOnlyDictionary<string, string>? additionalSettings = null)
     {
         var apiAssembly = Path.Combine(AppContext.BaseDirectory, "SmartCampus.Api.dll");
         Assert.True(File.Exists(apiAssembly), $"API assembly not found at {apiAssembly}.");
@@ -334,6 +335,9 @@ public sealed class InitialAdminSeederTests
         if (jwtSigningKey is not null)
             startInfo.Environment["Authentication__Jwt__SigningKey"] = jwtSigningKey;
         startInfo.Environment["Cors__AllowedOrigins__0"] = "http://localhost:5173";
+        startInfo.Environment["Invitations__Enabled"] = "false";
+        if (additionalSettings is not null)
+            foreach (var setting in additionalSettings) startInfo.Environment[setting.Key] = setting.Value;
 
         return Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start API process for integration test.");
@@ -382,7 +386,12 @@ public sealed class InitialAdminSeederTests
 
     internal sealed class EmptySchemaDatabase : IAsyncDisposable
     {
-        private readonly string name = "CampusTourInitialAdminSeedTest_" + Guid.NewGuid().ToString("N");
+        private readonly string name;
+
+        private EmptySchemaDatabase(bool demo)
+        {
+            name = (demo ? "SmartCampusTourPoiDemo_" : "CampusTourInitialAdminSeedTest_") + Guid.NewGuid().ToString("N");
+        }
         private readonly SqlConnectionStringBuilder settings = new(
             Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")!)
         {
@@ -393,9 +402,9 @@ public sealed class InitialAdminSeederTests
 
         public string ConnectionString => settings.ConnectionString;
 
-        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql")
+        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql", bool demo = false)
         {
-            var database = new EmptySchemaDatabase();
+            var database = new EmptySchemaDatabase(demo);
             try
             {
                 await using (var master = new SqlConnection(database.settings.ConnectionString))

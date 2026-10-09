@@ -1,10 +1,12 @@
 /**
- * The ONE place that turns a robot pose in the ROS `map` frame (metres,
+ * Presentation transforms for a robot pose in the ROS `map` frame (metres,
  * radians, the frame of Pois.X/Y/Yaw) into something a screen draws:
  * the Staff 3D twin and the Student 2D map. Components never write their own
  * `x, -z, yaw` formula (docs/architecture.md §4).
  *
- * Each saved map (`MapKey`) has one entry here. Its transforms are
+ * Occupancy raster geometry lives separately in the Admin POI map package,
+ * derived directly from ROS YAML/PGM; it does not require landmark calibration.
+ * Each presentation map (`MapKey`) has one entry here. Its transforms are
  * calibration results, not guesses: until a transform is measured
  * (`calibrated: false`), a live robot is NOT drawn on that surface, because
  * a robot parked at a wrong spot is worse than no robot.
@@ -22,8 +24,6 @@ export type MapPose = { x: number; y: number; yaw: number }
 
 export type MapConfig = {
   mapKey: string
-  /** From the map_server yaml (`robot/robot_maps/campus_map.yaml`). */
-  grid: { resolution: number; originX: number; originY: number; widthPx: number; heightPx: number }
   /** map metres -> 3D scene ground (u, v); the scene position is (u, 0, -v), Y up. */
   scene: { transform: Affine2D; calibrated: boolean; modelKey?: string }
   /** map metres -> Student 2D map in percent of its drawing (0-100 across, 0-100 down). */
@@ -33,7 +33,8 @@ export type MapConfig = {
 export const IDENTITY: Affine2D = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }
 
 /**
- * Campus map used by AMCL on the physical robot. The scene transform is the
+ * Legacy presentation map key, not an alias for the physical map2-v1 raster.
+ * The scene transform is the
  * identity the twin already uses for Gazebo and the mocks (map metres drawn
  * 1:1); it is marked uncalibrated for the real campus until measured against
  * the `map.obj` model. The Student drawing is a hand-made illustration, so
@@ -53,14 +54,12 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   },
   campus_v1: {
     mapKey: 'campus_v1',
-    grid: { resolution: 0.05, originX: -7.64, originY: -65.8, widthPx: 0, heightPx: 0 },
     scene: { transform: IDENTITY, calibrated: false },
     student2d: { transform: IDENTITY, calibrated: false },
   },
   // Gazebo preview world and the fleet emulator: map metres == scene metres by construction.
   'map3d-preview-v1': {
     mapKey: 'map3d-preview-v1',
-    grid: { resolution: 0.05, originX: 0, originY: 0, widthPx: 0, heightPx: 0 },
     scene: { transform: IDENTITY, calibrated: true },
     student2d: { transform: IDENTITY, calibrated: false },
   },
@@ -85,12 +84,6 @@ function transformedYaw(t: Affine2D, yaw: number) {
 export function mapToScenePose(pose: MapPose, transform: Affine2D = IDENTITY) {
   const p = applyAffine(transform, pose.x, pose.y)
   return { position: [p.x, 0, -p.y] as [number, number, number], rotation: transformedYaw(transform, pose.yaw) }
-}
-
-/** Occupancy-grid pixel (row 0 at the top), e.g. to draw on the saved map image. */
-export function mapToGridPixel(config: MapConfig, x: number, y: number) {
-  const { resolution, originX, originY, heightPx } = config.grid
-  return { px: (x - originX) / resolution, py: heightPx - (y - originY) / resolution }
 }
 
 /**

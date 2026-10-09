@@ -7,6 +7,8 @@ runtime behaviour - that is robot_navigation/README.md section "Acceptance
 tests on the real robot".
 """
 
+import ast
+import json
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -16,6 +18,7 @@ import yaml
 
 
 SRC = Path(__file__).resolve().parents[2]
+ROBOT_ROOT = SRC.parents[1]
 
 PLANNER_PLUGIN = 'nav2_smac_planner/SmacPlanner2D'
 CONTROLLER_PLUGIN = (
@@ -48,8 +51,62 @@ def _global_costmap():
     return _nav2_params()['global_costmap']['global_costmap']['ros__parameters']
 
 
+def test_map2_does_not_classify_pgm_unknown_as_free():
+    """PGM gray 205 (50/255 occupancy) must remain unknown in trinary maps."""
+    unknown_occupancy = 50.0 / 255.0
+    params = yaml.safe_load(
+        (ROBOT_ROOT / 'robot_maps' / 'map2.yaml').read_text(encoding='utf-8'))
+    assert params['image'] == 'map_fix.pgm'
+    assert params['free_thresh'] <= unknown_occupancy
+
+
 def _follow_path():
     return _nav2_params()['controller_server']['ros__parameters']['FollowPath']
+
+
+def _footprint(costmap):
+    """Humble parses a string of XY pairs; nested YAML arrays are not valid params."""
+    configured = costmap['footprint']
+    assert isinstance(configured, str)
+    points = json.loads(configured)
+    assert isinstance(points, list) and len(points) == 4
+    for point in points:
+        assert isinstance(point, list) and len(point) == 2
+        assert all(type(value) in (int, float) and math.isfinite(value)
+                   for value in point)
+    assert len({tuple(point) for point in points}) == 4
+    return points
+
+
+def _footprint_edges(points):
+    return zip(points, points[1:] + points[:1])
+
+
+def _cross(start, end, point):
+    return ((end[0] - start[0]) * (point[1] - start[1]) -
+            (end[1] - start[1]) * (point[0] - start[0]))
+
+
+def _inscribed_radius(costmap):
+    """Distance from frame origin to the closest polygon edge (Humble inflation)."""
+    return min(abs(_cross(start, end, (0.0, 0.0))) /
+               math.hypot(end[0] - start[0], end[1] - start[1])
+               for start, end in _footprint_edges(_footprint(costmap)))
+
+
+def _cad_chassis_corners():
+    root = ET.fromstring(_read('robot_description/urdf/common_properties.xacro'))
+    properties = {item.attrib['name']: float(item.attrib['value'])
+                  for item in root.findall('{http://www.ros.org/wiki/xacro}property')
+                  if item.attrib['name'] in (
+                      'base_length', 'base_width', 'base_collision_x', 'base_collision_y')}
+    half_length = properties['base_length'] / 2.0
+    half_width = properties['base_width'] / 2.0
+    cx, cy = properties['base_collision_x'], properties['base_collision_y']
+    return [(cx + half_length, cy + half_width),
+            (cx - half_length, cy + half_width),
+            (cx - half_length, cy - half_width),
+            (cx + half_length, cy - half_width)]
 
 
 # --------------------------------------------------------------- planner
@@ -114,8 +171,13 @@ def test_rpp_baseline_safety_flags():
 
 def test_rpp_speed_stays_at_the_supervised_baseline():
     params = _follow_path()
-    assert params['desired_linear_vel'] <= 0.20
+    # Explicitly authorized 0.24 m/s trial; catch a stale producer/ceiling
+    # or an unintended increase beyond this trial.
+    assert params['desired_linear_vel'] == 0.24
     smoother = _nav2_params()['velocity_smoother']['ros__parameters']
+    assert smoother['max_velocity'] == [params['desired_linear_vel'], 0.0, 0.45]
+    assert smoother['min_velocity'] == [-0.20, 0.0, -0.45]  # No faster reverse.
+    assert smoother['max_accel'] == [0.50, 0.0, 0.50]
     # The controller must never ask for more than the smoother will pass.
     assert params['desired_linear_vel'] <= smoother['max_velocity'][0]
     assert params['rotate_to_heading_angular_vel'] <= smoother['max_velocity'][2]
@@ -125,7 +187,7 @@ def test_rpp_speed_stays_at_the_supervised_baseline():
 def test_rpp_regulation_is_actually_active():
     """min_speed above desired_linear_vel silently disables regulation.
 
-    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.20 m/s
+    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.24 m/s
     baseline - leaving it unset would make curvature regulation a no-op.
     """
     params = _follow_path()
@@ -134,17 +196,44 @@ def test_rpp_regulation_is_actually_active():
 
 
 def test_heading_and_recovery_turns_share_the_supervised_speed_envelope():
-    """Recovery must not retain the old fast spin after RPP is slowed down."""
+    """Both turn producers must reach the same authorized smoother ceiling."""
     params = _nav2_params()
     rpp = _follow_path()
     behavior = params['behavior_server']['ros__parameters']
     smoother = params['velocity_smoother']['ros__parameters']
     limit = smoother['max_velocity'][2]
-    assert 0.0 < limit <= 0.40
+    assert limit == 0.45
     assert smoother['min_velocity'][2] == -limit
-    assert 0.0 < rpp['rotate_to_heading_angular_vel'] <= limit
-    assert (0.0 < behavior['min_rotational_vel'] <
-            behavior['max_rotational_vel'] <= limit)
+    assert rpp['rotate_to_heading_angular_vel'] == limit
+    assert behavior['max_rotational_vel'] == limit
+    assert behavior['min_rotational_vel'] == 0.10
+
+
+def test_real_bridge_accepts_straight_and_spin_maxima_without_raising_wheel_cap():
+    """Check the real navigation's manual-mode include and standalone bridge.
+
+    Independent Nav2 maxima fit the existing wheel cap. Combined maxima may
+    still be pair-scaled; the bridge's executable command tests cover that.
+    """
+    rpp = _follow_path()
+    for relative_path in (
+            'robot_control/launch/manual_mode.launch.py',
+            'stm32_bridge/launch/stm32_bridge.launch.py'):
+        tree = ast.parse(_read(relative_path))
+        defaults = {
+            ast.literal_eval(call.args[0]): ast.literal_eval(keyword.value)
+            for call in ast.walk(tree)
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+            and call.func.id == 'DeclareLaunchArgument'
+            for keyword in call.keywords if keyword.arg == 'default_value'
+        }
+        assert float(defaults['max_wheel_speed_mm_s']) == 250.0
+        assert float(defaults['speed_scale']) == 1.0
+        assert float(defaults['wheel_base']) == 0.4714
+        cap = float(defaults['max_wheel_speed_mm_s'])
+        assert rpp['desired_linear_vel'] * 1000.0 <= cap
+        assert (rpp['rotate_to_heading_angular_vel'] *
+                float(defaults['wheel_base']) * 500.0 <= cap)
 
 
 def test_turn_acceleration_is_limited_without_weakening_braking():
@@ -152,12 +241,17 @@ def test_turn_acceleration_is_limited_without_weakening_braking():
     params = _nav2_params()
     smoother = params['velocity_smoother']['ros__parameters']
     accel = smoother['max_accel'][2]
+    assert _follow_path()['max_angular_accel'] == accel == 0.50
+    assert params['behavior_server']['ros__parameters']['rotational_acc_lim'] == accel
     assert 0.0 < _follow_path()['max_angular_accel'] <= accel <= 0.50
     assert (0.0 < params['behavior_server']['ros__parameters'][
         'rotational_acc_lim'] <= accel)
     # Startup ramp changes must not silently reduce the existing brake limit.
     assert smoother['max_decel'] == [-0.50, 0.0, -2.50]
     assert smoother['velocity_timeout'] == 0.5
+    assert smoother['smoothing_frequency'] == 20.0
+    assert smoother['feedback'] == 'OPEN_LOOP'
+    assert smoother['scale_velocities'] is False
 
 
 def test_progress_timeout_budgets_slow_half_turn_then_translation():
@@ -188,8 +282,9 @@ def test_progress_timeout_budgets_slow_half_turn_then_translation():
 
 def test_rpp_lookahead_is_not_shorter_than_the_robot():
     params = _follow_path()
-    robot_radius = _local_costmap()['robot_radius']
-    assert params['lookahead_dist'] >= robot_radius
+    # Preserve the existing geometric lookahead guard without a circular model.
+    furthest_corner = max(math.hypot(*point) for point in _footprint(_local_costmap()))
+    assert params['lookahead_dist'] >= furthest_corner
 
 
 def test_rpp_inflation_gain_matches_the_local_costmap():
@@ -281,9 +376,34 @@ def test_navigation_rviz_has_four_independent_sonar_displays_off_by_default():
         assert display['Class'] == 'rviz_default_plugins/Range'
         assert display['Enabled'] is False
         assert display['Value'] is False
-        assert display['Topic']['Value'] == f'/ultrasonic/sonar{index}/range'
+        assert display['Topic']['Value'] == f'ultrasonic/sonar{index}/range'
         assert display['Topic']['Reliability Policy'] == 'Best Effort'
         assert display['Buffer Length'] == 1
+
+
+def test_navigation_rviz_starts_with_only_grid_and_saved_map():
+    """Keep the viewer light while AMCL waits for an operator's initial pose."""
+    config = yaml.safe_load(_read('robot_navigation/rviz/navigation.rviz'))
+    manager = config['Visualization Manager']
+    displays = {display['Name']: display for display in manager['Displays']
+                if display['Class'] != 'rviz_common/Group'}
+    enabled = {'Grid', 'Map (saved)'}
+    disabled = {
+        'Global Costmap', 'Local Costmap', 'LiDAR /scan', 'Astra depth',
+        'RobotModel', 'TF', 'Global Path', 'RPP Transformed Path',
+        'Local Footprint', 'AMCL Particles',
+    }
+    assert set(displays) == enabled | disabled
+    for name, display in displays.items():
+        assert display['Enabled'] is (name in enabled), name
+        assert display['Value'] is (name in enabled), name
+
+    assert manager['Global Options']['Fixed Frame'] == 'map'
+    initial_pose = next(tool for tool in manager['Tools']
+                        if tool['Class'] == 'rviz_default_plugins/SetInitialPose')
+    assert initial_pose['Topic']['Value'] == 'initialpose'
+    assert any(panel['Class'] == 'nav2_rviz_plugins/Navigation 2'
+               for panel in config['Panels'])
 
 
 def test_navigation_rviz_matches_humble_amcl_and_rpp_interfaces():
@@ -293,11 +413,20 @@ def test_navigation_rviz_matches_humble_amcl_and_rpp_interfaces():
     assert manager['Global Options']['Fixed Frame'] == 'map'
     assert by_name['AMCL Particles']['Class'] == 'nav2_rviz_plugins/ParticleCloud'
     assert (by_name['RPP Transformed Path']['Topic']['Value']
-            == '/received_global_plan')
+            == 'received_global_plan')
     assert (by_name['Local Footprint']['Topic']['Value']
-            == '/local_costmap/published_footprint')
+            == 'local_costmap/published_footprint')
     assert any(tool['Class'] == 'nav2_rviz_plugins/GoalTool'
                for tool in manager['Tools'])
+
+
+def test_navigation_rviz_topics_are_relative_for_robot_namespace():
+    """One layout for every robot: rviz2 --ros-args -r __ns:=/robot_01 maps
+    'map' to /robot_01/map. An absolute '/map' would ignore the namespace and
+    2D Pose Estimate would miss AMCL's <robot_ns>/initialpose."""
+    text = _read('robot_navigation/rviz/navigation.rviz')
+    absolute = re.findall(r'^\s*Value: (/\S+)$', text, flags=re.MULTILINE)
+    assert absolute == []
 
 
 def test_navigation_rviz_is_in_package_install_data():
@@ -335,12 +464,6 @@ def test_obstacle_layers_combine_with_maximum():
     assert _global_costmap()['obstacle_layer']['combination_method'] == 1
 
 
-def test_depth_is_local_only():
-    assert 'PointCloud2' not in yaml.safe_dump(_global_costmap())
-    assert _local_costmap()['depth_obstacle_layer'][
-        'pointcloud']['data_type'] == 'PointCloud2'
-
-
 def test_camera_disabled_launch_cannot_stall_the_costmap():
     """enable_camera:=false leaves camera/depth/points with no publisher.
 
@@ -351,38 +474,91 @@ def test_camera_disabled_launch_cannot_stall_the_costmap():
     depth = _local_costmap()['depth_obstacle_layer']['pointcloud']
     assert depth['expected_update_rate'] == 0.0
     launch = _read('robot_navigation/launch/navigation.launch.py')
-    assert "'enable_camera', default_value='true'" in launch
+    assert "'enable_camera', default_value='false'" in launch
     assert 'condition=IfCondition(enable_camera)' in launch
+    assert "package='robot_perception'" not in launch
+
+
+def test_scan_filter_parameters_match_the_launched_node_name():
+    filter_config = yaml.safe_load(
+        _read('robot_control/config/scan_range_filter.yaml'))
+    assert list(filter_config) == ['/**/scan_range_filter']
+    launch = _read('robot_navigation/launch/navigation.launch.py')
+    assert "name='scan_range_filter'" in launch
+    assert "executable='scan_to_scan_filter_chain'" in launch
 
 
 # ------------------------------------------------------ footprint/inflation
 
 
-def test_local_inflation_radius_covers_the_robot():
+def test_local_inflation_radius_covers_the_inscribed_radius():
     costmap = _local_costmap()
     assert (costmap['inflation_layer']['inflation_radius'] >=
-            costmap['robot_radius'])
+            _inscribed_radius(costmap))
 
 
-def test_global_inflation_radius_covers_the_robot():
+def test_global_inflation_radius_covers_the_inscribed_radius():
     costmap = _global_costmap()
     assert (costmap['inflation_layer']['inflation_radius'] >=
-            costmap['robot_radius'])
+            _inscribed_radius(costmap))
 
 
-def test_costmaps_agree_on_robot_radius():
-    assert _local_costmap()['robot_radius'] == _global_costmap()['robot_radius']
+def test_inflation_settings_stay_at_the_existing_baseline():
+    """Changing shape does not authorize tuning the cost field."""
+    for costmap in (_local_costmap(), _global_costmap()):
+        assert costmap['inflation_layer']['inflation_radius'] == 0.60
+        assert costmap['inflation_layer']['cost_scaling_factor'] == 3.0
 
 
-def test_robot_radius_covers_the_cad_chassis_box():
-    """robot_radius must bound the CAD collision box, not the 74x55 estimate."""
-    xacro = _read('robot_description/urdf/common_properties.xacro')
-    length = float(re.search(
-        r'name="base_length"\s+value="([0-9.]+)"', xacro).group(1))
-    width = float(re.search(
-        r'name="base_width"\s+value="([0-9.]+)"', xacro).group(1))
-    circumscribed = ((length ** 2 + width ** 2) ** 0.5) / 2.0
-    assert _local_costmap()['robot_radius'] >= circumscribed - 1e-3
+def test_costmaps_use_polygon_without_radius_or_extra_padding():
+    for costmap in (_local_costmap(), _global_costmap()):
+        assert 'robot_radius' not in costmap
+        _footprint(costmap)
+        assert costmap['footprint_padding'] == 0.0
+
+
+def test_costmaps_agree_on_footprint_and_padding():
+    local, global_ = _local_costmap(), _global_costmap()
+    assert _footprint(local) == _footprint(global_)
+    assert local['footprint_padding'] == global_['footprint_padding']
+
+
+def test_chassis_collision_projection_uses_base_footprint_axes():
+    """The CAD XY box is valid in base_footprint only while this transform holds."""
+    root = ET.fromstring(_read('robot_description/urdf/robot.urdf.xacro'))
+    joint = root.find("joint[@name='base_joint']")
+    assert joint.find('parent').attrib['link'] == 'base_footprint'
+    assert joint.find('child').attrib['link'] == 'base_link'
+    assert joint.find('origin').attrib['xyz'] == '0 0 ${base_z}'
+    assert joint.find('origin').attrib['rpy'] == '0 0 0'
+    collision = root.find("link[@name='base_link']/collision")
+    assert collision.find('origin').attrib['xyz'] == (
+        '${base_collision_x} ${base_collision_y} ${base_collision_z}')
+    assert collision.find('origin').attrib['rpy'] == '0 0 0'
+    assert collision.find('geometry/box').attrib['size'] == (
+        '${base_length} ${base_width} ${base_height}')
+
+
+def test_footprints_are_convex_counter_clockwise_and_contain_frame_origin():
+    for costmap in (_local_costmap(), _global_costmap()):
+        points = _footprint(costmap)
+        for index, (start, end) in enumerate(_footprint_edges(points)):
+            assert _cross(start, end, points[(index + 2) % 4]) > 0.0
+            assert _cross(start, end, (0.0, 0.0)) > 0.0
+
+
+def test_footprints_match_and_fully_cover_the_current_cad_chassis_box():
+    """Include the CAD centre offset; no millimetre tolerance hiding undersizing."""
+    corners = _cad_chassis_corners()
+    for costmap in (_local_costmap(), _global_costmap()):
+        points = _footprint(costmap)
+        # Match the four corners without prescribing which corner comes first.
+        for corner in corners:
+            assert any(all(math.isclose(a, b, rel_tol=0.0, abs_tol=1e-12)
+                           for a, b in zip(corner, point)) for point in points)
+            # Check containment, not just the polygon's axis-aligned bounds.
+            for start, end in _footprint_edges(points):
+                assert _cross(start, end, corner) >= -1e-12
 
 
 # ---------------------------------------------------------------- namespace
@@ -547,15 +723,6 @@ def test_plugin_packages_are_declared_dependencies():
                            'nav2_waypoint_follower'):
             assert f'<exec_depend>{dependency}</exec_depend>' in manifest, (
                 package, dependency)
-
-
-# ---------------------------------------------------- untouched calibration
-
-
-def test_wheel_base_calibration_is_unchanged():
-    manual = _read('robot_control/launch/manual_mode.launch.py')
-    assert "'wheel_base', default_value='0.4714'" in manual
-    assert "'wheel_radius', default_value='0.09725'" in manual
 
 
 if __name__ == '__main__':

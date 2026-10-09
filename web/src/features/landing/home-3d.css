@@ -42,9 +42,27 @@ html.dark .lp3 {
 .lp3-section-head h2 { margin-top: 20px; font-size: clamp(2.65rem, 5vw, 5.4rem); line-height: 1.08; letter-spacing: -.055em; font-weight: 800; max-width: 20ch; }
 .lp3-section-head p { margin-top: 20px; max-width: 54ch; font-size: clamp(1rem, 1.35vw, 1.28rem); line-height: 1.6; color: var(--lp-ink-2); }
 
-/* Header stays bright like the approved concept, including over the hero. */
-.lp3 .lp-nav { background: var(--lp-nav-bg); border-bottom: 1px solid var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.lp3 .lp-nav[data-stuck="false"] { --lp-ink: #102d31; --lp-ink-2: #4e6568; --lp-line-strong: rgba(16,45,49,.28); }
+/* The first viewport lets the hero image continue behind the navigation. */
+.lp3 .lp-nav { background: transparent; border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.lp3 .lp-nav[data-stuck="true"] { background: var(--lp-nav-bg); border-bottom-color: var(--lp-line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.lp3 .lp-nav[data-stuck="false"] { --lp-ink: #ffffff; --lp-ink-2: rgba(255,255,255,.84); --lp-line-strong: rgba(255,255,255,.42); }
+.lp3 .lp-nav[data-stuck="false"] .lp-brand,
+.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3 .lp-nav[data-stuck="false"] .lp-themebtn { color: #fff; }
+.lp3 .lp-nav[data-stuck="false"] .lp-brand,
+.lp3 .lp-nav[data-stuck="false"] .lp-navlink,
+.lp3 .lp-nav[data-stuck="false"] .lp-themebtn {
+  text-shadow: 0 2px 4px rgba(0,0,0,.82), 0 0 10px rgba(0,0,0,.42);
+  -webkit-text-stroke: .25px rgba(0,0,0,.28);
+}
+.lp3 .lp-nav[data-stuck="false"] .lp-brand__mark { filter: brightness(0) invert(1); }
+.lp3 .lp-nav[data-stuck="false"] .lp-btn--ghost {
+  color: #fff;
+  border-color: rgba(255,255,255,.78);
+  background: rgba(9,40,43,.28);
+  box-shadow: 0 2px 12px rgba(0,0,0,.2), inset 0 0 0 1px rgba(255,255,255,.1);
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
 html.dark .lp3 .lp-nav[data-stuck="false"] { --lp-ink: #f2f7f2; --lp-ink-2: #bad0ca; --lp-line-strong: rgba(230,247,235,.3); }
 .lp3 .lp-nav__inner { height: 76px; max-width: 1600px; }
 .lp3 .lp-brand__name { font-weight: 800; letter-spacing: -.045em; }
@@ -54,7 +72,7 @@ html.dark .lp3 .lp-nav .lp-brand__mark { filter: brightness(0) invert(1); }
 .lp3 .lp-btn--solid { color: #102d31; }
 
 /* Hero */
-.lp3 .lp-hero { min-height: min(920px, 100svh); margin-top: 76px; align-items: flex-end; background: #183833; }
+.lp3 .lp-hero { min-height: min(920px, 100svh); margin-top: 0; align-items: flex-end; background: #183833; }
 .lp3 .lp-hero__media { overflow: hidden; }
 .lp3 .lp-hero__media img { object-position: 56% center; }
 .lp3 .lp-hero__scrim { background: linear-gradient(90deg, rgba(4, 30, 26, .83) 0%, rgba(4, 30, 26, .5) 31%, rgba(4, 30, 26, .05) 67%), linear-gradient(0deg, rgba(4, 30, 26, .4), transparent 55%); }
@@ -146,7 +164,7 @@ html.dark .lp3-student { background: #103337; }
 /* Exploded robot */
 .lp3-tech-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .75fr); gap: clamp(28px, 5vw, 82px); align-items: center; margin-top: 40px; }
 .lp3-tech-art { position: relative; }
-.lp3-tech-art img { width: 100%; mix-blend-mode: multiply; }
+.lp3-tech-art img { display: block; width: 100%; mix-blend-mode: multiply; }
 html.dark .lp3-tech-art img { mix-blend-mode: normal; border-radius: 20px; }
 .lp3-tech-art > span { position: absolute; bottom: 4%; left: 0; color: var(--lp-ink-3); font-size: .67rem; letter-spacing: .18em; }
 .lp3-tech-list { border-top: 1px solid var(--lp-line); }
@@ -299,4 +317,139 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-video img,
   .lp3-steps h3,
   .lp3-tech-item h3 { transition: none; }
+}
+
+/* ── "Hành trình" motion layer ───────────────────────────────────────────────
+   Pins, the journey route, the live-looking panels and the robot hotspots.
+   Everything here renders a complete still state; GSAP in PublicHomePage and
+   the small components in sections/JourneyParts.tsx add the motion. */
+
+/* Masked headline lines: the inner span rises out of its line. The padding
+   keeps Vietnamese diacritics clear of the mask. */
+.lp3-hero-line,
+.lp3-line { display: block; overflow: hidden; padding-block: .08em .12em; margin-block: -.08em -.12em; }
+.lp3-hero-line > span,
+.lp3-line > span { display: inline-block; }
+
+/* A 16:9 stage that covers its box, so overlays stay locked to the picture.
+   It is centred with left/top arithmetic, not `translate`: GSAP drives the
+   stage's transform (pointer drift, scroll parallax) and would otherwise
+   replace a CSS translate and throw the picture off-centre. */
+.lp3 .lp-hero__media { container-type: size; overflow: hidden; }
+.lp3-hero-stage,
+.lp3-twin-stage {
+  --lp3-stage-w: max(100cqw, 177.78cqh);
+  --lp3-stage-h: max(56.25cqw, 100cqh);
+  --lp3-stage-shift: 0px;
+  position: absolute;
+  left: calc(50% - var(--lp3-stage-w) / 2 - var(--lp3-stage-shift));
+  top: calc(50% - var(--lp3-stage-h) / 2);
+  width: var(--lp3-stage-w);
+  height: var(--lp3-stage-h);
+}
+.lp3 .lp-hero__media .lp3-hero-stage img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+
+/* Pins on the illustrations */
+/* A zero-size anchor at the pin's point; the card, stem and dot overflow
+   upward from it. No transform here, so GSAP can animate the pin freely. */
+.lp3-pin { position: absolute; width: 0; height: 0; margin-top: 6px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none; }
+.lp3-pin > * { flex: none; }
+.lp3-pin__card { padding: 7px 11px; border: 1px solid rgba(214, 241, 141, .38); border-radius: 11px; background: rgba(8, 38, 40, .6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; font-size: .74rem; font-weight: 650; white-space: nowrap; }
+.lp3-pin__stem { width: 1.5px; height: 30px; background: linear-gradient(#d6f18d, rgba(214, 241, 141, .15)); }
+.lp3-pin__dot { width: 11px; height: 11px; border-radius: 50%; background: #d6f18d; animation: lp3-ping 2.2s infinite; }
+@keyframes lp3-ping {
+  0% { box-shadow: 0 0 0 0 rgba(214, 241, 141, .7); }
+  70% { box-shadow: 0 0 0 13px rgba(214, 241, 141, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 241, 141, 0); }
+}
+
+.lp3-scroll-cue { position: absolute; left: 50%; bottom: 22px; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 8px; color: rgba(255, 255, 255, .72); font-size: .6rem; font-weight: 700; letter-spacing: .18em; pointer-events: none; }
+.lp3-scroll-cue i { position: relative; width: 22px; height: 34px; border: 1.5px solid currentColor; border-radius: 12px; }
+.lp3-scroll-cue i::after { content: ''; position: absolute; left: 50%; top: 7px; width: 3px; height: 7px; border-radius: 2px; background: #d6f18d; translate: -50% 0; animation: lp3-cue 1.6s infinite; }
+@keyframes lp3-cue { 60% { transform: translateY(10px); opacity: 0; } 100% { opacity: 0; } }
+
+/* Journey route over the isometric campus */
+.lp3-journey-art img { display: block; }
+.lp3-route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.lp3-route__line { fill: none; stroke: #b8dc4e; stroke-width: 8; stroke-linecap: round; filter: drop-shadow(0 0 10px rgba(200, 240, 90, .85)); }
+.lp3-route__core { fill: #102d31; stroke: #d6f18d; stroke-width: 4; transition: fill .3s; }
+.lp3-route__ring { fill: none; stroke: #b8dc4e; stroke-width: 3; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.lp3-route__num { fill: #d6f18d; font-size: 24px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+.lp3-route__label { opacity: 1; transition: opacity .4s; }
+.lp3-route__label rect { fill: rgba(16, 45, 49, .9); }
+.lp3-route__label text { fill: #fff; font-size: 21px; font-weight: 650; dominant-baseline: central; }
+.lp3-route__bot { fill: #fff; stroke: #102d31; stroke-width: 5; filter: drop-shadow(0 0 14px rgba(214, 241, 141, 1)); }
+
+/* While pinned, only the reached stops and the current step are lit. */
+.lp3-journey[data-journey="pinned"] .lp3-route__stop:not(.is-active) .lp3-route__label { opacity: 0; }
+.lp3-journey[data-journey="pinned"] .lp3-route__stop.is-active .lp3-route__core { fill: #2c5a2b; }
+.lp3-journey[data-journey="pinned"] .lp3-route__stop.is-active .lp3-route__ring { animation: lp3-ring 1.8s infinite; }
+@keyframes lp3-ring { from { transform: scale(1); opacity: .9; } to { transform: scale(2.2); opacity: 0; } }
+.lp3-steps { position: relative; }
+.lp3-journey[data-journey="pinned"] .lp3-steps::before { content: ''; position: absolute; left: -22px; top: 0; width: 2px; height: calc(var(--lp3-journey-progress, 0) * 100%); border-radius: 2px; background: #a6d75e; }
+/* The <li> itself carries the reveal animation (which holds its opacity and
+   translate), so the dimming and the nudge go on its children. */
+.lp3-journey[data-journey="pinned"] .lp3-steps li:not(.lp3-steps-link) > * { opacity: .32; transition: opacity .45s ease, transform .6s cubic-bezier(.22, 1, .36, 1); }
+.lp3-journey[data-journey="pinned"] .lp3-steps li.is-active > * { opacity: 1; transform: translateX(10px); }
+
+/* Student view: a moving robot on the 2D map, a slow pan on the camera and
+   the assistant's answer. */
+@media (prefers-reduced-motion: no-preference) {
+  .lp3-map-robot { animation: lp3-robot-ride 9s ease-in-out infinite alternate; }
+  .lp3-video img { animation: lp3-pan 18s ease-in-out infinite alternate; }
+}
+@keyframes lp3-robot-ride {
+  0% { left: 16%; top: 55%; }
+  50% { left: 46%; top: 37%; }
+  100% { left: 74%; top: 16%; }
+}
+@keyframes lp3-pan { from { scale: 1.02; } to { scale: 1.12; translate: -3% 0; } }
+.lp3-ai-answer { min-height: 4.7em; margin: 0 0 12px; border-radius: 12px; padding: 10px; background: #123a3d; color: #eaf4ea; font-size: .72rem; line-height: 1.5; }
+.lp3-ai-typing { display: inline-flex; gap: 4px; padding-top: 4px; }
+.lp3-ai-typing i { width: 6px; height: 6px; border-radius: 50%; background: #d6f18d; animation: lp3-bob 1s infinite; }
+.lp3-ai-typing i:nth-child(2) { animation-delay: .15s; }
+.lp3-ai-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes lp3-bob { 50% { transform: translateY(-4px); opacity: .5; } }
+
+/* Twin: the picture lives on a stage so the pins and the robot stay put. */
+.lp3-twin-media { position: absolute; z-index: -2; inset: 0; overflow: hidden; container-type: size; }
+.lp3 .lp3-twin-stage .lp3-twin-image { position: static; inset: auto; z-index: auto; width: 100%; height: 100%; object-fit: cover; }
+.lp3-twin-robot { position: absolute; display: inline-flex; align-items: center; gap: 6px; margin: -40px 0 0 -44px; padding: 4px 8px; border-radius: 6px; background: #d6f18d; color: #102d31; font-size: .68rem; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.lp3-twin-robot i { width: 6px; height: 6px; border-radius: 50%; background: #102d31; animation: lp3-blink 1.4s infinite; }
+.lp3-twin-status { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; align-self: center; color: #d6f18d; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.lp3-twin-status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: lp3-blink 1.4s infinite; }
+.lp3-twin-status span { animation: lp3-status-in .45s cubic-bezier(.22, 1, .36, 1); }
+@keyframes lp3-blink { 50% { opacity: .25; } }
+@keyframes lp3-status-in { from { opacity: 0; translate: 0 6px; } }
+
+/* Robot hotspots tied to the technology list */
+.lp3-hotspot { position: absolute; display: grid; place-items: center; width: 38px; height: 38px; margin: -19px 0 0 -19px; border: 0; border-radius: 50%; background: #123a3d; color: #d6f18d; font: inherit; font-size: .72rem; font-weight: 800; cursor: pointer; box-shadow: 0 0 0 6px rgba(214, 241, 141, .35); transition: background-color .3s, color .3s, box-shadow .3s; }
+.lp3-hotspot[data-active="true"] { background: #d6f18d; color: #102d31; box-shadow: 0 0 0 4px #102d31, 0 0 0 14px rgba(214, 241, 141, .5); }
+.lp3-hotspot:focus-visible { outline: 2px solid #d6f18d; outline-offset: 6px; }
+.lp3-tech-item[data-active="true"] h3 { transform: translateX(5px); color: #6d9f47; }
+.lp3-tech-item[data-active="true"] .lp3-tech-number { color: #6d9f47; }
+@media (hover: hover) {
+  /* The hotspots sit on the picture, so it no longer lifts on hover. */
+  .lp3-tech-art:hover img { transform: none; }
+}
+
+@media (max-width: 767px) {
+  /* Keep the robot in the visible slice of the portrait hero and twin. */
+  .lp3-hero-stage { --lp3-stage-shift: 14cqh; }
+  .lp3-twin-stage { --lp3-stage-shift: 23cqh; }
+  /* On a phone the hero copy fills the frame, so its pins step aside; the
+     twin keeps one. */
+  .lp3-hero-stage .lp3-pin,
+  .lp3-twin-stage .lp3-pin:not(:nth-child(3)) { display: none; }
+  .lp3-scroll-cue { display: none; }
+  .lp3-twin-status { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp3-pin__dot,
+  .lp3-scroll-cue i::after,
+  .lp3-ai-typing i,
+  .lp3-twin-robot i,
+  .lp3-twin-status i,
+  .lp3-twin-status span { animation: none; }
 }

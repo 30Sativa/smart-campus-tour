@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ClipboardList, Hourglass, MailWarning, Percent } from 'lucide-react'
 import type { AdminRegistration, RegistrationState } from '../../../api/contracts/admin'
-import { StatStrip, StatTile, panelClass } from '../../staff/StaffUi'
+import { StatStrip, StatTile, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { REGISTRATION_STATE, REGISTRATION_STATES } from '../admin-status'
 
 /**

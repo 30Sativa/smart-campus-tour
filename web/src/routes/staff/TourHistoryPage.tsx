@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
 import { CalendarCheck, CircleX, History } from 'lucide-react'
 import { useTours } from '../../features/staff/staff-hooks'
-import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, Pagination, SearchField, StatStrip, StatTile, panelClass, StaffPage } from '../../features/staff/StaffUi'
-import { usePagination } from '../../features/staff/use-pagination'
+import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { LoadingPanel, PageHeader, Pagination, SearchField, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
+import { usePagination } from '../../components/ui/use-pagination'
 
 /** Case- and diacritic-insensitive, so "le quy don" finds "Lê Quý Đôn". */
 const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase()

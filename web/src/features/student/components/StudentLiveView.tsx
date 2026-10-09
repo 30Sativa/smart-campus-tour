@@ -1,62 +1,62 @@
-import { useState, useSyncExternalStore } from 'react'
-import { Compass, MessageSquare, Video } from 'lucide-react'
-import type { StudentSession, StudentTourSnapshot } from '../student-types'
+import { useId, useRef, type KeyboardEvent } from 'react'
+import { Captions, Check, Compass, Flag, ListOrdered, MessageSquare } from 'lucide-react'
+import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
+import { POI_PROGRESS_LABEL, poiMinutes, poiProgress } from '../student-route'
 import { StudentVideoPlayer } from './StudentVideoPlayer'
 import { Student2DMap } from './Student2DMap'
 import { StudentNarrationBar } from './StudentNarrationBar'
 import { StudentAiAssistant } from './StudentAiAssistant'
-import { useStudentStore } from '../student-store'
-
-// Same breakpoint as `.st-only-desktop` / `.st-only-mobile` in student.css.
-const MOBILE_QUERY = '(max-width: 1023px)'
-
-function subscribeMobile(onChange: () => void) {
-  const query = window.matchMedia(MOBILE_QUERY)
-  query.addEventListener('change', onChange)
-  return () => query.removeEventListener('change', onChange)
-}
-
-function isMobileLayout() {
-  return window.matchMedia(MOBILE_QUERY).matches
-}
+import { useStudentStore, type StudentLiveTab } from '../student-store'
+import '../student.css'
+import '../student-live.css'
 
 interface StudentLiveViewProps {
   session: StudentSession
   snapshot: StudentTourSnapshot
 }
 
+const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
+  { key: 'stream', label: 'Thuyết minh', Icon: Captions },
+  { key: 'map', label: 'Bản đồ 2D', Icon: Compass },
+  { key: 'ai', label: 'Hỏi AI', Icon: MessageSquare },
+  { key: 'route', label: 'Lộ trình', Icon: ListOrdered },
+]
+
+/**
+ * Live tour, layout "Ứng dụng tab": the robot's camera with a strip of stops
+ * underneath, and one panel with four tabs beside it. On phones the panel
+ * drops under the video and its tab bar sits at the bottom like an app.
+ * Every tab stays mounted so the AI conversation survives a tab switch.
+ */
 export function StudentLiveView({ session, snapshot }: StudentLiveViewProps) {
-  const [rightPanelTab, setRightPanelTab] = useState<'map' | 'ai'>('map')
-  const mobileTab = useStudentStore((s) => s.activeTab)
-  const setMobileTab = useStudentStore((s) => s.setActiveTab)
-  const isMobile = useSyncExternalStore(subscribeMobile, isMobileLayout, () => false)
-  const statusDisplay = getStudentStatusDisplay(
-    snapshot.step,
-    snapshot.currentPoi?.title,
-    snapshot.tourState
-  )
+  const tab = useStudentStore((s) => s.activeTab)
+  const setTab = useStudentStore((s) => s.setActiveTab)
+  const baseId = useId()
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const statusDisplay = getStudentStatusDisplay(snapshot.step, snapshot.currentPoi?.title, snapshot.tourState)
+  const pois = [...snapshot.pois].sort((a, b) => a.order - b.order)
+  const nextMinutes = snapshot.nextPoi ? poiMinutes(snapshot.nextPoi) : undefined
 
-  const narration = (
-    <StudentNarrationBar
-      title={snapshot.narration?.title || snapshot.currentPoi?.title}
-      text={snapshot.narration?.text || snapshot.currentPoi?.description}
-      isPlaying={snapshot.narration?.isPlaying}
-    />
-  )
+  const onTabKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    if (!step) return
+    event.preventDefault()
+    const index = (TABS.findIndex((t) => t.key === tab) + step + TABS.length) % TABS.length
+    setTab(TABS[index].key)
+    tabRefs.current[index]?.focus()
+  }
 
-  const map = (
-    <Student2DMap
-      pois={snapshot.pois}
-      currentPoi={snapshot.currentPoi}
-      nextPoi={snapshot.nextPoi}
-      robotPose={snapshot.robotPose}
-    />
-  )
+  const panel = (key: StudentLiveTab) => ({
+    role: 'tabpanel' as const,
+    id: `${baseId}-panel-${key}`,
+    'aria-labelledby': `${baseId}-tab-${key}`,
+    hidden: tab !== key,
+    className: `st-e-body st-e-body--${key}`,
+  })
 
   return (
-    <div className="st-ctn st-live-view">
-      {/* Status band: the dot takes the tone of the current step */}
+    <div className="st-ctn st-live-view st-e">
       <div className={`st-status st-tone-${statusDisplay.tone}`}>
         <div className="st-status__main">
           <span className="st-status__dot" aria-hidden="true" />
@@ -71,59 +71,125 @@ export function StudentLiveView({ session, snapshot }: StudentLiveViewProps) {
         </div>
       </div>
 
-      {/* Desktop: video + narration on the left, map / AI on the right */}
-      <div className="st-live-grid st-only-desktop">
-        <div className="st-col">
-          <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl} statusLabel={statusDisplay.label} active={!isMobile} />
-          {narration}
+      <div className="st-e-grid">
+        <div className="st-e-main">
+          <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl} statusLabel={statusDisplay.label} />
+          <StopStrip pois={pois} snapshot={snapshot} />
         </div>
 
-        <div className="st-col">
-          <div className="st-tabs">
-            <button type="button" aria-pressed={rightPanelTab === 'map'} onClick={() => setRightPanelTab('map')}>
-              <Compass size={15} />
-              <span>Bản đồ 2D</span>
-            </button>
-            <button type="button" aria-pressed={rightPanelTab === 'ai'} onClick={() => setRightPanelTab('ai')}>
-              <MessageSquare size={15} />
-              <span>Hỏi Trợ lý AI</span>
-            </button>
+        <section className="st-e-panel" aria-label="Thông tin buổi tham quan">
+          <div className="st-e-tabs" role="tablist" aria-label="Nội dung buổi tham quan" onKeyDown={onTabKey}>
+            {TABS.map(({ key, label, Icon }, index) => (
+              <button
+                key={key}
+                ref={(el) => { tabRefs.current[index] = el }}
+                type="button"
+                role="tab"
+                id={`${baseId}-tab-${key}`}
+                aria-controls={`${baseId}-panel-${key}`}
+                aria-selected={tab === key}
+                tabIndex={tab === key ? 0 : -1}
+                onClick={() => setTab(key)}
+              >
+                <Icon size={19} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
-          <div className="st-panel">
-            {rightPanelTab === 'map' ? map : <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />}
+
+          <div {...panel('stream')}>
+            <StudentNarrationBar
+              title={snapshot.narration?.title || snapshot.currentPoi?.title}
+              text={snapshot.narration?.text || snapshot.currentPoi?.description}
+              isPlaying={snapshot.narration?.isPlaying}
+            />
+            {snapshot.nextPoi && (
+              <div className="st-e-next">
+                <StopThumb poi={snapshot.nextPoi} />
+                <span>
+                  Tiếp theo: <b>{snapshot.nextPoi.title}</b>
+                  {nextMinutes && <small>khoảng {nextMinutes} phút</small>}
+                </span>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Mobile: video on top, one tab below */}
-      <div className="st-only-mobile">
-        <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl} statusLabel={statusDisplay.label} active={isMobile} />
+          <div {...panel('map')}>
+            <Student2DMap
+              pois={snapshot.pois}
+              currentPoi={snapshot.currentPoi}
+              nextPoi={snapshot.nextPoi}
+              robotPose={snapshot.robotPose}
+            />
+          </div>
 
-        <div className="st-tabs">
-          <button type="button" aria-pressed={mobileTab === 'stream'} onClick={() => setMobileTab('stream')}>
-            <Video size={14} />
-            <span>Thuyết minh</span>
-          </button>
-          <button type="button" aria-pressed={mobileTab === 'map'} onClick={() => setMobileTab('map')}>
-            <Compass size={14} />
-            <span>Bản đồ 2D</span>
-          </button>
-          <button type="button" aria-pressed={mobileTab === 'ai'} onClick={() => setMobileTab('ai')}>
-            <MessageSquare size={14} />
-            <span>Hỏi AI</span>
-          </button>
-        </div>
+          <div {...panel('ai')}>
+            <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />
+          </div>
 
-        <div>
-          {mobileTab === 'stream' && narration}
-          {mobileTab === 'map' && <div style={{ height: 380 }}>{map}</div>}
-          {mobileTab === 'ai' && (
-            <div style={{ height: 460 }}>
-              <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />
-            </div>
-          )}
-        </div>
+          <div {...panel('route')}>
+            <ol className="st-e-route">
+              {pois.map((poi) => {
+                const state = poiProgress(poi, snapshot)
+                const minutes = poiMinutes(poi)
+                return (
+                  <li key={poi.id} className={`is-${state}`} aria-current={state === 'now' ? 'step' : undefined}>
+                    <span className="st-e-route__n" aria-hidden="true">{state === 'done' ? <Check size={13} /> : poi.order}</span>
+                    <span>
+                      <b>{poi.title}</b>
+                      <small>
+                        {state === 'now' ? 'Bạn đang ở đây' : POI_PROGRESS_LABEL[state]}
+                        {state === 'later' && minutes ? ` · khoảng ${minutes} phút` : ''}
+                      </small>
+                    </span>
+                  </li>
+                )
+              })}
+              <li className={snapshot.step === 'returning' ? 'is-now' : 'is-later'}>
+                <span className="st-e-route__n" aria-hidden="true"><Flag size={13} /></span>
+                <span>
+                  <b>Về điểm kết thúc</b>
+                  <small>{snapshot.step === 'returning' ? 'Robot đang quay về' : 'Cảm ơn và chia tay'}</small>
+                </span>
+              </li>
+            </ol>
+          </div>
+        </section>
       </div>
     </div>
+  )
+}
+
+function StopThumb({ poi }: { poi: PoiDetail }) {
+  return poi.imageUrl
+    ? <img className="st-e-thumb" src={poi.imageUrl} alt="" loading="lazy" />
+    : <span className="st-e-thumb st-e-thumb--n" aria-hidden="true">{poi.order}</span>
+}
+
+function StopStrip({ pois, snapshot }: { pois: PoiDetail[]; snapshot: StudentTourSnapshot }) {
+  return (
+    <ol className="st-e-strip" aria-label="Các điểm dừng">
+      {pois.map((poi) => {
+        const state = poiProgress(poi, snapshot)
+        const minutes = poiMinutes(poi)
+        return (
+          <li key={poi.id} className={`st-e-stop is-${state}`} aria-current={state === 'now' ? 'step' : undefined}>
+            {poi.imageUrl
+              ? <img src={poi.imageUrl} alt="" loading="lazy" />
+              : <span className="st-e-stop__num" aria-hidden="true">{poi.order}</span>}
+            <em>
+              {state === 'done' && <Check size={11} aria-hidden="true" />}
+              {POI_PROGRESS_LABEL[state]}
+              {state === 'later' && minutes ? ` · ${minutes}′` : ''}
+            </em>
+            <b>{poi.order}. {poi.title}</b>
+          </li>
+        )
+      })}
+      <li className="st-e-stop st-e-stop--fin">
+        <Flag size={18} aria-hidden="true" />
+        <b>Về đích</b>
+      </li>
+    </ol>
   )
 }

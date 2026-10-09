@@ -1,7 +1,8 @@
-# Kế hoạch bootstrap account
+# Bootstrap account và POI fixture dev/demo
 
-Trạng thái: Initial Admin seeder đã triển khai trong working tree. Mục tiêu chỉ là
-khởi tạo account nền mà use case bình thường không thể tự tạo.
+Trạng thái: Initial Admin bootstrap và lệnh POI fixture dev/demo đã triển khai.
+Hai lệnh độc lập; bootstrap chỉ khởi tạo account nền mà use case bình thường
+không thể tự tạo. POI fixture phục vụ phát triển dữ liệu trước khảo sát waypoint.
 
 ## 1. Phân biệt phạm vi
 
@@ -11,7 +12,9 @@ khởi tạo account nền mà use case bình thường không thể tự tạo.
 | Catalog import | Nạp cấu hình kỹ thuật đã khảo sát/kiểm chứng | Tác vụ riêng sau này |
 | Test/demo fixtures | Automated tests hoặc kịch bản demo riêng | Không chạy ngầm vào DB ứng dụng |
 
-Không seed dữ liệu nghiệp vụ để DB có sẵn dữ liệu.
+Không seed dữ liệu nghiệp vụ ngầm vào DB ứng dụng. Ngoại lệ explicit của task
+POI baseline là bốn POI fixture trong DB demo riêng, mô tả ở mục 8; không phải
+catalog đã kiểm chứng và không chạy trong production.
 
 ## 2. Password và username
 
@@ -66,7 +69,7 @@ và account đã có ADMIN. Nếu normalized username sai/không nhất quán, u
 báo conflict và trả exit code khác 0. Lệnh không sửa/reset account hiện có hay
 thêm role; lỗi lúc ghi role rollback cả User.
 
-Không seed Tours, TourAllowedBranches, GroupRegistrations, RosterRows,
+Initial Admin bootstrap không seed Tours, TourAllowedBranches, GroupRegistrations, RosterRows,
 Invitations, BrowserSessions, BranchRequests, RefreshTokens, TourEvents,
 AuditLogs, Robots, Routes, Pois, RouteStops hoặc RouteVariants. Các bảng này
 được tạo từ flow nghiệp vụ thật hoặc catalog import riêng.
@@ -75,7 +78,7 @@ AuditLogs, Robots, Routes, Pois, RouteStops hoặc RouteVariants. Các bảng n�
 
 Routes/POIs/stops/variants chỉ được nạp riêng khi có manifest map/tuyến thật đã
 khảo sát và kiểm chứng. Không tạo dữ liệu vận hành giả. Catalog import chưa
-được implement trong task này.
+được implement. POI fixture dev/demo bên dưới không thay quy trình này.
 
 ## 6. Schema/runtime
 
@@ -103,5 +106,91 @@ thoát mà không mở HTTP, startup thường không bootstrap, không nhận p
 trên command line, và bootstrap dùng được cả hai snapshot. Primitive tests xác
 nhận verify đúng/sai, salt ngẫu nhiên và username normalization deterministic.
 Chạy `scripts/verify backend` để xác nhận build/test.
+
+## 8. POI baseline dev/demo
+
+Lệnh chạy riêng từ repo root, sau khi DB demo trống đã được provision và apply
+`backend/database/smart-campus-tour-schema-v1.1.sql`:
+
+```powershell
+$env:DOTNET_ENVIRONMENT = 'Development'
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:ConnectionStrings__DefaultConnection = 'Server=localhost,1433;Database=SmartCampusTourPoiDemo;Integrated Security=true;TrustServerCertificate=true'
+dotnet run --no-launch-profile --project backend/src/SmartCampus.Api -- --seed-demo-pois
+```
+
+Ví dụ dùng SQL Server local/Windows Integrated Security, không chứa credential.
+Các biến trên chỉ áp dụng cho shell này; kết thúc shell demo trước khi dùng lại
+cấu hình API thường. Không đổi User Secrets đang trỏ `SmartCampusTourV11`.
+Lệnh không tạo DB, apply schema, cấp quyền, mở HTTP hoặc yêu cầu JWT. Không ghép
+hai flag `--seed-demo-pois` và `--seed-initial-admin` trong một invocation.
+
+Guard kiểm tra Development và tên catalog trước khi kết nối, kiểm tra lại
+`DB_NAME()` sau kết nối, trước mọi DML. Chỉ chấp nhận `SmartCampusTourPoiDemo`
+hoặc `SmartCampusTourPoiDemo_<32-hex-guid>` (bản sao demo/test dùng một lần).
+`SmartCampusTourV11`, Production/Staging và tên có hậu tố tùy ý bị từ chối.
+DB principal cần SELECT/INSERT trên Pois và quyền lấy transaction application
+lock; command không cấp quyền. API startup thường không gọi seeder.
+
+Fixture dùng `MapKey=demo-poi-baseline-v1`, `MapFrame=map`, mét/radian. X/Y dựa
+trên mock FE hiện tại, yaw=0 là placeholder; không phải tọa độ tầng 6 NVH hoặc
+các map ROS đã lưu. Nguồn fixture ở
+`backend/src/SmartCampus.Infrastructure/Persistence/Seeding/DemoPoiFixture.cs`.
+
+| Poi.Id cố định | Name | X | Y | Yaw |
+|---|---|---:|---:|---:|
+| `8fd832a5-7e3b-4e6d-a101-000000000001` | [DEMO] AI Lab | -1.5 | -5.5 | 0 |
+| `8fd832a5-7e3b-4e6d-a101-000000000002` | [DEMO] Thư viện trung tâm | 4.8 | -2.2 | 0 |
+| `8fd832a5-7e3b-4e6d-a101-000000000003` | [DEMO] Innovation Space | 3.5 | 4.2 | 0 |
+| `8fd832a5-7e3b-4e6d-a101-000000000004` | [DEMO] Hội trường A | -3.5 | 3.8 | 0 |
+
+Description ghi rõ chưa khảo sát/không điều hướng robot thật. `IsActive=true`
+cho phép dùng trong phát triển Route ở DB demo; không có nghĩa đã kiểm chứng.
+NarrationText/AudioUrl/NarrationSeconds/FallbackVideoUrl để NULL; không dựng
+asset giả nhằm vượt READY. CreatedAt là UTC; UpdatedAt là NULL khi INSERT.
+Lệnh chỉ tạo Pois; không tạo Route/RouteStop/Tour/Robot hoặc nạp YAML robot.
+Không thêm field/table, HasData hoặc migration.
+
+### Idempotency và atomicity
+
+- GUID chưa có: INSERT; payload đã khớp: skip, không đổi timestamps.
+- Cùng GUID nhưng khác bất kỳ field payload nào (kể cả map, audio, IsActive):
+  conflict. CreatedAt/UpdatedAt không phải payload so khớp và được giữ nguyên.
+- Cùng tên trim/case-insensitive trong cùng map demo nhưng khác GUID: conflict,
+  không tự merge theo tên. Đây là quy tắc fixture, không thêm UNIQUE toàn DB.
+- Tất cả kiểm tra và INSERT trong một transaction. `sp_getapplock` exclusive,
+  transaction-owned tuần tự hóa các command seed cạnh tranh trong cùng DB.
+  Nó không khóa thay cho các use case chỉnh catalog khác.
+- Conflict hoặc ghi lỗi rollback batch, exit khác 0; không reset/upsert ghi đè.
+  Output thành công báo số created/skipped; SQL/connection diagnostics không
+  được in ra từ runner. Không có chế độ tự downgrade dữ liệu đã cập nhật.
+
+### Thay bằng waypoint thật ở task sau
+
+Khi cùng điểm nghiệp vụ được khảo sát, giữ Poi.Id và cập nhật map/frame/pose
+bằng script/import kỹ thuật được review, có diff, transaction và kiểm tra
+Tour READY/RUNNING cùng route/nhánh liên quan. RouteStop.PoiId giữ nguyên.
+Chuyển từ map demo sang map thật phải cập nhật Route.MapKey/MapFrame và Start/End
+nhất quán; không chỉ sửa POI. Chạy lại seed lúc đó báo conflict, không ghi đè.
+Điểm nghiệp vụ khác hẳn thì cần identity mới/ánh xạ có chủ đích.
+
+Chốt map revision và asset trước khi đo; frame `map` không tự xác định map.
+RViz Publish Point chỉ lấy vị trí, yaw cần pose có orientation và chạy thử.
+Scan lại map với hệ tọa độ mới cần map key mới và kiểm chứng lại tuyến.
+Tọa độ từng POI hợp lệ chưa chứng minh thứ tự/đường nối/Start/End đã thử.
+Không dùng DB fixture cho robot thật. Trước physical dispatch, task tích hợp
+phải từ chối demo/unapproved map và kiểm tra map/frame thực robot đang load
+theo ADR-0005; command seed này không triển khai dispatch guard hoặc bridge.
+
+### Verification
+
+`backend/tests/SmartCampus.IntegrationTests/DemoPoiSeederTests.cs` kiểm tra
+create-only-Pois, payload/GUID, rerun giữ timestamps, bổ sung fixture thiếu,
+conflict/không ghi đè, duplicate tên khác ID, rollback khi INSERT lỗi, hai
+connection seed đồng thời, RouteStop FK giữ nguyên sau update pose, command
+thoát không mở HTTP/không cần JWT, guard Production/sai DB/ghép lệnh, và startup
+thường không seed. SQL tests dùng database demo GUID riêng rồi dọn đúng DB đó.
+Chạy `bash scripts/verify backend` với `SMARTCAMPUS_SCHEMA_TEST_CONNECTION`
+theo `backend/database/README.md`; SKIPPED không phải kiểm chứng persistence.
 
 

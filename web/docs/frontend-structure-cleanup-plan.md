@@ -1,5 +1,12 @@
 # Kế hoạch làm sạch cấu trúc frontend
 
+> **Cập nhật 2026-10-05 — tài liệu lịch sử.** Phần ownership được xử lý trong
+> đợt này: UI dùng chung chuyển khỏi `features/staff/` vào `src/components/ui/`,
+> `DigitalTwinCanvas.tsx` chuyển vào `features/digital-twin/`, và `web/AGENTS.md`
+> ghi convention hiện hành cho structure/API. Các audit, cây đích và phase bên
+> dưới phản ánh snapshot tháng 9/2026; khi có khác biệt, `web/AGENTS.md` là
+> nguồn hiện trạng. Không diễn giải các phase cũ như việc còn phải làm.
+
 > **Trạng thái 2026-09-17 — tách ba khu vực.** FE hiện có **ba** lối vào:
 > landing `/`, vận hành `/staff/*` (CampusStaff, TourOperator, Admin) và quản trị
 > `/admin/*` (chỉ Admin). Dashboard vận hành trước đây nằm ở `/admin/*`; đó là
@@ -49,10 +56,11 @@ Mục tiêu cuối:
 - không có lệnh E-Stop từ browser;
 - `web/scripts/verify` và visual QA đều pass.
 
-FE chưa được refactor trong thay đổi hiện tại. Chỉ có các sửa cơ học để baseline
-verification chạy được: xoá unused import, đổi phép tính chart sang dạng bất
-biến, tách formatter khỏi file component và đồng bộ test với register toggle
-hiện hữu. Tài liệu này là kế hoạch thực thi.
+Tại snapshot của kế hoạch ngày 2026-09-16, FE chưa được refactor trong thay đổi
+khi đó. Chỉ có các sửa cơ học để baseline verification chạy được: xoá unused
+import, đổi phép tính chart sang dạng bất biến, tách formatter khỏi file
+component và đồng bộ test với register toggle hiện hữu. Tài liệu này lưu lại
+kế hoạch thực thi của giai đoạn đó.
 
 ## 2. Audit hiện trạng
 
@@ -146,6 +154,9 @@ warning React Hook Form trong auth pages; các warning này thuộc Phase 1. M�
 phase bên dưới phải kết thúc bằng verify pass; không dồn lỗi đến PR cuối.
 
 ## 3. Cấu trúc đích
+
+> Cây dưới đây là đề xuất tại thời điểm viết kế hoạch (2026-09-16), không phải
+> cây hiện tại. Xem `web/AGENTS.md` để biết ownership đang dùng.
 
 ```text
 web/src/

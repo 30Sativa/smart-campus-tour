@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -9,119 +9,186 @@ import RepTourDetailPage from '../../routes/representative/RepTourDetailPage'
 import RepRegistrationsPage from '../../routes/representative/RepRegistrationsPage'
 import RepRegistrationDetailPage from '../../routes/representative/RepRegistrationDetailPage'
 import RepRegisterPage from '../../routes/representative/RepRegisterPage'
-import { resetSim, tourById } from '../../mocks/staff-sim'
 import { useAuthStore } from '../../stores/auth-store'
+import type { RegistrationInput, RepresentativeRegistration, RepresentativeTour } from './api/types'
+import { rosterTemplateBytes } from './roster-import'
 
-const clients: QueryClient[] = []
-
-function renderAt(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0, refetchInterval: false }, mutations: { retry: false } } })
-  clients.push(client)
-  return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/dai-dien" element={<RepresentativeShell />}>
-            <Route index element={<RepDashboardPage />} />
-            <Route path="buoi" element={<RepToursPage />} />
-            <Route path="buoi/:tourId" element={<RepTourDetailPage />} />
-            <Route path="buoi/:tourId/dang-ky" element={<RepRegisterPage />} />
-            <Route path="dang-ky" element={<RepRegistrationsPage />} />
-            <Route path="dang-ky/:registrationId" element={<RepRegistrationDetailPage />} />
-            <Route path="dang-ky/:registrationId/sua" element={<RepRegisterPage />} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+const version = 'AAAAAAAAAAE='
+const tour: RepresentativeTour = { id: 'tour', name: 'Tour thật', description: 'Tuyến chuẩn bị', scheduledStartAt: '2026-10-20T02:00:00Z', state: 'SCHEDULED',
+  rowVersion: version, routeName: 'Tuyến A', stops: [{ order: 1, name: 'POI A', description: null }], register: { allowed: true, reason: null } }
+const initial: RepresentativeRegistration = {
+  summary: { id: 'registration', tourId: 'tour', tourName: tour.name, tourScheduledStartAt: tour.scheduledStartAt, tourState: 'SCHEDULED',
+    schoolName: 'Trường A', groupName: 'Đoàn A', state: 'SUBMITTED', rowCount: 1, submittedAt: tour.scheduledStartAt, updatedAt: tour.scheduledStartAt },
+  contactName: 'Người phụ trách', contactEmail: 'contact@example.com', rowVersion: version, tourRowVersion: version,
+  rejectionReason: null, reviewedAt: null, roster: [{ rowNumber: 2, rowType: 'SHARED_VIEWING', displayName: 'Phòng A', email: 'room@example.com', className: null }],
+  allowedActions: { edit: { allowed: true, reason: null }, resubmit: { allowed: false, reason: 'Chưa thể gửi lại' }, cancel: { allowed: true, reason: null } },
 }
-
+let registration: RepresentativeRegistration
+let submitAttempts: { key: string; input: RegistrationInput }[]
+let failSubmit: boolean
+let failUpdate: boolean | 'email'
+let cancelledVersion: string | null
+let replacedVersion: string | null
+let clients: QueryClient[]
+let missingRegistration: boolean
+function response(data: unknown, status = 200, extra: object = {}) {
+  return new Response(JSON.stringify({ success: status === 200, message: status === 409 ? 'Dữ liệu đã thay đổi.' : 'OK', data,
+    errors: status === 409 ? { code: 'STALE_VERSION', fields: null } : null, ...extra }), { status })
+}
+function renderAt(path: string) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchInterval: false }, mutations: { retry: false } } })
+  clients.push(client)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
+    <Route path="/dai-dien" element={<RepresentativeShell />}>
+      <Route index element={<RepDashboardPage />} /><Route path="buoi" element={<RepToursPage />} />
+      <Route path="buoi/:tourId" element={<RepTourDetailPage />} /><Route path="buoi/:tourId/dang-ky" element={<RepRegisterPage />} />
+      <Route path="dang-ky" element={<RepRegistrationsPage />} /><Route path="dang-ky/:registrationId" element={<RepRegistrationDetailPage />} />
+      <Route path="dang-ky/:registrationId/sua" element={<RepRegisterPage />} />
+    </Route>
+  </Routes></MemoryRouter></QueryClientProvider>)
+  return client
+}
 beforeEach(() => {
-  resetSim()
-  useAuthStore.setState({ accessToken: 'mock', isAuthenticated: true, user: { userId: 'mock-user-daidien', username: 'daidien', role: 'Representative' } })
+  registration = structuredClone(initial)
+  clients = []; submitAttempts = []; failSubmit = false; failUpdate = false; replacedVersion = null; cancelledVersion = null; missingRegistration = false
+  useAuthStore.getState().setAuth('real-test-token', { userId: 'owner', username: 'real.representative', role: 'Representative' })
+  vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
+    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer real-test-token')
+    const url = new URL(input, 'https://api.example.test')
+    if (url.pathname === '/api/registrations/registration/invitations')
+      return response({ enabled: false, canIssue: false, items: [] })
+    const path = url.pathname.replace('/api/representative', '')
+    if (options?.method === 'POST' && path === '/tours/tour/registrations') {
+      const payload = JSON.parse(options.body as string) as RegistrationInput
+      submitAttempts.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], input: payload })
+      if (failSubmit) { failSubmit = false; throw new TypeError('Connection lost after commit') }
+      registration = { ...registration, roster: payload.roster, summary: { ...registration.summary, ...payload, rowCount: payload.roster.length }, contactName: payload.contactName, contactEmail: payload.contactEmail }
+      return response({ id: registration.summary.id })
+    }
+    if (options?.method === 'PUT') {
+      replacedVersion = JSON.parse(options.body as string).expectedRowVersion
+      return failUpdate === 'email'
+        ? response(null, 409, { message: 'Có email đã được đăng ký trong Tour này.', errors: { code: 'EMAIL_RESERVED', fields: { 'Roster[0].Email': ['Email đã được đăng ký trong Tour này.'] } } })
+        : response(null, failUpdate ? 409 : 200)
+    }
+    if (options?.method === 'POST' && path.endsWith('/cancel')) { cancelledVersion = JSON.parse(options.body as string).expectedRowVersion; registration.summary.state = 'CANCELLED'; return response(null) }
+    if (path === '/tours/tour') return response(tour)
+    if (path === '/tours') return response([tour], 200, { pagination: { page: 1, pageSize: 20, totalItems: 42, totalPages: 3 } })
+    if (path === '/registrations/registration') return missingRegistration ? response(null, 404, { message: 'Không tìm thấy dữ liệu.' }) : response(structuredClone(registration))
+    if (path === '/registrations') return response([registration.summary], 200, { pagination: { page: 1, pageSize: 20, totalItems: 25, totalPages: 2 } })
+    throw new Error('Unexpected endpoint ' + path)
+  }))
 })
+afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals() })
 
-afterEach(() => {
-  clients.splice(0).forEach((client) => client.clear())
-  useAuthStore.setState({ accessToken: null, user: null, isAuthenticated: false })
-})
+describe('Representative real HTTP contract', () => {
+  it('shows a registration error instead of an infinite loading skeleton', async () => {
+    missingRegistration = true
+    renderAt('/dai-dien/dang-ky/registration/sua')
+    expect(await screen.findByText('Không mở được đăng ký')).toBeInTheDocument()
+    expect(screen.queryByText('Đang tải dữ liệu…')).not.toBeInTheDocument()
+  })
 
-describe('representative screens (flow review §4)', () => {
-  it('summarises the registrations on the overview', async () => {
+  it('uses server totals and shows actual account identity without a mock ribbon', async () => {
     renderAt('/dai-dien')
     expect(await screen.findByRole('heading', { name: 'Buổi đang nhận đăng ký' })).toBeInTheDocument()
-    expect(await screen.findByText('Hoạt động gần đây')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Xem buổi tham quan/ })).toHaveAttribute('href', '/dai-dien/buoi')
+    expect(screen.getByText('42')).toBeInTheDocument()
+    expect(screen.getAllByText('25').length).toBeGreaterThan(0)
+    expect(screen.getByText('real.representative')).toBeInTheDocument()
+    expect(screen.queryByText(/mô phỏng/)).not.toBeInTheDocument()
+    expect(screen.getByText('Các buổi đang nhận đăng ký đoàn')).toBeInTheDocument()
+    expect(screen.queryByText(/còn chỗ/)).not.toBeInTheDocument()
   })
-
-  it('lists Tours: register where Scheduled, open the registration where one exists', async () => {
-    renderAt('/dai-dien/buoi')
-    const register = await screen.findAllByRole('link', { name: 'Đăng ký tour' })
-    expect(register.some((link) => link.getAttribute('href') === '/dai-dien/buoi/tour-06/dang-ky')).toBe(true)
-    expect(screen.getAllByRole('link', { name: 'Xem đăng ký' }).length).toBeGreaterThan(0)
+  it('keeps a register action even when the Representative already has a group', async () => {
+    renderAt('/dai-dien/buoi/tour')
+    expect(await screen.findByRole('link', { name: 'Đăng ký đoàn' })).toHaveAttribute('href', '/dai-dien/buoi/tour/dang-ky')
+    expect(await screen.findByRole('link', { name: 'Xem tất cả (25)' })).toHaveAttribute('href', '/dai-dien/dang-ky?tourId=tour')
   })
-
-  it('explains why a locked Tour takes no registration', async () => {
-    renderAt('/dai-dien/buoi/tour-02')
-    expect(await screen.findByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
-    // The representative already has an approved registration on this Ready Tour.
-    expect(screen.getAllByRole('link', { name: 'Xem đăng ký' })[0]).toHaveAttribute('href', '/dai-dien/dang-ky/reg-r2')
+  it('imports mixed XLSX, submits exact row types and retries the same uncertain intent', async () => {
+    failSubmit = true
+    renderAt('/dai-dien/buoi/tour/dang-ky')
+    fireEvent.change(await screen.findByLabelText(/Tên trường/), { target: { value: 'Trường B' } })
+    fireEvent.change(screen.getByLabelText(/Tên đoàn/), { target: { value: 'Đoàn B' } })
+    fireEvent.change(screen.getByLabelText(/Người liên hệ/), { target: { value: 'Đại diện B' } })
+    fireEvent.change(screen.getByLabelText(/Email liên hệ/), { target: { value: 'contact@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    const bytes = rosterTemplateBytes()
+    const file = new File([bytes as BlobPart], 'mixed.xlsx')
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer })
+    fireEvent.change(screen.getByLabelText('Chọn file Excel danh sách lời mời'), { target: { files: [file] } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận sử dụng danh sách này' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi đăng ký' }))
+    expect(submitAttempts).toHaveLength(0)
+    fireEvent.click(screen.getByRole('checkbox', { name: /có quyền cung cấp thông tin đăng ký/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi đăng ký' }))
+    expect(await screen.findByText('Lần gửi trước chưa được xác nhận')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại' }))
+    expect(await screen.findByRole('heading', { name: 'Đoàn B' })).toBeInTheDocument()
+    expect(submitAttempts).toHaveLength(2)
+    expect(submitAttempts[1]).toEqual(submitAttempts[0])
+    expect(submitAttempts[0].input.roster.map(r => r.rowType)).toEqual(['INDIVIDUAL', 'SHARED_VIEWING'])
+    expect(submitAttempts[0].input.expectedTourRowVersion).toBe(version)
+    expect(screen.queryByText(/Mã đoàn/)).not.toBeInTheDocument()
   })
-
-  it('shows the join link and group code of an approved group', async () => {
-    renderAt('/dai-dien/dang-ky/reg-09')
-    expect(await screen.findByRole('heading', { name: 'Thông tin tham gia' })).toBeInTheDocument()
-    expect(screen.getByText(/campustour\.example\/tham-gia\/T-03/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sao chép link' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sao chép mã đoàn' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Thay danh sách học sinh' })).toHaveAttribute('href', '/dai-dien/dang-ky/reg-09/sua')
+  it('retains the draft version across polling and requires explicit reload after 409', async () => {
+    failUpdate = true
+    const client = renderAt('/dai-dien/dang-ky/registration/sua')
+    fireEvent.change(await screen.findByLabelText(/Tên đoàn/), { target: { value: 'Bản nháp' } })
+    registration.rowVersion = 'AAAAAAAAAAI='
+    await client.invalidateQueries({ queryKey: ['representative', 'owner', 'registration', 'registration'] })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /có quyền cung cấp thông tin đăng ký/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(await screen.findByText('Dữ liệu đã thay đổi.')).toBeInTheDocument()
+    expect(replacedVersion).toBe(version)
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại dữ liệu và bắt đầu lại' }))
+    await waitFor(() => expect(screen.getByLabelText(/Tên đoàn/)).toHaveValue('Đoàn A'))
   })
-
-  it('disables changes on a locked Tour and says why', async () => {
-    renderAt('/dai-dien/dang-ky/reg-r2')
-    expect(await screen.findByText(/Buổi tham quan đã được chốt nên đăng ký không thể chỉnh sửa/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Thay danh sách học sinh' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Hủy đăng ký' })).toBeDisabled()
+  it('keeps the draft and shows the conflicting roster row for an email reservation', async () => {
+    failUpdate = 'email'
+    renderAt('/dai-dien/dang-ky/registration/sua')
+    fireEvent.change(await screen.findByLabelText(/Tên đoàn/), { target: { value: 'Bản nháp email' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /có quyền cung cấp thông tin đăng ký/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
+    expect(await screen.findByText('Có email đã được đăng ký trong Tour này.')).toBeInTheDocument()
+    expect(screen.getByText('Bản nháp email')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).not.toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Tải lại dữ liệu và bắt đầu lại' })).not.toBeInTheDocument()
   })
-
-  it('shows Admin’s rejection reason and the way to fix it', async () => {
-    renderAt('/dai-dien/dang-ky/reg-r1')
-    expect(await screen.findByText('Lý do từ chối')).toBeInTheDocument()
-    expect(screen.getByText(/bổ sung cột Lop/)).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: 'Chỉnh sửa và gửi lại' })[0]).toHaveAttribute('href', '/dai-dien/dang-ky/reg-r1/sua')
-  })
-
-  it('cancels only after confirmation', async () => {
-    renderAt('/dai-dien/dang-ky/reg-09')
+  it('freezes the cancel confirmation version while background data changes', async () => {
+    const client = renderAt('/dai-dien/dang-ky/registration')
     fireEvent.click(await screen.findByRole('button', { name: 'Hủy đăng ký' }))
-    expect(screen.getByRole('alertdialog', { name: 'Hủy đăng ký này?' })).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Hủy đăng ký' }).at(-1)!)
-    await waitFor(() => expect(tourById('tour-03')?.registrations.find((reg) => reg.id === 'reg-09')?.state).toBe('Cancelled'))
+    registration.rowVersion = 'AAAAAAAAAAI='
+    await client.invalidateQueries({ queryKey: ['representative', 'owner', 'registration', 'registration'] })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy' }))
+    await waitFor(() => expect(cancelledVersion).toBe(version))
   })
-
-  it('checks group information before moving to the roster step', async () => {
-    renderAt('/dai-dien/buoi/tour-06/dang-ky')
-    const email = await screen.findByLabelText(/Email liên hệ/)
-    fireEvent.change(email, { target: { value: 'khong-hop-le' } })
-    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/ }))
-    expect(await screen.findByText(/Email chưa đúng định dạng/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Tải file Excel mẫu' })).toBeNull()
-    fireEvent.change(email, { target: { value: 'co.vy@truong.edu.vn' } })
-    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/ }))
-    expect(await screen.findByRole('button', { name: 'Tải file Excel mẫu' })).toBeInTheDocument()
-    // No roster confirmed yet: the form stays on step 2 and says what is missing.
-    fireEvent.click(screen.getByRole('button', { name: /Tiếp tục/ }))
-    expect(await screen.findByText(/Xác nhận sử dụng danh sách này/)).toBeInTheDocument()
+  it('reads approved rows but never shows legacy access or an approved edit action', async () => {
+    registration.summary.state = 'APPROVED'
+    registration.allowedActions = Object.fromEntries(['edit', 'resubmit', 'cancel'].map(k => [k, { allowed: false, reason: 'Chức năng sau duyệt chưa được triển khai.' }])) as RepresentativeRegistration['allowedActions']
+    renderAt('/dai-dien/dang-ky/registration')
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+    expect(await screen.findByText('Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
+    expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Mã đoàn|Sao chép mã|Nhập họ tên/)).not.toBeInTheDocument()
   })
-
-  it('filters My Registrations by state', async () => {
-    renderAt('/dai-dien/dang-ky?trang-thai=tu-choi')
-    expect(await screen.findByRole('link', { name: /Sáng mai/ })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Buổi chiều/ })).toBeNull()
+  it('surfaces an API error without replacing it with mock data', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response(null, 503, { message: 'Unavailable' })))
+    renderAt('/dai-dien/buoi')
+    expect(await screen.findByText('Không tải được Tour')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Đăng ký đoàn' })).not.toBeInTheDocument()
   })
-
-  it('does not open another school’s registration', async () => {
-    renderAt('/dai-dien/dang-ky/reg-01')
-    expect(await screen.findByText('Không mở được đăng ký')).toBeInTheDocument()
+  it('removes the previous owner cache when identity changes', async () => {
+    const client = renderAt('/dai-dien')
+    await screen.findByRole('heading', { name: 'Hoạt động gần đây' })
+    expect(client.getQueriesData({ queryKey: ['representative', 'owner'] }).length).toBeGreaterThan(0)
+    useAuthStore.getState().setAuth('new-token', { userId: 'another-owner', username: 'another', role: 'Representative' })
+    await waitFor(() => expect(client.getQueriesData({ queryKey: ['representative', 'owner'] })).toHaveLength(0))
   })
 })

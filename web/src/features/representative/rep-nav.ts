@@ -1,5 +1,5 @@
 import { CalendarDays, ClipboardList, LayoutDashboard } from 'lucide-react'
-import type { NavItem, NavSection } from '../staff/staff-nav'
+import type { NavItem, NavSection } from '../../components/ui/nav-types'
 
 /**
  * Representative navigation (flow review §4.1): the overview, the Tours a

@@ -1,104 +1,72 @@
-import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
-import type { RegistrationState } from '../../api/contracts/admin'
-import { FilterChips, PageHeader, Pagination, SearchField, SectionHeading, panelClass } from '../../features/staff/StaffUi'
-import { usePagination } from '../../features/staff/use-pagination'
-import { AdminErrorPanel, AdminPage, DateRangeFilter, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
-import { useAdminRegistrations } from '../../features/administration/admin-hooks'
-import { rangeFor, type DateRangeKey } from '../../features/administration/admin-format'
-import { REGISTRATION_STATE, REGISTRATION_STATES } from '../../features/administration/admin-status'
-import { AdminRegistrationTable } from '../../features/administration/components/RegistrationParts'
-import { RegistrationInsights } from '../../features/administration/components/RegistrationInsights'
-import { RegistrationReviewDrawer } from '../../features/administration/components/RegistrationReviewDrawer'
+import { PageHeader, Pagination, SearchField } from '../../components/ui/ConsolePrimitives'
+import { StageTabs } from '../../components/ui/StageTabs'
+import { buttonClass, inputClass } from '../../components/ui/ui-classes'
+import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../features/administration/AdminUi'
+import { useRegistrationReviews } from '../../features/administration/registrations/hooks'
+import { ReviewDrawer } from '../../features/administration/registrations/components/ReviewDrawer'
+import { dateBoundary, reviewTime } from '../../features/administration/registrations/presentation'
+import { ReviewStateBadge } from '../../features/administration/registrations/components/ReviewStateBadge'
+import { isRegistrationState, REGISTRATION_STATE_LABEL, REGISTRATION_STATES, type RegistrationState } from '../../features/registrations/registration-state'
 import { useReviewParam } from '../../features/administration/use-review-param'
+import { cardClass } from '../../features/administration/admin-visual'
 
-const DATE_OPTIONS: Array<{ value: DateRangeKey; label: string }> = [
-  { value: 'all', label: 'Mọi ngày' },
-  { value: 'today', label: 'Tour hôm nay' },
-  { value: 'week', label: 'Tour tuần này' },
-  { value: 'custom', label: 'Khoảng ngày' },
-]
+const STATE_COLOR: Record<RegistrationState | 'all', string> = { all: '#64748b', SUBMITTED: '#d97706', APPROVED: '#16a34a', REJECTED: '#dc2626', CANCELLED: '#64748b' }
 
-/**
- * Group registrations across Tours. `pending` is the review queue ("Chờ
- * duyệt"), which is the default view of registrations; the other mode starts
- * on every state. Oldest submission first.
- */
 export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'all' }) {
   const [params, setParams] = useSearchParams()
   const { reviewId, open, close } = useReviewParam()
-  const q = params.get('q') ?? ''
-  const stateParam = params.get('state') as RegistrationState | 'all' | null
-  const state: RegistrationState | 'all' = mode === 'pending' ? 'Submitted' : stateParam ?? 'all'
-  const date = (params.get('date') as DateRangeKey | null) ?? 'all'
-  const custom = { from: params.get('from') ?? '', to: params.get('to') ?? '' }
-  const range = rangeFor(date, new Date(), custom)
-  const base = useMemo(() => ({ q: q.trim() || undefined, from: range.from, to: range.to }), [q, range.from, range.to])
-  const query = useAdminRegistrations(base)
-
-  const update = (changes: Record<string, string | null>) =>
-    setParams((current) => {
-      const next = new URLSearchParams(current)
-      for (const [key, value] of Object.entries(changes)) {
-        if (value) next.set(key, value)
-        else next.delete(key)
-      }
-      return next
-    }, { replace: true })
-
-  const all = query.data ?? []
-  const rows = state === 'all' ? all : all.filter((reg) => reg.state === state)
-  const filtered = Boolean(q || date !== 'all')
-  const paged = usePagination(rows, 10, `${mode}|${q}|${state}|${date}|${custom.from}|${custom.to}`)
-
-  return (
-    <AdminPage>
-      <PageHeader
-        eyebrow="Đăng ký đoàn"
-        title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
-        description={mode === 'pending' ? 'Đoàn đã gửi danh sách và đang chờ quyết định. Duyệt hoặc từ chối (kèm lý do) khi Tour còn đang chuẩn bị.' : 'Toàn cảnh đăng ký đoàn của mọi Tour: trạng thái duyệt, số học sinh và tình trạng gửi thông tin tham gia.'}
-      />
-
-      {mode === 'all' && !query.isError && (
-        <RegistrationInsights registrations={all} loading={query.isLoading} activeState={state} onSelectState={(value) => update({ state: value === 'all' ? null : value })} />
-      )}
-
-      {mode === 'all' && <SectionHeading title="Danh sách đăng ký" note={query.data ? `${rows.length} đăng ký${state !== 'all' ? `, ${REGISTRATION_STATE[state].label.toLowerCase()}` : ''}` : undefined} />}
-      <section className={panelClass} aria-label="Danh sách đăng ký">
-        <div className="space-y-3 border-b border-[#f1f5f9] p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-            <SearchField value={q} onChange={(value) => update({ q: value || null })} label="Tìm theo trường, đại diện hoặc Tour" placeholder="Tìm theo trường, đại diện, Tour..." className="w-full lg:max-w-sm" />
-            <DateRangeFilter label="Lọc theo ngày Tour" value={date} from={custom.from} to={custom.to} options={DATE_OPTIONS} onChange={(next) => update({ date: next.date === 'all' ? null : next.date, from: next.from || null, to: next.to || null })} />
-          </div>
-          {mode === 'all' && (
-            <FilterChips<RegistrationState | 'all'>
-              label="Lọc theo trạng thái đăng ký"
-              value={state}
-              onChange={(value) => update({ state: value === 'all' ? null : value })}
-              options={[{ value: 'all', label: 'Tất cả', count: query.data?.length }, ...REGISTRATION_STATES.map((value) => ({ value, label: REGISTRATION_STATE[value].label, count: query.data ? all.filter((reg) => reg.state === value).length : undefined }))]}
-            />
-          )}
+  const search = params.get('q') ?? ''
+  const requestedState = (params.get('state') ?? '').toUpperCase()
+  const state = mode === 'pending' ? 'SUBMITTED' : isRegistrationState(requestedState) ? requestedState : undefined
+  const requestedPage = Number(params.get('page') ?? 1)
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
+  const sort = params.get('sort') ?? 'submittedAt'
+  const from = params.get('from') ?? ''
+  const to = params.get('to') ?? ''
+  // ISO calendar dates compare as text; an inverted range is explained here instead of failing as a load error.
+  const invalidRange = Boolean(from && to && from > to)
+  const query = useRegistrationReviews({ search: search.trim() || undefined, state, page, size: 10, sort,
+    tourId: params.get('tourId') || undefined, from: dateBoundary(from), to: dateBoundary(to, true) }, !invalidRange)
+  const update = (changes: Record<string, string | null>) => setParams(current => {
+    const next = new URLSearchParams(current)
+    next.delete('page')
+    for (const [key, value] of Object.entries(changes)) { if (value) next.set(key, value); else next.delete(key) }
+    return next
+  }, { replace: true })
+  const rows = query.data?.data ?? []
+  const total = query.data?.pagination.totalItems ?? 0
+  return <AdminPage>
+    <PageHeader eyebrow="Đăng ký đoàn" title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
+      description="Xem đăng ký từ đại diện và xét duyệt khi Tour còn nhận đăng ký. Mỗi quyết định được lưu cùng lịch sử thao tác." />
+    <section className={cardClass} aria-label="Danh sách đăng ký">
+      <div className="space-y-3 border-b border-slate-100 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchField value={search} onChange={q => update({ q: q || null })} label="Tìm theo trường, đoàn, đại diện hoặc Tour" placeholder="Tìm trường, đoàn, đại diện, Tour…" className="w-full lg:max-w-sm" />
+          <label className="text-xs font-medium text-slate-600">Tour từ ngày (UTC+7)<input type="date" className={`${inputClass} mt-1`} value={from} onChange={e => update({ from: e.target.value || null })} /></label>
+          <label className="text-xs font-medium text-slate-600">Tour đến ngày (UTC+7)<input type="date" className={`${inputClass} mt-1`} value={to} onChange={e => update({ to: e.target.value || null })} /></label>
+          <label className="text-xs font-medium text-slate-600">Sắp xếp<select className={`${inputClass} mt-1`} value={sort} onChange={e => update({ sort: e.target.value })}>
+            <option value="submittedAt">Gửi trước duyệt trước</option><option value="-submittedAt">Mới gửi trước</option><option value="-updatedAt">Mới cập nhật trước</option><option value="groupName">Tên đoàn</option>
+          </select></label>
         </div>
-
-        {query.isError ? (
-          <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
-        ) : query.isLoading ? (
-          <SkeletonRows rows={5} label="Đang tải đăng ký" />
-        ) : rows.length === 0 ? (
-          mode === 'pending' && !filtered ? (
-            <EmptyState title="Tất cả đăng ký đã được xử lý." description="Không còn đoàn nào chờ duyệt." />
-          ) : (
-            <EmptyState title="Không có đăng ký nào khớp bộ lọc." />
-          )
-        ) : (
-          <>
-            <AdminRegistrationTable registrations={paged.rows} onReview={open} showTour label={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'} />
-            <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang đăng ký" />
-          </>
-        )}
-      </section>
-
-      <RegistrationReviewDrawer registrationId={reviewId} onClose={close} />
-    </AdminPage>
-  )
+        {mode === 'all' && <StageTabs<RegistrationState | 'all'> label="Lọc trạng thái đăng ký" value={state ?? 'all'} onChange={value => update({ state: value === 'all' ? null : value })}
+          stages={[{ key: 'all', label: 'Tất cả', color: STATE_COLOR.all }, ...REGISTRATION_STATES.map(key => ({ key, label: REGISTRATION_STATE_LABEL[key].label, color: STATE_COLOR[key], separated: key === 'REJECTED' }))]} />}
+      </div>
+      {invalidRange ? <div className="p-5"><Notice tone="warn">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</Notice></div>
+        : query.isError ? <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
+        : query.isLoading ? <SkeletonRows rows={5} label="Đang tải đăng ký" /> : rows.length === 0 ? <EmptyState title="Không có đăng ký khớp bộ lọc." action={page > 1 ? <button className={buttonClass('secondary', 'sm')} onClick={() => update({ page: null })}>Về trang đầu</button> : undefined} />
+          : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm" aria-label="Đăng ký từ đại diện">
+            <thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Đoàn / Trường', 'Tour', 'Đại diện', 'Dòng lời mời', 'Trạng thái', ''].map((label, i) => <th key={i} scope="col" className="px-4 py-3">{label}</th>)}</tr></thead>
+            <tbody className="divide-y divide-slate-100">{rows.map(reg => <tr key={reg.id}>
+              <td className="px-4 py-4"><p className="font-semibold text-slate-800">{reg.groupName}</p><p className="mt-1 text-xs text-slate-500">{reg.schoolName}</p></td>
+              <td className="px-4 py-4"><p>{reg.tourName}</p><p className="mt-1 text-xs text-slate-500">{reviewTime(reg.tourScheduledStartAt)}</p></td>
+              <td className="px-4 py-4">{reg.representativeName}</td><td className="px-4 py-4 tabular-nums">{reg.rowCount}</td><td className="px-4 py-4"><ReviewStateBadge state={reg.state} /></td>
+              <td className="px-4 py-4"><button onClick={() => open(reg.id)} className="font-semibold text-blue-600 hover:underline">Xem & duyệt<span className="sr-only"> {reg.groupName}</span></button></td>
+            </tr>)}</tbody>
+          </table></div>}
+      {query.data && !query.isError && !invalidRange && <Pagination page={page} pageCount={Math.max(1, query.data.pagination.totalPages)} total={total} pageSize={10}
+        onPage={value => update({ page: String(value) })} label="Phân trang đăng ký" />}
+    </section>
+    {reviewId && <ReviewDrawer key={reviewId} id={reviewId} onClose={close} />}
+  </AdminPage>
 }

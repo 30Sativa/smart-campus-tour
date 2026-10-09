@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CircleCheck, MapPin, TriangleAlert } from 'lucide-react'
-import { PageHeader, PanelHead, panelClass } from '../../features/staff/StaffUi'
+import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
 import { useAdminRoutes } from '../../features/administration/admin-hooks'
 import { RoutePreview } from '../../features/administration/components/RoutePreview'

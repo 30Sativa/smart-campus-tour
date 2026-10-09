@@ -1,6 +1,6 @@
 import { Clock3, Hourglass, Radio, Send } from 'lucide-react'
 import type { AmrStatus, TourOperation } from '../../../api/contracts/staff'
-import { Field } from '../StaffUi'
+import { Field } from '../../../components/ui/ConsolePrimitives'
 import { stepLabel } from '../status'
 import { formatStopwatch, formatTime } from '../formatters'
 import { POSE_STALE_SECONDS, routeProgress } from '../attention'

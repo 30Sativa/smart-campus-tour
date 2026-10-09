@@ -1,0 +1,17 @@
+id: START
+name: Tour Start
+map_yaml: map2.yaml
+frame_id: map
+
+pose:
+  x: -0.319
+  y: -0.535
+  yaw: 0.077
+
+  quaternion:
+    x: 0.0
+    y: 0.0
+    z: 0.03849
+    w: 0.99926
+
+verified: false

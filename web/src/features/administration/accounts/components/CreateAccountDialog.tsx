@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { ConfirmationDialog } from '../../../staff/components/ConfirmationDialog'
-import { inputClass, labelClass } from '../../../staff/ui-classes'
+import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
+import { inputClass, labelClass } from '../../../../components/ui/ui-classes'
 import { Notice } from '../../AdminUi'
 import { useCreateAccount } from '../hooks'
 import { accountFormError, type AccountFormErrors, type AccountFormField } from '../errors'

@@ -174,18 +174,13 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
   compose file depend on them.
 - The Docker build context is `robot/`. Paths inside `Dockerfile` are relative
   to `robot/`, not to the repo root.
-- The drivetrain, navigation, and main ROS runtime deploy as a Docker image:
-  build in CI, push to DockerHub, pull on the miniPC. There is no normal path
-  to build the full ROS stack on the naked miniPC host. The Astra Pro's native
-  host bring-up is a hardware exception for the camera package only; it does
-  not authorize duplicate STM32, Nav2, or robot-control nodes outside the
-  container.
-  See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
-- **Exception, TEST phase only:** the `hardware` service currently bind-mounts
-  `./ros2_ws/src:/ros2_ws/src` so a fix can be built in the container without a
-  CI round trip. This is temporary and marked as such in `docker-compose.yml`.
-  Remove the mount before production so what runs matches the image. This
-  container overlay exception is separate from the native Astra Pro camera
-  bring-up described in ADR-0003.
+- The physical drivetrain, navigation, and main ROS runtime build and run natively
+  on Ubuntu 22.04 + ROS 2 Humble on the single miniPC. Use
+  `scripts/install-native`, `scripts/build-native`, and `scripts/source-minipc`;
+  do not start duplicate host/container nodes. Docker remains for CI image
+  builds, laptop debug, and simulation. See `docs/native-runtime.md`.
+- The physical miniPC has no Docker hardware service or source overlay. Native
+  builds use the checked-in workspace; debug/sim Docker profiles remain available
+  for development and CI/reference images.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

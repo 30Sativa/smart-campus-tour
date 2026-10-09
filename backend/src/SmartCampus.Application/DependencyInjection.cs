@@ -18,10 +18,13 @@ namespace SmartCampus.Application
                 config.RegisterServicesFromAssembly(assembly);
 
                 config.AddOpenBehavior(typeof(ValidationBehavior<,>));
+                config.AddOpenBehavior(typeof(PoiMutationTransactionBehavior<,>));
+                config.AddOpenBehavior(typeof(RegistrationTransactionBehavior<,>));
                 config.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
             });
 
             services.AddValidatorsFromAssembly(assembly);
+            services.AddScoped<SmartCampus.Application.Features.Invitations.InvitationIssuer>();
 
             return services;
         }

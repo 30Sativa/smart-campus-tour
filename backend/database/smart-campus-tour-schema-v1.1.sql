@@ -127,6 +127,7 @@ CREATE TABLE dbo.Pois
     IsActive                 BIT                       NOT NULL, -- Cho phép dùng cấu hình cho lựa chọn mới; tắt không xóa bản ghi hay lịch sử.
     CreatedAt                DATETIMEOFFSET(3)         NOT NULL, -- Thời điểm tạo bản ghi, lưu UTC (+00:00); ứng dụng phải cấp vì chưa có DEFAULT.
     UpdatedAt                DATETIMEOFFSET(3)         NULL,     -- Thời điểm cập nhật gần nhất, UTC; NULL khi chưa cập nhật.
+    RowVersion               ROWVERSION                NOT NULL, -- Token cạnh tranh do SQL Server cấp; ngăn ghi đè cập nhật POI.
 
     CONSTRAINT PK_Pois PRIMARY KEY (Id)
 );

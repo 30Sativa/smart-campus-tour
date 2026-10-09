@@ -23,13 +23,14 @@ shared rules; this file only covers what is specific to `web/`.
   role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
   - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
-    Current code uses a group code and roster-name matching mock; the Review 1
-    target is an emailed Tour page link plus personal access code, exchanged
-    for a browser session (ADR-0010), with one shared-viewing row for a
+    SQL GUID Tour links use a personal access code exchanged for a browser
+    session (ADR-0010/0015); non-GUID fixtures retain the labelled group-code
+    mock. There is one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
-    Current pages are mock-bound and still show the older shared group link;
-    they do not implement the personal-email invitation target.
+    Registration submission/pre-approval management is API-backed; see
+    `web/docs/representative-registration.md`. APPROVED is read-only in this
+    roster; invitation support uses the real owner-scoped API (ADR-0015).
   - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
     run action needs the `Staff` role, scope §2.1). What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
@@ -45,9 +46,11 @@ shared rules; this file only covers what is specific to `web/`.
     Scheduled, pick a prepared route, review groups (approve / reject with a
      reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
      Start, and read finished Tours. Admin never starts, holds, advances or ends
-     a run and never controls a robot. Review 1 target adds a limited P1
-     completion/email/invitation-entry summary and POI-content form; neither is
-     proof of current implementation. Screen map: `web/docs/admin-tours.md`.
+    a run and never controls a robot. Review 1 target adds a limited P1
+    completion/email/invitation-entry summary and POI-content form. The Admin
+    POI catalog at `/admin/pois` is API-backed: it edits content and only edits
+    map/pose before route/history use (ADR-0014). P1 audio upload/dwell warning
+    remains separate. Screen map: `web/docs/admin-tours.md`.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
@@ -93,7 +96,8 @@ shared rules; this file only covers what is specific to `web/`.
   - Endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`,
     `POST /api/auth/logout`.
   - Logout: call `POST /api/auth/logout` (revokes the refresh token
-    server-side — see `backend/AGENTS.md` Section 5), then clear local
+    server-side — see [backend/AGENTS.md Section 6](../backend/AGENTS.md#6-authentication-and-realtime-placement),
+    then clear local
     in-memory auth state and redirect to the public app. Do not treat
     "clear local state" alone as logout — always call the endpoint first, or
     a stolen refresh token from that session stays valid.
@@ -129,28 +133,72 @@ web/
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
     │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
     ├── features/
-    │   ├── landing/      landing.css, landing-content.ts, landing-motion.ts,
-    │   │                 sections/ (one component per landing section)
-    │   ├── staff/        StaffShell, staff-nav, use-mobile-nav, StaffUi
-    │   │                 (shared chrome), ui-classes, status/type vocabulary,
-    │   │                 formatters, reason, attention (next action per
-    │   │                 state, counts, "needs me now"), staff-hooks (query
-    │   │                 layer + realtime sync), components/ (run status,
-    │   │                 controls, route, robot, dialogs, operational twin)
-    │   └── administration/ AdminShell, AdminUi, admin-nav, admin-status
-    │                     (labels), admin-hooks (query layer), admin-attention
-    │                     (dashboard tasks), components/ (TourForm, RoutePreview,
-    │                     ReadyChecklist, registration table/drawer, roster,
-    │                     invitation + Chốt/Mở lại/Hủy dialogs)
-    ├── api/              client.ts (the one HTTP client), signalr.ts (hub
-    │                     factory), contracts/ (endpoint DTOs + calls)
+    │   ├── administration/ AdminShell, AdminUi, admin-nav/status/hooks,
+    │   │                   accounts/ and POI administration subfeatures,
+    │   │                   registration/Tour components
+    │   ├── digital-twin/  DigitalTwinCanvas, CampusModel, RobotModel,
+    │   │                  TwinScene, SimulatorPreview, demo motion/map config
+    │   ├── landing/       landing.css/content/motion and sections/
+    │   ├── quest-stream/  browser livestream capability (WebRTC/WHEP)
+    │   ├── representative/ registration/invitation UI, hooks, nav and format
+    │   ├── registrations/ shared live roster/state vocabulary and owner/Admin
+    │   │                  invitation support with its API binding
+    │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
+    │   │                  reason, attention, query/realtime hooks and
+    │   │                  operation, route, robot and twin components
+    │   ├── student/       legacy fixture flow/status plus invitation/ SQL Tour
+    │   │                  cookie entry, session recovery and leave
+    │   └── visitor/       legacy visitor flow, content, format and map UI
+    ├── components/ui/    multi-feature neutral primitives and shared console
+    │                     chrome; tests remain next to their owner
+    ├── api/              client.ts, signalr.ts, shared transport envelopes;
+    │                     existing contracts/{admin,staff,representative,
+    │                     visitor,...}.ts remain during migration
     ├── auth/             AuthBootstrap, AuthLayout + LoginPage/AuthFields,
     │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
-    ├── three/            DigitalTwinCanvas.tsx (R3F canvas)
     └── test/             setup.ts (Vitest + jest-dom)
 ```
+
+### Ownership rules
+
+- `app/` owns providers and router composition only. `routes/` owns URL entry
+  points, route params/search params, and page composition; it is not a home for
+  API clients or reusable feature libraries.
+- `features/<capability>/` owns that capability's UI, hooks, state mapping,
+  feature API bindings, and local types. Keep page wrappers such as `StaffPage`,
+  `AdminPage`, and Representative wrappers with their feature.
+- A helper reused by multiple subfeatures of the same feature should live at
+  that feature root before being promoted to app-wide shared code. For example,
+  use `features/administration/use-debounced-value.ts`.
+- `components/` is for neutral UI with real consumers in multiple features.
+  Put it in `components/ui/` only when it has no feature-specific business
+  vocabulary; do not create a generic bucket or move wrappers by default.
+- Remaining Admin-to-Staff imports are semantic data/components: `STAFF_NAV`
+  feeds the role matrix, while `eventTypeLabel` and `HEAD_LABEL` provide
+  operations vocabulary. Account/POI labels stay in `administration/admin-status.ts`;
+  operational status labels stay in `staff/status.ts`. Representative has no
+  remaining Staff UI dependency.
+- `features/registrations/` owns `RosterPreview`, roster row types and live
+  SQL registration-state vocabulary shared by Administration and Representative.
+  Its `invitations/` owns `InvitationPanel` and the owner/Admin support API.
+  It does not import either consumer feature. Student cookie access belongs in
+  `features/student/invitation/`, separate from account auth and support writes.
+  The current small entry page owns its query/mutations and calls `apiClient`
+  with `auth: false` and `credentials: 'include'`; it never stores session
+  credentials in JavaScript or uses account refresh on a Student 401.
+- `api/` owns shared HTTP/SignalR transport and cross-feature wire primitives.
+  New feature-specific endpoint calls and contracts live under their owning
+  feature's `api/`. Existing `api/contracts/{admin,staff,representative,
+  visitor,...}.ts` files are a transition-era layout with current consumers;
+  keep them intact unless a later change can move all consumers mechanically.
+- `auth/` owns app-wide login, session, roles, and access. `stores/` owns only
+  app-global client/UI state; TanStack Query remains the owner of server data.
+- `mocks/` contains labelled fixtures/simulations, never an automatic fallback
+  after a production API failure. Bind a mock beside the consuming feature.
+- `test/` contains the global Vitest bootstrap; feature and shared-component
+  tests stay beside the code they cover.
 
 Current route entry points include `/` (public), `/tour` and `/tour/:tourId`
 (Student), `/dai-dien/*` (Representative), `/visit/*` (legacy visitor),
@@ -166,9 +214,10 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
 The current frontend contains a legacy visitor registration/tour flow at
-`/visit/*`, plus a mock Student page at `/tour` and mock Representative pages at
-`/dai-dien/*`. The Student page currently matches a group code and name/class
-against mock roster data; the Representative page shares a group link/code.
+`/visit/*`, plus a mock Student page at `/tour` and live Representative submission pages at
+`/dai-dien/*`. Student fixture Tours match a group code/name/class; SQL GUID
+Tour links use real code/cookie entry. Representative registration and
+invitation support use SQL and the contract in docs/architecture.md Section 3.2.3.
 The Review 1 target (ADR-0010) instead emails a Tour page link and personal
 access code; entering the code creates a session, and a valid existing session
 avoids repeat entry. The URL itself grants no access. The target
@@ -188,12 +237,11 @@ Admin supports all groups; Staff-only does not gain recovery permission.
 The `_to_delete/` holding area was deleted for good on 2026-09-18. Git history is
 the only copy of anything that was in it.
 
-`src/components/` currently holds nothing: the landing page redesign on
-2026-09-17 gave the theme control its own landing-token styling inside
-`features/landing/sections/SiteNav.tsx`, which left `components/ui/ThemeToggle.tsx`
-with no consumer, and it was deleted with the rest of `_to_delete/` on
-2026-09-18. Re-create `src/components/` only when a component genuinely has more
-than one consumer.
+The shared presentation layer currently lives in `src/components/ui/`. It owns
+neutral primitives used across the operations, administration, Representative,
+and Digital Twin surfaces, including console chrome. It is not the destination
+for every component: keep business labels, status mapping, feature page frames,
+and one-feature controls with their owning feature.
 
 Tests live next to the code they cover (`*.test.ts(x)`).
 
@@ -223,10 +271,16 @@ This is a **data source, not a fallback**. Mock data must never be served in
 response to a failed request, and no screen may branch on where its rows came
 from.
 
-`src/api/` contains the HTTP client, Auth calls/session refresh, `ApiError`,
-`apiUrl`, the SignalR hub factory, and endpoint contracts. Auth is wired;
-`staffApi` remains deliberately unwired until the corresponding backend
-features are ready. Keep business fixtures until each feature has a real
+`src/api/` contains the HTTP client (`client.ts`), Auth calls/session refresh,
+`ApiError`, `apiUrl`, SignalR factory (`signalr.ts`), and shared transport
+envelopes in `contracts/shared.ts`. Auth is wired; `staffApi` remains
+deliberately unwired until the corresponding backend features are ready.
+Feature-specific account and POI API bindings already live under
+`features/administration/{accounts,pois}/api/`. New feature endpoint calls and
+contracts follow that placement. Existing top-level `contracts/admin.ts`,
+`staff.ts`, `representative.ts`, `visitor.ts` and related files are retained
+while current mock/API consumers share them; do not duplicate their types or
+move them piecemeal. Keep business fixtures until each feature has a real
 backend binding; never use them as fallback after a failed HTTP request.
 
 ## 3. Development Rules
@@ -290,16 +344,20 @@ backend binding; never use them as fallback after a failed HTTP request.
   short (150-300ms), on opacity/transform/colour only, and every overlay
   carries `motion-reduce:transition-none`. Visible copy uses no em/en dash:
   empty values print `-`, sentences use a comma, colon or full stop.
-  Both shells render `staff/ConsoleSidebar.tsx` (2026-09-22).
+  Both shells render `components/ui/ConsoleSidebar.tsx`.
   The two still differ in *priority* — administration has no alert bell and no
   live badge — which is the right axis to diverge on.
-  - Shared chrome lives in `features/staff/StaffUi.tsx` and is used by
-    both areas: `panelClass`, `PageHeader`, `PanelHead`, `SectionHeading`,
-    `StatStrip`/`StatTile`, `SearchField`, `Pagination` (+ `use-pagination.ts`),
-    `SummaryTile`, `CellIcon`, `StatusBadge`, `LoadingPanel`, `ErrorPanel`,
-    `PageSkeleton`; `ui-classes.ts` holds `buttonClass`, `inputClass`,
-    `labelClass`, `thClass`/`tdClass`/`rowClass`.
-    Build a page out of those before writing new markup.
+  - Neutral shared UI lives in `components/ui/`: `ConsolePrimitives.tsx`
+    (`panelClass`, `PageHeader`, `PanelHead`, `SectionHeading`, `StatStrip`/
+    `StatTile`, `SearchField`, `Pagination`, `SummaryTile`, `CellIcon`,
+    `LoadingPanel`, `PageSkeleton`, `Field`, `FilterChips`), `ui-classes.ts`,
+    `use-pagination.ts`, `ConsoleSidebar.tsx`, `use-mobile-nav.ts`, and
+    `ConfirmationDialog.tsx`. `AdminPage`, `StaffPage`, Representative wrappers,
+    `ErrorPanel`, `EmptyPanel`, operational `StatusBadge`, and business status
+    mappings stay feature-owned. `components/ui/status-tone.ts` owns only the
+    neutral tone type and presentation classes; `features/staff/status.ts`
+    continues to own operational status/event translation. Build from shared
+    primitives before adding a second copy, but move only real multi-feature UI.
   - **One accent.** `SummaryTile` never tints itself by meaning, because colour
     on these screens already means severity on a `StatusBadge`. The exceptions
     are deliberate and few: `StatusBadge` tones (`features/staff/status.ts`),
@@ -312,7 +370,8 @@ backend binding; never use them as fallback after a failed HTTP request.
     attendance, email-open tracking, trend analytics or ratings are included.
   - A screen's summary row counts rows the API already returned, for the labels
     on that same screen. That is presentation. Anything genuinely derived still
-    comes from the backend (Section 3).
+    comes from the backend
+    ([backend/AGENTS.md Section 3](../backend/AGENTS.md#3-current-model-and-fleet-boundary)).
 - **The visitor area is an English surface.** The public, staff and admin areas
   are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
   its status vocabulary in `features/visitor/visitor-status.ts`, which is the
@@ -410,7 +469,13 @@ can be derived during render.
 
 - No direct `fetch` from React components.
 - Backend URLs must not be hard-coded in features or components.
-- HTTP access stays behind `src/api/` and feature-level query/mutation hooks.
+- HTTP access stays behind `src/api/client.ts` and feature-level
+  query/mutation hooks. `src/api/` does not own feature query hooks or endpoint
+  orchestration.
+- Shared wire envelopes stay in `src/api/contracts/shared.ts`; new
+  feature-specific calls/contracts belong in `features/<owner>/api/`. Keep the
+  existing top-level endpoint contract files during the current migration
+  rather than duplicating or relocating types without all consumers.
 - SignalR transport details should not be scattered across UI components.
 - Raw transport DTOs should not leak through the whole component tree when a
   feature-specific view model is genuinely needed.
@@ -528,10 +593,16 @@ refetch behavior remain unimplemented.
 web/scripts/verify
 ```
 
-Runs, in order: `npm ci` -> `npm run typecheck` -> `npm run lint` ->
+Runs, in order: `npm ci` -> `npm run maps:check` -> `npm run typecheck` -> `npm run lint` ->
 `npm run test` -> `npm run build`. Build is part of verify — a clean typecheck
 can still fail at build time. `npm test` is `vitest run` (single run, no watch)
 so it exits and is CI-safe.
+
+`.github/workflows/web-verify.yml` runs this same script on relevant pull
+requests and main/develop pushes. Static map parity reads the checked-in
+`robot/robot_maps/` source; it does not launch ROS, a robot or Fleet Emulator.
+No SQL connection or production credentials are needed. Cookie acceptance
+across deployed FE/BE sites still requires real HTTPS/browser verification.
 
 Tests run in jsdom. Do not try to assert on WebGL/Canvas output there — the R3F
 setup is checked by rendering `/staff/digital-twin` in a browser.
