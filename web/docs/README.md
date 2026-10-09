@@ -13,6 +13,8 @@ the business authority.
 - [Staff operations screens](staff-operations.md) — implementation-facing
   Staff/Twin map. Review current scope before treating old UI behavior as a
   target requirement.
+- [Local six-robot fleet](patrol-demo.md) — navigation geometry, priority bays,
+  tasks, local Copilot/cameras, what-if trials and the physical integration boundary.
 - [Campus model asset](../public/models/campus/README.md) — ownership and use
   of the current visitor campus model.
 

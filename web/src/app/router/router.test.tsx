@@ -48,6 +48,14 @@ const settled = (router: ReturnType<typeof createMemoryRouter>, path: string) =>
   waitFor(() => expect(router.state.location.pathname).toBe(path))
 
 describe('route table', () => {
+<<<<<<< Updated upstream
+=======
+  // Compile both dashboards before timing session/guard behavior on a cold Windows run.
+  beforeAll(async () => {
+    await import('../../routes/admin/AdminDashboardPage')
+    await import('../../routes/staff/OverviewPage')
+  }, 30_000)
+>>>>>>> Stashed changes
   beforeEach(() => useAuthStore.getState().setAuthReady())
   afterEach(() => {
     vi.unstubAllGlobals()

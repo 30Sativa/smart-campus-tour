@@ -1,36 +1,26 @@
 import { Component, Suspense, useMemo, type ReactNode } from 'react'
 import { Html } from '@react-three/drei'
 import { useLoader } from '@react-three/fiber'
-import { Box3, Mesh, Vector3 } from 'three'
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { prepareCampusModel, type CampusModelKey } from './campus-model'
 
 const modelBase = `${import.meta.env.BASE_URL}models/simulator-map/`
 
-function LoadedCampus() {
+function LoadedObjCampus() {
   const materials = useLoader(MTLLoader, `${modelBase}map.mtl`)
   const object = useLoader(OBJLoader, `${modelBase}map.obj`, (loader) => {
     materials.preload()
     loader.setMaterials(materials)
   })
-  const model = useMemo(() => {
-    const root = object.clone(true)
-    const bounds = new Box3().setFromObject(root)
-    const size = bounds.getSize(new Vector3())
-    const center = bounds.getCenter(new Vector3())
-    // Display calibration only: preserve Y-up, fit the model to a 20-unit width.
-    // The OBJ's principal floor is at Y=10; this is not a surveyed ROS transform.
-    const scale = 20 / Math.max(size.x, size.z)
-    root.scale.setScalar(scale)
-    root.position.set(-center.x * scale, -10 * scale, -center.z * scale)
-    root.traverse((child) => {
-      if (child instanceof Mesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-      }
-    })
-    return root
-  }, [object])
+  const model = useMemo(() => prepareCampusModel(object, 10), [object])
+  return <primitive object={model} dispose={null} />
+}
+
+function LoadedGlbCampus() {
+  const gltf = useLoader(GLTFLoader, `${modelBase}NVHSV_Tang6_V3_modern_v2.glb?revision=2`)
+  const model = useMemo(() => prepareCampusModel(gltf.scene), [gltf.scene])
   return <primitive object={model} dispose={null} />
 }
 
@@ -43,6 +33,6 @@ class ModelBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
-export function CampusModel() {
-  return <ModelBoundary><Suspense fallback={<Html center><p role="status" className="w-48 rounded-xl bg-white p-4 text-sm text-[#40546f]">Đang tải bản đồ 3D…</p></Html>}><LoadedCampus /></Suspense></ModelBoundary>
+export function CampusModel({ modelKey = 'legacy' }: { modelKey?: CampusModelKey }) {
+  return <ModelBoundary key={modelKey}><Suspense fallback={<Html center><p role="status" className="w-48 rounded-xl bg-white p-4 text-sm text-[#40546f]">Đang tải bản đồ 3D…</p></Html>}>{modelKey === 'nvh-v3' ? <LoadedGlbCampus /> : <LoadedObjCampus />}</Suspense></ModelBoundary>
 }

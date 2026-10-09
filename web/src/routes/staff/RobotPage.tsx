@@ -93,20 +93,20 @@ export default function RobotPage() {
       ) : data.length === 0 ? (
         <EmptyPanel>Chưa có robot nào kết nối tới hệ thống.</EmptyPanel>
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
           <div className="space-y-5">
             {data.map((robot) => (
               <RobotPanel key={robot.id} robot={robot} now={now} />
             ))}
           </div>
-          <div className="xl:sticky xl:top-20">
+          <div className="min-w-0 xl:sticky xl:top-20">
             <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
-              <div className="flex items-center justify-between border-b border-[#f1f5f9] px-5 py-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-[#10b981] animate-pulse" />
                   <h3 className="text-sm font-bold text-[#0f172a]">Bản đồ vị trí hạm đội</h3>
                 </div>
-                <span className="text-xs text-[#64748b]">Tọa độ ROS thời gian thực</span>
+                <span className="text-xs text-[#64748b]">Vị trí robot · 3D</span>
               </div>
               <OperationalTwin robots={data} className="h-[460px]" />
             </div>

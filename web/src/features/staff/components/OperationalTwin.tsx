@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from 'react'
-import { Eye, EyeOff, Layers, LoaderCircle, Map as MapIcon } from 'lucide-react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { Eye, EyeOff, Layers, LoaderCircle, Map as MapIcon, Maximize2, Minimize2 } from 'lucide-react'
 import type { AmrStatus, TourOperation } from '../../../api/contracts/staff'
 import type { TwinRobot, TwinRoute } from '../../digital-twin/TwinScene'
 import { statusInfo, type StatusTone } from '../status'
 import { LiveDot } from '../StaffUi'
 import { POSE_STALE_SECONDS } from '../attention'
+import { PatrolDemo } from '../../digital-twin/PatrolDemo'
 
 const TwinScene = lazy(() => import('../../digital-twin/TwinScene'))
 
@@ -39,6 +40,10 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '' }
 }) {
   const [overhead, setOverhead] = useState(false)
   const [labels, setLabels] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  useEffect(()=>{ if(!expanded)return; const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setExpanded(false)}; window.addEventListener('keydown',close); return()=>window.removeEventListener('keydown',close) },[expanded])
+  // Idle view has a default local fleet; active Tours retain reported observations.
+  const demo = !tour
   const placed = robots.filter((robot) => robot.pose)
   const missing = robots.length - placed.length
   const focusId = tour?.robotId ?? null
@@ -64,34 +69,39 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '' }
   const sources = [...new Set(placed.map((robot) => robot.source).filter((source) => source && source !== 'Physical'))]
 
   return (
-    <section className={`relative overflow-hidden rounded-2xl border border-[#dce9fb] bg-[#edf2fa] ${className}`} aria-label="Digital Twin vận hành 3D">
-      <div className="absolute inset-x-0 top-14 bottom-0" role="img" aria-label={tour ? `Bản đồ 3D: ${focusRobot?.name ?? 'robot'} và các POI của ${tour.code}` : `Bản đồ 3D với ${placed.length} robot`}>
-        <Suspense fallback={<div className="grid size-full place-items-center text-sm text-[#647793]"><span className="flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />Đang tải bản đồ 3D…</span></div>}>
-          <TwinScene robots={twinRobots} route={route} selectedStopId={selectedStopId} overhead={overhead} showLabels={labels} />
-        </Suspense>
+    <section className={`flex flex-col overflow-hidden rounded-2xl border border-[#dce9fb] bg-[#edf2fa] ${expanded ? 'fixed inset-3 z-50 h-[calc(100dvh-1.5rem)] shadow-2xl' : `relative ${demo ? 'min-h-[680px] sm:min-h-[600px]' : ''} ${className}`}`} aria-label="Digital Twin vận hành 3D">
+      <div className="order-2 min-h-0 flex-1">
+        {demo ? <PatrolDemo overhead={overhead} showLabels={labels} /> : (
+          <div className="h-full" role="img" aria-label={tour ? `Bản đồ 3D: ${focusRobot?.name ?? 'robot'} và các POI của ${tour.code}` : `Bản đồ 3D với ${placed.length} robot`}>
+            <Suspense fallback={<div className="grid size-full place-items-center text-sm text-[#647793]"><span className="flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />Đang tải bản đồ 3D…</span></div>}>
+              <TwinScene modelKey="nvh-v3" robots={twinRobots} route={route} selectedStopId={selectedStopId} overhead={overhead} showLabels={labels} />
+            </Suspense>
+          </div>
+        )}
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[#e3eaf3] bg-[#fbfdff] p-3">
+      <div className="order-1 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-[#e3eaf3] bg-[#fbfdff] p-3">
         <span className="pointer-events-auto inline-flex items-center gap-2 text-xs font-bold text-[#1f314d]">
-          <LiveDot tone="ok" />Operational Twin
-          {sources.length > 0 && <span className="font-mono text-[10px] font-normal text-[#8a98ac]">· có dữ liệu {sources.join(', ')}</span>}
+          <LiveDot tone={demo ? 'muted' : 'ok'} pulse={!demo} />Operational Twin
+          {demo ? <span className="rounded-full bg-[#eaf4ff] px-2 py-1 text-[10px] text-[#2f62b8]">6 robot · Chưa kết nối miniPC</span> : sources.length > 0 && <span className="font-mono text-[10px] font-normal text-[#8a98ac]">· có dữ liệu {sources.join(', ')}</span>}
         </span>
-        <span className="pointer-events-auto flex gap-1.5">
+        <span className="pointer-events-auto flex flex-wrap gap-1.5">
+          {demo && <button type="button" className={toolClass(expanded)} onClick={()=>setExpanded(v=>!v)} aria-pressed={expanded}>{expanded?<Minimize2 size={14}/>:<Maximize2 size={14}/>} {expanded?'Thu nhỏ':'Toàn màn hình'}</button>}
           <button type="button" onClick={() => setOverhead((value) => !value)} aria-pressed={overhead} className={toolClass(overhead)}>
             {overhead ? <Layers size={14} aria-hidden="true" /> : <MapIcon size={14} aria-hidden="true" />}{overhead ? 'Góc 3D' : 'Nhìn từ trên'}
           </button>
           <button type="button" onClick={() => setLabels((value) => !value)} aria-pressed={labels} className={toolClass(labels)}>
-            {labels ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}Tên POI
+            {labels ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}Điểm point
           </button>
         </span>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 p-3">
+      {!demo && <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 p-3">
         <span className="rounded-lg bg-white/90 px-3 py-2 text-[11px] font-semibold text-[#516783] shadow-sm ring-1 ring-[#dce9fb] backdrop-blur">
-          {tour ? 'Số = thứ tự POI · ⚑ điểm kết thúc · không vẽ đường Nav2' : 'Vị trí từ telemetry, hệ tọa độ bản đồ robot'}
+          NVH tầng 6 · V3{tour ? ' · Số = thứ tự POI · ⚑ điểm kết thúc · không vẽ đường Nav2' : ' · Chưa hiệu chỉnh tọa độ robot với model 3D'}
         </span>
         {missing > 0 && <span className="rounded-lg bg-white/90 px-3 py-2 text-[11px] font-semibold text-[#8a5a06] shadow-sm ring-1 ring-[#dce9fb]">{missing} robot không gửi vị trí</span>}
-      </div>
+      </div>}
     </section>
   )
 }
