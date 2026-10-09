@@ -1,9 +1,7 @@
-using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
-using SmartCampus.Application.Features.Representative.Commands;
-using SmartCampus.Application.Features.Registrations;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
-using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
+using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
 
 namespace SmartCampus.Application.Features.Representative.Commands.UpdateRegistration;
 

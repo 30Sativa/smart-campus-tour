@@ -82,7 +82,7 @@ export default function AdminDashboardPage() {
         <>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard title="Tour sắp tới" to="/admin/tours?state=Scheduled" label="7 ngày tới" value={kpi.soon} unit="Tour" series={kpi.soonSeries} note="Đường: số Tour mỗi ngày, 14 ngày tới" />
-            <KpiCard title="Học sinh đã duyệt" to="/admin/registrations?stage=done" label="Tour đang mở" value={kpi.students} unit="học sinh" series={kpi.studentSeries} note="Đường: học sinh được duyệt, 14 ngày qua" />
+            <KpiCard title="Học sinh đã duyệt" to="/admin/registrations?state=APPROVED" label="Tour đang mở" value={kpi.students} unit="học sinh" series={kpi.studentSeries} note="Đường: học sinh được duyệt, 14 ngày qua" />
             <KpiCard title="Đoàn chờ duyệt" to="/admin/registrations/pending" label="Cần Admin quyết định" value={kpi.pending} unit="đoàn" series={kpi.pendingSeries} note="Đường: đăng ký mới mỗi ngày, 14 ngày qua" />
           </div>
 

@@ -9,6 +9,7 @@ import { useRegistrationReview, useReviewDecision } from '../hooks'
 import { reviewError } from '../errors'
 import { reviewTime } from '../presentation'
 import { ReviewStateBadge } from './ReviewStateBadge'
+import { InvitationPanel } from '../../../registrations/invitations/InvitationPanel'
 
 export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const query = useRegistrationReview(id)
@@ -52,13 +53,13 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
           <Field label="Số dòng lời mời">{reg.summary.rowCount}</Field><Field label="Gửi lúc">{reviewTime(reg.summary.submittedAt)}</Field>
           {reg.reviewedAt && <Field label="Xét duyệt lúc">{reviewTime(reg.reviewedAt)}</Field>}
         </dl>
-        {reg.summary.state === 'APPROVED' && <Notice>Đăng ký đã được duyệt. Cấp mã truy cập và gửi email chưa được triển khai.</Notice>}
+        {reg.summary.state === 'APPROVED' && <InvitationPanel registrationId={id} rowVersion={reg.rowVersion} tourRowVersion={reg.tourRowVersion} />}
         <p className="text-sm text-slate-600">Điểm xem chung ghi người phụ trách màn hình; số dòng không phải số học sinh tham dự.</p>
         <RosterPreview rows={reg.roster} label="Roster đăng ký" />
       </div>}
     </Drawer>
     {reg && <ConfirmationDialog key={`${id}-${reg.rowVersion}-${confirm}`} open={confirm !== null} title={confirm === 'reject' ? `Từ chối ${reg.summary.groupName}?` : `Duyệt ${reg.summary.groupName}?`}
-      description={confirm === 'reject' ? 'Đại diện sẽ thấy lý do, sửa đăng ký và gửi lại để xét duyệt.' : `Duyệt ${reg.summary.rowCount} dòng lời mời đang hiển thị. Tour giữ trạng thái hiện tại; cấp mã truy cập và gửi email chưa được triển khai.`}
+      description={confirm === 'reject' ? 'Đại diện sẽ thấy lý do, sửa đăng ký và gửi lại để xét duyệt.' : `Duyệt ${reg.summary.rowCount} dòng lời mời đang hiển thị. Hệ thống sẽ cấp mã và gửi email riêng khi hỗ trợ lời mời được bật. Gửi email lỗi vẫn giữ đăng ký đã duyệt.`}
       confirmLabel={confirm === 'reject' ? 'Từ chối' : 'Duyệt'} busyLabel="Đang lưu…" tone={confirm === 'reject' ? 'danger' : 'default'}
       withReason={confirm === 'reject'} requireReason reasonLabel="Lý do từ chối" reasonPlaceholder="Nêu thông tin cần đại diện sửa." busy={mutation.isPending}
       error={error?.message} onConfirm={decide} onCancel={() => { if (!mutation.isPending) setConfirm(null) }} />}

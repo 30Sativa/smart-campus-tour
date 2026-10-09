@@ -1,4 +1,4 @@
-namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
+namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
 
 public sealed record RegistrationListItem(Guid Id, Guid TourId, string TourName, DateTimeOffset TourScheduledStartAt,
     string TourState, string SchoolName, string GroupName, string State, int RowCount,

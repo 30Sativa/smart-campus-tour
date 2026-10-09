@@ -1,4 +1,4 @@
-namespace SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
+namespace SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
 
 public sealed record ReviewListRequest(string? Search = null, string? Sort = null, int Page = 1,
     int Size = 20, string? Expand = null, Guid? TourId = null, string? State = null,

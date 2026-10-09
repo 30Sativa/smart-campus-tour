@@ -27,6 +27,7 @@ export function apiUrl(path: string): string {
 
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   json?: unknown
+  auth?: boolean
 }
 
 export type AuthResponse = {
@@ -81,7 +82,7 @@ export async function restoreAuthSession(): Promise<void> {
 
 export async function apiClient<T>(
   path: string,
-  { json, headers, ...options }: ApiRequestOptions = {},
+  { json, headers, auth = true, ...options }: ApiRequestOptions = {},
 ): Promise<T> {
   const doRequest = (token?: string | null) =>
     fetch(apiUrl(path), {
@@ -94,9 +95,9 @@ export async function apiClient<T>(
       body: json === undefined ? undefined : JSON.stringify(json),
     })
 
-  let response = await doRequest(useAuthStore.getState().accessToken)
+  let response = await doRequest(auth ? useAuthStore.getState().accessToken : null)
 
-  if (response.status === 401 && !path.startsWith('/api/auth/')) {
+  if (response.status === 401 && auth && !path.startsWith('/api/auth/')) {
     try {
       response = await doRequest((await refreshSession()).accessToken)
     } catch {

@@ -55,6 +55,8 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
     expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer real-test-token')
     const url = new URL(input, 'https://api.example.test')
+    if (url.pathname === '/api/registrations/registration/invitations')
+      return response({ enabled: false, canIssue: false, items: [] })
     const path = url.pathname.replace('/api/representative', '')
     if (options?.method === 'POST' && path === '/tours/tour/registrations') {
       const payload = JSON.parse(options.body as string) as RegistrationInput
@@ -168,8 +170,8 @@ describe('Representative real HTTP contract', () => {
     registration.summary.state = 'APPROVED'
     registration.allowedActions = Object.fromEntries(['edit', 'resubmit', 'cancel'].map(k => [k, { allowed: false, reason: 'Chức năng sau duyệt chưa được triển khai.' }])) as RepresentativeRegistration['allowedActions']
     renderAt('/dai-dien/dang-ky/registration')
-    expect(await screen.findByText('Đăng ký đã được duyệt')).toBeInTheDocument()
-    expect(screen.getByText('Hỗ trợ lời mời riêng sẽ được cung cấp trong bước tiếp theo.')).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+    expect(await screen.findByText('Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.')).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
     expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/Mã đoàn|Sao chép mã|Nhập họ tên/)).not.toBeInTheDocument()

@@ -285,13 +285,13 @@ public sealed class PoiManagementEndpointTests
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public static async Task<ApiHost> StartForDatabaseAsync(string connectionString)
+        public static async Task<ApiHost> StartForDatabaseAsync(string connectionString, IReadOnlyDictionary<string, string>? settings = null)
         {
             using var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             listener.Stop();
-            var host = new ApiHost(InitialAdminSeederTests.StartApiProcess(connectionString, [], port), port);
+            var host = new ApiHost(InitialAdminSeederTests.StartApiProcess(connectionString, [], port, additionalSettings: settings), port);
             try
             {
                 await host.WaitUntilReadyAsync();

@@ -832,14 +832,13 @@ Details expose a review gate with a reason; browser focus/reconnect cannot
 replace the review
 snapshot, and a 409 requires explicit reload before another decision.
 
-Approval is persisted eligibility for future access issuance. This slice does
-not issue an Invitation, access code, BrowserSession or email attempt, and
-never claims email delivery. This deliberately stops before the access workflow
-whose secure code storage/admission/revocation remains separate work. Any
+Approval is persisted eligibility for access issuance. When invitation support
+is enabled, Section 3.2.3 issues invitations and queues email in the same commit.
+Any
 invitation history (including inactive/revoked rows) blocks review with
 INVITATION_BOUNDARY to avoid changing existing access without atomic revocation.
-APPROVED stays read-only to Representative. Admin email correction, approval
-reversal, READY/runtime, notifications and actual email remain outside scope.
+APPROVED roster stays read-only to Representative; invitation support is separate.
+Admin email correction, approval reversal and READY/runtime remain outside scope.
 
 Live routes `/admin/registrations` and `/admin/registrations/pending` use only
 this HTTP contract, with no mock fallback. Owner-keyed live query caches are
@@ -847,14 +846,79 @@ separate from demo caches. Existing Admin Tour/dashboard review drawers,
 invitation demos, Staff/Student simulations and legacy contracts remain mock;
 their links use the mock Tour review consumer rather than sending fixture IDs
 to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
-Representative lists/details refetch from SQL and show committed review state.
+The Admin sidebar "Chờ duyệt" badge links to the live queue, so it reads
+`pagination.totalItems` of the same SUBMITTED query; the dashboard and bell stay
+simulated. Representative lists/details refetch from SQL and show committed review state.
 
-Shared invariants/input validation/audit and mutation persistence are owned by
-`backend/src/SmartCampus.Application/Features/Registrations/` and its specific
-persistence boundary. Representative action policy and draft replacement remain
-under its Commands; read models/mapping remain near their Queries. Review use
-cases live under `backend/src/SmartCampus.Application/Features/RegistrationReview/`. The roster display shared by
-live Admin and Representative is under `web/src/features/registrations/`.
+`backend/src/SmartCampus.Application/Features/Registrations/` owns the shared
+registration invariants: state values, the SCHEDULED write window and conflict
+codes, rowversion tokens, email normalization/reservation, input validation and
+audit. `IRegistrationRepository.LockRegistrationAsync` is the single Tour-first
+lock entry for Representative, review and invitation writers. Each actor policy
+sits at its feature root because commands enforce it and detail queries project
+it: `backend/src/SmartCampus.Application/Features/Representative/RepresentativeRegistrationPolicy.cs`
+and `backend/src/SmartCampus.Application/Features/RegistrationReview/ReviewPolicy.cs`.
+Approve and reject are separate commands sharing
+`backend/src/SmartCampus.Application/Features/RegistrationReview/Commands/ReviewDecision.cs`; Representative
+draft replacement stays with its commands; read models stay in their query
+`Dtos/`. The roster display and SQL registration-state vocabulary shared by live
+Admin and Representative are under `web/src/features/registrations/`.
+
+#### 3.2.3 Invitations, Resend and Student entry (implemented, opt-in)
+
+ADR-0015 defines code protection, expiry, queue claims and session semantics.
+The full configuration/transport contract is in
+backend/docs/invitations-resend.md. This integrates backend and web without a
+schema change. Enabled approval atomically issues/queues one private invitation
+per active approved row; failed mail never reverses approval or changes Tour state.
+
+Admin or owner Representative GET /api/registrations/{registrationId}/invitations
+returns enabled/canIssue and items with approved row identity, version, expiry,
+revocation, latest email status and action gates. Codes/hashes/ciphertext/session
+credentials are never returned. Staff-only gets 403, another owner's group 404.
+POST the same path + /issue with requestId (UUID), expectedRowVersion
+(registration), expectedTourRowVersion to fill missing invitations of previously
+approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
+and expectedRowVersion (invitation). All use BaseResponse; writes return null.
+Retain requestId for uncertain retries; identical committed operations cannot
+enqueue/rotate twice. Another operation with that ID conflicts.
+
+Tour-first locks serialize issuance/support/admission. Resend keeps code/session;
+reissue keeps invitation ID/expiry, replaces code and closes open sessions;
+revoke invalidates code and sessions. Send/reissue require active APPROVED rows,
+unexpired access and SCHEDULED/READY/RUNNING; revocation also supports valid
+post-Start End Early fallback. A one-minute per-invitation send cooldown applies.
+Expiry defaults to scheduled start +24 hours, configurable for future issuance.
+Codes have 100 random bits, HMAC-SHA256 hashes and AES-256-GCM protected values
+bound to ID/version with separate external keys; no secret/PII appears in URLs.
+
+AuditLogs is the durable delivery queue: EMAIL_SEND_REQUESTED/PENDING, one
+EMAIL_SEND_STARTED claim, and one EMAIL_SEND_RESULT per CorrelationId.
+External Resend HTTP happens after commit, using the attempt UUID as its
+idempotency key. Interrupted attempts become UNKNOWN after two minutes;
+manual resend is a new attempt. No automatic uncertain retry. ACCEPTED means
+provider acceptance, not inbox delivery/read. Audit includes only IDs, version,
+sanitized outcome and timestamps; never code, ciphertext, PII or provider bodies.
+
+Student POST /api/student/tours/{tourId}/join accepts JSON {accessCode}.
+POST /session (empty body) restores/heartbeats; POST /leave closes the session.
+All use BaseResponse with minimal Tour name/state/schedule, invitation expiry,
+row type and eligible fallback URL. No account JWT/token response/roster identity.
+The per-Tour cookie is HttpOnly, Secure, SameSite=None and scoped to that API
+path; SQL stores only its HMAC. Exact browser-origin checks protect cookie
+mutations. Join is limited to 60 requests/minute/IP. A shared Tour lock and SQL
+filtered UNIQUE enforce one active session; expired sessions close before INSERT.
+The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
+Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
+session for configured SessionIdleMinutes (default 10), bounded by invitation
+expiry. First successful entry records INVITATION_ENTERED once per invitation.
+
+Live Admin review and owner Representative detail share real invitation support.
+SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state;
+non-GUID fixtures retain the labelled demo. No simulated stream/AI/robot state
+is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
+email correction/roster replacement after issuance and retention remain separate.
+HTTPS and browser cookie/local-network permissions still apply to local BE use.
 
 ### 3.3 State storage and realtime delivery
 

@@ -23,29 +23,38 @@ of invalid data; resubmit retains ID, rechecks emails and clears review metadata
 Detail projections use a short read-only Tour lock in the same order so tokens
 and roster agree under SQL read-committed. Only SCHEDULED/SUBMITTED may be reviewed.
 Any invitation history blocks review,
-including inactive or revoked rows, until access revocation is implemented.
+including inactive or revoked rows; replacing an approved roster is still deferred.
 APPROVED remains read-only for Representative.
 
-Approval does not issue an invitation/code/session or send email. No fake mail
-status, group code or demo Tour link appears in the live drawer. Admin email
-correction, approval reversal, Tour lifecycle and access issuance remain outside
-this task. Existing Tour/dashboard review and invitation simulation consumers
+Enabled approval atomically issues invitations and queues separate emails under
+ADR-0015; see backend/docs/invitations-resend.md. The approved drawer shares live
+invitation support with Representative detail. No fake email status, group code
+or fixture Tour link appears. Admin email correction, approval reversal and Tour
+lifecycle remain separate. Existing Tour/dashboard review and invitation simulation consumers
 remain intact with their own drawer and caches; they do not observe SQL data.
 
 Source ownership:
 
-- Backend Representative: use-case commands/validators; shared draft writer and
-  replacement body near its shared draft commands; list query validation and
-  Tour projection under their query capability; registration detail mapping
-  inside its query. There is no feature-root catch-all rules/mapper module.
-- The backend Registrations capability owns inputs/validation and shared consistency, email
-  reservation and audit. IRegistrationRepository/EfRegistrationRepository owns
-  mutation locks/reservations; IRepresentativeRepository owns Representative reads.
-- The backend RegistrationReview capability owns list/detail/review use cases and its read
-  boundary. No generic repository/workflow framework or new dependency was added.
+- Backend Registrations (`backend/src/SmartCampus.Application/Features/Registrations/`) owns the invariants every
+  registration writer shares: state values, the SCHEDULED write window and
+  conflict codes (`RegistrationGate`), rowversion tokens, email normalization and
+  Tour-wide reservation, input validation and audit. One public type per file.
+- `IRegistrationRepository.LockRegistrationAsync` is the only way an existing
+  registration is locked for writing; it owns the Tour-first order for
+  Representative mutations, Admin approve/reject and invitation support.
+- Backend Representative keeps its action policy and operation enum at the feature
+  root (commands enforce it, the detail/Tour queries project it), shared mutation
+  loading and draft replacement with its commands, and read models in query DTO folders.
+- Backend RegistrationReview keeps `ReviewPolicy` at its root, separate Approve and
+  Reject commands sharing
+  `backend/src/SmartCampus.Application/Features/RegistrationReview/Commands/ReviewDecision.cs`
+  (locks, versions, gate, review metadata), and list/detail read models in query DTO folders. Only approval revalidates
+  stored rows/emails and issues invitations. No generic repository/workflow framework.
 - Web live review owns API/types/hooks/presentation/errors/drawer under
-  web/src/features/administration/registrations. The roster renderer and row type
-  have two real consumers and live under web/src/features/registrations.
+  web/src/features/administration/registrations. The roster renderer, row type and
+  SQL registration-state vocabulary have two real consumers and live under
+  web/src/features/registrations. The sidebar "Chờ duyệt" badge reads the live
+  SUBMITTED total; the simulated dashboard and bell keep their own counts.
 
 Verification uses `bash scripts/verify backend web`. Set
 SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server with CREATE
@@ -56,7 +65,19 @@ invitation history and audit rollback. Browser HTTP tests cover confirmations,
 rejection reasons, stale reload/focus behavior, server pagination, load errors and
 no mock fallback. The preserved mock Tour workflow still has its own regression.
 
-## Verification observed on 2026-10-08
+## Verification observed on 2026-10-09
+
+- `scripts/verify backend` PASS: 70 unit and 119 integration tests; no skips.
+  SQL-backed tests used disposable local databases, including concurrent review,
+  atomic rollback, invitation ownership and session admission.
+- `scripts/verify web` PASS: maps:check, typecheck, lint, all 308 tests and production build.
+  Tests cover the live sidebar total, hiding it after a failed refresh and correcting
+  an inverted calendar range without sending the invalid list request.
+- Browser render inspected on desktop and mobile using isolated HTTP fixtures:
+  pending badge, inverted range notice, correction and APPROVED filter.
+- Resend provider tests use fake HTTP; no live email was sent by these checks.
+
+## Historical verification observed on 2026-10-08
 
 - Backend dispatcher PASS: 67 unit tests and 100 integration tests. SQL tests
   actually ran on the disposable local SQL Server; none were skipped.
