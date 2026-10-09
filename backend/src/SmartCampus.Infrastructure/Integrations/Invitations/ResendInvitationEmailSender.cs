@@ -13,19 +13,7 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
     {
         var code = codes.Reveal(email.InvitationId, email.AccessVersion, email.ProtectedCode);
         var link = configuration.PublicBaseUrl + "/tour/" + email.TourId;
-        var text = $"Bạn được mời tham gia {email.TourName}.\n" +
-            $"Giờ dự kiến: {email.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy HH:mm} (UTC+7).\n" +
-            $"Trang Tour: {link}\nMã truy cập: {code}\n" +
-            $"Hết hạn: {email.ExpiresAt.ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy HH:mm} (UTC+7).\n" +
-            $"Không chia sẻ mã. Mở trang Tour rồi sao chép/dán mã truy cập.\nHỗ trợ: {configuration.SupportEmail}";
-        var html = "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px\">" +
-            "<h1>Lời mời tham quan CampusTour</h1><p>" + WebUtility.HtmlEncode(email.TourName) + "</p>" +
-            "<p>Giờ dự kiến: " + email.ScheduledStartAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm") + " (UTC+7)</p>" +
-            "<p><a href=\"" + WebUtility.HtmlEncode(link) + "\">Mở trang Tour</a></p>" +
-            "<p>Mã truy cập</p><p style=\"font-size:24px;font-weight:bold;letter-spacing:2px\">" + code + "</p>" +
-            "<p>Hết hạn: " + email.ExpiresAt.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm") + " (UTC+7)</p>" +
-            "<p>Không chia sẻ mã. Mã dùng lại trong hạn lời mời; gửi lại email giữ nguyên mã.</p><p>Hỗ trợ: " +
-            WebUtility.HtmlEncode(configuration.SupportEmail) + "</p></div>";
+        var (html, text) = InvitationEmailTemplate.Render(email, code, link, configuration.SupportEmail);
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration.ApiKey);
         request.Headers.Add("Idempotency-Key", "campus-tour/" + email.AttemptId.ToString("D"));

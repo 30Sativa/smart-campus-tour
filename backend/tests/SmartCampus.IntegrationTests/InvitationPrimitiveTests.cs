@@ -14,7 +14,7 @@ public sealed class InvitationPrimitiveTests
         ["Invitations:HashKey"] = Convert.ToBase64String(Enumerable.Repeat((byte)1, 32).ToArray()),
         ["Invitations:ProtectionKey"] = Convert.ToBase64String(Enumerable.Repeat((byte)2, 32).ToArray()),
         ["Invitations:PublicBaseUrl"] = "https://tour.example.test", ["Invitations:SupportEmail"] = "support@example.test",
-        ["Resend:ApiKey"] = "test-key-never-used-with-real-provider", ["Resend:From"] = "CampusTour <tour@example.test>"
+        ["Resend:ApiKey"] = "test-key-never-used-with-real-provider", ["Resend:From"] = "CampusTour <noreply@example.test>"
     };
     internal static InvitationConfiguration Configuration() => new(new ConfigurationBuilder()
         .AddInMemoryCollection(ConfigurationValues().Select(p => new KeyValuePair<string, string?>(p.Key, p.Value))).Build());
@@ -81,6 +81,49 @@ public sealed class InvitationPrimitiveTests
         Assert.Contains(plaintext, html);
         Assert.DoesNotContain("recipient-private", JsonSerializer.Serialize(result));
     }
+
+    [Fact]
+    public async Task InvitationEmail_PreservesAccessInstructions_InHtmlAndPlainText_WithVietnamTimes()
+    {
+        var config = Configuration(); var codec = new InvitationCodeService(config);
+        var id = Guid.NewGuid(); var tour = Guid.NewGuid(); var code = codec.Create(id, 1);
+        var plaintext = codec.Reveal(id, 1, code.Protected);
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        await new ResendInvitationEmailSender(http, config, codec).SendAsync(new(tour, id, Guid.NewGuid(),
+            "viewer@example.test", "Campus <img src=x onerror=alert(1)> & science",
+            new DateTimeOffset(2026, 10, 9, 18, 30, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 10, 10, 18, 30, 0, TimeSpan.Zero), 1, code.Protected), default);
+
+        using var json = JsonDocument.Parse(handler.Body!);
+        var payload = json.RootElement;
+        var html = payload.GetProperty("html").GetString()!;
+        var text = payload.GetProperty("text").GetString()!;
+        Assert.Equal(config.From, payload.GetProperty("from").GetString());
+        Assert.Contains("Campus &lt;img src=x onerror=alert(1)&gt; &amp; science", html);
+        Assert.DoesNotContain("<img", html);
+        Assert.Contains("Campus <img src=x onerror=alert(1)> & science", text);
+        foreach (var body in new[] { html, text })
+        {
+            Assert.Contains("10/10/2026 01:30", body);
+            Assert.Contains("11/10/2026 01:30", body);
+            Assert.Contains("UTC+7", body);
+            Assert.Contains("Mã truy cập", body);
+            Assert.Contains(plaintext, body);
+            Assert.Contains("Không chia sẻ mã", body);
+            Assert.Contains("gửi lại email giữ nguyên mã", body);
+            Assert.Contains("support@example.test", body);
+            Assert.DoesNotContain("viewer@example.test", body);
+        }
+        var links = System.Text.RegularExpressions.Regex.Matches(html, "href=\"([^\"]+)\"")
+            .Select(match => WebUtility.HtmlDecode(match.Groups[1].Value)).ToArray();
+        Assert.Equal(new[] { "https://tour.example.test/tour/" + tour,
+            "https://tour.example.test/tour/" + tour, "mailto:support@example.test" }, links);
+        Assert.All(links, link => Assert.DoesNotContain(plaintext, link));
+        Assert.DoesNotContain(plaintext, payload.GetProperty("subject").GetString()!);
+        Assert.Contains("Trang Tour", text, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task NetworkFailure_RemainsUnknown()
     {
