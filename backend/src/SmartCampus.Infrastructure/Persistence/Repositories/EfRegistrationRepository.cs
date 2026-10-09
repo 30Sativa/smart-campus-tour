@@ -40,6 +40,14 @@ public sealed class EfRegistrationRepository(ApplicationDbContext context) : IRe
     public Task<bool> HasInvitationsAsync(Guid registration, CancellationToken ct) =>
         context.Invitations.AnyAsync(i => i.RosterRow.RegistrationId == registration, ct);
 
+    public Task<AuditLog?> FindEmailCorrectionAsync(Guid tour, Guid requestId, CancellationToken ct) =>
+        context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.TourId == tour && a.CorrelationId == requestId &&
+            a.Action == SmartCampus.Application.Features.RosterEmailCorrection.Commands.CorrectRosterEmail.CorrectRosterEmailCommandHandler.AuditAction, ct);
+
+    public Task<bool> HasLaterEmailCorrectionAsync(Guid tour, Guid row, long receiptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.TourId == tour && a.EntityId == row.ToString("D") && a.Id > receiptId &&
+            a.Action == SmartCampus.Application.Features.RosterEmailCorrection.Commands.CorrectRosterEmail.CorrectRosterEmailCommandHandler.AuditAction, ct);
+
     public async Task<IReadOnlyList<int>> ReservedEmailIndexesAsync(Guid tour, Guid? excludingRegistration,
         IReadOnlyList<string> emails, CancellationToken ct)
     {

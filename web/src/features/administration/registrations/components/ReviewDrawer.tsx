@@ -10,6 +10,8 @@ import { reviewError } from '../errors'
 import { reviewTime } from '../presentation'
 import { ReviewStateBadge } from './ReviewStateBadge'
 import { InvitationPanel } from '../../../registrations/invitations/InvitationPanel'
+import { EmailCorrectionDialog } from './EmailCorrectionDialog'
+import type { ReviewRosterRow } from '../types'
 
 export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const query = useRegistrationReview(id)
@@ -17,12 +19,16 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
   const [confirm, setConfirm] = useState<'approve' | 'reject' | null>(null)
   const [needsReload, setNeedsReload] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [emailRow, setEmailRow] = useState<ReviewRosterRow | null>(null)
+  const [emailSaved, setEmailSaved] = useState(false)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const reg = query.data
   const error = mutation.isError ? reviewError(mutation.error) : null
-  const canReview = reg?.review.allowed && !needsReload && !saved && !query.isFetching && !query.isError && !mutation.isPending
+  const canWrite = !needsReload && !query.isFetching && !query.isError && !mutation.isPending && !emailRow
+  const canReview = reg?.review.allowed && !saved && canWrite
   const reload = async () => {
     const result = await query.refetch()
-    if (!result.isError) { setNeedsReload(false); setSaved(false); mutation.reset() }
+    if (!result.isError) { setNeedsReload(false); setSaved(false); setEmailError(null); mutation.reset() }
   }
   const decide = (reason: string) => {
     if (!reg || !confirm || !canReview) return
@@ -32,7 +38,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       onError: failure => { if (reviewError(failure).reload) { setConfirm(null); setNeedsReload(true) } },
     })
   }
-  const close = () => { if (!mutation.isPending) onClose() }
+  const close = () => { if (!mutation.isPending && !emailRow) onClose() }
   return <>
     <Drawer open wide title={reg?.summary.groupName ?? 'Đăng ký đoàn'} description={reg ? `${reg.summary.tourName} · ${reviewTime(reg.summary.tourScheduledStartAt)}` : undefined}
       onClose={close} footer={reg && <div className="flex flex-wrap items-center justify-end gap-2">
@@ -42,10 +48,12 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       {query.isLoading && <p aria-busy="true">Đang tải đăng ký…</p>}
       {query.isError && <Notice tone="danger" action={<button className={buttonClass('secondary', 'sm')} onClick={() => void reload()}>Thử lại</button>}>Không tải được đăng ký này.</Notice>}
       {needsReload && <Notice tone="warn" action={<button className={buttonClass('secondary', 'sm')} disabled={query.isFetching} onClick={() => void reload()}>Tải lại</button>}>Dữ liệu đã thay đổi hoặc Tour đã khóa. Tải lại và xem danh sách trước khi quyết định.</Notice>}
+      {emailError && <Notice tone="danger">{emailError}</Notice>}
       {error && <Notice tone="danger">{error.message}{error.fields.length > 0 && <ul className="mt-2 list-disc pl-5">{[...new Set(error.fields)].map(value => <li key={value}>{value}</li>)}</ul>}</Notice>}
       {reg && !query.isError && <div className="mt-4 space-y-5">
         <ReviewStateBadge state={reg.summary.state} />
         {saved && <p role="status" className="text-sm text-emerald-700">Quyết định đã được lưu.</p>}
+        {emailSaved && <p role="status" className="text-sm text-emerald-700">Email đã được cập nhật.{reg.summary.state === 'APPROVED' && ' Mã cũ đã bị vô hiệu hóa; xem kết quả gửi mã mới ở phần lời mời.'}</p>}
         {reg.rejectionReason && <Notice tone="danger">Lý do từ chối: {reg.rejectionReason}</Notice>}
         <dl className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
           <Field label="Trường">{reg.summary.schoolName}</Field><Field label="Đại diện đăng ký">{reg.summary.representativeName}</Field>
@@ -55,9 +63,16 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
         </dl>
         {reg.summary.state === 'APPROVED' && <InvitationPanel registrationId={id} rowVersion={reg.rowVersion} tourRowVersion={reg.tourRowVersion} />}
         <p className="text-sm text-slate-600">Điểm xem chung ghi người phụ trách màn hình; số dòng không phải số học sinh tham dự.</p>
-        <RosterPreview rows={reg.roster} label="Roster đăng ký" />
+        {!reg.correctEmail.allowed && <p className="text-sm text-slate-600">{reg.correctEmail.reason}</p>}
+        <RosterPreview rows={reg.roster} label="Roster đăng ký" rowAction={row => <button className={buttonClass('secondary', 'sm')}
+          disabled={!reg.correctEmail.allowed || !canWrite || Boolean(confirm)} aria-label={`Sửa email dòng ${row.rowNumber}`}
+          onClick={() => { setEmailSaved(false); setEmailRow(row) }}>Sửa email</button>} />
+        <button className={buttonClass('secondary', 'sm')} disabled={!canWrite} onClick={() => void reload()}>Tải lại đăng ký</button>
       </div>}
     </Drawer>
+    {reg && emailRow && <EmailCorrectionDialog registration={reg} row={emailRow} onClose={() => setEmailRow(null)}
+      onSaved={() => { setEmailRow(null); setEmailSaved(true); setSaved(false); void query.refetch() }}
+      onConflict={message => { setEmailRow(null); setEmailError(message); setNeedsReload(true) }} />}
     {reg && <ConfirmationDialog key={`${id}-${reg.rowVersion}-${confirm}`} open={confirm !== null} title={confirm === 'reject' ? `Từ chối ${reg.summary.groupName}?` : `Duyệt ${reg.summary.groupName}?`}
       description={confirm === 'reject' ? 'Đại diện sẽ thấy lý do, sửa đăng ký và gửi lại để xét duyệt.' : `Duyệt ${reg.summary.rowCount} dòng lời mời đang hiển thị. Hệ thống sẽ cấp mã và gửi email riêng khi hỗ trợ lời mời được bật. Gửi email lỗi vẫn giữ đăng ký đã duyệt.`}
       confirmLabel={confirm === 'reject' ? 'Từ chối' : 'Duyệt'} busyLabel="Đang lưu…" tone={confirm === 'reject' ? 'danger' : 'default'}

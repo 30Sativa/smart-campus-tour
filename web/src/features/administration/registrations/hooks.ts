@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../../stores/auth-store'
 import { registrationsApi as api } from './api/registrations'
-import type { ReviewFilters, ReviewInput } from './types'
+import type { EmailCorrectionInput, ReviewFilters, ReviewInput } from './types'
 
 const ownerKey = (id: string) => ['admin-registration-review', id] as const
 export function useRegistrationReviews(filters: ReviewFilters, enabled = true) {
@@ -26,6 +26,16 @@ export function useReviewDecision() {
   return useMutation({ mutationFn: ({ id, decision, input }: { id: string; decision: 'approve' | 'reject'; input: ReviewInput }) => api.review(id, decision, input),
     onSuccess: () => Promise.all([
       client.invalidateQueries({ queryKey: [...ownerKey(owner ?? ''), 'list'] }),
+      client.invalidateQueries({ queryKey: ['representative'] }),
+    ]) })
+}
+export function useEmailCorrection() {
+  const owner = useAuthStore(s => s.user?.userId)
+  const client = useQueryClient()
+  return useMutation({ mutationFn: ({ id, rowId, input }: { id: string; rowId: string; input: EmailCorrectionInput }) => api.correctEmail(id, rowId, input),
+    onSuccess: () => Promise.all([
+      client.invalidateQueries({ queryKey: [...ownerKey(owner ?? ''), 'list'] }),
+      client.invalidateQueries({ queryKey: ['registration-invitations'] }),
       client.invalidateQueries({ queryKey: ['representative'] }),
     ]) })
 }

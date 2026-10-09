@@ -66,6 +66,23 @@ responses. Retain the same request UUID after an uncertain HTTP response.
 - ACCEPTED means service acceptance; no delivery/read or attendance claim.
 - UNKNOWN means inconclusive delivery; do not treat it as FAILED or ACCEPTED.
 
+Admin can correct only one active roster row's email from the live registration
+drawer while the Tour is SCHEDULED (docs/architecture.md Section 3.2.4).
+APPROVED corrections keep approval and row identity, replace only that row's
+code and close its old sessions, then queue email to the new normalized address.
+Existing invitation ID/expiry remain unchanged. If no invitation exists, only
+the corrected row is issued. Support must be enabled for an approved correction;
+unapproved corrections never issue or send. READY requires reopening first;
+Tour lifecycle/reopen is still outside the live registration API.
+
+Correction writes use a request UUID and Tour/registration/roster/invitation
+snapshot versions. A committed uncertain retry cannot rotate or queue twice;
+if another correction has updated the same row afterward, the old request
+conflicts and requires reload instead of reinstating the old address. Email
+delivery failure does not undo the correction/revocation: use the existing
+resend action after cooldown to send the current code. A previously claimed
+email may still arrive at the old address, but its code is invalid.
+
 Durable requests survive restart. A worker appends a claim and commits before
 external sending; no email occurs inside a SQL transaction. Interrupted claims
 become UNKNOWN after two minutes. Manual resend creates a new attempt with the

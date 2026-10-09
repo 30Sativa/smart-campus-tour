@@ -1,6 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { ReviewDetails, ReviewFilters, ReviewInput, ReviewSummary } from '../types'
+import type { EmailCorrectionInput, ReviewDetails, ReviewFilters, ReviewInput, ReviewSummary } from '../types'
 
 export const registrationsApi = {
   list: (filters: ReviewFilters, signal?: AbortSignal) => {
@@ -11,4 +11,6 @@ export const registrationsApi = {
   get: (id: string, signal?: AbortSignal) => apiClient<ApiResponse<ReviewDetails>>(`/api/admin/registrations/${encodeURIComponent(id)}`, { signal }),
   review: (id: string, decision: 'approve' | 'reject', input: ReviewInput) =>
     apiClient<ApiResponse<null>>(`/api/admin/registrations/${encodeURIComponent(id)}/${decision}`, { method: 'POST', json: input }),
+  correctEmail: (id: string, rowId: string, input: EmailCorrectionInput) =>
+    apiClient<ApiResponse<null>>(`/api/admin/registrations/${encodeURIComponent(id)}/roster/${encodeURIComponent(rowId)}/email`, { method: 'POST', json: input }),
 }

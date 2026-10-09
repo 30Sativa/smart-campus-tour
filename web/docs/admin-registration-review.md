@@ -29,8 +29,9 @@ APPROVED remains read-only for Representative.
 Enabled approval atomically issues invitations and queues separate emails under
 ADR-0015; see backend/docs/invitations-resend.md. The approved drawer shares live
 invitation support with Representative detail. No fake email status, group code
-or fixture Tour link appears. Admin email correction, approval reversal and Tour
-lifecycle remain separate. Existing Tour/dashboard review and invitation simulation consumers
+or fixture Tour link appears. Single-row Admin email correction uses the live
+API in docs/architecture.md Section 3.2.4; approval reversal and Tour lifecycle
+remain separate. Existing Tour/dashboard review and invitation simulation consumers
 remain intact with their own drawer and caches; they do not observe SQL data.
 
 Source ownership:
@@ -67,10 +68,28 @@ no mock fallback. The preserved mock Tour workflow still has its own regression.
 
 ## Verification observed on 2026-10-09
 
-- `scripts/verify backend` PASS: 70 unit and 119 integration tests; no skips.
+Admin roster email correction adds the confirmed single-row action to live
+detail. SUBMITTED/REJECTED stay in their original state, with rejection metadata
+preserved; APPROVED retains approval and revokes only the corrected row's old
+access. The dialog keeps the exact UUID/body on an uncertain response and
+requires successful explicit reload after stale/state/auth failures. The shared
+roster renderer accepts an optional row action; Representative/demo consumers
+remain unchanged. No email-service call is made inside SQL transactions.
+
+The correction's SQL endpoint regressions cover authorization, request binding,
+row identity, normalization/reservations, versions and races, atomic rollback,
+selected session/code revocation, durable retry after restart, missing/expired
+invitation handling, old queued/in-flight delivery and manual resend of the new
+code. Browser HTTP tests cover confirmation, committed reload, lost replies,
+duplicates/validation, stale/auth blocking, rejected metadata and READY guidance.
+Desktop and 390px editor layouts were inspected using an isolated HTTP fixture;
+that visual fixture does not establish live provider delivery or production
+HTTPS cookie behavior.
+
+- `scripts/verify backend` PASS: 83 unit and 132 integration tests; no skips.
   SQL-backed tests used disposable local databases, including concurrent review,
   atomic rollback, invitation ownership and session admission.
-- `scripts/verify web` PASS: maps:check, typecheck, lint, all 308 tests and production build.
+- `scripts/verify web` PASS: maps:check, typecheck, lint, all 362 tests and production build.
   Tests cover the live sidebar total, hiding it after a failed refresh and correcting
   an inverted calendar range without sending the invalid list request.
 - Browser render inspected on desktop and mobile using isolated HTTP fixtures:

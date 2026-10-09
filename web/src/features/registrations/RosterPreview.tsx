@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import type { RosterRow } from './roster'
 import { inputClass } from '../../components/ui/ui-classes'
@@ -9,7 +9,7 @@ const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').repl
  * The roster as a table: source row, type, display name, email and optional class (Review 1).
  * Scrolls inside its own box, sideways too on a narrow phone.
  */
-export function RosterPreview({ rows, label = 'Danh sách lời mời', maxHeight = 'max-h-[360px]', variant = 'console' }: { rows: RosterRow[]; label?: string; maxHeight?: string; variant?: 'console' | 'representative' }) {
+export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách lời mời', maxHeight = 'max-h-[360px]', variant = 'console', rowAction }: { rows: T[]; label?: string; maxHeight?: string; variant?: 'console' | 'representative'; rowAction?: (row: T) => ReactNode }) {
   const [q, setQ] = useState('')
   const representative = variant === 'representative'
   const searchable = rows.length > 12
@@ -36,6 +36,7 @@ export function RosterPreview({ rows, label = 'Danh sách lời mời', maxHeigh
               <th scope="col" className="px-4 py-2.5 font-medium">Họ tên</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Loại dòng</th><th scope="col" className="px-4 py-2.5 font-medium">Email</th>
               <th scope="col" className="w-32 px-4 py-2.5 font-medium">Lớp</th>
+              {rowAction && <th scope="col" className="px-4 py-2.5 font-medium">Thao tác</th>}
             </tr>
           </thead>
           <tbody className={representative ? undefined : 'divide-y divide-[#f1f5f9]'}>
@@ -45,10 +46,11 @@ export function RosterPreview({ rows, label = 'Danh sách lời mời', maxHeigh
                 <td className={representative ? 'font-semibold' : 'px-4 py-2.5 font-medium text-[#0f172a]'}>{row.displayName}</td>
                 <td className={representative ? undefined : 'px-4 py-2.5'}><span className={representative ? `rep-row-type ${row.rowType === 'INDIVIDUAL' ? 'rep-row-type--ind' : 'rep-row-type--shared'}` : undefined}>{row.rowType === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung'}</span></td><td className={representative ? undefined : 'px-4 py-2.5'}>{row.email}</td>
                 <td className={representative ? undefined : 'px-4 py-2.5 text-[#334155]'}>{row.className || <span className={representative ? 'rep-muted' : 'text-[#94a3b8]'}>-</span>}</td>
+                {rowAction && <td className="px-4 py-2.5">{rowAction(row)}</td>}
               </tr>
             ))}
             {shown.length === 0 && (
-              <tr><td colSpan={5} className={`px-4 py-6 text-center ${representative ? 'rep-muted' : 'text-[#64748b]'}`}>Không có dòng khớp "{q}".</td></tr>
+              <tr><td colSpan={rowAction ? 6 : 5} className={`px-4 py-6 text-center ${representative ? 'rep-muted' : 'text-[#64748b]'}`}>Không có dòng khớp "{q}".</td></tr>
             )}
           </tbody>
         </table>
