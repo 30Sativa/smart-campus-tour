@@ -14,7 +14,9 @@ choose a heading or enter one numerically. Selecting a different map clears
 all three draft pose fields. No request is sent until Save.
 
 After a successful create, return to `/admin/pois`, refresh the catalog and
-show a dismissible confirmation naming the new inactive POI. Replace the create
+show a dismissible green success confirmation naming the new inactive POI.
+Focus and scroll the confirmation into view even when the form was scrolled
+down; it remains visible until dismissed. Replace the create
 history entry so Back does not reopen the submitted draft. Failed creates keep
 the draft and show the API error; they do not show a success notice or navigate.
 

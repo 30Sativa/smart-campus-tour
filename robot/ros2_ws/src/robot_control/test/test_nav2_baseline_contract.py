@@ -7,6 +7,7 @@ runtime behaviour - that is robot_navigation/README.md section "Acceptance
 tests on the real robot".
 """
 
+import ast
 import json
 import math
 import re
@@ -170,12 +171,12 @@ def test_rpp_baseline_safety_flags():
 
 def test_rpp_speed_stays_at_the_supervised_baseline():
     params = _follow_path()
-    # Explicitly authorized 0.22 m/s trial; catch either a stale 0.20 ceiling
+    # Explicitly authorized 0.24 m/s trial; catch a stale producer/ceiling
     # or an unintended increase beyond this trial.
-    assert params['desired_linear_vel'] == 0.22
+    assert params['desired_linear_vel'] == 0.24
     smoother = _nav2_params()['velocity_smoother']['ros__parameters']
-    assert smoother['max_velocity'][0] == params['desired_linear_vel']
-    assert smoother['min_velocity'][0] == -0.20  # Reverse limit is unchanged.
+    assert smoother['max_velocity'] == [params['desired_linear_vel'], 0.0, 0.45]
+    assert smoother['min_velocity'] == [-0.20, 0.0, -0.45]  # No faster reverse.
     assert smoother['max_accel'] == [0.50, 0.0, 0.50]
     # The controller must never ask for more than the smoother will pass.
     assert params['desired_linear_vel'] <= smoother['max_velocity'][0]
@@ -186,7 +187,7 @@ def test_rpp_speed_stays_at_the_supervised_baseline():
 def test_rpp_regulation_is_actually_active():
     """min_speed above desired_linear_vel silently disables regulation.
 
-    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.22 m/s
+    The Humble default is 0.25 m/s, which is ABOVE this robot's 0.24 m/s
     baseline - leaving it unset would make curvature regulation a no-op.
     """
     params = _follow_path()
@@ -195,17 +196,44 @@ def test_rpp_regulation_is_actually_active():
 
 
 def test_heading_and_recovery_turns_share_the_supervised_speed_envelope():
-    """Recovery must not retain the old fast spin after RPP is slowed down."""
+    """Both turn producers must reach the same authorized smoother ceiling."""
     params = _nav2_params()
     rpp = _follow_path()
     behavior = params['behavior_server']['ros__parameters']
     smoother = params['velocity_smoother']['ros__parameters']
     limit = smoother['max_velocity'][2]
-    assert 0.0 < limit <= 0.40
+    assert limit == 0.45
     assert smoother['min_velocity'][2] == -limit
-    assert 0.0 < rpp['rotate_to_heading_angular_vel'] <= limit
-    assert (0.0 < behavior['min_rotational_vel'] <
-            behavior['max_rotational_vel'] <= limit)
+    assert rpp['rotate_to_heading_angular_vel'] == limit
+    assert behavior['max_rotational_vel'] == limit
+    assert behavior['min_rotational_vel'] == 0.10
+
+
+def test_real_bridge_accepts_straight_and_spin_maxima_without_raising_wheel_cap():
+    """Check the real navigation's manual-mode include and standalone bridge.
+
+    Independent Nav2 maxima fit the existing wheel cap. Combined maxima may
+    still be pair-scaled; the bridge's executable command tests cover that.
+    """
+    rpp = _follow_path()
+    for relative_path in (
+            'robot_control/launch/manual_mode.launch.py',
+            'stm32_bridge/launch/stm32_bridge.launch.py'):
+        tree = ast.parse(_read(relative_path))
+        defaults = {
+            ast.literal_eval(call.args[0]): ast.literal_eval(keyword.value)
+            for call in ast.walk(tree)
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+            and call.func.id == 'DeclareLaunchArgument'
+            for keyword in call.keywords if keyword.arg == 'default_value'
+        }
+        assert float(defaults['max_wheel_speed_mm_s']) == 250.0
+        assert float(defaults['speed_scale']) == 1.0
+        assert float(defaults['wheel_base']) == 0.4714
+        cap = float(defaults['max_wheel_speed_mm_s'])
+        assert rpp['desired_linear_vel'] * 1000.0 <= cap
+        assert (rpp['rotate_to_heading_angular_vel'] *
+                float(defaults['wheel_base']) * 500.0 <= cap)
 
 
 def test_turn_acceleration_is_limited_without_weakening_braking():
@@ -213,12 +241,17 @@ def test_turn_acceleration_is_limited_without_weakening_braking():
     params = _nav2_params()
     smoother = params['velocity_smoother']['ros__parameters']
     accel = smoother['max_accel'][2]
+    assert _follow_path()['max_angular_accel'] == accel == 0.50
+    assert params['behavior_server']['ros__parameters']['rotational_acc_lim'] == accel
     assert 0.0 < _follow_path()['max_angular_accel'] <= accel <= 0.50
     assert (0.0 < params['behavior_server']['ros__parameters'][
         'rotational_acc_lim'] <= accel)
     # Startup ramp changes must not silently reduce the existing brake limit.
     assert smoother['max_decel'] == [-0.50, 0.0, -2.50]
     assert smoother['velocity_timeout'] == 0.5
+    assert smoother['smoothing_frequency'] == 20.0
+    assert smoother['feedback'] == 'OPEN_LOOP'
+    assert smoother['scale_velocities'] is False
 
 
 def test_progress_timeout_budgets_slow_half_turn_then_translation():

@@ -135,6 +135,7 @@ describe('Admin POI form', () => {
     expect(await screen.findByRole('heading', { name: 'Quản lý POI' })).toBeVisible()
     expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois')
     expect(screen.getByRole('status')).toHaveTextContent('Đã tạo POI “New library” thành công.')
+    expect(screen.getByRole('status').parentElement).toHaveFocus()
     expect(await screen.findByRole('link', { name: 'New library' })).toHaveAttribute('href', '/admin/pois/poi-created')
     expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/admin/pois/poi-created'))).toBe(false)
@@ -158,6 +159,31 @@ describe('Admin POI form', () => {
     expect(screen.getByLabelText('Tên POI')).toHaveValue('New library')
     expect(screen.getByLabelText('X (m)')).toHaveValue(0)
     expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
+  })
+
+  it('brings the create confirmation into view even if the catalog reload fails', async () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    try {
+      stubApi(() => jsonResponse({ success: false, message: 'Catalog unavailable.', data: null }, 500))
+      render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[{ pathname: '/admin/pois', state: { createdPoiName: 'Saved POI' } }]}>
+          <Routes><Route path="/admin/pois" element={<AdminPoisPage />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>)
+      expect(await screen.findByText('Không thể tải danh sách POI.')).toBeVisible()
+      const notice = screen.getByRole('status')
+      expect(notice).toHaveTextContent('Đã tạo POI “Saved POI” thành công.')
+      expect(notice.parentElement).toHaveFocus()
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' })
+      fireEvent.click(screen.getByRole('button', { name: 'Đóng thông báo' }))
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      expect(screen.getByText('Không thể tải danh sách POI.')).toBeVisible()
+    } finally {
+      if (original) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', original)
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+    }
   })
 
   it('keeps dirty fields through a query refetch and submits the original RowVersion on conflict', async () => {
