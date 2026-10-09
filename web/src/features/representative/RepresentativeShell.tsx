@@ -7,6 +7,7 @@ import { useLogout } from '../../auth/use-logout'
 import { useAuthStore } from '../../stores/auth-store'
 import { useThemeStore } from '../../stores/theme-store'
 import { PageSkeleton } from './components/RepUi'
+import { RepBell } from './RepBell'
 import { REP_NAV, repActivePath } from './rep-nav'
 import './representative.css'
 
@@ -77,6 +78,7 @@ export default function RepresentativeShell() {
             <button type="button" className="rep-sheet-logout" onClick={() => void logout()}><LogOut size={16} aria-hidden="true" />Đăng xuất</button>
           </nav>
           <div className="rep-actions">
+            <RepBell />
             <button type="button" className="rep-icon-btn" onClick={(event) => switchTheme(event.currentTarget)} aria-label={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}>
               {theme === 'dark' ? <Sun size={18} strokeWidth={1.8} aria-hidden="true" /> : <Moon size={18} strokeWidth={1.8} aria-hidden="true" />}
             </button>

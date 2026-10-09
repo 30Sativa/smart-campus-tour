@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Lenis from '@studio-freight/lenis'
-import { ArrowRight, Bot, MapPin, MessageCircle, Radio, Route, Video } from 'lucide-react'
+import { ArrowRight, BatteryCharging, Bot, MapPin, MessageCircle, Radar, Radio, Route, Video } from 'lucide-react'
 import { SiteNav } from '../../features/landing/sections/SiteNav'
 import { Hero } from '../../features/landing/sections/Hero'
 import { CtaBand } from '../../features/landing/sections/CtaBand'
@@ -17,10 +17,16 @@ const steps = [
   { number: '03', title: 'Cả lớp xem tour trực tiếp', body: 'Một robot đi qua các điểm dừng; mỗi học sinh theo dõi trên trình duyệt của mình.' },
 ]
 
+/**
+ * Parts of the robot, in the order of the numbered rings already drawn on
+ * `technology-robot-quest.png`; `spot` is the centre of that ring, in percent,
+ * so each button sits exactly on top of the picture's own number.
+ */
 const technology: TechItem[] = [
-  { icon: Route, title: 'Lộ trình tự hành', body: 'Robot đi theo tuyến đã chuẩn bị và dừng tại từng điểm tham quan.', spot: { x: 57, y: 13 } },
-  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Camera trên robot truyền góc nhìn của chuyến đi tới học sinh.', spot: { x: 66, y: 52 } },
-  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', spot: { x: 46, y: 60 } },
+  { icon: Radar, title: 'LiDAR & tự hành', body: 'Cảm biến LiDAR quét quanh robot để định vị, tránh vật cản và bám theo tuyến đã chuẩn bị qua từng điểm tham quan.', spot: { x: 33, y: 63.5 } },
+  { icon: BatteryCharging, title: 'Pin & nguồn điện', body: 'Pin trên robot cấp điện cho động cơ và máy tính; mức pin hiện cho đội vận hành theo dõi.', spot: { x: 62.8, y: 58 } },
+  { icon: Radio, title: 'Vị trí đồng bộ', body: 'Cùng một vị trí phục vụ bản đồ 2D của học sinh và Twin 3D của đội vận hành.', spot: { x: 42.8, y: 70.5 } },
+  { icon: Video, title: 'Nguồn hình trực tiếp', body: 'Kính Meta Quest 3 trên trụ giữ truyền góc nhìn của chuyến đi tới học sinh.', spot: { x: 60.6, y: 9.6 } },
 ]
 
 /** Labelled buildings on `twin-smartbus.png`, in percent of the picture. */

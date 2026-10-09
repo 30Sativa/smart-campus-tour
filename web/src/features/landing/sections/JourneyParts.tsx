@@ -122,7 +122,7 @@ export type TechItem = {
   icon: LucideIcon
   title: string
   body: string
-  /** Where the part sits on `technology-smartbus.png`, in percent. */
+  /** Where the part sits on the landing-page robot illustration, in percent. */
   spot: { x: number; y: number }
 }
 
@@ -132,7 +132,7 @@ export function TechShowcase({ items }: { items: readonly TechItem[] }) {
   return (
     <div className="lp3-tech-grid">
       <div className="lp3-tech-art" data-reveal data-reveal-media>
-        <img src="/images/home-3d/technology-smartbus.png" alt="Minh họa 3D ý tưởng cấu trúc robot SmartBus" loading="lazy" decoding="async" />
+        <img src="/images/home-3d/technology-robot-quest.png" alt="Mô hình 3D robot CampusTour với linh kiện bên trong, cảm biến LiDAR, trụ giữ kính Meta Quest 3 và một bánh xe bên hông" loading="lazy" decoding="async" />
         {items.map((item, index) => (
           <button
             key={item.title}
