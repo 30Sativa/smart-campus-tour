@@ -2,12 +2,12 @@ import { useSearchParams } from 'react-router'
 import { PageHeader, Pagination, SearchField } from '../../components/ui/ConsolePrimitives'
 import { StageTabs } from '../../components/ui/StageTabs'
 import { buttonClass, inputClass } from '../../components/ui/ui-classes'
-import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
+import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../features/administration/AdminUi'
 import { useRegistrationReviews } from '../../features/administration/registrations/hooks'
 import { ReviewDrawer } from '../../features/administration/registrations/components/ReviewDrawer'
-import { dateBoundary, reviewTime, STATE_LABEL } from '../../features/administration/registrations/presentation'
+import { dateBoundary, reviewTime } from '../../features/administration/registrations/presentation'
 import { ReviewStateBadge } from '../../features/administration/registrations/components/ReviewStateBadge'
-import type { RegistrationState } from '../../features/administration/registrations/types'
+import { isRegistrationState, REGISTRATION_STATE_LABEL, REGISTRATION_STATES, type RegistrationState } from '../../features/registrations/registration-state'
 import { useReviewParam } from '../../features/administration/use-review-param'
 import { cardClass } from '../../features/administration/admin-visual'
 
@@ -18,14 +18,16 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
   const { reviewId, open, close } = useReviewParam()
   const search = params.get('q') ?? ''
   const requestedState = (params.get('state') ?? '').toUpperCase()
-  const state = mode === 'pending' ? 'SUBMITTED' : requestedState in STATE_LABEL ? requestedState as RegistrationState : undefined
+  const state = mode === 'pending' ? 'SUBMITTED' : isRegistrationState(requestedState) ? requestedState : undefined
   const requestedPage = Number(params.get('page') ?? 1)
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const sort = params.get('sort') ?? 'submittedAt'
   const from = params.get('from') ?? ''
   const to = params.get('to') ?? ''
+  // ISO calendar dates compare as text; an inverted range is explained here instead of failing as a load error.
+  const invalidRange = Boolean(from && to && from > to)
   const query = useRegistrationReviews({ search: search.trim() || undefined, state, page, size: 10, sort,
-    tourId: params.get('tourId') || undefined, from: dateBoundary(from), to: dateBoundary(to, true) })
+    tourId: params.get('tourId') || undefined, from: dateBoundary(from), to: dateBoundary(to, true) }, !invalidRange)
   const update = (changes: Record<string, string | null>) => setParams(current => {
     const next = new URLSearchParams(current)
     next.delete('page')
@@ -48,9 +50,10 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
           </select></label>
         </div>
         {mode === 'all' && <StageTabs<RegistrationState | 'all'> label="Lọc trạng thái đăng ký" value={state ?? 'all'} onChange={value => update({ state: value === 'all' ? null : value })}
-          stages={[{ key: 'all', label: 'Tất cả', color: STATE_COLOR.all }, ...(Object.keys(STATE_LABEL) as RegistrationState[]).map(key => ({ key, label: STATE_LABEL[key], color: STATE_COLOR[key], separated: key === 'REJECTED' }))]} />}
+          stages={[{ key: 'all', label: 'Tất cả', color: STATE_COLOR.all }, ...REGISTRATION_STATES.map(key => ({ key, label: REGISTRATION_STATE_LABEL[key].label, color: STATE_COLOR[key], separated: key === 'REJECTED' }))]} />}
       </div>
-      {query.isError ? <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
+      {invalidRange ? <div className="p-5"><Notice tone="warn">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</Notice></div>
+        : query.isError ? <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
         : query.isLoading ? <SkeletonRows rows={5} label="Đang tải đăng ký" /> : rows.length === 0 ? <EmptyState title="Không có đăng ký khớp bộ lọc." action={page > 1 ? <button className={buttonClass('secondary', 'sm')} onClick={() => update({ page: null })}>Về trang đầu</button> : undefined} />
           : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm" aria-label="Đăng ký từ đại diện">
             <thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Đoàn / Trường', 'Tour', 'Đại diện', 'Dòng lời mời', 'Trạng thái', ''].map((label, i) => <th key={i} scope="col" className="px-4 py-3">{label}</th>)}</tr></thead>
@@ -61,7 +64,7 @@ export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'al
               <td className="px-4 py-4"><button onClick={() => open(reg.id)} className="font-semibold text-blue-600 hover:underline">Xem & duyệt<span className="sr-only"> {reg.groupName}</span></button></td>
             </tr>)}</tbody>
           </table></div>}
-      {query.data && !query.isError && <Pagination page={page} pageCount={Math.max(1, query.data.pagination.totalPages)} total={total} pageSize={10}
+      {query.data && !query.isError && !invalidRange && <Pagination page={page} pageCount={Math.max(1, query.data.pagination.totalPages)} total={total} pageSize={10}
         onPage={value => update({ page: String(value) })} label="Phân trang đăng ký" />}
     </section>
     {reviewId && <ReviewDrawer key={reviewId} id={reviewId} onClose={close} />}

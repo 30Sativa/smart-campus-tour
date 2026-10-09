@@ -1,4 +1,4 @@
-using SmartCampus.Application.Features.Representative.Commands;
+using SmartCampus.Application.Features.Representative;
 using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTours;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
@@ -58,44 +58,39 @@ public sealed class RepresentativeValidationTests
     }
 
     [Fact]
-    public void RegistrationActionsAndMutationGateShareTheSameStateMatrix()
+    public void RepresentativeGatesShareOneStateMatrixForActionsAndMutations()
     {
-        var create = RepresentativeRegistrationPolicy.Gate(RegistrationConsistency.Scheduled, string.Empty, false, RegistrationOperation.Create);
-        Assert.True(create.Allowed);
-        Assert.False(RepresentativeRegistrationPolicy.Gate("READY", string.Empty, false, RegistrationOperation.Create).Allowed);
+        const string open = RegistrationGate.OpenTourState;
+        static bool Allowed(string tour, string state, bool invitations, RegistrationOperation operation) =>
+            RepresentativeRegistrationPolicy.Evaluate(tour, state, invitations, operation).Allowed;
 
-        var submitted = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Submitted, false);
-        Assert.True(submitted.Edit.Allowed);
-        Assert.True(submitted.Cancel.Allowed);
-        Assert.False(submitted.Resubmit.Allowed);
+        Assert.True(Allowed(open, string.Empty, false, RegistrationOperation.Create));
+        Assert.False(Allowed("READY", string.Empty, false, RegistrationOperation.Create));
 
-        var rejected = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Rejected, false);
-        Assert.True(rejected.Resubmit.Allowed);
-        Assert.True(rejected.Cancel.Allowed);
-        Assert.False(rejected.Edit.Allowed);
+        Assert.True(Allowed(open, RegistrationStates.Submitted, false, RegistrationOperation.Update));
+        Assert.True(Allowed(open, RegistrationStates.Submitted, false, RegistrationOperation.Cancel));
+        Assert.False(Allowed(open, RegistrationStates.Submitted, false, RegistrationOperation.Resubmit));
 
-        var cancelled = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Cancelled, false);
-        Assert.True(cancelled.Resubmit.Allowed);
-        Assert.False(cancelled.Edit.Allowed);
-        Assert.False(cancelled.Cancel.Allowed);
+        Assert.True(Allowed(open, RegistrationStates.Rejected, false, RegistrationOperation.Resubmit));
+        Assert.True(Allowed(open, RegistrationStates.Rejected, false, RegistrationOperation.Cancel));
+        Assert.False(Allowed(open, RegistrationStates.Rejected, false, RegistrationOperation.Update));
 
-        var withInvitations = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Submitted, true);
-        Assert.False(withInvitations.Edit.Allowed);
-        Assert.False(withInvitations.Resubmit.Allowed);
-        Assert.False(withInvitations.Cancel.Allowed);
+        Assert.True(Allowed(open, RegistrationStates.Cancelled, false, RegistrationOperation.Resubmit));
+        Assert.False(Allowed(open, RegistrationStates.Cancelled, false, RegistrationOperation.Update));
+        Assert.False(Allowed(open, RegistrationStates.Cancelled, false, RegistrationOperation.Cancel));
 
-        var locked = RepresentativeRegistrationPolicy.Actions("RUNNING", RegistrationConsistency.Submitted, false);
-        Assert.False(locked.Edit.Allowed);
-        Assert.False(locked.Resubmit.Allowed);
-        Assert.False(locked.Cancel.Allowed);
-
-        var approved = RepresentativeRegistrationPolicy.Actions(RegistrationConsistency.Scheduled, RegistrationConsistency.Approved, false);
-        Assert.False(approved.Edit.Allowed);
-        Assert.False(approved.Resubmit.Allowed);
-        Assert.False(approved.Cancel.Allowed);
-        Assert.Equal(RepresentativeRegistrationPolicy.ApprovedBoundary, approved.Edit.Reason);
-        var exception = Assert.Throws<ConflictException>(() => RepresentativeRegistrationPolicy.RequireAllowed(
-            RegistrationConsistency.Scheduled, RegistrationConsistency.Approved, false, RegistrationOperation.Cancel));
+        foreach (var operation in new[] { RegistrationOperation.Update, RegistrationOperation.Resubmit, RegistrationOperation.Cancel })
+        {
+            Assert.False(Allowed(open, RegistrationStates.Submitted, true, operation));
+            Assert.False(Allowed("RUNNING", RegistrationStates.Submitted, false, operation));
+            var approved = RepresentativeRegistrationPolicy.Evaluate(open, RegistrationStates.Approved, false, operation);
+            Assert.False(approved.Allowed);
+            Assert.Equal(RepresentativeRegistrationPolicy.ApprovedBoundary, approved.ToActionGate().Reason);
+        }
+        var exception = Assert.Throws<ConflictException>(() => RepresentativeRegistrationPolicy.Evaluate(
+            open, RegistrationStates.Approved, false, RegistrationOperation.Cancel).EnsureAllowed());
         Assert.Equal("INVITATION_BOUNDARY", exception.Code);
+        var stale = Assert.Throws<ConflictException>(() => RowVersionToken.EnsureCurrent([0, 0, 0, 0, 0, 0, 0, 2], "AAAAAAAAAAE="));
+        Assert.Equal("STALE_VERSION", stale.Code);
     }
 }

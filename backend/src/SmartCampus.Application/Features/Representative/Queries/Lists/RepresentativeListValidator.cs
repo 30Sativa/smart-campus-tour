@@ -1,4 +1,5 @@
 using FluentValidation;
+using SmartCampus.Application.Features.Registrations;
 
 namespace SmartCampus.Application.Features.Representative.Queries.Lists;
 
@@ -16,7 +17,7 @@ internal sealed class RepresentativeListValidator : AbstractValidator<Representa
         RuleFor(x => x.Expand).Must(string.IsNullOrWhiteSpace).WithMessage("Không hỗ trợ mở rộng dữ liệu.");
         RuleFor(x => x.Sort).Must(value => string.IsNullOrWhiteSpace(value) ||
             sortFields.Any(field => value == field || value == "-" + field)).WithMessage("Thứ tự sắp xếp không được hỗ trợ.");
-        RuleFor(x => x.State).Must(value => value is null or "SUBMITTED" or "APPROVED" or "REJECTED" or "CANCELLED")
+        RuleFor(x => x.State).Must(value => value is null || RegistrationStates.IsKnown(value))
             .WithMessage("Trạng thái đăng ký không hợp lệ.");
     }
 }

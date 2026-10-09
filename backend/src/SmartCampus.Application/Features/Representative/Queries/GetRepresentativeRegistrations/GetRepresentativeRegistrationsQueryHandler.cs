@@ -1,6 +1,7 @@
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;
 

@@ -306,7 +306,8 @@ public sealed class InitialAdminSeederTests
         string[] arguments,
         int? port = null,
         string? jwtSigningKey = TestJwtSigningKey,
-        string environment = "Development")
+        string environment = "Development",
+        IReadOnlyDictionary<string, string>? additionalSettings = null)
     {
         var apiAssembly = Path.Combine(AppContext.BaseDirectory, "SmartCampus.Api.dll");
         Assert.True(File.Exists(apiAssembly), $"API assembly not found at {apiAssembly}.");
@@ -334,6 +335,9 @@ public sealed class InitialAdminSeederTests
         if (jwtSigningKey is not null)
             startInfo.Environment["Authentication__Jwt__SigningKey"] = jwtSigningKey;
         startInfo.Environment["Cors__AllowedOrigins__0"] = "http://localhost:5173";
+        startInfo.Environment["Invitations__Enabled"] = "false";
+        if (additionalSettings is not null)
+            foreach (var setting in additionalSettings) startInfo.Environment[setting.Key] = setting.Value;
 
         return Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start API process for integration test.");

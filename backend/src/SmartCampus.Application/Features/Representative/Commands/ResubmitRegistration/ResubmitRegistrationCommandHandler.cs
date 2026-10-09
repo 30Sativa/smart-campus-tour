@@ -1,9 +1,7 @@
-using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
-using SmartCampus.Application.Features.Representative.Commands;
-using SmartCampus.Application.Features.Registrations;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
-using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
+using SmartCampus.Application.Features.Representative.Commands.RegistrationDraft;
 
 namespace SmartCampus.Application.Features.Representative.Commands.ResubmitRegistration;
 
@@ -18,7 +16,7 @@ public sealed class ResubmitRegistrationCommandHandler(IRegistrationRepository r
         await RegistrationEmailReservation.EnsureAvailableAsync(repository, tour.Id, registration.Id, input.Roster, ct);
         var now = clock.GetUtcNow();
         RegistrationDraftWriter.Replace(registration, input, now);
-        registration.State = RegistrationConsistency.Submitted;
+        registration.State = RegistrationStates.Submitted;
         registration.SubmittedAt = now;
         registration.CancelledAt = null;
         registration.ReviewedAt = null;
