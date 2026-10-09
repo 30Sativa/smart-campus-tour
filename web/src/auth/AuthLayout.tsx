@@ -16,7 +16,6 @@ const MAX_TILT = 4
 /**
  * Pointer effects for the glass card, driven by CSS custom properties so React
  * never re-renders on mouse movement:
- * - `--auth-mx/--auth-my` on the card: where its glowing rim and sheen sit.
  * - `--auth-rx/--auth-ry` on the card: a small 3D lean toward the pointer.
  * - `--auth-bx/--auth-by` on the submit button: it drifts toward the pointer.
  * - `--auth-px/--auth-py` + `data-ripple` on the button: the press ripple.
@@ -50,8 +49,6 @@ function useAuroraPointer(rootRef: RefObject<HTMLElement | null>, cardRef: RefOb
       const box = card.getBoundingClientRect()
       const x = event.clientX - box.left
       const y = event.clientY - box.top
-      card.style.setProperty('--auth-mx', `${x}px`)
-      card.style.setProperty('--auth-my', `${y}px`)
       if (!move) return
 
       card.style.setProperty('--auth-ry', `${clamp((x / box.width - 0.5) * MAX_TILT * 1.6).toFixed(2)}deg`)
@@ -107,8 +104,7 @@ function useAuroraPointer(rootRef: RefObject<HTMLElement | null>, cardRef: RefOb
  *
  * A campus photograph fills the screen (SmartBus by day, the lit tour path at
  * dusk in dark mode) under a soft aurora of drifting colour fields; the form
- * sits on one frosted-glass card in the middle whose rim lights up where the
- * pointer is. Everything behind the card is decorative,
+ * sits on one frosted-glass card in the middle. Everything behind the card is decorative,
  * `aria-hidden` and holds nothing focusable.
  *
  * The root carries `.lp`, which is where the palette, the font and the

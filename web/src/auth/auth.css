@@ -176,12 +176,12 @@
   perspective: 1200px;
 }
 
-/* The 1px padding is the rim: a radial light that follows the pointer. */
+/* The 1px padding is the rim: a fixed radial light from the top edge. */
 .auth-card {
   border-radius: 28px;
   padding: 1px;
   background: radial-gradient(
-    460px circle at var(--auth-mx, 50%) var(--auth-my, 0%),
+    460px circle at 50% 0%,
     var(--auth-rim-1),
     var(--auth-rim-2) 28%,
     var(--auth-rim-rest) 62%
@@ -203,15 +203,6 @@
   padding: 34px 36px 26px;
   border-radius: 27px;
   background: var(--auth-card-bg);
-}
-
-/* Sheen inside the glass, under the same light as the rim. */
-.auth-col::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(320px circle at var(--auth-mx, 50%) var(--auth-my, 0%), var(--auth-sheen), transparent 62%);
-  pointer-events: none;
 }
 
 .auth-col > * {
@@ -858,7 +849,6 @@ html[data-auth-exit='split']::view-transition-old(auth-exit-aurora) {
   --auth-rim-1: rgba(39, 100, 81, 0.9);
   --auth-rim-2: rgba(214, 241, 141, 0.75);
   --auth-rim-rest: rgba(16, 45, 49, 0.12);
-  --auth-sheen: rgba(214, 241, 141, 0.38);
   --auth-shadow: rgba(16, 45, 49, 0.45);
   --auth-submit-bg: #102d31;
   --auth-submit-ink: #d6f18d;
@@ -887,7 +877,6 @@ html.dark .auth[data-page='login'] {
   --auth-rim-1: rgba(214, 241, 141, 0.85);
   --auth-rim-2: rgba(39, 100, 81, 0.9);
   --auth-rim-rest: rgba(219, 241, 222, 0.12);
-  --auth-sheen: rgba(214, 241, 141, 0.1);
   --auth-shadow: rgba(0, 0, 0, 0.75);
   --auth-submit-bg: #d6f18d;
   --auth-submit-ink: #102d31;

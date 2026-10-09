@@ -164,7 +164,7 @@ html.dark .lp3-student { background: #103337; }
 /* Exploded robot */
 .lp3-tech-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .75fr); gap: clamp(28px, 5vw, 82px); align-items: center; margin-top: 40px; }
 .lp3-tech-art { position: relative; }
-.lp3-tech-art img { width: 100%; mix-blend-mode: multiply; }
+.lp3-tech-art img { display: block; width: 100%; mix-blend-mode: multiply; }
 html.dark .lp3-tech-art img { mix-blend-mode: normal; border-radius: 20px; }
 .lp3-tech-art > span { position: absolute; bottom: 4%; left: 0; color: var(--lp-ink-3); font-size: .67rem; letter-spacing: .18em; }
 .lp3-tech-list { border-top: 1px solid var(--lp-line); }

@@ -1,29 +1,20 @@
 import type { ReactNode } from 'react'
-import {
-  Bot,
-  CalendarCheck2,
-  ChevronRight,
-  MonitorPlay,
-  PlayCircle,
-  ShieldAlert,
-  Hourglass,
-  Users,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { ChevronRight, MonitorPlay } from 'lucide-react'
 import { Link } from 'react-router'
 import type { AmrStatus, TourOperation } from '../../api/contracts/staff'
 import { useStaffAmrs, useTours } from '../../features/staff/staff-hooks'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { groupSummary, operationsCounts, tourAction } from '../../features/staff/attention'
+import { groupSummary, tourAction } from '../../features/staff/attention'
 import { formatCountdown, formatTime } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
 import { RunStatus } from '../../features/staff/components/RunStatus'
 import { TourStateBadges } from '../../features/staff/components/TourParts'
 import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
-import { OverviewAnalytics } from '../../features/staff/components/OverviewAnalytics'
-import { TourActivityChart, TourStatusDistribution } from '../../features/staff/components/StaffCharts'
+import { RunningFunnel, StudentsByTour } from '../../features/staff/components/OverviewAnalytics'
+import { AttentionCard, RunResults, SparkCard, StudentsThroughDay, TodayByState } from '../../features/staff/components/StaffCharts'
+import { lastSevenDays, studentsThroughDay, tookPlace } from '../../features/staff/overview-data'
 
 /** Flat white card, the same as the admin dashboard. */
 const CARD = 'rounded-xl bg-white shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
@@ -42,87 +33,47 @@ export default function OverviewPage() {
   if (failed) return <StaffPage><ErrorPanel error={failed.error} onRetry={failed.refetch} /></StaffPage>
   if (!tours.data || !robots.data) return <StaffPage><Header /><LoadingPanel /></StaffPage>
 
-  const counts = operationsCounts(tours.data)
   const running = tours.data.find((tour) => tour.state === 'Running')
   const physical = robots.data.find((robot) => robot.assignable) ?? robots.data[0]
   const next = tours.data.find((tour) => tour.state === 'Ready')
 
-  // Calculate total students and healthy robots
-  const totalStudents = tours.data.reduce((sum, tour) => sum + groupSummary(tour).students, 0)
   // Only physical robots serve Tours (scope §11.6); Gazebo / emulator units are labelled elsewhere, never counted here.
   const physicalRobots = robots.data.filter((robot) => robot.assignable !== false && robot.source !== 'Gazebo' && robot.source !== 'Emulator')
   const readyRobots = physicalRobots.filter(
     (robot) => robot.connectionState === 'Live' && !robot.needsCheck && !robot.headFault && !robot.currentSessionId,
   ).length
 
+  const days = lastSevenDays(tours.data, history.data ?? [], now)
+  const ran = days.reduce((sum, day) => sum + day.total, 0)
+  const completed = days.reduce((sum, day) => sum + day.completed, 0)
+  const today = tours.data.filter(tookPlace)
+  const joined = today.filter((tour) => tour.state === 'Running' || tour.state === 'Completed' || tour.state === 'Cancelled')
+  const day = studentsThroughDay(tours.data, now)
+  const joinedSeries = day.points.flatMap((point) => (point.joined != null ? [point.joined] : []))
+
   return (
     <StaffPage>
       <Header running={running} />
 
-      {/* ── 6 KPI Cards ──────────────────────────────────────────────────────── */}
-      <section aria-label="Số liệu hôm nay" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          to="/staff/tours"
-          icon={CalendarCheck2}
-          label="Buổi hôm nay"
-          value={counts.toursToday}
-          trend={`${counts.ready} sẵn sàng, ${counts.scheduled} chờ chốt`}
-        />
-        <KpiCard
-          to="/staff/live"
-          icon={PlayCircle}
-          label="Tour đang chạy"
-          value={counts.running}
-          trend={counts.running ? 'Đang hoạt động' : 'Tạm nghỉ'}
-          tone={counts.running ? 'info' : undefined}
-          live={counts.running > 0}
-        />
-        <KpiCard
-          to="/staff/robot"
-          icon={Bot}
-          label="Robot rảnh"
-          value={`${readyRobots} / ${physicalRobots.length}`}
-          trend={readyRobots ? 'Sẵn sàng nhận buổi kế' : 'Đang phục vụ hoặc chờ kiểm tra'}
-          trendTone={readyRobots ? 'ok' : undefined}
-        />
-        <KpiCard
-          to="/staff/tours"
-          icon={Users}
-          label="Khách tham quan"
-          value={totalStudents}
-          trend={`${counts.groupsToday} đoàn đã duyệt`}
-        />
-        <KpiCard
-          to="/staff/live"
-          icon={ShieldAlert}
-          label="Sự cố & Hỗ trợ"
-          value={counts.needsAssistance}
-          trend={counts.needsAssistance > 0 ? 'Cần xử lý ngay' : 'Hệ thống ổn định'}
-          tone={counts.needsAssistance > 0 ? 'danger' : undefined}
-          trendTone={counts.needsAssistance > 0 ? 'danger' : 'ok'}
-        />
-        <KpiCard
-          to="/staff/tours"
-          icon={Hourglass}
-          label="Chờ Admin chốt"
-          value={counts.scheduled}
-          trend={counts.scheduled ? 'Chưa bắt đầu được' : 'Không có buổi chờ'}
-        />
+      {/* ── KPI cards with their trend, the Admin dashboard's shape ─────────── */}
+      <section aria-label="Số liệu chính" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <SparkCard to="/staff/history" title="Buổi đã chạy" label="7 ngày qua" value={ran} unit="buổi" note={`${completed} hoàn thành · ${ran - completed} kết thúc sớm / hủy`} series={days.map((day) => day.total)} />
+        <SparkCard to="/staff/history" title="Tỉ lệ hoàn thành" label="7 ngày qua" value={ran ? Math.round((completed / ran) * 100) : '–'} unit="%" note={`${completed} hoàn thành / ${ran} buổi`} series={days.map((day) => day.rate)} />
+        <SparkCard to="/staff/tours" title="Học sinh đã tham gia" label="Hôm nay" value={day.joined} unit={`/ ${day.planned} HS`} note={`${joined.length} buổi đã chạy · còn ${today.length - joined.length} buổi`} series={joinedSeries} />
+        <AttentionCard tours={tours.data} readyRobots={readyRobots} robotCount={physicalRobots.length} />
       </section>
 
       {/* ── Charts: only counts the API returned (no seeded series, no ratings:
           feedback is PENDING GVHD in the scope). ─────────────────────────── */}
-      <section aria-label="Biểu đồ vận hành" className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className={`${CARD} p-5`}>
-          <TourActivityChart tours={tours.data} history={history.data ?? []} now={now} />
-        </div>
-        <div className={`${CARD} p-5`}>
-          <TourStatusDistribution tours={tours.data} />
-        </div>
+      <section aria-label="Biểu đồ vận hành" className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <StudentsThroughDay tours={tours.data} now={now} />
+        <TodayByState tours={tours.data} />
+        <RunResults days={days} />
+        <RunningFunnel tours={tours.data} robots={robots.data} now={now} />
       </section>
-
-      {/* ── Device Telemetry & Attendance Metrics ────────────────────────────── */}
-      <OverviewAnalytics tours={tours.data} robots={robots.data} />
+      <div className="mt-4">
+        <StudentsByTour tours={tours.data} />
+      </div>
 
       {/* ── Running session beside the robot; what needs attention lives in the header bell. ── */}
       <div className="mt-6 grid items-start gap-5 min-[1200px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.85fr)]">
@@ -194,8 +145,7 @@ function Header({ running }: { running?: TourOperation }) {
   const today = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   return (
     <PageHeader
-      scale="console"
-      eyebrow="Trung tâm Điều hành Smart Campus Tour"
+            eyebrow="Trung tâm Điều hành Smart Campus Tour"
       title="Tổng quan vận hành"
       description={`${today.charAt(0).toUpperCase()}${today.slice(1)}. Học sinh tham quan từ xa qua web; một robot thật chạy một buổi tại một thời điểm. Luồng bình thường tự chạy, Staff can thiệp khi cần.`}
       action={
@@ -205,77 +155,6 @@ function Header({ running }: { running?: TourOperation }) {
         </Link>
       }
     />
-  )
-}
-
-/* ── KPI Tile Component ───────────────────────────────────────────────────── */
-
-const TILE_TONE = {
-  info: 'text-[#2563eb]',
-  danger: 'text-[#dc2626]',
-  ok: 'text-[#16a34a]',
-} as const
-
-function KpiCard({
-  to,
-  icon: Icon,
-  label,
-  value,
-  trend,
-  tone,
-  trendTone,
-  live = false,
-}: {
-  to: string
-  icon: LucideIcon
-  label: string
-  value: ReactNode
-  trend?: string
-  tone?: keyof typeof TILE_TONE
-  trendTone?: keyof typeof TILE_TONE
-  live?: boolean
-}) {
-  return (
-    <Link
-      to={to}
-      className={`${CARD} flex flex-col justify-between p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(17,24,39,0.3),0_0_0_1px_rgba(16,24,40,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-bold text-[#64748b] truncate">{label}</span>
-        <span
-          className={`grid size-7 shrink-0 place-items-center rounded-lg ${
-            tone === 'danger'
-              ? 'bg-[#fef2f2] text-[#dc2626]'
-              : tone === 'info'
-              ? 'bg-[#eff6ff] text-[#2563eb]'
-              : 'bg-[#f8fafc] text-[#64748b]'
-          }`}
-        >
-          <Icon size={15} aria-hidden="true" />
-        </span>
-      </div>
-
-      <div className="my-2 flex items-baseline gap-2">
-        {live && <span className="size-2 rounded-full bg-[#10b981] animate-pulse" />}
-        <span
-          className={`text-[26px] font-black tracking-tight tabular-nums leading-none ${
-            tone ? TILE_TONE[tone] : 'text-[#0f172a]'
-          }`}
-        >
-          {value}
-        </span>
-      </div>
-
-      {trend && (
-        <span
-          className={`text-[11px] font-semibold truncate ${
-            trendTone ? TILE_TONE[trendTone] : 'text-[#94a3b8]'
-          }`}
-        >
-          {trend}
-        </span>
-      )}
-    </Link>
   )
 }
 
