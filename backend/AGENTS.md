@@ -33,10 +33,12 @@ backend/
 │   └── scaffold-db
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
-│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Pois,Simulation}/
-│   ├── SmartCampus.Infrastructure/  Authentication/, Persistence/{Repositories,Seeding}/
+│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Invitations,Pois,
+│   │                               Registrations,RegistrationReview,Representative,Simulation}/
+│   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/Invitations/,
+│   │                               Persistence/{Repositories,Seeding}/
 │   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
-│                                    Properties/, Program.cs, appsettings.json
+│                                    Invitations/, Properties/, Program.cs, appsettings.json
 └── tests/
     ├── SmartCampus.UnitTests/
     ├── SmartCampus.IntegrationTests/
@@ -45,14 +47,18 @@ backend/
 
 Current API controllers cover Auth, Admin account management, Admin POI
 management, Representative submission/pre-approval registration, Admin
-registration review, and development SimulationPreview. The Representative
+registration review, owner/Admin invitation support, anonymous Student cookie
+entry/session/leave, and development SimulationPreview. The Representative
 contract and Tour-first transaction are recorded in `docs/architecture.md`
 Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation issuance,
 Resend delivery and minimal Student sessions in Section 3.2.3. Application has matching Auth,
-Accounts, POI, Representative and RegistrationReview features, shared Registrations
+Accounts, POI, Invitations, Representative and RegistrationReview features, shared Registrations
 invariants, and the in-memory pose publisher used by SimulationPreview.
 Infrastructure has specific Auth, account, POI, Representative read and shared
-registration mutation/review repositories. The temporary robot pose endpoint and read-only fleet
+registration mutation/review, invitation and Student-access repositories.
+Invitation cryptography/configuration and the Resend HTTP adapter are in
+Infrastructure; the hosted delivery worker is in Api and dispatches Application
+claim/result commands before/after external HTTP. The temporary robot pose endpoint and read-only fleet
 pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
 cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
@@ -81,6 +87,7 @@ backend/src/SmartCampus.Application/
 ├── Common/
 │   ├── Abstractions/
 │   │   ├── Authentication/          authentication use-case boundaries
+│   │   ├── Invitations/             code/email boundaries and invitation settings
 │   │   ├── Messaging/               ICommand<T>, IQuery<T>
 │   │   └── Persistence/             commit boundary and feature repository interfaces
 │   ├── Authentication/              shared role resolution
@@ -99,16 +106,19 @@ backend/src/SmartCampus.Infrastructure/
 ├── Persistence/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
-│   ├── Repositories/                 current Auth, Accounts, POI management and Representative implementations
+│   ├── Repositories/                 Auth, Accounts, POI, Representative, shared Registrations,
+│   │                                RegistrationReview, Invitations and StudentAccess
 │   └── Seeding/                      current demo POI seeding
-├── Integrations/                     future: external adapters without Api/Hub references
+├── Integrations/Invitations/         current code protection, configuration, email template and Resend adapter
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Api/
 ├── Common/{Requests,Responses}/
 ├── Controllers/                      AuthController, AdminAccountsController,
 │                                     AdminPoisController, RepresentativeController,
-│                                     SimulationController
+│                                     AdminRegistrationsController, InvitationsController,
+│                                     StudentAccessController, SimulationController
+├── Invitations/                      hosted email worker; scoped MediatR claim/result dispatch
 ├── ExceptionHandling/
 ├── Hubs/                             SimulationHub/Preview helpers; fleet/operations future
 ├── Properties/
@@ -172,8 +182,9 @@ Decisions and operating notes are in
 `backend/database/README.md`. This did not migrate v1.0 data. Do not manually
 edit generated entities to stand in for a SQL schema change.
 V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
-no per-Tour dwell editor or operator assignment. Branch use cases,
-roster locking and retention cleanup remain implementation work.
+no per-Tour dwell editor or operator assignment. Production branch use cases,
+Tour readiness/state writers and retention cleanup remain implementation work;
+pre-approval roster mutations already enforce the Tour write window and locks.
 
 `backend/database/smart-campus-tour-schema-v1.1.sql` and the scaffolded entities
 contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`, `RouteStop`,
@@ -184,8 +195,9 @@ invitation/session records represent student access; BranchRequests represent
 proposed route changes. `RowVersion` is a SQL Server concurrency token on
 `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`,
 `TourAllowedBranch`, `BranchRequest`, and `Poi`. Database uniqueness enforces
-selected invariants, while session/request workflows and cross-row consistency
-still need application code.
+selected invariants. Application invitation/session commands enforce admission,
+expiry, revocation and cross-row checks under Tour-first locks; production
+branch/request orchestration remains separate implementation work.
 
 `TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
 design, **not current tables or entities**. A navigation leg remains a
@@ -299,6 +311,15 @@ support use the same transaction. Writers of an existing registration acquire
 locks only through `IRegistrationRepository.LockRegistrationAsync`, which owns
 the Tour-first order; create and Tour-only writers lock the Tour first. Do not
 lock a registration or its rows by another path.
+
+Student join/session/leave and email claim/result commands also use this
+registration transaction and acquire the Tour lock. Session is a command:
+heartbeats persist LastSeenAt/ExpiresAt. Closing idle sessions uses a scoped
+ExecuteUpdate before insertion to satisfy the filtered unique index, within
+the same transaction; it is not an independent commit. The worker commits an
+email claim before calling the Infrastructure sender and records a sanitized
+result through a new scoped command. Never put external email HTTP inside the
+SQL transaction or automatically retry an uncertain send.
 
 **Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
 `ValidationBehavior` -> Application query handler -> Application read boundary

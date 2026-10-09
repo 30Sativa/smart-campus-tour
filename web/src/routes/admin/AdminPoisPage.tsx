@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowDownUp, MapPin, Plus } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { AdminErrorPanel, AdminPage, AdminStatusBadge, EmptyState, Notice, TableFrame } from '../../features/administration/AdminUi'
 import { useDebouncedValue } from '../../features/administration/use-debounced-value'
 import { poiRequestError } from '../../features/administration/pois/errors'
@@ -13,6 +13,10 @@ const PAGE_SIZE = 20
 type ActiveFilter = 'all' | 'active' | 'inactive'
 
 export default function AdminPoisPage() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const navigationState = location.state as { createdPoiName?: unknown } | null
+  const createdPoiName = typeof navigationState?.createdPoiName === 'string' ? navigationState.createdPoiName : null
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<PoiSort | ''>('name')
   const [page, setPage] = useState(1)
@@ -41,6 +45,12 @@ export default function AdminPoisPage() {
         description="Tạo và cập nhật điểm tham quan. POI giữ nguyên mã định danh khi đổi nội dung hoặc pose."
         action={<Link to="/admin/pois/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo POI</Link>}
       />
+
+      {createdPoiName && <div className="mb-4">
+        <Notice action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={() => navigate('/admin/pois', { replace: true, state: null })}>Đóng thông báo</button>}>
+          Đã tạo POI “{createdPoiName}” thành công. POI mới ở trạng thái không khả dụng cho đến khi được kích hoạt.
+        </Notice>
+      </div>}
 
       <div className="mb-4">
         <Notice tone="warn">Map và tọa độ hiển thị là dữ liệu cấu hình, chưa có trạng thái xác minh bằng robot thật. IsActive chỉ cho phép chọn POI khi chuẩn bị Route; không có nghĩa POI đã sẵn sàng điều hướng.</Notice>

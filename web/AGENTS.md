@@ -141,10 +141,13 @@ web/
     │   ├── landing/       landing.css/content/motion and sections/
     │   ├── quest-stream/  browser livestream capability (WebRTC/WHEP)
     │   ├── representative/ registration/invitation UI, hooks, nav and format
+    │   ├── registrations/ shared live roster/state vocabulary and owner/Admin
+    │   │                  invitation support with its API binding
     │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
     │   │                  reason, attention, query/realtime hooks and
     │   │                  operation, route, robot and twin components
-    │   ├── student/       remote-Tour flow and student status vocabulary
+    │   ├── student/       legacy fixture flow/status plus invitation/ SQL Tour
+    │   │                  cookie entry, session recovery and leave
     │   └── visitor/       legacy visitor flow, content, format and map UI
     ├── components/ui/    multi-feature neutral primitives and shared console
     │                     chrome; tests remain next to their owner
@@ -177,6 +180,14 @@ web/
   operations vocabulary. Account/POI labels stay in `administration/admin-status.ts`;
   operational status labels stay in `staff/status.ts`. Representative has no
   remaining Staff UI dependency.
+- `features/registrations/` owns `RosterPreview`, roster row types and live
+  SQL registration-state vocabulary shared by Administration and Representative.
+  Its `invitations/` owns `InvitationPanel` and the owner/Admin support API.
+  It does not import either consumer feature. Student cookie access belongs in
+  `features/student/invitation/`, separate from account auth and support writes.
+  The current small entry page owns its query/mutations and calls `apiClient`
+  with `auth: false` and `credentials: 'include'`; it never stores session
+  credentials in JavaScript or uses account refresh on a Student 401.
 - `api/` owns shared HTTP/SignalR transport and cross-feature wire primitives.
   New feature-specific endpoint calls and contracts live under their owning
   feature's `api/`. Existing `api/contracts/{admin,staff,representative,
@@ -582,10 +593,16 @@ refetch behavior remain unimplemented.
 web/scripts/verify
 ```
 
-Runs, in order: `npm ci` -> `npm run typecheck` -> `npm run lint` ->
+Runs, in order: `npm ci` -> `npm run maps:check` -> `npm run typecheck` -> `npm run lint` ->
 `npm run test` -> `npm run build`. Build is part of verify — a clean typecheck
 can still fail at build time. `npm test` is `vitest run` (single run, no watch)
 so it exits and is CI-safe.
+
+`.github/workflows/web-verify.yml` runs this same script on relevant pull
+requests and main/develop pushes. Static map parity reads the checked-in
+`robot/robot_maps/` source; it does not launch ROS, a robot or Fleet Emulator.
+No SQL connection or production credentials are needed. Cookie acceptance
+across deployed FE/BE sites still requires real HTTPS/browser verification.
 
 Tests run in jsdom. Do not try to assert on WebGL/Canvas output there — the R3F
 setup is checked by rendering `/staff/digital-twin` in a browser.

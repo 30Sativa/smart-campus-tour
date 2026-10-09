@@ -27,7 +27,7 @@ export default function RepDashboardPage() {
       <RepHero next={next} />
       {needsFix && <RepAttention registration={needsFix} />}
       <div className="rep-stats" style={{ marginTop: 'clamp(40px, 5vw, 64px)' }}>
-        <div className="rep-stat"><b className="rep-stat-value num">{tours.data?.pagination.totalItems}</b><span className="rep-stat-label">Buổi nhận đăng ký<small>Các buổi còn chỗ cho đoàn của bạn</small></span></div>
+        <div className="rep-stat"><b className="rep-stat-value num">{tours.data?.pagination.totalItems}</b><span className="rep-stat-label">Buổi nhận đăng ký<small>Các buổi đang nhận đăng ký đoàn</small></span></div>
         <div className="rep-stat"><b className="rep-stat-value num">{registrations.data?.pagination.totalItems}</b><span className="rep-stat-label">Đăng ký của tôi<small>Mọi đoàn bạn đã gửi</small></span></div>
         <div className="rep-stat"><b className="rep-stat-value num">{pending.data?.pagination.totalItems}</b><span className="rep-stat-label">Chờ duyệt<small>Đang đợi Admin xem danh sách</small></span></div>
       </div>

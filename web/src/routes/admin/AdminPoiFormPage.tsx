@@ -242,11 +242,10 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
 
     if (isCreate) {
       create.mutate(input, {
-        onSuccess: (response) => {
-          const id = response.data?.id
-          if (id) navigate(`/admin/pois/${id}`, { replace: true })
-          else navigate('/admin/pois', { replace: true })
-        },
+        onSuccess: () => navigate('/admin/pois', {
+          replace: true,
+          state: { createdPoiName: input.name },
+        }),
       })
     } else if (poi.data && !isCreate) {
       update.mutate({ id: poi.data.id, input: { ...input, expectedRowVersion: draft.rowVersion } }, {

@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPoiFormPage from '../../../routes/admin/AdminPoiFormPage'
+import AdminPoisPage from '../../../routes/admin/AdminPoisPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import { poiQueryKeys } from './hooks'
 import type { PoiDetails } from './types'
@@ -41,12 +42,20 @@ function stubApi(handler: FetchHandler) {
   return fetchMock
 }
 
-function renderAt(path: string) {
+function HistoryControls() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return <><button onClick={() => navigate(-1)}>Browser Back</button><div aria-label="Current path">{location.pathname}</div></>
+}
+
+function renderAt(path: string, showCatalog = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={showCatalog ? ['/admin/pois', path] : [path]}>
+        {showCatalog && <HistoryControls />}
         <Routes>
+          <Route path="/admin/pois" element={showCatalog ? <AdminPoisPage /> : <div>Danh sách POI</div>} />
           <Route path="/admin/pois/new" element={<AdminPoiFormPage />} />
           <Route path="/admin/pois/:poiId" element={<AdminPoiFormPage />} />
         </Routes>
@@ -90,7 +99,7 @@ describe('Admin POI form', () => {
 
   it('creates with yaw zero and uses the persisted decimal range in browser constraints', async () => {
     let createPayload: Record<string, unknown> | null = null
-    stubApi((url, init) => {
+    const fetchMock = stubApi((url, init) => {
       if (url.pathname === '/api/admin/pois' && init?.method === 'POST') {
         createPayload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: true, message: 'POI created inactive.', data: { id: 'poi-created' }, errors: null })
@@ -98,9 +107,13 @@ describe('Admin POI form', () => {
       if (url.pathname === '/api/admin/pois/poi-created') {
         return jsonResponse({ success: true, message: 'POI retrieved.', data: poiDetails({ id: 'poi-created' }), errors: null })
       }
-      return jsonResponse({ success: true, message: 'POIs retrieved.', data: [], pagination: {}, errors: null })
+      return jsonResponse({ success: true, data: [poiDetails({ id: 'poi-created', name: 'New library' })], pagination: { page: 1, pageSize: 20, totalPages: 1, totalItems: 1 } })
     })
-    renderAt('/admin/pois/new')
+    const { client } = renderAt('/admin/pois/new', true)
+    client.setQueryDefaults(poiQueryKeys.all, { staleTime: Infinity })
+    client.setQueryData(poiQueryKeys.list({ sort: 'name', page: 1, size: 20 }), {
+      data: [], pagination: { page: 1, pageSize: 20, totalPages: 1, totalItems: 0 },
+    })
 
     fillCreateForm()
     expect(screen.queryByRole('button', { name: 'Tạo POI không khả dụng' })).not.toBeInTheDocument()
@@ -119,6 +132,32 @@ describe('Admin POI form', () => {
 
     await waitFor(() => expect(createPayload).not.toBeNull())
     expect(createPayload).toMatchObject({ name: 'New library', mapKey: 'map2-v2', mapFrame: 'map', yaw: 0 })
+    expect(await screen.findByRole('heading', { name: 'Quản lý POI' })).toBeVisible()
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois')
+    expect(screen.getByRole('status')).toHaveTextContent('Đã tạo POI “New library” thành công.')
+    expect(await screen.findByRole('link', { name: 'New library' })).toHaveAttribute('href', '/admin/pois/poi-created')
+    expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/admin/pois/poi-created'))).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng thông báo' }))
+    expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'New library' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Browser Back' }))
+    await waitFor(() => expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois'))
+    expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
+  })
+
+  it('keeps the create draft and displays an error without a success notice when the API rejects it', async () => {
+    stubApi(() => jsonResponse({ success: false, message: 'POI creation failed.', data: null, errors: null }, 400))
+    renderAt('/admin/pois/new', true)
+    fillCreateForm()
+    fireEvent.change(screen.getByLabelText('Yaw (rad)'), { target: { value: '0' } })
+    reviewCreate()
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
+    expect(await screen.findByText('POI creation failed.')).toBeVisible()
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois/new')
+    expect(screen.getByLabelText('Tên POI')).toHaveValue('New library')
+    expect(screen.getByLabelText('X (m)')).toHaveValue(0)
+    expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
   })
 
   it('keeps dirty fields through a query refetch and submits the original RowVersion on conflict', async () => {

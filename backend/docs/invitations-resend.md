@@ -88,6 +88,47 @@ match configured CORS or API origin before cookie mutations.
 SQL rooms show committed Tour state. Livestream/robot content/AI need their own
 integrations; no fixture data is displayed as a real invited Tour.
 
+## Browser/deployment checks
+
+Student requests use `auth: false` and `credentials: 'include'`, separate from
+account JWT/refresh. The Web route normalizes GUID case to the backend's canonical
+cookie path and remounts entry state when the Tour changes. Join/leave cancel
+pending heartbeats; confirmed 401/403/409 hides cached room access. Network
+failures show stale information and permit explicit session recovery. The UI
+does not promise a fixed idle timeout because SessionIdleMinutes is configurable.
+
+SameSite=None/Secure and exact credentialed CORS are necessary transport
+settings, but do not override browser third-party-cookie restrictions.
+Cross-origin and cross-site are different: HTTPS FE and API subdomains of the
+same site can still require CORS. Prefer a supported same-site deployment or
+same-origin API proxy when unrelated sites would require third-party cookies;
+preserve the host-only HttpOnly cookie, Secure flag and allowed-origin checks.
+See [MDN Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
+and [third-party cookies](https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies).
+
+Before deployment, test with the actual HTTPS FE/API domains in normal and
+private browser profiles, including profiles that block third-party cookies:
+
+1. Join with an authorized disposable invitation; inspect that Set-Cookie is
+   accepted, then /session sends the cookie and returns 200 without an account JWT.
+2. Reload and open another tab: the same cookie retains one SQL session. A
+   separate browser with the same code gets 409 without displacing the first.
+3. Leave: cookie is deleted, old /session returns 401, and a fresh join succeeds.
+   Revoke/reissue from the owner/Admin: old code and cookies stop working after
+   the next heartbeat; resend keeps them working.
+4. Expire the test invitation or idle session; verify generic 401 and no access
+   extension. Disconnect/reconnect and verify the stale warning clears only on
+   successful recovery. Verify forbidden origins cannot mutate cookies/sessions.
+5. Check the TLS proxy's public scheme/host and client-IP forwarding against
+   its trusted-proxy configuration; the join limiter partitions on RemoteIpAddress.
+   Do not trust arbitrary forwarded headers or bypass local-network/certificate
+   restrictions. Use the deployed API URL in the FE build.
+
+Automated .NET HTTP assertions verify headers/origin/admission against disposable
+SQL, not browser cookie storage. jsdom tests verify UI/cache behavior, not HTTPS
+or cookie acceptance. Real provider delivery needs a separately authorized test
+recipient; no email is transmitted by verification.
+
 ## Verification limits
 
 Run scripts/verify backend and scripts/verify web. SQL tests require

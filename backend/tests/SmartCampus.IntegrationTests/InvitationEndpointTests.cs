@@ -51,6 +51,57 @@ public sealed class InvitationEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task CookieTransport_AllowedOrigin_LogoutAndRejoin_PreserveAdmissionAndAuditBoundaries()
+    {
+        await using var f = await Fixture.CreateAsync();
+        const string origin = "https://tour.example.test";
+        var settings = Settings().ToDictionary(p => p.Key, p => p.Value);
+        settings["Cors__AllowedOrigins__0"] = origin;
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitation = item.GetProperty("id").GetGuid();
+        var code = await CodeAsync(f, invitation);
+        async Task<HttpResponseMessage> Request(string operation, string requestOrigin, string? cookie = null)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/student/tours/{f.TourId:D}/{operation}");
+            request.Headers.Add("Origin", requestOrigin);
+            if (cookie is not null) request.Headers.Add("Cookie", cookie);
+            if (operation == "join") request.Content = JsonContent.Create(new { accessCode = code });
+            return await host.Client.SendAsync(request);
+        }
+        using var join = await Request("join", origin);
+        Assert.Equal(HttpStatusCode.OK, join.StatusCode);
+        Assert.Equal(origin, join.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("true", join.Headers.GetValues("Access-Control-Allow-Credentials").Single());
+        Assert.True(join.Headers.CacheControl!.NoStore);
+        var setCookie = join.Headers.GetValues("Set-Cookie").Single();
+        Assert.Contains($"path=/api/student/tours/{f.TourId:D}", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("samesite=none", setCookie, StringComparison.OrdinalIgnoreCase);
+        var cookie = setCookie.Split(';')[0];
+        using var forbidden = await Request("leave", "https://untrusted.example.test", cookie);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        Assert.False(forbidden.Headers.Contains("Set-Cookie"));
+        using var session = await Request("session", origin, cookie);
+        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
+        using var leave = await Request("leave", origin, cookie);
+        Assert.Equal(HttpStatusCode.OK, leave.StatusCode);
+        Assert.Contains("expires=", leave.Headers.GetValues("Set-Cookie").Single(), StringComparison.OrdinalIgnoreCase);
+        using var ended = await Request("session", origin, cookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, ended.StatusCode);
+        using var rejoin = await Request("join", origin);
+        Assert.Equal(HttpStatusCode.OK, rejoin.StatusCode);
+        await using var db = f.Context();
+        Assert.Equal(2, await db.BrowserSessions.CountAsync());
+        Assert.Equal(1, await db.BrowserSessions.CountAsync(s => s.EndedAt == null));
+        Assert.Equal("LOGOUT", (await db.BrowserSessions.SingleAsync(s => s.EndedAt != null)).EndReason);
+        Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "INVITATION_ENTERED" && a.EntityId == invitation.ToString("D")));
+    }
+
+    [SchemaV11Fact]
     public async Task LeaveFailure_StillClearsCookie_AndJoinLimitReturnsTheNormalEnvelope()
     {
         await using var f = await Fixture.CreateAsync();
