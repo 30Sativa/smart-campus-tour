@@ -2,10 +2,14 @@
 
 ## Workflow and scope
 
-At `/admin/pois/new`, enter a name, click a position on the ROS map, then click
-a direction to commit body heading. Create saves an inactive POI through the
-existing API. Edit uses the same picker; numeric X/Y/yaw fields are available
-under the fine-tuning disclosure. A new position clears yaw so the Admin must
+At `/admin/pois/new`, enter a name, then choose the pose input method:
+**Chọn trên bản đồ** or **Nhập tọa độ thủ công**. The map method uses a position
+click followed by a heading click and shows the resulting X/Y/yaw beside the
+map. The manual method shows numeric X/Y/yaw inputs and a POI preview, without
+pointer-selection controls or a separate heading dial. Create saves an inactive
+POI through the existing API. Edit uses the same methods. Switching methods
+preserves the draft pose and ends any unfinished pointer selection; a missing
+registered map uses manual entry only. A new position clears yaw so the Admin must
 choose a heading or enter one numerically. Selecting a different map clears
 all three draft pose fields. No request is sent until Save.
 
@@ -16,7 +20,7 @@ coordinates. Use Reload to restore the persisted draft after a conflict.
 Numeric input remains an alternative to pointer interaction. Editing numeric
 pose fields exits the selection mode.
 The form uses application validation so missing/invalid numeric values report
-an error even when fine-tuning is collapsed. Escape exits selection mode but
+an error even in map mode. Escape exits selection mode but
 does not invent a yaw; Save still requires all three pose values.
 
 The API usage flags govern editing. Route/history locks keep the pose viewable

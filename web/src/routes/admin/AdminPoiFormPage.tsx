@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Check, ChevronDown, FileText, MapPinned, Mic, RotateCcw, Save, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, FileText, Keyboard, MapPinned, Mic, RotateCcw, Save, TriangleAlert } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { AdminErrorPanel, AdminPage, Notice } from '../../features/administration/AdminUi'
 import { poiRequestError } from '../../features/administration/pois/errors'
@@ -7,7 +7,6 @@ import { useCreatePoi, usePoi, useSetPoiActive, useUpdatePoi } from '../../featu
 import type { CreatePoiInput, PoiDetails } from '../../features/administration/pois/types'
 import { DEFAULT_POI_MAP, OCCUPANCY_MAPS, occupancyMapFor, type OccupancyMap } from '../../features/administration/pois/map/catalog'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../features/administration/pois/map/PoiPosePicker'
-import { YawDial } from '../../features/administration/pois/map/YawDial'
 import { cellAtPose, rosToImage } from '../../features/administration/pois/map/occupancy-grid'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass, buttonClass } from '../../components/ui/ui-classes'
@@ -43,7 +42,7 @@ const WORDS_PER_SECOND = 2.6
 
 const STEPS = [
   { title: 'Thông tin', hint: 'Tên & mô tả' },
-  { title: 'Vị trí & hướng', hint: 'Chọn trên bản đồ' },
+  { title: 'Vị trí & hướng', hint: 'Bản đồ hoặc nhập tay' },
   { title: 'Thuyết minh', hint: 'Không bắt buộc' },
   { title: 'Kiểm tra & tạo', hint: 'Xem lại lần cuối' },
 ]
@@ -102,6 +101,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmAvailability, setConfirmAvailability] = useState(false)
   const [pickerMode, setPickerMode] = useState<PickerMode>(isCreate ? 'position' : 'pan')
+  const [poseInputMethod, setPoseInputMethod] = useState<'map' | 'manual'>('map')
   const form = draft.form
   const selectedMap = occupancyMapFor(form.mapKey, form.mapFrame)
   const pickerPose: PickerPose = { x: numberValue(form.x), y: numberValue(form.y), yaw: numberValue(form.yaw) }
@@ -109,8 +109,10 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   const busy = create.isPending || update.isPending
   const editable = isCreate || poi.data?.usage.canEditContentAndAvailability === true
   const poseEditable = isCreate || poi.data?.usage.canEditPose === true
+  const manualPose = poseInputMethod === 'manual' || !selectedMap
+  const showPoseFields = manualPose || !poseEditable
   const pageTitle = isCreate ? 'Tạo POI' : 'Chi tiết POI'
-  const picking = poseEditable && pickerMode !== 'pan'
+  const picking = poseEditable && !manualPose && pickerMode !== 'pan'
   // Create walks the sections as steps; Edit shows the same sections as free tabs.
   const [step, setStep] = useState(0)
   const [reached, setReached] = useState(0)
@@ -144,12 +146,20 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     if (field === 'x' || field === 'y' || field === 'yaw') setPickerMode('pan')
   }
 
+  const selectPoseInputMethod = (method: 'map' | 'manual') => {
+    if (!poseEditable || busy) return
+    setPoseInputMethod(method)
+    // Switching methods keeps the draft; only an unfinished pointer selection ends.
+    setPickerMode(method === 'map' && (pickerPose.x == null || pickerPose.y == null) ? 'position' : 'pan')
+    setFormError(null)
+  }
+
   const selectMap = (mapKey: string) => {
     if (!poseEditable || busy) return
     const map = OCCUPANCY_MAPS.find((entry) => entry.mapKey === mapKey)
     if (!map) return
     setDraft((current) => ({ ...current, form: { ...current.form, mapKey: map.mapKey, mapFrame: map.frameId, x: '', y: '', yaw: '' } }))
-    setPickerMode('position')
+    setPickerMode(poseInputMethod === 'manual' ? 'pan' : 'position')
     setFormError(null)
     create.reset()
     update.reset()
@@ -188,7 +198,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     const y = numberValue(form.y)
     const yaw = numberValue(form.yaw)
     if (x == null || y == null || yaw == null) return { error: 'Nhập x, y và yaw bằng số hợp lệ.', step: 1 }
-    if (poseEditable && pickerMode !== 'pan') return { error: 'Chốt vị trí và hướng, hoặc hủy thao tác chọn trên bản đồ trước khi lưu.', step: 1 }
+    if (picking) return { error: 'Chốt vị trí và hướng, hoặc hủy thao tác chọn trên bản đồ trước khi lưu.', step: 1 }
     if (poseEditable && (Math.abs(x) > 999999.9999 || Math.abs(y) > 999999.9999)) return { error: 'x và y phải nằm trong giới hạn số của hệ thống.', step: 1 }
     if (poseEditable && (yaw < -3.141593 || yaw > 3.141593)) return { error: 'Yaw phải nằm trong khoảng −π đến π radian.', step: 1 }
     const poseChanged = isCreate || !poi.data || form.mapKey !== poi.data.mapKey || form.mapFrame !== poi.data.mapFrame ||
@@ -338,36 +348,49 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             </Field>
           </FormSection>
 
-          <FormSection id="poi-section-pose" step={2} active={step === 1} done={hasPosition && hasYaw} title="Map và pose" description="X/Y tính bằng mét; yaw bằng radian trong khoảng −π đến π." tag="Bắt buộc" delay={60}>
+          <FormSection id="poi-section-pose" step={2} active={step === 1} done={hasPosition && hasYaw} title="Vị trí & hướng robot" description="Chọn trên bản đồ hoặc nhập tọa độ đã đo. Hai cách dùng chung một vị trí POI." tag="Bắt buộc" delay={60}>
             <Field label="Bản đồ" htmlFor="poi-map" hint={poseEditable ? 'Đổi bản đồ sẽ xóa pose trong bản nháp và yêu cầu chọn lại vị trí, hướng.' : undefined}>
               <select id="poi-map" disabled={!poseEditable || busy} value={selectedMap?.mapKey ?? '__stored__'} onChange={(event) => selectMap(event.target.value)} className={inputClass}>
                 {!selectedMap && <option value="__stored__">{form.mapKey} / {form.mapFrame} (chưa có bản đồ tương ứng)</option>}
                 {OCCUPANCY_MAPS.map((map) => <option key={map.mapKey} value={map.mapKey}>Map 2 ({map.mapKey}, frame {map.frameId})</option>)}
               </select>
             </Field>
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(270px,1fr)]">
-            <div className="min-w-0">{selectedMap ? <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} /> : <Notice tone="info">Chưa có ảnh cho đúng map/frame này. Hệ thống giữ nguyên tọa độ đã lưu và không hiển thị chúng trên bản đồ khác.</Notice>}</div>
-            <div className="min-w-0 space-y-4">
-
-            <div className="rounded-2xl border border-[#e2e8f0] bg-[#fbfdff] p-4">
-              <YawDial yaw={yaw} disabled={!poseEditable || busy || !hasPosition} onChange={(value) => change('yaw', String(value))} />
-              {poseEditable && !hasPosition && <p className="mt-3 text-xs text-[#7c94a7]">Chọn vị trí trước, sau đó đặt hướng thân.</p>}
-            </div>
-
-            <details open={isCreate || !selectedMap || !poseEditable} className="group rounded-2xl border border-[#e2e8f0]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-[#334155] [&::-webkit-details-marker]:hidden">
-                Tinh chỉnh tọa độ
-                <ChevronDown size={16} className="text-[#86a0b3] transition-transform duration-300 group-open:rotate-180" aria-hidden="true" />
-              </summary>
-              <div className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
+            {poseEditable && <fieldset>
+              <legend className={`${labelClass} mb-2`}>Cách đặt vị trí POI</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  { value: 'map', title: 'Chọn trên bản đồ', hint: 'Bấm vị trí, sau đó bấm hướng robot.', icon: MapPinned },
+                  { value: 'manual', title: 'Nhập tọa độ thủ công', hint: 'Nhập X, Y và yaw từ số đã đo.', icon: Keyboard },
+                ] as const).map(({ value, title, hint, icon: Icon }) => <label key={value} className={`flex items-start gap-3 rounded-xl border p-3.5 transition-colors ${manualPose === (value === 'manual') ? 'border-[#2d719e] bg-[#f1f7fc]' : 'border-[#e2e8f0] bg-white'} ${busy || (value === 'map' && !selectedMap) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-[#a8cde6]'}`}>
+                  <input type="radio" name="poi-pose-method" value={value} checked={manualPose === (value === 'manual')} disabled={busy || (value === 'map' && !selectedMap)} onChange={() => selectPoseInputMethod(value)} aria-label={title} className="mt-1 size-4 shrink-0 accent-[#2d719e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b9dc9]" />
+                  <Icon size={19} className="mt-0.5 shrink-0 text-[#54738a]" aria-hidden="true" />
+                  <span><span className="block text-sm font-semibold text-[#173b59]">{title}</span><span className="mt-1 block text-xs leading-5 text-[#647b8d]">{hint}</span></span>
+                </label>)}
+              </div>
+              <p className="mt-2 text-xs text-[#647b8d]">Chuyển cách nhập giữ nguyên tọa độ đang có. Chỉ đổi bản đồ mới xóa vị trí và hướng.</p>
+            </fieldset>}
+            {!selectedMap && <Notice tone="info">Chưa có ảnh cho đúng map/frame này. Hệ thống giữ nguyên tọa độ đã lưu và không hiển thị chúng trên bản đồ khác.</Notice>}
+            <div className={`grid items-start gap-4 ${manualPose ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : 'xl:grid-cols-[minmax(0,1fr)_280px]'}`}>
+            <div hidden={manualPose} className={manualPose ? 'hidden' : 'min-w-0'}>{selectedMap && <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy && !manualPose} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} />}</div>
+            <div hidden={!showPoseFields} className={showPoseFields ? 'min-w-0 rounded-xl border border-[#e2e8f0] p-4' : 'hidden'}>
+              <h3 className="text-sm font-semibold text-[#173b59]">{poseEditable ? 'Nhập vị trí & hướng' : 'Tọa độ đã lưu'}</h3>
+              <p className="mt-1 mb-4 text-xs leading-5 text-[#647b8d]">X/Y tính bằng mét; yaw tính bằng radian (−π đến π). Nhập 0 cho yaw nếu robot hướng theo trục +X.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="MapKey" htmlFor="poi-map-key"><input id="poi-map-key" readOnly disabled={!poseEditable} value={form.mapKey} className={`${inputClass} bg-[#f8fafc] font-mono`} /></Field>
                 <Field label="MapFrame" htmlFor="poi-map-frame"><input id="poi-map-frame" readOnly disabled={!poseEditable} value={form.mapFrame} className={`${inputClass} bg-[#f8fafc] font-mono`} /></Field>
                 <Field label="X (m)" htmlFor="poi-x"><input id="poi-x" type="number" step="0.0001" required disabled={!poseEditable || busy} value={form.x} onChange={(event) => change('x', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
                 <Field label="Y (m)" htmlFor="poi-y"><input id="poi-y" type="number" step="0.0001" required disabled={!poseEditable || busy} value={form.y} onChange={(event) => change('y', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field>
                 <div className="sm:col-span-2"><Field label="Yaw (rad)" htmlFor="poi-yaw"><input id="poi-yaw" type="number" step="0.000001" min="-3.141593" max="3.141593" required disabled={!poseEditable || busy} value={form.yaw} onChange={(event) => change('yaw', event.target.value)} className={`${inputClass} font-mono tabular-nums`} /></Field></div>
               </div>
-            </details>
             </div>
+            {manualPose ? <PoiPreview map={selectedMap} name={form.name} description={form.description} pose={pickerPose} seconds={form.narrationSeconds} hasAudio={!!form.audioUrl.trim()} active={!isCreate && poi.data!.isActive} /> : poseEditable && <section className="rounded-xl bg-[#f1f7fc] p-4" aria-label="Tọa độ đã chọn">
+              <h3 className="text-sm font-semibold text-[#173b59]">Tọa độ đã chọn</h3>
+              <dl className="mt-3 space-y-2 text-sm">
+                {([['X (m)', x?.toFixed(4)], ['Y (m)', y?.toFixed(4)], ['Yaw (rad)', yaw?.toFixed(6)]]).map(([label, value]) => <div key={label} className="flex justify-between gap-3"><dt className="text-[#647b8d]">{label}</dt><dd className="font-mono tabular-nums text-[#173b59]">{value ?? 'Chưa chọn'}</dd></div>)}
+              </dl>
+              <p className="mt-4 text-xs leading-5 text-[#647b8d]">Muốn nhập hoặc tinh chỉnh số chính xác? Chuyển sang nhập tọa độ thủ công.</p>
+              <button type="button" disabled={busy} onClick={() => selectPoseInputMethod('manual')} className={`${buttonClass('secondary', 'sm')} mt-3`}>Nhập / chỉnh tọa độ</button>
+            </section>}
             </div>
             {!poseEditable && <p className="rounded-xl bg-[#f4f8fb] px-3 py-2 text-xs text-[#647b8d]">Pose bị khóa theo lịch sử sử dụng, không chỉ theo trạng thái IsActive.</p>}
           </FormSection>
@@ -408,7 +431,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             <div className="flex flex-wrap gap-2">
               {isCreate && step === 2 && !words && <button type="button" onClick={() => goNext(lastStep)} className={buttonClass('ghost')}>Bỏ qua bước này</button>}
               {isCreate && step < lastStep && <button type="button" onClick={() => goNext()} className={buttonClass('primary')}>Tiếp tục<ArrowRight size={15} aria-hidden="true" /></button>}
-              <button type="submit" disabled={busy || !editable || (poseEditable && pickerMode !== 'pan')} aria-describedby="poi-submit-hint" className={`${buttonClass('primary')} ${isCreate && step < lastStep ? 'hidden' : ''}`}><Save size={16} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>
+              {(!isCreate || step === lastStep) && <button type="submit" disabled={busy || !editable || picking} aria-describedby="poi-submit-hint" className={buttonClass('primary')}><Save size={16} aria-hidden="true" />{create.isPending ? 'Đang tạo…' : update.isPending ? 'Đang lưu…' : isCreate ? 'Tạo POI không khả dụng' : 'Lưu thay đổi'}</button>}
             </div>
           </div>
         </div>
@@ -571,6 +594,7 @@ function StepNav({ steps, step, reached, mode, done, onSelect }: { steps: typeof
             <li key={item.title} className="flex min-w-0 flex-1 items-center last:flex-none">
               <button
                 type="button" disabled={locked} onClick={() => onSelect(index)}
+                aria-label={item.title}
                 aria-current={current ? 'step' : undefined}
                 className="flex min-w-0 items-center gap-2.5 rounded-xl p-1 text-left transition-colors hover:bg-[#f1f7fc] disabled:cursor-not-allowed disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]"
               >
