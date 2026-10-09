@@ -845,7 +845,8 @@ Any
 invitation history (including inactive/revoked rows) blocks review with
 INVITATION_BOUNDARY to avoid changing existing access without atomic revocation.
 APPROVED roster stays read-only to Representative; invitation support is separate.
-Admin email correction, approval reversal and READY/runtime remain outside scope.
+Admin email correction is implemented in Section 3.2.4. Approval reversal and
+READY/runtime remain outside this review slice.
 
 Live routes `/admin/registrations` and `/admin/registrations/pending` use only
 this HTTP contract, with no mock fallback. Owner-keyed live query caches are
@@ -924,8 +925,90 @@ Live Admin review and owner Representative detail share real invitation support.
 SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state;
 non-GUID fixtures retain the labelled demo. No simulated stream/AI/robot state
 is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
-email correction/roster replacement after issuance and retention remain separate.
+roster replacement after issuance and retention remain separate. Admin email
+correction is implemented below.
 HTTPS and browser cookie/local-network permissions still apply to local BE use.
+
+#### 3.2.4 Admin roster email correction (implemented)
+
+This integrates backend and the live Admin registration drawer without a schema
+change. Business authority is scope Section 5.2; it is a single-row correction,
+not approval reversal or roster replacement.
+
+POST /api/admin/registrations/{id}/roster/{rowId}/email requires the Admin JWT
+role. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
+expectedRosterRowVersion, expectedInvitationRowVersion?}. UUID requestId and
+8-byte base64 version tokens are required; the invitation token is null only
+when the selected row has no invitation. Unknown JSON properties are rejected;
+actor comes from JWT sub. BaseResponse returns null on committed success;
+clients refetch detail and invitation support.
+
+Admin GET detail now adds correctEmail {allowed, reason}; each active roster row
+adds id, rowVersion and nullable invitationRowVersion. These tokens and the
+roster are read under the existing Tour snapshot lock. Representative input and
+detail contracts are unchanged. Row ID, never row number/name, selects the write.
+
+The command uses the existing registration transaction/UnitOfWork. It takes the
+Tour lock, then registration lock, checks Tour/registration/row/invitation
+versions, requires SCHEDULED, and checks the normalized email against other
+active rows in the same registration and the existing SUBMITTED/APPROVED
+Tour-wide reservations. Normalization/format/length match registration input;
+no alias canonicalization. The selected active row retains ID, name, type and
+class; only Email/UpdatedAt change. Registration UpdatedAt/version advances so
+opened Representative replacements and Admin decisions become stale. Review
+metadata and registration state are preserved.
+
+SUBMITTED and REJECTED may be corrected without sending or granting access;
+REJECTED retains its reason/reviewer and still needs Representative resubmit and
+Admin approval. CANCELLED/unknown states are refused. Any invitation history on
+a non-approved registration blocks correction, consistent with existing review
+and Representative boundaries. READY requires reopening; RUNNING and terminal
+Tours are refused. The real Tour reopen endpoint is still separate implementation
+work; the live drawer explains the restriction and never invokes a mock reopen.
+
+For APPROVED, enabled invitation configuration is required. Existing selected
+invitation keeps its ID/expiry, increments AccessVersion, replaces hash/protected
+code, clears revocation and closes every open browser session via the same
+invitation reissue implementation. Expired invitations cannot be revived. If
+the approved row has no invitation (e.g. approval while support was disabled),
+only that row is issued using the configured initial expiry. Other rows,
+invitations and sessions are untouched. Correction queues one new email attempt
+atomically with the email/access change. It does not apply the old recipient's
+send cooldown: a correction must replace access immediately; later manual resend
+uses the existing one-minute cooldown and current code.
+
+External email stays in the existing post-commit worker. Old pending requests
+fail the AccessVersion check at claim; an already claimed old email may still
+reach its former recipient, but its code is invalid after correction commits.
+FAILED/UNKNOWN delivery keeps the new email/code and APPROVED state; ordinary
+invitation resend retries the current code without another rotation.
+
+ROSTER_EMAIL_CORRECTED audit records actor/Tour/row/request/time/result and
+opaque opened snapshot versions/registration ID. No email (including email
+hash), names, access code, ciphertext or session token is added to audit. Audit,
+row, registration, invitation, session revocation and queue writes commit or
+roll back together. Durable receipts are scoped to Tour plus correction action
+and request UUID. A replay by the same actor for the same row/snapshot and
+normalized current recipient returns success before stale/state checks without
+rotating/enqueuing again, including after restart. A reused UUID with different
+actor/row/snapshot/recipient returns IDEMPOTENCY_CONFLICT. After any later
+correction of the same row, replay returns that conflict and requires reload
+(even if the email was subsequently changed back). It never reinstates the
+earlier email. This avoids retaining recipient PII in
+append-only receipts. Equivalent email case/whitespace is treated identically.
+
+400 reports invalid email/tokens/body; 404 reports missing/inactive/wrong-group
+row; 409 uses STALE_VERSION, TOUR_LOCKED, STATE_CONFLICT, INVITATION_BOUNDARY,
+EMAIL_RESERVED, EMAIL_UNCHANGED, INVITATIONS_DISABLED, INVITATION_UNAVAILABLE,
+INVITATION_EXPIRED or IDEMPOTENCY_CONFLICT. Conflicts do not expose another
+group's identity/email. 401/403 enforce authentication/role.
+
+The Admin drawer confirms the selected row/old email/new email and access
+consequences. It retains the exact request UUID/body on uncertain network/5xx
+outcomes; confirmed validation/duplicate errors allow a new attempt. Stale,
+state and authorization failures block further writes until explicit successful
+reload. Focus/reconnect cannot replace an opened snapshot. Live calls never
+fall back to fixtures; existing Tour/demo consumers remain intact.
 
 ### 3.3 State storage and realtime delivery
 

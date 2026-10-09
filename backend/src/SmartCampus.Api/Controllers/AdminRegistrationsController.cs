@@ -12,6 +12,7 @@ using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistratio
 using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistration.Dtos;
 using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
 using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
+using SmartCampus.Application.Features.RosterEmailCorrection.Commands.CorrectRosterEmail;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -51,6 +52,14 @@ public sealed class AdminRegistrationsController(ISender sender) : ControllerBas
         return Ok(Committed());
     }
 
-    // Decisions return no data: clients refetch the committed detail.
+    [HttpPost("{id:guid}/roster/{rowId:guid}/email")]
+    public async Task<ActionResult<BaseResponse<object?>>> CorrectEmail(Guid id, Guid rowId,
+        [FromBody] CorrectRosterEmailRequest request, CancellationToken ct)
+    {
+        await sender.Send(new CorrectRosterEmailCommand(id, rowId, User.GetRequiredUserId(), request), ct);
+        return Ok(Committed());
+    }
+
+    // Writes return no data: clients refetch the committed detail.
     private static BaseResponse<object?> Committed() => new() { Success = true, Message = "OK", Data = null };
 }

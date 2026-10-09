@@ -63,18 +63,12 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
             }
             if (command.Operation is "reissue" or "revoke")
             {
-                foreach (var session in invitation.BrowserSessions.Where(s => s.EndedAt is null))
-                { session.EndedAt = now; session.EndReason = "INVITATION_REVOKED"; }
-                invitation.UpdatedAt = now;
-                if (command.Operation == "revoke") invitation.RevokedAt = now;
-                else
+                if (command.Operation == "revoke")
                 {
-                    invitation.AccessVersion = checked(invitation.AccessVersion + 1);
-                    var code = await issuer.CreateCodeAsync(invitation.Id, invitation.AccessVersion, ct);
-                    invitation.AccessCodeHash = code.Hash; invitation.AccessCodeProtected = code.Protected;
-                    invitation.CodeIssuedAt = now;
-                    invitation.RevokedAt = null;
+                    InvitationIssuer.CloseSessions(invitation, now);
+                    invitation.RevokedAt = now;
                 }
+                else await issuer.ReissueAsync(invitation, now, ct);
             }
             if (command.Operation != "revoke") repository.AddAudit(InvitationAudit.Request(invitation, tour.Id, command.Actor, now));
         }

@@ -56,9 +56,13 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
             r.RejectionReason, r.ReviewedAt, r.ReviewedByUserId,
             HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
             Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)
-                .Select(row => new RosterInput(row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName)).ToArray()
+                .Select(row => new { row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName,
+                    row.RowVersion, InvitationVersion = row.Invitation == null ? null : row.Invitation.RowVersion }).ToArray()
         }).SingleOrDefaultAsync(ct);
         return read is null ? null : new(read.Summary, read.ContactName, read.ContactEmail, read.RowVersion,
-            read.TourVersion, read.RejectionReason, read.ReviewedAt, read.ReviewedByUserId, read.Rows, read.HasInvitations);
+            read.TourVersion, read.RejectionReason, read.ReviewedAt, read.ReviewedByUserId,
+            read.Rows.Select(row => new ReviewRosterRow(row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email,
+                row.ClassName, RowVersionToken.Encode(row.RowVersion), row.InvitationVersion is null ? null : RowVersionToken.Encode(row.InvitationVersion))).ToArray(),
+            read.HasInvitations);
     }
 }
