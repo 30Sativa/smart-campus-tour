@@ -13,6 +13,27 @@ registered map uses manual entry only. A new position clears yaw so the Admin mu
 choose a heading or enter one numerically. Selecting a different map clears
 all three draft pose fields. No request is sent until Save.
 
+### Import a robotics POI YAML in manual mode
+
+**Nhập file YAML** reads one `.yaml`/`.yml` file locally (up to 64 KB), such as
+`robot/robot_maps/poi_start.yaml`. Required fields are `map_yaml`, `frame_id`,
+and numeric `pose.x`, `pose.y`, `pose.yaw` (metres/radians). The import checks
+the selected map's source filename/frame, finite numbers, yaw range and bounds;
+X/Y are rounded to four decimal places and yaw to six before bounds checks.
+Malformed/multiple YAML documents, duplicate keys, aliases and unsupported tags
+are rejected. Errors preserve the entire draft. YAML `name`, `id`, quaternion
+and `verified` do not overwrite the POI's existing name, identity or content,
+and import never marks a pose physically verified.
+
+The selected MapKey stays unchanged. A bare `map_yaml: map2.yaml` does not
+identify an immutable revision; Admin must verify the selected snapshot. If a
+file also provides `map_key`, it must match that selection. Unknown map/frame
+packages disable import rather than guessing a map. A valid import fills only
+X/Y/yaw in the draft; it does not upload the file, save, activate a POI, set a
+Route start or send a navigation command. The existing Save/API usage locks and
+RowVersion still apply. Reading a file temporarily disables pose changes and
+Save so an in-flight read cannot overwrite a concurrently submitted draft.
+
 Zoom buttons, Fit, center-on-POI and drag-to-pan work without changing the
 pose. Pan is a separate mode from position/heading selection. Escape cancels
 the current selection preview; it does not restore already committed draft

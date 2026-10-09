@@ -8,6 +8,7 @@ import type { CreatePoiInput, PoiDetails } from '../../features/administration/p
 import { DEFAULT_POI_MAP, OCCUPANCY_MAPS, occupancyMapFor, type OccupancyMap } from '../../features/administration/pois/map/catalog'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../features/administration/pois/map/PoiPosePicker'
 import { cellAtPose, rosToImage } from '../../features/administration/pois/map/occupancy-grid'
+import { PoiYamlImporter } from '../../features/administration/pois/PoiYamlImporter'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass, buttonClass } from '../../components/ui/ui-classes'
 import { PageHeader, LoadingPanel } from '../../components/ui/ConsolePrimitives'
@@ -102,11 +103,12 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   const [confirmAvailability, setConfirmAvailability] = useState(false)
   const [pickerMode, setPickerMode] = useState<PickerMode>(isCreate ? 'position' : 'pan')
   const [poseInputMethod, setPoseInputMethod] = useState<'map' | 'manual'>('map')
+  const [readingYaml, setReadingYaml] = useState(false)
   const form = draft.form
   const selectedMap = occupancyMapFor(form.mapKey, form.mapFrame)
   const pickerPose: PickerPose = { x: numberValue(form.x), y: numberValue(form.y), yaw: numberValue(form.yaw) }
 
-  const busy = create.isPending || update.isPending
+  const busy = create.isPending || update.isPending || readingYaml
   const editable = isCreate || poi.data?.usage.canEditContentAndAvailability === true
   const poseEditable = isCreate || poi.data?.usage.canEditPose === true
   const manualPose = poseInputMethod === 'manual' || !selectedMap
@@ -373,6 +375,17 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             <div className={`grid items-start gap-4 ${manualPose ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : 'xl:grid-cols-[minmax(0,1fr)_280px]'}`}>
             <div hidden={manualPose} className={manualPose ? 'hidden' : 'min-w-0'}>{selectedMap && <PoiPosePicker key={selectedMap.fingerprint} map={selectedMap} pose={pickerPose} editable={poseEditable && !busy && !manualPose} mode={pickerMode} onModeChange={setPickerMode} onPoseChange={changePose} />}</div>
             <div hidden={!showPoseFields} className={showPoseFields ? 'min-w-0 rounded-xl border border-[#e2e8f0] p-4' : 'hidden'}>
+              {manualPose && poseEditable && <PoiYamlImporter
+                key={`${form.mapKey}/${form.mapFrame}/${draft.rowVersion}`}
+                map={selectedMap} disabled={busy} onReadingChange={setReadingYaml}
+                onImport={(pose) => {
+                  setDraft((current) => ({ ...current, form: { ...current.form, x: String(pose.x), y: String(pose.y), yaw: String(pose.yaw) } }))
+                  setPickerMode('pan')
+                  setFormError(null)
+                  create.reset()
+                  update.reset()
+                }}
+              />}
               <h3 className="text-sm font-semibold text-[#173b59]">{poseEditable ? 'Nhập vị trí & hướng' : 'Tọa độ đã lưu'}</h3>
               <p className="mt-1 mb-4 text-xs leading-5 text-[#647b8d]">X/Y tính bằng mét; yaw tính bằng radian (−π đến π). Nhập 0 cho yaw nếu robot hướng theo trục +X.</p>
               <div className="grid gap-4 sm:grid-cols-2">
