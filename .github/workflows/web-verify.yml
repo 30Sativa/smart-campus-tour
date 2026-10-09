@@ -1,0 +1,38 @@
+name: Web Verify
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "robot/robot_maps/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/web-verify.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "web/**"
+      - "robot/robot_maps/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/web-verify.yml"
+
+jobs:
+  verify:
+    name: Verify web
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Run web verification
+        run: bash web/scripts/verify

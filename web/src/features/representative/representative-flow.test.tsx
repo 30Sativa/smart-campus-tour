@@ -96,6 +96,8 @@ describe('Representative real HTTP contract', () => {
     expect(screen.getAllByText('25').length).toBeGreaterThan(0)
     expect(screen.getByText('real.representative')).toBeInTheDocument()
     expect(screen.queryByText(/mô phỏng/)).not.toBeInTheDocument()
+    expect(screen.getByText('Các buổi đang nhận đăng ký đoàn')).toBeInTheDocument()
+    expect(screen.queryByText(/còn chỗ/)).not.toBeInTheDocument()
   })
   it('keeps a register action even when the Representative already has a group', async () => {
     renderAt('/dai-dien/buoi/tour')

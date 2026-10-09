@@ -15,7 +15,9 @@ async function access(tourId: string, action: string, code?: string, signal?: Ab
 }
 function accessError(error: unknown) {
   if (error instanceof ApiError) {
+    if (error.status === 400) return 'Mã truy cập không hợp lệ. Kiểm tra mã trong email rồi thử lại.'
     if (error.status === 401) return 'Mã hoặc phiên đã hết hạn, bị thu hồi hoặc không thuộc Tour này.'
+    if (error.status === 403) return 'Nguồn truy cập không được phép. Liên hệ quản trị hệ thống để kiểm tra cấu hình truy cập.'
     if (error.status === 409) return 'Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi và cấp mã mới.'
     if (error.status === 429) return 'Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.'
   }
@@ -26,14 +28,17 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const key = ['student-invitation', tourId]
   const [code, setCode] = useState('')
   const [left, setLeft] = useState(false)
-  const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
-    retry: false, enabled: !left, refetchInterval: 30000, refetchIntervalInBackground: true })
   const join = useMutation({ mutationFn: () => access(tourId, 'join', code),
+    onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: info => { setCode(''); setLeft(false); client.setQueryData(key, info) } })
   const leave = useMutation({ mutationFn: () => access(tourId, 'leave'),
+    onMutate: () => client.cancelQueries({ queryKey: key }),
     onSuccess: () => { setLeft(true); client.setQueryData(key, null); join.reset() } })
-  const expired = session.isError && session.error instanceof ApiError && session.error.status === 401
-  const info = left || expired ? null : session.data
+  // A heartbeat begun before join/leave must not overwrite the mutation's committed state.
+  const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
+    retry: false, enabled: !left && !join.isPending && !leave.isPending, refetchInterval: 30000, refetchIntervalInBackground: true })
+  const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
+  const info = left || accessDenied ? null : session.data
   const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
   return <div className="lp st st--entry">
     <header className="st-header"><div className="st-ctn st-header__inner">
@@ -51,7 +56,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         <h2 className="mb-3 text-2xl font-semibold">Nhập mã truy cập</h2>
         <p className="mb-5 text-sm text-slate-600">Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
         <label className="block font-medium" htmlFor="invitation-code">Mã truy cập</label>
-        <input id="invitation-code" autoComplete="off" maxLength={64} value={code} onChange={event => setCode(event.target.value)}
+        <input id="invitation-code" autoComplete="off" maxLength={64} value={code} disabled={join.isPending} onChange={event => setCode(event.target.value)}
           className="mt-2 w-full rounded-lg border border-slate-300 p-3 font-mono text-lg" required />
         {join.isError && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(join.error)}</p>}
         {session.isError && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(session.error)}</p>}
@@ -59,7 +64,8 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         <p className="mt-4 text-sm text-slate-600">Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</p>
       </form>}
       {leave.isError && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(leave.error)}</p>}
-      {info && session.isError && <p role="alert" className="mt-3 text-sm text-red-700">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên được giữ tối đa 10 phút để kết nối lại.</p>}
+      {info && session.isError && <p role="alert" className="mt-3 text-sm text-red-700">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
+      {session.isError && !left && <button type="button" className="mt-3 underline" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
     </section></main>
   </div>
 }

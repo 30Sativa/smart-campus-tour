@@ -13,6 +13,11 @@ registered map uses manual entry only. A new position clears yaw so the Admin mu
 choose a heading or enter one numerically. Selecting a different map clears
 all three draft pose fields. No request is sent until Save.
 
+After a successful create, return to `/admin/pois`, refresh the catalog and
+show a dismissible confirmation naming the new inactive POI. Replace the create
+history entry so Back does not reopen the submitted draft. Failed creates keep
+the draft and show the API error; they do not show a success notice or navigate.
+
 ### Import a robotics POI YAML in manual mode
 
 **Nhập file YAML** reads one `.yaml`/`.yml` file locally (up to 64 KB), such as
