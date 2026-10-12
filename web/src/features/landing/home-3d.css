@@ -453,3 +453,13 @@ html[data-theme-wave]::view-transition-new(root) {
   .lp3-twin-status i,
   .lp3-twin-status span { animation: none; }
 }
+
+/* Pinned journey (wide screens): keep the illustration on one steady layer.
+   While the section is pinned the page scrolls under a still pointer, so the
+   3D hover tilt kept switching on and off; a multiply-blended image inside a
+   3D-transformed box is re-composited each time, which showed as a white
+   flash between stops. No tilt, no blending (the pinned box is isolated
+   anyway, so multiply had no visible effect there), one promoted layer. */
+.lp3-journey[data-journey="pinned"] .lp3-journey-art { transform: none !important; transition: none; isolation: isolate; }
+.lp3-journey[data-journey="pinned"] .lp3-journey-art img { mix-blend-mode: normal; will-change: transform; backface-visibility: hidden; }
+.lp3-journey[data-journey="pinned"] .lp3-route { will-change: transform; }

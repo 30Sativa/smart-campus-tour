@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Bot,
@@ -63,8 +63,10 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
 
   const isRosterUpdating = snapshot.step === 'roster_updating'
 
+  const stops = [...snapshot.pois].sort((a, b) => a.order - b.order)
+
   return (
-    <div className="st-ctn st-wait">
+    <div className="st-ctn st-x-wait">
       {/* Banner nếu Admin/Đại diện đang cập nhật danh sách (UC-06) */}
       {isRosterUpdating && (
         <div className="st-alert st-alert--warn">
@@ -78,130 +80,60 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
         </div>
       )}
 
-      {/* Campus image connects the waiting room with the join screen. */}
-      <section className="st-band">
-        <img src="/images/student-campus.png" alt="" aria-hidden="true" />
-        <div className="st-band__top">
-          <div className="st-kicker">Phòng chờ trực tuyến</div>
-          <span className="st-pill-time">
-            <Clock size={13} />
-            <span>Giờ dự kiến: {snapshot.scheduledAt}</span>
-          </span>
-        </div>
-        <div>
-          <h2>{snapshot.tourName}</h2>
-          <p className="st-band__meta">
-            {snapshot.schoolName} • Đoàn {snapshot.groupCode}
-          </p>
-          <div style={{ marginTop: 22 }}>
-            <span className="st-pill-status"><i />Đang chờ bắt đầu</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Welcome */}
-      <div className="st-card st-welcome">
-        <div className="st-avatar" aria-hidden="true">{session.studentName.trim().charAt(0)}</div>
-        <div>
+      <div className="st-x-wait__grid">
+        <section className="st-x-card st-x-count">
+          <Countdown scheduledAt={snapshot.scheduledAt} />
+          <svg className="st-x-bot" width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">
+            <rect x="12" y="22" width="40" height="28" rx="10" fill="currentColor" />
+            <rect x="18" y="29" width="28" height="12" rx="6" fill="#13261d" />
+            <circle cx="26" cy="35" r="2.6" fill="#d6f18d" /><circle cx="38" cy="35" r="2.6" fill="#d6f18d" />
+            <path d="M32 22v-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="32" cy="11" r="4" fill="#f4b860" />
+          </svg>
+          <span className="st-pill-status"><i />Đang chờ bắt đầu</span>
           <h3>Xin chào, {session.studentName}!</h3>
           <p>
-            Bạn đã được xác nhận vào phòng chờ của đoàn {session.groupCode}. Khi người điều hành nhấn bắt đầu, màn hình sẽ tự động chuyển sang luồng video trực tiếp từ Robot AMR.
+            Bạn đã được xác nhận vào phòng chờ của đoàn {session.groupCode}. Khi người điều hành nhấn bắt đầu, màn hình sẽ tự chuyển sang hình trực tiếp từ robot.
           </p>
-        </div>
-      </div>
+          <p className="st-x-meta"><Clock size={14} /><span>{snapshot.schoolName} • Giờ dự kiến {snapshot.scheduledAt}</span></p>
+        </section>
 
-      <div className="st-grid2">
-        {/* Test Equipment & Audio Checklist */}
-        <div className="st-card">
-          <h4 className="st-sec-title">Chuẩn bị thiết bị trước khi tham quan</h4>
-          <div style={{ display: 'grid', gap: 14 }}>
-            <div className="st-check">
-              <div className="st-check__head">
-                <div className="st-check__row">
-                  <span className="st-check__ic"><Volume2 size={18} /></span>
-                  <div>
-                    <h5>Kiểm tra Loa / Âm thanh</h5>
-                    <p>Để nghe rõ thuyết minh tại các điểm dừng</p>
-                  </div>
-                </div>
-                {audioTested && <CheckCircle2 size={20} className="st-ok" />}
-              </div>
-              <button
-                type="button"
-                onClick={handleTestAudio}
-                disabled={isPlayingTestAudio}
-                className="st-chip-btn st-chip-btn--block"
-              >
-                {isPlayingTestAudio ? (
-                  <>
-                    <Volume2 size={14} />
-                    <span>Đang phát chuông thử nghiệm...</span>
-                  </>
-                ) : audioTested ? (
-                  <>
-                    <CheckCircle2 size={14} className="st-ok" />
-                    <span>Âm thanh sẵn sàng (Nghe lại)</span>
-                  </>
+        <div className="st-x-wait__side">
+          <div className="st-x-checks">
+            <div className={audioTested ? 'st-x-check is-ok' : 'st-x-check'}>
+              <span className="st-x-check__ic">{audioTested ? <CheckCircle2 size={20} /> : <Volume2 size={20} />}</span>
+              <span className="st-x-check__tx">
+                <b>Kiểm tra Loa / Âm thanh</b>
+                <span>Để nghe rõ thuyết minh tại các điểm dừng</span>
+              </span>
+              <span className={isPlayingTestAudio ? 'st-x-wave' : 'st-x-wave is-idle'} aria-hidden="true"><i /><i /><i /><i /><i /></span>
+              <button type="button" onClick={handleTestAudio} disabled={isPlayingTestAudio} className="st-chip-btn">
+                {isPlayingTestAudio ? 'Đang phát...' : audioTested ? (
+                  <><CheckCircle2 size={14} className="st-ok" /><span>Âm thanh sẵn sàng</span></>
                 ) : (
-                  <>
-                    <VolumeX size={14} />
-                    <span>Bấm để nghe thử âm thanh</span>
-                  </>
+                  <><VolumeX size={14} /><span>Bấm để nghe thử âm thanh</span></>
                 )}
               </button>
             </div>
 
-            <div className="st-check">
-              <div className="st-check__head">
-                <div className="st-check__row">
-                  <span className="st-check__ic"><Mic size={18} /></span>
-                  <div>
-                    <h5>Kiểm tra Micro (Tùy chọn)</h5>
-                    <p>Dùng nếu bạn muốn hỏi Trợ lý AI bằng giọng nói</p>
-                  </div>
-                </div>
-                {micStatus === 'granted' && <CheckCircle2 size={20} className="st-ok" />}
-              </div>
-              <button
-                type="button"
-                onClick={handleTestMic}
-                disabled={micStatus === 'testing'}
-                className="st-chip-btn st-chip-btn--block"
-              >
-                {micStatus === 'testing' ? (
-                  <span>Đang kiểm tra micro...</span>
-                ) : micStatus === 'granted' ? (
-                  <>
-                    <CheckCircle2 size={14} className="st-ok" />
-                    <span>Micro sẵn sàng</span>
-                  </>
-                ) : micStatus === 'denied' ? (
-                  <span>Chưa cấp quyền mic (vẫn có thể gõ chữ)</span>
-                ) : (
-                  <>
-                    <Mic size={14} />
-                    <span>Kiểm tra quyền micro</span>
-                  </>
-                )}
+            <div className={micStatus === 'granted' ? 'st-x-check is-ok' : 'st-x-check'}>
+              <span className="st-x-check__ic">{micStatus === 'granted' ? <CheckCircle2 size={20} /> : <Mic size={20} />}</span>
+              <span className="st-x-check__tx">
+                <b>Kiểm tra Micro (Tùy chọn)</b>
+                <span>{micStatus === 'denied' ? 'Chưa cấp quyền mic, vẫn có thể gõ chữ' : 'Dùng nếu bạn muốn hỏi Trợ lý AI bằng giọng nói'}</span>
+              </span>
+              <button type="button" onClick={handleTestMic} disabled={micStatus === 'testing'} className="st-chip-btn">
+                {micStatus === 'testing' ? 'Đang kiểm tra...' : micStatus === 'granted' ? 'Micro sẵn sàng' : 'Kiểm tra'}
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Planned POI summary */}
-        <div className="st-card">
-          <h4 className="st-sec-title">
-            <span>Lộ trình dự kiến</span>
-            <span>({String(snapshot.pois.length).padStart(2, '0')} điểm tham quan)</span>
-          </h4>
-          <ol className="st-route">
-            {snapshot.pois.map((poi, idx) => (
-              <li key={poi.id} className="st-route__row">
-                <em>{String(idx + 1).padStart(2, '0')}</em>
-                <div>
-                  <h6>{poi.title}</h6>
-                  <p>{poi.description}</p>
-                </div>
+          <h4 className="st-x-sec">Xem trước {String(stops.length).padStart(2, '0')} điểm dừng</h4>
+          <ol className="st-x-preview">
+            {stops.map((poi) => (
+              <li key={poi.id}>
+                {poi.imageUrl ? <img src={poi.imageUrl} alt="" loading="lazy" /> : <span className="st-x-preview__n" aria-hidden="true">{poi.order}</span>}
+                <span className="st-x-preview__cap"><b>{String(poi.order).padStart(2, '0')}</b>{poi.title}</span>
               </li>
             ))}
           </ol>
@@ -214,6 +146,49 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
           Hãy giữ mở trang này. Khi buổi tham quan bắt đầu, hệ thống sẽ tự động đưa bạn vào chuyến tham quan trực tiếp.
         </span>
       </p>
+    </div>
+  )
+}
+
+/** "14:30" (today) or an ISO time; anything else just shows the scheduled time. */
+function scheduledTime(value: string): number | null {
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
+  if (hm) {
+    const at = new Date()
+    at.setHours(Number(hm[1]), Number(hm[2]), 0, 0)
+    return at.getTime()
+  }
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const RING_WINDOW_MS = 60 * 60 * 1000
+
+/** Count-down ring to the scheduled start; the ring empties over the last hour. */
+function Countdown({ scheduledAt }: { scheduledAt: string }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+  const target = scheduledTime(scheduledAt)
+  const left = target == null ? null : Math.max(0, target - now)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const label = left == null ? scheduledAt
+    : left === 0 ? 'Sắp bắt đầu'
+    : left >= 3_600_000 ? `${Math.floor(left / 3_600_000)}:${pad(Math.floor((left % 3_600_000) / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
+    : `${pad(Math.floor(left / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
+  const fill = left == null ? 1 : 1 - Math.min(1, left / RING_WINDOW_MS)
+  return (
+    <div className="st-x-ring" role="timer" aria-label={left == null ? `Giờ dự kiến ${scheduledAt}` : `Còn ${label} tới giờ bắt đầu`}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="44" className="st-x-ring__track" />
+        <circle cx="50" cy="50" r="44" className="st-x-ring__arc" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - fill * 100} />
+      </svg>
+      <span className="st-x-ring__c">
+        <b>{label}</b>
+        <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Chờ Staff bắt đầu' : 'Bắt đầu sau'}</span>
+      </span>
     </div>
   )
 }

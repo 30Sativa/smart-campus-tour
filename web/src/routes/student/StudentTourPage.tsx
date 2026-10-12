@@ -9,6 +9,12 @@ import { useStudentSnapshot, useStudentJoinMutation } from '../../features/stude
 import { useStudentStore } from '../../features/student/student-store'
 import '../../features/landing/landing.css'
 import '../../features/student/student.css'
+import '../../features/student/student-expedition.css'
+
+/** The drifting light behind every student screen (decorative). */
+function Backdrop() {
+  return <div className="st-x-bg" aria-hidden="true"><i /><i /><i /></div>
+}
 
 export default function StudentTourPage() {
   const { tourId: paramTourId } = useParams<{ tourId?: string }>()
@@ -38,7 +44,8 @@ export default function StudentTourPage() {
   // Nếu chưa có session học sinh hợp lệ: Hiển thị form tham gia
   if (!session) {
     return (
-      <div className="lp st st--entry">
+      <div className="lp st st-x st--entry">
+        <Backdrop />
         <StudentHeader session={null} tourName={snapshot?.tourName} />
         <main className="st-main">
           <StudentJoinForm
@@ -49,6 +56,7 @@ export default function StudentTourPage() {
             isSubmitting={joinMutation.isPending}
             errorMessage={joinMutation.error ? (joinMutation.error as Error).message : null}
             onSubmit={(req) => joinMutation.mutate(req)}
+            pois={snapshot?.pois}
           />
         </main>
       </div>
@@ -57,7 +65,8 @@ export default function StudentTourPage() {
 
   if (isSnapshotLoading || !snapshot) {
     return (
-      <div className="lp st">
+      <div className="lp st st-x">
+        <Backdrop />
         <StudentHeader session={session} />
         <div className="st-loading">
           <div>
@@ -78,7 +87,8 @@ export default function StudentTourPage() {
 
   if (isTerminal) {
     return (
-      <div className="lp st">
+      <div className="lp st st-x">
+        <Backdrop />
         <StudentHeader
           session={session}
           tourName={snapshot.tourName}
@@ -104,7 +114,8 @@ export default function StudentTourPage() {
 
   if (isWaiting) {
     return (
-      <div className="lp st">
+      <div className="lp st st-x">
+        <Backdrop />
         <StudentHeader
           session={session}
           tourName={snapshot.tourName}
@@ -120,7 +131,8 @@ export default function StudentTourPage() {
 
   // Tour đang Running: Vào Live Tour
   return (
-    <div className="lp st">
+    <div className="lp st st-x">
+        <Backdrop />
       <StudentHeader
         session={session}
         tourName={snapshot.tourName}

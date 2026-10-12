@@ -141,7 +141,11 @@ export default function PublicHomePage() {
         const ride = { path: route, align: route, alignOrigin: [0.5, 0.5] as [number, number] }
         if (window.matchMedia('(min-width: 1100px)').matches) {
           journey.dataset.journey = 'pinned'
+          // Only touch the DOM when the step actually changes, not on every scroll frame.
+          let current = -1
           const setStep = (active: number) => {
+            if (active === current) return
+            current = active
             steps.forEach((step, index) => step.classList.toggle('is-active', index === active))
             stops.forEach((stop, index) => stop.classList.toggle('is-active', index <= active))
           }

@@ -1,7 +1,7 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { TourOperation } from '../../../api/contracts/staff'
 import { REASON_SHORT } from '../reason'
 import { CARD, DONE, REST, studentsThroughDay, todayByState, type DayResult } from '../overview-data'
@@ -63,7 +63,7 @@ export function SparkCard({ title, to, label, value, unit, note, series }: { tit
         <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <defs><linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.2} /><stop offset="1" stopColor={DONE} stopOpacity={0} /></linearGradient></defs>
-            <Area type="monotone" dataKey="v" stroke={DONE} strokeWidth={2} fill={`url(#${id}-g)`} connectNulls isAnimationActive={!reducedMotion()} dot={false} />
+            <Area type="monotone" dataKey="v" stroke={DONE} strokeWidth={2} fill={`url(#${id}-g)`} connectNulls isAnimationActive={!reducedMotion()} animationDuration={500} dot={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -126,8 +126,8 @@ export function StudentsThroughDay({ tours, now }: { tours: TourOperation[]; now
                 return <Tip title={hm(p.at)} rows={[...(p.joined != null ? [{ color: DONE, label: 'Đã tham gia', value: p.joined }] : []), ...(p.planned != null ? [{ color: REST, label: 'Theo lịch', value: p.planned }] : [])]} />
               }} />
               <ReferenceLine x={now} stroke="#173b59" strokeDasharray="2 3" label={{ value: 'Bây giờ', position: 'top', fontSize: 10, fill: '#173b59' }} />
-              <Area type="stepAfter" dataKey="planned" stroke={REST} strokeWidth={2} strokeDasharray="5 5" fill="none" connectNulls={false} isAnimationActive={!reducedMotion()} dot={false} />
-              <Area type="stepAfter" dataKey="joined" stroke={DONE} strokeWidth={2.2} fill={`url(#${id}-a)`} connectNulls={false} isAnimationActive={!reducedMotion()} activeDot={{ r: 5, fill: '#fff', stroke: DONE, strokeWidth: 2.5 }} dot={false} />
+              <Area type="stepAfter" dataKey="planned" stroke={REST} strokeWidth={2} strokeDasharray="5 5" fill="none" connectNulls={false} isAnimationActive={!reducedMotion()} animationDuration={500} dot={false} />
+              <Area type="stepAfter" dataKey="joined" stroke={DONE} strokeWidth={2.2} fill={`url(#${id}-a)`} connectNulls={false} isAnimationActive={!reducedMotion()} animationDuration={500} activeDot={{ r: 5, fill: '#fff', stroke: DONE, strokeWidth: 2.5 }} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -136,36 +136,48 @@ export function StudentsThroughDay({ tours, now }: { tours: TourOperation[]; now
   )
 }
 
-/** Today's sessions by state: one blue family, darker = further along. */
+/**
+ * Today's sessions by state: one blue family, darker = further along.
+ * Drawn as plain SVG (no chart library, no measuring, no entry animation) so it
+ * is on screen with the first paint. Hovering a slice or its legend entry
+ * shows that state in the centre.
+ */
 export function TodayByState({ tours }: { tours: TourOperation[] }) {
   const all = todayByState(tours)
   const data = all.filter((d) => d.value > 0)
+  const [hover, setHover] = useState<string | null>(null)
+  const total = data.reduce((sum, d) => sum + d.value, 0)
+  const gap = data.length > 1 ? 1.2 : 0
+  const slices = data.map((d, i) => {
+    const before = data.slice(0, i).reduce((sum, item) => sum + item.value, 0)
+    const share = (d.value / total) * 100
+    return { ...d, dash: Math.max(0, share - gap), offset: -(before / total) * 100 }
+  })
+  const shown = data.find((d) => d.state === hover)
   return (
     <section className={CARD} aria-labelledby="ov-donut">
       <CardHead id="ov-donut" title="Buổi hôm nay theo trạng thái" />
       <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
         <div className="relative size-[200px]" role="img" aria-label={`${tours.length} buổi: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ') || 'chưa có'}`}>
-          {data.length > 0 && (
-            <ResponsiveContainer width="100%" height="100%" debounce={160}>
-              <PieChart>
-                <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}>
-                  {data.map((d) => <Cell key={d.state} fill={d.color} />)}
-                </Pie>
-                <Tooltip content={({ active, payload }) => {
-                  const p = payload?.[0]?.payload as { label: string; value: number; color: string } | undefined
-                  return active && p ? <Tip title={p.label} rows={[{ color: p.color, label: 'Số buổi', value: p.value }]} /> : null
-                }} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
+          <svg viewBox="0 0 42 42" className="size-full -rotate-90" aria-hidden="true">
+            <circle cx="21" cy="21" r="16" fill="none" stroke="#f3f4f6" strokeWidth="5.5" />
+            {slices.map((d) => (
+              <circle key={d.state} cx="21" cy="21" r="16" fill="none" pathLength={100} stroke={d.color} strokeWidth={hover === d.state ? 6.6 : 5.5}
+                strokeDasharray={`${d.dash} ${100 - d.dash}`} strokeDashoffset={d.offset}
+                opacity={hover && hover !== d.state ? 0.45 : 1}
+                className="cursor-pointer transition-[opacity,stroke-width] duration-200 motion-reduce:transition-none"
+                onMouseEnter={() => setHover(d.state)} onMouseLeave={() => setHover(null)} />
+            ))}
+          </svg>
           <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-            <span className="text-[28px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{tours.length}</span>
-            <span className="mt-1 text-xs text-[#6b7280]">buổi</span>
+            <span className="text-[28px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{shown ? shown.value : tours.length}</span>
+            <span className="mt-1 max-w-24 text-xs text-[#6b7280]">{shown ? shown.label : 'buổi'}</span>
           </div>
         </div>
         <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1">
           {all.map((d) => (
-            <li key={d.state} className="inline-flex items-center gap-1.5 px-1 py-1 text-xs font-medium text-[#4b5563]">
+            <li key={d.state} onMouseEnter={() => d.value && setHover(d.state)} onMouseLeave={() => setHover(null)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-[#4b5563] transition-colors ${hover === d.state ? 'bg-[#f3f4f6]' : ''}`}>
               <span aria-hidden="true" className="size-[9px] rounded-full" style={{ background: d.color, boxShadow: d.state === 'Cancelled' ? 'inset 0 0 0 1px #cbd5e1' : undefined }} />{d.label} <b className="text-[#111827] tabular-nums">{d.value}</b>
             </li>
           ))}
@@ -197,8 +209,8 @@ export function RunResults({ days }: { days: DayResult[] }) {
                 const d = payload?.[0]?.payload as DayResult | undefined
                 return active && d ? <Tip title={d.label} rows={[{ color: DONE, label: 'Hoàn thành', value: d.completed }, { color: REST, label: 'Kết thúc sớm / hủy', value: d.cancelled }]} /> : null
               }} />
-              <Bar dataKey="completed" name="Hoàn thành" fill={DONE} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} />
-              <Bar dataKey="cancelled" name="Kết thúc sớm / hủy" fill={REST} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} />
+              <Bar dataKey="completed" name="Hoàn thành" fill={DONE} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} animationDuration={500} />
+              <Bar dataKey="cancelled" name="Kết thúc sớm / hủy" fill={REST} radius={[4, 4, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} animationDuration={500} />
             </BarChart>
           </ResponsiveContainer>
         )}
