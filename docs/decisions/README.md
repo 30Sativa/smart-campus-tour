@@ -47,6 +47,7 @@ adding a test, bumping a patch version.
 | [0012](0012-v1-1-schema-and-operation-scope.md) | v1.1 SQL snapshot, fixed seeded dwell, all Staff operate all Tours, stop references and append-only audit | accepted by team; applied/scaffolded locally; use cases pending |
 | [0013](0013-single-application-role-per-account.md) | Auth/Web V1 supports exactly one supported application role per account | accepted by team; GVHD review at Review 2 |
 | [0014](0014-admin-poi-management.md) | Admin manages POI content and only edits geometry before route/history use | implementation scope authorized; group/GVHD review at Review 2 |
+| [0015](0015-invitation-issuance-and-resend-email.md) | Secure invitation codes, Resend queue and minimal Student entry | implementation scope authorized; opt-in configuration required |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -13,7 +13,8 @@ import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import type { ActionGate, RegistrationState, TourState } from '../api/types'
 import type { StatusTone } from '../../../components/ui/status-tone'
-import { REGISTRATION_LABEL, TOUR_LABEL } from '../rep-format'
+import { REGISTRATION_STATE_LABEL } from '../../registrations/registration-state'
+import { TOUR_LABEL } from '../rep-format'
 import { repButton } from '../rep-classes'
 
 /* ── Frame ────────────────────────────────────────────────────────────────── */
@@ -106,7 +107,7 @@ function SoftBadge({ label, tone, size = 'sm' }: { label: string; tone: StatusTo
 }
 
 export function RegistrationStatusBadge({ state, size }: { state: RegistrationState; size?: 'sm' | 'md' }) {
-  return <SoftBadge {...REGISTRATION_LABEL[state]} size={size} />
+  return <SoftBadge {...REGISTRATION_STATE_LABEL[state]} size={size} />
 }
 
 export function TourStateBadge({ state, size }: { state: TourState; size?: 'sm' | 'md' }) {

@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.Registrations;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -285,23 +286,23 @@ public sealed class RepresentativeEndpointTests
         Assert.Equal(1, await fixture.Database.CountRowsAsync("dbo.GroupRegistrations"));
     }
 
-    private static string Version(JsonElement data) => data.GetProperty("rowVersion").GetString()!;
-    private static SmartCampus.Application.Features.Representative.Dtos.RegistrationInput Input(JsonElement tour, string group, string email, bool mixed = false, bool sharedOnly = false) =>
+    internal static string Version(JsonElement data) => data.GetProperty("rowVersion").GetString()!;
+    internal static SmartCampus.Application.Features.Registrations.RegistrationInput Input(JsonElement tour, string group, string email, bool mixed = false, bool sharedOnly = false) =>
         new("School", group, "Contact", "contact@example.com", Version(tour), mixed ?
             [new(2, "INDIVIDUAL", "Same name", email.Trim(), null), new(4, "SHARED_VIEWING", "Same name", "room@example.com", "10A")]
             : [new(2, sharedOnly ? "SHARED_VIEWING" : "INDIVIDUAL", "Viewer", email.Trim(), null)]);
-    private static async Task<string> LoginAsync(HttpClient client, string username)
+    internal static async Task<string> LoginAsync(HttpClient client, string username)
     {
         using var response = await client.PostAsJsonAsync("/api/auth/login", new { username, password = "integration-test-password" });
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return doc.RootElement.GetProperty("accessToken").GetString()!;
     }
-    private sealed record Response(HttpStatusCode Status, JsonElement Body)
+    internal sealed record Response(HttpStatusCode Status, JsonElement Body)
     {
         public JsonElement Data => Body.TryGetProperty("data", out var data) ? data : default;
     }
-    private sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, Guid tourId, Guid adminId) : IAsyncDisposable
+    internal sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, Guid tourId, Guid adminId) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
         public Guid TourId => tourId;
@@ -336,7 +337,7 @@ public sealed class RepresentativeEndpointTests
         }
         public async Task<Response> SendAsync(HttpMethod method, string path, object? payload = null, Guid? key = null, string? token = null)
         {
-            using var request = new HttpRequestMessage(method, "/api/representative" + path);
+            using var request = new HttpRequestMessage(method, path.StartsWith("/api/", StringComparison.Ordinal) ? path : "/api/representative" + path);
             var accessToken = token ?? this.token;
             if (accessToken is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             if (payload is not null) request.Content = JsonContent.Create(payload);

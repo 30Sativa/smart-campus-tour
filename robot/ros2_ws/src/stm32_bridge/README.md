@@ -214,6 +214,18 @@ passes the command through before the `250 mm/s` pair-scaling limit. The `1600`
 value in firmware is the HBS57H driver resolution in pulses per motor
 revolution, not a wheel speed.
 
+The supervised Nav2 trial requests `0.24 m/s` forward and `0.45 rad/s` for
+in-place turns. At the real calibrated `wheel_base=0.4714 m`, these separately
+need `240/240 mm/s` and opposite `106.065 mm/s` wheels, so the unchanged cap
+passes them (commands are rounded to integer mm/s). Combined maxima need an
+outer wheel of `346.065 mm/s`; pair scaling still produces `97/250 mm/s` or
+the reverse. Before rounding, the effective twist is approximately
+`0.1734 m/s, 0.3251 rad/s`, preserving curvature. Do not raise the wheel cap
+or alter calibration just to remove this expected warning. Installed motor
+inversion changes signs afterward. See `robot/docs/nav2-turn-test.md` for
+runtime checks, hardware acceptance and rollback; no bridge/firmware code is
+changed by this trial.
+
 ## Run Teleop
 
 In another terminal:

@@ -24,6 +24,7 @@ namespace SmartCampus.Application
             });
 
             services.AddValidatorsFromAssembly(assembly);
+            services.AddScoped<SmartCampus.Application.Features.Invitations.InvitationIssuer>();
 
             return services;
         }

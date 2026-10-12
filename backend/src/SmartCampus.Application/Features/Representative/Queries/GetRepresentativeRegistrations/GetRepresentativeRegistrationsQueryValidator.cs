@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.Representative.Queries.Lists;
 using FluentValidation;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations;

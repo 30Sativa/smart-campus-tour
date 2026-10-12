@@ -29,13 +29,6 @@ export function formatRelative(iso: string, now = Date.now()) {
   return `${formatTime(iso)} ${formatShortDate(iso)}`
 }
 
-export const REGISTRATION_LABEL: Record<RegistrationState, { label: string; tone: StatusTone }> = {
-  SUBMITTED: { label: 'Chờ duyệt', tone: 'warn' },
-  APPROVED: { label: 'Đã duyệt', tone: 'ok' },
-  REJECTED: { label: 'Từ chối', tone: 'danger' },
-  CANCELLED: { label: 'Đã hủy', tone: 'muted' },
-}
-
 export const TOUR_LABEL: Record<TourState, { label: string; tone: StatusTone }> = {
   SCHEDULED: { label: 'Đang nhận đăng ký', tone: 'info' },
   READY: { label: 'Đã chốt danh sách', tone: 'muted' },

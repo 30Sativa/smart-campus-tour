@@ -16,7 +16,15 @@ function Backdrop() {
   return <div className="st-x-bg" aria-hidden="true"><i /><i /><i /></div>
 }
 
+import { StudentInvitationPage } from '../../features/student/invitation/StudentInvitationPage'
+
 export default function StudentTourPage() {
+  const { tourId } = useParams<{ tourId?: string }>()
+  if (tourId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tourId))
+    return <StudentInvitationPage key={tourId.toLowerCase()} tourId={tourId.toLowerCase()} />
+  return <DemoStudentTourPage />
+}
+function DemoStudentTourPage() {
   const { tourId: paramTourId } = useParams<{ tourId?: string }>()
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)

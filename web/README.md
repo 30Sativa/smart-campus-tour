@@ -47,6 +47,14 @@ self-registration route. The business fixtures do not provide login accounts.
 
 `VITE_*` values ship to the browser, so never put a secret in one.
 
+### Vercel routing
+
+Set the Vercel project's Root Directory to `web` and use the Vite preset.
+`web/vercel.json` serves the React app's HTML entry point for browser routes,
+so opening or refreshing `/login`, `/admin/*`, `/staff/*` and `/dai-dien/*`
+reaches React Router instead of Vercel's `404 NOT_FOUND` page. Redeploy after
+changing this configuration.
+
 ## Scripts
 
 | Script | What it does |

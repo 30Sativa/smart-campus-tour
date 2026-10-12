@@ -1,3 +1,4 @@
+using SmartCampus.Application.Features.Registrations;
 using FluentValidation;
 
 namespace SmartCampus.Application.Features.Representative.Commands.SubmitRegistration;

@@ -10,9 +10,7 @@ import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSideba
 import { ADMIN_NAV, adminActivePath } from './admin-nav'
 import { AdminHeaderActions } from './AdminHeaderActions'
 import { AdminSidebar } from './AdminSidebar'
-import { useAdminRegistrations } from './admin-hooks'
-
-const PENDING = { state: 'Submitted' as const }
+import { usePendingReviewCount } from './registrations/hooks'
 
 /**
  * The administration shell: preparing Tours before they run.
@@ -28,8 +26,8 @@ export default function AdminShell() {
   const handleLogout = useLogout()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const navRef = useMobileNav(menuOpen, closeMenu)
-  const pending = useAdminRegistrations(PENDING)
-  const pendingCount = Array.isArray(pending.data) ? pending.data.filter((reg) => reg.tourState === 'Scheduled').length : 0
+  // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
+  const pendingCount = usePendingReviewCount() ?? 0
 
   const current = adminActivePath(location.pathname)
   const onRoles = location.pathname.startsWith('/admin/roles')
@@ -64,7 +62,7 @@ export default function AdminShell() {
           </div>
         </header>
 
-        {!onAccounts && !onPois && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
+        {!onAccounts && !onPois && !location.pathname.startsWith('/admin/registrations') && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>

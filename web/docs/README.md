@@ -8,7 +8,10 @@ the business authority.
 ## Current local references
 
 - [Representative registration](representative-registration.md) — real submission slice,
-  Excel contract, deferred invitation boundary and isolated end-to-end setup.
+  Excel contract, approved-roster boundary and isolated end-to-end setup.
+
+- [Invitation/email setup](../../backend/docs/invitations-resend.md) — real
+  shared support panel, Resend configuration and Student code/cookie entry.
 
 - [POI map picker](poi-map-picker.md) — ROS raster geometry, Admin workflow,
   map-package release and verification.
@@ -19,6 +22,8 @@ the business authority.
 - [Staff operations screens](staff-operations.md) — implementation-facing
   Staff/Twin map. Review current scope before treating old UI behavior as a
   target requirement.
+- [Local six-robot fleet](patrol-demo.md) — navigation geometry, priority bays,
+  tasks, local Copilot/cameras, what-if trials and the physical integration boundary.
 - [Campus model asset](../public/models/campus/README.md) — ownership and use
   of the current visitor campus model.
 
@@ -35,3 +40,5 @@ the business authority.
 
 All web screen guides describe UI structure or current code evidence; none can
 override the cross-system requirements or prove backend integration.
+
+- [Admin registration review](admin-registration-review.md) — live SQL review and the separate demo boundary.

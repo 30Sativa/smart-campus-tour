@@ -1,6 +1,7 @@
+using SmartCampus.Application.Features.Representative.Queries.Tours;
+using SmartCampus.Application.Features.Representative.Queries.Lists;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Models;
-using SmartCampus.Application.Features.Representative.Dtos;
 
 namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentativeTours;
 

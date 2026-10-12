@@ -43,12 +43,32 @@ reason). A disabled button always prints its reason. The screen never decides.
 | `/staff/live[/:id]` | Điều hành trực tiếp — Operational Twin, trạng thái phiên, điều khiển & phục hồi, lộ trình và nhật ký. Telemetry chi tiết nằm ở `/staff/robot`; preview nằm trong bước kiểm tra trước khi bắt đầu. | §4.2, §11, §12 |
 | `/staff/robot` | Robot & thiết bị — connection, localization, head, pose age, source label, "confirm ready" after End Early | §8.4, §11.4, §5.4 |
 | `/staff/history` | Lịch sử phiên | S-05 |
-| `/staff/digital-twin` | Simulator preview (no sidebar entry) | — |
+| `/staff/digital-twin` | Local six-robot workbench, Physical Twin preparation and separate simulator preview (no sidebar entry) | — |
+
+The physical preparation surface has no production telemetry binding yet.
+See `web/docs/physical-digital-twin.md` for its observation seam, freshness
+checks, calibration requirements and later miniPC integration steps.
 
 Twin rules applied (§11.2–11.6): POIs shown by order with the end point, **no
 straight lines between POIs**; the camera head turns separately from the body;
 a stale pose is greyed and labelled, never animated forward; Gazebo/Emulator
 robots carry their label and never serve a session.
+
+Operational Twin on the live operations and robot screens loads the styled
+V3 model, `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.glb`, using
+the same model loader, lighting and camera fit as the physical preparation view.
+Existing robot/POI fixtures and view controls are retained; changing the display
+asset does not establish measured ROS alignment or a production telemetry binding.
+
+The robot screen and idle live-operations twin start **six robots by default**,
+labelled as disconnected from the miniPC. **Điểm point** toggles ten initially
+hidden rings. Robots select random destinations, follow animated dashed routes,
+observe for 60 simulated seconds and actively move into safe bays to yield to
+lower-numbered robots. The wider Digital Twin page exposes task queues,
+events/exports, local fleet metrics, scenarios, a rule-based Copilot, virtual
+onboard/CCTV cameras and isolated what-if trials. These local controls send no
+physical commands and do not change active-Tour observations. See
+[local patrol fleet](patrol-demo.md) for placement, checks and integration limits.
 
 ## Code layout
 

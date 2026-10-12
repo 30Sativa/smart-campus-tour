@@ -110,7 +110,7 @@ export function buildMapPackage({ sourceYaml, mapKey, frameId = 'map', root = re
   return { manifest, imageBytes }
 }
 
-export function exportMap({ sourceYaml = 'robot/robot_maps/map2.yaml', mapKey = 'map2-v1', check = false, root = repoRoot, outputRoot = webRoot } = {}) {
+export function exportMap({ sourceYaml = 'robot/robot_maps/map2.yaml', mapKey = 'map2-v2', check = false, root = repoRoot, outputRoot = webRoot } = {}) {
   const { manifest, imageBytes } = buildMapPackage({ sourceYaml, mapKey, root })
   const manifestPath = resolve(outputRoot, `src/features/administration/pois/map/${mapKey}.generated.json`)
   const imagePath = resolve(outputRoot, `public${manifest.imageUrl}`)
@@ -142,6 +142,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       (keyIndex >= 0 && (!args[keyIndex + 1] || args[keyIndex + 1].startsWith('--')))) {
     throw new Error('Usage: node scripts/export-poi-map.mjs [--check] [--map-key map2-v2]')
   }
-  const manifest = exportMap({ check: args.includes('--check'), mapKey: keyIndex >= 0 ? args[keyIndex + 1] : 'map2-v1' })
+  const manifest = exportMap({ check: args.includes('--check'), mapKey: keyIndex >= 0 ? args[keyIndex + 1] : 'map2-v2' })
   console.log(`${args.includes('--check') ? 'Verified' : 'Exported'} ${manifest.mapKey}: ${manifest.width}x${manifest.height}, ${manifest.cellCounts.unknown} unknown cells`)
 }

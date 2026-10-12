@@ -126,9 +126,16 @@ stack fuses gyro yaw-rate.
 ### 2.0 Navigation baseline
 
 Planner `nav2_smac_planner/SmacPlanner2D`, controller
-`RegulatedPurePursuitController` at 0.20 m/s, autonomous reverse disabled in
+`RegulatedPurePursuitController`, autonomous reverse disabled in
 both the controller and the behaviour tree -
 [ADR-0007](decisions/0007-smac2d-rpp-no-autonomous-reverse.md).
+
+ADR-0007 records the original 0.20 m/s baseline. The current supervised speed
+trial sets RPP/smoother forward to 0.24 m/s and RPP heading/Spin/smoother
+rotation to 0.45 rad/s. Acceleration, braking, wheel caps and safety mechanisms
+are unchanged; combined forward/turn commands can still be wheel-pair scaled.
+This is READY FOR HARDWARE TEST, not measured robot performance; procedure and
+rollback are in [robot/docs/nav2-turn-test.md](../robot/docs/nav2-turn-test.md).
 
 RPP does path tracking plus collision checking against the local costmap. It is
 not a local trajectory planner and does not search for detours. So: an obstacle
@@ -386,8 +393,9 @@ this API build.
 
 The Web picker uses a versioned static map package exported from
 `robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
-source files; Web owns the deployment derivative. `map2-v1`, frame `map`,
-identifies this snapshot; it is not an alias for demo, Student, or Twin maps.
+source files; Web owns the deployment derivative. `map2-v2`, frame `map`,
+identifies the current snapshot; `map2-v1` remains registered for existing POIs.
+Neither key is an alias for demo, Student, or Twin maps.
 The exporter records source SHA-256 hashes, resolution, the full origin pose,
 dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
 same cell as the source pixel, with Nav2 Humble trinary classification. There
@@ -418,16 +426,16 @@ and unknown cells produce advisory warnings, not navigation verification.
 The API still validates numeric precision/range, not map existence, bounds,
 occupancy, reachability, or loaded robot-map identity.
 
-Current source caveat: with `negate: 0` and `free_thresh: 0.25`, gray 205 is
-free (`1-205/255 < 0.25`). The source contains no unknown cells under these
-thresholds. Do not infer occupancy from the source image's appearance or alter
-robot thresholds as part of the picker. Deployment-map binding, current robot
-pose, navigation testing, and fleet integration remain separate work.
-`map2-v1` remains an immutable snapshot of the current thresholds. Robot-map
-semantics and the runtime-loaded map must be reviewed before entering
-operational POIs; a later threshold change needs a new key and explicit POI
-review. Source parity checks intentionally fail until that revision is
-registered and their target key is updated.
+The current source uses `negate: 0` and `free_thresh: 0.196`; gray 205 is
+unknown (`1-205/255 > 0.196`). `map2-v2` records these thresholds and is the
+source-parity check target and default for new POIs. `map2-v1` remains an
+immutable snapshot with `free_thresh: 0.25`, where gray 205 is free and no
+cells are unknown. Existing POIs retain their key and raster; switching to
+the new map requires explicit pose review and never bulk-relabels stored POIs.
+Do not infer occupancy from the source image's appearance or alter robot
+thresholds as part of the picker. Deployment-map binding, current robot pose,
+navigation testing, and fleet integration remain separate work. A later
+threshold change requires a new key and source-parity check target.
 
 ### 3.1 Fleet contract
 
@@ -669,10 +677,10 @@ SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to D
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
 backend also implements Representative submission/pre-approval registration,
-Auth V1, Admin account management, Admin POI
+Admin registration review, Auth V1, Admin account management, Admin POI
 management, and development-only SimulationPreview; the relevant HTTP contracts
-are described in Sections 3.0–3.0.2 and 3.2.1. Tour execution/orchestration,
-Admin registration review, invitation/session product APIs, branch-request use cases, fleet
+are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestration,
+invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
 Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
@@ -777,8 +785,230 @@ Tour and REGISTRATION_SUBMITTED action, saved with the registration under the
 same lock/transaction. Replaying a committed key returns its original ID,
 even after a state change; it never edits the original registration. A fresh
 key creates another group. Audit contains identifiers/actions only, no roster
-PII. Invitation/email/session, Admin review, branch runtime and voting are
-outside this slice. Admin/Staff preview mocks do not review SQL registrations.
+PII. Invitation/email/session, branch runtime and voting are
+outside this slice. Admin review is implemented separately below; Admin/Staff
+Tour preview mocks continue to use their own simulation records.
+
+#### 3.2.2 Admin registration review HTTP boundary (implemented)
+
+This integrates `backend/` and `web/` against the existing v1.1 schema; no
+schema change is required. All endpoints require the Admin JWT role.
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | /api/admin/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
+| GET | /api/admin/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
+| POST | /api/admin/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
+| POST | /api/admin/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
+
+Collections use BaseResponse/PagedResponse and page/size/search/sort; expand is
+unsupported. Search covers school, group, Representative full name and Tour name.
+Sort supports submittedAt (default, oldest first), updatedAt and groupName, with
+optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
+from/to are offset-qualified instants filtering Tour scheduled time, inclusive
+lower/exclusive upper bound; the web converts calendar dates using UTC+7.
+Unknown IDs return 404. Anonymous/non-Admin requests return 401/403.
+
+Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
+versions must be 8-byte base64 SQL rowversions, reason is required for rejection
+(nonblank, at most 1000 characters) and absent/blank for approval. Unknown JSON
+properties are rejected. Actor comes only from JWT sub. No roster is accepted in
+a review write: the decision always concerns the stored active rows.
+
+The existing RegistrationTransactionBehavior wraps the UnitOfWork commit.
+Shared registration persistence takes the Tour UPDLOCK first, then registration
+UPDLOCK, checks both versions, SCHEDULED/SUBMITTED and invitation history.
+Approval independently validates persisted contact/roster data and rechecks
+normalized effective emails against SUBMITTED/APPROVED groups under the same
+lock as Representative writes. Rejection can release an invalid roster for
+correction; Representative resubmit revalidates and clears review metadata.
+Review does not replace or deactivate roster rows, change Tour state or release
+an APPROVED email reservation. Concurrent review/edit/cancel of the same
+version has one winner; retries of a successful decision return 409 and cannot
+append a second review audit. Refetch committed detail to reconcile a lost reply.
+
+The decision, ReviewedByUserId/ReviewedAt/UpdatedAt and one append-only
+REGISTRATION_APPROVED or REGISTRATION_REJECTED audit commit atomically. Audit
+contains only actor/Tour/registration/action/result/time, no reason or roster
+PII. A failed audit rolls back the decision. Conflict codes match Section 3.2.1;
+EMAIL_RESERVED reports only indexed incoming roster fields. Detail queries
+retain a short read-only Tour UPDLOCK while projecting
+registration/version/roster, so a version cannot be paired with an older roster
+under read-committed isolation. They use the same Tour-first order as writers.
+Details expose a review gate with a reason; browser focus/reconnect cannot
+replace the review
+snapshot, and a 409 requires explicit reload before another decision.
+
+Approval is persisted eligibility for access issuance. When invitation support
+is enabled, Section 3.2.3 issues invitations and queues email in the same commit.
+Any
+invitation history (including inactive/revoked rows) blocks review with
+INVITATION_BOUNDARY to avoid changing existing access without atomic revocation.
+APPROVED roster stays read-only to Representative; invitation support is separate.
+Admin email correction is implemented in Section 3.2.4. Approval reversal and
+READY/runtime remain outside this review slice.
+
+Live routes `/admin/registrations` and `/admin/registrations/pending` use only
+this HTTP contract, with no mock fallback. Owner-keyed live query caches are
+separate from demo caches. Existing Admin Tour/dashboard review drawers,
+invitation demos, Staff/Student simulations and legacy contracts remain mock;
+their links use the mock Tour review consumer rather than sending fixture IDs
+to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
+The Admin sidebar "Chờ duyệt" badge links to the live queue, so it reads
+`pagination.totalItems` of the same SUBMITTED query; the dashboard and bell stay
+simulated. Representative lists/details refetch from SQL and show committed review state.
+
+`backend/src/SmartCampus.Application/Features/Registrations/` owns the shared
+registration invariants: state values, the SCHEDULED write window and conflict
+codes, rowversion tokens, email normalization/reservation, input validation and
+audit. `IRegistrationRepository.LockRegistrationAsync` is the single Tour-first
+lock entry for Representative, review and invitation writers. Each actor policy
+sits at its feature root because commands enforce it and detail queries project
+it: `backend/src/SmartCampus.Application/Features/Representative/RepresentativeRegistrationPolicy.cs`
+and `backend/src/SmartCampus.Application/Features/RegistrationReview/ReviewPolicy.cs`.
+Approve and reject are separate commands sharing
+`backend/src/SmartCampus.Application/Features/RegistrationReview/Commands/ReviewDecision.cs`; Representative
+draft replacement stays with its commands; read models stay in their query
+`Dtos/`. The roster display and SQL registration-state vocabulary shared by live
+Admin and Representative are under `web/src/features/registrations/`.
+
+#### 3.2.3 Invitations, Resend and Student entry (implemented, opt-in)
+
+ADR-0015 defines code protection, expiry, queue claims and session semantics.
+The full configuration/transport contract is in
+backend/docs/invitations-resend.md. This integrates backend and web without a
+schema change. Enabled approval atomically issues/queues one private invitation
+per active approved row; failed mail never reverses approval or changes Tour state.
+
+Admin or owner Representative GET /api/registrations/{registrationId}/invitations
+returns enabled/canIssue and items with approved row identity, version, expiry,
+revocation, latest email status and action gates. Codes/hashes/ciphertext/session
+credentials are never returned. Staff-only gets 403, another owner's group 404.
+POST the same path + /issue with requestId (UUID), expectedRowVersion
+(registration), expectedTourRowVersion to fill missing invitations of previously
+approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
+and expectedRowVersion (invitation). All use BaseResponse; writes return null.
+Retain requestId for uncertain retries; identical committed operations cannot
+enqueue/rotate twice. Another operation with that ID conflicts.
+
+Tour-first locks serialize issuance/support/admission. Resend keeps code/session;
+reissue keeps invitation ID/expiry, replaces code and closes open sessions;
+revoke invalidates code and sessions. Send/reissue require active APPROVED rows,
+unexpired access and SCHEDULED/READY/RUNNING; revocation also supports valid
+post-Start End Early fallback. A one-minute per-invitation send cooldown applies.
+Expiry defaults to scheduled start +24 hours, configurable for future issuance.
+Codes have 100 random bits, HMAC-SHA256 hashes and AES-256-GCM protected values
+bound to ID/version with separate external keys; no secret/PII appears in URLs.
+
+AuditLogs is the durable delivery queue: EMAIL_SEND_REQUESTED/PENDING, one
+EMAIL_SEND_STARTED claim, and one EMAIL_SEND_RESULT per CorrelationId.
+External Resend HTTP happens after commit, using the attempt UUID as its
+idempotency key. Interrupted attempts become UNKNOWN after two minutes;
+manual resend is a new attempt. No automatic uncertain retry. ACCEPTED means
+provider acceptance, not inbox delivery/read. Audit includes only IDs, version,
+sanitized outcome and timestamps; never code, ciphertext, PII or provider bodies.
+
+Student POST /api/student/tours/{tourId}/join accepts JSON {accessCode}.
+POST /session (empty body) restores/heartbeats; POST /leave closes the session.
+All use BaseResponse with minimal Tour name/state/schedule, invitation expiry,
+row type and eligible fallback URL. No account JWT/token response/roster identity.
+The per-Tour cookie is HttpOnly, Secure, SameSite=None and scoped to that API
+path; SQL stores only its HMAC. Exact browser-origin checks protect cookie
+mutations. Join is limited to 60 requests/minute/IP. A shared Tour lock and SQL
+filtered UNIQUE enforce one active session; expired sessions close before INSERT.
+The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
+Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
+session for configured SessionIdleMinutes (default 10), bounded by invitation
+expiry. First successful entry records INVITATION_ENTERED once per invitation.
+
+Live Admin review and owner Representative detail share real invitation support.
+SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state;
+non-GUID fixtures retain the labelled demo. No simulated stream/AI/robot state
+is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
+roster replacement after issuance and retention remain separate. Admin email
+correction is implemented below.
+HTTPS and browser cookie/local-network permissions still apply to local BE use.
+
+#### 3.2.4 Admin roster email correction (implemented)
+
+This integrates backend and the live Admin registration drawer without a schema
+change. Business authority is scope Section 5.2; it is a single-row correction,
+not approval reversal or roster replacement.
+
+POST /api/admin/registrations/{id}/roster/{rowId}/email requires the Admin JWT
+role. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
+expectedRosterRowVersion, expectedInvitationRowVersion?}. UUID requestId and
+8-byte base64 version tokens are required; the invitation token is null only
+when the selected row has no invitation. Unknown JSON properties are rejected;
+actor comes from JWT sub. BaseResponse returns null on committed success;
+clients refetch detail and invitation support.
+
+Admin GET detail now adds correctEmail {allowed, reason}; each active roster row
+adds id, rowVersion and nullable invitationRowVersion. These tokens and the
+roster are read under the existing Tour snapshot lock. Representative input and
+detail contracts are unchanged. Row ID, never row number/name, selects the write.
+
+The command uses the existing registration transaction/UnitOfWork. It takes the
+Tour lock, then registration lock, checks Tour/registration/row/invitation
+versions, requires SCHEDULED, and checks the normalized email against other
+active rows in the same registration and the existing SUBMITTED/APPROVED
+Tour-wide reservations. Normalization/format/length match registration input;
+no alias canonicalization. The selected active row retains ID, name, type and
+class; only Email/UpdatedAt change. Registration UpdatedAt/version advances so
+opened Representative replacements and Admin decisions become stale. Review
+metadata and registration state are preserved.
+
+SUBMITTED and REJECTED may be corrected without sending or granting access;
+REJECTED retains its reason/reviewer and still needs Representative resubmit and
+Admin approval. CANCELLED/unknown states are refused. Any invitation history on
+a non-approved registration blocks correction, consistent with existing review
+and Representative boundaries. READY requires reopening; RUNNING and terminal
+Tours are refused. The real Tour reopen endpoint is still separate implementation
+work; the live drawer explains the restriction and never invokes a mock reopen.
+
+For APPROVED, enabled invitation configuration is required. Existing selected
+invitation keeps its ID/expiry, increments AccessVersion, replaces hash/protected
+code, clears revocation and closes every open browser session via the same
+invitation reissue implementation. Expired invitations cannot be revived. If
+the approved row has no invitation (e.g. approval while support was disabled),
+only that row is issued using the configured initial expiry. Other rows,
+invitations and sessions are untouched. Correction queues one new email attempt
+atomically with the email/access change. It does not apply the old recipient's
+send cooldown: a correction must replace access immediately; later manual resend
+uses the existing one-minute cooldown and current code.
+
+External email stays in the existing post-commit worker. Old pending requests
+fail the AccessVersion check at claim; an already claimed old email may still
+reach its former recipient, but its code is invalid after correction commits.
+FAILED/UNKNOWN delivery keeps the new email/code and APPROVED state; ordinary
+invitation resend retries the current code without another rotation.
+
+ROSTER_EMAIL_CORRECTED audit records actor/Tour/row/request/time/result and
+opaque opened snapshot versions/registration ID. No email (including email
+hash), names, access code, ciphertext or session token is added to audit. Audit,
+row, registration, invitation, session revocation and queue writes commit or
+roll back together. Durable receipts are scoped to Tour plus correction action
+and request UUID. A replay by the same actor for the same row/snapshot and
+normalized current recipient returns success before stale/state checks without
+rotating/enqueuing again, including after restart. A reused UUID with different
+actor/row/snapshot/recipient returns IDEMPOTENCY_CONFLICT. After any later
+correction of the same row, replay returns that conflict and requires reload
+(even if the email was subsequently changed back). It never reinstates the
+earlier email. This avoids retaining recipient PII in
+append-only receipts. Equivalent email case/whitespace is treated identically.
+
+400 reports invalid email/tokens/body; 404 reports missing/inactive/wrong-group
+row; 409 uses STALE_VERSION, TOUR_LOCKED, STATE_CONFLICT, INVITATION_BOUNDARY,
+EMAIL_RESERVED, EMAIL_UNCHANGED, INVITATIONS_DISABLED, INVITATION_UNAVAILABLE,
+INVITATION_EXPIRED or IDEMPOTENCY_CONFLICT. Conflicts do not expose another
+group's identity/email. 401/403 enforce authentication/role.
+
+The Admin drawer confirms the selected row/old email/new email and access
+consequences. It retains the exact request UUID/body on uncertain network/5xx
+outcomes; confirmed validation/duplicate errors allow a new attempt. Stale,
+state and authorization failures block further writes until explicit successful
+reload. Focus/reconnect cannot replace an opened snapshot. Live calls never
+fall back to fixtures; existing Tour/demo consumers remain intact.
 
 ### 3.3 State storage and realtime delivery
 

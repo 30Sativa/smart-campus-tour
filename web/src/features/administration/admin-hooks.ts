@@ -1,10 +1,9 @@
 /**
  * Server state for administration: TanStack Query owns the cache.
  *
- * `/api/admin/*` does not exist yet, so the four services are bound to their
- * labelled mocks here and nowhere else. When the endpoints land, replace the
- * four `mock…Service` bindings with `adminTourService`, `adminRegistrationService`,
- * `adminInvitationService` and `adminRouteService` from `api/contracts/admin.ts`.
+ * The Tour/dashboard/invitation demos remain bound to labelled mocks here.
+ * Live registration review uses its separate SQL HTTP binding.
+ * These separate caches and contracts must never be used as an error fallback.
  *
  * Every change invalidates the operations cache as well: Admin's "Chốt buổi"
  * is exactly what makes Staff's Start possible.

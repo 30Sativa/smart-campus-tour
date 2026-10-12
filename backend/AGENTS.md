@@ -33,10 +33,12 @@ backend/
 │   └── scaffold-db
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
-│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Pois,Simulation}/
-│   ├── SmartCampus.Infrastructure/  Authentication/, Persistence/{Repositories,Seeding}/
+│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Invitations,Pois,
+│   │                               Registrations,RegistrationReview,Representative,Simulation}/
+│   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/Invitations/,
+│   │                               Persistence/{Repositories,Seeding}/
 │   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
-│                                    Properties/, Program.cs, appsettings.json
+│                                    Invitations/, Properties/, Program.cs, appsettings.json
 └── tests/
     ├── SmartCampus.UnitTests/
     ├── SmartCampus.IntegrationTests/
@@ -44,13 +46,19 @@ backend/
 ```
 
 Current API controllers cover Auth, Admin account management, Admin POI
-management, Representative submission/pre-approval registration, and development
-SimulationPreview. The Representative contract and Tour-first transaction are
-recorded in `docs/architecture.md` Section 3.2.1; invitation/session support and
-Admin review remain separate implementation work. Application has matching Auth,
-Accounts, POI and Representative features plus the in-memory pose publisher used by
-SimulationPreview. Infrastructure has specific Auth, account, POI
-management and Representative repositories. The temporary robot pose endpoint and read-only fleet
+management, Representative submission/pre-approval registration, Admin
+registration review, owner/Admin invitation support, anonymous Student cookie
+entry/session/leave, and development SimulationPreview. The Representative
+contract and Tour-first transaction are recorded in `docs/architecture.md`
+Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation issuance,
+Resend delivery and minimal Student sessions in Section 3.2.3. Application has matching Auth,
+Accounts, POI, Invitations, Representative and RegistrationReview features, shared Registrations
+invariants, and the in-memory pose publisher used by SimulationPreview.
+Infrastructure has specific Auth, account, POI, Representative read and shared
+registration mutation/review, invitation and Student-access repositories.
+Invitation cryptography/configuration and the Resend HTTP adapter are in
+Infrastructure; the hosted delivery worker is in Api and dispatches Application
+claim/result commands before/after external HTTP. The temporary robot pose endpoint and read-only fleet
 pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
 cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
@@ -79,13 +87,15 @@ backend/src/SmartCampus.Application/
 ├── Common/
 │   ├── Abstractions/
 │   │   ├── Authentication/          authentication use-case boundaries
+│   │   ├── Invitations/             code/email boundaries and invitation settings
 │   │   ├── Messaging/               ICommand<T>, IQuery<T>
 │   │   └── Persistence/             commit boundary and feature repository interfaces
 │   ├── Authentication/              shared role resolution
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          current: Accounts, Auth, Pois, Representative, Simulation
+├── Features/                          current: Accounts, Auth, Invitations, Pois, Registrations,
+│                                       RegistrationReview, Representative, Simulation
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
 │       └── Queries/<UseCase>/
@@ -96,16 +106,19 @@ backend/src/SmartCampus.Infrastructure/
 ├── Persistence/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
-│   ├── Repositories/                 current Auth, Accounts, POI management and Representative implementations
+│   ├── Repositories/                 Auth, Accounts, POI, Representative, shared Registrations,
+│   │                                RegistrationReview, Invitations and StudentAccess
 │   └── Seeding/                      current demo POI seeding
-├── Integrations/                     future: external adapters without Api/Hub references
+├── Integrations/Invitations/         current code protection, configuration, email template and Resend adapter
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Api/
 ├── Common/{Requests,Responses}/
 ├── Controllers/                      AuthController, AdminAccountsController,
 │                                     AdminPoisController, RepresentativeController,
-│                                     SimulationController
+│                                     AdminRegistrationsController, InvitationsController,
+│                                     StudentAccessController, SimulationController
+├── Invitations/                      hosted email worker; scoped MediatR claim/result dispatch
 ├── ExceptionHandling/
 ├── Hubs/                             SimulationHub/Preview helpers; fleet/operations future
 ├── Properties/
@@ -169,8 +182,9 @@ Decisions and operating notes are in
 `backend/database/README.md`. This did not migrate v1.0 data. Do not manually
 edit generated entities to stand in for a SQL schema change.
 V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
-no per-Tour dwell editor or operator assignment. Invitation/branch use cases,
-roster locking and retention cleanup remain implementation work.
+no per-Tour dwell editor or operator assignment. Production branch use cases,
+Tour readiness/state writers and retention cleanup remain implementation work;
+pre-approval roster mutations already enforce the Tour write window and locks.
 
 `backend/database/smart-campus-tour-schema-v1.1.sql` and the scaffolded entities
 contain `User`, `UserRole`, `RefreshToken`, `Route`, `Poi`, `RouteStop`,
@@ -181,8 +195,9 @@ invitation/session records represent student access; BranchRequests represent
 proposed route changes. `RowVersion` is a SQL Server concurrency token on
 `Robot`, `Tour`, `GroupRegistration`, `RosterRow`, `Invitation`,
 `TourAllowedBranch`, `BranchRequest`, and `Poi`. Database uniqueness enforces
-selected invariants, while session/request workflows and cross-row consistency
-still need application code.
+selected invariants. Application invitation/session commands enforce admission,
+expiry, revocation and cross-row checks under Tour-first locks; production
+branch/request orchestration remains separate implementation work.
 
 `TourRoute`, `TourSlot`, `Booking`, and `TourInstance` are terms from an older
 design, **not current tables or entities**. A navigation leg remains a
@@ -250,14 +265,15 @@ approved email, retaining invitation identity and expiry. Representative support
 is own-group only; Admin supports all groups; Staff-only has no recovery right.
 Shared-viewing data identifies its responsible person, not every student in the
 room; individual data requires individual rows. Code storage for safe resend,
-API binding, atomic admission and revocation remain implementation work.
+Secure code storage, API binding, atomic admission, Resend delivery and revocation
+are implemented under ADR-0015 with opt-in backend configuration.
 
 The current v1.1 schema persists invitation/session records, shared-viewing
 classification and branch requests; email attempts remain append-only audit
 records, and their delivery/revocation workflows remain application logic. The
 backend currently implements Auth V1, Admin account management, Admin POI
 management, and its development Simulation controller/Hub. Representative Tour reads and pre-approval registration are now implemented
-under Section 3.2.1 of `docs/architecture.md`. Admin review, invitation, dispatch,
+under Section 3.2.1 of `docs/architecture.md`. Admin review is implemented under Section 3.2.2; invitation/session support under Section 3.2.3. Dispatch
 and production fleet endpoints remain planned. Do not infer that a group code/name match is equivalent to an approved
 personal invitation. A future feature change must reconcile its public
 contracts in `docs/architecture.md` and include the appropriate schema and
@@ -290,8 +306,20 @@ shape as registration mutations: `RegistrationTransactionBehavior` wraps their
 UnitOfWork save in a read-committed SQL transaction, and each handler takes an
 update lock on the parent Tour before locking the registration, checking versions
 and effective emails, so roster/registration/audit rows commit together
-(`docs/architecture.md` Section 3.2.1). Future registration writers, including
-Admin review, must keep that Tour-first lock order.
+(`docs/architecture.md` Section 3.2.1). Admin approve/reject and invitation
+support use the same transaction. Writers of an existing registration acquire
+locks only through `IRegistrationRepository.LockRegistrationAsync`, which owns
+the Tour-first order; create and Tour-only writers lock the Tour first. Do not
+lock a registration or its rows by another path.
+
+Student join/session/leave and email claim/result commands also use this
+registration transaction and acquire the Tour lock. Session is a command:
+heartbeats persist LastSeenAt/ExpiresAt. Closing idle sessions uses a scoped
+ExecuteUpdate before insertion to satisfy the filtered unique index, within
+the same transaction; it is not an independent commit. The worker commits an
+email claim before calling the Infrastructure sender and records a sanitized
+result through a new scoped command. Never put external email HTTP inside the
+SQL transaction or automatically retry an uncertain send.
 
 **Query:** HTTP request -> Api controller -> MediatR `IQuery<T>` ->
 `ValidationBehavior` -> Application query handler -> Application read boundary
@@ -386,7 +414,7 @@ account in V1; the physical `UserRoles` primary key remains unchanged.
 The backend also implements Admin account and POI management, plus
 Representative Tour reads and owner-scoped registration submission/management.
 User JWT and role authorization for those APIs are present. Authorization for
-future Admin Tour/review, invitation, dispatch, and fleet business APIs, and
+future Admin Tour, dispatch, and fleet business APIs, and
 robot/fleet machine authentication, remain unimplemented. Production fleet and
 operations Hubs remain pending; before
 robot navigation commands are enabled outside the local compatibility spike,

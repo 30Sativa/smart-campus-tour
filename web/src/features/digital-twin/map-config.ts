@@ -25,7 +25,7 @@ export type MapPose = { x: number; y: number; yaw: number }
 export type MapConfig = {
   mapKey: string
   /** map metres -> 3D scene ground (u, v); the scene position is (u, 0, -v), Y up. */
-  scene: { transform: Affine2D; calibrated: boolean }
+  scene: { transform: Affine2D; calibrated: boolean; modelKey?: string }
   /** map metres -> Student 2D map in percent of its drawing (0-100 across, 0-100 down). */
   student2d: { transform: Affine2D; calibrated: boolean }
 }
@@ -41,6 +41,17 @@ export const IDENTITY: Affine2D = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }
  * it needs its own three-point fit before real poses appear on it.
  */
 export const MAP_CONFIGS: Record<string, MapConfig> = {
+  // Physical occupancy snapshots have no measured transform to the 3D model yet.
+  'map2-v1': {
+    mapKey: 'map2-v1',
+    scene: { transform: IDENTITY, calibrated: false },
+    student2d: { transform: IDENTITY, calibrated: false },
+  },
+  'map2-v2': {
+    mapKey: 'map2-v2',
+    scene: { transform: IDENTITY, calibrated: false },
+    student2d: { transform: IDENTITY, calibrated: false },
+  },
   campus_v1: {
     mapKey: 'campus_v1',
     scene: { transform: IDENTITY, calibrated: false },

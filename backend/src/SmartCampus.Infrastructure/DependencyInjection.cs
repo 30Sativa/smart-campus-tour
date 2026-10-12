@@ -10,6 +10,8 @@ using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
 using SmartCampus.Infrastructure.Persistence.Seeding;
+using SmartCampus.Application.Common.Abstractions.Invitations;
+using SmartCampus.Infrastructure.Integrations.Invitations;
 
 namespace SmartCampus.Infrastructure;
 
@@ -38,7 +40,15 @@ public static class DependencyInjection
         services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
         services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
+        services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
+        services.AddScoped<IRegistrationReviewRepository, EfRegistrationReviewRepository>();
         services.AddScoped<IRegistrationTransaction, EfRegistrationTransaction>();
+        var invitationConfiguration = new InvitationConfiguration(configuration);
+        services.AddSingleton(invitationConfiguration);
+        services.AddSingleton(invitationConfiguration.Settings);
+        services.AddSingleton<IInvitationCodeService, InvitationCodeService>();
+        services.AddScoped<IInvitationRepository, EfInvitationRepository>();
+        services.AddScoped<IStudentAccessRepository, EfStudentAccessRepository>();
         services.AddScoped<InitialAdminSeeder>();
         services.AddScoped<DemoPoiSeeder>();
 

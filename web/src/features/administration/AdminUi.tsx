@@ -3,7 +3,7 @@
  * `components/ui`; administration state and labels stay in this feature.
  */
 import type { ReactNode } from 'react'
-import { AlertCircle, CircleAlert, Inbox, MailCheck, MailWarning, MailX, RotateCcw, TriangleAlert } from 'lucide-react'
+import { AlertCircle, CircleAlert, CircleCheck, Inbox, MailCheck, MailWarning, MailX, RotateCcw, TriangleAlert } from 'lucide-react'
 import type { AdminRegistration, RegistrationState, TourState } from '../../api/contracts/admin'
 import { FilterChips, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../components/ui/ui-classes'
@@ -105,10 +105,11 @@ export function SkeletonRows({ rows = 5, label = 'Đang tải' }: { rows?: numbe
 }
 
 /** An inline notice inside a panel or dialog. */
-export function Notice({ tone = 'info', children, action }: { tone?: 'info' | 'warn' | 'danger'; children: ReactNode; action?: ReactNode }) {
-  const palette = tone === 'danger' ? 'border-[#f5c8c2] bg-[#fff4f2] text-[#9d3428]' : tone === 'warn' ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : 'border-[#d8e5f7] bg-[#f5f9ff] text-[#35507a]'
+export function Notice({ tone = 'info', children, action }: { tone?: 'info' | 'success' | 'warn' | 'danger'; children: ReactNode; action?: ReactNode }) {
+  const palette = tone === 'danger' ? 'border-[#f5c8c2] bg-[#fff4f2] text-[#9d3428]' : tone === 'warn' ? 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]' : tone === 'success' ? 'border-[#b8dec9] bg-[#edf8f1] text-[#236344]' : 'border-[#d8e5f7] bg-[#f5f9ff] text-[#35507a]'
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-[13px] leading-5 font-medium ${palette}`} role={tone === 'info' ? 'status' : 'alert'}>
+    <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-[13px] leading-5 font-medium ${palette}`} role={tone === 'info' || tone === 'success' ? 'status' : 'alert'}>
+      {tone === 'success' && <CircleCheck size={20} className="shrink-0" aria-hidden="true" />}
       <div className="min-w-0 flex-1">{children}</div>
       {action}
     </div>

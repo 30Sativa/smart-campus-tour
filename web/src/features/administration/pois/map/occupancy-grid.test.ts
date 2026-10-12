@@ -67,7 +67,7 @@ describe('occupancy-grid coordinates', () => {
   })
 
   it('never aliases demo keys or a mismatched frame to the registered raster', () => {
-    expect(occupancyMapFor('map2-v1', 'map')).toBe(map)
+    expect(occupancyMapFor('map2-v2', 'map')).toBe(map)
     expect(occupancyMapFor('demo-poi-baseline-v1', 'map')).toBeNull()
     expect(occupancyMapFor('campus_v1', 'map')).toBeNull()
     expect(occupancyMapFor('map2-v1', 'odom')).toBeNull()

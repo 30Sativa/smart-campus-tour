@@ -4,7 +4,6 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import AdminTourDetailPage from './AdminTourDetailPage'
-import AdminRegistrationsPage from './AdminRegistrationsPage'
 import { resetSim, tourById } from '../../mocks/staff-sim'
 import { useAuthStore } from '../../stores/auth-store'
 
@@ -75,7 +74,7 @@ describe('admin tour workflow', () => {
   })
 
   it('asks for a reload when the roster changed during review', async () => {
-    renderAt('/admin/registrations/pending?review=reg-14', <AdminRegistrationsPage mode="pending" />, '/admin/registrations/pending')
+    renderAt('/admin/tours/tour-07?tab=registrations&review=reg-14', <AdminTourDetailPage />, '/admin/tours/:tourId')
     fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
     const confirm = await screen.findByRole('dialog', { name: /Duyệt THPT Chuyên Trần Đại Nghĩa/ })
     fireEvent.click(within(confirm).getByRole('button', { name: 'Duyệt' }))

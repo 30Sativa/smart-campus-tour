@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, Download } from 'lucide-react'
 import { repButton } from '../rep-classes'
 import { ROSTER_MAX_ROWS, TEMPLATE_FILE_NAME, downloadBytes, importRosterFile, rosterTemplateBytes } from '../roster-import'
 import type { ImportResult } from '../roster-import'
-import { RosterPreview } from './RosterPreview'
+import { RosterPreview } from '../../registrations/RosterPreview'
 import { HoopDrop } from './HoopDrop'
 
 export type AcceptedRoster = Extract<ImportResult, { ok: true }>
@@ -138,7 +138,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
               </div>
             ))}
           </dl>
-          <div style={{ marginTop: 16 }}><RosterPreview rows={phase.result.rows} label="Xem trước danh sách" maxHeight="max-h-[300px]" /></div>
+          <div style={{ marginTop: 16 }}><RosterPreview rows={phase.result.rows} label="Xem trước danh sách" maxHeight="max-h-[300px]" variant="representative" /></div>
           {keptCount > 0 && (
             <p className="rep-file-warn">Xác nhận sẽ thay toàn bộ {keptCount} dòng lời mời đang có bằng {phase.result.rows.length} dòng lời mời trong file này. Không ghép hai danh sách.</p>
           )}
