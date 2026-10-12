@@ -333,6 +333,27 @@ def test_global_costmap_has_no_depth_or_sonar():
     assert 'depth' not in rendered
 
 
+def test_lidar_clears_no_returns_without_clearing_near_range_rejects():
+    """Guard the coupled scan-filter/costmap policy, including its safety edge.
+
+    Humble's valid-inf callback projects +Inf as a maximum-range clearing
+    ray. Too-close returns must therefore be NaN, not +Inf; otherwise a
+    rejected close object could erase obstacles behind it. This contract
+    supplements an isolated test of the installed Nav2 obstacle layer.
+    """
+    params = yaml.safe_load(_read('robot_control/config/scan_range_filter.yaml'))
+    filters = params['/**/scan_filter_chain']['ros__parameters']
+    ranges = filters['filter1']['params']
+    assert math.isnan(ranges['lower_replacement_value'])
+    assert ranges['upper_replacement_value'] == math.inf
+    assert ranges['lower_threshold'] > 0
+    for scan in (_local_costmap()['lidar_obstacle_layer']['scan'],
+                 _global_costmap()['obstacle_layer']['scan']):
+        assert scan['inf_is_valid'] is True
+        assert scan['marking'] is True and scan['clearing'] is True
+        assert 0 < scan['obstacle_max_range'] < scan['raytrace_max_range']
+
+
 # ----------------------------------------------------------- local costmap
 
 

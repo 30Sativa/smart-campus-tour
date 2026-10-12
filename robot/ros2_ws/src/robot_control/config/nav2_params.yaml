@@ -213,6 +213,10 @@ local_costmap:
           data_type: LaserScan
           marking: true
           clearing: true
+          # No-return rays must clear old marks after a person moves away.
+          # Near-range rejects stay NaN in the scan filter so they
+          # cannot be mistaken for clear space by this setting.
+          inf_is_valid: true
           max_obstacle_height: 2.0
           raytrace_max_range: 15.0
           raytrace_min_range: 0.0
@@ -333,6 +337,8 @@ global_costmap:
           data_type: LaserScan
           marking: true
           clearing: true
+          # Same no-return clearing policy as the local LiDAR layer.
+          inf_is_valid: true
           max_obstacle_height: 2.0
           raytrace_max_range: 15.0
           raytrace_min_range: 0.0
