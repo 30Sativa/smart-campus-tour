@@ -60,7 +60,7 @@ export function SparkCard({ title, to, label, value, unit, note, series }: { tit
         <p className="text-xs text-[#6b7280]">{note}</p>
       </div>
       <div className="mt-auto h-[76px] w-full" aria-hidden="true">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <defs><linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.2} /><stop offset="1" stopColor={DONE} stopOpacity={0} /></linearGradient></defs>
             <Area type="monotone" dataKey="v" stroke={DONE} strokeWidth={2} fill={`url(#${id}-g)`} connectNulls isAnimationActive={!reducedMotion()} dot={false} />
@@ -114,7 +114,7 @@ export function StudentsThroughDay({ tours, now }: { tours: TourOperation[]; now
       </p>
       <div className="h-[240px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh trong ngày: ${day.joined} đã tham gia, ${day.planned} theo lịch`}>
         {day.planned === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Hôm nay chưa có buổi nào.</p> : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <AreaChart data={day.points} margin={{ top: 16, right: 16, bottom: 0, left: -12 }}>
               <defs><linearGradient id={`${id}-a`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.22} /><stop offset="1" stopColor={DONE} stopOpacity={0.02} /></linearGradient></defs>
               <CartesianGrid vertical={false} stroke="#f1f2f4" />
@@ -146,7 +146,7 @@ export function TodayByState({ tours }: { tours: TourOperation[] }) {
       <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
         <div className="relative size-[200px]" role="img" aria-label={`${tours.length} buổi: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ') || 'chưa có'}`}>
           {data.length > 0 && (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" debounce={160}>
               <PieChart>
                 <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}>
                   {data.map((d) => <Cell key={d.state} fill={d.color} />)}
@@ -188,7 +188,7 @@ export function RunResults({ days }: { days: DayResult[] }) {
       </p>
       <div className="h-[230px] px-2 pt-2 pb-3" role="img" aria-label={days.map((d) => `${d.label}: ${d.completed} hoàn thành, ${d.cancelled} kết thúc sớm hoặc hủy`).join('; ')}>
         {completed + cancelled === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Chưa có buổi nào kết thúc trong 7 ngày qua.</p> : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barGap={2} barCategoryGap="30%">
               <CartesianGrid vertical={false} stroke="#f1f2f4" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={axisTick} interval={0} />
