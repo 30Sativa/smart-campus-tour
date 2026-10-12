@@ -26,20 +26,33 @@ export function StudentNarrationBar({
   }
 
   return (
-    <div className="st-narr">
-      <div className="st-narr__body">
+    <div className="st-narr st-x-narr">
+      <div className="st-narr__label">
+        <span>Thuyết minh điểm dừng</span>
+        {isAiSpeaking && <span className="st-narr__duck">Âm lượng nền đang hạ thấp</span>}
+      </div>
+      <h4>{title}</h4>
+
+      <div className="st-x-player">
         <span className={isPlaying ? 'st-narr__ic is-playing' : 'st-narr__ic'} aria-hidden="true">
           <Volume2 size={18} />
         </span>
-        <div>
-          <div className="st-narr__label">
-            <span>Thuyết minh điểm dừng</span>
-            {isAiSpeaking && <span className="st-narr__duck">Âm lượng nền đang hạ thấp</span>}
-          </div>
-          <h4>{title}</h4>
-          <p>{text}</p>
-        </div>
+        <span className={isPlaying ? 'st-x-wave st-x-wave--long' : 'st-x-wave st-x-wave--long is-idle'} aria-hidden="true">
+          {Array.from({ length: 18 }, (_, index) => <i key={index} />)}
+        </span>
+        <span className="st-x-player__state">{isPlaying ? 'Đang phát' : 'Đã phát'}</span>
       </div>
+
+      {isPlaying ? (
+        // Words light up one after another while the narration plays (decorative pacing, not audio sync).
+        <p key={text} className="st-x-words">
+          {text.split(' ').map((word, index) => (
+            <span key={index} style={{ ['--i' as string]: index }}>{word} </span>
+          ))}
+        </p>
+      ) : (
+        <p>{text}</p>
+      )}
 
       {onReplay && (
         <button type="button" onClick={onReplay} className="st-chip-btn">

@@ -40,7 +40,7 @@ export function KpiCard({ title, to, label, value, unit, series, note }: { title
         <p className="text-xs text-[#9ca3af]">{note}</p>
       </div>
       <div className="mt-auto h-[84px] w-full" aria-hidden="true">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <defs><linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={APPROVED} stopOpacity={0.2} /><stop offset="1" stopColor={APPROVED} stopOpacity={0} /></linearGradient></defs>
             <Area type="monotone" dataKey="v" stroke={APPROVED} strokeWidth={2} fill={`url(#${id}-g)`} isAnimationActive={!reducedMotion()} dot={false} />
@@ -81,7 +81,7 @@ export function StudentsByTour({ tours, registrations, now }: { tours: AdminTour
       </div>
       <div className="h-[250px] px-2 pt-2 pb-3" role="img" aria-label={`Theo Tour: ${rows.map((r) => `${r.code} gửi ${r.sent}, duyệt ${r.approved}`).join('; ')}`}>
         {rows.length === 0 ? <p className="grid h-full place-items-center text-sm text-[#9ca3af]">Chưa có Tour nào.</p> : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barGap={4} barCategoryGap="28%">
               <CartesianGrid vertical={false} stroke="#f1f2f4" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} />
@@ -149,7 +149,7 @@ export function StudentsPerDay({ tours, registrations }: { tours: AdminTour[]; r
       </CardHead>
       <p className="flex flex-wrap items-baseline gap-2 px-5 pt-4"><b className="text-[26px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{today}</b><span className="text-xs text-[#9ca3af]">hôm nay · {total} học sinh trong 14 ngày</span></p>
       <div className="h-[250px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh tham gia 14 ngày gần nhất: ${days.filter((d) => d.students).map((d) => `${d.label} ${d.students}`).join(', ') || 'chưa có'}`}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={days} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
             <defs><linearGradient id={`${id}-a`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={APPROVED} stopOpacity={0.22} /><stop offset="1" stopColor={APPROVED} stopOpacity={0.01} /></linearGradient></defs>
             <CartesianGrid vertical={false} stroke="#f1f2f4" />
@@ -184,7 +184,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
       <CardHead id="dash-donut" title="Tour theo trạng thái" />
       <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
         <div className="relative size-[200px]" role="img" aria-label={`${tours.length} Tour: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ')}`}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <PieChart>
               <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}
                 onClick={(_, index) => { const picked = data[index]; if (picked) navigate(`/admin/tours?state=${picked.state}`) }} className="cursor-pointer outline-none">

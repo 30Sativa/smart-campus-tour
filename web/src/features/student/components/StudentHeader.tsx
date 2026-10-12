@@ -1,4 +1,5 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Moon, Sun } from 'lucide-react'
+import { useThemeStore } from '../../../stores/theme-store'
 import { USE_MOCK_API } from '../../../mocks/mock-mode'
 import type { StudentSession } from '../student-types'
 
@@ -20,6 +21,13 @@ export function StudentHeader({
   isLive = false,
   onLeave,
 }: StudentHeaderProps) {
+  const theme = useThemeStore((state) => state.theme)
+  const toggleTheme = useThemeStore((state) => state.toggleTheme)
+  const themeButton = (
+    <button type="button" className="st-theme" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối'} title={theme === 'dark' ? 'Nền sáng' : 'Nền tối'}>
+      {theme === 'dark' ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+    </button>
+  )
   return (
     <header className="st-header">
       <div className="st-ctn st-header__inner">
@@ -38,6 +46,7 @@ export function StudentHeader({
 
         {session ? (
           <div className="st-user">
+            {themeButton}
             <div className="st-user__text">
               <p className="st-user__name">{session.studentName}</p>
               <p className="st-user__meta">
@@ -53,10 +62,12 @@ export function StudentHeader({
             )}
           </div>
         ) : (
-          <div className="st-portal"><i />Cổng tham quan học sinh</div>
+          <div className="st-user">
+            {themeButton}
+            <div className="st-portal"><i />Cổng tham quan học sinh</div>
+          </div>
         )}
       </div>
-      {USE_MOCK_API && <p className="st-demo-note">Bản xem trước · Thông tin phiên và trợ lý AI dùng dữ liệu mẫu.</p>}
     </header>
   )
 }

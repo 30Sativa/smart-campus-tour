@@ -111,7 +111,7 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
             </div>
             <div className="mt-3 flex flex-col items-center gap-5 sm:flex-row lg:flex-col xl:flex-row">
               <div className="relative size-44 shrink-0" role="img" aria-label={`${total} đăng ký: ${donut.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ')}`}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" debounce={160}>
                   <PieChart>
                     <Pie
                       data={donut}
@@ -185,7 +185,7 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
             </div>
 
             <div className="mt-4 w-full" style={{ height: Math.max(160, tours.length * 38 + 36) }} role="img" aria-label={`Đăng ký theo Tour, tính theo ${measure === 'groups' ? 'số đoàn' : 'học sinh'}: ${tours.map((t) => `${t.code} ${t.total}`).join(', ')}`}>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" debounce={160}>
                 <BarChart data={tours} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 0 }} barCategoryGap={10}>
                   <CartesianGrid horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />

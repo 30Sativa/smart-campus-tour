@@ -67,7 +67,7 @@ export default function RepresentativeShell() {
     <div className="rep-app">
       <header className="rep-nav">
         <div className="rep-nav-in">
-          <Link to="/dai-dien" className="rep-brand" onClick={() => setMenuOpen(false)} aria-label="CampusTour - Tổng quan đại diện">
+          <Link to="/" className="rep-brand" onClick={() => setMenuOpen(false)} aria-label="CampusTour - Về trang chủ" title="Về trang chủ">
             <img src="/images/logo.png" alt="" width={46} height={46} />
             <span className="rep-brand-lock"><span className="rep-brand-name">CampusTour</span><span className="rep-brand-rule" aria-hidden="true" /><span className="rep-brand-sub">ĐẠI DIỆN</span></span>
           </Link>
