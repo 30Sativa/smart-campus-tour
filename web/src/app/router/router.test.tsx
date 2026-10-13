@@ -49,6 +49,9 @@ const settled = (router: ReturnType<typeof createMemoryRouter>, path: string) =>
 
 describe('route table', () => {
 
+
+
+
   // Compile both dashboards before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
     await import('../../routes/admin/AdminDashboardPage')
@@ -56,8 +59,11 @@ describe('route table', () => {
   }, 30_000)
 
 
+
+
   // Compile the dashboard's chart chunk before timing session/guard behavior.
   beforeAll(async () => { await import('../../routes/admin/AdminDashboardPage') }, 30_000)
+
 
   beforeEach(() => useAuthStore.getState().setAuthReady())
   afterEach(() => {
@@ -85,7 +91,12 @@ describe('route table', () => {
     const router = renderWithBootstrapAt('/admin')
 
     await settled(router, '/admin')
+
+    // AdminDashboardPage passes this current title to PageHeader; the old title is absent.
+    expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
+
     expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
       method: 'POST',
@@ -199,6 +210,12 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt('/admin/tours/tour-03')
       await settled(router, '/admin/tours/tour-03')
+
+
+      // AdminTourDetailPage renders the tour name in h2 and its code in h1.
+      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
+
+
 
       expect(await screen.findByRole('heading', { name: /Tour T-03/i, level: 1 })).toBeInTheDocument()
       expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()

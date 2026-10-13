@@ -1,31 +1,44 @@
 import type { Affine2D } from './map-config'
-import { NAV_NODES, PATROL_POIS, distance, findPath, nodePoint, pathGap, segmentGap } from './patrol-routing'
+import { NAV_NODES, PATROL_POIS, distance, findPath, nearestNode, nodePoint, pathGap, segmentGap, visibleSegment } from './patrol-routing'
 import type { Point } from './patrol-routing'
 export { PATROL_POIS, NAV_NODES, findPath, nodePoint } from './patrol-routing'
 export const OBSERVE_SECONDS = 60
 export const SAFE_DISTANCE = 1.4
+export const YIELD_TRIGGER_DISTANCE = 3.5
 export const PATROL_TICK = 0.05
 const scale = 20 / (2.14561939 + 97.7707138)
 export const PATROL_TRANSFORM: Affine2D = { a: scale, b: 0, c: 0, d: -scale, tx: -35.803092385 * scale, ty: -47.812547205 * scale }
 export const PATROL_MODEL_SCALE = scale
 export const PATROL_CLEARANCE = 0.6
 export const PATROL_FLOOR_Y = scale
+// Outer campus circuit, with Point 2 as an optional inner-corridor excursion.
+// Values are POI indices, ordered by corridor position rather than label number.
+export const PATROL_CIRCUIT = [0, 4, 3, 2, 1, 9, 8, 7, 6, 5]
+const NARROW_BRANCHES = [{ point: 7, radius: 23, exit: 0 }, { point: 8, radius: 27, exit: 9 }]
+function inBranch(p: Point, branch: typeof NARROW_BRANCHES[number], margin = 0) {
+  // Point 9's long blind corridor ends at the west side of the junction;
+  // its circular distance envelope alone would also reserve the main corridor.
+  return distance(p, PATROL_POIS[branch.point]) < branch.radius + margin && p.x < (branch.point === 8 ? 28 : 21.5) + margin
+}
 export type RobotMode = 'moving' | 'observing' | 'yielding' | 'yielded' | 'paused' | 'fault' | 'charging'
 export type PatrolRobot = {
   id: string; number: number; color: string; pose: Point & { yaw: number }; node: number; path: number[]
   target: number; observing: number | null; remaining: number; waiting: boolean; blockedSeconds: number
-  mode: RobotMode; yieldTo: number | null; bay: number | null; resumeMode: RobotMode
+  mode: RobotMode; yieldTo: number | null; yieldUntilArrival: number | null; arrivals: number; bay: number | null; resumeMode: RobotMode
   visits: number; speed: number; battery: number; travelled: number; waitSeconds: number; moveSeconds: number
   queue: number[]; chargingTrip: boolean; perception: 'CLEAR' | 'SLOWING' | 'STOPPED'; yieldCount: number
   activeTask: number | null
+  lapOrigin: number; lapRoute: number[]; lapSkipped: number[]; laps: number; lapPending: boolean
+  patrolTarget: boolean; resumeWaypoint: { point: number; patrol: boolean } | null; branchWaiting: boolean
 }
 export type FleetEvent = { sequence: number; seconds: number; robot: number | null; kind: string; message: string }
 export type BlockedZone = { point: number; until: number }
 export type FleetTask = { id: number; robot: number; point: number; type: 'patrol' | 'manual'; status: 'queued' | 'running' | 'completed'; created: number; started: number | null; completed: number | null; deadline: number }
-export type PatrolState = { seconds: number; seed: number; robots: PatrolRobot[]; events: FleetEvent[]; eventSequence: number; blocked: BlockedZone[]; heat: Record<number, number>; cameraOffline: boolean; decisions: string[]; tasks: FleetTask[]; taskSequence: number; completedCount: number; completionTotal: number; onTimeCount: number; history: { seconds: number; completed: number; waiting: number }[] }
+export type PatrolState = { seconds: number; seed: number; robots: PatrolRobot[]; events: FleetEvent[]; eventSequence: number; blocked: BlockedZone[]; heat: Record<number, number>; cameraOffline: boolean; decisions: string[]; tasks: FleetTask[]; taskSequence: number; completedCount: number; completionTotal: number; onTimeCount: number; history: { seconds: number; completed: number; waiting: number }[]; branchOwners: Record<number, number | null> }
 const colors = ['#2563eb', '#d97706', '#0d9488', '#9333ea', '#e11d48', '#4d7c0f']
-const cloneRobot = (r: PatrolRobot) => ({ ...r, pose: { ...r.pose }, path: [...r.path], queue: [...r.queue] })
+const cloneRobot = (r: PatrolRobot) => ({ ...r, pose: { ...r.pose }, path: [...r.path], queue: [...r.queue], lapRoute: [...r.lapRoute], lapSkipped: [...r.lapSkipped] })
 function beginTask(s: PatrolState, r: PatrolRobot) {
+  if (r.patrolTarget && r.lapSkipped.includes(r.target)) { r.activeTask = null; return }
   const queued = s.tasks.find(t => t.robot === r.number && t.point === r.target && t.status === 'queued')
   if (queued) { queued.status = 'running'; queued.started ??= s.seconds; r.activeTask = queued.id }
   else { const task: FleetTask = { id: ++s.taskSequence, robot: r.number, point: r.target, type: 'patrol', status: 'running', created: s.seconds, started: s.seconds, completed: null, deadline: s.seconds + 300 }; s.tasks.push(task); r.activeTask = task.id }
@@ -35,32 +48,67 @@ function emit(s: PatrolState, robot: number | null, kind: string, message: strin
   s.events = [{ sequence: ++s.eventSequence, seconds: s.seconds, robot, kind, message }, ...s.events].slice(0, 200)
 }
 function random(s: PatrolState) { s.seed = (Math.imul(s.seed, 1664525) + 1013904223) >>> 0; return s.seed / 4294967296 }
+function beginLap(s: PatrolState, r: PatrolRobot) {
+  const candidates = [...PATROL_CIRCUIT]
+  const skipCount = 1 + Math.floor(random(s) * 3)
+  r.lapSkipped = []
+  for (let i = 0; i < skipCount; i++) r.lapSkipped.push(candidates.splice(Math.floor(random(s) * candidates.length), 1)[0])
+  const origin = PATROL_CIRCUIT.indexOf(r.lapOrigin)
+  r.lapRoute = Array.from({ length: PATROL_CIRCUIT.length }, (_, i) => PATROL_CIRCUIT[(origin + i + 1) % PATROL_CIRCUIT.length])
+    .filter(point => point !== 1 || !r.lapSkipped.includes(point))
+  r.lapPending = true
+  emit(s, r.number, 'lap-plan', `R${r.number} vòng ${r.laps + 1}: bỏ dừng Điểm ${r.lapSkipped.map(p => p + 1).join(', ')}`)
+}
 function chooseTarget(s: PatrolState, r: PatrolRobot) {
-  if (r.queue.length) return r.queue.shift()!
-  const claimed = new Set(s.robots.filter(other => other.number !== r.number).map(other => other.target))
-  let candidates = PATROL_POIS.map((_, i) => i).filter(i => i !== r.target && !claimed.has(i) && !s.blocked.some(b => b.point === i))
-  if (!candidates.length) candidates = PATROL_POIS.map((_, i) => i).filter(i => i !== r.target)
-  return candidates[Math.floor(random(s) * candidates.length)]
+  if (r.resumeWaypoint) {
+    const saved = r.resumeWaypoint; r.resumeWaypoint = null; r.patrolTarget = saved.patrol
+    return saved.point
+  }
+  if (r.queue.length) { r.patrolTarget = false; return r.queue.shift()! }
+  if (!r.lapRoute.length) beginLap(s, r)
+  r.patrolTarget = true
+  return r.lapRoute.shift()!
 }
 function blockedCells(s: PatrolState, r?: PatrolRobot, occupied = false) {
   const blocked = new Set<number>()
   NAV_NODES.forEach((_, i) => {
     const p = nodePoint(i)
+    // Keep yielding bays out of the blind branch, so they cannot trap its exiting robot.
+    if (occupied && NARROW_BRANCHES.some(b => s.branchOwners[b.point] !== r?.number && inBranch(p, b))) blocked.add(i)
     if (s.blocked.some(b => distance(p, PATROL_POIS[b.point]) < 2.3) || occupied && s.robots.some(other => other.number !== r?.number && (distance(p, other.pose) < SAFE_DISTANCE + 0.1 || other.bay !== null && distance(p, nodePoint(other.bay)) < SAFE_DISTANCE + 0.1))) blocked.add(i)
   })
   if (r) blocked.delete(r.node)
   return blocked
 }
 const goalNode = (r: PatrolRobot) => r.bay ?? PATROL_POIS[r.target].node
-function plan(s: PatrolState, r: PatrolRobot, occupied = false) { r.path = findPath(r.node, goalNode(r), blockedCells(s, r, occupied)) }
+function plan(s: PatrolState, r: PatrolRobot, occupied = false) {
+  // A waiting visitor still needs an approach path; the reservation gates its movement at the mouth.
+  const branch = NARROW_BRANCHES.find(b => inBranch(PATROL_POIS[r.target], b))
+  const avoidOccupied = occupied && (!branch || s.branchOwners[branch.point] === r.number || r.bay !== null)
+  r.path = findPath(r.node, goalNode(r), blockedCells(s, r, avoidOccupied))
+}
+function reserveNarrowBranch(s: PatrolState) {
+  for (const branch of NARROW_BRANCHES) {
+    const point = PATROL_POIS[branch.point]
+    const owner = s.robots.find(r => r.number === s.branchOwners[branch.point])
+    const clearOfEntrance = owner && !inBranch(owner.pose, branch, SAFE_DISTANCE + 1)
+    if (!owner || clearOfEntrance && (!inBranch(PATROL_POIS[owner.target], branch) || ['fault', 'paused'].includes(owner.mode))) s.branchOwners[branch.point] = null
+    if (s.branchOwners[branch.point] != null) continue
+    const inside = s.robots.filter(r => inBranch(r.pose, branch))
+    const approaching = s.robots.filter(r => inBranch(PATROL_POIS[r.target], branch) && (r.branchWaiting || r.mode === 'moving' && distance(r.pose, point) < branch.radius + 10))
+    const next = (inside.length ? inside : approaching).sort((a, b) => a.number - b.number)[0]
+    if (next) { s.branchOwners[branch.point] = next.number; emit(s, next.number, 'branch', `R${next.number} giữ nhánh Điểm ${branch.point + 1} đến khi đi ra; xe khác chờ ngoài nhánh`) }
+  }
+}
 export function createPatrol(seed = 713): PatrolState {
   const robots = [0, 2, 4, 6, 8, 9].map((poi, i): PatrolRobot => ({
     id: `local_${i + 1}`, number: i + 1, color: colors[i], pose: { ...nodePoint(PATROL_POIS[poi].node), yaw: 0 }, node: PATROL_POIS[poi].node,
     path: [], target: poi, observing: null, remaining: 0, waiting: false, blockedSeconds: 0, mode: 'moving', yieldTo: null, bay: null, resumeMode: 'moving',
-    visits: 0, speed: 0.8 + (i % 3) * 0.05, battery: 95 - i * 5, travelled: 0, waitSeconds: 0, moveSeconds: 0, queue: [], chargingTrip: false, perception: 'CLEAR', yieldCount: 0, activeTask: null,
+    yieldUntilArrival: null, arrivals: 0, visits: 0, speed: 0.8 + (i % 3) * 0.05, battery: 95 - i * 5, travelled: 0, waitSeconds: 0, moveSeconds: 0, queue: [], chargingTrip: false, perception: 'CLEAR', yieldCount: 0, activeTask: null,
+    lapOrigin: poi, lapRoute: [], lapSkipped: [], laps: 0, lapPending: false, patrolTarget: true, resumeWaypoint: null, branchWaiting: false,
   }))
-  const s: PatrolState = { seconds: 0, seed: seed >>> 0, robots, events: [], eventSequence: 0, blocked: [], heat: {}, cameraOffline: false, decisions: [], tasks: [], taskSequence: 0, completedCount: 0, completionTotal: 0, onTimeCount: 0, history: [] }
-  for (const r of robots) { r.target = chooseTarget(s, r); plan(s, r); beginTask(s,r); emit(s, r.number, 'assigned', `R${r.number} → Điểm ${r.target + 1} (chọn ngẫu nhiên)` ) }
+  const s: PatrolState = { seconds: 0, seed: seed >>> 0, robots, events: [], eventSequence: 0, blocked: [], heat: {}, cameraOffline: false, decisions: [], tasks: [], taskSequence: 0, completedCount: 0, completionTotal: 0, onTimeCount: 0, history: [], branchOwners: {} }
+  for (const r of robots) { r.target = chooseTarget(s, r); plan(s, r); beginTask(s,r); emit(s, r.number, 'assigned', `R${r.number} → Điểm ${r.target + 1} (theo vòng)` ) }
   return s
 }
 export const patrolPose = (r: PatrolRobot) => r.pose
@@ -73,8 +121,11 @@ export function robotRoute(r: PatrolRobot, maxLength = Infinity): Point[] {
 /** Find an actual connected, free bay outside the higher-priority route; no sideways teleport. */
 function yieldBay(s: PatrolState, low: PatrolRobot, high: PatrolRobot) {
   const route = robotRoute(high), occupied = blockedCells(s, low, true)
-  const anchors = onNode(low) ? [low.node] : [...new Set([low.node, low.path[0]].filter((n): n is number => n !== undefined))]
-  const anchor = anchors.filter(n => s.robots.every(other => other.number === low.number || segmentGap(other.pose, low.pose, nodePoint(n)) >= SAFE_DISTANCE - 1e-8)).sort((a,b) => distance(nodePoint(b),high.pose)-distance(nodePoint(a),high.pose))[0]
+  const nearest = nearestNode(low.pose)
+  // Any-angle legs may be long. Rejoin a nearby free node to pull aside,
+  // rather than retreating to a faraway corner of the current leg.
+  const anchors = onNode(low) ? [low.node] : [...new Set([nearest, ...NAV_NODES[nearest].edges, low.node, low.path[0]].filter((n): n is number => n !== undefined))]
+  const anchor = anchors.filter(n => visibleSegment(low.pose, nodePoint(n)) && s.robots.every(other => other.number === low.number || segmentGap(other.pose, low.pose, nodePoint(n)) >= SAFE_DISTANCE - 1e-8)).sort((a,b) => distance(low.pose, nodePoint(a)) - distance(low.pose, nodePoint(b)) || distance(nodePoint(b),high.pose)-distance(nodePoint(a),high.pose))[0]
   if (anchor === undefined) return null
   occupied.delete(anchor)
   const queue = [anchor], parents = new Map<number, number>(), lengths = new Map([[anchor, 0]])
@@ -86,6 +137,7 @@ function yieldBay(s: PatrolState, low: PatrolRobot, high: PatrolRobot) {
     if (clear && !reserved && i !== anchor && length + distance(p, low.pose) * 0.05 < score) { chosen = i; score = length + distance(p, low.pose) * 0.05 }
     for (const j of NAV_NODES[i].edges) {
       if (lengths.has(j) || occupied.has(j)) continue
+      if (s.robots.some(other => other.number !== low.number && segmentGap(other.pose, p, nodePoint(j)) < SAFE_DISTANCE + 0.02)) continue
       lengths.set(j, length + distance(p, nodePoint(j))); parents.set(j, i); queue.push(j)
     }
   }
@@ -96,16 +148,49 @@ function yieldBay(s: PatrolState, low: PatrolRobot, high: PatrolRobot) {
 const onNode = (r: PatrolRobot) => distance(r.pose, nodePoint(r.node)) < 1e-6
 function requestYields(s: PatrolState) {
   for (const high of s.robots) {
-    if (high.mode !== 'moving' || !high.path.length) continue
-    const route = robotRoute(high, 8)
+    if (!['moving', 'yielding'].includes(high.mode)) continue
+    const guide = high.path.length ? high : { ...high, path: findPath(high.node, goalNode(high), blockedCells(s, high)) }
+    if (!guide.path.length) continue
+    const route = robotRoute(guide, YIELD_TRIGGER_DISTANCE + SAFE_DISTANCE)
     for (const low of s.robots) {
       if (low.number <= high.number || low.yieldTo !== null && (high.number > low.yieldTo || high.number === low.yieldTo && low.mode === 'yielding') || ['paused', 'fault', 'charging'].includes(low.mode)) continue
-      if (distance(low.pose, high.pose) > 9 || pathGap(low.pose, route) > SAFE_DISTANCE + 0.4) continue
-      const bay = yieldBay(s, low, high)
+      // A queued visitor cannot ask the branch owner to park until that visitor
+      // arrives: it would wait for the very reservation the owner is holding.
+      if (NARROW_BRANCHES.some(b => low.number === s.branchOwners[b.point] && high.number !== low.number && inBranch(low.pose, b))) continue
+      if (distance(low.pose, high.pose) > YIELD_TRIGGER_DISTANCE || pathGap(low.pose, route) > SAFE_DISTANCE + 0.25) continue
+      const velocity = (robot: PatrolRobot) => {
+        if (!['moving', 'yielding'].includes(robot.mode) || !robot.path.length) return { x: 0, y: 0 }
+        const next = nodePoint(robot.path[0]), length = distance(robot.pose, next) || 1
+        return { x: (next.x - robot.pose.x) / length * robot.speed, y: (next.y - robot.pose.y) / length * robot.speed }
+      }
+      const highVelocity = velocity(guide), lowVelocity = velocity(low)
+      const relative = { x: low.pose.x - high.pose.x, y: low.pose.y - high.pose.y }
+      const closing = { x: lowVelocity.x - highVelocity.x, y: lowVelocity.y - highVelocity.y }
+      // Nearby parallel/departing traffic keeps its lane; only an approaching
+      // conflict asks the larger-numbered robot to pull into a connected bay.
+      if (high.blockedSeconds < 1 && (relative.x * closing.x + relative.y * closing.y >= -1e-7
+        || segmentGap({ x: 0, y: 0 }, relative, { x: relative.x + closing.x * 2, y: relative.y + closing.y * 2 }) > SAFE_DISTANCE + 0.15)) continue
+      const bay = yieldBay(s, low, guide)
       if (!bay) continue
+      for (const branch of NARROW_BRANCHES) if (s.branchOwners[branch.point] === low.number && !inBranch(low.pose, branch)) s.branchOwners[branch.point] = null
       if (low.yieldTo === null) low.resumeMode = low.mode
-      low.mode = 'yielding'; low.yieldTo = high.number; low.bay = bay.node; low.path = bay.path; low.yieldCount++
+      low.mode = 'yielding'; low.yieldTo = high.number; low.yieldUntilArrival = high.arrivals + 1; low.bay = bay.node; low.path = bay.path; low.yieldCount++
       emit(s, low.number, 'yield', `R${low.number} rời tuyến, nhường R${high.number} tại chỗ tránh`)
+    }
+  }
+}
+function parkBranchVisitors(s: PatrolState) {
+  for (const branch of NARROW_BRANCHES) {
+    const owner = s.robots.find(r => r.number === s.branchOwners[branch.point])
+    if (!owner) continue
+    const point = PATROL_POIS[branch.point]
+    const exitGuide = { ...owner, pose: { ...point, yaw: 0 }, path: findPath(point.node, PATROL_POIS[branch.exit].node) }
+    for (const r of s.robots) {
+      if (r.number === owner.number || !inBranch(PATROL_POIS[r.target], branch) || r.branchWaiting || r.mode !== 'moving' || r.yieldTo !== null || distance(r.pose, point) > branch.radius + 10) continue
+      const bay = yieldBay(s, r, exitGuide)
+      if (!bay) continue
+      r.branchWaiting = true; r.bay = bay.node; r.path = bay.path; r.mode = 'yielding'
+      emit(s, r.number, 'branch-wait', `R${r.number} vào chỗ chờ, giữ lối ra Điểm ${branch.point + 1} thông thoáng`)
     }
   }
 }
@@ -119,12 +204,27 @@ function nextLeg(s: PatrolState, r: PatrolRobot) {
 /** Local deterministic fleet engine. All six complete sweeps are checked before moving. */
 export function stepPatrol(state: PatrolState, dt = PATROL_TICK): PatrolState {
   if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) throw new Error('Patrol needs a fixed step of at most 100 ms')
-  const s = { ...state, seconds: state.seconds + dt, robots: state.robots.map(cloneRobot), heat: { ...state.heat }, blocked: state.blocked.filter(b => b.until > state.seconds), tasks: state.tasks.map(t=>({...t})), history: [...state.history] }
+  const s = { ...state, seconds: state.seconds + dt, robots: state.robots.map(cloneRobot), branchOwners: { ...state.branchOwners }, heat: { ...state.heat }, blocked: state.blocked.filter(b => b.until > state.seconds), tasks: state.tasks.map(t=>({...t})), history: [...state.history] }
   const controlTick = Math.round(s.seconds / PATROL_TICK) % 10 === 0
+  reserveNarrowBranch(s)
+  if (controlTick) parkBranchVisitors(s)
   if (controlTick) requestYields(s)
+  if (controlTick) for (const r of s.robots) {
+    if (r.mode !== 'yielding' || r.yieldTo === null || r.blockedSeconds < 2) continue
+    const high = s.robots.find(other => other.number === r.yieldTo)!
+    const bay = yieldBay(s, r, high)
+    // Another robot may have approached a previously clear escape segment.
+    // Re-anchor safely even mid-edge instead of remaining trapped there.
+    if (bay) { r.bay = bay.node; r.path = bay.path; r.blockedSeconds = 0 }
+  }
   for (const r of s.robots) {
     r.waiting = false
     if (r.mode === 'paused' || r.mode === 'fault') continue
+    if (r.branchWaiting && r.yieldTo === null) {
+      if (NARROW_BRANCHES.some(b => inBranch(PATROL_POIS[r.target], b) && s.branchOwners[b.point] === r.number) && onNode(r)) {
+        r.branchWaiting = false; r.yieldTo = null; r.yieldUntilArrival = null; r.bay = null; r.mode = 'moving'; plan(s, r)
+      } else if (r.mode === 'yielded') { r.waiting = true; r.waitSeconds += dt; continue }
+    }
     if (r.mode === 'charging') {
       r.battery = Math.min(100, r.battery + dt * 0.5)
       if (r.battery >= 95) { r.chargingTrip = false; emit(s, r.number, 'charged', `R${r.number} đã sạc 95%`); nextLeg(s, r) }
@@ -134,9 +234,12 @@ export function stepPatrol(state: PatrolState, dt = PATROL_TICK): PatrolState {
       const high = s.robots.find(other => other.number === r.yieldTo)!
       if (r.mode === 'yielded') {
         r.waitSeconds += dt
-        if (distance(r.pose, high.pose) > 4 && (high.mode !== 'moving' || pathGap(r.pose, robotRoute(high, 10)) > SAFE_DISTANCE + 0.3)) {
+        const finishedLeg = r.yieldUntilArrival !== null && high.arrivals >= r.yieldUntilArrival
+        if (finishedLeg && distance(r.pose, high.pose) > 4 && (high.mode !== 'moving' || pathGap(r.pose, robotRoute(high, 10)) > SAFE_DISTANCE + 0.3)) {
           emit(s, r.number, 'resume', `R${r.number} tiếp tục sau khi R${high.number} đi qua`)
-          r.yieldTo = null; r.bay = null; r.mode = 'moving'; plan(s, r, true)
+          r.yieldTo = null; r.yieldUntilArrival = null
+          if (r.branchWaiting) r.mode = 'yielded'
+          else { r.bay = null; r.mode = 'moving'; plan(s, r, true) }
         }
         continue
       }
@@ -148,22 +251,36 @@ export function stepPatrol(state: PatrolState, dt = PATROL_TICK): PatrolState {
     }
     if (r.battery < 15 && !r.chargingTrip && r.yieldTo === null && onNode(r)) {
       const task=s.tasks.find(t=>t.id===r.activeTask)
-      if(task){task.status='queued';r.queue.unshift(task.point);r.activeTask=null}
+      if(task){task.status='queued';r.activeTask=null}
+      r.resumeWaypoint = { point: r.target, patrol: r.patrolTarget }
       r.chargingTrip = true; r.observing = null; r.remaining = 0
       r.target = [5, 9].reduce((best, i) => distance(r.pose, PATROL_POIS[i]) < distance(r.pose, PATROL_POIS[best]) ? i : best)
       plan(s, r); emit(s, r.number, 'low-battery', `R${r.number} pin ${Math.floor(r.battery)}%, về trạm sạc Điểm ${r.target + 1}`)
     }
     if (!r.path.length && r.node === goalNode(r)) {
+      r.arrivals++
       if (r.bay !== null) { r.mode = 'yielded'; emit(s, r.number, 'bay', `R${r.number} đã vào chỗ tránh cho R${r.yieldTo}`) }
       else if (r.chargingTrip) r.mode = 'charging'
-      else { r.mode = 'observing'; r.observing = r.target; r.remaining = r.remaining || OBSERVE_SECONDS; r.visits++; emit(s, r.number, 'arrived', `R${r.number} quan sát Điểm ${r.target + 1} trong 60s`) }
+      else {
+        if (r.patrolTarget && r.lapPending && !r.lapRoute.length) {
+          r.laps++; r.lapPending = false
+          emit(s, r.number, 'lap-complete', `R${r.number} hoàn thành vòng ${r.laps}`)
+        }
+        if (r.patrolTarget && r.lapSkipped.includes(r.target)) {
+          emit(s, r.number, 'passed', `R${r.number} đi qua Điểm ${r.target + 1}, không dừng quan sát`)
+          nextLeg(s, r)
+        } else {
+          r.mode = 'observing'; r.observing = r.target; r.remaining = r.remaining || OBSERVE_SECONDS; r.visits++
+          emit(s, r.number, 'arrived', `R${r.number} quan sát Điểm ${r.target + 1} trong 60s`)
+        }
+      }
       continue
     }
     if (controlTick && onNode(r) && (r.blockedSeconds > 2 || !r.path.length || s.blocked.length)) plan(s, r, r.blockedSeconds > 2)
     if (!r.path.length) { r.waiting = true; r.waitSeconds += dt; r.blockedSeconds += dt; continue }
     // Grant an escape window before advancing into a robot that is clearing our route.
     // Waiting only at bumper distance could prevent that robot from crossing to its bay.
-    if (r.mode === 'moving' && s.robots.some(other => other.mode === 'yielding' && other.yieldTo === r.number && pathGap(other.pose, robotRoute(r)) < SAFE_DISTANCE + 0.5)) {
+    if (['moving', 'yielding'].includes(r.mode) && s.robots.some(other => other.mode === 'yielding' && other.yieldTo === r.number && pathGap(other.pose, robotRoute(r)) < SAFE_DISTANCE + 0.5)) {
       r.waiting = true; r.waitSeconds += dt; continue
     }
     const target = nodePoint(r.path[0]), gap = distance(r.pose, target)
@@ -171,6 +288,9 @@ export function stepPatrol(state: PatrolState, dt = PATROL_TICK): PatrolState {
     r.perception = nearest < SAFE_DISTANCE + 0.15 ? 'STOPPED' : nearest < 2.5 ? 'SLOWING' : 'CLEAR'
     const advance = Math.min(gap, r.speed * dt * (r.perception === 'SLOWING' ? 0.65 : 1))
     const to = { x: r.pose.x + (target.x - r.pose.x) * advance / gap, y: r.pose.y + (target.y - r.pose.y) * advance / gap }
+    if (NARROW_BRANCHES.some(b => s.branchOwners[b.point] !== r.number && inBranch(to, b))) {
+      r.waiting = true; r.waitSeconds += dt; continue
+    }
     const unsafe = s.robots.some(other => other.number !== r.number && segmentGap(other.pose, r.pose, to) < SAFE_DISTANCE - 1e-8)
       || state.robots.some(other => other.number !== r.number && segmentGap(other.pose, r.pose, to) < SAFE_DISTANCE - 1e-8)
     if (unsafe) { r.waiting = true; r.waitSeconds += dt; r.blockedSeconds += dt; continue }

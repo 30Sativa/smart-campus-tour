@@ -44,6 +44,16 @@ const remap = new Map([...seen].sort((a, b) => a - b).map((old, i) => [old, i]))
 const nodes = [...remap.keys()].map(i => ({ p: all[i].p, edges: all[i].edges.filter(j => remap.has(j)).map(j => remap.get(j)) }))
 const marks = [[24, -74], [29.1, -43], [58, -29], [58, -58], [33, -76], [22, -79], [17, -69], [1, -65], [3, -31], [34, -19]]
 const pois = marks.map((p, i) => { const n = nearest(p, nodes); return { poi: i + 1, node: nodes.indexOf(n), x: n.p[0], y: n.p[1], annotated: p } })
-const data = { cell, clearance, modelSha256: createHash('sha256').update(readFileSync(model)).digest('hex'), nodes, pois }
+// Keep the nearby original obstacle segments for continuous, any-angle
+// shortcuts. A free grid node alone does not prove a diagonal has clearance.
+const routingObstacles = [...new Set(nodes.flatMap(n => obstacles(n.p)))].map(e => [e.a, e.b])
+const modelBytes = readFileSync(model)
+const modelJson = JSON.parse(modelBytes.toString('utf8', 20, 20 + modelBytes.readUInt32LE(12)))
+const fixtures = modelJson.nodes.filter(n => /^Campus lamp \d+ diffuser$/.test(n.name))
+const lamps = fixtures.map(n => [n.translation[0], n.translation[2]])
+const lampZones = fixtures.map(n => n.extras.lightingZone)
+const lampHeight = fixtures[0].translation[1]
+if (!fixtures.every(n => n.translation[1] === lampHeight)) throw Error('Ceiling fixture heights must match the shared lighting plane')
+const data = { cell, clearance, obstacles: routingObstacles, atrium, lamps, lampZones, lampHeight, modelSha256: createHash('sha256').update(modelBytes).digest('hex'), nodes, pois }
 writeFileSync('src/features/digital-twin/patrol-nav.json', JSON.stringify(data))
 console.log(JSON.stringify({ nodes: nodes.length, allNodes: all.length, pois }, null, 2))

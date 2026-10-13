@@ -2,12 +2,15 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { createPatrol, patrolPose, robotRoute, stepPatrol, PATROL_TICK, PATROL_TRANSFORM, PATROL_MODEL_SCALE, PATROL_FLOOR_Y } from './patrol-demo'
 import { FleetPanels, type FleetTab } from './FleetPanels'
 import { robotModeLabel } from './fleet-analysis'
+import type { CameraMode } from './camera-view'
+import { TwinTools, type TwinTool } from './TwinTools'
 
 const TwinScene = lazy(() => import('./TwinScene'))
 const buttonClass = 'rounded-lg border border-[#dce9fb] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#40546f] focus-visible:outline-2 focus-visible:outline-[#4f8df7]'
 
 /** Default local patrol; never publishes poses or motion commands. */
-export function PatrolDemo({ overhead, showLabels }: { overhead: boolean; showLabels: boolean }) {
+export function PatrolDemo({ overhead, showLabels, onToggleLabels }: { overhead: boolean; showLabels: boolean; onToggleLabels: () => void }) {
+  const [tool, setTool] = useState<TwinTool>('select')
   const [state, setState] = useState(() => createPatrol())
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
@@ -17,6 +20,8 @@ export function PatrolDemo({ overhead, showLabels }: { overhead: boolean; showLa
   const [routes, setRoutes] = useState(true)
   const [sensors, setSensors] = useState(false)
   const [panel, setPanel] = useState(false)
+  const [cameraPoint, setCameraPoint] = useState(0)
+  const [cameraMode, setCameraMode] = useState<CameraMode>('point')
   useEffect(() => {
     if (!playing) return
     let previous = performance.now()
@@ -50,13 +55,18 @@ export function PatrolDemo({ overhead, showLabels }: { overhead: boolean; showLa
       <button className={buttonClass} aria-pressed={routes} onClick={()=>setRoutes(v=>!v)}>Tuyến robot</button>
       <button className={buttonClass} aria-pressed={sensors} onClick={()=>setSensors(v=>!v)}>Cảm biến ảo</button>
       <button className={buttonClass} aria-expanded={panel} onClick={()=>setPanel(v=>!v)}>Bảng vận hành</button>
+      <button className={buttonClass} aria-pressed={panel && tab === 'camera' && cameraMode === 'point'} onClick={() => { setPanel(true); setTab('camera'); setCameraMode('point') }}>Camera point</button>
     </div>
-    <div className="relative min-h-[200px] flex-1" role="img" aria-label="6 robot đi đến 10 điểm ngẫu nhiên">
+    <div className="relative min-h-[200px] flex-1" role="img" aria-label="6 robot đi trọn vòng, bỏ ngẫu nhiên một số điểm dừng">
       <Suspense fallback={<p className="p-3 text-xs">Đang tải bản đồ 3D…</p>}>
         <TwinScene modelKey="nvh-v3" robots={robots} overhead={overhead} showLabels={showLabels} syntheticPatrol seconds={state.seconds} viewMode={view} heat={state.heat} sensors={sensors}
+          tool={tool}
+          showCameras={panel && tab === 'camera' && cameraMode === 'point'} cameraPoint={cameraPoint}
+          onSelectCamera={point => { setCameraPoint(point); setCameraMode('point'); setPanel(true); setTab('camera') }}
           patrolPaths={routes ? state.robots.map(r=>({id:r.id,color:r.color,points:robotRoute(r),active:r.mode==='moving'||r.mode==='yielding'})) : []}
-          onSelectRobot={id=>{setSelected(Number(id.split('_')[1]));setPanel(true);setTab('robots')}} />
+          onSelectRobot={tool === 'select' ? id=>{setSelected(Number(id.split('_')[1]));setPanel(true);setTab('robots')} : undefined} />
       </Suspense>
+      <TwinTools tool={tool} onTool={setTool} routes={routes} onRoutes={() => setRoutes(v => !v)} labels={showLabels} onLabels={onToggleLabels} />
       {(view==='traffic'||sensors)&&<span className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] text-slate-600">{view==='traffic'?'Đỏ: chờ · Cam: nhường · Xanh: thông tuyến':'Cảm biến ảo 270° / 4m'}</span>}
     </div>
     <div className="max-h-[55%] shrink-0 overflow-auto border-t border-[#dce9fb] bg-[#fbfdff] text-xs text-[#40546f]">
@@ -70,11 +80,11 @@ export function PatrolDemo({ overhead, showLabels }: { overhead: boolean; showLa
         <label className="flex items-center gap-1">Tốc độ phát<select className={buttonClass} value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value={1}>1×</option><option value={5}>5×</option><option value={10}>10×</option></select></label>
         <span className="tabular-nums">{Math.floor(state.seconds)}s tuần tra{!playing ? ' · tạm dừng' : ''}</span>
       </div>
-      <p className="mt-2 text-[10px] text-[#71819a]">Vị trí tính trên web · Đích ngẫu nhiên · Quan sát 60s · R1 ưu tiên cao nhất · Robot số lớn chủ động vào chỗ tránh</p>
+      <p className="mt-2 text-[10px] text-[#71819a]">Vị trí tính trên web · Chạy trọn vòng · Mỗi vòng bỏ dừng 1–3 điểm ngẫu nhiên · Quan sát 60s · R1 ưu tiên cao nhất</p>
       </div>
       {panel && <><nav className="flex flex-wrap gap-1 border-t border-slate-200 px-3 py-2" aria-label="Chức năng Fleet Twin">
         {([['robots','Robot'],['tasks','Nhiệm vụ'],['events','Nhật ký'],['metrics','Thống kê'],['scenarios','Kịch bản'],['copilot','AI Copilot'],['camera','Camera'],['whatif','What-if']] as [FleetTab,string][]).map(([id,label])=><button key={id} className={buttonClass} aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}
-      </nav><FleetPanels tab={tab} state={state} setState={setState} selected={selected} setSelected={setSelected} /></>}
+      </nav><FleetPanels tab={tab} state={state} setState={setState} selected={selected} setSelected={setSelected} cameraPoint={cameraPoint} onCameraPointChange={setCameraPoint} cameraMode={cameraMode} onCameraModeChange={setCameraMode} /></>}
     </div>
   </div>
 }

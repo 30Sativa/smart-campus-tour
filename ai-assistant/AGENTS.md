@@ -1,3 +1,4 @@
+
 # AGENTS.md — `ai-assistant/`
 
 > **STATUS: SKELETON.** Nothing is implemented yet. Fill the TODO blocks as
@@ -59,8 +60,8 @@ ai-assistant/
 │   ├── prompting/      system prompt and prompt assembly
 │   ├── providers/      provider adapter interface, Gemini adapter, fake
 │   └── guards/         input/output filters, robot-command refusal, cache
-├── content/            content pack (campus/, pois/); rules in content/README.md
-├── evals/              questions.json (exists); recorded responses (later)
+├── content/            approved Markdown content pack (campus/, pois/); rules in content/README.md
+├── evals/              questions.json (exists); expected facts and recorded responses (later)
 ├── tests/
 └── scripts/verify
 ```

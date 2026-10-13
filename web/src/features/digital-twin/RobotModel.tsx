@@ -7,7 +7,11 @@ import { mapToScenePose, type Affine2D } from './map-config'
 
 function CadRobot() {
   const gltf = useLoader(GLTFLoader, `${import.meta.env.BASE_URL}models/robot/campus-amr.glb`)
-  const model = useMemo(() => gltf.scene.clone(true), [gltf.scene])
+  const model = useMemo(() => {
+    const root = gltf.scene.clone(true)
+    root.traverse(child => { if (child instanceof Mesh) { child.castShadow = true; child.receiveShadow = true } })
+    return root
+  }, [gltf.scene])
   return <primitive object={model} dispose={null} />
 }
 

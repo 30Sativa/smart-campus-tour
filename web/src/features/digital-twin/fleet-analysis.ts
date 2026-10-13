@@ -32,10 +32,10 @@ export function askFleet(state: PatrolState, question: string, selected = 1) {
     refs.push(...seen.obstacles.map(o => o.number))
   } else if (/loi|fault|canh bao/.test(normalized)) {
     answer = `${m.faults} robot lỗi; ${state.blocked.length} vùng đang chặn; camera ${state.cameraOffline ? 'offline' : 'online'}. ` + state.robots.filter(robot => robot.mode === 'fault').map(robot => `R${robot.number} đứng yên và cần khôi phục.`).join(' ')
-  } else if (/nhiem vu|phan cong|tai sao chon/.test(normalized)) answer = state.decisions[0] ?? 'Chưa có nhiệm vụ thủ công. Đích tuần tra được chọn ngẫu nhiên, tránh chọn trùng đích đã có robot nhận. Nhiệm vụ thêm mới được chấm theo khoảng cách + hàng đợi + mức pin, loại robot lỗi hoặc pin dưới 20%.'
+  } else if (/nhiem vu|phan cong|tai sao chon/.test(normalized)) answer = state.decisions[0] ?? 'Chưa có nhiệm vụ thủ công. Robot đi trọn vòng hành lang; mỗi vòng bỏ ngẫu nhiên 1–3 điểm dừng. Nhiệm vụ thêm mới được chấm theo khoảng cách + hàng đợi + mức pin, loại robot lỗi hoặc pin dưới 20%.'
   else if (explicitRobot) answer = `R${number}: ${robotModeLabel(r)}, đích Điểm ${r.target + 1}, pin ${r.battery.toFixed(0)}%, đã đến điểm ${r.visits} lượt, đi ${r.travelled.toFixed(1)}m và chờ ${r.waitSeconds.toFixed(1)}s.`
   else {
-    answer = `Đội ${state.robots.length} robot, 10 điểm: ${m.active} robot đang di chuyển, ${m.visits} lượt đến điểm, ${state.completedCount} nhiệm vụ đã hoàn thành, ${m.yields} lần vào chế độ nhường đường, tổng ${m.distance.toFixed(1)}m. Robot quan sát 60s rồi chọn đích ngẫu nhiên. Số nhỏ được ưu tiên; ${m.faults} robot lỗi. Bạn có thể hỏi về robot, pin, nhiệm vụ, camera hoặc tắc đường.`
+    answer = `Đội ${state.robots.length} robot, 10 điểm: ${m.active} robot đang di chuyển, ${m.visits} lượt đến điểm, ${state.completedCount} nhiệm vụ đã hoàn thành, ${m.yields} lần vào chế độ nhường đường, tổng ${m.distance.toFixed(1)}m. Robot đi trọn vòng, bỏ ngẫu nhiên 1–3 điểm dừng mỗi vòng và quan sát 60s tại các điểm còn lại. Số nhỏ được ưu tiên; ${m.faults} robot lỗi. Bạn có thể hỏi về robot, pin, nhiệm vụ, camera hoặc tắc đường.`
     refs.push(...state.robots.map(robot => robot.number))
   }
   return { answer, robots: [...new Set(refs)], at: state.seconds }
