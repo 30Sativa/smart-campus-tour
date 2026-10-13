@@ -8,7 +8,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('patrol demo controls', () => {
   it('starts six synthetic robots, pauses, resumes, changes playback speed and resets', async () => {
-    render(<PatrolDemo overhead={false} showLabels={false} />)
+    render(<PatrolDemo overhead={false} showLabels={false} onToggleLabels={vi.fn()} />)
     await screen.findByTestId('demo-scene')
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'performance'] })
     // Restart the interval so its clock and fake performance share the same origin.

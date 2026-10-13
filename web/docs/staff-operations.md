@@ -62,11 +62,13 @@ asset does not establish measured ROS alignment or a production telemetry bindin
 
 The robot screen and idle live-operations twin start **six robots by default**,
 labelled as disconnected from the miniPC. **Điểm point** toggles ten initially
-hidden rings. Robots select random destinations, follow animated dashed routes,
+hidden rings. Robots follow complete corridor laps with 1–3 randomly skipped
+observation stops per lap and thin animated dashed routes,
 observe for 60 simulated seconds and actively move into safe bays to yield to
 lower-numbered robots. The wider Digital Twin page exposes task queues,
 events/exports, local fleet metrics, scenarios, a rule-based Copilot, virtual
-onboard/CCTV cameras and isolated what-if trials. These local controls send no
+point/onboard/CCTV cameras and isolated what-if trials. **Camera point** exposes
+C1–C10 on the map and a point selector for fixed views. These local controls send no
 physical commands and do not change active-Tour observations. See
 [local patrol fleet](patrol-demo.md) for placement, checks and integration limits.
 

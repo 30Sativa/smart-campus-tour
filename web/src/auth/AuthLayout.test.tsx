@@ -43,6 +43,8 @@ describe('AuthLayout', () => {
     const login = renderAt('/login')
     expect(login.container.querySelector('.auth-visual__title')?.textContent).toMatch(/Khám phá khuôn viên/)
     expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-smartbus.png')
+    expect(login.container.querySelectorAll('.auth-visual__img')).toHaveLength(1)
+    expect(login.container.querySelectorAll('.auth-devbadge summary')).toHaveLength(1)
     expect(screen.getByText(/© \d{4} Smart Campus Tour/)).toBeInTheDocument()
   })
 })

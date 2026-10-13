@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { IDENTITY, type MapConfig } from './map-config'
+import { IDENTITY, MAP_CONFIGS, type MapConfig } from './map-config'
 import { acceptObservation, observationView, type RobotObservation } from './robot-telemetry'
 
 const now = Date.parse('2026-10-09T05:00:00Z')
 const sample: RobotObservation = { robotId: 'robot_01', mapKey: 'map2-v2', frameId: 'map', streamId: 'stream-a', seq: 1, capturedAt: new Date(now).toISOString(), pose: { x: 3, y: 4, yaw: 0 } }
-const calibrated: MapConfig = { mapKey: 'map2-v2', scene: { calibrated: true, transform: { ...IDENTITY, tx: 10 } }, student2d: { calibrated: false, transform: IDENTITY } }
+const calibrated: MapConfig = { ...MAP_CONFIGS['map2-v2'], scene: { calibrated: true, transform: { ...IDENTITY, tx: 10 } }, student2d: { calibrated: false, transform: IDENTITY } }
 
 describe('prepared robot telemetry', () => {
   it('accepts finite map pose samples and owns their data', () => {

@@ -18,7 +18,10 @@ export function prepareCampusModel(object: Object3D, floorY?: number) {
   root.position.multiplyScalar(scale).add(new Vector3(-center.x * scale, -(floorY ?? bounds.min.y) * scale, -center.z * scale))
   root.traverse((child) => {
     if (child instanceof Mesh) {
-      child.castShadow = true
+      // Cast the architectural shell, columns and garden structures; furniture
+      // need not each add a draw call to the campus-wide shadow map.
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      child.castShadow = materials.some(material => !material.transparent && /^(Warm ivory walls|Retained blue-grey corridor columns|Garden bench stone|Garden pergola steel)$/.test(material.name))
       child.receiveShadow = true
     }
   })

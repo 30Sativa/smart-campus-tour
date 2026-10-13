@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "mapKey": "map2-v1",
+  "frameId": "map",
+  "width": 1419,
+  "height": 1949,
+  "resolution": 0.05,
+  "origin": [
+    -15.3,
+    -76.1,
+    0
+  ],
+  "mode": "trinary",
+  "negate": 0,
+  "occupiedThreshold": 0.65,
+  "freeThreshold": 0.25,
+  "fingerprint": "18576df63c998624351a7bcd36c381574831c77fc6b7ffb4fc296f773298b734",
+  "imageUrl": "/maps/map2-v1/occupancy-72d43c1d265c59c8.png",
+  "imageSha256": "72d43c1d265c59c8dcdc04c732cd90e3e01f9c29556f0e3c1c9c04c6fe76b24d",
+  "source": {
+    "yaml": "robot/robot_maps/map2.yaml",
+    "pgm": "robot/robot_maps/map_fix.pgm",
+    "yamlSha256": "b7468a6b7ebc95b5e2874885b1e7467791e28ea7a32b7e8053bdc66eba9ea364",
+    "pgmSha256": "940df58b70e3280aec306776cf0c5ecf270361e2398911d8982b48007ed8abd7"
+  },
+  "cellCounts": {
+    "free": 2732690,
+    "occupied": 32941,
+    "unknown": 0
+  }
+}

@@ -1,16 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { createPatrol, stepPatrol, patrolPose, sweptDistance, PATROL_POIS, PATROL_TICK, SAFE_DISTANCE, fleetMetrics, injectScenario, addTask, toggleRobot, findPath } from './patrol-demo'
+import { createPatrol, stepPatrol, patrolPose, sweptDistance, PATROL_CIRCUIT, PATROL_POIS, PATROL_TICK, SAFE_DISTANCE, YIELD_TRIGGER_DISTANCE, fleetMetrics, injectScenario, addTask, toggleRobot, findPath } from './patrol-demo'
 import { distance, nodePoint } from './patrol-routing'
 
-describe('random six-robot fleet', () => {
-  it('uses six scaled robots, ten destinations and repeatable random assignments', () => {
+describe('six-robot circuit fleet', () => {
+  it('uses six scaled robots, ten destinations and repeatable random skipped stops', () => {
     const a = createPatrol(731), b = createPatrol(731), c = createPatrol(49)
     expect(a).toEqual(b)
-    expect(a.robots.map(r => r.target)).not.toEqual(c.robots.map(r => r.target))
+    expect(a.robots.map(r => r.lapSkipped)).not.toEqual(c.robots.map(r => r.lapSkipped))
+    for (const r of a.robots) {
+      expect(new Set(r.lapSkipped).size).toBe(r.lapSkipped.length)
+      expect(r.lapSkipped.length).toBeGreaterThanOrEqual(1)
+      expect(r.lapSkipped.length).toBeLessThanOrEqual(3)
+      expect(r.lapRoute.at(-1)).toBe(r.lapOrigin)
+    }
     expect(a.robots).toHaveLength(6)
     expect(PATROL_POIS.map(p => p.poi)).toEqual([1,2,3,4,5,6,7,8,9,10])
     for (const p of PATROL_POIS) expect(findPath(PATROL_POIS[0].node, p.node).length || p.poi === 1).toBeTruthy()
   })
+  it.each([713, 731])('returns to the starting point through the full circuit, skipping only dwell (%s)', seed => {
+    let state = createPatrol(seed)
+    state.robots = state.robots.slice(0, 1)
+    const initial = state.robots[0], skipped = new Set(initial.lapSkipped)
+    const expected = [initial.target, ...initial.lapRoute], reached: number[] = []
+    for (let tick = 0; tick < 30000 && state.robots[0].laps === 0; tick++) {
+      const before = state
+      if (skipped.has(before.robots[0].target)) expect(before.robots[0].activeTask).toBeNull()
+      state = stepPatrol(state)
+      const events = state.events.filter(e => e.sequence > before.eventSequence && ['arrived', 'passed'].includes(e.kind)).reverse()
+      for (const event of events) {
+        const point = Number(event.message.match(/Điểm (\d+)/)?.[1]) - 1
+        reached.push(point)
+        expect(event.kind).toBe(skipped.has(point) ? 'passed' : 'arrived')
+      }
+    }
+    expect(state.robots[0].laps).toBe(1)
+    expect(reached).toEqual(expected)
+    expect(new Set(reached)).toEqual(new Set(PATROL_CIRCUIT.filter(p => p !== 1 || !skipped.has(p))))
+    expect(state.robots[0].node).toBe(PATROL_POIS[initial.lapOrigin].node)
+  }, 30000)
   it('keeps entire sweeps separated, actively clears routes for lower numbers and makes progress', () => {
     let state = createPatrol(), observed = false
     const visits = state.robots.map(() => [] as number[])
@@ -32,7 +59,8 @@ describe('random six-robot fleet', () => {
     expect(observed).toBe(true)
     expect(fleetMetrics(state).yields).toBeGreaterThan(0)
     expect(state.events.some(e=>e.kind==='bay')).toBe(true)
-    for(const v of visits) expect(v.length).toBeGreaterThan(3)
+    const progress = JSON.stringify(state.robots.map(r => ({ robot: r.number, visits: r.visits, laps: r.laps, mode: r.mode, yieldTo: r.yieldTo, bay: r.bay, point: r.target + 1, pose: r.pose, path: r.path.slice(0, 3), wait: r.blockedSeconds })))
+    for(const v of visits) expect(v.length, progress).toBeGreaterThan(3)
     expect(visits.some(v=>v.slice(1).some((p,i)=>p !== (v[i]+1)%10))).toBe(true)
     expect(()=>stepPatrol(state,2)).toThrow(/100 ms/)
   },30000)
@@ -41,9 +69,49 @@ describe('random six-robot fleet', () => {
     for(let tick=0;tick<24000;tick++)state=stepPatrol(state)
     for(const r of state.robots)expect(r.visits,`R${r.number}: ${r.mode}, nhường ${r.yieldTo}, đích ${r.target+1}`).toBeGreaterThan(0)
   },30000)
+  it('serves waiting bays and lets every robot finish a circuit through the narrow branch', () => {
+    let state = createPatrol(), queued = false
+    for (let tick = 0; tick < 72000; tick++) {
+      state = stepPatrol(state)
+      queued ||= state.robots.some(r => r.branchWaiting)
+      if (state.robots.every(r => r.laps > 0)) break
+    }
+    expect(queued).toBe(true)
+    const progress = JSON.stringify({ branches: state.branchOwners, robots: state.robots.map(r => ({ robot: r.number, mode: r.mode, point: r.target + 1, visits: r.visits, laps: r.laps, branch: r.branchWaiting, yieldTo: r.yieldTo, arrival: r.yieldUntilArrival, bay: r.bay, pose: r.pose, path: r.path.slice(0, 3), wait: r.blockedSeconds })) })
+    for (const r of state.robots) expect(r.laps, `R${r.number} must leave its waiting bay and complete a lap: ${progress}`).toBeGreaterThan(0)
+  }, 30000)
+  it('requests priority bays only nearby, then parks until the priority robot finishes its leg', () => {
+    let state = createPatrol(), parked = 0, resumed = 0, requests = 0
+    for (let tick = 0; tick < 24000; tick++) {
+      const before = state
+      state = stepPatrol(state)
+      for (const r of state.robots) {
+        const old = before.robots.find(other => other.number === r.number)!
+        if (r.yieldTo !== null && r.yieldCount > old.yieldCount) {
+          requests++
+          const high = before.robots.find(other => other.number === r.yieldTo)!
+          expect(distance(old.pose, high.pose)).toBeLessThanOrEqual(YIELD_TRIGGER_DISTANCE + 1e-6)
+          expect(r.yieldTo).toBeLessThan(r.number)
+        }
+        if (old.mode === 'yielded' && old.yieldTo !== null && old.yieldUntilArrival !== null) {
+          const nextHigh = state.robots.find(other => other.number === old.yieldTo)!
+          if (nextHigh.arrivals < old.yieldUntilArrival && r.yieldCount === old.yieldCount) {
+            parked++
+            expect(r.pose).toEqual(old.pose)
+            expect(r.yieldTo).not.toBeNull()
+          }
+          if (r.yieldTo === null) resumed++
+        }
+      }
+    }
+    expect(requests).toBeGreaterThan(0)
+    expect(parked).toBeGreaterThan(0)
+    expect(resumed).toBeGreaterThan(0)
+  }, 30000)
   it('observes for 60 seconds, pauses independently, assigns tasks and recovers scenarios', () => {
     let state=createPatrol()
     const r=state.robots[0]
+    r.lapSkipped = r.lapSkipped.filter(point => point !== 0)
     r.pose={...nodePoint(r.node),yaw:0}; r.path=[]; r.target=PATROL_POIS.findIndex(p=>p.node===r.node)
     state=stepPatrol(state)
     expect(state.robots[0].remaining).toBe(60)

@@ -8,15 +8,6 @@ const VISUAL = {
   title: 'Khám phá khuôn viên từ một điểm chạm.',
   lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
 
-  '/register': {
-    title: 'Bắt đầu hành trình khám phá khuôn viên.',
-    lead: 'Một tài khoản để đặt tour và theo dõi lịch tham quan của bạn.',
-  },
-  default: {
-    title: 'Khám phá khuôn viên từ một điểm chạm.',
-    lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
-  },
-
 } as const
 
 /**
@@ -63,15 +54,6 @@ export function AuthLayout() {
         </div>
         <p className="auth-visual__note">01 / BẮT ĐẦU HÀNH TRÌNH</p>
 
-        <img src={onRegister ? '/images/hero-campus.jpg' : '/images/login-smartbus.png'} alt="" className="auth-visual__img" fetchPriority="high" />
-        <div className="auth-visual__scrim" />
-        <div className="auth-visual__inner">
-          {!onRegister && <p className="auth-visual__eyebrow">CAMPUS TOUR <span /> SMARTBUS</p>}
-          <p className="auth-visual__title">{visual.title}</p>
-          <p className="auth-visual__lead">{visual.lead}</p>
-        </div>
-        {!onRegister && <p className="auth-visual__note">01 / BẮT ĐẦU HÀNH TRÌNH</p>}
-
       </section>
 
       {/* Business fixtures remain visible during development; sign-in itself
@@ -81,9 +63,6 @@ export function AuthLayout() {
 
           <summary>Dữ liệu nghiệp vụ mẫu</summary>
           <p>DEV: các màn nghiệp vụ chưa nối backend vẫn dùng dữ liệu mẫu.</p>
-
-          <summary>Dữ liệu mẫu</summary>
-          <p>DEV: chạy trên dữ liệu mẫu. {MOCK_ACCOUNTS_HINT}.</p>
 
         </details>
       )}

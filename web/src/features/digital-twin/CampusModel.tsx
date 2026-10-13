@@ -19,7 +19,7 @@ function LoadedObjCampus() {
 }
 
 function LoadedGlbCampus() {
-  const gltf = useLoader(GLTFLoader, `${modelBase}NVHSV_Tang6_V3_modern_v2.glb?revision=2`)
+  const gltf = useLoader(GLTFLoader, `${modelBase}NVHSV_Tang6_V3_modern_v2.glb?revision=18`)
   const model = useMemo(() => prepareCampusModel(gltf.scene), [gltf.scene])
   return <primitive object={model} dispose={null} />
 }
