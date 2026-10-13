@@ -22,13 +22,13 @@ Hai dịch vụ chạy trên NUC:
 
 - **`server.py`** (Python 3, thư viện chuẩn): giám sát ADB + FFmpeg, tự khởi
   động lại có back-off khi rút cáp, kính ngủ, FFmpeg chết hoặc MediaMTX khởi
-  động lại; có `/status` và `/health` ở cổng 8080.
+  động lại; có `/status`, `/device` và `/health` ở cổng 8080.
 - **MediaMTX** (một file chạy, không cần cài thêm gì): nhận luồng RTSP rồi
   phát cho trình duyệt qua WebRTC. Không mã hoá lại, nên gần như không tốn CPU.
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `server.py` | supervisor ADB → FFmpeg → publish RTSP + HTTP `/status` |
+| `server.py` | supervisor ADB → FFmpeg → publish RTSP + HTTP `/status`, `/device` |
 | `scripts/install-mediamtx.sh` | tải và cài MediaMTX (hoặc từ file .tar.gz đã tải sẵn) |
 | `scripts/install-services.sh` | cài 2 dịch vụ systemd `mediamtx` + `quest-stream`, mở firewall |
 | `scripts/check-quest.sh` | kiểm tra adb, ffmpeg, MediaMTX, cổng WebRTC, kính |
@@ -200,6 +200,31 @@ MediaMTX ra sau HTTPS (MediaMTX tự bật `webrtcEncryption` với chứng ch�
 reverse proxy Caddy/nginx cho cổng 8889; UDP 8189 vẫn đi thẳng).
 
 ---
+
+
+### `/device`: kính cho Staff Dashboard
+
+`GET http://<IP_NUC>:8080/device` trả về **tình trạng kính** (tách riêng với
+luồng hình) để khu "Giám sát thiết bị" trên trang Staff hiển thị. Một luồng
+riêng chạy mỗi `QUEST_DEVICE_POLL` giây (mặc định 5): `adb devices -l` rồi, nếu
+kính sẵn sàng, `adb shell dumpsys battery`. Chỉ đọc, không đụng tới
+screenrecord/FFmpeg/MediaMTX.
+
+```json
+{
+  "connection": "connected",          // connected | unauthorized | offline | not_found | adb_error | unknown
+  "reason": "",
+  "serial": "2G0YC5ZG123", "model": "Quest 3",
+  "battery": { "level": 54, "charging": true, "plugged": "USB", "status": "charging" },
+  "batteryError": null,
+  "checkedAt": 1791800000.123,        // lần đọc kính gần nhất (epoch s)
+  "stream": "live",                   // live | connecting | lost (từ /status)
+  "streamState": "live", "streamReason": "STREAM_STARTED",
+  "pollSeconds": 5, "now": 1791800001.456
+}
+```
+
+Phía web: đặt `VITE_QUEST_STATUS_URL=http://<IP_NUC>:8080/device` trong `web/.env.local`.
 
 ## Xử lý khi hỏng
 

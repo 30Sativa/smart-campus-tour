@@ -14,6 +14,8 @@ interface ImportMetaEnv {
    * `features/quest-stream/quest-stream-config.ts`.
    */
   readonly VITE_QUEST_WHEP_URL?: string
+  /** quest-stream headset status on the robot miniPC, e.g. http://<NUC_IP>:8080/device. */
+  readonly VITE_QUEST_STATUS_URL?: string
   /** Optional STUN URLs for the Quest stream, comma separated. */
   readonly VITE_QUEST_ICE_SERVERS?: string
   /** @deprecated The old HLS address; only read to warn that it is ignored. */
