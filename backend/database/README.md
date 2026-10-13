@@ -8,6 +8,14 @@
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 
+Admin POI Management adds `Pois.RowVersion` to the v1.1 schema for optimistic
+concurrency. New empty databases receive it from the snapshot. Existing v1.1
+databases must first run `patches/add-poi-rowversion-v1.1.sql`; do not rerun the
+CREATE snapshot against them. Apply the patch to the intended development or
+deployment database through the normal database-change process, then
+re-scaffold from that database and review the generated POI property/mapping.
+The patch is idempotent and preserves existing POIs.
+
 ## Run real SQL tests
 
 From the repository root in PowerShell, using a local SQL Server test instance with CREATE DATABASE permission:
@@ -17,15 +25,36 @@ $env:SMARTCAMPUS_SCHEMA_TEST_CONNECTION = 'Server=localhost,1433;Integrated Secu
 bash scripts/verify backend
 ```
 
-Use a disposable development SQL Server, never a production connection. Each SQL test creates a database named `CampusTourSchemaTest_<random-guid>`, applies v1.1 and test fixtures, and drops only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. SQL-backed tests explicitly report SKIPPED without this environment variable; a normal PASS with skips is not evidence v1.1 was tested.
+Use a disposable development SQL Server, never a production connection. SQL tests create their own GUID-named databases (including `SmartCampusTourPoiDemo_<32-hex-guid>` for POI fixtures), apply the selected snapshot and test fixtures, and drop only that database in cleanup. The supplied Initial Catalog is ignored; existing databases are not modified. No connection string is written into generated source. SQL-backed tests explicitly report SKIPPED without this environment variable; a normal PASS with skips is not evidence v1.1 was tested.
 
 Coverage: execute the complete snapshot; reject duplicate business keys; allow legitimate historical/multi-registration rows; race two independent connections for one session; require closing an expired session before replacement; enforce pending/accepted branch limits; validate new stop FKs; preserve last actual arrival across a route change; enforce robot-claim uniqueness; apply permissions twice; demonstrate INSERT/SELECT succeeds and UPDATE/DELETE fails as a non-owner test user. Audit tests append request/result rows and count email attempts separately from log rows.
 
 ## Apply/adopt later
 
-The current local target is `SmartCampusTourV11` on `localhost,1433`; the local API User Secret `ConnectionStrings:DefaultConnection` points to it using Windows Integrated Security. Runtime configuration is per developer; the shared repository contains no connection string. To scaffold again, set `SMARTCAMPUS_DB_CONNECTION` to this target and run `bash backend/scripts/scaffold-db` from Git Bash. Never point that script at a database with data whose schema does not match the snapshot. After every re-scaffold, review the filtered unique index relationships: EF scaffold inferred `BranchRequest.TourId` as one-to-one from the one-accepted-per-Tour index, and `BrowserSession.InvitationId` as one-to-one from the one-open-session-per-invitation index. Both relations are one-to-many because other request/session rows are allowed; the backend mappings and inverse collections were corrected accordingly.
+For the POI development baseline, provision a separate empty
+`SmartCampusTourPoiDemo` database and apply
+`backend/database/smart-campus-tour-schema-v1.1.sql` there once. Do not apply the
+CREATE snapshot to an existing populated database. Then run the explicit
+`--seed-demo-pois` command using the environment/connection instructions in
+`backend/database/seed-data-plan.md` section 8. It creates four unverified POIs
+with stable GUIDs and map key `demo-poi-baseline-v1`; reruns skip matching rows
+or fail on conflict. It never runs on normal API startup. Keep this DB separate
+from physical robot operations. The baseline fixture itself does not change the
+schema; Admin POI Management adds the separate RowVersion patch above. Existing
+runtime User Secrets remain unchanged.
 
-## Application invariants still to implement
+The current local target is `SmartCampusTourV11` on `localhost,1433`; the local API User Secret `ConnectionStrings:DefaultConnection` points to it using Windows Integrated Security. Runtime configuration is per developer; the shared repository contains no connection string. To scaffold again, set `SMARTCAMPUS_DB_CONNECTION` to this target and run `bash backend/scripts/scaffold-db` from Git Bash. Never point that script at a database with data whose schema does not match the snapshot; apply the additive POI RowVersion patch first. After every re-scaffold, review the filtered unique index relationships: EF scaffold inferred `BranchRequest.TourId` as one-to-one from the one-accepted-per-Tour index, and `BrowserSession.InvitationId` as one-to-one from the one-open-session-per-invitation index. Both relations are one-to-many because other request/session rows are allowed; the backend mappings and inverse collections were corrected accordingly.
+
+## Registration submission implementation
+
+The Representative submission API now enforces Tour-first locks, owned mutations,
+rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
+The schema is unchanged. See `web/docs/representative-registration.md` for the
+live slice, isolated Route/Tour fixture and verification. Admin approval/rejection now shares these locks and reservations; see
+`web/docs/admin-registration-review.md`. Approved roster replacement and
+invitation/session revocation remain future implementation.
+
+## Remaining application invariants
 
 - Every roster import/replacement, registration approval and Admin email correction locks the same parent Tour with UPDLOCK **before** checking normalized email duplicates, holding the lock until commit. Define the same effective-row predicate and normalization in all paths; lowercasing only during import is insufficient.
 - Derive BranchPointRouteStopId from the selected variant and test rejection of mismatched Tour, registration, route and branch point. Close requests atomically on visit closure/NEEDS_ASSISTANCE; old requests stay terminal after recovery. FK existence and filtered UNIQUE do not implement this state machine.

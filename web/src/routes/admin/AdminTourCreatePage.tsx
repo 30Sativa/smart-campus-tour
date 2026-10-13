@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { PageHeader } from '../../features/staff/StaffUi'
+import { PageHeader } from '../../components/ui/ConsolePrimitives'
 import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
 import { useAdminRoutes, useCreateTour } from '../../features/administration/admin-hooks'
 import { readAdminError } from '../../features/administration/admin-status'

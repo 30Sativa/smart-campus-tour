@@ -7,28 +7,51 @@ only mode. It does not publish velocity commands or provide a protective stop.
 
 ## Runtime behavior
 
-- RGB and cloud use `ApproximateTimeSynchronizer` with queue 5 and 50 ms slop.
+- Normal RGB-D subscriptions use DDS `KEEP_LAST(1)` and a sampled callback
+  group. The existing health timer grants one take per input subscription at
+  configured `rate_hz`; missed ticks do not accumulate permits. Humble's
+  executor checks the group before `rcl_take` and conversion to Python, so
+  this reduces PointCloud2 takes/deserialization rather than dropping clouds
+  after callbacks receive them. RGB and cloud still use
+  `ApproximateTimeSynchronizer`, with queue 1 and the same 50 ms slop.
+  Accepted pairs require strictly increasing RGB and cloud timestamps.
   CameraInfo is cached and checked for frame, resolution,
   intrinsics, and supported `plumb_bob` distortion.
-- A single daemon worker handles inference. It keeps one active frame and at
-  most one newest pending frame. Executor timers continue while inference runs.
+- A single daemon worker handles inference and RGB-D fusion. It keeps one
+  active snapshot and at most one newest pending snapshot; a one-slot result
+  mailbox keeps the newest result until the executor consumes it. The worker
+  starts no faster than configured `rate_hz`. Cloud decoding, TF lookup, and
+  projection stay off the ROS executor.
+- `dropped` counts both pending snapshots replaced by newer input and completed
+  results replaced before the executor consumes them. The worker never waits
+  for an unconsumed result, and it does not build a frame backlog. Replaced
+  model/fusion failures still increment `errors`.
+  Samples overwritten in DDS or unmatched by the synchronizer are not included
+  in `dropped`; it is not a total camera-frame-loss counter.
 - Outputs retain the source sensor stamp. Unsupported model output, missing
   depth, invalid calibration, stale data, or TF failure is `UNKNOWN`; it never
   publishes an empty `people` array as a clear observation.
 - The optional policy defaults OFF. When explicitly enabled, startup/UNKNOWN/
   stale produce 50%, a clear sequence of fresh observations can reach 100%,
   and the node never publishes zero (Nav2 defines zero as no speed limit).
-- `bbox_only:=true` needs RGB and a model, publishes an overlay image, and
-  cannot be combined with SpeedLimit.
+- `bbox_only:=true` retains its ungated RGB subscription, needs RGB and a
+  model, publishes an overlay image, and cannot be combined with SpeedLimit.
+
+Sampling does not reduce the camera's publish rate, UDP traffic, or all native
+DDS receive/reassembly costs. A busy executor can sample below `rate_hz`;
+the reader retains the latest sample instead of draining an old queue.
+If hardware still shows transport pressure with about five cloud callbacks
+per second, the next benchmark is a dedicated perception cloud stream sampled
+on the native host, keeping the original cloud stream for Nav2.
 
 ## Launch
 
-Run in the robot ROS 2 Humble container after RGB is enabled by the existing
+Run on the native robot ROS 2 Humble runtime after RGB is enabled by the existing
 camera/navigation setup:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml"
 ```
 
 This is observation mode because `publish_speed_limit` defaults to false.
@@ -36,7 +59,7 @@ BBox-only mode:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml bbox_only:=true
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml" bbox_only:=true
 ```
 
 The SpeedLimit policy can be enabled only after P0–P4 hardware evidence and
@@ -44,16 +67,15 @@ operator review:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/yolo26n_openvino_model/yolo26n.xml \
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/yolo26n_openvino_model/yolo26n.xml" \
   publish_speed_limit:=true
 ```
 
 The model file above is an example path, not an artifact known to exist on the
 robot. Export YOLO26n on a development machine, then copy its `.xml`, `.bin`,
-and manifest into `robot/models/yolo26n_openvino_model/`. Compose mounts
-`PERSON_MODEL_DIR` (default `./models`, relative to `robot/`) read-only at
-`/opt/models`. The Docker image pins OpenVINO Runtime 2024.6.0; do not pip
-install runtime packages into a running container. Record artifact SHA-256 and
+and manifest into the machine-local directory referenced by `PERSON_MODEL_DIR`. Native setup pins OpenVINO Runtime 2024.6.0 via
+`robot/config/perception-requirements.txt`; do not pip install runtime packages
+into an active robot process. Record artifact SHA-256 and
 the exporter version in the manifest.
 YOLO11n is a conditional fallback only if YOLO26n cannot export/load or fails
 the measured P3 target. INT8 and iGPU are not assumed.
@@ -64,11 +86,11 @@ latency, unique RGB frame rate, and drops remain unmeasured there:
 
 ```bash
 python3 robot/ros2_ws/src/robot_perception/scripts/bench_detector.py \
-  /opt/models/<verified-model>/<model>.xml --manifest-out /tmp/person-model-manifest.json
+  ${PERSON_MODEL_DIR}/<verified-model>/<model>.xml --manifest-out /tmp/person-model-manifest.json
 ```
 
 Use `person_perception/diagnostics` during P3 for live end-to-end latency,
-unique frame rate, and dropped-frame counters. Neither measurement exists yet.
+unique frame rate, and dropped-frame counters.
 
 ## Topics
 
@@ -80,8 +102,67 @@ an empty array is valid only for a successfully processed observation and is
 not a safety guarantee. UNKNOWN does not publish a people array.
 
 Diagnostics include state/reason, image and cloud source stamps, sync delta,
-observation age, inference p50/p95, source-stamp-to-detection E2E p50/p95,
-unique frame rate, drops, duplicates, errors, and policy.
+observation age, inference p50/p95, source-stamp-to-consumed-observation E2E
+p50/p95 (including RGB-D fusion), unique frame rate, drops, duplicates,
+errors, and policy.
+`fusion_p50_ms` / `fusion_p95_ms` measure elapsed `perf_counter` time around
+`_locate()`, over the last 100 calls with nonempty person boxes. The worker
+records successful and failed calls, including results later rejected as
+stale or replaced before consumption. The interval excludes inference, input
+deserialization/synchronization, mailbox waits, and output publication.
+Empty-bbox and bbox-only observations add no samples; neither do failures
+before `_locate()` is called (for example missing CameraInfo). Metrics are
+`unknown` until the first measured call. Empty observations retain previous
+samples instead of adding near-zero durations; this is a last-attempt window,
+not a time window.
+Fusion breakdown uses independent `deque(maxlen=100)` histories and
+`perf_counter` timing for these phases:
+
+| Metrics | Timed work |
+|---|---|
+| `cloud_decode_p50_ms` / `cloud_decode_p95_ms` | `cloud_xyz(cloud)` |
+| `transform_p50_ms` / `transform_p95_ms` | Both TF lookups, cloud transform to color frame, and Z filtering |
+| `projection_p50_ms` / `projection_p95_ms` | K preparation, projection, and in-image mask |
+| `roi_p50_ms` / `roi_p95_ms` | In-image point indexing (once per call) and the entire bbox loop: ROI/core selection, median, and person transform to base frame |
+
+A phase records one sample in `finally` whether it finishes or raises.
+Completed phases retain their samples when a later phase fails; unentered
+phases add nothing. Empty boxes and calibration failures before the first
+phase add no samples. Collection happens in the worker, including attempts
+whose results are later stale/replaced. Each metric is `unknown` before its
+first sample and retains its history when skipped. The windows can contain
+different attempts; phase percentiles should not be summed to obtain fusion
+percentiles. Calibration checks and profiling bookkeeping remain part of
+total fusion timing, outside the phase intervals.
+
+Projection still covers every cloud point in front of the colour camera; there
+is no sampling and no depth-pixel/RGB-pixel alignment assumption. Points go
+through the depth->colour TF and the raw-image colour K/D. `plumb_bob` D with 0,
+4 or 5 coefficients is evaluated in vectorized float64 using OpenCV's
+formula and operation order (fx, fy, cx, cy; skew ignored as OpenCV does).
+Other D lengths still call `cv2.projectPoints`. The Python `cv2.projectPoints`
+binding always computes a 2N x 15 float64 Jacobian, about 70 MB for a
+640x480 cloud, and that dominated the earlier projection phase. In-image
+indexing used to run once per box inside the `roi` phase; it now runs once per
+call in the same phase. Both metrics keep their definitions, so samples
+before and after this change are comparable.
+`test/test_projection_regression.py` checks the current path against a frozen
+copy of the earlier path on a deterministic synthetic Astra-like scene. The same
+scene gives an offline per-phase benchmark (no ROS graph, camera or tf2 lookup):
+
+```bash
+cd robot/ros2_ws/src/robot_perception/test
+PYTHONPATH=.. python3 fusion_scene.py --iterations 30
+```
+
+The cumulative `rgb_received` and `cloud_received` counters count messages
+delivered to Python callbacks, not all samples published by the camera.
+`pairs_accepted` counts synchronized pairs queued after timestamp/delta/order
+validation, not successfully fused observations. At 30 Hz camera input and
+`rate_hz=5`, RGB-D callback counts should grow by about five per second;
+bbox-only RGB callbacks remain at the source rate and cloud/pair counts stay
+zero. Duplicate or out-of-order cloud stamps now increment `duplicates` and
+make the observation UNKNOWN, just as repeated RGB stamps already did.
 Heartbeat does not refresh observation freshness. A timer inside this node
 cannot handle total process or executor failure.
 

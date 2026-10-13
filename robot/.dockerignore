@@ -11,6 +11,21 @@ README.md
 
 docker-compose.yml
 robot_maps
+models
+.git
+.env
+.env.*
+
+# Recordings/models and generated output never enter the build context.
+**/*.db3
+**/*.mcap
+**/*.bag
+**/*.onnx
+**/build
+**/install
+**/log
+**/.idea
+**/.ruff_cache
 
 **/.gitignore
 **/.vscode

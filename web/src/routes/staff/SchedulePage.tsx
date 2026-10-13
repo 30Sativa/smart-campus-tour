@@ -1,8 +1,9 @@
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { useTours } from '../../features/staff/staff-hooks'
-import { EmptyPanel, ErrorPanel, LoadingPanel, PageHeader, panelClass, StaffPage } from '../../features/staff/StaffUi'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { TourTable } from '../../features/staff/components/TourParts'
 import { useNow } from '../../features/staff/use-now'
 

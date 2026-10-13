@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { RefreshCcw, Users } from 'lucide-react'
 import type { AdminRegistration, RosterRow } from '../../../api/contracts/admin'
-import { buttonClass } from '../../staff/ui-classes'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { formatSlot, formatStamp } from '../admin-format'
-import { rowClass, tdClass, thClass } from '../admin-classes'
-import { SearchField } from '../../staff/StaffUi'
+import { rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
+import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { InvitationStatus, RegistrationStateBadge, TableFrame } from '../AdminUi'
 
 /**

@@ -53,13 +53,15 @@ describe('staff session workflow', () => {
 
   it('offers each session the next step its state calls for', async () => {
     renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
-    const table = await screen.findByRole('table', { name: 'Buổi hôm nay' })
-    const row = (code: string) => within(table).getByText(code).closest('tr') as HTMLElement
-    expect(within(row('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
-    expect(within(row('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
-    expect(within(row('T-03')).getByRole('link', { name: 'Xem chi tiết' })).toBeInTheDocument()
-    expect(within(row('T-03')).getByText(/Còn 1 đăng ký chờ duyệt/)).toBeInTheDocument()
-    expect(within(table).queryByRole('button', { name: /Bắt đầu/ })).toBeNull()
+    // One state at a time; with a session running, "Đang chạy" opens first.
+    const row = async (code: string) => (await within(await screen.findByRole('table', { name: 'Buổi hôm nay' })).findByText(code)).closest('tr') as HTMLElement
+    expect(within(await row('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
+    fireEvent.click(screen.getByRole('button', { name: /Sẵn sàng/ }))
+    expect(within(await row('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
+    fireEvent.click(screen.getByRole('button', { name: /Chờ Admin chốt/ }))
+    expect(within(await row('T-03')).getByRole('link', { name: 'Xem chi tiết' })).toBeInTheDocument()
+    expect(within(await row('T-03')).getByText(/Còn 1 đăng ký chờ duyệt/)).toBeInTheDocument()
+    expect(within(await screen.findByRole('table', { name: 'Buổi hôm nay' })).queryByRole('button', { name: /Bắt đầu/ })).toBeNull()
   })
 
   it('keeps Start disabled with the server reason while the robot serves another session', async () => {

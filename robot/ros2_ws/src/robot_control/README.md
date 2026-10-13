@@ -273,21 +273,38 @@ firmware `STOP,<seq>` command.
 
 ## Important Tuning TODOs
 
-- `config/nav2_params.yaml`: `robot_radius=0.49` is the circumscribed radius of
-  the CAD chassis box in `robot_description/urdf/common_properties.xacro`
-  (0.8022 x 0.5628 m -> half-diagonal 0.490 m). The previous 0.47 came from a
-  74x55 cm estimate and was therefore SMALLER than the CAD body. This is a
-  costmap/footprint radius and has nothing to do with the odometry
-  `wheel_base=0.4714`. `inflation_radius=0.60` on both costmaps; inflation is
-  measured from the obstacle, so it must stay >= `robot_radius`.
-  TODO(hardware): measure the finished chassis envelope, including anything
-  that protrudes past the CAD box, and re-derive both numbers.
+- `robot/ros2_ws/src/robot_control/config/nav2_params.yaml`: both costmaps use
+  the rectangular polygon projected from the chassis collision box in
+  `robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`:
+  0.802199951 x 0.562799988 m, centred at XY (0, 0.000049973).
+  `footprint` is a Humble string parameter, with `footprint_padding=0.0`
+  to use the CAD envelope exactly. No `robot_radius` is configured.
+  This geometry is independent of the calibrated odometry `wheel_base=0.4714`.
+  Inflation stays at `inflation_radius=0.60`, `cost_scaling_factor=3.0` on both
+  costmaps. Humble derives the inscribed radius from the polygon (~0.28135 m);
+  inflation must cover that radius, but does not guarantee corner clearance.
+  Verify the published polygon, turns and obstacle clearance on hardware;
+  update the envelope only if a measured physical protrusion justifies it.
 - `config/nav2_params.yaml`: planner is `nav2_smac_planner/SmacPlanner2D`,
-  controller is `RegulatedPurePursuitController` at 0.20 m/s with
+  controller is `RegulatedPurePursuitController` at 0.22 m/s for a supervised
+  forward-speed hardware trial (previously 0.20 m/s), with
   `allow_reversing: false`. Values marked `TUNE ON HARDWARE` in that file are
   the ones to touch after a real run - not before. Rationale in
   [ADR-0007](../../../../docs/decisions/0007-smac2d-rpp-no-autonomous-reverse.md);
   behaviour and limitations in `robot_navigation/README.md`.
+  Smoother forward ceiling is 0.22 m/s; reverse remains -0.20 m/s,
+  acceleration/deceleration and turn settings are unchanged. With the default
+  bridge `speed_scale=1.0` and 250 mm/s wheel limit, straight travel at 0.22
+  passes unchanged; turns can still trigger wheel-pair scaling. RPP regulation
+  and an active `speed_limit` can also reduce speed. This trial does not
+  diagnose or guarantee a fix for motor vibration/noise.
+  Hardware check: compare straight starts, steady travel, goal stops and
+  supervised obstacle stops at the same payload/route against 0.20 m/s; record
+  vibration/noise, driver alarms, drift and measured stopping clearance.
+  Verify runtime `FollowPath.desired_linear_vel=0.22` and smoother
+  `max_velocity=[0.22, 0.0, 0.40]` after rebuilding/restarting. If behaviour
+  worsens, stop and restore only these two forward values to 0.20, then
+  rebuild/restart; do not raise wheel limits to force 0.22 through a turn.
 - Any launch file that feeds `config/nav2_params.yaml` into
   `nav2_bringup/navigation_launch.py` MUST first
   `SetLaunchConfiguration('robot_ns', ...)` ('' or '/robot_01') and

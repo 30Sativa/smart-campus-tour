@@ -4,7 +4,7 @@ import { Menu, Moon, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../../../stores/auth-store'
 import { useThemeStore } from '../../../stores/theme-store'
 import { useLogout } from '../../../auth/use-logout'
-import { homePathForRole, isAdminRole, isStaffRole } from '../../../auth/roles'
+import { homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole } from '../../../auth/roles'
 import { navLinks } from '../landing-content'
 
 type Props = {
@@ -29,13 +29,19 @@ export function SiteNav({ onLockScroll }: Props) {
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const logout = useLogout()
   const isStaff = isStaffRole(user?.role)
+  // Every signed-in account with its own area gets a way back to it from the home page.
+  const hasArea = isStaff || isRepresentativeRole(user?.role)
+  const areaLabel = isAdminRole(user?.role) ? 'Quản trị' : isStaff ? 'Điều hành' : 'đại diện'
 
   useEffect(() => {
     const node = sentinelRef.current
     if (!node || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver(
       ([entry]) => setStuck(!entry.isIntersecting),
-      { rootMargin: '-72px 0px 0px 0px' },
+      // The sentinel sits at the document top. A negative top root margin would
+      // place it outside the observer viewport on the first paint, making the
+      // navigation appear stuck before the visitor has scrolled.
+      { rootMargin: '0px' },
     )
     observer.observe(node)
     return () => observer.disconnect()
@@ -129,10 +135,14 @@ export function SiteNav({ onLockScroll }: Props) {
 
             {isAuthenticated ? (
               <>
-                <span className="lp-user">{user?.username}</span>
+                {hasArea ? (
+                  <Link to={homePathForRole(user?.role)} className="lp-user lp-user--link" title={`Về khu vực ${areaLabel.toLowerCase()}`}>{user?.username}</Link>
+                ) : (
+                  <span className="lp-user">{user?.username}</span>
+                )}
                 {isStaff && (
                   <Link to={homePathForRole(user?.role)} className="lp-btn lp-btn--solid lp-btn--sm">
-                    {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
+                    {areaLabel}
                   </Link>
                 )}
                 <button type="button" onClick={logout} className="lp-btn lp-btn--ghost lp-btn--sm">
@@ -170,7 +180,7 @@ export function SiteNav({ onLockScroll }: Props) {
             <>
               {isStaff && (
                 <Link to={homePathForRole(user?.role)} className="lp-sheet__cta" onClick={closeMenu}>
-                  {isAdminRole(user?.role) ? 'Quản trị' : 'Điều hành'}
+                  {areaLabel}
                 </Link>
               )}
               <button type="button" onClick={logout}>

@@ -4,6 +4,7 @@ import threading
 import time
 import types
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -29,13 +30,18 @@ class FakeTime:
 
 
 class Harness:
+    _on_pair = P.PersonPerceptionNode._on_pair
+    _on_bbox_image = P.PersonPerceptionNode._on_bbox_image
+    _count_input = P.PersonPerceptionNode._count_input
     _enqueue = P.PersonPerceptionNode._enqueue
     _consume = P.PersonPerceptionNode._consume
     _health_tick = P.PersonPerceptionNode._health_tick
     _policy_tick = P.PersonPerceptionNode._policy_tick
     _set_unknown = P.PersonPerceptionNode._set_unknown
     _publish_limit = P.PersonPerceptionNode._publish_limit
+    _record_error = P.PersonPerceptionNode._record_error
     _tf = P.PersonPerceptionNode._tf
+    _profile_phase = P.PersonPerceptionNode._profile_phase
     _worker_loop = P.PersonPerceptionNode._worker_loop
 
     def _publish_diagnostics(self, percent=None):
@@ -44,8 +50,9 @@ class Harness:
     def _publish_debug(self, *_args):
         self.debug_published = True
 
-    def _publish_people(self, *_args):
+    def _publish_people(self, people, *_args):
         self.people_published = True
+        self.published_people = list(people)
 
     def _locate(self, _snapshot, _boxes):
         return []
@@ -78,13 +85,20 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node._worker_busy = False
     node._stopping = False
     node._last_image_stamp = None
+    node._last_cloud_stamp = None
     node._last_pair_stamp = None
     node._last_valid_mono = None
     node._last_obs_ros = None
     node._pending_policy = None
     node._counts = {'dropped': 0, 'duplicate': 0, 'errors': 0}
+    node._input_counts = {'rgb_received': 0, 'cloud_received': 0, 'pairs_accepted': 0}
+    node._input_group = None if bbox_only else P.SampledInputGroup()
+    node.info = None
     node._latencies = []
     node._e2e_latencies = []
+    node._fusion_latencies = P.deque(maxlen=100)
+    node._fusion_phase_latencies = {phase: P.deque(maxlen=100) for phase in P.FUSION_PHASES}
+    node._calibration_signature = None
     node._observation_times = []
     node._bbox_count = 0
     node._valid_fusion_count = 0
@@ -112,19 +126,356 @@ def make_node(*, now=10.0, enabled=False, bbox_only=True):
     node.imgsz = 2
     node.conf = 0.45
     node.iou = 0.5
+    node._inference_period = 0.0
     return node
 
 
-def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=None):
+def inference_result(image_s, cloud_s=None, *, queued_at=0.0, error='', boxes=None,
+                     people=None, fusion_error=''):
     snapshot = P.Snapshot(
         image=image(image_s), cloud=message(cloud_s, cloud=True) if cloud_s is not None else None,
         info=object() if cloud_s is not None else None, image_stamp=image_s,
         cloud_stamp=cloud_s, queued_at=queued_at)
     boxes = np.empty((0, 4), np.float32) if boxes is None else boxes
-    return P.InferenceResult(snapshot, boxes, np.zeros(len(boxes), np.float32), 0.01, error)
+    if people is None and cloud_s is not None and not fusion_error: people=[]
+    return P.InferenceResult(snapshot, boxes, np.zeros(len(boxes), np.float32), 0.01,
+                             error, people, fusion_error)
 
 
 class PersonPerceptionNodeTests(unittest.TestCase):
+    def test_locate_phase_timing_success_exceptions_guards_and_empty_boxes(self):
+        cases = (
+            ('success', 4, ''),
+            ('decode error', 1, 'decode failed'),
+            ('no points', 1, 'no valid cloud points'),
+            ('transform error', 2, 'TF failed'),
+            ('no front points', 2, 'no cloud points in front of camera'),
+            ('projection error', 3, 'projection failed'),
+            ('roi error on second box', 4, 'ROI failed'),
+            ('invalid calibration', 0, 'invalid CameraInfo K'),
+            ('empty boxes', 0, ''),
+        )
+        for name, completed_or_attempted, error in cases:
+            with self.subTest(name=name):
+                node = make_node(bbox_only=False)
+                info = types.SimpleNamespace(
+                    width=2, height=2,
+                    header=types.SimpleNamespace(frame_id='camera_optical'),
+                    k=[1., 0., 1., 0., 1., 1., 0., 0., 1.],
+                    d=[0., 0., 0., 0., 0.], distortion_model='plumb_bob')
+                cloud = test_math.cloud([[(0., 0., 2.)] * 24])
+                cloud.header = types.SimpleNamespace(
+                    stamp=stamp(10.0), frame_id='camera_depth_optical')
+                snapshot = P.Snapshot(image(10.0), cloud, info, 10.0, 10.0, 0.0)
+                boxes = np.array([[0., 0., 2., 2.], [0., 0., 2., 2.]])
+                node._tf = mock.Mock(side_effect=[
+                    (np.eye(3), np.zeros(3)), (np.eye(3), np.array([1., 2., 3.]))])
+                ticks = [tick for i in range(completed_or_attempted)
+                         for tick in (float(i), float(i) + (i + 1) / 100)]
+                with mock.patch.object(P, 'cloud_xyz', wraps=P.cloud_xyz) as decode, \
+                        mock.patch.object(P, 'project_points', return_value=np.ones((24, 2))) as project, \
+                        mock.patch.object(P, 'range_core', wraps=P.range_core) as roi, \
+                        mock.patch.object(P.time, 'perf_counter', side_effect=ticks) as timer:
+                    if name == 'decode error':
+                        decode.side_effect = P.PerceptionError(error)
+                    elif name == 'no points':
+                        decode.return_value = np.empty((0, 3))
+                    elif name == 'transform error':
+                        node._tf.side_effect = P.PerceptionError(error)
+                    elif name == 'no front points':
+                        node._tf.side_effect = [
+                            (np.eye(3), np.array([0., 0., -4.])),
+                            (np.eye(3), np.array([1., 2., 3.]))]
+                    elif name == 'projection error':
+                        project.side_effect = P.PerceptionError(error)
+                    elif name == 'roi error on second box':
+                        roi.side_effect = [
+                            (2., np.ones(24, dtype=bool), np.ones(24, dtype=bool)),
+                            P.PerceptionError(error)]
+                    elif name == 'invalid calibration':
+                        info.k[0] = 0.
+                    elif name == 'empty boxes':
+                        boxes = np.empty((0, 4))
+
+                    if error:
+                        with self.assertRaisesRegex(P.PerceptionError, error):
+                            P.PersonPerceptionNode._locate(node, snapshot, boxes)
+                    else:
+                        people = P.PersonPerceptionNode._locate(node, snapshot, boxes)
+                        if name == 'empty boxes':
+                            self.assertEqual(people, [])
+                        else:
+                            np.testing.assert_allclose(people, [[1., 2., 5.], [1., 2., 5.]])
+                    self.assertEqual(timer.call_count, 2 * completed_or_attempted)
+                    if completed_or_attempted < 1:
+                        decode.assert_not_called()
+                    if completed_or_attempted < 2:
+                        node._tf.assert_not_called()
+                    if completed_or_attempted < 3:
+                        project.assert_not_called()
+                    if completed_or_attempted < 4:
+                        roi.assert_not_called()
+                    if name == 'roi error on second box':
+                        self.assertEqual(roi.call_count, 2)
+                for i, phase in enumerate(P.FUSION_PHASES):
+                    samples = node._fusion_phase_latencies[phase]
+                    self.assertEqual(len(samples), int(i < completed_or_attempted))
+                    if samples:
+                        self.assertAlmostEqual(samples[0], (i + 1) / 100)
+
+    def test_worker_profiles_nonempty_locate_success_error_stale_and_replaced_results(self):
+        cases = (
+            ('success/replaced', False, True, '', True, 10.1, True),
+            ('fusion error', False, True, 'fusion failed', True, 10.1, False),
+            ('stale result', False, True, '', True, 12.0, False),
+            ('empty boxes', False, False, '', True, 10.1, False),
+            ('bbox only', True, True, '', True, 10.1, False),
+            ('missing info before locate', False, True, '', False, 10.1, False),
+        )
+        for name, bbox_only, has_boxes, error, has_info, now, replaced in cases:
+            with self.subTest(name=name):
+                node = make_node(now=now, bbox_only=bbox_only)
+                raw = (np.array([[[0., 0., 1., 1., .9, 0.]]], np.float32)
+                       if has_boxes else np.empty((1, 0, 6), np.float32))
+                node.net = types.SimpleNamespace(infer=lambda _inputs: {0: raw})
+                node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+                node._locate = mock.Mock(
+                    return_value=[np.array([1., 0., 0.])] if has_boxes else [],
+                    side_effect=RuntimeError(error) if error else None)
+                node._pending = P.Snapshot(
+                    image(10.0), message(10.0, cloud=True),
+                    object() if has_info else None, 10.0, 10.0, time.monotonic())
+                if replaced:
+                    node._result = inference_result(9.9, 9.9)
+                measured = has_boxes and has_info and not bbox_only
+                # Existing statistics must survive an empty-bbox observation.
+                if not has_boxes:
+                    node._fusion_latencies.append(.7)
+                initial = list(node._fusion_latencies)
+                clock_ticks = [1., 1.1, 5., 5.25] if measured else [1., 1.1]
+                fake_cv2 = types.ModuleType('cv2')
+                fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+                thread = threading.Thread(target=node._worker_loop, daemon=True)
+                with mock.patch.dict(sys.modules, {'cv2': fake_cv2}), \
+                        mock.patch.object(P.time, 'perf_counter', side_effect=clock_ticks) as timer:
+                    try:
+                        thread.start()
+                        with node._wake:
+                            self.assertTrue(node._wake.wait_for(
+                                lambda: node._result is not None
+                                and node._result.snapshot.image_stamp == 10.0
+                                and not node._worker_busy, timeout=1))
+                            result = node._result
+                        self.assertAlmostEqual(result.latency_s, .1)
+                        self.assertEqual(timer.call_count, 4 if measured else 2)
+                    finally:
+                        with node._wake:
+                            node._stopping = True
+                            node._wake.notify_all()
+                        thread.join(timeout=1)
+                self.assertFalse(thread.is_alive())
+                expected = initial + ([.25] if measured else [])
+                self.assertEqual(list(node._fusion_latencies), expected)
+                if not bbox_only and has_info:
+                    node._locate.assert_called_once()
+                else:
+                    node._locate.assert_not_called()
+                self.assertEqual(result.fusion_error,
+                                 error or ('missing CameraInfo' if not has_info else ''))
+                if replaced:
+                    self.assertEqual(node._counts['dropped'], 1)
+                node._consume(result)
+                self.assertEqual(list(node._fusion_latencies), expected)
+                if now == 12.0:
+                    self.assertIn('STALE/INVALID', node._status_reason)
+                    self.assertEqual(node._counts['errors'], 1)
+                elif error or not has_info:
+                    self.assertEqual(node._status_reason, result.fusion_error)
+                    self.assertEqual(node._counts['errors'], 1)
+                else:
+                    self.assertEqual(node._status_reason, 'BBOX_ONLY_VALID' if bbox_only else 'VALID')
+                    if not has_boxes:
+                        self.assertEqual(node._valid_fusion_count, 0)
+                        self.assertEqual(node.published_people, [])
+
+    def test_fusion_diagnostics_percentiles_unknown_and_last_100_attempts(self):
+        class DiagnosticArray:
+            def __init__(self):
+                self.header = types.SimpleNamespace(stamp=None)
+
+        class DiagnosticStatus:
+            OK = 0
+            ERROR = 2
+
+        node = make_node(bbox_only=False)
+        node._latencies = [.106, .124]
+        node._e2e_latencies = [.65, .9]
+
+        def diagnostics():
+            with mock.patch.multiple(
+                    P, DiagnosticArray=DiagnosticArray, DiagnosticStatus=DiagnosticStatus,
+                    KeyValue=lambda **kwargs: types.SimpleNamespace(**kwargs)):
+                P.PersonPerceptionNode._publish_diagnostics(node)
+            return {value.key: value.value for value in node.diag_pub.messages[-1].status[0].values}
+
+        original = diagnostics()
+        self.assertEqual(original['fusion_p50_ms'], 'unknown')
+        self.assertEqual(original['fusion_p95_ms'], 'unknown')
+        phases = ('cloud_decode', 'transform', 'projection', 'roi')
+        for phase in phases:
+            self.assertEqual(original[f'{phase}_p50_ms'], 'unknown')
+            self.assertEqual(original[f'{phase}_p95_ms'], 'unknown')
+        node._fusion_latencies.extend([.1, .2, .3, .4])
+        profiled = diagnostics()
+        self.assertEqual(profiled['fusion_p50_ms'], '250.00')
+        self.assertEqual(profiled['fusion_p95_ms'], '385.00')
+        self.assertEqual(
+            {key: value for key, value in original.items() if not key.startswith('fusion_')},
+            {key: value for key, value in profiled.items() if not key.startswith('fusion_')})
+        node._fusion_latencies.clear()
+        node._fusion_latencies.extend(i / 1000 for i in range(101))
+        self.assertEqual(len(node._fusion_latencies), 100)
+        latest = diagnostics()
+        self.assertEqual(latest['fusion_p50_ms'], '50.50')
+        self.assertEqual(latest['fusion_p95_ms'], '95.05')
+        for factor, phase in enumerate(phases, start=1):
+            samples = node._fusion_phase_latencies[phase]
+            samples.extend(factor * value for value in (.1, .2, .3, .4))
+            measured = diagnostics()
+            self.assertEqual(measured[f'{phase}_p50_ms'], f'{250 * factor:.2f}')
+            self.assertEqual(measured[f'{phase}_p95_ms'], f'{385 * factor:.2f}')
+            samples.clear()
+            samples.extend(factor * i / 1000 for i in range(101))
+            self.assertEqual(len(samples), 100)
+            measured = diagnostics()
+            self.assertEqual(measured[f'{phase}_p50_ms'], f'{50.5 * factor:.2f}')
+            self.assertEqual(measured[f'{phase}_p95_ms'], f'{95.05 * factor:.2f}')
+        phase_keys = {f'{phase}_p{percentile}_ms' for phase in phases for percentile in (50, 95)}
+        self.assertEqual(
+            {key: value for key, value in latest.items() if key not in phase_keys},
+            {key: value for key, value in measured.items() if key not in phase_keys})
+
+    def test_sample_group_limits_each_reader_before_take_and_keeps_latest(self):
+        class Reader:
+            def __init__(self):
+                self.latest = None  # models DDS KEEP_LAST(1), not a Python message queue
+                self.takes = 0
+
+            def dispatch(self, group):
+                if self.latest is None or not group.can_execute(self):
+                    return None
+                if not group.beginning_execution(self):
+                    return None
+                try:
+                    self.takes += 1  # take/deserialization happens only after permission
+                    msg, self.latest = self.latest, None
+                    return msg
+                finally:
+                    group.ending_execution(self)
+
+        group = P.SampledInputGroup()
+        rgb, cloud = Reader(), Reader()
+        group.add_entity(rgb)
+        group.add_entity(cloud)
+        for frame in range(6):
+            rgb.latest = cloud.latest = frame
+            self.assertIsNone(rgb.dispatch(group))
+            self.assertIsNone(cloud.dispatch(group))
+        self.assertEqual(cloud.takes, 0)
+        group.release()
+        self.assertEqual(rgb.dispatch(group), 5)
+        self.assertEqual(cloud.dispatch(group), 5)
+        for frame in range(6, 12):
+            rgb.latest = cloud.latest = frame
+            self.assertIsNone(rgb.dispatch(group))
+            self.assertIsNone(cloud.dispatch(group))
+        group.release()
+        self.assertEqual(rgb.dispatch(group), 11)
+        self.assertEqual(cloud.dispatch(group), 11)
+        self.assertEqual((rgb.takes, cloud.takes), (2, 2))
+
+    def test_sample_group_missed_ticks_do_not_accumulate_or_allow_concurrent_takes(self):
+        class Entity:
+            pass
+
+        group = P.SampledInputGroup()
+        rgb, cloud = Entity(), Entity()
+        group.add_entity(rgb)
+        group.add_entity(cloud)
+        for _ in range(10):
+            group.release()
+        self.assertTrue(group.can_execute(rgb))
+        self.assertTrue(group.can_execute(cloud))
+        self.assertTrue(group.beginning_execution(rgb))
+        self.assertFalse(group.beginning_execution(rgb))
+        self.assertFalse(group.beginning_execution(cloud))
+        group.ending_execution(rgb)
+        self.assertFalse(group.can_execute(rgb))
+        self.assertTrue(group.beginning_execution(cloud))
+        group.ending_execution(cloud)
+        self.assertFalse(group.can_execute(cloud))
+
+    def test_health_tick_releases_normal_inputs_but_bbox_only_stays_ungated(self):
+        class Entity:
+            pass
+
+        node = make_node(bbox_only=False)
+        reader = Entity()
+        node._input_group.add_entity(reader)
+        self.assertFalse(node._input_group.can_execute(reader))
+        node._health_tick()
+        self.assertTrue(node._input_group.can_execute(reader))
+
+        node = make_node(bbox_only=True)
+        node._on_bbox_image(image(10.0))
+        node._on_bbox_image(image(10.1))
+        self.assertIsNone(node._input_group)
+        self.assertEqual(node._pending.image_stamp, 10.1)
+        self.assertEqual(node._input_counts,
+                         {'rgb_received': 2, 'cloud_received': 0, 'pairs_accepted': 0})
+
+    def test_rgbd_pending_is_latest_only_and_cloud_timestamps_cannot_be_reused(self):
+        node = make_node(bbox_only=False)
+        for ts in (10.0, 10.2, 10.4):
+            node._on_pair(image(ts), message(ts + .01, cloud=True))
+        self.assertEqual(node._pending.image_stamp, 10.4)
+        self.assertAlmostEqual(node._pending.cloud_stamp, 10.41)
+        self.assertEqual(node._counts['dropped'], 2)
+        self.assertEqual(node._input_counts['pairs_accepted'], 3)
+        node._pending = None
+        for image_ts, cloud_ts in ((10.42, 10.41), (10.43, 10.40)):
+            node._on_pair(image(image_ts), message(cloud_ts, cloud=True))
+            self.assertIsNone(node._pending)
+            self.assertEqual(node._status_reason, 'duplicate/out-of-order cloud timestamp')
+        self.assertEqual(node._counts['duplicate'], 2)
+        self.assertEqual(node._input_counts['pairs_accepted'], 3)
+
+    def test_locate_empty_boxes_skips_cloud_tf_and_projection(self):
+        info = types.SimpleNamespace(
+            width=2, height=2,
+            header=types.SimpleNamespace(frame_id='camera_optical'),
+            k=[1., 0., 0., 0., 1., 0., 0., 0., 1.],
+            d=[0., 0., 0., 0., 0.],
+            distortion_model='plumb_bob')
+        snapshot = P.Snapshot(image(10.0), message(10.0, cloud=True), info,
+                              10.0, 10.0, 0.0)
+        tf_calls = []
+        node = types.SimpleNamespace(
+            _calibration_signature=None,
+            _fusion_phase_latencies={phase: P.deque(maxlen=100) for phase in P.FUSION_PHASES},
+            base_frame='base_link',
+            _tf=lambda *_args: tf_calls.append(True))
+
+        with mock.patch.object(P.time, 'perf_counter', side_effect=AssertionError('empty boxes profiled')), \
+                mock.patch.object(P, 'cloud_xyz', side_effect=AssertionError('cloud decoded')), \
+                mock.patch.object(P, 'project_points', side_effect=AssertionError('cloud projected')):
+            people = P.PersonPerceptionNode._locate(
+                node, snapshot, np.empty((0, 4), dtype=np.float32))
+
+        self.assertEqual(people, [])
+        self.assertEqual(tf_calls, [])
+        self.assertTrue(all(not samples for samples in node._fusion_phase_latencies.values()))
+
     def test_sync_accepts_40ms_and_rejects_60ms(self):
         node = make_node()
         node._enqueue(image(10.0), message(10.04, cloud=True), None)
@@ -161,10 +512,12 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         node._last_obs_ros = 100.0
         node._last_valid_mono = time.monotonic()
         node._last_image_stamp = 100.0
+        node._last_cloud_stamp = 100.0
         node._last_pair_stamp = 100.0
         node._health_tick()
         self.assertEqual(node._status_reason, 'ROS clock moved backwards')
         self.assertIsNone(node._last_image_stamp)
+        self.assertIsNone(node._last_cloud_stamp)
         self.assertIsNone(node._last_pair_stamp)
 
     def test_hung_worker_keeps_one_latest_pending_and_health_timer_runs(self):
@@ -208,6 +561,135 @@ class PersonPerceptionNodeTests(unittest.TestCase):
             else:
                 sys.modules['cv2'] = previous_cv2
         self.assertFalse(thread.is_alive())
+
+    def test_worker_replaces_unconsumed_result_and_processes_only_latest_pending(self):
+        entered = threading.Event()
+        release = threading.Event()
+        calls = []
+        call_times = []
+
+        class SlowFirstModel:
+            def infer(self, _inputs):
+                calls.append(len(calls) + 1)
+                call_times.append(time.monotonic())
+                if len(calls) == 1:
+                    entered.set()
+                    release.wait(timeout=5)
+                return {0: np.empty((1, 0, 6), np.float32)}
+
+        node = make_node(now=10.0)
+        node._inference_period = 0.05
+        node.net = SlowFirstModel()
+        node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+        node._pending = P.Snapshot(image(10.0), None, None, 10.0, None, time.monotonic())
+        node._result = inference_result(9.95, error='MODEL_ERROR: previous frame failed')
+        fake_cv2 = types.ModuleType('cv2')
+        fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+        previous_cv2 = sys.modules.get('cv2')
+        sys.modules['cv2'] = fake_cv2
+        thread = threading.Thread(target=node._worker_loop, name='test-inference', daemon=True)
+        try:
+            thread.start()
+            self.assertTrue(entered.wait(timeout=1))
+            node._enqueue(image(10.1), None, None)
+            node._enqueue(image(10.2), None, None)
+            node._enqueue(image(10.3), None, None)
+            self.assertEqual(node._counts['dropped'], 2)
+            self.assertEqual(node._pending.image_stamp, 10.3)
+
+            release.set()
+            with node._wake:
+                self.assertTrue(node._wake.wait_for(
+                    lambda: node._result is not None
+                    and node._result.snapshot.image_stamp == 10.3
+                    and not node._worker_busy,
+                    timeout=2))
+
+            self.assertEqual(calls, [1, 2])
+            self.assertGreaterEqual(call_times[1] - call_times[0], 0.04)
+            self.assertIsNone(node._pending)
+            # Two overwritten pending snapshots and two replaced completed results.
+            self.assertEqual(node._counts['dropped'], 4)
+            # A replaced failed result still contributes to the error counter.
+            self.assertEqual(node._counts['errors'], 1)
+        finally:
+            release.set()
+            with node._wake:
+                node._stopping = True
+                node._wake.notify_all()
+            thread.join(timeout=1)
+            if previous_cv2 is None:
+                sys.modules.pop('cv2', None)
+            else:
+                sys.modules['cv2'] = previous_cv2
+        self.assertFalse(thread.is_alive())
+
+    def test_idle_worker_exits_when_shutdown_notifies_condition(self):
+        node = make_node()
+        thread = threading.Thread(target=node._worker_loop, name='test-idle-worker', daemon=True)
+        thread.start()
+        time.sleep(0.01)
+        with node._wake:
+            node._stopping = True
+            node._wake.notify_all()
+        thread.join(timeout=1)
+        self.assertFalse(thread.is_alive())
+
+    def test_rgbd_fusion_runs_on_worker_and_fusion_errors_remain_unknown(self):
+        fusion_threads = []
+        node = make_node(now=10.1, bbox_only=False)
+        node.net = types.SimpleNamespace(
+            infer=lambda _inputs: {0: np.empty((1, 0, 6), np.float32)})
+        node._rgb_array = lambda _msg: np.zeros((2, 2, 3), np.uint8)
+        node._locate = lambda _snap, _boxes: (
+            fusion_threads.append(threading.current_thread().name) or [])
+        node._pending = P.Snapshot(image(10.0), message(10.0, cloud=True), object(),
+                                   10.0, 10.0, time.monotonic())
+        fake_cv2 = types.ModuleType('cv2')
+        fake_cv2.resize = lambda arr, size: np.zeros((size[1], size[0], 3), np.uint8)
+        previous_cv2 = sys.modules.get('cv2')
+        sys.modules['cv2'] = fake_cv2
+        thread = threading.Thread(target=node._worker_loop, name='person-inference-test', daemon=True)
+        try:
+            thread.start()
+            with node._wake:
+                self.assertTrue(node._wake.wait_for(
+                    lambda: node._result is not None and not node._worker_busy,
+                    timeout=1))
+                result = node._result
+                node._result = None
+            self.assertEqual(fusion_threads, ['person-inference-test'])
+            node._consume(result)
+            self.assertEqual(node._status_reason, 'VALID')
+            self.assertTrue(node.people_published)
+            self.assertEqual(node.published_people, [])
+            self.assertEqual(node._valid_fusion_count, 0)
+            self.assertEqual(node._pending_policy, ([], 10.0))
+            node._policy_tick()
+            self.assertIsNone(node._pending_policy)
+            self.assertEqual(node.last_diagnostic_percent, 50.0)
+
+            failed = inference_result(10.01, 10.01, fusion_error='TF lookup failed')
+            node._consume(failed)
+            self.assertEqual(node._status_reason, 'TF lookup failed')
+            self.assertEqual(node._counts['errors'], 1)
+        finally:
+            with node._wake:
+                node._stopping = True
+                node._wake.notify_all()
+            thread.join(timeout=1)
+            if previous_cv2 is None:
+                sys.modules.pop('cv2', None)
+            else:
+                sys.modules['cv2'] = previous_cv2
+        self.assertFalse(thread.is_alive())
+
+    def test_future_rgb_or_cloud_timestamp_is_still_unknown(self):
+        for result in (inference_result(10.06, 10.0),
+                       inference_result(10.0, 10.06)):
+            node = make_node(now=10.0, bbox_only=False)
+            node._consume(result)
+            self.assertIn('STALE/INVALID', node._status_reason)
 
     def test_model_load_failure_is_reported(self):
         logs = []
@@ -257,7 +739,7 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         node._health_tick()
         self.assertEqual(node._status_reason, 'MODEL_ERROR: model unavailable')
 
-    def test_tf_lookup_uses_source_stamp_and_missing_tf_is_not_hidden(self):
+    def test_tf_lookup_uses_latest_transform_and_missing_tf_is_not_hidden(self):
         class Transform:
             transform = types.SimpleNamespace(
                 rotation=types.SimpleNamespace(x=0., y=0., z=0., w=1.),
@@ -274,15 +756,15 @@ class PersonPerceptionNodeTests(unittest.TestCase):
         FakeTime.calls = []
         try:
             node = types.SimpleNamespace(tf_buffer=Buffer())
-            P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical', 12.345)
+            P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical')
             self.assertEqual(node.tf_buffer.calls[0][:2], ('base_link', 'camera_optical'))
-            self.assertEqual(FakeTime.calls[-1], (12, 345000000))
+            self.assertEqual(FakeTime.calls[-1], (0, 0))
 
             class MissingBuffer:
-                def lookup_transform(self, *_args): raise LookupError('no transform at source time')
+                def lookup_transform(self, *_args): raise LookupError('no latest transform')
             node.tf_buffer = MissingBuffer()
-            with self.assertRaisesRegex(LookupError, 'source time'):
-                P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical', 12.345)
+            with self.assertRaisesRegex(LookupError, 'latest transform'):
+                P.PersonPerceptionNode._tf(node, 'base_link', 'camera_optical')
         finally:
             P.rclpy.time.Time = old_time
 

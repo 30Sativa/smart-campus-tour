@@ -32,6 +32,7 @@ export interface MockTourData {
 export const MOCK_POIS: PoiDetail[] = [
   {
     id: 'poi-gate',
+    imageUrl: '/images/student-poi/gate.webp',
     title: 'Cổng chính & Quảng trường Khát Vọng',
     order: 1,
     x: 20,
@@ -41,6 +42,7 @@ export const MOCK_POIS: PoiDetail[] = [
   },
   {
     id: 'poi-lib',
+    imageUrl: '/images/student-poi/library.webp',
     title: 'Thư viện Thông minh & Không gian Sáng chế',
     order: 2,
     x: 50,
@@ -50,6 +52,7 @@ export const MOCK_POIS: PoiDetail[] = [
   },
   {
     id: 'poi-admin',
+    imageUrl: '/images/student-poi/lab.webp',
     title: 'Khu liên hợp Khoa học & Nhà Điều hành',
     order: 3,
     x: 80,

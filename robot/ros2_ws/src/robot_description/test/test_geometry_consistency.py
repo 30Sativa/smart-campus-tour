@@ -47,7 +47,7 @@ def test_wheel_geometry_and_real_odometry_calibration():
     firmware_diameter = _capture(
         firmware_header, r'#define WHEEL_DIAMETER_MM\s+([0-9.]+)f')
 
-    assert controller_radius == urdf_radius == bridge_radius
+    assert controller_radius == urdf_radius == bridge_radius == 0.09725
     assert controller_separation == urdf_separation == 0.4325
     assert manual_wheel_base == standalone_wheel_base == node_wheel_base == 0.4714
     assert firmware_diameter == urdf_radius * 2.0 * 1000.0

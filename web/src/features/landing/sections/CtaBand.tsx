@@ -18,8 +18,10 @@ export function CtaBand() {
 
       <div className="lp-ctn">
         <div className="lp-cta__body">
-          <h2 className="lp-h2 lp-h2--wide" data-reveal>
-            Một campus.<br /><em>Nhiều góc nhìn mới.</em>
+          {/* Each line rises out of its own mask when the scene scrolls in. */}
+          <h2 className="lp-h2 lp-h2--wide" id="cta-title">
+            <span className="lp3-line"><span>Một campus.</span></span>
+            <span className="lp3-line"><span><em>Nhiều góc nhìn mới.</em></span></span>
           </h2>
           <p className="lp-lead" data-reveal>
             Khám phá hành trình tham quan từ xa cùng CampusTour.

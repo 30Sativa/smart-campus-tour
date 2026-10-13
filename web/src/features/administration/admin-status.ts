@@ -6,7 +6,7 @@
  */
 import { ApiError } from '../../api/client'
 import type { AdminErrorBody, RegistrationState, TourState } from '../../api/contracts/admin'
-import type { StatusTone } from '../staff/status'
+import type { StatusTone } from '../../components/ui/status-tone'
 
 type Entry = { label: string; tone: StatusTone }
 
@@ -23,6 +23,17 @@ export const REGISTRATION_STATE: Record<RegistrationState, Entry> = {
   Approved: { label: 'Đã duyệt', tone: 'ok' },
   Rejected: { label: 'Từ chối', tone: 'danger' },
   Cancelled: { label: 'Đã hủy', tone: 'muted' },
+}
+
+/** Labels for account and POI states shown in the administration tables. */
+export type AdminEntityStatus = 'account-active' | 'account-inactive' | 'poi-active' | 'poi-inactive' | 'invalid-role'
+
+export const ADMIN_ENTITY_STATUS: Record<AdminEntityStatus, Entry> = {
+  'account-active': { label: 'Đang hoạt động', tone: 'ok' },
+  'account-inactive': { label: 'Ngừng hoạt động', tone: 'muted' },
+  'poi-active': { label: 'Khả dụng', tone: 'ok' },
+  'poi-inactive': { label: 'Không khả dụng', tone: 'muted' },
+  'invalid-role': { label: 'Vai trò không hợp lệ', tone: 'danger' },
 }
 
 export const TOUR_STATES = Object.keys(TOUR_STATE) as TourState[]

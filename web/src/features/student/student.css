@@ -451,3 +451,92 @@ html.dark .st .st-demo-note { background: #153236; color: #b6cfc0; }
   .st .st-pill-time { max-width: 100%; }
   .st .st-end__visual { min-height: 340px; }
 }
+
+/* The approved student entry layout fits the viewport on desktop. */
+.st.st--entry {
+  font-family: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  font-synthesis: none;
+  height: 100dvh;
+  min-height: 0;
+}
+.st--entry .st-header { position: static; flex: none; }
+.st--entry .st-header__inner { height: 76px; max-width: none; padding-inline: 5%; }
+.st--entry .st-brand { gap: 18px; }
+.st--entry .st-brand__mark { width: 35px; height: 35px; }
+.st--entry .st-brand__name { font-size: 20px; letter-spacing: -.025em; }
+.st--entry .st-brand__title { font-size: 14px; max-width: 60vw; margin-top: 4px; }
+.st--entry .st-demo-note { min-height: 28px; padding-block: 5px; line-height: 17px; font-size: 11px; }
+.st--entry .st-main { display: flex; min-height: 0; }
+.st--entry .st-join { flex: 1; min-height: 0; grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); }
+.st--entry .st-join__visual { min-height: 0; padding: clamp(30px, 4vw, 70px); gap: 28px; }
+/* Keep the image outside grid sizing; the content alone defines the layout. */
+.st--entry .st-join__visual > img { position: absolute; z-index: 0; object-position: 58% center; }
+.st--entry .st-join__visual::after { z-index: 0; background: linear-gradient(180deg, rgba(7, 30, 24, .55), rgba(7, 30, 24, .13) 56%, rgba(7, 30, 24, .75)); }
+.st--entry .st-kicker { font-size: 10px; letter-spacing: .13em; }
+.st--entry .st-kicker::before { width: 22px; height: 1px; border-radius: 0; }
+.st--entry .st-join__title {
+  max-width: 100%;
+  font-size: clamp(36px, 3.45vw, 64px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  margin-top: 19px;
+  color: #fff;
+  -webkit-text-stroke: .65px rgba(12, 40, 28, .7);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 5px rgba(5, 24, 17, .48), 0 10px 28px rgba(5, 24, 17, .32);
+}
+.st--entry .st-join__school { font-size: 14px; line-height: 1.7; color: #f4f8ee; margin-top: 20px; text-shadow: 0 2px 4px #18382c; }
+.st--entry .st-join__school svg { flex: none; }
+.st--entry .st-join__steps { padding-top: 22px; gap: 22px; }
+.st--entry .st-join__steps div { font-size: 12px; line-height: 1.7; color: #fff; text-shadow: 0 1px 4px #18382c; }
+.st--entry .st-join__steps b { font-size: 12px; margin-bottom: 8px; }
+.st--entry .st-join__panel { min-height: 0; overflow-y: auto; padding: 30px clamp(30px, 5vw, 95px); }
+.st--entry .st-form { max-width: 530px; gap: 20px; margin-block: auto; }
+.st--entry .st-form__head h3 { max-width: none; font-size: clamp(24px, 1.8vw, 32px); line-height: 1.3; letter-spacing: -.025em; margin-top: 12px; }
+.st--entry .st-form__head p { max-width: none; font-size: 13px; line-height: 1.7; margin-top: 10px; }
+.st--entry .st-field label { font-size: 13px; line-height: 1.6; margin-bottom: 8px; }
+.st--entry .st-input input, .st--entry .st-field > input { height: 53px; font-family: inherit; font-size: 14px; }
+.st--entry .st-field small { font-size: 11px; line-height: 1.6; margin-top: 7px; }
+.st--entry .st-btn { height: 56px; min-height: 56px; font-size: 14px; flex: none; }
+.st--entry .st-form__note { font-size: 11px; line-height: 1.7; }
+.st--entry .st-form:has(.st-alert) { gap: 12px; }
+.st--entry .st-alert { padding: 10px 12px; font-size: 12px; }
+.st--entry .st-alert span { display: block; }
+@media (max-height: 750px) and (min-width: 861px) {
+  .st--entry .st-header__inner { height: 64px; }
+  .st--entry .st-join__visual { padding: 32px 42px; }
+  .st--entry .st-join__title { font-size: clamp(34px, 3.3vw, 55px); }
+  .st--entry .st-join__panel { padding: 22px 48px; }
+  .st--entry .st-form { gap: 15px; }
+  .st--entry .st-input input, .st--entry .st-field > input { height: 47px; }
+  .st--entry .st-join__steps { padding-top: 16px; }
+}
+@media (max-height: 680px) and (min-width: 861px) {
+  .st--entry .st-join__panel { padding: 16px 48px; }
+  .st--entry .st-form { gap: 12px; }
+  .st--entry .st-input input, .st--entry .st-field > input { height: 44px; }
+  .st--entry .st-btn { height: 50px; min-height: 50px; }
+  .st--entry .st-form__head h3 { font-size: 25px; margin-top: 8px; }
+  .st--entry .st-form__head p { margin-top: 7px; }
+  .st--entry .st-form:has(.st-alert) { gap: 5px; }
+}
+@media (max-width: 860px) {
+  .st.st--entry { height: auto; min-height: 100dvh; }
+  .st--entry .st-join { grid-template-columns: 1fr; }
+  .st--entry .st-join__visual { min-height: 400px; padding: 28px; }
+  .st--entry .st-join__title { font-size: clamp(32px, 5vw, 44px); }
+  .st--entry .st-join__panel { padding: 32px 24px; overflow-y: visible; }
+  .st--entry .st-join__steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; padding-top: 14px; }
+  .st--entry .st-join__steps div { display: block; font-size: 11px; }
+  .st--entry .st-join__steps b { margin-bottom: 5px; }
+}
+@media (max-width: 600px) {
+  .st--entry .st-header__inner { height: 72px; padding-inline: 20px; }
+  .st--entry .st-brand { gap: 10px; }
+  .st--entry .st-brand__name { font-size: 18px; }
+  .st--entry .st-brand__title { display: block; font-size: 10px; max-width: 70vw; }
+  .st--entry .st-portal { display: none; }
+  .st--entry .st-demo-note { font-size: 10px; }
+  .st--entry .st-join__school { font-size: 12px; }
+}

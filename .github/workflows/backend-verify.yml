@@ -1,0 +1,36 @@
+name: Backend Verify
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/backend-verify.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/backend-verify.yml"
+
+jobs:
+  verify:
+    name: Verify backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run backend verification
+        run: bash backend/scripts/verify

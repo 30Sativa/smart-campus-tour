@@ -13,21 +13,30 @@ No second YOLO pipeline, person costmap layer, tracking, social navigation,
 Collision Monitor, firmware change, mode-manager change, or Nav2 speed increase
 belongs to this MVP. YOLO26n CPU 320 batch 1 is the first candidate. YOLO11n is
 a fallback only if YOLO26n cannot export/load or fails measured P3. INT8 and
-iGPU are not assumed. The robot image pins OpenVINO `2024.6.0`, numpy `1.26.4`,
-and openvino-telemetry `2024.1.0`; export tools such as torch/ultralytics stay
-off the robot. Compose mounts model artifacts read-only at `/opt/models`.
-Astra remains native on the MiniPC host. No runtime benchmark or camera
+iGPU are not assumed. The native runtime pins OpenVINO `2024.6.0`, numpy
+`1.26.4`, and openvino-telemetry `2024.1.0` through
+`robot/config/perception-requirements.txt`; export tools such as torch/ultralytics
+stay off the robot. Model artifacts live under the machine-local
+`PERSON_MODEL_DIR` set by `source-minipc`. Astra and perception run natively on
+the miniPC. No runtime benchmark or camera
 calibration is verified by this document.
 
 ## Data contract
 
-RGB and PointCloud2 are paired with `ApproximateTimeSynchronizer` (queue 5,
-slop 0.05 s, header stamps required). CameraInfo is cached independently and
-validated against image frame/resolution and raw-image K/D. Only tested
-`plumb_bob` (or zero-distortion pinhole) is accepted. TF is looked up at the
-cloud source timestamp. The detector runs in one worker with one active and
-one replaceable latest pending snapshot; health/policy timers run on the ROS
-executor.
+RGB and PointCloud2 are sampled before rclpy takes/converts them, using
+DDS `KEEP_LAST(1)` and one callback-group permit per subscription on each
+`rate_hz` health tick. They are paired with `ApproximateTimeSynchronizer`
+(queue 1, slop 0.05 s, header stamps required); neither source timestamp may
+be reused or move backwards in an accepted pair. CameraInfo is cached
+independently and validated against image frame/resolution and raw-image K/D. Only tested
+`plumb_bob` (or zero-distortion pinhole) is accepted. The rigid sensor/robot
+extrinsics use the latest available TF; source sensor timestamps remain on
+the observations and outputs. One worker performs inference and cloud fusion
+at no more than configured `rate_hz`, with one active and one replaceable
+latest pending snapshot. A one-slot result mailbox retains the newest
+completed result; replacing pending input or an unconsumed result increments
+`dropped`. Health and policy timers run on the ROS executor, while cloud
+decoding, TF lookup, and projection stay on the worker.
 
 The bbox ROI is shrunk by 0.5. Range uses p25, a ±0.4 m band, then median XYZ
 of core cloud points. At least 20 ROI points and 10 core points are required.
@@ -39,7 +48,14 @@ Relative outputs are `people` (`PoseArray`), `people_markers`,
 `person_perception/diagnostics`, and `person_perception/debug_image` in
 bbox-only mode. PoseArray uses the cloud timestamp and `base_frame`; debug
 image uses the RGB timestamp. PoseArray has no tracking ID. Diagnostics report
-state/reason, both source stamps, sync delta, age, latency and counters.
+state/reason, both source stamps, sync delta, age, inference latency,
+end-to-end latency through RGB-D fusion, and counters.
+Additional cumulative counters `rgb_received` / `cloud_received` measure
+Python callback deliveries, and `pairs_accepted` counts pairs queued after
+timestamp validation. `dropped` retains its pending/result replacement
+meaning; DDS overwrites and unmatched sync samples are not counted.
+Sampling reduces Python takes/conversion/sync work, while camera publication
+and native DDS receive/UDP traffic remain unchanged.
 
 ## Slowdown policy (disabled by default)
 
@@ -96,14 +112,14 @@ Observation mode (default):
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml"
 ```
 
 Bbox-only debug mode:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml bbox_only:=true
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml" bbox_only:=true
 ```
 
 P5 is a supervised hardware test only after all earlier gates and operator
@@ -111,7 +127,7 @@ approval. Its command explicitly opts in:
 
 ```bash
 ros2 launch robot_perception person_perception.launch.py \
-  robot_id:=robot_01 model_xml:=/opt/models/<verified-model>/<model>.xml \
+  robot_id:=robot_01 model_xml:="$PERSON_MODEL_DIR/<verified-model>/<model>.xml" \
   publish_speed_limit:=true
 ```
 

@@ -1,12 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PublicHomePage from './PublicHomePage'
 import { useAuthStore } from '../../stores/auth-store'
 import { useThemeStore } from '../../stores/theme-store'
 
 describe('PublicHomePage', () => {
+  // jsdom has no SVG path geometry. Exercise the real reduced-motion path for
+  // these content/navigation checks; motion helpers have their own tests.
+  beforeEach(() => {
+    const matchMedia = window.matchMedia
+    vi.spyOn(window, 'matchMedia').mockImplementation(query => ({ ...matchMedia(query), matches: query === '(prefers-reduced-motion: reduce)' }))
+  })
+
   afterEach(() => {
+    vi.restoreAllMocks()
     useAuthStore.setState({ accessToken: null, user: null, isAuthenticated: false })
     useThemeStore.setState({ theme: 'light' })
     document.documentElement.classList.remove('dark')
@@ -89,6 +97,8 @@ describe('PublicHomePage', () => {
     })
     document.documentElement.classList.add('light')
     renderPage()
+    // Enable motion for the theme interaction after the static page mounted.
+    vi.mocked(window.matchMedia).mockRestore()
 
     fireEvent.click(screen.getByRole('button', { name: 'Chuyển sang giao diện tối' }))
 

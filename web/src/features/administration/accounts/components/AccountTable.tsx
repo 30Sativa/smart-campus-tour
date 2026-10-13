@@ -1,6 +1,6 @@
 import { formatStamp } from '../../admin-format'
-import { StatusBadge } from '../../../staff/StaffUi'
-import { buttonClass, rowClass, tdClass, thClass } from '../../../staff/ui-classes'
+import { AdminStatusBadge } from '../../AdminUi'
+import { buttonClass, rowClass, tdClass, thClass } from '../../../../components/ui/ui-classes'
 import { TableFrame } from '../../AdminUi'
 import type { AccountListItem, AccountSort, AccountSortField } from '../types'
 
@@ -45,7 +45,7 @@ function SortHeading({ field, label, sort, onSort }: {
 }
 
 function RoleValue({ role }: { role: AccountListItem['role'] }) {
-  return role === null ? <StatusBadge value="invalid-role" /> : <span className="font-medium text-[#334155]">{role}</span>
+  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="font-medium text-[#334155]">{role}</span>
 }
 
 function AccountAction({ account, onAction }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction'] }) {
@@ -79,7 +79,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
               <td className={`${tdClass} font-semibold text-[#1e293b]`}>{account.username}</td>
               <td className={`${tdClass} text-[#334155]`}>{account.fullName}</td>
               <td className={tdClass}><RoleValue role={account.role} /></td>
-              <td className={tdClass}><StatusBadge value={account.isActive ? 'account-active' : 'account-inactive'} /></td>
+              <td className={tdClass}><AdminStatusBadge status={account.isActive ? 'account-active' : 'account-inactive'} /></td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.createdAt)}</td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.updatedAt)}</td>
               <td className={`${tdClass} text-right`}><AccountAction account={account} onAction={onLifecycleAction} /></td>
@@ -96,7 +96,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
                 <p className="truncate font-semibold text-[#1e293b]">{account.fullName}</p>
                 <p className="truncate text-xs text-[#64748b]">{account.username}</p>
               </div>
-              <StatusBadge value={account.isActive ? 'account-active' : 'account-inactive'} />
+              <AdminStatusBadge status={account.isActive ? 'account-active' : 'account-inactive'} />
             </div>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
               <div><dt className="text-xs text-[#64748b]">Vai trò</dt><dd className="mt-1"><RoleValue role={account.role} /></dd></div>

@@ -2,9 +2,9 @@ import { Link } from 'react-router'
 import { useEffect, useRef } from 'react'
 import { CalendarClock, Check, ChevronRight, CircleCheck, CircleX, Clock3, Route } from 'lucide-react'
 import type { AdminTour, ReadyCheck, RegistrationCounts } from '../../../api/contracts/admin'
-import { buttonClass } from '../../staff/ui-classes'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { formatSlot } from '../admin-format'
-import { rowClass, tdClass, thClass } from '../admin-classes'
+import { rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
 import { TableFrame, TourStateBadge } from '../AdminUi'
 
 /**

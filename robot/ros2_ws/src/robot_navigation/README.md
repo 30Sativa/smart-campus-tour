@@ -48,11 +48,12 @@ LUU Y robot that: KHONG co map mac dinh. Quen map:= se bao loi ro rang roi dung.
 | `localization.launch.py` | map_server + AMCL + lifecycle manager; standalone cần truyền `map:=...` |
 | `navigation.launch.py` | Robot thật: bringup + LiDAR + AMCL + Nav2 trên map đã lưu |
 | `sim_navigation.launch.py` | Gazebo: mode_manager + relay + AMCL + Nav2 trên map đã lưu |
+| `remote_rviz.launch.py` | Laptop: relay TF + adapter scan visualization; thêm `rviz:=true` để mở RViz |
 
 Cờ chung: `rviz:=true` mở RViz (mặc định tắt); `camera_enable_color:=true` bật
 RGB cho Phase 4 (mặc định tắt để tiết kiệm băng thông USB). `enable_camera` mặc
-định true — Astra vào local costmap; `camera_x/y/z/roll/pitch/yaw` **phải** là bộ
-số Phase 2 đã hiệu chỉnh.
+định false — chỉ bật Astra sau khi mount đã được hiệu chuẩn; bộ
+`camera_x/y/z/roll/pitch/yaw` **phải** là số Phase 2 đã hiệu chỉnh.
 
 ## Nav2 baseline (A→B trên robot thật)
 
@@ -64,12 +65,154 @@ lệnh tắt nguồn cảm biến. Chưa áp dụng patch semantic bridge hoặc
 Trước khi nạp lại sonar vào costmap cần xử lý đồng thời hai vấn đề đó và test
 từng sensor; chỉ đổi checkbox RViz không bật sonar vào navigation.
 
+### Remote RViz trên laptop (workaround/debug)
+
+**Trạng thái:** relay TF đã hardware regression PASS theo người vận hành;
+adapter scan mới bên dưới **READY FOR HARDWARE TEST**, validation còn pending.
+
+Trong A/B test trên routed Wi-Fi, `/tf` ở MiniPC vẫn đều nhưng subscriber
+RELIABLE trên laptop có lúc stall nhiều giây. BEST_EFFORT ở laptop rồi relay
+local sang RELIABLE đã giải quyết stall/`queue is full` trong regression đó.
+RViz vẫn có thể treo khi bật LiDAR sau vài phút, kể cả với llvmpipe hoặc
+Local Costmap BEST_EFFORT + VOLATILE. Lúc treo, process còn sống, CPU thấp,
+main thread nằm ở `futex_wait_queue`. GDB theo báo cáo người vận hành:
+
+```text
+VisualizationManager::onUpdate -> Executor::execute_subscription
+-> LaserScan callback -> TFFrameTransformer / TFWrapper::waitForTransform
+-> tf2_ros::Buffer::waitForTransform -> BufferCore::addTransformableRequest
+```
+
+Evidence định vị UI bị block trong đường LaserScan/TF transform request;
+chưa đủ chứng minh mutex owner, toàn bộ chuỗi deadlock hoặc lỗi của một phiên
+bản TF2 cụ thể. Đây không phải bằng chứng publisher `/scan` hay Nav2 bị lỗi.
+
+Chỉ chạy launch này **trên cùng laptop với RViz**:
+
+```text
+MiniPC /tf --BEST_EFFORT qua mạng--> laptop tf_rviz_relay
+          --RELIABLE--> /robot_01/tf_rviz --> RViz
+                                     \--> scan_rviz adapter (TF buffer riêng)
+MiniPC /tf_static --------------------------> RViz (giữ nguyên)
+                 \-------------------------> scan_rviz adapter (giữ nguyên)
+MiniPC /robot_01/scan --BEST_EFFORT--> scan_rviz adapter
+                     --BEST_EFFORT--> /robot_01/scan_rviz (PointCloud2, frame map)
+                                     --> RViz PointCloud2 (Fixed Frame map)
+```
+
+Adapter lookup `target_frame <- scan.header.frame_id` tại chính
+`scan.header.stamp` với timeout **0**. Thiếu TF, extrapolation, frame không
+kết nối hoặc stamp 0: bỏ scan ngay, không retry/chờ/queue và không dùng TF
+latest. Range không finite hoặc ngoài `[range_min, range_max]` bị loại;
+output chỉ có XYZ FLOAT32 trong frame đích, giữ nguyên stamp scan. Một rigid
+transform dùng cho cả scan tại timestamp tia đầu, **không deskew từng tia**
+theo `time_increment`, không giữ intensity hoặc cấu trúc beam của LaserScan.
+Đây là cloud visualization, không dùng cho localization hoặc navigation.
+
+`PointCloud2` Humble vẫn dùng TF message filter, nên chỉ đổi loại display
+không đủ. Cloud phải có `header.frame_id` **bằng** Fixed Frame của RViz.
+Trong [BufferCore Humble](https://github.com/ros2/geometry2/blob/humble/tf2/src/buffer_core.cpp),
+`addTransformableRequest` trả ngay khi target == source, trước mutex request.
+Default adapter/config remote đều dùng `map`, tránh request transform giữa
+hai frame cho LiDAR trong UI. Đây là workaround có mục tiêu, không phải sửa
+TF2 hay bảo đảm mọi display khác không thể block.
+
+Trên laptop ROS 2 Humble, từ repo root, build/source package mới. Dependency
+thêm là package ROS chuẩn `tf2_ros_py`, `sensor_msgs`, `sensor_msgs_py`,
+`std_msgs`; cần RViz và `nav2_rviz_plugins` như viewer hiện có:
+
+```bash
+source /opt/ros/humble/setup.bash
+cd robot/ros2_ws
+colcon build --symlink-install --base-paths src/robot_navigation
+source install/setup.bash
+ros2 launch robot_navigation remote_rviz.launch.py robot_id:=robot_01 rviz:=true
+```
+
+Dùng cùng ROS domain/discovery với robot như môi trường remote debug đã hoạt
+động; launch không cấu hình network, systemd hoặc Tailscale. Không source
+`robot/scripts/source-minipc` trên laptop vì script đó nạp môi trường MiniPC.
+Nếu robot không namespace, bỏ `robot_id:=robot_01`: output là `/tf_rviz` và
+`/scan_rviz`. `robot_id` namespace scan input, hai output và topic RViz;
+TF input robot vẫn global, không prefix frame ID. `use_sim_time:=true` chỉ
+dùng khi debug simulation có `/clock`. Mặc định `rviz:=false` chạy hai helper
+thôi, theo quy ước launch headless của repo.
+
+Config remote mặc định:
+`robot/ros2_ws/src/robot_navigation/rviz/remote_navigation.rviz` (LiDAR cloud
+ON, Fixed Frame `map`). Adapter lấy `target_frame: map` từ
+`robot/ros2_ws/src/robot_navigation/config/scan_rviz.yaml`. Trước khi AMCL có
+initial pose/`map -> odom`, scan có thể bị drop hết; đặt `2D Pose Estimate`
+đúng vị trí thật, không thêm static `map -> odom` để che lỗi.
+
+Layout remote lưu docking bằng `Window Geometry / QMainWindow State` của
+Qt 5 / RViz2 Humble: `Displays` và `Navigation 2` bên trái, bản đồ ở giữa,
+`Views` bên phải. Sau khi build/source bằng lệnh trên, mở launch, đóng rồi
+mở lại cùng lệnh để xác nhận layout được giữ trên laptop; `Astra depth`
+phải vẫn OFF. Test Qt offscreen kiểm tra restore và save/restore, chưa thay
+cho kiểm chứng GUI RViz thực tế hoặc bảo đảm mọi phiên bản Qt/RViz khác.
+Nếu cần chỉnh docking cho phiên bản khác, mở bản sao config trong RViz,
+kéo panel và dùng **File → Save Config**, rồi chỉ chép giá trị
+`QMainWindow State` về config remote để giữ nguyên Displays/topic/QoS/camera.
+
+Để debug trong `odom`, chuẩn bị bản config RViz với Fixed Frame `odom` và
+bản params với `target_frame: odom`, rồi truyền **cả hai**:
+
+```bash
+ros2 launch robot_navigation remote_rviz.launch.py robot_id:=robot_01 rviz:=true \
+  rviz_config:=/path/to/remote_odom.rviz scan_params_file:=/path/to/scan_odom.yaml
+```
+
+Không chỉ đổi Fixed Frame trong UI khi adapter đang chạy: mismatch sẽ đưa
+LiDAR vào đường TF request cũ. Custom config phải dùng PointCloud2 topic
+`scan_rviz`, không bật lại LaserScan topic `scan`.
+
+Relay chuyển nguyên `TFMessage`, không sửa timestamp/frame/transform, dùng
+KEEP_LAST depth 100 và VOLATILE ở cả hai đầu (depth dynamic TF của Humble).
+Chỉ RViz và adapter trong launch riêng được remap `/tf`; `/tf_static` đi trực
+tiếp như cũ. Scan/cloud dùng KEEP_LAST depth 1, BEST_EFFORT, VOLATILE; không
+giữ backlog scan. Không include bringup/Nav2, không đổi `/scan`/`/tf` gốc,
+không tăng queue RViz và không tự bật helper trong runtime MiniPC. AMCL/Nav2/
+costmap vẫn đọc `/robot_01/scan` trực tiếp. Config navigation gốc không đổi.
+Dừng launch là bỏ workaround. Chỉ chạy một instance cho mỗi output; các
+topic ROS output vẫn có thể được máy khác trong domain subscribe.
+
+Test package sau build/source (từ `robot/ros2_ws`):
+
+```bash
+colcon test --packages-select robot_navigation
+colcon test-result --test-result-base build/robot_navigation --verbose
+```
+
+Hardware checklist (chưa thực hiện cho adapter mới):
+
+1. Giữ runtime native trên MiniPC như cũ; trên laptop dừng viewer/relay cũ,
+   chạy launch mới. TF relay phải tiếp tục regression PASS. Với Discovery
+   Server, graph CLI có thể không đầy đủ; xem
+   `robot/docs/network-ros-discovery.md` trước khi kết luận endpoint thiếu.
+2. Xác nhận cloud có frame `map`, stamp nguồn scan; LiDAR display là
+   PointCloud2 đọc `/robot_01/scan_rviz`, Fixed Frame `map`. Scan phải khớp map
+   sau initial pose. Chạy ít nhất 20–30 phút, kiểm tra UI vẫn tương tác được,
+   rồi bật từng display khác để phân biệt trigger.
+3. Trước khi có TF, hoặc thử bản adapter params với frame chưa tồn tại:
+   không có cloud mới, UI vẫn responsive, `/robot_01/scan` và Nav2 trên MiniPC
+   vẫn hoạt động. Khôi phục config/TF: chỉ scan mới được vẽ, không replay
+   backlog. Có thể dùng `ros2 topic echo /robot_01/scan_rviz sensor_msgs/msg/PointCloud2
+   --qos-reliability best_effort --once` để kiểm tra header khi graph thiếu.
+4. Nếu còn treo, lấy backtrace tất cả thread và ghi các display đang bật.
+   Nếu scan drop liên tục: kiểm tra tuổi TF, clock và frame chain; không dùng
+   latest TF hoặc timeout dài để che lỗi. Chuyển động nhanh có thể làm cloud
+   lệch vì không deskew; adapter không sửa clock lệch, TF thiếu hay outage.
+
 ### RViz Nav2 và bật/tắt hiển thị từng sensor
 
 Mở riêng RViz sau khi build/source package trên máy có desktop:
 
 ```bash
-ros2 run rviz2 rviz2 -d "$(ros2 pkg prefix --share robot_navigation)/rviz/navigation.rviz"
+# Robot chạy robot_id:=robot_01 (cách chạy chuẩn):
+ros2 run rviz2 rviz2 -d "$(ros2 pkg prefix --share robot_navigation)/rviz/navigation.rviz" \
+  --ros-args -r __ns:=/robot_01
+# Robot chạy không namespace (robot_id:=''): bỏ dòng --ros-args.
 ```
 
 Hoặc thêm `rviz:=true` vào lệnh launch navigation hiện tại. RViz vẫn OFF mặc định.
@@ -80,10 +223,14 @@ Rear Left / Rear Right có màu riêng và đều bỏ tick sẵn. Tick từng m
 Range khi test lại; các checkbox chỉ thay đổi hiển thị, không đổi costmap,
 publisher hay nguồn điện sensor. TF cũng có thể bật riêng để kiểm tra hướng.
 
-File dành cho phiên không namespace (`robot_id:=''`), dùng `/scan`,
-`/ultrasonic/sonar1/range`, ... . Nếu chạy `robot_id:=robot_01`, cần cấu hình
-topic/action tương ứng có tiền tố `/robot_01` cho RViz trước khi gửi goal;
-layout này chưa tự thêm tiền tố theo launch argument. Frame cố định vẫn là `map`.
+Mọi topic trong file là **tên tương đối** (`map`, `scan`, `initialpose`, ...),
+resolve theo namespace của RViz: `__ns:=/robot_01` → `/robot_01/map`,
+`/robot_01/initialpose`; không namespace → `/map`. Panel Navigation 2 cũng gửi
+`navigate_to_pose` trong cùng namespace. Một file dùng cho mọi robot, không cần
+sửa tay topic. `rviz:=true` trong `navigation.launch.py` tự gắn namespace theo
+`robot_id`. TF vẫn global (`/tf`), Fixed Frame vẫn là `map`.
+Dropdown chọn topic của RViz đưa ra tên tuyệt đối; nếu chọn rồi Save Config thì
+gõ lại dạng tương đối (test contract sẽ báo nếu file có topic bắt đầu bằng `/`).
 
 Các mô tả sonar bên dưới chỉ áp dụng khi layer được bật lại sau kiểm chứng.
 
@@ -108,8 +255,10 @@ Tham số ở `robot_control/config/nav2_params.yaml`. Những chỗ ghi
 `TUNE ON HARDWARE` là chỗ cần chỉnh sau khi có số liệu chạy thật — đừng chỉnh
 trước.
 
-Đợt test quay chậm sau phản hồi quay giật: RPP `0.35 rad/s`, recovery/smoother
-giới hạn `0.40 rad/s`, gia tốc tăng tốc góc `0.50 rad/s²`. Cách nạp, xác nhận
+Baseline thử nghiệm có giám sát: tiến RPP/smoother `0.24 m/s`, quay căn hướng
+RPP và recovery/smoother cùng trần `0.45 rad/s`; gia tốc tăng tốc góc giữ
+`0.50 rad/s²`. Giữ wheel cap `250 mm/s`: mức tiến/quay riêng đạt được về
+lệnh, nhưng vừa tiến vừa quay có thể bị bridge scale cả cặp bánh. Cách nạp, xác nhận
 parameter runtime, test và rollback: [robot/docs/nav2-turn-test.md](../../../docs/nav2-turn-test.md).
 Trạng thái **READY FOR HARDWARE TEST**, chưa xác nhận quay êm trên xe thật.
 
@@ -211,6 +360,16 @@ Mỗi transform có **đúng một** chủ. `stm32_bridge` chạy với `publish
 để không tranh `odom -> base_footprint` với EKF. Nav2 dùng `base_footprint` làm
 `robot_base_frame` ở mọi chỗ.
 
+**Launch scope của Astra.** ROS 2 include không tự cô lập launch arguments;
+`DeclareLaunchArgument` chỉ đặt default khi context chưa có giá trị. Trước đây
+include STM32 trong `manual_mode.launch.py` làm `publish_tf=false` rò tới
+`astra_pro.launch.py`, khiến default camera `true` không được áp dụng.
+Include STM32 hiện có `GroupAction(scoped=True)` riêng. Include camera trong
+navigation cũng có scope riêng và truyền rõ `publish_tf=true` qua
+`orbbec_with_mount.launch.py` tới driver. Camera không ghi đè các argument
+chung như `rviz` ở launch cha; `enable_camera=false` vẫn không chạy camera
+hay mount TF. Driver vendor và quyền sở hữu TF odometry không đổi.
+
 **Nav2 namespace + TF.** `nav2_bringup/navigation_launch.py` trên Humble remap
 `/tf -> tf` trong mọi node. Khi push namespace, cái đó thành `/robot_01/tf`,
 trong khi AMCL / EKF / robot_state_publisher vẫn broadcast lên `/tf` global →
@@ -266,20 +425,54 @@ robot thật sự spawn đúng gốc world mà map sim được ghi từ đó.
 
 ## Footprint / inflation
 
-- `robot_radius: 0.49` — bán kính bao của box CAD trong
-  `robot_description/urdf/common_properties.xacro`
-  (`base_length 0.8022` × `base_width 0.5628` → nửa đường chéo 0.490 m).
-  Con số 0.47 cũ tính từ ước lượng 74×55 cm, tức là **nhỏ hơn thân xe theo CAD**.
-  Đây KHÔNG liên quan gì tới `wheel_base=0.4714` của odometry.
-- `inflation_radius: 0.60` (cả local lẫn global). Inflation đo **từ vật cản**,
-  không phải "lề thêm ngoài robot radius", nên nó phải `>= robot_radius`.
-  Bản cũ để local `0.35` < `robot_radius 0.47` — đó là bug.
-- Robot dùng **circular footprint** conservative, chưa dùng polygon. Polygon
-  chỉ nên làm khi đã đo thân xe hoàn thiện.
-- TODO(hardware): đo envelope xe thật, kể cả bumper / tay cầm / dây nhô ra
-  ngoài box CAD, rồi tính lại.
-- Nếu robot từ chối một cái cửa mà nó lọt được thật: hạ `inflation_radius`,
-  **đừng** hạ `robot_radius`.
+- Cả local/global costmap dùng cùng **polygon chữ nhật**, không cấu hình
+  `robot_radius`. Source of truth:
+  `robot/ros2_ws/src/robot_description/urdf/common_properties.xacro`, được
+  collision box trong `robot/ros2_ws/src/robot_description/urdf/robot.urdf.xacro`
+  sử dụng: dài `0.802199951`, rộng `0.562799988` m, tâm XY
+  `(0, 0.000049973)`. Giữ offset Y của CAD để không thu nhỏ một cạnh.
+- Trong `base_footprint`, X hướng trước, Y hướng trái; `base_joint` chỉ dịch Z,
+  không xoay trục. Thứ tự điểm ngược chiều kim đồng hồ: trước-trái → sau-trái
+  → sau-phải → trước-phải. Humble đọc `footprint` dưới dạng **chuỗi**:
+
+  ```yaml
+  footprint: "[[0.4010999755, 0.281449967], [-0.4010999755, 0.281449967], [-0.4010999755, -0.281350021], [0.4010999755, -0.281350021]]"
+  footprint_padding: 0.0
+  ```
+
+  Padding bằng 0 để dùng đúng envelope, thay default Humble 0.01 m. Những chữ
+  số thêm giữ phép tính CAD, không khẳng định độ chính xác đo xe tới nanomet.
+- Collision primitive của bánh chính, caster và LiDAR nằm trong box XY này;
+  `camera_assembly.stl` cũng nằm trong envelope (X tối đa khoảng 0.39535 m).
+  Sonar chỉ có visual, chưa có collision geometry; yaw và ánh xạ kênh vẫn
+  provisional theo `robot/docs/cad-sensor-mounts.md`. Chưa có bằng chứng về
+  collision envelope nhô ra ngoài chassis để tăng footprint hay thêm margin.
+- Giữ `inflation_radius: 0.60` và `cost_scaling_factor: 3.0` ở cả hai costmap.
+  Humble tính inscribed radius từ khoảng cách gốc frame tới cạnh gần nhất
+  (~0.28135 m); inflation radius phải bao inscribed radius. Khoảng 0.60 m đo
+  **từ vật cản**, là phạm vi cost field, không phải clearance cố định quanh
+  chassis. Chuyển polygon tự làm thay đổi vùng cost inscribed và gradient;
+  chưa tune lại tham số inflation hay RPP.
+- **Giới hạn planner giữ nguyên:** SmacPlanner2D Humble kiểm tra cost tại tâm,
+  không kiểm tra polygon theo từng yaw. RPP kiểm tra polygon trên local
+  costmap; global path vẫn có thể đưa ra góc/lối mà controller từ chối.
+  Inflation không thay thế việc kiểm tra các góc khi xoay tại chỗ.
+- **READY FOR HARDWARE TEST:** dùng launch hiện có với map đã lưu:
+
+  ```bash
+  ros2 launch robot_navigation navigation.launch.py robot_id:=robot_01 map:=/maps/campus_map.yaml rviz:=true
+  ```
+
+  Thay map bằng file thực trên miniPC, chạy trong ROS runtime đã build bản sửa.
+  Kiểm tra `footprint` và `footprint_padding` trên cả
+  `/robot_01/local_costmap/local_costmap` và `/robot_01/global_costmap/global_costmap`.
+  Trong RViz, local/global `published_footprint` phải cùng chữ nhật đúng thân
+  xe (topic dùng frame odom/map, cần TF để so sánh), không còn circle gần 0.98 m.
+  Thử đi thẳng, xoay tại chỗ và gần góc/cửa với người giám sát/E-stop.
+  Theo dõi góc thân quét vào vật cản, polygon lệch trục, RPP dừng dù planner có
+  path, và khoảng cách/tốc độ thực khi gradient inflation thay đổi.
+  Không thu nhỏ footprint để ép robot qua lối hẹp; chỉ cập nhật envelope khi
+  có số đo nhô ra ngoài CAD được xác nhận.
 
 ## Nav2 namespace — root cause của lỗi cũ
 
@@ -355,7 +548,12 @@ Astra   /camera/depth/points -> local costmap CHỈ (depth_obstacle_layer)
 4x SR04T /ultrasonic/sonarN/range -> RViz khi bật display; sonar_layer hiện OFF
 ```
 
-`navigation.launch.py` bật camera mặc định (`enable_camera:=true`). Bộ số
+
+`navigation.launch.py` tắt camera mặc định (`enable_camera:=false`) để giữ baseline LiDAR-only. Bộ số
+
+`navigation.launch.py` tắt camera mặc định (`enable_camera:=false`). Chỉ bật
+`enable_camera:=true` sau khi đã hiệu chuẩn vị trí gắn camera. Bộ số
+
 `camera_x/y/z/roll/pitch/yaw` **phải** là kết quả hiệu chỉnh của Phase 2 —
 xem `docs/phase2-perception.md` mục 3. Sai pitch là sàn biến thành tường.
 
@@ -371,7 +569,8 @@ Chi tiết trong `docs/phase3-nav2.md`.
   tối) — khớp với costmap trong `robot_control/config/nav2_params.yaml`
   (raytrace 15 / obstacle 12). Đổi LiDAR thì sửa cả hai chỗ.
 - Robot cắt cua → tăng `FollowPath.lookahead_dist`. Robot lượn rộng trong hành
-  lang → giảm. Đừng xuống dưới `robot_radius`.
+  lang → giảm. Giữ guard baseline: không xuống dưới khoảng cách tới góc xa
+  nhất của footprint (~0.490 m).
 - Planner từ chối lối hẹp → giảm `GridBased.cost_travel_multiplier`, rồi mới
   tới `inflation_radius`.
 

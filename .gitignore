@@ -467,3 +467,6 @@ Claude outputs/
 .agents/
 .aider-desk/
 skills-lock.json
+
+# Native miniPC version reports are machine-local
+/robot/.native-state/

@@ -4,13 +4,24 @@ Aligned on 2026-09-21 with **"CampusTour DT-AMR: Đặc tả phạm vi, nghiệp
 tích hợp tham quan từ xa" (19/09/2026)**, §2, §3, §5.2, §5.5, §11.1. The scope is
 the source of truth; this file maps it onto the web area.
 
+## Current implementation boundary
+
+`/admin/registrations` and `/admin/registrations/pending` now use the real SQL
+review API; see `web/docs/admin-registration-review.md`. Their row counts
+represent invitation rows, including shared viewing, rather than attendance.
+The Tour/dashboard/READY/invitation screens described below remain labelled
+simulation consumers. Their review drawer still reviews only demo records.
+Live review does not issue access codes or send email, and never falls back to
+that simulation. Admin account and POI screens also use their existing APIs.
+
 ## What Admin does (and does not)
 
 | Admin does | Not Admin's |
 |---|---|
 | Create a Tour (name, time, description, prepared route) → **Scheduled** | Start / Hold / Next / End Early / recovery: Staff (`/staff/*`) |
 | Edit it while Scheduled | Robot, camera or head control, choosing or swapping a robot |
-| Review groups: **Approve**, or **Reject** with a reason | Route / POI / angle / narration editing (the technical team's config) |
+| Review groups: **Approve**, or **Reject** with a reason | Route / route-stop / angle editing, robot control, arbitrary route geometry |
+| Manage POI catalog, content and unused map/pose values at `/admin/pois` (ADR-0014) | Changing geometry after a route/history reference; claiming a stored pose was verified on hardware |
 | Send / re-send the participation e-mail (representative only) | Fleet, scenario editor, what-if, maintenance, analytics, marketing |
 | **Chốt Tour** Scheduled → Ready, **Mở lại** Ready → Scheduled (before Start) | Student accounts, attendance, self-booking, capacity, schedule optimisation |
 | **Hủy Tour** Scheduled/Ready → Cancelled, with a reason | Cancelling a Running Tour (that is Staff's End Early) |
@@ -18,6 +29,14 @@ the source of truth; this file maps it onto the web area.
 
 READY means "content and groups locked". It never means "robot ready": the
 robot, head and stream are checked by Staff at Start.
+
+POI `IsActive` means selectable for a newly prepared Route. It is not a
+verification state or proof the point is ready to navigate. The web form marks
+pose unverified and provides an occupancy-map position/heading picker with
+numeric x/y/yaw fine-tuning. The map package is derived from ROS YAML/PGM, not
+the Student drawing or Twin model. Updates keep the same POI ID. There is no
+hard-delete action. See `web/docs/poi-map-picker.md` for the workflow and map
+release checks.
 
 ## Screens
 
@@ -31,6 +50,9 @@ robot, head and stream are checked by Staff at Start.
 | `/admin/registrations/pending` | Review queue (Submitted), drawer via `?review=<id>` |
 | `/admin/registrations` | All registrations, state filter |
 | `/admin/routes` | Danh mục tuyến (read-only) |
+| `/admin/pois` | POI catalog, search/status filter/paging; create inactive; content and eligible pose edits; usage lock details |
+| `/admin/pois/new` | Create inactive POI; select pose on the ROS occupancy map or fine-tune numerically; optional narration/media metadata |
+| `/admin/pois/:id` | Edit POI, inspect route/history/READY-RUNNING use, activate/deactivate with confirmation |
 | `/admin/history` | Lịch sử Tour: startedAt, endedAt, endReason |
 | `/admin/roles` | Role/area matrix (read-only reference, sidebar footer) |
 

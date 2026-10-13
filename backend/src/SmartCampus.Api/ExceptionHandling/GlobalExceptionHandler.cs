@@ -39,7 +39,13 @@ public sealed class GlobalExceptionHandler(
             ConflictException conflictException => (
                 StatusCodes.Status409Conflict,
                 conflictException.Message,
-                null),
+                conflictException.Code == "CONFLICT" && conflictException.FieldErrors is null
+                    ? null
+                    : (object?)new
+                    {
+                        code = conflictException.Code,
+                        fields = conflictException.FieldErrors
+                    }),
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "An unexpected error occurred.",

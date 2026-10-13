@@ -1,4 +1,4 @@
-using SmartCampus.Application.Features.Auth.Login;
+using SmartCampus.Application.Features.Auth.Commands.Login;
 
 namespace SmartCampus.UnitTests;
 

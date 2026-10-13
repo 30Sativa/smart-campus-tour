@@ -35,7 +35,7 @@ adding a test, bumping a patch version.
 |---|---|---|
 | [0001](0001-lidar-primary-astra-supplementary.md) | LiDAR is the navigation backbone; the Astra Pro is supplementary | accepted |
 | [0002](0002-manual-stlink-flash-no-can-bootloader.md) | STM32 firmware is flashed manually over ST-Link | accepted |
-| [0003](0003-deploy-robot-via-docker-image.md) | The robot runs a prebuilt Docker image, not a build on the miniPC | accepted |
+| [0003](0003-deploy-robot-via-docker-image.md) | Historical Docker physical deployment (superseded by native runtime) | superseded for physical runtime |
 | [0004](0004-external-fleet-emulator.md) | Use an external Fleet Emulator for fleet-scale validation | accepted |
 | [0005](0005-backend-authoritative-poi-per-leg-orchestration.md) | Backend owns authoritative POI navigation targets and per-leg tour orchestration | accepted |
 | [0006](0006-demo-first-tour-schema.md) | Use the v1.0 demo-first SQL Server schema as the Database First persistence source | superseded for the current schema by ADR-0012 |
@@ -46,6 +46,8 @@ adding a test, bumping a patch version.
 | [0011](0011-student-data-use-for-tour.md) | Use student data only for Tour registration, invitations, and operational statistics; no post-Tour admissions contact | accepted by team; implementation pending |
 | [0012](0012-v1-1-schema-and-operation-scope.md) | v1.1 SQL snapshot, fixed seeded dwell, all Staff operate all Tours, stop references and append-only audit | accepted by team; applied/scaffolded locally; use cases pending |
 | [0013](0013-single-application-role-per-account.md) | Auth/Web V1 supports exactly one supported application role per account | accepted by team; GVHD review at Review 2 |
+| [0014](0014-admin-poi-management.md) | Admin manages POI content and only edits geometry before route/history use | implementation scope authorized; group/GVHD review at Review 2 |
+| [0015](0015-invitation-issuance-and-resend-email.md) | Secure invitation codes, Resend queue and minimal Student entry | implementation scope authorized; opt-in configuration required |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -1711,3 +1711,8 @@ html.dark .lp {
     grid-template-columns: 1fr;
   }
 }
+
+/* The signed-in name on the home page leads back to that account's own area. */
+.lp-user--link { color: inherit; text-decoration: none; border-radius: 6px; transition: color .2s; }
+.lp-user--link:hover { color: var(--lp-ink); text-decoration: underline; text-underline-offset: 3px; }
+.lp-user--link:focus-visible { outline: 2px solid #5b9dc9; outline-offset: 3px; }

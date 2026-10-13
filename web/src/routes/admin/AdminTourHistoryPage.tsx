@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import type { AdminTour } from '../../api/contracts/admin'
-import { FilterChips, PageHeader, Pagination, panelClass } from '../../features/staff/StaffUi'
-import { usePagination } from '../../features/staff/use-pagination'
+import { FilterChips, PageHeader, Pagination, panelClass } from '../../components/ui/ConsolePrimitives'
+import { usePagination } from '../../components/ui/use-pagination'
 import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows, TableFrame, TourStateBadge } from '../../features/administration/AdminUi'
 import { useAdminTours } from '../../features/administration/admin-hooks'
 import { formatSlot, formatStamp } from '../../features/administration/admin-format'
-import { rowClass, tdClass, thClass } from '../../features/administration/admin-classes'
+import { rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 
 type Filter = 'all' | 'Completed' | 'Cancelled'
 

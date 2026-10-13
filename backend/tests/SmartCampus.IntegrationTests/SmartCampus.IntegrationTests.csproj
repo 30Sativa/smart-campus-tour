@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <None Include="..\..\database\smart-campus-tour-schema-v1.1.sql" Link="Schema\snapshot.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\fixtures\representative-registration-demo.sql" Link="Schema\representative-demo.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.0.sql" Link="Schema\snapshot-v1.0.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-permissions.sql" Link="Schema\permissions.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

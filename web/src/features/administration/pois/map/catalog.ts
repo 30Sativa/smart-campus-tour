@@ -7,6 +7,20 @@ export type OccupancyMap = Omit<typeof map2Manifest, 'origin'> & {
 }
 
 /** Retained immutable map snapshots; registration does not establish 3D calibration. */
+
+import type { GridGeometry } from './occupancy-grid'
+
+export type OccupancyMap = GridGeometry & {
+  schemaVersion: number
+  mapKey: string
+  frameId: string
+  imageUrl: string
+  imageSha256: string
+  fingerprint: string
+  sourceYaml: string
+}
+
+
 function registeredMap(value: typeof map2Manifest): OccupancyMap {
   if (value.schemaVersion !== 1 || value.frameId !== 'map' || !value.mapKey ||
       !Number.isSafeInteger(value.width) || value.width <= 0 ||
@@ -19,6 +33,11 @@ function registeredMap(value: typeof map2Manifest): OccupancyMap {
 
 export const OCCUPANCY_MAPS = [registeredMap(map2Manifest), registeredMap(map2LegacyManifest)]
 export const DEFAULT_POI_MAP = OCCUPANCY_MAPS[0]
+
 export function occupancyMapFor(mapKey: string, frameId: string): OccupancyMap | null {
   return OCCUPANCY_MAPS.find(map => map.mapKey === mapKey && map.frameId === frameId) ?? null
+
+export function occupancyMapFor(mapKey: string, frameId: string): OccupancyMap | null {
+  return OCCUPANCY_MAPS.find((map) => map.mapKey === mapKey && map.frameId === frameId) ?? null
+
 }

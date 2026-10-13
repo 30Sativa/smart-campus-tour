@@ -7,6 +7,15 @@ the business authority.
 
 ## Current local references
 
+- [Representative registration](representative-registration.md) — real submission slice,
+  Excel contract, approved-roster boundary and isolated end-to-end setup.
+
+- [Invitation/email setup](../../backend/docs/invitations-resend.md) — real
+  shared support panel, Resend configuration and Student code/cookie entry.
+
+- [POI map picker](poi-map-picker.md) — ROS raster geometry, Admin workflow,
+  map-package release and verification.
+
 - [Admin Tour screens](admin-tours.md) — implementation-facing Admin screen
   map. Business rules that predate Review 1 may be historical; follow the
   current detailed scope and UI flow.
@@ -31,3 +40,5 @@ the business authority.
 
 All web screen guides describe UI structure or current code evidence; none can
 override the cross-system requirements or prove backend integration.
+
+- [Admin registration review](admin-registration-review.md) — live SQL review and the separate demo boundary.

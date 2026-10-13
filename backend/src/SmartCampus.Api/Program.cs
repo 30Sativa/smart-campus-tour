@@ -6,9 +6,17 @@ using SmartCampus.Infrastructure.Authentication.Jwt;
 using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Threading.RateLimiting;
 
 var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args);
-var builder = WebApplication.CreateBuilder(initialAdminSeedCommand.GetHostArguments());
+var demoPoiSeedCommand = DemoPoiSeedCommand.Parse(initialAdminSeedCommand.GetHostArguments());
+var builder = WebApplication.CreateBuilder(demoPoiSeedCommand.GetHostArguments());
+if (demoPoiSeedCommand.Requested)
+{
+    Environment.ExitCode = await demoPoiSeedCommand.RunAsync(builder, initialAdminSeedCommand.Requested);
+    return;
+}
+
 var simulationPreviewEnabled = builder.Environment.IsDevelopment() &&
     builder.Configuration.GetValue<bool>("SimulationPreview:Enabled");
 
@@ -21,15 +29,35 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
 builder.Services.AddApplication();
 if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
     builder.Services.AddInfrastructure(builder.Configuration);
+if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
+{
+    builder.Services.AddHttpClient<SmartCampus.Application.Common.Abstractions.Invitations.IInvitationEmailSender,
+        SmartCampus.Infrastructure.Integrations.Invitations.ResendInvitationEmailSender>(client =>
+        client.Timeout = TimeSpan.FromSeconds(20));
+    if (builder.Configuration.GetValue<bool?>("Invitations:EmailWorkerEnabled") != false)
+        builder.Services.AddHostedService<SmartCampus.Api.Invitations.InvitationEmailWorker>();
+}
 
 // The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.
 builder.Services.AddSimulationPreview();
 
 // Register HTTP endpoints, error responses, and the development API document.
-builder.Services.AddControllers();
+builder.Services.AddControllers().UseBaseResponseForInvalidModelState();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, ct) => await context.HttpContext.Response.WriteAsJsonAsync(
+        new SmartCampus.Api.Common.Responses.BaseResponse<object> {
+            Success = false, Message = "Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.",
+            Errors = new { code = "RATE_LIMITED" }
+        }, ct);
+    options.AddPolicy("InvitationJoin", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {
     var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -100,6 +128,7 @@ if (!simulationPreviewEnabled)
     app.UseHttpsRedirection();
 
 app.UseCors("WebClient");
+app.UseRateLimiter();
 if (!simulationPreviewEnabled)
 {
     app.UseAuthentication();

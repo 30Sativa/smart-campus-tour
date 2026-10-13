@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+expected="${1:?usage: check-native-versions <reviewed-report>}"
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+bash "$ROBOT_ROOT/scripts/capture-native-versions" >/dev/null
+cp "$ROBOT_ROOT/.native-state/versions.txt" "$tmp"
+diff -u "$expected" "$tmp"

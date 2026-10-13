@@ -78,6 +78,8 @@ const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegist
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
+const AdminPoisPage = lazy(() => import('../../routes/admin/AdminPoisPage'))
+const AdminPoiFormPage = lazy(() => import('../../routes/admin/AdminPoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 function ShellFallback({ background }: { background: string }) {
@@ -273,6 +275,9 @@ export const routes = [
       { path: 'routes', element: <AdminRouteCatalogPage /> },
       { path: 'history', element: <AdminTourHistoryPage /> },
       { path: 'accounts', element: <AdminAccountsPage /> },
+      { path: 'pois', element: <AdminPoisPage /> },
+      { path: 'pois/new', element: <AdminPoiFormPage /> },
+      { path: 'pois/:poiId', element: <AdminPoiFormPage /> },
       { path: 'roles', element: <RolesPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },

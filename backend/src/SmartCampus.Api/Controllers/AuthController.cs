@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Auth;
-using SmartCampus.Application.Features.Auth.Login;
-using SmartCampus.Application.Features.Auth.Logout;
-using SmartCampus.Application.Features.Auth.Refresh;
+using SmartCampus.Application.Features.Auth.Commands.Login;
+using SmartCampus.Application.Features.Auth.Commands.Logout;
+using SmartCampus.Application.Features.Auth.Queries.Refresh;
 
 namespace SmartCampus.Api.Controllers;
 

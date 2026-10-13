@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { AdminTourDetail } from '../../../api/contracts/admin'
-import { ConfirmationDialog } from '../../staff/components/ConfirmationDialog'
+import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { isStale, readAdminError } from '../admin-status'
 import { useTourTransition, type TourTransition } from '../admin-hooks'
 

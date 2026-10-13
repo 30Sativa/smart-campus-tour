@@ -1,33 +1,32 @@
 #!/usr/bin/env bash
-
-# Resolve the clone this script actually lives in. Hard-coding a path under
-# $HOME silently sources a stale install/ if the miniPC still has an older
-# clone under a different directory name.
+# Source in every native runtime/inspection terminal. No ROS exports in bashrc.
 ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-if [ ! -f "$ROBOT_ROOT/.env" ]; then
-    echo "ERROR: $ROBOT_ROOT/.env not found"
+if [[ ! -f "$ROBOT_ROOT/.env" || ! -f /opt/ros/humble/setup.bash ||
+      ! -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]]; then
+    echo 'Missing robot/.env, ROS Humble, or native install space. See robot/docs/native-runtime.md.' >&2
     return 1 2>/dev/null || exit 1
 fi
-
+# Remove inherited transport overrides before loading explicit machine settings.
+# ROS_SUPER_CLIENT belongs only to the CLI daemon.
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
 set -a
 source "$ROBOT_ROOT/.env"
 set +a
-
-source /opt/ros/humble/setup.bash
-
-if [ -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]; then
-    source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
-else
-    echo "WARNING: $ROBOT_ROOT/ros2_ws/install/setup.bash not found."
-    echo "         Native Astra camera packages are NOT on the path. If setting up"
-    echo "         the camera host exception, build only its overlay with:"
-    echo "         cd $ROBOT_ROOT/ros2_ws && colcon build --symlink-install --packages-up-to orbbec_bringup"
-    echo "         Do not build or launch duplicate drivetrain/Nav2 nodes on the host."
+if [[ "${RMW_IMPLEMENTATION:-}" != rmw_fastrtps_cpp ||
+      -z "${ROS_DOMAIN_ID:-}" || -z "${ROS_DISCOVERY_SERVER:-}" ]]; then
+    echo 'Set RMW_IMPLEMENTATION=rmw_fastrtps_cpp, ROS_DOMAIN_ID and ROS_DISCOVERY_SERVER in robot/.env.' >&2
+    return 1 2>/dev/null || exit 1
 fi
-
-echo "ROS environment loaded:"
-echo "  WS=$ROBOT_ROOT/ros2_ws"
-echo "  DOMAIN=$ROS_DOMAIN_ID"
-echo "  DISCOVERY=$ROS_DISCOVERY_SERVER"
-echo "  RMW=$RMW_IMPLEMENTATION"
+# Humble setup scripts are not nounset-safe; preserve the caller setting.
+_robot_nounset=false
+[[ $- == *u* ]] && _robot_nounset=true
+set +u
+source /opt/ros/humble/setup.bash
+source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
+if [[ "$_robot_nounset" == true ]]; then
+    set -u
+fi
+unset _robot_nounset
+export ROBOT_MAP_DIR="${ROBOT_MAP_DIR:-$ROBOT_ROOT/robot_maps}"
+export PERSON_MODEL_DIR="${PERSON_MODEL_DIR:-$ROBOT_ROOT/models}"
+echo "Native ROS: WS=$ROBOT_ROOT/ros2_ws DOMAIN=$ROS_DOMAIN_ID DISCOVERY=$ROS_DISCOVERY_SERVER RMW=$RMW_IMPLEMENTATION"

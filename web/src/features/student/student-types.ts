@@ -33,6 +33,8 @@ export interface PoiDetail {
   description: string
   audioUrl?: string
   dwellSeconds?: number
+  /** Optional photo of the stop, shown in the stop strip of the live view. */
+  imageUrl?: string
 }
 
 export interface StudentRobotPose {

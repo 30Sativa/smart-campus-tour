@@ -92,117 +92,52 @@ The robot software was brought up in four phases; each has a design doc under
 
 ## Current Deployment Workflow
 
-1. Develop and test on the laptop.
-2. Push code to GitHub.
-3. GitHub Actions builds the ROS2 Docker image.
-4. Pull requests only build/check the image; they do not push to DockerHub.
-5. Pushes to `main` or `master` build and push the Docker image to DockerHub.
-6. The robot miniPC pulls the image from DockerHub and runs it with Docker
-   Compose.
-7. STM32 firmware is flashed manually with ST-Link when needed.
+The one physical miniPC runs the complete ROS 2 graph natively on Ubuntu 22.04 +
+ROS 2 Humble. Docker remains for CI image builds, laptop debug tooling and
+Gazebo simulation; it is not used to start the physical robot. See
+[`docs/native-runtime.md`](docs/native-runtime.md).
 
-This workflow does not implement a CAN bootloader and does not auto-flash the
-STM32 from the miniPC or from GitHub Actions.
-
-The drivetrain, navigation, and main ROS runtime on the miniPC use the
-prebuilt Docker image. There is no normal deployment path that builds the full
-ROS workspace on the naked host. The Astra Pro is a documented hardware
-exception: its USB driver and `orbbec_bringup` run natively on the host, using
-a camera-only ROS overlay. This does not allow duplicate STM32, Nav2, or
-`robot_control` nodes to run outside the container; see ADR-0003 and
-`ros2_ws/src/orbbec_bringup/README.md`.
+1. Provision the host with `robot/scripts/install-native`.
+2. Run the optional Astra host setup, then `robot/scripts/build-native`.
+3. Source `robot/scripts/source-minipc` in every runtime terminal.
+4. Bring up base/odom, LiDAR, localization and LiDAR-only Nav2 in layers.
+5. Add Astra and person perception only after the baseline is stable.
+6. Flash STM32 manually with ST-Link when required.
 
 ## Docker Compose Environments
 
-`robot/docker-compose.yml` là Compose chính cho các profile `hardware`,
-`debug` và `sim`. `robot/docker-compose.preview.yml` là integration development
-riêng giữa Gazebo và backend `SimulationPreview`; nó không phải deployment path
-của robot thật. Hai file giữ các mục đích riêng.
+`robot/docker-compose.yml` is retained for laptop `debug` and standalone `sim`
+profiles. It has no physical `hardware` service. `docker-compose.preview.yml`
+remains the separate Gazebo → SimulationPreview integration path.
 
-| Profile | Máy | Service | Image | USB devices | GUI |
-|---|---|---|---|---|---|
-| `hardware` | robot miniPC | `robot-ros2` | Prebuilt DockerHub image | STM32, LiDAR, gamepad | không |
-| `debug` | Ubuntu guest trong VMware | `ros2-debug` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
-| `sim` | Ubuntu guest trong VMware | `ros2-sim` | Build local -> `robot-ros2:dev` | **không có** | X11 tới X server của VM |
+| Profile | Service | Purpose |
+|---|---|---|
+| `debug` | `ros2-debug` | RViz, rqt, PlotJuggler and graph inspection |
+| `sim` | `ros2-sim` | Gazebo standalone simulation |
 
-Mọi service đều nằm sau profile, nên `docker compose up` trần sẽ không khởi
-động gì. Nhờ vậy trên VMware không thể vô tình start service hardware và gặp
-lỗi `error gathering device information ... /dev/ttyACM0: no such file or directory`.
+Both profiles have no USB device mappings. Never launch the physical stack from
+the debug container.
 
-`devices:` chỉ tồn tại trong service `robot-ros2`. Anchor
-`x-ros2-common-env` dùng chung chỉ chứa biến môi trường ROS, không chứa
-devices, nên service debug/sim không thể kế thừa serial port.
+### Networking giữa native miniPC và development laptop
 
-Cả ba service dùng chung một Dockerfile và entrypoint: `debug` và `sim` build
-tại chỗ, còn `hardware` chạy image prebuilt mà CI build từ đúng Dockerfile đó.
-Khi mở shell mới bằng `docker exec -it <container> bash`, `/root/.bashrc` tự
-source ROS 2 Humble trước, sau đó source `/ros2_ws/install/setup.bash` nếu
-workspace đã được build. Không cần source tay trong shell mới.
+Both machines use the same `ROS_DOMAIN_ID` and `RMW_IMPLEMENTATION` from their
+`.env` file. The miniPC may run a Fast DDS Discovery Server at
+`127.0.0.1:11811`; a laptop inspector points to that server. Set the variables
+before launching every node. If graph introspection looks incomplete, follow
+[`docs/network-ros-discovery.md`](docs/network-ros-discovery.md) and query a
+known topic before restarting processes.
 
-`docker exec` KHÔNG chạy ENTRYPOINT, nên `/root/.bashrc` (chứ không phải
-`docker/ros_entrypoint.sh`) mới là thứ auto-source cho shell tương tác. Vì
-profile `hardware` dùng image prebuilt, behavior này chỉ có trên miniPC sau
-khi CI build lại image và `docker compose --profile hardware pull`.
-
-Bind mount `./ros2_ws/src:/ros2_ws/src` chỉ thay source, không tự build lại
-workspace. Sau `git pull` có thay đổi ROS code, chạy
-`cd /ros2_ws && colcon build --symlink-install`. Shell đang chạy build vẫn cần
-`source /ros2_ws/install/setup.bash` một lần để nhận overlay vừa build, hoặc
-thoát ra và mở shell `docker exec` mới để `.bashrc` tự source.
-
-### Networking giữa VMware và miniPC
-
-Cả hai máy phải dùng cùng `ROS_DOMAIN_ID = 30`.
-
-Dự án này luôn dùng **Fast DDS Discovery Server**, không fallback sang multicast:
-
-- MiniPC chạy Discovery Server tại `127.0.0.1:11811`.
-- VMware trỏ tới `amr-minipc:11811` qua Tailscale MagicDNS.
-- Không hard-code IP Wi-Fi/LAN.
-- Không ghi các biến ROS networking vào `~/.bashrc`.
-- Giá trị theo từng máy nằm trong `.env`.
-- Nếu thiếu `ROS_DISCOVERY_SERVER`, Docker Compose phải fail ngay thay vì quay về multicast.
-- Sau khi đổi `.env`, phải recreate container để environment mới có hiệu lực.
-
-Kiểm tra giá trị thực tế Compose sẽ truyền vào container:
-
-```bash
-docker compose --profile hardware config | grep -E 'ROS_DOMAIN_ID|ROS_DISCOVERY_SERVER|RMW_IMPLEMENTATION'
-```
-
-### Chạy trên miniPC
-
-```bash
-cd robot
-cp .env.minipc.example .env
-docker compose --profile hardware pull robot-ros2
-docker compose --profile hardware up -d --force-recreate robot-ros2
-docker exec -it robot-ros2 bash
-```
-
-`hardware` chạy image đã build và push lên DockerHub; service này cố ý không có
-`build:`. Vì vậy `--build` không cập nhật được image hardware. Mỗi lần update
-phải `pull` trước khi recreate container. Không dùng `pull_policy: always` để
-việc startup khi miniPC mất mạng vẫn dùng được image đã cache.
-
-Trong container:
-
-```bash
-ros2 launch robot_control manual_mapping.launch.py \
-  port:=$SERIAL_PORT lidar_serial_port:=$LIDAR_PORT
-```
-
-### Chạy trên VMware (debug + RViz2)
+### Chạy trên laptop Ubuntu 22.04 (debug + RViz2)
 
 ```bash
 cd robot
 cp .env.vmware.example .env
-xhost +local:docker       # cho container nói chuyện với X server của VM
+xhost +local:docker       # cho container nói chuyện với X server của laptop
 docker compose --profile debug up -d --build
 docker exec -it ros2-debug bash
 ```
 
-VMware lấy Discovery Server từ `.env.vmware.example`:
+Laptop lấy Discovery Server từ `.env.vmware.example` (giữ tên file cũ):
 
 ```text
 ROS_DISCOVERY_SERVER=amr-minipc:11811
@@ -225,15 +160,15 @@ Mở RViz2:
 rviz2
 ```
 
-Source được mount live tại `/ros2_ws/src`, nên có thể sửa code trên VM rồi
+Source được mount live tại `/ros2_ws/src`, nên có thể sửa code trên laptop rồi
 build lại trong container:
 
 ```bash
 colcon build --symlink-install && source /ros2_ws/install/setup.bash
 ```
 
-Không launch stack điều khiển robot thật từ container debug. VMware chỉ dùng
-cho `rviz2`, `ros2 topic`, `ros2 service`, `tf2_echo` và các thao tác chỉ đọc,
+Không launch stack điều khiển robot thật từ container debug. Laptop dùng
+`rviz2`, `rqt`, PlotJuggler, rosbag2 và các thao tác inspect ROS,
 trong khi miniPC sở hữu phần cứng.
 
 Khi xong, thu hồi quyền X11:
@@ -242,7 +177,7 @@ Khi xong, thu hồi quyền X11:
 xhost -local:docker
 ```
 
-### Chạy trên VMware (simulation standalone)
+### Chạy trên laptop Ubuntu 22.04 (simulation standalone)
 
 ```bash
 cd robot
@@ -259,7 +194,7 @@ ros2 launch robot_navigation sim_navigation.launch.py rviz:=true
 ```
 
 Profile `sim` không map hardware device và không yêu cầu
-`ROS_DISCOVERY_SERVER`. Khi xong, chạy `xhost -local:docker` trên VMware.
+`ROS_DISCOVERY_SERVER`. Khi xong, chạy `xhost -local:docker` trên laptop.
 
 
 ## How To Build Docker Image Locally
@@ -270,6 +205,10 @@ docs in this repo target Humble.
 ```bash
 docker build -t robot-ros2:local .
 ```
+
+The default Docker target is the CI/reference hardware image; it is not a physical miniPC runtime. For development tools or Gazebo, use
+`docker build --target debug -t robot-ros2:debug .` or
+`docker build --target sim -t robot-ros2:sim .` (build context `robot/`).
 
 Run the built image interactively:
 
@@ -369,53 +308,11 @@ Set these secrets in the GitHub repository settings:
 Do not commit DockerHub tokens, passwords, ST-Link credentials, or machine
 secrets into this repository.
 
-## How miniPC Pulls And Runs The Image
+## Native miniPC configuration
 
-The robot compose file is `docker-compose.yml`. Copy the template that matches
-the machine: `robot/.env.minipc.example` (miniPC, profile `hardware`),
-`robot/.env.vmware.example` (VMware, profile `debug`) or
-`robot/.env.sim.example` (VMware, profile `sim`). `.env` itself is git-ignored,
-never commit it:
-
-```bash
-cp .env.minipc.example .env
-nano .env   # fill in your real DOCKER_IMAGE
-```
-
-Example `.env` on the miniPC:
-
-```bash
-DOCKER_IMAGE=307sativa/robot-ros2:0f26981
-SERIAL_PORT=/dev/ttyACM0
-BAUDRATE=115200
-ROS_DOMAIN_ID=30
-RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-ROS_DISCOVERY_SERVER=127.0.0.1:11811
-```
-
-Start or update the robot runtime:
-
-```bash
-docker compose --profile hardware pull robot-ros2
-docker compose --profile hardware up -d --force-recreate robot-ros2
-```
-
-Không thêm `--build` vào flow `hardware`: service `robot-ros2` là image-only
-theo ADR-0003, nên `--build` không rebuild hoặc cập nhật image DockerHub.
-
-When GitHub Actions publishes a new image, update `.env` to the new commit SHA
-on both the miniPC and VMware before comparing results. Use `git pull` only when
-the compose file or other runtime configuration changed; pulling a new image
-does not require a repository update.
-
-If the STM32 appears as `/dev/ttyUSB0` instead of `/dev/ttyACM0`, change:
-
-```bash
-SERIAL_PORT=/dev/ttyUSB0
-```
-
-The compose file uses `network_mode: host` so ROS2 discovery and local robot
-communication work more naturally on the real miniPC.
+The miniPC uses `robot/.env.minipc.example` for ROS domain, DDS and device names,
+but runs native launch files. Follow [`docs/native-runtime.md`](docs/native-runtime.md);
+there is no image pull or Compose hardware profile.
 
 ## STM32 Firmware Build Check
 

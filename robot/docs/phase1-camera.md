@@ -109,8 +109,9 @@ colcon build --symlink-install --packages-up-to orbbec_bringup \
 source install/setup.bash
 ```
 
-Trên miniPC triển khai, đây chỉ là camera-native overlay exception. Không
-build hoặc chạy drivetrain/Nav2 trên host; phần đó vẫn chạy trong container.
+Trên miniPC triển khai, đây là native camera setup trong cùng workspace. Sau
+khi camera kiểm tra ổn định, build và chạy drivetrain/Nav2 native theo
+`docs/native-runtime.md`; không chạy bản container song song.
 
 ## 4. Chạy
 

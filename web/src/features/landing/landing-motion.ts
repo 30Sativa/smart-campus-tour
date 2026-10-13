@@ -1,13 +1,15 @@
 import gsap from 'gsap'
 import ScrollTrigger from 'gsap/ScrollTrigger'
+import MotionPathPlugin from 'gsap/MotionPathPlugin'
 
-gsap.registerPlugin(ScrollTrigger)
+gsap.registerPlugin(ScrollTrigger, MotionPathPlugin)
 
 /**
  * Motion budget for this page is deliberately small. Every animation below has
  * a job: the hero establishes the scene before the claim, reveals lead the eye
- * down the page in reading order, the counters make the numbers land, and the
- * marquee shows breadth without giving each keyword a box.
+ * down the page in reading order, the pinned journey lets the robot travel the
+ * three steps as the visitor scrolls, the counters make the numbers land, and
+ * the marquee shows breadth without giving each keyword a box.
  *
  * Everything collapses to static when the visitor asks for reduced motion.
  */
