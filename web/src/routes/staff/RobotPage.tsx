@@ -4,12 +4,16 @@ import { Link } from 'react-router'
 import { ApiError } from '../../api/client'
 import type { AmrStatus } from '../../api/contracts/staff'
 import { useConfirmRobotReady, useStaffAmrs } from '../../features/staff/staff-hooks'
-import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { EmptyPanel, ErrorPanel, LiveDot, StaffPage, StatusBadge } from '../../features/staff/StaffUi'
+import { LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useNow } from '../../features/staff/use-now'
-import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
+import { BatteryMeter, RobotTelemetry, SourceBadge } from '../../features/staff/components/RobotParts'
 import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
+import { DeviceCard, QuestMonitor, Stat } from '../../features/staff/components/DeviceMonitors'
+import { robotIssues } from '../../features/staff/attention'
+import { statusInfo } from '../../features/staff/status'
+import { formatHeartbeat } from '../../features/staff/formatters'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 
 /**
@@ -24,6 +28,9 @@ export default function RobotPage() {
   const available = data.filter((r) => r.connectionState === 'Live' && !r.needsCheck && !r.currentTourCode).length
   const inTour = data.filter((r) => r.currentTourCode || r.currentSessionId).length
   const needsCheck = data.filter((r) => r.needsCheck || r.headFault || r.connectionState !== 'Live').length
+  // The headset rides on the physical robot, so its card sits right after it.
+  const onCar = data.filter((r) => r.assignable !== false && r.source !== 'Gazebo' && r.source !== 'Emulator')
+  const others = data.filter((r) => !onCar.includes(r))
 
   return (
     <StaffPage wide>
@@ -87,74 +94,121 @@ export default function RobotPage() {
         </div>
       </div>
 
-      {robots.isPending ? (
-        <LoadingPanel />
-      ) : robots.isError ? (
-        <ErrorPanel error={robots.error} onRetry={robots.refetch} />
-      ) : data.length === 0 ? (
-        <EmptyPanel>Chưa có robot nào kết nối tới hệ thống.</EmptyPanel>
-      ) : (
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)]">
-          <div className="space-y-5">
-            {data.map((robot) => (
-              <RobotPanel key={robot.id} robot={robot} now={now} />
-            ))}
-          </div>
-          <div className="min-w-0 xl:sticky xl:top-20">
+      {/* The fleet map is the centre of the page; robots and the Meta Quest 3 headset sit
+          beside it as compact cards that open in place ("Xem chi tiết"). The headset reads
+          its own source (the robot miniPC), so it shows even when the robot list fails.
+          Map beside the rail from xl, map first then the cards below. */}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 xl:sticky xl:top-20" aria-label="Bản đồ vị trí hạm đội">
+          {robots.isPending ? (
+            <LoadingPanel />
+          ) : robots.isError ? (
+            <ErrorPanel error={robots.error} onRetry={robots.refetch} />
+          ) : data.length === 0 ? (
+            <EmptyPanel>Chưa có robot nào kết nối tới hệ thống.</EmptyPanel>
+          ) : (
             <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-[#10b981] animate-pulse" />
                   <h3 className="text-sm font-bold text-[#0f172a]">Bản đồ vị trí hạm đội</h3>
                 </div>
-                <span className="text-xs text-[#64748b]">Vị trí robot · 3D</span>
+                <span className="text-xs text-[#64748b]">Vị trí robot · 3D · {data.length} robot</span>
               </div>
-              <OperationalTwin robots={data} className="h-[460px]" />
+              <OperationalTwin robots={data} className="h-[420px] sm:h-[520px] xl:h-[clamp(540px,calc(100vh-250px),780px)]" />
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </section>
+        <aside className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Thiết bị">
+          {onCar.map((robot) => (
+            <RobotCard key={robot.id} robot={robot} now={now} />
+          ))}
+          <QuestMonitor />
+          {others.map((robot) => (
+            <RobotCard key={robot.id} robot={robot} now={now} />
+          ))}
+        </aside>
+      </div>
     </StaffPage>
   )
 }
 
-function RobotPanel({ robot, now }: { robot: AmrStatus; now: number }) {
+function RobotCard({ robot, now }: { robot: AmrStatus; now: number }) {
   const confirm = useConfirmRobotReady()
   const [open, setOpen] = useState(false)
-  const release = robot.needsCheck ? (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      disabled={robot.executionState === 'Unknown'}
-      className={buttonClass('primary', 'sm')}
-    >
-      <CheckCheck size={14} aria-hidden="true" />
-      Xác nhận sẵn sàng
-    </button>
-  ) : null
+  const issues = robotIssues(robot)
+  const connection = statusInfo(robot.connectionState)
+  const doing = robot.currentTourCode
+    ? `Đang phục vụ ${robot.currentTourCode}`
+    : robot.assignable === false
+    ? 'Chỉ dùng diễn tập / nghiên cứu'
+    : 'Không phục vụ buổi nào'
 
   return (
-    <section
-      className={`${panelClass} ${robot.assignable === false ? 'opacity-90' : ''}`}
-      aria-label={robot.name}
-    >
-      <div className="border-b border-[#f1f5f9] px-5 py-4">
-        <RobotHeader robot={robot} action={release} />
-      </div>
-      {robot.needsCheck && (
-        <div className="mx-5 mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 text-xs text-[#b45309] flex items-center gap-2">
-          <Wrench size={15} className="shrink-0 text-[#d97706]" />
-          <span>
-            Robot đang được giữ sau khi kết thúc sớm hoặc gặp sự cố.{' '}
-            {robot.executionState === 'Unknown'
-              ? 'Chưa có tín hiệu xác nhận robot đã dừng an toàn.'
-              : 'Kiểm tra tại chỗ robot đã dừng, đầu xoay ở FRONT, sau đó bấm Xác nhận sẵn sàng.'}
-          </span>
+    <div className={`min-w-0 ${robot.assignable === false ? 'opacity-90' : ''}`}>
+      <DeviceCard
+        label={robot.name}
+        icon={<Bot size={18} strokeWidth={2} />}
+        title={<span className="font-mono">{robot.name}</span>}
+        tag={<><SourceBadge source={robot.source} /><span className="truncate">{doing}</span></>}
+        badge={
+          issues.length > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#fde68a] bg-[#fffbeb] px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap text-[#d97706]">
+              <ShieldAlert size={12} aria-hidden="true" />
+              {issues.length} cảnh báo
+            </span>
+          ) : (
+            <StatusBadge value="Healthy" />
+          )
+        }
+        footer={
+          <>
+            <LiveDot tone={connection.tone} pulse={false} />
+            <span className="truncate">Telemetry · {formatHeartbeat(robot.telemetryAgeSeconds, robot.lastSeenAt, now)}</span>
+          </>
+        }
+        details={
+          <>
+            {robot.needsCheck && (
+              <p className="mt-3 flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-[11.5px] leading-relaxed text-[#b45309]">
+                <Wrench size={14} className="mt-0.5 shrink-0 text-[#d97706]" aria-hidden="true" />
+                <span>
+                  Robot đang được giữ sau khi kết thúc sớm hoặc gặp sự cố.{' '}
+                  {robot.executionState === 'Unknown'
+                    ? 'Chưa có tín hiệu xác nhận robot đã dừng an toàn.'
+                    : 'Kiểm tra tại chỗ robot đã dừng, đầu xoay ở FRONT, sau đó bấm Xác nhận sẵn sàng.'}
+                </span>
+              </p>
+            )}
+            <RobotTelemetry robot={robot} now={now} />
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <Stat label="Kết nối" tone={connection.tone}>{connection.label}</Stat>
+          <Stat label="Pin">
+            <span className="w-full"><BatteryMeter value={robot.batteryPercent} /></span>
+          </Stat>
         </div>
-      )}
-      <div className="px-5 pb-4 pt-1">
-        <RobotTelemetry robot={robot} now={now} />
-      </div>
+        {issues.length > 0 && <p className="text-[11.5px] font-semibold text-[#d97706]">{issues.join(' · ')}</p>}
+        {robot.needsCheck && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2">
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[#b45309]">
+              <Wrench size={13} aria-hidden="true" />
+              Đang giữ chờ kiểm tra
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              disabled={robot.executionState === 'Unknown'}
+              className={buttonClass('primary', 'sm')}
+            >
+              <CheckCheck size={14} aria-hidden="true" />
+              Xác nhận sẵn sàng
+            </button>
+          </div>
+        )}
+      </DeviceCard>
       <ConfirmationDialog
         open={open}
         title={`Xác nhận ${robot.name} sẵn sàng?`}
@@ -169,6 +223,6 @@ function RobotPanel({ robot, now }: { robot: AmrStatus; now: number }) {
         }}
         onConfirm={(note) => confirm.mutate({ robotId: robot.id, note }, { onSuccess: () => setOpen(false) })}
       />
-    </section>
+    </div>
   )
 }

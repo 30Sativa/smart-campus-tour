@@ -152,6 +152,101 @@ class AdbParsingTests(unittest.TestCase):
         self.assertIn("2560x1344", cmd)
 
 
+class BatteryParsingTests(unittest.TestCase):
+    DUMPSYS = (
+        "Current Battery Service state:\n"
+        "  AC powered: false\n"
+        "  USB powered: true\n"
+        "  Wireless powered: false\n"
+        "  status: 2\n"
+        "  health: 2\n"
+        "  level: 54\n"
+        "  scale: 100\n"
+    )
+
+    def test_level_and_charging(self):
+        self.assertEqual(
+            server.parse_battery(self.DUMPSYS),
+            {"level": 54, "charging": True, "plugged": "USB", "status": "charging"},
+        )
+
+    def test_not_charging_and_scaled(self):
+        out = "  AC powered: false\n  USB powered: false\n  status: 3\n  level: 30\n  scale: 50\n"
+        battery = server.parse_battery(out)
+        self.assertEqual(battery["level"], 60)
+        self.assertFalse(battery["charging"])
+        self.assertIsNone(battery["plugged"])
+
+    def test_full_on_power_is_not_charging(self):
+        out = "  AC powered: true\n  status: 5\n  level: 100\n"
+        battery = server.parse_battery(out)
+        self.assertFalse(battery["charging"])
+        self.assertEqual(battery["plugged"], "AC")
+        self.assertEqual(battery["status"], "full")
+
+    def test_no_level_is_none(self):
+        self.assertIsNone(server.parse_battery("error: closed"))
+
+    def test_stream_summary(self):
+        self.assertEqual(server.stream_summary("live"), "live")
+        self.assertEqual(server.stream_summary("starting"), "connecting")
+        self.assertEqual(server.stream_summary("connecting"), "connecting")
+        for state in ("offline", "error", "stopped"):
+            self.assertEqual(server.stream_summary(state), "lost")
+
+
+class DeviceMonitorWithFakeAdb(unittest.TestCase):
+    """poll_once against tests/fake_adb.py: no headset, no ffmpeg needed."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = Path(self.tmp.name) / "state"
+        self.env = {k: os.environ.get(k) for k in ("FAKE_ADB_STATE_FILE", "FAKE_ADB_BATTERY", "FAKE_ADB_CHARGING")}
+        os.environ["FAKE_ADB_STATE_FILE"] = str(self.state)
+        self.cfg = cfg(adb=str(HERE / "fake_adb.py"))
+        self.device = server.DeviceStatus()
+        self.monitor = server.DeviceMonitor(self.cfg, self.device)
+
+    def tearDown(self):
+        for key, value in self.env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self.tmp.cleanup()
+
+    def poll(self, state):
+        self.state.write_text(state)
+        self.monitor.poll_once()
+        return self.device.snapshot()
+
+    def test_connected_reads_battery(self):
+        os.environ["FAKE_ADB_BATTERY"] = "14"
+        os.environ["FAKE_ADB_CHARGING"] = "1"
+        snap = self.poll("device")
+        self.assertEqual(snap["connection"], "connected")
+        self.assertEqual(snap["model"], "Quest 3")
+        self.assertEqual(snap["battery"]["level"], 14)
+        self.assertTrue(snap["battery"]["charging"])
+        self.assertIsNotNone(snap["checkedAt"])
+
+    def test_unauthorized_has_no_battery(self):
+        snap = self.poll("unauthorized")
+        self.assertEqual(snap["connection"], "unauthorized")
+        self.assertIsNone(snap["battery"])
+        self.assertIn("Allow USB debugging", snap["reason"])
+
+    def test_unplugged(self):
+        snap = self.poll("none")
+        self.assertEqual(snap["connection"], "not_found")
+        self.assertIsNone(snap["battery"])
+
+    def test_adb_missing(self):
+        monitor = server.DeviceMonitor(cfg(adb="/nonexistent/adb"), self.device)
+        monitor.poll_once()
+        self.assertEqual(self.device.snapshot()["connection"], "adb_error")
+
+
 class HttpTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -185,6 +280,34 @@ class HttpTests(unittest.TestCase):
         self.assertIn("QUEST_NOT_CONNECTED", data["reason"])
         self.assertEqual(data["whepPath"], "/quest/whep")
         self.assertEqual(data["output"]["width"], 1280)
+
+    def test_device_keeps_headset_and_video_apart(self):
+        device = server.DeviceStatus()
+        device.update(connection="connected", serial="S", model="Quest 3",
+                      battery={"level": 18, "charging": False, "plugged": None, "status": "discharging"})
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(self.cfg, self.status, device))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            self.status.set("connecting", "STREAM_STALLED: no frames from the Quest")
+            url = f"http://127.0.0.1:{httpd.server_address[1]}/device"
+            with urllib.request.urlopen(url, timeout=5) as r:
+                data = json.loads(r.read())
+                self.assertEqual(r.headers["Access-Control-Allow-Origin"], "*")
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        self.assertEqual(data["connection"], "connected")
+        self.assertEqual(data["battery"]["level"], 18)
+        self.assertEqual(data["stream"], "connecting")
+        self.assertIn("STREAM_STALLED", data["streamReason"])
+        self.assertEqual(data["pollSeconds"], 5.0)
+
+    def test_device_before_first_check(self):
+        code, _, body = self.get("/device")
+        self.assertEqual(code, 200)
+        data = json.loads(body)
+        self.assertEqual(data["connection"], "unknown")
+        self.assertIsNone(data["checkedAt"])
 
     def test_health_preflight_and_unknown(self):
         self.assertEqual(self.get("/health")[0], 200)

@@ -53,15 +53,42 @@ describe('staff session workflow', () => {
 
   it('offers each session the next step its state calls for', async () => {
     renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
-    // One state at a time; with a session running, "Đang chạy" opens first.
-    const row = async (code: string) => (await within(await screen.findByRole('table', { name: 'Buổi hôm nay' })).findByText(code)).closest('tr') as HTMLElement
-    expect(within(await row('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
-    fireEvent.click(screen.getByRole('button', { name: /Sẵn sàng/ }))
-    expect(within(await row('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
-    fireEvent.click(screen.getByRole('button', { name: /Chờ Admin chốt/ }))
-    expect(within(await row('T-03')).getByRole('link', { name: 'Xem chi tiết' })).toBeInTheDocument()
-    expect(within(await row('T-03')).getByText(/Còn 1 đăng ký chờ duyệt/)).toBeInTheDocument()
-    expect(within(await screen.findByRole('table', { name: 'Buổi hôm nay' })).queryByRole('button', { name: /Bắt đầu/ })).toBeNull()
+    // The whole day in one list; choosing a session opens it beside the list
+    // with the one next step its state calls for.
+    const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
+    // By the code chip: a note may name another session ("Đang phục vụ T-01").
+    const open = async (code: string) => {
+      fireEvent.click((await within(agenda).findByText(code, { selector: 'span' })).closest('button') as HTMLElement)
+      return screen.getByRole('complementary', { name: 'Chi tiết buổi' })
+    }
+    expect(within(await open('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
+    expect(within(await open('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
+    const scheduled = await open('T-03')
+    expect(within(scheduled).getByRole('link', { name: 'Xem chi tiết' })).toHaveAttribute('href', '/staff/tours/tour-03')
+    expect(within(scheduled).getByText(/Còn 1 đăng ký chờ duyệt/)).toBeInTheDocument()
+    // Start itself never sits on the list or the panel: it lives on the pre-start check.
+    expect(screen.queryByRole('button', { name: /Bắt đầu/ })).toBeNull()
+  })
+
+  it('filters the day by state and keeps the chosen session in the address', async () => {
+    renderAt('/staff/tours?view=Ready&tour=tour-02', <ToursTodayPage />, '/staff/tours')
+    const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
+    expect(within(agenda).getByText('T-02', { selector: 'span' }).closest('button')).toHaveAttribute('aria-pressed', 'true')
+    expect(within(agenda).queryByText('T-01', { selector: 'span' })).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).getByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
+  })
+
+  it('filters the day from the state dropdown', async () => {
+    renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
+    const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
+    expect(within(agenda).getByText('T-01', { selector: 'span' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Lọc buổi theo trạng thái: Tất cả trạng thái/ }))
+    fireEvent.click(within(screen.getByRole('listbox', { name: 'Lọc buổi theo trạng thái' })).getByRole('option', { name: /Sẵn sàng/ }))
+    expect(screen.queryByRole('listbox')).toBeNull()
+    const filtered = screen.getByRole('list', { name: 'Buổi hôm nay' })
+    expect(within(filtered).getByText('T-02', { selector: 'span' })).toBeInTheDocument()
+    expect(within(filtered).queryByText('T-01', { selector: 'span' })).toBeNull()
+    expect(screen.getByRole('button', { name: /Lọc buổi theo trạng thái: Sẵn sàng/ })).toBeInTheDocument()
   })
 
   it('keeps Start disabled with the server reason while the robot serves another session', async () => {
