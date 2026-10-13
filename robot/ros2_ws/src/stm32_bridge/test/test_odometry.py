@@ -96,10 +96,13 @@ if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
+    DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
     DEFAULT_TWIST_COVARIANCE_DIAGONAL,
     DEFAULT_WHEEL_BASE,
+    GAME_ROTATION_VECTOR_YAW_VARIANCE,
     Stm32BridgeNode,
+    imu_orientation_variance,
     imu_yaw_variance,
     yaw_to_quaternion_z,
 )
@@ -403,10 +406,11 @@ def test_yaw_to_quaternion_z_roundtrip():
 
 
 class _ImuPublishHarness:
-    def __init__(self):
+    def __init__(self, orientation_report='rotation_vector'):
         self.messages = []
         self._imu_pub = SimpleNamespace(publish=self.messages.append)
         self.imu_frame = 'imu_link'
+        self.imu_orientation_report = orientation_report
         self._last_imu_measurement = None
 
     _publish_imu = Stm32BridgeNode._publish_imu
@@ -424,6 +428,44 @@ def test_imu_message_publishes_yaw_and_accuracy_covariance():
     approx(msg.orientation.z, math.sqrt(0.5), tol=1e-9)
     approx(msg.orientation.w, math.sqrt(0.5), tol=1e-9)
     assert msg.orientation_covariance[8] == imu_yaw_variance(2)
+    assert msg.angular_velocity_covariance[0] == -1.0
+    assert msg.linear_acceleration_covariance[0] == -1.0
+
+
+def test_game_rotation_vector_is_the_default_orientation_report():
+    assert DEFAULT_IMU_ORIENTATION_REPORT == 'game_rotation_vector'
+    source = open(os.path.join(
+        _PKG_ROOT, 'stm32_bridge', 'stm32_bridge_node.py'),
+        encoding='utf-8').read()
+    assert ("'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT"
+            in source)
+
+
+def test_game_rotation_vector_variance_ignores_magnetometer_accuracy():
+    # GRV khong dung tu ke: accuracy 0 (tu ke chua hieu chuan) khong duoc
+    # day variance len 1.0 nhu Rotation Vector.
+    for acc in (None, 0, 1, 2, 3, 99):
+        assert (imu_orientation_variance(acc, 'game_rotation_vector') ==
+                GAME_ROTATION_VECTOR_YAW_VARIANCE)
+    assert GAME_ROTATION_VECTOR_YAW_VARIANCE < imu_yaw_variance(0)
+    # Rotation Vector giu nguyen bang cu de rollback.
+    for acc in (None, 0, 1, 2, 3):
+        assert (imu_orientation_variance(acc, 'rotation_vector') ==
+                imu_yaw_variance(acc))
+
+
+def test_imu_message_uses_fixed_variance_for_game_rotation_vector():
+    harness = _ImuPublishHarness('game_rotation_vector')
+    stamp = SimpleNamespace(to_msg=lambda: 'stamp')
+    harness._publish_imu(stamp, -math.pi / 2.0, 0)
+
+    assert len(harness.messages) == 1
+    msg = harness.messages[0]
+    approx(msg.orientation.z, -math.sqrt(0.5), tol=1e-9)
+    approx(msg.orientation.w, math.sqrt(0.5), tol=1e-9)
+    assert (msg.orientation_covariance[8] ==
+            GAME_ROTATION_VECTOR_YAW_VARIANCE)
+    assert msg.orientation_covariance[0] == msg.orientation_covariance[4]
     assert msg.angular_velocity_covariance[0] == -1.0
     assert msg.linear_acceleration_covariance[0] == -1.0
 

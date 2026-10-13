@@ -99,6 +99,24 @@ ROS_SUPER_CLIENT=TRUE ros2 bag record --include-hidden-topics -o "$AMR_RUN_DIR/b
   2>&1 | tee "$AMR_RUN_DIR/bag_record.log"
 ```
 
+For a heading/odometry investigation (EKF vs. wheel vs. BNO085 vs. AMCL),
+also record the raw IMU, the wheel joint states and diagnostics; the POI list
+above does not include them:
+
+```bash
+ROS_SUPER_CLIENT=TRUE ros2 bag record --include-hidden-topics -o "$AMR_RUN_DIR/bag" \
+  /rosout /tf /tf_static /diagnostics \
+  /robot_01/imu/data /robot_01/wheel/odom /robot_01/joint_states \
+  /robot_01/odom /robot_01/amcl_pose /robot_01/initialpose \
+  /robot_01/scan /robot_01/cmd_vel_nav /robot_01/cmd_vel \
+  /robot_01/robot_mode_state /robot_01/emergency_stop_state \
+  2>&1 | tee "$AMR_RUN_DIR/bag_record.log"
+```
+
+`imu/data` is published only when yaw or its accuracy changes, so its rate
+is low while the robot is still; measure its rate while turning. Note in
+`notes.md` which EKF file (`ekf_params_file`) the launch used.
+
 Record exactly which topics were received. Missing inactive/optional topics do
 not prove a DDS failure. CLI transport flags on this recorder do not change
 the environment of an existing navigation stack. Stop the recorder with Ctrl+C

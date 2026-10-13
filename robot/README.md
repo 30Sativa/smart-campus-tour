@@ -68,7 +68,7 @@ supplementary RGB-D perception sensor, **not** the primary localization source.
 ```
 RPLiDAR A3M1       -> /scan                         -> costmaps, AMCL, SLAM
 STM32 STEP counts  -> stm32_bridge -> /wheel/odom -\
-BNO085 Rotation Vector            -> /imu/data   -> EKF -> /odom + odom TF
+BNO085 Game Rotation Vector       -> /imu/data   -> EKF -> /odom + odom TF
 Astra Pro -> /camera/depth/points    -> local costmap ONLY (3D obstacles)
 Astra Pro -> RGB                     -> Phase 4 person detection
 ```
