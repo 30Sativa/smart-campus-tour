@@ -7,6 +7,8 @@ changing robot code.
 
 ## Contracts and operations
 
+- [Runtime logs and rosbag sessions](logging.md) — standard machine-local
+  storage, per-session layout, capture commands and cleanup rules for agents.
 - [STM32 ↔ ROS serial protocol](PROTOCOL_FB.md) — source of truth before
   changing either side of the USB CDC contract.
 - [ROS discovery troubleshooting](network-ros-discovery.md) — VM/miniPC
