@@ -31,10 +31,12 @@ not own visitor audio playback, narration or AI dialogue.
 
 ## Status
 
-**Not started (no source yet).** The stack is selected in
-[ADR-0016](../docs/decisions/0016-student-qa-assistant-stack.md) (Python/FastAPI,
-Gemini through a provider adapter) and the text-Q&A contract with the backend
-is defined in `docs/architecture.md` §7.1. STT/TTS remain to be decided.
+**Text Q&A service implemented, not yet integrated.** `POST /v1/answer` and
+`GET /health` follow `docs/architecture.md` §7.1 (stack: ADR-0016, Python +
+Starlette, Gemini through a provider adapter). Verified with unit tests using
+fake providers; no live Gemini evaluation has run yet, the content pack has no
+approved files yet, and the backend endpoint and web integration are pending.
+STT/TTS remain to be decided.
 
 ## Verification
 

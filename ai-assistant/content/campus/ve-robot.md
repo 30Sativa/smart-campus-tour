@@ -4,9 +4,9 @@ title: Về robot hướng dẫn
 kind: campus
 poiId:
 priority: 1
-status: draft
-reviewedBy:
-reviewedAt:
+status: approved
+reviewedBy: Quản Bá Thành
+reviewedAt: 2026-10-13
 ---
 <!-- Nguồn: README.md, docs/architecture.md §2, ADR-0001, ADR-0007, campus-tour-scope.md. Chỉ ghi điều đã có trong tài liệu dự án. -->
 

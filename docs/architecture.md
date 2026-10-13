@@ -1549,7 +1549,7 @@ the data-use condition of the provider tier.
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
 | `backend/` | <!-- TODO(WP2) --> | <!-- TODO(WP2): docker image? dotnet publish? --> | AWS EC2 |
-| `ai-assistant/` | Python 3.11+ / FastAPI (ADR-0016); build pipeline TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
+| `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; image TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see

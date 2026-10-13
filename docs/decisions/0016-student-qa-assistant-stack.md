@@ -62,3 +62,20 @@ Without a secondary provider, a provider outage disables Q&A until it
 recovers; the rest of the Tour is unaffected. Grounding reduces but does not
 eliminate wrong answers, so the evaluation set and approved content remain
 the quality gate.
+
+## Addendum: HTTP framework and test tooling (2026-10-13)
+
+The first implementation uses **Starlette** (the ASGI toolkit FastAPI is built
+on) with pydantic models and uvicorn, instead of FastAPI. The Gemini adapter
+uses the standard-library HTTP client in a worker thread instead of httpx,
+and tests use the standard-library `unittest` instead of pytest. Runtime
+dependencies are therefore only starlette, pydantic and uvicorn; ruff is the
+only development dependency.
+
+Reasons: the service has two internal endpoints and needs none of FastAPI's
+additions (OpenAPI docs, dependency injection); fewer dependencies are less
+to install and patch; and the development environment used for the first
+implementation could not install packages from PyPI, while these choices let
+the full test suite run there. Requests and responses still use pydantic and
+the §7.1 contract is unchanged. Switching to FastAPI later only affects
+`src/campus_assistant/api.py`.

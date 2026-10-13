@@ -91,7 +91,10 @@ class CheckContentTest(unittest.TestCase):
         _, a = self.run_check({"campus/ve-robot.md": approved})
         _, b = self.run_check({"campus/ve-robot.md": approved, "campus/d.md": doc(id_="d")})
         _, c = self.run_check({"campus/ve-robot.md": approved.replace("LiDAR", "LiDAR 2D")})
-        version = lambda out: out.split("contentVersion ")[1].split()[0]
+
+        def version(out: str) -> str:
+            return out.split("contentVersion ")[1].split()[0]
+
         self.assertEqual(version(a), version(b))
         self.assertNotEqual(version(a), version(c))
 

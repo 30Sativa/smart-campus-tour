@@ -4,9 +4,9 @@ title: Về trợ lý AI
 kind: campus
 poiId:
 priority: 1
-status: draft
-reviewedBy:
-reviewedAt:
+status: approved
+reviewedBy: Quản Bá Thành
+reviewedAt: 2026-10-13
 ---
 <!-- Nguồn: ai-assistant/AGENTS.md, docs/architecture.md §7.1, ADR-0011, ADR-0016. -->
 

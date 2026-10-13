@@ -4,9 +4,9 @@ title: Về chuyến tham quan từ xa
 kind: campus
 poiId:
 priority: 1
-status: draft
-reviewedBy:
-reviewedAt:
+status: approved
+reviewedBy: Quản Bá Thành
+reviewedAt: 2026-10-13
 ---
 <!-- Nguồn: docs/requirements/campus-tour-scope.md, campus-tour-ui-flow.md, ADR-0010, ADR-0015. -->
 

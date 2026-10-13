@@ -39,27 +39,33 @@ Selected by [ADR-0016](../docs/decisions/0016-student-qa-assistant-stack.md);
 the HTTP contract is `docs/architecture.md` §7.1. Source does not exist yet.
 
 - Language/runtime: **Python 3.11+**.
-- HTTP framework: **FastAPI** with **pydantic** models; outbound HTTP with
-  **httpx**.
+- HTTP framework: **Starlette** with **pydantic** models, served by
+  **uvicorn** (ADR-0016 addendum). Outbound HTTP uses the standard library.
 - LLM provider: **Google Gemini API** (Flash-tier model) behind a provider
   adapter interface. Model ID and key come from configuration only. One
   provider in V1, no secondary provider.
-- Tests and checks: **pytest**, **ruff**; an offline evaluation run with
-  recorded provider responses. Tests never call the real provider.
+- Tests and checks: standard-library **unittest**, **ruff**; an offline
+  evaluation run with recorded provider responses (planned). Tests never call
+  the real provider.
 - Packaging: container image on server/cloud, private network only.
 
-Planned layout (create only what a task needs):
+Layout:
 
 ```
 ai-assistant/
 ├── pyproject.toml
 ├── .env.example        names of required variables, no values
 ├── src/campus_assistant/
-│   ├── api/            FastAPI app, /v1/answer, /health, service-key check
-│   ├── content/        content-pack loader, versioning, context selection
-│   ├── prompting/      system prompt and prompt assembly
-│   ├── providers/      provider adapter interface, Gemini adapter, fake
-│   └── guards/         input/output filters, robot-command refusal, cache
+│   ├── api.py          Starlette app: /v1/answer, /health, service-key check, safe logs
+│   ├── service.py      orchestration: guard -> cache -> context -> LLM -> parse -> sanitize
+│   ├── content.py      content-pack loader, contentVersion, context selection
+│   ├── prompting.py    system prompt and prompt assembly
+│   ├── guards.py       normalization, robot-command refusal, answer sanitizing
+│   ├── cache.py        bounded TTL answer cache
+│   ├── resilience.py   circuit breaker, non-queuing concurrency limit
+│   ├── config.py       settings from environment
+│   ├── models.py       request/response schemas
+│   └── providers/      provider protocol, Gemini adapter, fake providers
 ├── content/            approved Markdown content pack (campus/, pois/); rules in content/README.md
 ├── evals/              questions.json (exists); expected facts and recorded responses (later)
 ├── tests/
@@ -70,7 +76,13 @@ Configuration (environment variables, values never committed):
 `AI_SERVICE_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, plus the budget/limit
 settings listed in §7.1. Local `.env` is untracked.
 
-Local run command: TODO(WP4) — added with the first source change.
+Local run (inside `ai-assistant/`, after the one-time setup in
+`scripts/verify`): copy `.env.example` to `.env`, set `AI_SERVICE_KEY` and
+either `AI_PROVIDER=fake` or the Gemini variables, then
+
+```bash
+PYTHONPATH=src .venv/bin/python -m campus_assistant   # listens on 127.0.0.1:8090
+```
 
 ---
 
@@ -101,7 +113,11 @@ Local run command: TODO(WP4) — added with the first source change.
 ai-assistant/scripts/verify
 ```
 
-Current checks (stdlib Python 3.10+, no install needed):
+One-time setup (needs PyPI access): `python -m venv .venv` and
+`.venv/bin/pip install -e ".[dev]"` inside `ai-assistant/`. CI runs the same
+script with `REQUIRE_LINT=1` (`.github/workflows/ai-assistant-verify.yml`).
+
+Checks, in order:
 
 - `scripts/test_check_content.py` — unit tests for the content checker.
 - `scripts/check_content.py` — validates `content/` frontmatter, review
@@ -109,10 +125,20 @@ Current checks (stdlib Python 3.10+, no install needed):
   `evals/questions.json`; prints `contentVersion` and how many evaluation
   questions are gradable with the currently approved content.
 
+- `ruff check .` — lint (warning only when ruff is missing locally; required
+  in CI).
+- `tests/` — service unit tests with fake providers and a fake clock; no
+  network.
+
 Content rules and the context-selection order are in `content/README.md`.
 
-<!-- TODO(WP4): with the first service source add ruff, pytest and the offline
-     evaluation run; verify fails if pyproject.toml exists without them. -->
+Quality evaluation (step 3 of the plan): `scripts/run_eval.py` runs every
+gradable question in `evals/questions.json` through the real pipeline with
+Gemini (needs `.env`), grades it by keywords and writes
+`evals/reports/<time>-<model>.md` (untracked). A full live run also writes
+`evals/recorded/latest.json`; `tests/test_evaluation.py` replays it offline in
+`scripts/verify`, and fails if an answer that passed when recorded now fails
+(it guards the code path; prompt changes need a new live run).
 
 ---
 

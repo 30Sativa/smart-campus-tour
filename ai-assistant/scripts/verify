@@ -1,30 +1,57 @@
 #!/usr/bin/env bash
-# ai-assistant verification. Contract: exit 0 pass, non-zero fail, 3 = skipped.
-# Today: content pack + evaluation set checks (stdlib Python).
-# TODO(WP4): add ruff, pytest and the offline evaluation run with the first
-# Python source (pyproject.toml) — see ai-assistant/AGENTS.md §4.
+# ai-assistant verification. Contract: exit 0 pass, non-zero fail.
+#
+# One-time setup (needs network access to PyPI), inside ai-assistant/:
+#   python -m venv .venv
+#   .venv/bin/pip install -e ".[dev]"          (Windows Git Bash: .venv/Scripts/pip ...)
+#
+# Steps: content checker tests -> content/eval checks -> lint (ruff) -> service unit tests.
+# Lint runs when ruff is installed; REQUIRE_LINT=1 (set in CI) makes a missing ruff a failure.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-PY="${PYTHON:-}"
-if [ -z "$PY" ]; then
-  for c in python3 python; do
-    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then PY="$c"; break; fi
+pick_python() {
+  local c
+  for c in "${PYTHON:-}" .venv/bin/python .venv/Scripts/python.exe python3 python; do
+    [ -n "$c" ] || continue
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
   done
-fi
-if [ -z "$PY" ]; then
-  echo "FAIL: Python 3.10+ not found (set PYTHON=...)."
+  return 1
+}
+
+if ! PY="$(pick_python)"; then
+  echo "FAIL: Python 3.11+ not found. Create ai-assistant/.venv (see the header of this script) or set PYTHON=..."
   exit 1
 fi
+echo "== using $("$PY" -c 'import sys; print(sys.executable, sys.version.split()[0])')"
 
 echo "== content checker tests"
 "$PY" -m unittest discover -s scripts -p 'test_*.py'
+
 echo "== content pack and evaluation set"
 "$PY" scripts/check_content.py
 
-if [ -f pyproject.toml ] || [ -f package.json ] || [ -f go.mod ]; then
-  echo "FAIL: ai-assistant/ has source but scripts/verify does not check it yet."
-  echo "      Add the real code checks before adding source."
+if ! "$PY" -c 'import starlette, pydantic, uvicorn' 2>/dev/null; then
+  echo "FAIL: service dependencies are not installed for $PY."
+  echo "      Inside ai-assistant/: python -m venv .venv && .venv/bin/pip install -e \".[dev]\""
   exit 1
 fi
-echo "PASS: content checks (no service source yet)."
+
+echo "== lint (ruff)"
+if "$PY" -m ruff --version >/dev/null 2>&1; then
+  "$PY" -m ruff check .
+elif [ "${REQUIRE_LINT:-0}" = "1" ]; then
+  echo "FAIL: ruff is required (REQUIRE_LINT=1) but not installed."
+  exit 1
+else
+  echo "WARN: ruff is not installed; lint was not run locally (CI runs it with REQUIRE_LINT=1)."
+fi
+
+echo "== service unit tests"
+SEP="$("$PY" -c 'import os; print(os.pathsep)')"
+PYTHONPATH="src${SEP}tests" "$PY" -m unittest discover -s tests -t tests
+
+echo "PASS: ai-assistant"

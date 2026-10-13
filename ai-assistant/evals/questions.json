@@ -112,7 +112,9 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không phát lại",
+            "không xem lại",
+            "không thể xem lại"
           ],
           [
             "hiện tại"
@@ -268,7 +270,10 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không tự lùi",
+            "không lùi",
+            "không thể tự lùi",
+            "không thể lùi"
           ]
         ]
       },
@@ -301,7 +306,11 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không tự tạo",
+            "chỉ đi",
+            "không đi vào",
+            "không đi tới",
+            "không thể đi"
           ],
           [
             "kiểm chứng",
@@ -324,7 +333,8 @@
             "đại diện"
           ],
           [
-            "Staff"
+            "Staff",
+            "nhân viên vận hành"
           ]
         ]
       },
@@ -340,7 +350,10 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không xem được",
+            "không thấy",
+            "không thể xem",
+            "không nhìn"
           ]
         ]
       },
@@ -372,7 +385,8 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không được lưu",
+            "không lưu"
           ]
         ]
       },
@@ -793,7 +807,8 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không điều khiển",
+            "không thể điều khiển"
           ]
         ]
       },
@@ -1138,7 +1153,9 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không phát lại",
+            "không xem lại",
+            "không thể xem lại"
           ]
         ]
       },
@@ -1170,7 +1187,10 @@
         "behavior": "answer",
         "mustMentionAny": [
           [
-            "không"
+            "không xem được",
+            "không thấy",
+            "không thể xem",
+            "không nhìn"
           ]
         ]
       },

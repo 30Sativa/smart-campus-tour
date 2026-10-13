@@ -54,14 +54,15 @@ used:
 1. The POI snapshot from the backend (`name`, `description`, `narrationText`),
    or nothing when the backend sends `poi: null` (general campus context).
 2. The approved `pois/` file whose `poiId` equals the snapshot's id.
-3. The other approved `pois/` files (so "what is next / elsewhere" questions
+3. Approved `campus/` files with `priority: 1`.
+4. The other approved `pois/` files (so "what is next / elsewhere" questions
    work), each prefixed with its POI title.
-4. Approved `campus/` files, `priority: 1` first.
+5. Approved `campus/` files with `priority: 2`, then `priority: 3`.
 
-When the pack exceeds the budget, items are dropped from the end of this list
-(campus `priority: 3` first, then other POIs). If that is no longer enough,
-keyword retrieval replaces step 3–4 (ADR-0016); not needed while the pack is
-small.
+When the pack exceeds the budget, an item that does not fit is skipped and
+later, smaller items may still be added, so lower-priority content is dropped
+first. If that is no longer enough, keyword retrieval replaces steps 3–5
+(ADR-0016); not needed while the pack is small.
 
 `contentVersion` = first 12 hex characters of SHA-256 over the approved files
 (sorted by path, path + body). It changes whenever approved content changes and
