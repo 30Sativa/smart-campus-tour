@@ -59,8 +59,8 @@ ai-assistant/
 │   ├── prompting/      system prompt and prompt assembly
 │   ├── providers/      provider adapter interface, Gemini adapter, fake
 │   └── guards/         input/output filters, robot-command refusal, cache
-├── content/            approved Markdown content pack (campus/, pois/)
-├── evals/              question set, expected facts, recorded responses
+├── content/            content pack (campus/, pois/); rules in content/README.md
+├── evals/              questions.json (exists); recorded responses (later)
 ├── tests/
 └── scripts/verify
 ```
@@ -100,9 +100,18 @@ Local run command: TODO(WP4) — added with the first source change.
 ai-assistant/scripts/verify
 ```
 
-<!-- TODO(WP4): replace the skeleton with format/lint, typecheck, unit tests,
-     integration tests and any prompt/evaluation checks required by the chosen
-     stack. -->
+Current checks (stdlib Python 3.10+, no install needed):
+
+- `scripts/test_check_content.py` — unit tests for the content checker.
+- `scripts/check_content.py` — validates `content/` frontmatter, review
+  rules, personal-data and placeholder checks, size budget, and
+  `evals/questions.json`; prints `contentVersion` and how many evaluation
+  questions are gradable with the currently approved content.
+
+Content rules and the context-selection order are in `content/README.md`.
+
+<!-- TODO(WP4): with the first service source add ruff, pytest and the offline
+     evaluation run; verify fails if pyproject.toml exists without them. -->
 
 ---
 

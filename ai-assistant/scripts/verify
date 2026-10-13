@@ -1,14 +1,30 @@
 #!/usr/bin/env bash
-# TODO(WP4): replace this skeleton when ai-assistant/ has source.
-# Required contract: exit 0 on pass, non-zero on failure, and never hide errors.
+# ai-assistant verification. Contract: exit 0 pass, non-zero fail, 3 = skipped.
+# Today: content pack + evaluation set checks (stdlib Python).
+# TODO(WP4): add ruff, pytest and the offline evaluation run with the first
+# Python source (pyproject.toml) — see ai-assistant/AGENTS.md §4.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-if [ ! -f package.json ] && [ ! -f pyproject.toml ] && [ ! -f go.mod ]; then
-  echo "SKIPPED: ai-assistant/ has no source yet. Nothing to verify."
-  exit 3
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then PY="$c"; break; fi
+  done
+fi
+if [ -z "$PY" ]; then
+  echo "FAIL: Python 3.10+ not found (set PYTHON=...)."
+  exit 1
 fi
 
-echo "FAIL: ai-assistant/ has source but scripts/verify is still a skeleton."
-echo "      Replace the TODO with the real checks before adding source."
-exit 1
+echo "== content checker tests"
+"$PY" -m unittest discover -s scripts -p 'test_*.py'
+echo "== content pack and evaluation set"
+"$PY" scripts/check_content.py
+
+if [ -f pyproject.toml ] || [ -f package.json ] || [ -f go.mod ]; then
+  echo "FAIL: ai-assistant/ has source but scripts/verify does not check it yet."
+  echo "      Add the real code checks before adding source."
+  exit 1
+fi
+echo "PASS: content checks (no service source yet)."
