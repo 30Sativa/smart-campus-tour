@@ -3,12 +3,23 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest'
 import { FleetPanels, type FleetTab } from './FleetPanels'
 import { createPatrol } from './patrol-demo'
-vi.mock('./FleetCamera',()=>({FleetCamera:()=> <div>Camera scene</div>}))
+vi.mock('./FleetCamera',()=>({FleetCamera:({mode,point,number}:{mode:string;point:number;number:number})=> <div data-testid="camera-feed">{mode === 'point' ? `Camera point ${point + 1}` : `Camera ${mode} R${number}`}</div>}))
 function Harness({tab}:{tab:FleetTab}) {
   const [state,setState]=useState(()=>createPatrol()), [selected,setSelected]=useState(1)
   return <><div data-testid="fleet-state">{state.robots.map(r=>`R${r.number}:${r.mode}:${r.battery}:${r.queue.length}`).join(',')} · selected {selected} · clock {state.seconds}</div><FleetPanels tab={tab} state={state} setState={setState} selected={selected} setSelected={setSelected}/></>
 }
 describe('fleet operations panels',()=>{
+  it('opens a fixed point camera by default and switches between all points and robot cameras', () => {
+    render(<Harness tab="camera" />)
+    expect(screen.getByTestId('camera-feed')).toHaveTextContent('Camera point 1')
+    expect(screen.getByLabelText('Điểm camera').querySelectorAll('option')).toHaveLength(10)
+    fireEvent.change(screen.getByLabelText('Điểm camera'), { target: { value: '6' } })
+    expect(screen.getByTestId('camera-feed')).toHaveTextContent('Camera point 7')
+    fireEvent.click(screen.getByRole('button', { name: 'Trên robot' }))
+    expect(screen.getByTestId('camera-feed')).toHaveTextContent('Camera robot R1')
+    fireEvent.click(screen.getByRole('button', { name: 'Tại point' }))
+    expect(screen.getByTestId('camera-feed')).toHaveTextContent('Camera point 7')
+  })
   it('adds an explainable task and applies selected robot fault/recovery',()=>{
     const view=render(<Harness tab="tasks"/>)
     fireEvent.click(screen.getByRole('button',{name:'Giao nhiệm vụ'}))

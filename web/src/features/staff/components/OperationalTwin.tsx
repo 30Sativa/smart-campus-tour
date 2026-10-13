@@ -72,7 +72,7 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '' }
   return (
     <section className={`flex flex-col overflow-hidden rounded-2xl border border-[#dce9fb] bg-[#edf2fa] ${expanded ? 'fixed inset-3 z-50 h-[calc(100dvh-1.5rem)] shadow-2xl' : `relative ${demo ? 'min-h-[680px] sm:min-h-[600px]' : ''} ${className}`}`} aria-label="Digital Twin vận hành 3D">
       <div className="order-2 min-h-0 flex-1">
-        {demo ? <PatrolDemo overhead={overhead} showLabels={labels} /> : (
+        {demo ? <PatrolDemo overhead={overhead} showLabels={labels} onToggleLabels={() => setLabels(value => !value)} /> : (
           <div className="h-full" role="img" aria-label={tour ? `Bản đồ 3D: ${focusRobot?.name ?? 'robot'} và các POI của ${tour.code}` : `Bản đồ 3D với ${placed.length} robot`}>
             <Suspense fallback={<div className="grid size-full place-items-center text-sm text-[#647793]"><span className="flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />Đang tải bản đồ 3D…</span></div>}>
               <TwinScene modelKey="nvh-v3" robots={twinRobots} route={route} selectedStopId={selectedStopId} overhead={overhead} showLabels={labels} />
