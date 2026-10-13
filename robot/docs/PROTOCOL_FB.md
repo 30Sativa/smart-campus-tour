@@ -53,11 +53,13 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 6 | `yaw_cdeg` | Yaw × 100, đơn vị centi-độ. Dương = quay trái (REP-103) |
 | 7 | `yaw_valid` | 1 = mẫu IMU còn mới (dưới 200 ms) |
 | 8–15 | 4 cặp sonar | `<mm>,<valid>` cho SONAR1–4 |
-| 16 | `yaw_acc` | 0–3. **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ** |
+| 16 | `yaw_acc` | 0–3: 2 bit status của report hướng firmware đang dùng. Với Rotation Vector (0x05): **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ**. Với Game Rotation Vector (0x08, mặc định) không có từ kế, trường này không mô tả sai số heading |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
-Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data` và chuyển
-`yaw_acc` thành orientation covariance; `robot_localization` dùng covariance
+Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data`. Với
+`imu_orientation_report:=rotation_vector` nó chuyển `yaw_acc` thành orientation
+covariance; với `game_rotation_vector` (mặc định, khớp firmware mặc định) nó
+dùng variance cố định; `robot_localization` dùng covariance
 đó khi fuse yaw với wheel velocity. Bridge không còn dùng yaw để sửa wheel
 odometry.
 

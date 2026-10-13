@@ -46,7 +46,18 @@ DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     0.1,
 ]
 
+# Report huong ma firmware dang stream (BNO08X_USE_GAME_ROTATION_VECTOR).
+# game_rotation_vector (0x08, mac dinh): gyro + accel, khong tu ke -> yaw_acc
+#   khong mo ta sai so heading, dung variance co dinh.
+# rotation_vector (0x05, firmware cu): yaw_acc = muc hieu chuan tu ke.
+IMU_ORIENTATION_REPORTS = ('game_rotation_vector', 'rotation_vector')
+DEFAULT_IMU_ORIENTATION_REPORT = 'game_rotation_vector'
+# ~5.7 do 1-sigma. EKF dung yaw IMU tuong doi (imu0_relative); do tren xe
+# that, yaw khong tu ke lech LiDAR 3-4 % moi vong quay va troi < 0.5 do/phut.
+GAME_ROTATION_VECTOR_YAW_VARIANCE = 0.01
+
 # Variance cua yaw theo muc accuracy BNO08x bao ve (truong yaw_acc cua khung FB).
+# Chi dung voi rotation_vector.
 # 0 = tu ke chua hieu chuan: heading van co gia tri nhung co the sai hang chuc do.
 IMU_YAW_VARIANCE_BY_ACCURACY = {
     3: 0.0020,    # ~2.5 do 1-sigma
@@ -56,7 +67,7 @@ IMU_YAW_VARIANCE_BY_ACCURACY = {
 }
 # Firmware cu khong gui yaw_acc: gia dinh trung binh thay vi tin tuyet doi.
 DEFAULT_IMU_YAW_VARIANCE = 0.05
-# Roll/pitch khong duoc do (chi bat Rotation Vector, va xe chay nen phang).
+# Roll/pitch khong duoc do (chi publish yaw, va xe chay nen phang).
 IMU_UNMEASURED_VARIANCE = 99999.0
 
 
@@ -65,6 +76,14 @@ def imu_yaw_variance(yaw_acc: Optional[int]) -> float:
     if yaw_acc is None:
         return DEFAULT_IMU_YAW_VARIANCE
     return IMU_YAW_VARIANCE_BY_ACCURACY.get(yaw_acc, DEFAULT_IMU_YAW_VARIANCE)
+
+
+def imu_orientation_variance(yaw_acc: Optional[int],
+                             orientation_report: str) -> float:
+    """Variance cua yaw cho report huong firmware dang dung."""
+    if orientation_report == 'game_rotation_vector':
+        return GAME_ROTATION_VECTOR_YAW_VARIANCE
+    return imu_yaw_variance(yaw_acc)
 
 
 def yaw_to_quaternion_z(yaw_rad: float) -> Tuple[float, float]:
@@ -128,6 +147,9 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')
+        # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
+        self.declare_parameter(
+            'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
         self.declare_parameter(
             'odom_covariance_diagonal',
             DEFAULT_ODOM_COVARIANCE_DIAGONAL,
@@ -185,6 +207,14 @@ class Stm32BridgeNode(Node):
         self.publish_imu = bool(self.get_parameter('publish_imu').value)
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.imu_frame = str(self.get_parameter('imu_frame').value)
+        self.imu_orientation_report = str(
+            self.get_parameter('imu_orientation_report').value)
+        if self.imu_orientation_report not in IMU_ORIENTATION_REPORTS:
+            self.get_logger().error(
+                f'imu_orientation_report={self.imu_orientation_report!r} '
+                f'khong hop le {IMU_ORIENTATION_REPORTS}; dung '
+                f'{DEFAULT_IMU_ORIENTATION_REPORT}.')
+            self.imu_orientation_report = DEFAULT_IMU_ORIENTATION_REPORT
         self.reset_odom_on_start = bool(
             self.get_parameter('reset_odom_on_start').value)
         self.odom_covariance_diagonal = self._read_diagonal_parameter(
@@ -311,6 +341,7 @@ class Stm32BridgeNode(Node):
             f'publish_odom={self.publish_odom}, publish_tf={self.publish_tf}, '
             f'odom_frame={self.odom_frame}, base_frame={self.base_frame}, '
             f'wheel_odom_topic=wheel/odom, imu_topic={self.imu_topic}, '
+            f'imu_orientation_report={self.imu_orientation_report}, '
             f'publish_sonar={self.publish_sonar}, '
             f'sonar_topics=({self.sonar1_topic},{self.sonar2_topic},'
             f'{self.sonar3_topic},{self.sonar4_topic}), '
@@ -604,7 +635,7 @@ class Stm32BridgeNode(Node):
                      yaw_acc: Optional[int]):
         """Publish sensor_msgs/Imu chi voi orientation yaw.
 
-        Khong co gyro/accel tho (firmware chi bat Rotation Vector) nen dat -1
+        Khong co gyro/accel tho (firmware chi stream report huong) nen dat -1
         vao phan tu dau cua hai covariance con lai -- quy uoc chuan cua ROS de
         bao "khong co du lieu nay", robot_localization se bo qua chung.
         """
@@ -630,7 +661,8 @@ class Stm32BridgeNode(Node):
         msg.orientation_covariance = [
             IMU_UNMEASURED_VARIANCE, 0.0, 0.0,
             0.0, IMU_UNMEASURED_VARIANCE, 0.0,
-            0.0, 0.0, imu_yaw_variance(yaw_acc),
+            0.0, 0.0, imu_orientation_variance(
+                yaw_acc, self.imu_orientation_report),
         ]
         msg.angular_velocity_covariance[0] = -1.0
         msg.linear_acceleration_covariance[0] = -1.0

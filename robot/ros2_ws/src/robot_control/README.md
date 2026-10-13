@@ -30,7 +30,7 @@ subscribes only to `/cmd_vel`.
 | `/emergency_stop_state` | `std_msgs/msg/Bool` | Emergency stop state |
 | `/scan` | `sensor_msgs/msg/LaserScan` | RPLiDAR scan |
 | `/wheel/odom` | `nav_msgs/msg/Odometry` | Wheel-only odometry from STM32 STEP counts |
-| `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Rotation Vector orientation |
+| `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Game Rotation Vector yaw (no magnetometer) |
 | `/odom` | `nav_msgs/msg/Odometry` | EKF output consumed by SLAM/Nav2 |
 | `/ultrasonic/sonar1/range` | `sensor_msgs/msg/Range` | SR04T SONAR1 |
 | `/ultrasonic/sonar2/range` | `sensor_msgs/msg/Range` | SR04T SONAR2 |
