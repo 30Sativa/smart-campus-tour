@@ -51,6 +51,12 @@ The real launch files run `robot_state_publisher` and `robot_localization`.
 of `odom -> base_footprint`. SLAM or AMCL publishes `map -> odom`, and the URDF
 publishes fixed robot frames below `base_footprint`.
 
+The EKF reads `config/ekf.yaml` (wheel twist + BNO085 relative yaw) unless
+`ekf_params_file:=...` is passed to `manual_mode.launch.py` or
+`robot_navigation/navigation.launch.py`. `config/ekf_wheel_only.yaml` is a
+heading experiment that drops `imu/data`; it is not the default. Omitting the
+argument rolls back to `ekf.yaml`.
+
 The RPLiDAR launch default uses `frame_id=lidar_link` to match the current URDF.
 If your hardware driver is already publishing `laser`, either set
 `lidar_frame:=laser` or update the URDF/static transform consistently.

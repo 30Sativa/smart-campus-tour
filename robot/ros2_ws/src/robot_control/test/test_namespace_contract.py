@@ -95,6 +95,7 @@ def test_topic_parameters_are_relative():
         'robot_control/config/mode_manager.yaml',
         'robot_control/config/nav2_params.yaml',
         'robot_control/config/ekf.yaml',
+        'robot_control/config/ekf_wheel_only.yaml',
         'robot_control/config/slam_toolbox_online_async.yaml',
     )
     # Scalars: `topic: /x`, `topic: "/x"`, `scan_topic: '/x'`, and the list
@@ -114,6 +115,7 @@ def test_no_config_hardcodes_a_robot_id():
         'robot_control/config/mode_manager.yaml',
         'robot_control/config/nav2_params.yaml',
         'robot_control/config/ekf.yaml',
+        'robot_control/config/ekf_wheel_only.yaml',
         'robot_control/config/slam_toolbox_online_async.yaml',
         'robot_navigation/config/localization_params.yaml',
     )

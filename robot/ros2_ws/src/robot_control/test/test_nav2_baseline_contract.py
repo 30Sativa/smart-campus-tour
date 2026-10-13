@@ -226,6 +226,8 @@ def test_real_bridge_accepts_straight_and_spin_maxima_without_raising_wheel_cap(
             if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
             and call.func.id == 'DeclareLaunchArgument'
             for keyword in call.keywords if keyword.arg == 'default_value'
+            # Path defaults (e.g. ekf_params_file) are substitutions.
+            and isinstance(keyword.value, ast.Constant)
         }
         assert float(defaults['max_wheel_speed_mm_s']) == 250.0
         assert float(defaults['speed_scale']) == 1.0

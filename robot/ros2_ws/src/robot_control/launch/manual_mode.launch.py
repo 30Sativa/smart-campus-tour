@@ -23,8 +23,9 @@ def generate_launch_description():
     odom_frame = LaunchConfiguration('odom_frame')
     initial_mode = LaunchConfiguration('initial_mode')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    ekf_params_file = LaunchConfiguration('ekf_params_file')
 
-    ekf_config = PathJoinSubstitution([
+    default_ekf_params = PathJoinSubstitution([
         FindPackageShare('robot_control'),
         'config',
         'ekf.yaml',
@@ -97,6 +98,11 @@ def generate_launch_description():
                               description='manual or explore.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='Use simulation clock.'),
+        DeclareLaunchArgument(
+            'ekf_params_file', default_value=default_ekf_params,
+            description='robot_localization EKF parameter file. Default '
+                        'ekf.yaml fuses wheel twist + BNO085 yaw; '
+                        'ekf_wheel_only.yaml is a heading experiment.'),
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -136,7 +142,8 @@ def generate_launch_description():
         ]),
 
         # The EKF is the only odom -> base_footprint TF owner on real hardware.
-        # Input: wheel/odom (vx + vyaw) and imu/data (relative yaw).
+        # Input (default ekf.yaml): wheel/odom (vx + vyaw) and imu/data
+        # (relative yaw). ekf_wheel_only.yaml drops imu/data for experiments.
         # Output: odom, remapped from robot_localization's default name.
         Node(
             package='robot_localization',
@@ -145,7 +152,7 @@ def generate_launch_description():
             namespace=robot_id,
             output='screen',
             parameters=[
-                ekf_config,
+                ekf_params_file,
                 {
                     'use_sim_time': ParameterValue(
                         use_sim_time, value_type=bool),
