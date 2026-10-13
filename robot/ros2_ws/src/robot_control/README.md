@@ -57,6 +57,12 @@ The EKF reads `config/ekf.yaml` (wheel twist + BNO085 relative yaw) unless
 heading experiment that drops `imu/data`; it is not the default. Omitting the
 argument rolls back to `ekf.yaml`.
 
+Likewise `config/nav2_params_wide_global_inflation.yaml` is an opt-in Nav2
+experiment (`nav2_params_file:=...` on `navigation.launch.py`): identical to
+`nav2_params.yaml` except the GLOBAL inflation layer (1.50 m / 2.0 instead of
+0.60 m / 3.0), so Smac2D keeps away from corridor walls. The local costmap
+and RPP are unchanged.
+
 The RPLiDAR launch default uses `frame_id=lidar_link` to match the current URDF.
 If your hardware driver is already publishing `laser`, either set
 `lidar_frame:=laser` or update the URDF/static transform consistently.

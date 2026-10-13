@@ -533,6 +533,21 @@ def test_inflation_settings_stay_at_the_existing_baseline():
         assert costmap['inflation_layer']['cost_scaling_factor'] == 3.0
 
 
+def test_wide_global_inflation_experiment_changes_only_global_inflation():
+    """The opt-in experiment file must not drift from the baseline elsewhere."""
+    baseline = _nav2_params()
+    experiment = yaml.safe_load(
+        _read('robot_control/config/nav2_params_wide_global_inflation.yaml'))
+    inflation = (experiment['global_costmap']['global_costmap']
+                 ['ros__parameters']['inflation_layer'])
+    assert inflation['inflation_radius'] == 1.50
+    assert inflation['cost_scaling_factor'] == 2.0
+    inflation.update(_global_costmap()['inflation_layer'])
+    assert experiment == baseline
+    navigation = _read('robot_navigation/launch/navigation.launch.py')
+    assert 'nav2_params_wide_global_inflation' not in navigation
+
+
 def test_costmaps_use_polygon_without_radius_or_extra_padding():
     for costmap in (_local_costmap(), _global_costmap()):
         assert 'robot_radius' not in costmap
