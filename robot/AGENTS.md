@@ -97,6 +97,14 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   `ros2 node info`) temporarily incomplete even while topics carry data. Follow
   the troubleshooting note in `docs/network-ros-discovery.md` before declaring
   a node or endpoint unavailable.
+- For runtime logs and rosbag captures, read `robot/docs/logging.md` first.
+  Use the machine-local `$HOME/amr_logs/runs/` root, one new directory per
+  test session. Set `ROS_LOG_DIR` before launch; keep launch output, goal output,
+  bags and the session notes together. Do not create new captures in the old
+  `$HOME/amr_bags/` root, overwrite a prior session, or delete active captures.
+  Store compressed historical captures in `$HOME/amr_logs/archive/`; never
+  commit logs or bags. A recorder is not proof that every required topic was
+  received: check its actual topic list and timestamps before diagnosing.
 
 <!-- TODO(Duy): thêm rule kiến trúc mới ở đây mỗi khi agent làm sai một lần. Đây là chỗ harness "học". -->
 
