@@ -48,9 +48,9 @@ adding a test, bumping a patch version.
 | [0013](0013-single-application-role-per-account.md) | Auth/Web V1 supports exactly one supported application role per account | accepted by team; GVHD review at Review 2 |
 | [0014](0014-admin-poi-management.md) | Admin manages POI content and only edits geometry before route/history use | implementation scope authorized; group/GVHD review at Review 2 |
 | [0015](0015-invitation-issuance-and-resend-email.md) | Secure invitation codes, Resend queue and minimal Student entry | implementation scope authorized; opt-in configuration required |
+| [0016](0016-student-qa-assistant-stack.md) | Backend-mediated Student Q&A; Python/FastAPI assistant; Gemini via provider adapter; approved content pack | accepted by team; implementation pending |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend
-     - chọn model AI cho assistant dưới ràng buộc i3-7100T / 8GB / không GPU
      - monorepo vs multi-repo (nếu muốn ghi lại lý do gộp)
 -->
