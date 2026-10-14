@@ -38,7 +38,7 @@ it('recovers a cookie session without an access code, account JWT or account ref
     expect(options.credentials).toBe('include')
     expect(options.method).toBe('POST')
     expect(options.body).toBeUndefined()
-    expect((options.headers as Record<string, string>).Authorization).toBeUndefined()
+    expect(new Headers(options.headers).get('Authorization')).toBeNull()
     return response()
   })
   vi.stubGlobal('fetch', fetch)

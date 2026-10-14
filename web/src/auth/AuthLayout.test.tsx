@@ -45,10 +45,10 @@ describe('AuthLayout', () => {
 
   it('renders the sign-in copy over the photograph', () => {
     const login = renderAt('/login')
-    expect(login.container.querySelector('.auth-visual__title')?.textContent).toMatch(/Khám phá khuôn viên/)
-    expect(login.container.querySelector('.auth-visual__img')).toHaveAttribute('src', '/images/login-smartbus.png')
-    expect(login.container.querySelectorAll('.auth-visual__img')).toHaveLength(1)
+    expect(login.container.querySelector('.auth-caption__title')?.textContent).toMatch(/Khám phá khuôn viên/)
+    expect(login.container.querySelectorAll('.auth-aurora__photo')).toHaveLength(1)
     expect(login.container.querySelectorAll('.auth-devbadge summary')).toHaveLength(1)
+  })
 
   it('draws the aurora backdrop and the campus caption as decoration only', () => {
     const { container } = renderAt('/login')

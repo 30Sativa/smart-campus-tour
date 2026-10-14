@@ -65,3 +65,9 @@ owning unit; they do not become requirements.
    [architecture.md](architecture.md) and the related decision record.
 5. Then inspect the current code, SQL schema, and tests. If target and current
    state differ, preserve the distinction and report the implementation gap.
+
+## 6. Dated technical reviews
+
+- [Backend/Frontend Technical Lead review, 2026-10-14](reviews/2026-10-14-backend-frontend-technical-review.md)
+  — source findings, focused fixes, verification and remaining debt. This is a
+  dated code review, not a replacement for requirements or public contracts.

@@ -9,10 +9,6 @@ const CAPTION = {
   title: 'Khám phá khuôn viên từ một điểm chạm.',
   lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
 } as const
-
-
-} as const
-
 /** Furthest the card leans toward the pointer, in degrees. */
 const MAX_TILT = 4
 
@@ -133,19 +129,6 @@ export function AuthLayout() {
         <p className="auth-caption__title">{CAPTION.title}</p>
         <p className="auth-caption__lead">{CAPTION.lead}</p>
       </section>
-
-
-        <img src="/images/login-smartbus.png" alt="" className="auth-visual__img" fetchPriority="high" />
-        <div className="auth-visual__scrim" />
-        <div className="auth-visual__inner">
-          <p className="auth-visual__eyebrow">CAMPUS TOUR <span /> SMARTBUS</p>
-          <p className="auth-visual__title">{VISUAL.title}</p>
-          <p className="auth-visual__lead">{VISUAL.lead}</p>
-        </div>
-        <p className="auth-visual__note">01 / BẮT ĐẦU HÀNH TRÌNH</p>
-
-      </section>
-
       <div className="auth-stage">
         <div ref={cardRef} className="auth-card">
           <div className="auth-col">

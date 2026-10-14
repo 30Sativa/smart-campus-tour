@@ -45,7 +45,7 @@ const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsP
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
 const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
-// Students join a remote tour with the group code, no account (flow review 21/09/2026 §5).
+// SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
 const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'))
 
 // School representative (flow review 21/09/2026 §4).
