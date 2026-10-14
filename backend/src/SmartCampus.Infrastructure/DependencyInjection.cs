@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddSingleton<IInvitationCodeService, InvitationCodeService>();
         services.AddScoped<IInvitationRepository, EfInvitationRepository>();
         services.AddScoped<IStudentAccessRepository, EfStudentAccessRepository>();
+        services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
         services.AddScoped<InitialAdminSeeder>();
         services.AddScoped<DemoPoiSeeder>();
 

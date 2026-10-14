@@ -23,6 +23,7 @@ export type StudentOperationalStep =
   | 'reconnecting'           // Đang kết nối lại; chưa biết trạng thái hiện tại
   | 'ended_completed'        // Buổi đã hoàn thành
   | 'ended_cancelled'        // Buổi đã hủy
+  | 'in_progress'            // Trang thật: Tour RUNNING nhưng chưa có tiến độ robot
 
 export interface PoiDetail {
   id: string

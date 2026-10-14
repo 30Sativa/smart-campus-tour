@@ -31,12 +31,17 @@ not own visitor audio playback, narration or AI dialogue.
 
 ## Status
 
-**Text Q&A service implemented, not yet integrated.** `POST /v1/answer` and
-`GET /health` follow `docs/architecture.md` §7.1 (stack: ADR-0016, Python +
-Starlette, Gemini through a provider adapter). Verified with unit tests using
-fake providers; no live Gemini evaluation has run yet, the content pack has no
-approved files yet, and the backend endpoint and web integration are pending.
-STT/TTS remain to be decided.
+**Text Q&A implemented end to end.** `POST /v1/answer` and `GET /health`
+follow `docs/architecture.md` §7.1 (stack: ADR-0016, Python + Starlette, Gemini
+through a provider adapter). The backend exposes
+`POST /api/student/tours/{tourId}/questions` and the invited Student page shows
+the chat while the Tour is RUNNING. Three campus content files are approved;
+the last live evaluation passed 63 of 64 gradable questions.
+
+Not done yet: nothing writes Tour progress, so the POI snapshot stays `null`; POI
+and school content files are still drafts, STT/TTS are undecided, and there is
+no load test or container image. Local end-to-end run:
+`backend/docs/student-ai-local.md`.
 
 ## Verification
 
@@ -44,5 +49,6 @@ STT/TTS remain to be decided.
 ai-assistant/scripts/verify
 ```
 
-The script currently returns `SKIPPED` until source and a real verification
-pipeline are added.
+Runs the content checks, ruff (when installed), the unit tests and an offline
+replay of `evals/recorded/latest.json`. One-time setup and the live evaluation
+command are in `AGENTS.md` §4.

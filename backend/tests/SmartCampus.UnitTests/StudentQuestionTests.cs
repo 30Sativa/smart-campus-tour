@@ -24,6 +24,7 @@ public sealed class StudentQuestionTests
         public FakeRepository Repository { get; } = new();
         public FakeAssistant Assistant { get; } = new();
         public FakeClock Clock { get; } = new();
+        public FakeTourReader Tour { get; } = new();
         public StudentQuestionGate Gate { get; }
         public AskStudentQuestionCommandHandler Handler { get; }
 
@@ -31,7 +32,7 @@ public sealed class StudentQuestionTests
         {
             Gate = new StudentQuestionGate(Clock);
             Handler = new AskStudentQuestionCommandHandler(Repository, new FakeCodes(), new InvitationSettings(enabled, 24),
-                Assistant, Gate, Clock);
+                Assistant, Gate, Clock, Tour);
         }
     }
 
@@ -50,6 +51,21 @@ public sealed class StudentQuestionTests
         Assert.Single(sent.RecentTurns);
         Assert.Null(sent.Poi);
         Assert.Equal(2, h.Repository.Checks); // before and after the assistant call
+    }
+
+    [Fact]
+    public async Task RobotAtAStop_SnapshotsThatPoi_ForTheAssistantAndTheAnswer()
+    {
+        var h = new Harness();
+        var poiId = Guid.NewGuid();
+        h.Tour.Poi = new AssistantPoi(poiId, "Thư viện", "Ba tầng.", "Đây là thư viện.");
+
+        var answer = await h.Handler.Handle(Ask(), CancellationToken.None);
+
+        var sent = Assert.Single(h.Assistant.Calls);
+        Assert.Equal(h.Tour.Poi, sent.Poi);
+        Assert.Equal(new StudentAnswerPoi(poiId, "Thư viện"), answer.Poi);
+        Assert.Equal(TourId, Assert.Single(h.Tour.Lookups));
     }
 
     [Fact]
@@ -216,6 +232,20 @@ public sealed class StudentQuestionTests
         public void Add(BrowserSession session) => throw new NotSupportedException();
         public Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct) => throw new NotSupportedException();
         public void AddAudit(AuditLog audit) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeTourReader : IStudentTourViewReader
+    {
+        public AssistantPoi? Poi { get; set; }
+        public List<Guid> Lookups { get; } = [];
+
+        public Task<AssistantPoi?> FindCurrentPoiAsync(Guid tourId, CancellationToken ct)
+        {
+            Lookups.Add(tourId);
+            return Task.FromResult(Poi);
+        }
+
+        public Task<StudentTourViewData?> LoadAsync(Guid tourId, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FakeAssistant : IAiAssistantClient

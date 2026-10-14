@@ -1,8 +1,10 @@
 
 # AGENTS.md — `ai-assistant/`
 
-> **STATUS: SKELETON.** Nothing is implemented yet. Fill the TODO blocks as
-> WP4 implementation proceeds; delete this banner when appropriate.
+> **STATUS: text Q&A implemented.** `/v1/answer` service, backend endpoint
+> (`docs/architecture.md` §7.1) and the live web panel exist. Not yet done: nothing
+> writes Tour progress yet, so the POI snapshot stays `null` in practice;
+> STT/TTS, load test and container image.
 
 Student private Q&A service for CampusTour DT-AMR (Work Package 4). V1 uses one
 project language; multilingual and per-tour language selection are out of scope.
@@ -24,7 +26,8 @@ revoked invitation must not receive a late response or start a new Q&A request.
 Each student's Q&A stays private. A “Điểm xem chung” uses one shared
 screen/session, so any answer shown there is shared with that room; it is not a
 count or identity for the students watching. The assistant must never control
-robot movement. This target is not implemented by the current skeleton.
+robot movement. Text Q&A meets this target; the backend snapshots the POI from
+the Tour's progress columns, which nothing writes yet.
 
 It does not own person detection, obstacle avoidance, navigation goals, speed
 limits or any other movement decision. Those belong to `robot/`. In
@@ -36,7 +39,7 @@ not part of this assistant.
 ## 2. Stack and layout
 
 Selected by [ADR-0016](../docs/decisions/0016-student-qa-assistant-stack.md);
-the HTTP contract is `docs/architecture.md` §7.1. Source does not exist yet.
+the HTTP contract is `docs/architecture.md` §7.1.
 
 - Language/runtime: **Python 3.11+**.
 - HTTP framework: **Starlette** with **pydantic** models, served by
@@ -45,8 +48,8 @@ the HTTP contract is `docs/architecture.md` §7.1. Source does not exist yet.
   adapter interface. Model ID and key come from configuration only. One
   provider in V1, no secondary provider.
 - Tests and checks: standard-library **unittest**, **ruff**; an offline
-  evaluation run with recorded provider responses (planned). Tests never call
-  the real provider.
+  replay of the last live evaluation run (`evals/recorded/latest.json`). Tests
+  never call the real provider.
 - Packaging: container image on server/cloud, private network only.
 
 Layout:
@@ -67,7 +70,7 @@ ai-assistant/
 │   ├── models.py       request/response schemas
 │   └── providers/      provider protocol, Gemini adapter, fake providers
 ├── content/            approved Markdown content pack (campus/, pois/); rules in content/README.md
-├── evals/              questions.json (exists); expected facts and recorded responses (later)
+├── evals/              questions.json; recorded/latest.json (last live run); reports/ (untracked)
 ├── tests/
 └── scripts/verify
 ```

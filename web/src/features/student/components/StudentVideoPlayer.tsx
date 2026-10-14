@@ -20,6 +20,10 @@ interface StudentVideoPlayerProps {
    * only pulled once.
    */
   active?: boolean
+  /** Replaces the "Trực tiếp" badge, e.g. "Video dự phòng" for a Tour's fallback video. */
+  badge?: string
+  /** Shown over the poster when there is neither a Quest stream nor a video source. */
+  emptyMessage?: string
 }
 
 const QUEST_WAITING: Record<'idle' | 'connecting' | 'offline' | 'error', string> = {
@@ -34,6 +38,8 @@ export function StudentVideoPlayer({
   statusLabel = 'Trực tiếp từ Robot AMR',
   onReplayNarration,
   active = true,
+  badge,
+  emptyMessage,
 }: StudentVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -51,6 +57,7 @@ export function StudentVideoPlayer({
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
   const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active)
   const questWaiting = questUrl && questStatus !== 'live' ? questStatus : null
+  const noSource = !questUrl && !streamUrl
 
   useEffect(() => {
     const video = videoRef.current
@@ -62,7 +69,7 @@ export function StudentVideoPlayer({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video || questUrl) return
+    if (!video || questUrl || !streamUrl) return
 
     const tryPlay = async () => {
       try {
@@ -124,6 +131,10 @@ export function StudentVideoPlayer({
         <div className="st-video__badges">
           {questWaiting ? (
             <span className="st-badge st-badge--dark">{questWaiting === 'connecting' ? 'Đang kết nối' : 'Mất tín hiệu'}</span>
+          ) : noSource ? (
+            <span className="st-badge st-badge--dark">Chưa có hình</span>
+          ) : badge ? (
+            <span className="st-badge st-badge--sample">{badge}</span>
           ) : sampleVideo ? (
             <span className="st-badge st-badge--sample">Video minh họa</span>
           ) : (
@@ -144,6 +155,12 @@ export function StudentVideoPlayer({
               <span className="st-btn__ic" aria-hidden="true"><RotateCcw size={16} /></span>
             </button>
           )}
+        </div>
+      )}
+
+      {noSource && emptyMessage && (
+        <div className="st-video__overlay" role="status">
+          <p>{emptyMessage}</p>
         </div>
       )}
 

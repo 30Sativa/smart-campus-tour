@@ -252,7 +252,7 @@ html.dark .st.st-x .st-x-bot { color: var(--x-lime); }
 /* tabbed side panel */
 .st.st-x .st-e-panel { border-radius: 26px; }
 .st.st-x .st-e-tabs { position: relative; margin: 12px; padding: 5px; border: 0; border-radius: 16px; background: var(--sunk); }
-.st.st-x .st-e-tabs__ind { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px - 12px) / 4); border-radius: 12px; background: var(--x-lime); box-shadow: 0 8px 20px -12px var(--x-glow); transform: translateX(calc(var(--tab, 0) * (100% + 4px))); transition: transform .45s var(--x-ease); }
+.st.st-x .st-e-tabs__ind { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc((100% - 10px - (var(--tabs, 4) - 1) * 4px) / var(--tabs, 4)); border-radius: 12px; background: var(--x-lime); box-shadow: 0 8px 20px -12px var(--x-glow); transform: translateX(calc(var(--tab, 0) * (100% + 4px))); transition: transform .45s var(--x-ease); }
 .st.st-x .st-e-tabs button { position: relative; z-index: 1; border-radius: 12px; color: var(--mute); transition: color .3s; }
 .st.st-x .st-e-tabs button:hover { color: var(--ink); }
 .st.st-x .st-e-tabs button[aria-selected="true"] { background: transparent; color: var(--x-on-lime); }

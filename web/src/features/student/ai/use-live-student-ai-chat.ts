@@ -12,7 +12,7 @@ import {
 const WELCOME: AiChatMessage = {
   id: 'welcome',
   sender: 'ai',
-  text: 'Chào bạn! Mình là trợ lý AI của chuyến tham quan. Bạn có thể hỏi mình về chuyến đi, robot hoặc điểm đang tham quan nhé.',
+  text: 'Chào bạn! Mình là trợ lý AI của chuyến tham quan. Bạn có thể hỏi mình về chuyến tham quan, robot dẫn đường hoặc cách mình xử lý câu hỏi của bạn nhé.',
   timestamp: 'Vừa xong',
 }
 

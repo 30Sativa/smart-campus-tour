@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Bot,
@@ -11,11 +11,19 @@ import {
 import type { StudentSession, StudentTourSnapshot } from '../student-types'
 
 interface StudentWaitingRoomProps {
-  session: StudentSession
+  /** Demo session; the invited page has no student identity and passes the texts below instead. */
+  session?: StudentSession
   snapshot: StudentTourSnapshot
+  heading?: string
+  intro?: string
+  meta?: string
+  /** The microphone check only matters where voice questions exist (the demo). */
+  showMicCheck?: boolean
+  /** Extra content under the welcome card, e.g. a fallback video link. */
+  children?: ReactNode
 }
 
-export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProps) {
+export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, showMicCheck = true, children }: StudentWaitingRoomProps) {
   const [isPlayingTestAudio, setIsPlayingTestAudio] = useState(false)
   const [audioTested, setAudioTested] = useState(false)
   const [micStatus, setMicStatus] = useState<'idle' | 'testing' | 'granted' | 'denied'>('idle')
@@ -91,11 +99,12 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
             <circle cx="32" cy="11" r="4" fill="#f4b860" />
           </svg>
           <span className="st-pill-status"><i />Đang chờ bắt đầu</span>
-          <h3>Xin chào, {session.studentName}!</h3>
+          <h3>{heading ?? `Xin chào, ${session?.studentName ?? 'bạn'}!`}</h3>
           <p>
-            Bạn đã được xác nhận vào phòng chờ của đoàn {session.groupCode}. Khi người điều hành nhấn bắt đầu, màn hình sẽ tự chuyển sang hình trực tiếp từ robot.
+            {intro ?? `Bạn đã được xác nhận vào phòng chờ của đoàn ${session?.groupCode ?? ''}. Khi người điều hành nhấn bắt đầu, màn hình sẽ tự chuyển sang hình trực tiếp từ robot.`}
           </p>
-          <p className="st-x-meta"><Clock size={14} /><span>{snapshot.schoolName} • Giờ dự kiến {snapshot.scheduledAt}</span></p>
+          <p className="st-x-meta"><Clock size={14} /><span>{meta ?? `${snapshot.schoolName} • Giờ dự kiến ${snapshot.scheduledAt}`}</span></p>
+          {children}
         </section>
 
         <div className="st-x-wait__side">
@@ -116,7 +125,7 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
               </button>
             </div>
 
-            <div className={micStatus === 'granted' ? 'st-x-check is-ok' : 'st-x-check'}>
+            {showMicCheck && <div className={micStatus === 'granted' ? 'st-x-check is-ok' : 'st-x-check'}>
               <span className="st-x-check__ic">{micStatus === 'granted' ? <CheckCircle2 size={20} /> : <Mic size={20} />}</span>
               <span className="st-x-check__tx">
                 <b>Kiểm tra Micro (Tùy chọn)</b>
@@ -125,18 +134,18 @@ export function StudentWaitingRoom({ session, snapshot }: StudentWaitingRoomProp
               <button type="button" onClick={handleTestMic} disabled={micStatus === 'testing'} className="st-chip-btn">
                 {micStatus === 'testing' ? 'Đang kiểm tra...' : micStatus === 'granted' ? 'Micro sẵn sàng' : 'Kiểm tra'}
               </button>
-            </div>
+            </div>}
           </div>
 
-          <h4 className="st-x-sec">Xem trước {String(stops.length).padStart(2, '0')} điểm dừng</h4>
-          <ol className="st-x-preview">
+          {stops.length > 0 && <h4 className="st-x-sec">Xem trước {String(stops.length).padStart(2, '0')} điểm dừng</h4>}
+          {stops.length > 0 && <ol className="st-x-preview">
             {stops.map((poi) => (
               <li key={poi.id}>
                 {poi.imageUrl ? <img src={poi.imageUrl} alt="" loading="lazy" /> : <span className="st-x-preview__n" aria-hidden="true">{poi.order}</span>}
                 <span className="st-x-preview__cap"><b>{String(poi.order).padStart(2, '0')}</b>{poi.title}</span>
               </li>
             ))}
-          </ol>
+          </ol>}
         </div>
       </div>
 

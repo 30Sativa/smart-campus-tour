@@ -48,7 +48,8 @@ public sealed class AskStudentQuestionCommandValidator : AbstractValidator<AskSt
 }
 
 public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository repository, IInvitationCodeService codes,
-    InvitationSettings settings, IAiAssistantClient assistant, StudentQuestionGate gate, TimeProvider clock)
+    InvitationSettings settings, IAiAssistantClient assistant, StudentQuestionGate gate, TimeProvider clock,
+    IStudentTourViewReader tour)
     : IRequestHandler<AskStudentQuestionCommand, StudentAnswer>
 {
     private static UnauthorizedException Invalid() =>
@@ -66,9 +67,9 @@ public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository re
             throw new TooManyRequestsException("Bạn hỏi hơi nhanh. Đợi một chút rồi hỏi tiếp nhé.");
         try
         {
-            // Authoritative Tour progress (current POI) is not implemented yet; until the dispatch use cases
-            // exist the snapshot is null and the assistant answers from general campus content (§7.1).
-            AssistantPoi? poi = null;
+            // POI snapshot from the Tour's progress columns: the current stop while the robot is at it, otherwise
+            // null and the assistant answers from general campus content (§7.1).
+            var poi = await tour.FindCurrentPoiAsync(command.TourId, ct);
             var turns = command.RecentTurns
                 .Select(t => new AssistantTurn(StudentQuestionText.Normalize(t.Question), StudentQuestionText.Normalize(t.Answer)))
                 .ToList();

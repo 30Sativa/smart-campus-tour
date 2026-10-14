@@ -21,3 +21,8 @@
 @media (max-width: 600px) {
   .st .st-invitation-card { margin-top: 24px; padding: 20px; }
 }
+/* Invited page: session status under the shared Tour screens, fallback video link. */
+.st .st-invitation-status:empty { display: none; }
+.st .st-invitation-status { padding-bottom: 24px; }
+.st .st-invitation-fallback { margin-top: 12px; }
+.st .st-invitation-fallback a { text-decoration: underline; font-weight: 600; }

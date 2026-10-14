@@ -36,7 +36,9 @@ Terminal 2 — tạo/reuse fixture và chạy API HTTPS ở cổng 7093:
 Lần đầu, script tạo database mới tên `SmartCampusStudentAiLocal_<guid>` từ
 schema v1.1, một Tour `RUNNING`, một lời mời `INDIVIDUAL` hạn 24 giờ. Script
 không ghi vào database sản phẩm đã cấu hình. Email worker tắt; dữ liệu liên hệ
-dùng miền `example.test`. Route không có robot hay stop. Các thông tin cục bộ
+dùng miền `example.test`. Route có ba stop thử `[TEST] ...` (chỉ dữ liệu lộ trình),
+không có robot, livestream hay tiến độ. Fixture tạo trước bản này không có stop:
+chạy lại với `-NewFixture`. Các thông tin cục bộ
 được lưu vào file Git bỏ qua:
 
 - `backend/student-ai-entry.env`: URL `/tour/{tourId}` và mã test.
@@ -63,7 +65,10 @@ npm run dev -- --host localhost --port 5174 --strictPort
 
 1. Mở URL trong `backend/student-ai-entry.env`, nhập mã và bấm **Vào Tour**.
    Dùng cùng hostname `localhost`; cookie Student thuộc backend HTTPS.
-2. Kiểm tra **Tour đang diễn ra**, **Phiên lời mời cá nhân** và Trợ lý AI.
+2. Trang dùng giao diện giống Tour demo: video (báo *Livestream chưa được kết
+   nối*), thanh hành trình và ba thẻ **Thuyết minh**, **Lộ trình**, **Hỏi AI**
+   (không có bản đồ 2D vì chưa có vị trí robot). Đầu trang ghi
+   **Phiên lời mời cá nhân**. Mở thẻ **Hỏi AI** để hỏi.
 3. Hỏi: **LiDAR và camera Astra hỗ trợ robot dẫn Tour như thế nào?**
    Chờ trạng thái tra cứu kết thúc; kiểm tra câu trả lời nói đúng vai trò của hai
    cảm biến theo nội dung đã duyệt. UI hiện chưa hiển thị danh sách nguồn.
@@ -73,6 +78,15 @@ npm run dev -- --host localhost --port 5174 --strictPort
    trang, nên reload sẽ xóa lịch sử chat.
 6. Muốn chuyển từ trình duyệt này sang trình duyệt khác, bấm **Thoát phiên**
    trước. Cùng lời mời đang hoạt động ở browser khác sẽ trả lỗi 409.
+7. (Tùy chọn, chỉ trên database test `SmartCampusStudentAiLocal_<guid>`) Giả lập
+   robot đang ở stop 1 để thấy thuyết minh và ngữ cảnh POI của AI. Trang tự cập
+   nhật sau tối đa 5 giây; đặt `CurrentStep = NULL` để trả lại như cũ:
+
+   ```sql
+   DECLARE @stop UNIQUEIDENTIFIER = (SELECT Id FROM dbo.RouteStops WHERE StopOrder = 1);
+   UPDATE dbo.Tours SET CurrentStep = 'OBSERVING', CurrentRouteStopId = @stop,
+     LastArrivedRouteStopId = @stop WHERE State = 'RUNNING';
+   ```
 
 Nếu UI báo mất kết nối, kiểm tra ba terminal và đúng cổng. Lỗi 503:
 kiểm tra service 8091, service key đồng nhất và quyền/quota Gemini. Không đổi sang

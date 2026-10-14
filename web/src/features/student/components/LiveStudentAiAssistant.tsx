@@ -10,7 +10,12 @@ const SUGGESTIONS = ['Robot dùng cảm biến gì?', 'Chuyến tham quan kéo d
  * Voice input stays off until server-side STT exists: browser speech recognition may send audio to a
  * third party, which the privacy rules do not allow by default.
  */
-export function LiveStudentAiAssistant({ tourId, shared = false }: { tourId: string; shared?: boolean }) {
+export function LiveStudentAiAssistant({ tourId, shared = false, poiName }: {
+  tourId: string
+  shared?: boolean
+  /** The stop the robot is at, for the context label only: the backend snapshots the POI itself (§7.1). */
+  poiName?: string
+}) {
   const { messages, isTyping, askAi, retry } = useLiveStudentAiChat(tourId)
   return (
     <AiChatPanel
@@ -18,7 +23,7 @@ export function LiveStudentAiAssistant({ tourId, shared = false }: { tourId: str
       isTyping={isTyping}
       askAi={askAi}
       retry={retry}
-      contextLabel="Thông tin chung của chuyến tham quan"
+      contextLabel={poiName ? `Điểm ${poiName} và thông tin chung` : 'Thông tin chung của chuyến tham quan'}
       suggestions={SUGGESTIONS}
       shared={shared}
       maxLength={MAX_QUESTION_LENGTH}
