@@ -1400,7 +1400,7 @@ never publishes `/cmd_vel`, sets Nav2 goals, alters `/speed_limit`, or makes a
 movement/safety decision. Student audio/Q&A and livestream use browser/cloud
 paths; their final media transports remain undecided.
 
-### 7.1 Student private Q&A contract (accepted, not implemented)
+### 7.1 Student private Q&A contract (implemented; integration verification pending)
 
 Decision record: [ADR-0016](decisions/0016-student-qa-assistant-stack.md).
 Business rules: `docs/requirements/campus-tour-scope.md` (P0-07, R1-06,
@@ -1415,6 +1415,21 @@ The browser never calls `ai-assistant` or the LLM provider directly. The
 backend owns access checks and the POI snapshot; `ai-assistant` is stateless,
 has no database access and never receives roster data, email, access codes,
 session tokens or account identities.
+
+Implementation: `ai-assistant/` (service), backend
+`Features/StudentQuestions/AskStudentQuestionCommand.cs`,
+`Infrastructure/Integrations/Assistant/HttpAiAssistantClient.cs` and
+`Api/Controllers/StudentQuestionsController.cs`, and the web panel on the invited
+Student page (`web/src/features/student/components/LiveStudentAiAssistant.tsx`,
+shown only while the Tour is `RUNNING`). The labelled demo Tour page keeps its
+simulated answers. Voice input is off on the live page until server-side STT
+(P1-01).
+
+Backend configuration (opt-in, validated at startup; secrets outside Git):
+`AiAssistant:BaseUrl` (absolute http(s) URL of the private assistant) and
+`AiAssistant:ServiceKey` (≥ 16 characters, equal to the assistant's
+`AI_SERVICE_KEY`). Without `AiAssistant:BaseUrl` the endpoint returns 503
+`AI_UNAVAILABLE`. Student sessions also require `Invitations:Enabled` (§3.2.3).
 
 #### Public endpoint (backend)
 
@@ -1439,7 +1454,7 @@ session tokens or account identities.
 
 | Status | Code | Meaning |
 |---|---|---|
-| 400 | (validation errors) | Empty/too long text, bad UUID, too many turns |
+| 400 | (validation errors, existing `BaseResponse` format) | Empty/too long text, missing/empty `questionId`, too many or too long turns |
 | 401 | — | No, expired, closed or revoked session; same generic body as §3.2.3 |
 | 409 | `TOUR_NOT_RUNNING` | Tour is not `RUNNING` at acceptance or at answer time |
 | 409 | `QUESTION_ID_REUSED` | Same `questionId` with different text |

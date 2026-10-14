@@ -46,6 +46,18 @@ public sealed class GlobalExceptionHandler(
                         code = conflictException.Code,
                         fields = conflictException.FieldErrors
                     }),
+            TooManyRequestsException tooMany => (
+                StatusCodes.Status429TooManyRequests,
+                tooMany.Message,
+                (object?)new { code = tooMany.Code }),
+            ServiceUnavailableException unavailable => (
+                StatusCodes.Status503ServiceUnavailable,
+                unavailable.Message,
+                (object?)new { code = unavailable.Code }),
+            GatewayTimeoutException timeout => (
+                StatusCodes.Status504GatewayTimeout,
+                timeout.Message,
+                (object?)new { code = timeout.Code }),
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "An unexpected error occurred.",

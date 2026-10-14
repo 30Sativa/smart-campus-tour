@@ -8,9 +8,28 @@ using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Threading.RateLimiting;
 
-var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args);
+var studentAiLocal = args.Contains(StudentAiLocalCommand.Argument, StringComparer.Ordinal);
+var registrationLocal = args.Contains(RegistrationLocalCommand.Argument, StringComparer.Ordinal);
+var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args.Where(argument => argument != StudentAiLocalCommand.Argument && argument != RegistrationLocalCommand.Argument).ToArray());
 var demoPoiSeedCommand = DemoPoiSeedCommand.Parse(initialAdminSeedCommand.GetHostArguments());
 var builder = WebApplication.CreateBuilder(demoPoiSeedCommand.GetHostArguments());
+if (studentAiLocal || registrationLocal)
+{
+    try
+    {
+        if (initialAdminSeedCommand.Requested || demoPoiSeedCommand.Requested || (studentAiLocal && registrationLocal))
+            throw new StudentAiLocalSetupException("Run local setup separately from other seed commands.");
+        if (registrationLocal) await RegistrationLocalCommand.PrepareAsync(builder);
+        else await StudentAiLocalCommand.PrepareAsync(builder);
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception is StudentAiLocalSetupException ? exception.Message
+            : $"Local setup failed ({exception.GetType().Name}). Check local SQL Server access, schema and filesystem permissions.");
+        Environment.ExitCode = 1;
+        return;
+    }
+}
 if (demoPoiSeedCommand.Requested)
 {
     Environment.ExitCode = await demoPoiSeedCommand.RunAsync(builder, initialAdminSeedCommand.Requested);
@@ -36,6 +55,11 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
         client.Timeout = TimeSpan.FromSeconds(20));
     if (builder.Configuration.GetValue<bool?>("Invitations:EmailWorkerEnabled") != false)
         builder.Services.AddHostedService<SmartCampus.Api.Invitations.InvitationEmailWorker>();
+    // Student private Q&A (docs/architecture.md §7.1): opt-in via AiAssistant:BaseUrl, validated at startup.
+    builder.Services.AddSingleton(new SmartCampus.Infrastructure.Integrations.Assistant.AiAssistantConfiguration(builder.Configuration));
+    builder.Services.AddHttpClient<SmartCampus.Application.Common.Abstractions.Assistant.IAiAssistantClient,
+        SmartCampus.Infrastructure.Integrations.Assistant.HttpAiAssistantClient>(client =>
+        client.Timeout = TimeSpan.FromSeconds(20));
 }
 
 // The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.

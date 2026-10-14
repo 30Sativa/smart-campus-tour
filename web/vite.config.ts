@@ -2,9 +2,14 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { readFileSync } from 'node:fs'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Optional trusted local certificate for invitation email/browser tests.
+  server: process.env.LOCAL_HTTPS_PFX ? {
+    https: { pfx: readFileSync(process.env.LOCAL_HTTPS_PFX), passphrase: process.env.LOCAL_HTTPS_PASSWORD },
+  } : undefined,
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',

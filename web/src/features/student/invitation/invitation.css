@@ -14,6 +14,10 @@
 .st .st-invitation-card label { margin-top: 20px; }
 .st .st-invitation-card input { margin-top: 8px; }
 .st .st-invitation-submit { margin-top: 20px; padding-inline: 24px; }
+/* Live Q&A inside the invitation card: undo the card's paragraph spacing for chat bubbles. */
+.st .st-invitation-ai { margin-top: 20px; }
+.st .st-invitation-ai .st-ai p { margin-top: 0; }
+.st .st-invitation-ai .st-ai__err button { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; text-decoration: underline; }
 @media (max-width: 600px) {
   .st .st-invitation-card { margin-top: 24px; padding: 20px; }
 }

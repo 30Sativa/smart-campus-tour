@@ -22,11 +22,8 @@ public sealed class StudentAccessController(ISender sender, IConfiguration confi
 
     private async Task<ActionResult<BaseResponse<StudentTourInfo?>>> Access(Guid tourId, string operation, string? code, CancellationToken ct)
     {
-        var origin = Request.Headers.Origin.ToString();
-        var allowed = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (origin.Length > 0 && origin != $"{Request.Scheme}://{Request.Host}" && !allowed.Contains(origin, StringComparer.Ordinal))
-            throw new SmartCampus.Application.Common.Exceptions.ForbiddenException("Nguồn truy cập không được phép.");
-        var name = "campus_tour_" + tourId.ToString("N");
+        StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        var name = StudentSessionCookie.Name(tourId);
         var options = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None,
             Path = $"/api/student/tours/{tourId:D}", IsEssential = true };
         // Register before dispatch: exception middleware may clear existing headers.

@@ -81,6 +81,24 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_AssistantErrors_ReturnTheirCodes()
+    {
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+        foreach (var (exception, code) in new (Exception, string)[]
+        {
+            (new TooManyRequestsException("Slow down."), "RATE_LIMITED"),
+            (new ServiceUnavailableException("Assistant down.", "AI_UNAVAILABLE"), "AI_UNAVAILABLE"),
+            (new GatewayTimeoutException("Assistant slow.", "AI_TIMEOUT"), "AI_TIMEOUT")
+        })
+        {
+            var context = CreateHttpContext();
+            await handler.TryHandleAsync(context, exception, CancellationToken.None);
+            using var response = await ReadResponseAsync(context);
+            Assert.Equal(code, response.RootElement.GetProperty("errors").GetProperty("code").GetString());
+        }
+    }
+
+    [Fact]
     public async Task TryHandleAsync_GenericConflict_PreservesNullErrors()
     {
         var context = CreateHttpContext();
@@ -120,6 +138,9 @@ public sealed class GlobalExceptionHandlerTests
         { new UnauthorizedException("A valid account identity is required."), HttpStatusCode.Unauthorized },
         { new NotFoundException("Robot was not found."), HttpStatusCode.NotFound },
         { new ConflictException("Robot is already assigned."), HttpStatusCode.Conflict },
+        { new TooManyRequestsException("Slow down."), HttpStatusCode.TooManyRequests },
+        { new ServiceUnavailableException("Assistant down.", "AI_UNAVAILABLE"), HttpStatusCode.ServiceUnavailable },
+        { new GatewayTimeoutException("Assistant slow.", "AI_TIMEOUT"), HttpStatusCode.GatewayTimeout },
         { new Exception("Unexpected."), HttpStatusCode.InternalServerError }
     };
 

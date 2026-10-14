@@ -3,6 +3,8 @@
 Implemented contract: docs/architecture.md Section 3.2.3; decision:
 docs/decisions/0015-invitation-issuance-and-resend-email.md.
 
+Local browser happy case: `backend/docs/registration-local.md`.
+
 ## Backend configuration
 
 Invitations are opt-in. Keep API/crypto keys out of Git and VITE_* variables.

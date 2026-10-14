@@ -5,6 +5,7 @@ import type { ApiResponse } from '../../../api/contracts/shared'
 import '../student.css'
 import '../../landing/landing.css'
 import './invitation.css'
+import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
 
 type TourInfo = { tourId: string; tourName: string; tourState: string; scheduledStartAt: string; invitationExpiresAt: string; rowType: string; fallbackVideoUrl: string | null }
 const path = (id: string) => `/api/student/tours/${encodeURIComponent(id)}`
@@ -51,7 +52,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         <p>{info.tourName} · {date(info.scheduledStartAt)}</p>
         <p className="mt-2 text-sm">{info.rowType === 'SHARED_VIEWING' ? 'Phiên dành cho màn hình xem chung.' : 'Phiên lời mời cá nhân.'} Mã còn hạn tới {date(info.invitationExpiresAt)}.</p>
         {info.fallbackVideoUrl ? <a className="mt-4 inline-block underline" href={info.fallbackVideoUrl} target="_blank" rel="noreferrer">Xem video dự phòng</a>
-          : <p className="mt-4 text-sm text-slate-600">{info.tourState === 'RUNNING' ? 'Livestream và nội dung hướng dẫn chưa được kết nối cho buổi này.' : 'Buổi tham quan sẽ bắt đầu khi nhân viên vận hành mở Tour.'}</p>}
+          : <p className="mt-4 text-sm text-slate-600">{info.tourState === 'RUNNING' ? 'Livestream chưa được kết nối cho buổi này. Bạn có thể hỏi Trợ lý AI bên dưới.' : 'Buổi tham quan sẽ bắt đầu khi nhân viên vận hành mở Tour.'}</p>}
+        {info.tourState === 'RUNNING' && <div className="st-invitation-ai">
+          <LiveStudentAiAssistant tourId={tourId} shared={info.rowType === 'SHARED_VIEWING'} />
+        </div>}
       </> : <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
         <h2 className="mb-3 text-2xl font-semibold">Nhập mã truy cập</h2>
         <p className="mb-5 text-sm text-slate-600">Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>

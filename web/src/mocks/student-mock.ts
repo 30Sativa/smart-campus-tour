@@ -240,20 +240,32 @@ export function mockGetStudentSnapshot(tourId: string): StudentTourSnapshot {
   }
 }
 
+/** Prefix on every simulated answer so the labelled demo is never mistaken for the real assistant. */
+export const DEMO_ANSWER_PREFIX = '(Câu trả lời mẫu của phiên demo, chưa dùng AI thật) '
+
+/**
+ * Simulated answers for the labelled demo Tour only. The invited live page calls the real assistant
+ * (docs/architecture.md §7.1). Topics are checked most-specific first so "chính sách học bổng" is not
+ * mistaken for a library question about "sách".
+ */
 export async function mockAskAiResponse(question: string, poiContext?: string): Promise<string> {
   // Simulate delay
   await new Promise((resolve) => setTimeout(resolve, 800))
 
-  const cleanQ = question.toLowerCase()
-  if (cleanQ.includes('mấy tầng') || cleanQ.includes('diện tích') || cleanQ.includes('sách')) {
-    return `Thư viện Thông minh của trường có 4 tầng rộng hơn 3.200m², trang bị hơn 50.000 đầu sách chuyên khảo và hệ thống trạm mượn trả sách tự động tích hợp thẻ sinh viên thông minh nhé!`
+  const q = question.toLowerCase()
+  const has = (...words: string[]) => words.some((w) => q.includes(w))
+  if (has('học bổng', 'học phí', 'tuyển sinh', 'ngành', 'điểm chuẩn')) {
+    return DEMO_ANSWER_PREFIX +
+      'Phiên demo chưa có dữ liệu tuyển sinh hay học bổng. Ở buổi tham quan thật, trợ lý chỉ trả lời theo nội dung nhà trường đã duyệt; thông tin tuyển sinh chính thức bạn xem trên trang của trường nhé.'
   }
-  if (cleanQ.includes('học bổng') || cleanQ.includes('tuyển sinh') || cleanQ.includes('ngành')) {
-    return `Trường có các chính sách học bổng từ 30% đến 100% học phí dành riêng cho học sinh các trường THPT có thành tích xuất sắc. Bạn có thể tham khảo thêm tại cổng thông tin tuyển sinh chính thức!`
+  if (has('robot', 'amr', 'tự hành', 'lidar', 'cảm biến')) {
+    return DEMO_ANSWER_PREFIX +
+      'Robot dẫn đường là robot di động tự hành (AMR), dùng cảm biến LiDAR làm chính và chạy phần mềm ROS 2 với Nav2 để tự đi theo tuyến đã chuẩn bị.'
   }
-  if (cleanQ.includes('robot') || cleanQ.includes('amr') || cleanQ.includes('tự hành')) {
-    return `Robot bạn đang thấy dẫn đường là Robot AMR tự hành của trường, sử dụng cảm biến LiDAR và thuật toán SLAM ROS 2 để lập bản đồ và dẫn đường tự động không cần đường ray!`
+  if (has('thư viện', 'mấy tầng', 'diện tích', 'đầu sách')) {
+    return DEMO_ANSWER_PREFIX +
+      'Thư viện Thông minh trong phiên demo là điểm tham quan minh họa; số liệu thật của thư viện sẽ có khi nhà trường duyệt nội dung cho buổi tham quan.'
   }
-
-  return `Chào bạn! Về câu hỏi "${question}" tại khu vực ${poiContext || 'khuôn viên'}: Đây là một điểm rất đặc biệt của trường. Khu vực này luôn mở cửa phục vụ sinh viên từ 7:30 đến 21:00 các ngày trong tuần.`
+  return DEMO_ANSWER_PREFIX +
+    `Bạn vừa hỏi về khu vực ${poiContext || 'khuôn viên'}. Phiên demo chỉ có vài câu trả lời minh họa; ở buổi tham quan thật trợ lý sẽ trả lời theo nội dung đã duyệt hoặc nói rõ khi chưa có thông tin.`
 }

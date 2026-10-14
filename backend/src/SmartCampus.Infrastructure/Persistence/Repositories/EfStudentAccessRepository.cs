@@ -18,6 +18,13 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
     public Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct) => context.AuditLogs
         .AnyAsync(a => a.Action == "INVITATION_ENTERED" && a.EntityId == invitationId.ToString("D") && a.EntityType == "Invitation", ct);
     public void AddAudit(AuditLog audit) => context.AuditLogs.Add(audit);
+    public Task<StudentQuestionAccess?> FindQuestionAccessAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct) =>
+        context.BrowserSessions.AsNoTracking()
+            .Where(s => s.SessionTokenHash == tokenHash && s.EndedAt == null && s.ExpiresAt > now &&
+                s.Invitation.RevokedAt == null && s.Invitation.ExpiresAt > now && s.Invitation.RosterRow.IsActive &&
+                s.Invitation.RosterRow.Registration.State == "APPROVED" && s.Invitation.RosterRow.Registration.TourId == tourId)
+            .Select(s => new StudentQuestionAccess(s.Id, s.Invitation.RosterRow.Registration.Tour.State, s.Invitation.RosterRow.RowType))
+            .SingleOrDefaultAsync(ct);
     // Close before INSERT to respect the filtered UNIQUE index in the same Tour transaction.
     public Task CloseExpiredAsync(Guid invitationId, DateTimeOffset now, CancellationToken ct) =>
         context.BrowserSessions.Where(s => s.InvitationId == invitationId && s.EndedAt == null && s.ExpiresAt <= now)
