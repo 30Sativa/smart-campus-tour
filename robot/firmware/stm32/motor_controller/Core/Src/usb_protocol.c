@@ -9,14 +9,14 @@
 #include "usbd_cdc_if.h"
 
 #include <ctype.h>
-
-_Static_assert(MOTOR_ISR_WATCHDOG_MS > CMD_TIMEOUT_MS,
-               "ISR watchdog is a backstop: it must outlast the main-loop CMD timeout");
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+_Static_assert(MOTOR_ISR_WATCHDOG_MS > CMD_TIMEOUT_MS,
+               "ISR watchdog is a backstop: it must outlast the main-loop CMD timeout");
 
 #define PROTOCOL_TX_BUFFER_SIZE 224U
 #define PROTOCOL_TX_BUFFER_COUNT 2U

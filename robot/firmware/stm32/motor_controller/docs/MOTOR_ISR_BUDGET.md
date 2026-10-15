@@ -62,7 +62,7 @@ nên lệnh cuối có thể đã đi trước lúc host chết tới 50 ms. M�
 (khoảng 25 ms) cũng cộng thêm độ trễ phát hiện. Motor luôn dừng tức thì, không
 có dốc giảm tốc (giữ nguyên hành vi cũ).
 
-| Tình huống | Đường dừng | Thời gian dự kiến tính từ sự cố |
+| Tình huống | Đường dừng | Thời gian **dự kiến** tính từ sự cố (chưa đo trên MCU) |
 |---|---|---|
 | Ctrl+C bridge, E-stop, `STOP` | `STOP` được xử lý | ≤ 1 vòng lặp (khoảng 30 ms) |
 | `kill -9` bridge, rút cáp USB, host treo | Timeout vòng lặp chính 300 ms | **0.25–0.40 s** |
@@ -107,26 +107,7 @@ arm-none-eabi-nm motor_controller.elf | grep watchdog_ticks_left
 và symbol `watchdog_ticks_left` tồn tại. Nếu hàm vẫn mở đầu bằng
 `push {r7, lr}`, nghĩa là đang build từ source cũ.
 
-## Bench (người làm, bánh nhấc khỏi sàn)
+## Bench
 
-1. CubeIDE: Clean + Build cấu hình **Debug**, chạy phép kiểm ở mục trên, rồi
-   nạp qua ST-Link (`FLASHING.md`).
-2. Kê robot lên giá cho bánh quay tự do, E-stop trong tầm tay. Chỉ chạy
-   `manual_mode.launch.py`, không chạy Nav2. Ghi bag `/robot_01/wheel/odom`,
-   `/robot_01/imu/data`, `/robot_01/cmd_vel`, `/rosout`.
-3. Cho chạy thẳng lần lượt ở 0, 50, 100, 150, 200, 250 mm/s, mỗi mức khoảng
-   20 s, bằng `cmd_vel_manual`. **Đạt:**
-   - `wheel/odom` ≥ 35 Hz ở **mọi** mức (trước: 40 → 11.5 → 3.5 Hz).
-   - 0 `ERR,bad_command`, 0 `No STM32 feedback`, 0 safe stop.
-   - `imu/data` khoảng 20 Hz khi bánh đang quay.
-4. Dừng an toàn, mỗi bài 3 lần ở 100 mm/s. Đo từ log `/rosout`/bag (hoặc
-   quay video 60 fps) đến lúc bánh đứng yên:
-   - Ctrl+C bridge: **≤ 0.1 s**.
-   - `kill -9` bridge **hoặc** rút cáp USB STM32: **0.25–0.40 s**; trên 0.45 s
-     là không đạt.
-   - Ngừng phát `cmd_vel_manual` khi bridge còn chạy: khoảng 0.5 s (theo
-     `cmd_timeout`/`nav_timeout`), FB báo `STOP`.
-
-   Watchdog trong ngắt chỉ kích hoạt khi vòng lặp chính kẹt, không ép được từ
-   bên ngoài; đã kiểm bằng test host và mô phỏng.
-5. Đạt cả các bước trên mới chạy lại bài A → B có người giám sát.
+Xem `BENCH_STM32_LINK.md`: sao lưu, baseline, kiểm tra build, đo bằng
+`scripts/bench_link.py`, tiêu chí đạt và rollback.
