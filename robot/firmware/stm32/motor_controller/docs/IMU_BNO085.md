@@ -62,6 +62,9 @@ Ghi chú: `CLK` chưa đạt 90 kHz như tính toán vì ở SYSCLK 16 MHz thì
 
 ## Ngân sách thời gian của main loop
 
+Ngắt STEP 50 kHz từng chiếm 49–93 % CPU ở build Debug; xem
+`MOTOR_ISR_BUDGET.md` (đã sửa).
+
 `App_Loop()` là vòng lặp co-operative duy nhất: `Motor_Update()`,
 `Protocol_Update()` (feedback + watchdog lệnh 300 ms) và
 `BNO08x_ReadRotationVector()` dùng chung nó.

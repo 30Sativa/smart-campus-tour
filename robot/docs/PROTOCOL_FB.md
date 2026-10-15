@@ -22,7 +22,7 @@ file này tồn tại.
 
 | Lệnh | Ý nghĩa |
 |---|---|
-| `CMD,<seq>,<left_mm_s>,<right_mm_s>` | Tốc độ bánh. Phải gửi đều, im quá 300 ms là watchdog cắt động cơ |
+| `CMD,<seq>,<left_mm_s>,<right_mm_s>` | Tốc độ bánh. Phải gửi đều, im quá 300 ms là watchdog cắt động cơ. Dự phòng: ngắt TIM2 tự dừng phát xung sau 500 ms không có `CMD` hợp lệ, kể cả khi vòng lặp chính kẹt (`firmware/stm32/motor_controller/docs/MOTOR_ISR_BUDGET.md`) |
 | `STOP,<seq>` | Dừng ngay |
 | `TARE,<seq>` | Đặt hướng hiện tại = 0° |
 | `TARE,<seq>,<deg>` | Đặt hướng hiện tại = `<deg>` |

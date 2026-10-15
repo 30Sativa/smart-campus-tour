@@ -15,8 +15,20 @@ for t in test_bno08x_parse test_usb_rx_queue; do
         -lm -o "$out/$t"
 done
 
+# motor_core.c chay voi main.h gia (tests/stubs) va -O0 nhu build Debug cua
+# CubeIDE; #pragma optimize trong file van ap dung nhu tren MCU.
+gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
+    -I "$root/tests/stubs" -I "$root/Core/Inc" \
+    "$root/tests/test_motor_core.c" "$root/Core/Src/motor/motor_core.c" \
+    -lm -o "$out/test_motor_core"
+
+gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
+    -I "$root/tests/stubs" -I "$root/Core/Inc" \
+    "$root/tests/test_usb_protocol.c" "$root/Core/Src/usb_protocol.c" \
+    -lm -o "$out/test_usb_protocol"
+
 echo "== run =="
-for t in test_bno08x_parse test_usb_rx_queue; do
+for t in test_bno08x_parse test_usb_rx_queue test_motor_core test_usb_protocol; do
     echo "-- $t"
     "$out/$t"
 done
