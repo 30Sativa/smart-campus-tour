@@ -53,14 +53,16 @@ beforeEach(() => {
   clients = []; submitAttempts = []; failSubmit = false; failUpdate = false; replacedVersion = null; cancelledVersion = null; missingRegistration = false
   useAuthStore.getState().setAuth('real-test-token', { userId: 'owner', username: 'real.representative', role: 'Representative' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
-    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer real-test-token')
+    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer real-test-token')
     const url = new URL(input, 'https://api.example.test')
     if (url.pathname === '/api/registrations/registration/invitations')
       return response({ enabled: false, canIssue: false, items: [] })
     const path = url.pathname.replace('/api/representative', '')
     if (options?.method === 'POST' && path === '/tours/tour/registrations') {
       const payload = JSON.parse(options.body as string) as RegistrationInput
-      submitAttempts.push({ key: (options.headers as Record<string, string>)['Idempotency-Key'], input: payload })
+      const requestId = new Headers(options.headers).get('Idempotency-Key')
+      expect(requestId).not.toBeNull()
+      submitAttempts.push({ key: requestId!, input: payload })
       if (failSubmit) { failSubmit = false; throw new TypeError('Connection lost after commit') }
       registration = { ...registration, roster: payload.roster, summary: { ...registration.summary, ...payload, rowCount: payload.roster.length }, contactName: payload.contactName, contactEmail: payload.contactEmail }
       return response({ id: registration.summary.id })

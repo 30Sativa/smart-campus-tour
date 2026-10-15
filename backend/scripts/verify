@@ -20,6 +20,8 @@ if [ ! -f "$SOLUTION" ]; then
   exit 1
 fi
 
+bash -n deploy/init-db.sh scripts/test-deployment
+
 "$DOTNET" restore "$SOLUTION"
 "$DOTNET" build "$SOLUTION" -warnaserror --no-restore
 "$DOTNET" test "$SOLUTION" --no-build

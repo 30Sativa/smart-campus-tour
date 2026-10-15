@@ -26,6 +26,8 @@ export type MapPose = { x: number; y: number; yaw: number }
 
 export type MapConfig = {
   mapKey: string
+  /** Raster metadata exists only for registered occupancy snapshots. */
+  grid?: { resolution: number; originX: number; originY: number; widthPx: number; heightPx: number }
   /** map metres -> 3D scene ground (u, v); the scene position is (u, 0, -v), Y up. */
   scene: { transform: Affine2D; calibrated: boolean; modelKey?: string }
   /** map metres -> Student 2D map in percent of its drawing (0-100 across, 0-100 down). */

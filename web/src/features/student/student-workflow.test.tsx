@@ -6,6 +6,7 @@ import StudentTourPage from '../../routes/student/StudentTourPage'
 import { useStudentStore } from './student-store'
 
 const clients: QueryClient[] = []
+const scrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
 
 function renderStudentApp(initialPath = '/tour/tour-101') {
   const client = new QueryClient({
@@ -31,21 +32,25 @@ function renderStudentApp(initialPath = '/tour/tour-101') {
 beforeEach(() => {
   useStudentStore.getState().clearSession()
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+  // jsdom has no layout/scrolling; retain the real AI component and workflow.
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, writable: true, value: vi.fn() })
   // Mock HTMLMediaElement play
   window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
   window.HTMLMediaElement.prototype.pause = vi.fn()
 })
 
 afterEach(() => {
+  if (scrollIntoViewDescriptor) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', scrollIntoViewDescriptor)
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
   clients.splice(0).forEach((client) => client.clear())
   vi.restoreAllMocks()
 })
 
-describe('Student Tour workflow (Scope Mục 5 & UC-05)', () => {
+describe('Legacy fixture Student Tour workflow (non-GUID Tour IDs)', () => {
   it('renders Join Form by default when no session exists', async () => {
     renderStudentApp('/tour/tour-101')
 
-    expect(await screen.findByRole('heading', { level: 2, name: /Tham quan/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: /Sẵn sàng.*khám phá/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/Mã đoàn/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Họ và tên/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Vào buổi tham quan/i })).toBeInTheDocument()
@@ -72,16 +77,16 @@ describe('Student Tour workflow (Scope Mục 5 & UC-05)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Vào buổi tham quan/i }))
 
     // Tour-101 is Running, so after match it enters Live Tour directly
-    const studentNames = await screen.findAllByText(/Nguyễn Văn An/i)
-    expect(studentNames.length).toBeGreaterThan(0)
-
     const statusElements = await screen.findAllByText(/Đang giới thiệu/i)
     expect(statusElements.length).toBeGreaterThan(0)
+    expect(useStudentStore.getState().session?.studentName).toBe('Nguyễn Văn An')
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
 
     expect(screen.getAllByText(/Thuyết minh điểm dừng/i)[0]).toBeInTheDocument()
-    expect(screen.getAllByText(/Bản đồ 2D/i)[0]).toBeInTheDocument()
-    expect(screen.getAllByText(/Trợ lý AI/i)[0]).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Bản đồ 2D' }))
+    expect(screen.getByRole('tabpanel', { name: 'Bản đồ 2D' })).toBeVisible()
+    fireEvent.click(screen.getByRole('tab', { name: 'Hỏi AI' }))
+    expect(screen.getByRole('tabpanel', { name: 'Hỏi AI' })).toBeVisible()
     expect(screen.getAllByText('Video minh họa')[0]).toBeInTheDocument()
   })
 

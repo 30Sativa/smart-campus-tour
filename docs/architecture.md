@@ -1548,12 +1548,32 @@ the data-use condition of the provider tier.
 | `robot/` Docker profiles | GitHub Actions / local Docker | `docker compose --profile debug` or `--profile sim` | development/simulation only |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
-| `backend/` | <!-- TODO(WP2) --> | <!-- TODO(WP2): docker image? dotnet publish? --> | AWS EC2 |
+| `backend/` | multi-stage .NET 10 image (`backend/Dockerfile`) | `backend/docker-compose.yml`: HTTPS API + SQL Server + one-shot database bootstrap | one x86_64 AWS EC2 |
 | `ai-assistant/` | Python 3.11+ / FastAPI (ADR-0016); build pipeline TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see
 [ADR-0002](decisions/0002-manual-stlink-flash-no-can-bootloader.md).
+
+### Backend EC2 deployment
+
+`backend/docs/ec2-deployment.md` records configuration, TLS, secrets, initial Admin,
+backup and smoke-test commands for the single-instance deployment. Kestrel
+terminates TLS on container port 8443, published as host 443; the API runs as a
+non-root user. SQL Server 2022 Express is the default edition, uses a persistent
+named volume and an internal Docker network, and publishes no host database port.
+The API has a separate outbound network for invitation delivery.
+
+The one-shot `db-init` waits for SQL health, applies the existing v1.1 snapshot
+transactionally only to an empty database, marks its canonical snapshot hash in
+database metadata, and provisions the dedicated `smartcampus_api` login. It
+rejects existing unmarked/different snapshots instead of migrating them. Runtime
+permissions preserve append-only AuditLogs/TourEvents, grant writes for current
+implemented features, and grant read access only to Tour/route/robot/branch data.
+This deployment introduces no API route or schema migration. The API process
+probe expects 401 from the existing refresh route without a cookie; it is not a
+database/business readiness check. Docker smoke testing and real EC2/browser TLS
+validation remain separate from the normal backend verification script.
 
 
 ### Physical robot deployment

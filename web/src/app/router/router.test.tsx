@@ -82,7 +82,8 @@ describe('route table', () => {
           role: 'Admin',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
-      return new Response(JSON.stringify({ success: true, data: [] }), {
+      return new Response(JSON.stringify({ success: true, data: [],
+        pagination: { page: 1, pageSize: 1, totalItems: 0, totalPages: 0 } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -92,10 +93,8 @@ describe('route table', () => {
 
     await settled(router, '/admin')
 
-    // AdminDashboardPage passes this current title to PageHeader; the old title is absent.
-    expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
-
     expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).not.toBeInTheDocument()
 
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
