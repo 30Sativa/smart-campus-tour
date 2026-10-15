@@ -111,11 +111,46 @@ static inline int bno08x_count_reports(const uint8_t *p, int n, uint8_t want)
     return cnt;
 }
 
+/* Report ID cua hai loai report huong ma driver co the dung. */
+#define BNO08X_REPORT_ROTATION_VECTOR       0x05U
+#define BNO08X_REPORT_GAME_ROTATION_VECTOR  0x08U
+
+#define BNO08X_Q14_SCALE (1.0f / 16384.0f)
+
+/**
+ * Doc quaternion Q14 (i, j, k, real) cua mot report huong.
+ *
+ * Rotation Vector (0x05, 14 byte) va Game Rotation Vector (0x08, 12 byte)
+ * co CUNG bo cuc o byte 0..11: id, seq, status, delay, i, j, k, real
+ * (int16 little-endian, Q14). 0x05 chi co them 2 byte accuracy estimate o
+ * cuoi -- khong dung toi. rep phai la con tro tu bno08x_find_report*(), tuc
+ * la report da nam tron trong payload.
+ *
+ * Tra 1 neu doc duoc, 0 neu rep NULL hoac khong phai report huong.
+ */
+static inline uint8_t bno08x_report_quat(const uint8_t *rep,
+                                         float *qi, float *qj,
+                                         float *qk, float *qr)
+{
+    if ((rep == NULL) || (qi == NULL) || (qj == NULL) ||
+        (qk == NULL) || (qr == NULL)) return 0U;
+    if ((rep[0] != BNO08X_REPORT_ROTATION_VECTOR) &&
+        (rep[0] != BNO08X_REPORT_GAME_ROTATION_VECTOR)) return 0U;
+
+    *qi = (float)(int16_t)(rep[4]  | (rep[5]  << 8)) * BNO08X_Q14_SCALE;
+    *qj = (float)(int16_t)(rep[6]  | (rep[7]  << 8)) * BNO08X_Q14_SCALE;
+    *qk = (float)(int16_t)(rep[8]  | (rep[9]  << 8)) * BNO08X_Q14_SCALE;
+    *qr = (float)(int16_t)(rep[10] | (rep[11] << 8)) * BNO08X_Q14_SCALE;
+    return 1U;
+}
+
 /**
  * Muc tin cay cua mot report rotation vector (byte status, 2 bit thap).
  * 0 = chua hieu chuan / khong tin duoc, 3 = tot nhat.
- * Khi tu ke chua hieu chuan, BNO08x van tra heading nhung bao accuracy 0 --
- * so ra nhin hop ly ma co the sai hang chuc do.
+ * Voi Rotation Vector (0x05): khi tu ke chua hieu chuan, BNO08x van tra
+ * heading nhung bao accuracy 0 -- so ra nhin hop ly ma co the sai hang chuc do.
+ * Voi Game Rotation Vector (0x08) khong co tu ke, nen 2 bit nay KHONG noi gi
+ * ve sai so heading; bridge mac dinh bo qua no.
  */
 static inline uint8_t bno08x_report_accuracy(const uint8_t *rep)
 {

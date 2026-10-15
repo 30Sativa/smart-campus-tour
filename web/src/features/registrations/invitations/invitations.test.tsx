@@ -23,7 +23,7 @@ afterEach(() => { client.clear(); useAuthStore.getState().logout(); vi.unstubAll
 it('shows truthful email status and keeps the request ID when retrying an uncertain write', async () => {
   const writes: Record<string, unknown>[] = []
   const fetch = vi.fn(async (_input: string, options?: RequestInit) => {
-    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer owner-token')
+    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer owner-token')
     if (options?.method === 'POST') {
       writes.push(JSON.parse(options.body as string))
       if (writes.length === 1) throw new TypeError('connection lost after commit')
@@ -61,7 +61,7 @@ it('uses only an access code for Student entry and never refreshes/logs out an a
   let joined = false
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
     calls.push({ path, options })
-    expect((options?.headers as Record<string, string>).Authorization).toBeUndefined()
+    expect(new Headers(options?.headers).get('Authorization')).toBeNull()
     expect(options?.credentials).toBe('include')
     if (path.endsWith('/join')) { joined = true; return response({ tourId: 'tour', tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z', invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'SHARED_VIEWING', fallbackVideoUrl: null }) }
     return response(null, 401)

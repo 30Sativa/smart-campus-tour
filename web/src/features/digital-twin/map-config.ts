@@ -17,6 +17,8 @@
  * `fitAffine([...])` and paste the result below.
  */
 
+import { occupancyMapFor } from '../administration/pois/map/catalog'
+
 /** out = [a b; c d] · [x y] + [tx ty] */
 export type Affine2D = { a: number; b: number; c: number; d: number; tx: number; ty: number }
 
@@ -24,6 +26,8 @@ export type MapPose = { x: number; y: number; yaw: number }
 
 export type MapConfig = {
   mapKey: string
+  /** Raster metadata exists only for registered occupancy snapshots. */
+  grid?: { resolution: number; originX: number; originY: number; widthPx: number; heightPx: number }
   /** map metres -> 3D scene ground (u, v); the scene position is (u, 0, -v), Y up. */
   scene: { transform: Affine2D; calibrated: boolean; modelKey?: string }
   /** map metres -> Student 2D map in percent of its drawing (0-100 across, 0-100 down). */
@@ -31,6 +35,12 @@ export type MapConfig = {
 }
 
 export const IDENTITY: Affine2D = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }
+
+function snapshotGrid(mapKey: string): MapConfig['grid'] {
+  const map = occupancyMapFor(mapKey, 'map')
+  if (!map) throw new Error(`Missing occupancy snapshot: ${mapKey}`)
+  return { resolution: map.resolution, originX: map.origin[0], originY: map.origin[1], widthPx: map.width, heightPx: map.height }
+}
 
 /**
  * Legacy presentation map key, not an alias for the physical map2-v1 raster.
@@ -44,11 +54,13 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   // Physical occupancy snapshots have no measured transform to the 3D model yet.
   'map2-v1': {
     mapKey: 'map2-v1',
+    grid: snapshotGrid('map2-v1'),
     scene: { transform: IDENTITY, calibrated: false },
     student2d: { transform: IDENTITY, calibrated: false },
   },
   'map2-v2': {
     mapKey: 'map2-v2',
+    grid: snapshotGrid('map2-v2'),
     scene: { transform: IDENTITY, calibrated: false },
     student2d: { transform: IDENTITY, calibrated: false },
   },

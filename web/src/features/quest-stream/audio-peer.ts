@@ -1,6 +1,11 @@
 /** Audio-only WHIP publisher / WHEP reader. Credentials stay in session memory. */
 export class AudioPeerError extends Error {
-  constructor(public readonly status?: number) { super('Audio connection failed') }
+  readonly status?: number
+
+  constructor(status?: number) {
+    super('Audio connection failed')
+    this.status = status
+  }
 }
 
 export function audioPath(value: string | undefined): string | null {

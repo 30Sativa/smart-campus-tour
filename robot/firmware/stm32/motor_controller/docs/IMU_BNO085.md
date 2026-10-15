@@ -62,6 +62,9 @@ Ghi chú: `CLK` chưa đạt 90 kHz như tính toán vì ở SYSCLK 16 MHz thì
 
 ## Ngân sách thời gian của main loop
 
+Ngắt STEP 50 kHz từng chiếm 49–93 % CPU ở build Debug; xem
+`MOTOR_ISR_BUDGET.md` (đã sửa).
+
 `App_Loop()` là vòng lặp co-operative duy nhất: `Motor_Update()`,
 `Protocol_Update()` (feedback + watchdog lệnh 300 ms) và
 `BNO08x_ReadRotationVector()` dùng chung nó.
@@ -158,6 +161,10 @@ hiệu phần cứng có vấn đề.
 
 ## Accuracy
 
+**Mặc định firmware stream Game Rotation Vector (0x08)**, xem mục
+"Game Rotation Vector" bên dưới. Phần còn lại của mục này mô tả Rotation Vector
+(0x05, `BNO08X_USE_GAME_ROTATION_VECTOR 0`).
+
 Report rotation vector mang mức tin cậy 0–3 ở byte status. Khi từ kế chưa hiệu
 chuẩn, BNO085 vẫn trả heading nhưng báo accuracy 0 — số nhìn hợp lý mà sai hàng
 chục độ. Giá trị này giờ nằm ở **cuối** khung `FB` (thêm ở cuối nên parser cũ
@@ -168,6 +175,27 @@ nên dùng `ACC` để hạ trọng số IMU thay vì tin tuyệt đối.
 
 Hiệu chuẩn từ kế: cầm xe vẽ hình số 8 trong không khí khoảng 10 lần, `ACC` sẽ
 leo lên 3.
+
+## Game Rotation Vector (mặc định)
+
+`BNO08X_USE_GAME_ROTATION_VECTOR` (`Core/Inc/imu/bno08x.h`, mặc định `1`) chọn
+report 0x08 thay cho 0x05. Game Rotation Vector chỉ dùng gyro + accel, **không
+dùng từ kế**:
+
+- Yaw tương đối, trôi chậm theo thời gian; AMCL bù qua `map -> odom`.
+- Không bao giờ nhảy khi từ kế hiệu chuẩn. Trên xe thật (2026-10-13) xe chỉ
+  quay trên mặt phẳng nên từ kế kẹt ở accuracy 0, và khi nó tự hiệu chuẩn giữa
+  lúc chạy heading đã nhảy khoảng +45°.
+- ROS chỉ dùng yaw tương đối (`ekf.yaml`: `imu0_relative: true`) nên không mất gì.
+
+Bố cục byte 0..11 của 0x08 (12 byte) giống 0x05 (14 byte, thêm accuracy
+estimate ở cuối): `bno08x_report_quat()` đọc chung cho cả hai. Byte status vẫn
+được gửi ở trường `yaw_acc` của `FB`, nhưng với 0x08 nó không mô tả sai số
+heading; bridge (`imu_orientation_report:=game_rotation_vector`, mặc định) dùng
+variance cố định.
+
+Đổi về Rotation Vector: đặt macro `0`, build + nạp lại, và đặt tham số bridge
+`imu_orientation_report:=rotation_vector`.
 
 ## Tare (đặt góc)
 
@@ -264,7 +292,8 @@ wrap180, và toán tare (kể cả các trường hợp vắt qua ±180).
 
 ## Còn thiếu
 
-- Chỉ bật Rotation Vector. Chưa có accel/gyro raw, linear accel, game rotation vector.
+- Chỉ bật một report hướng (Game Rotation Vector mặc định, hoặc Rotation Vector).
+  Chưa có accel/gyro raw, linear accel.
 - Chưa lưu/nạp calibration (DCD) của BNO085 → mỗi lần cấp nguồn phải để nó tự ổn định.
 - Chân RST/INT đang tắt bằng macro (`BNO08X_USE_HW_RST` / `BNO08X_USE_INT_PIN` = 0),
   chạy thuần polling.

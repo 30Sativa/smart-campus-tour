@@ -17,7 +17,7 @@ STM32
         -> FB feedback
         -> stm32_bridge_node
         +-> /wheel/odom (STEP-count wheel odometry)
-        +-> /imu/data   (BNO085 Rotation Vector yaw)
+        +-> /imu/data   (BNO085 Game Rotation Vector yaw)
                 -> robot_localization EKF
                 -> /odom + TF odom -> base_footprint
 ```
@@ -134,8 +134,9 @@ The real `robot_control/manual_mode.launch.py` always passes
 only `odom -> base_footprint` TF owner. Repeated cached IMU measurements with
 the same `(yaw, yaw_acc)` are not republished. A wheel sample without a valid
 delta or time interval is dropped instead of publishing a fake zero twist.
-`imu0_relative: true` makes the first BNO085 yaw the relative odom reference,
-so startup does not snap to magnetic north. SLAM or AMCL remains responsible
+`imu0_relative: true` makes the first BNO085 yaw the relative odom reference.
+The default firmware streams Game Rotation Vector (no magnetometer), so yaw is
+relative and never jumps when a magnetometer calibrates. SLAM or AMCL remains responsible
 for `map -> odom`.
 
 Default drivetrain values match the current firmware notes:
@@ -284,6 +285,7 @@ ros2 run tf2_tools view_frames
 | `publish_imu` | `true` | Publish valid BNO085 orientation samples |
 | `imu_topic` | `imu/data` | Relative IMU topic name |
 | `imu_frame` | `imu_link` | IMU message frame |
+| `imu_orientation_report` | `game_rotation_vector` | Must match firmware `BNO08X_USE_GAME_ROTATION_VECTOR`. `game_rotation_vector`: fixed yaw variance 0.01 (no magnetometer, `yaw_acc` ignored). `rotation_vector`: variance from `yaw_acc` |
 | `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |

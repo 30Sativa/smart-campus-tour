@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+_Static_assert(MOTOR_ISR_WATCHDOG_MS > CMD_TIMEOUT_MS,
+               "ISR watchdog is a backstop: it must outlast the main-loop CMD timeout");
+
 #define PROTOCOL_TX_BUFFER_SIZE 224U
 #define PROTOCOL_TX_BUFFER_COUNT 2U
 
@@ -84,6 +87,10 @@ void Protocol_Update(void)
 	now = HAL_GetTick();
 	Protocol_CheckTimeout(now);
 
+	/* An ERR line only takes this iteration's USB slot when it was actually
+	 * queued. While it waits (rate limit or CDC busy) FB keeps flowing:
+	 * blocking FB here turned a burst of dropped lines into seconds without
+	 * odometry, and the host then entered its feedback-timeout safe stop. */
 	if (Protocol_TrySendPendingError() != 0U)
 	{
 		return;
@@ -169,6 +176,7 @@ void Protocol_ProcessLine(char *line)
 		last_seq = seq;
 		last_valid_rx_ms = HAL_GetTick();
 		protocol_status = PROTOCOL_STATUS_OK;
+		Motor_FeedWatchdog();
 		Motor_SetWheelSpeedMMPS(MOTOR_LEFT, left_mm_s);
 		Motor_SetWheelSpeedMMPS(MOTOR_RIGHT, right_mm_s);
 		return;
@@ -468,7 +476,7 @@ static uint8_t Protocol_TrySendPendingError(void)
 	now = HAL_GetTick();
 	if ((uint32_t)(now - last_error_attempt_ms) < FEEDBACK_PERIOD_MS)
 	{
-		return 1U;
+		return 0U;
 	}
 
 	last_error_attempt_ms = now;
@@ -478,7 +486,7 @@ static uint8_t Protocol_TrySendPendingError(void)
 		return 1U;
 	}
 
-	return 1U;
+	return 0U;
 }
 
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)

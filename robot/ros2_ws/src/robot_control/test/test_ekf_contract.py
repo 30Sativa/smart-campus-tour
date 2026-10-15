@@ -12,8 +12,8 @@ def _read(relative_path):
     return (SRC / relative_path).read_text(encoding='utf-8')
 
 
-def _ekf_parameters():
-    config = yaml.safe_load(_read('robot_control/config/ekf.yaml'))
+def _ekf_parameters(config_file='robot_control/config/ekf.yaml'):
+    config = yaml.safe_load(_read(config_file))
     return config['/**/ekf_filter_node']['ros__parameters']
 
 
@@ -50,6 +50,32 @@ def test_ekf_owns_final_odom_and_tf_in_real_launch():
     assert "'publish_tf': 'false'" in launch
     assert "remappings=[('odometry/filtered', 'odom')]" in launch
     assert 'enable_ekf' not in launch
+
+
+def test_wheel_only_experiment_differs_from_default_only_by_imu():
+    default = _ekf_parameters()
+    wheel_only = _ekf_parameters('robot_control/config/ekf_wheel_only.yaml')
+    imu_keys = {key for key in default if key.startswith('imu0')}
+    assert imu_keys
+    assert not any(key.startswith('imu') for key in wheel_only)
+    assert wheel_only == {
+        key: value for key, value in default.items() if key not in imu_keys
+    }
+
+
+def test_ekf_params_file_defaults_to_ekf_yaml_and_reaches_ekf_node():
+    manual = _read('robot_control/launch/manual_mode.launch.py')
+    navigation = _read('robot_navigation/launch/navigation.launch.py')
+    for launch in (manual, navigation):
+        assert "ekf_params_file = LaunchConfiguration('ekf_params_file')" in launch
+        assert "default_value=default_ekf_params" in launch
+        default_block = launch.split('default_ekf_params = ', 1)[1]
+        default_block = default_block.split('])', 1)[0]
+        assert "'robot_control'" in default_block
+        assert "'ekf.yaml'" in default_block
+    assert 'ekf_wheel_only' not in navigation
+    assert "'ekf_params_file': ekf_params_file" in navigation
+    assert 'parameters=[\n                ekf_params_file,' in manual
 
 
 def test_real_launch_inverts_both_feedback_counts_for_odometry():

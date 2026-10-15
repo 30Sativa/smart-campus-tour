@@ -1,0 +1,4 @@
+# Machine-local deployment configuration, certificates and database backups.
+/deploy/api.env
+/deploy/certs/
+/deploy/backups/

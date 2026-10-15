@@ -404,8 +404,8 @@ architecture decisions in the Stack section.
 
 - Use TypeScript for all application source.
 - Avoid `any`. Use explicit types or `unknown` plus narrowing at uncertain
-  boundaries. TypeScript `strict` is **not** enabled in `web/tsconfig.app.json`,
-  so this is enforced by review, not by `npm run typecheck`.
+  boundaries. TypeScript `strict` is explicitly enabled in `web/tsconfig.app.json`
+  and checked by `npm run typecheck`; ESLint also rejects explicit `any`.
 - Use explicit types at important module boundaries: component props, API
   request/response models, shared hooks, and public utilities.
 - Do not duplicate the same DTO/type in multiple feature folders when one
