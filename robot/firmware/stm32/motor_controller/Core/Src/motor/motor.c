@@ -144,6 +144,14 @@ uint32_t Motor_GetStepFrequencyHz(uint8_t motor_id)
 	return (uint32_t)(MotorCore_GetStepFrequencyHz(index) + 0.5f);
 }
 
+void Motor_FeedWatchdog(void)
+{
+	MotorCore_FeedWatchdog(MOTOR_ISR_WATCHDOG_MS);
+}
+
+/* 50 kHz ISR entry: keep it a plain tail call even in -O0 builds
+ * (see the CPU budget note in motor_core.c). */
+__attribute__((optimize("O2")))
 void Motor_HandleTimerInterrupt(void)
 {
 	MotorCore_HandleTimerInterrupt();
