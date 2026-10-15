@@ -15,6 +15,9 @@ changing robot code.
   discovery and debugging.
 - [Nav2 turn test](nav2-turn-test.md) — hardware-test procedure; check its
   READY FOR HARDWARE TEST status before relying on the parameters.
+- [Nav2 smoothness trial](nav2-smooth-trial.md) — opt-in
+  `nav2_params_smooth.yaml` (LatchedGoalChecker + 0.20 m/s): offline evidence,
+  launch, bag, rollback and acceptance criteria. READY FOR HARDWARE TEST.
 - [RViz / TF / Nav2 debug note](rviz-tf-nav2-debug-note.md) — operator-reported
   observations, lifecycle/planner triage and Docker comparison plan; not a
   verified hardware fix.

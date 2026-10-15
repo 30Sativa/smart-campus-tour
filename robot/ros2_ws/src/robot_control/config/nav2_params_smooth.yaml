@@ -1,0 +1,507 @@
+# EXPERIMENT ONLY -- not the default. The default is nav2_params.yaml.
+#
+# Motion-smoothness trial on top of nav2_params_wide_global_inflation.yaml
+# (global inflation 1.50/2.0). test_nav2_baseline_contract.py keeps every
+# other key equal to that file. Changes, each marked "SMOOTH:" below:
+#   1. goal_checker -> robot_nav_plugins::LatchedGoalChecker (same 0.15 m /
+#      0.30 rad acceptance; the xy latch survives the 1 Hz replans and the
+#      controller keeps turning in place once latched).
+#   2. FollowPath.desired_linear_vel 0.24 -> 0.20 (stops the bridge pair-
+#      scaling on ordinary turns; the smoother ceiling stays 0.24).
+#
+# Select with:  nav2_params_file:=<share>/robot_control/config/nav2_params_smooth.yaml
+# Roll back by selecting nav2_params_wide_global_inflation.yaml again.
+# Individual items can be reverted live, without a restart:
+#   ros2 param set /robot_01/controller_server FollowPath.desired_linear_vel 0.24
+#   ros2 param set /robot_01/controller_server goal_checker.relatch_distance 0.0
+#   ros2 param set /robot_01/controller_server goal_checker.latched_xy_tolerance 0.15
+# (the last two make LatchedGoalChecker behave exactly like SimpleGoalChecker).
+# =============================================================================
+# nav2_params.yaml - Nav2 baseline for the campus-tour AMR (ROS 2 Humble).
+#
+# Loaded through nav2_bringup/launch/navigation_launch.py, which wraps this
+# file in RewrittenYaml(root_key=<namespace>) and ParameterFile(allow_substs=
+# True). Two consequences you must respect when editing:
+#
+#   1. Comments are stripped at launch time (safe_load -> dump). They are for
+#      humans reading the repo, not for the running node.
+#   2. "$(var robot_ns)" is substituted at launch time. Every launch file that
+#      includes navigation_launch.py with THIS params file must first do
+#      SetLaunchConfiguration('robot_ns', ...) -> '' or '/robot_01'.
+#      Without it, launch aborts with "substitution failure".
+#
+# Why $(var robot_ns) instead of a plain relative topic: costmap plugins
+# subscribe on the *costmap* node, whose namespace is <robot_ns>/local_costmap
+# (nav2_costmap_2d::Costmap2DROS pushes a sub-namespace). A relative "scan"
+# there resolves to <robot_ns>/local_costmap/scan - a topic nobody publishes.
+# Upstream nav2 solves this by hardcoding "/robot1/scan" in its multirobot
+# params; the substitution does the same thing without baking the robot id
+# into the file.
+#
+# CHAIN (do not break it - see robot_navigation/README.md):
+#   controller_server -\
+#   behavior_server   -+-> cmd_vel_ctrl -> velocity_smoother -> cmd_vel_nav
+#                                                -> mode_manager -> cmd_vel
+#                                                -> stm32_bridge -> motors
+# =============================================================================
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 1000
+    # BASELINE SAFETY: the stock Humble trees end their recovery RoundRobin
+    # with <BackUp backup_dist="0.30" backup_speed="0.05"/>. Rear sonar pose
+    # is still schematic (sensors.xacro) and there is no rear-facing LiDAR or
+    # depth, so an autonomous reverse is not defensible yet. These two trees
+    # are the stock trees with the BackUp node removed - nothing else changed.
+    # Re-enable BackUp only after the rear-coverage tests in
+    # robot_navigation/README.md pass on the real robot.
+    default_nav_to_pose_bt_xml: "$(find-pkg-share robot_navigation)/behavior_trees/navigate_to_pose_no_backup.xml"
+    default_nav_through_poses_bt_xml: "$(find-pkg-share robot_navigation)/behavior_trees/navigate_through_poses_no_backup.xml"
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 10.0
+    odom_topic: odom
+    publish_zero_velocity: true
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    # HUMBLE: progress_checker_plugin is SINGULAR and takes a plain string;
+    # goal_checker_plugins and controller_plugins are plural lists. The plural
+    # spelling for the progress checker arrived in Iron. Getting this wrong is
+    # quiet rather than loud: controller_server.cpp declares
+    # "progress_checker_plugin", the plural key is simply never read, and the
+    # id falls back to default_progress_checker_id_ - which is also
+    # "progress_checker", so the block below still gets picked up by accident.
+    # Rename that block and the whole thing silently reverts to defaults.
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["goal_checker"]
+    controller_plugins: ["FollowPath"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.20
+      # RPP rotates in place before moving off (use_rotate_to_heading), and an
+      # in-place rotation counts as zero progress. Keep 15 s for the slower
+      # turn: pi/0.45 + 0.45/0.50 ~= 7.9 s before translation. The contract
+      # test also budgets translation past required_movement_radius.
+      movement_time_allowance: 15.0
+
+    # SMOOTH: Humble's controller_server compares against the PATH END and
+    # calls GoalChecker::reset() on every path update, so with the BT
+    # replanning at 1 Hz the stateful xy latch is dropped every second while
+    # the robot turns at the goal. RPP also takes its "rotate to goal heading"
+    # radius from this checker; a few cm of AMCL correction during that turn
+    # pushed it out of the radius and it turned back towards the path end
+    # (offline sim: 340 deg of back-and-forth and a progress failure at
+    # POI_01; 13/10 bag: four separate turns at the goal).
+    # LatchedGoalChecker keeps the latch across path updates to the same goal
+    # (robot-to-goal vector moved <= relatch_distance; absolute odom-frame
+    # positions would jump ~0.19 m per degree of AMCL yaw correction at
+    # POI_01) and, once latched, reports latched_xy_tolerance to RPP. Acceptance is unchanged (0.15 m once, then 0.30 rad). The latch is
+    # released if the robot is ever > latched_xy_tolerance from the goal.
+    goal_checker:
+      plugin: "robot_nav_plugins::LatchedGoalChecker"
+      xy_goal_tolerance: 0.15
+      yaw_goal_tolerance: 0.30
+      stateful: true
+      latched_xy_tolerance: 0.35
+      relatch_distance: 0.10
+
+    # -----------------------------------------------------------------------
+    # Regulated Pure Pursuit. Plugin id is the fully qualified type: the class
+    # entry in nav2_regulated_pure_pursuit_controller.xml has no name="..."
+    # attribute, so pluginlib looks it up by type.
+    #
+    # WHAT RPP DOES: follows the global path, regulating speed on curvature,
+    # proximity cost and approach distance, and collision-checks the arc up to
+    # the lookahead carrot against the LOCAL costmap.
+    # WHAT RPP DOES NOT DO: it is not a local trajectory planner. It will not
+    # search for a detour around an obstacle the global planner cannot see. An
+    # obstacle that only the depth camera or sonar sees makes RPP refuse to
+    # drive (collision check fails) - the expected baseline outcome is a safe
+    # stop / navigation failure, not an automatic detour.
+    # -----------------------------------------------------------------------
+    FollowPath:
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+
+      # SMOOTH: 0.24 -> 0.20 m/s. At 0.24 any turn faster than 0.04 rad/s
+      # put one wheel over the bridge's 250 mm/s cap, and the bridge
+      # pair-scaled 39-50 % of moving commands on 15/10 (1225 warnings per
+      # round trip). 0.20 leaves room for |w| <= 0.21 rad/s at cruise. The
+      # velocity_smoother ceiling below stays 0.24 (unchanged envelope).
+      desired_linear_vel: 0.20
+
+      # Lookahead. Fixed (not velocity-scaled) for a predictable first run.
+      # Keep 0.60 m beyond the footprint's furthest corner (~0.490 m), as in
+      # the existing baseline. TUNE ON HARDWARE: raise if the robot
+      # cuts corners, lower if it wanders wide in corridors.
+      use_velocity_scaled_lookahead_dist: false
+      lookahead_dist: 0.60
+      min_lookahead_dist: 0.40
+      max_lookahead_dist: 0.90
+      lookahead_time: 1.5
+      use_interpolation: true
+
+      # In-place rotation instead of arcing onto the path. Correct for a
+      # differential base in a corridor. Mutually exclusive with
+      # allow_reversing - RPP force-disables reversing if both are true.
+      use_rotate_to_heading: true
+      rotate_to_heading_min_angle: 0.785
+      # Supervised turn test: ~26 deg/s. RPP, Recovery Spin and the smoother
+      # share a 0.45 rad/s ceiling; acceleration and braking stay unchanged.
+      # Acceptance and rollback: robot/docs/nav2-turn-test.md.
+      rotate_to_heading_angular_vel: 0.45
+      # Match smoother acceleration: +0.05 rad/s per controller tick at 10 Hz.
+      # Actual smoothness still needs hardware measurement.
+      max_angular_accel: 0.50
+
+      # BASELINE POLICY: no autonomous reverse. Rear sonar pose is schematic
+      # and there is no rear LiDAR/depth. See bt_navigator above.
+      allow_reversing: false
+
+      # Collision checking on the arc to the carrot, against the LOCAL costmap
+      # (which is where depth + sonar live). This is what makes the robot stop
+      # for a depth-only or sonar-only obstacle.
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 1.0
+
+      # Speed regulation.
+      use_regulated_linear_velocity_scaling: true
+      use_cost_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 0.90
+      # MUST stay below desired_linear_vel. The Humble default is 0.25, which
+      # is ABOVE our 0.24 m/s - leaving it at the default silently disables
+      # curvature regulation entirely.
+      regulated_linear_scaling_min_speed: 0.10
+      cost_scaling_dist: 0.60
+      cost_scaling_gain: 1.0
+      # MUST equal local_costmap.inflation_layer.cost_scaling_factor below, or
+      # RPP's cost regulation reads the inflation gradient wrong (it logs a
+      # warning at configure time).
+      inflation_cost_scaling_factor: 3.0
+
+      # Approach to goal.
+      min_approach_linear_velocity: 0.05
+      approach_velocity_scaling_dist: 0.60
+
+      transform_tolerance: 0.2
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: false
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      # XY projection of the chassis collision box from
+      # robot/ros2_ws/src/robot_description/urdf/common_properties.xacro:
+      # length 0.802199951, width 0.562799988, centre (0, 0.000049973).
+      # base_footprint -> base_link translates only Z; X forward, Y left.
+      # Counter-clockwise: front-left, rear-left, rear-right, front-right.
+      # Humble expects a string, not a nested YAML parameter array.
+      footprint: "[[0.4010999755, 0.281449967], [-0.4010999755, 0.281449967], [-0.4010999755, -0.281350021], [0.4010999755, -0.281350021]]"
+      # Use the CAD envelope exactly; override Humble's default 0.01 m pad.
+      footprint_padding: 0.0
+
+      # -------------------------------------------------------------------
+      # SEPARATE obstacle layers per sensor family. One shared ObstacleLayer
+      # would let the LiDAR's clearing raytrace erase marks the depth camera
+      # made (the LiDAR plane passes straight over a low box). Each layer
+      # keeps its own grid and writes into the master with MAX, so a LiDAR
+      # clear can no longer wipe a depth mark.
+      #
+      # This reduces cross-sensor clearing. It does NOT solve stale depth
+      # marks: the depth layer can still only clear inside the camera's own
+      # ~58 deg cone, so an obstacle that is removed while the robot is
+      # turned away stays marked until the robot faces it again. Verify on
+      # hardware - see robot_navigation/README.md acceptance test D.
+      # -------------------------------------------------------------------
+      # Temporary sonar-OFF baseline. Do not load RangeSensorLayer: on Humble
+      # updateBounds still processes readings even when enabled is false.
+      # Keep its configuration below for a later, isolated hardware retest.
+      plugins: ["lidar_obstacle_layer", "depth_obstacle_layer", "inflation_layer"]
+
+      lidar_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        # 0 = Overwrite, 1 = Maximum, anything else = do nothing.
+        # 1 is also the Humble default; set explicitly so a future reader does
+        # not have to go read obstacle_layer.cpp to know the layers combine
+        # with MAX rather than overwriting each other.
+        combination_method: 1
+        observation_sources: scan
+        scan:
+          topic: "$(var robot_ns)/scan"
+          data_type: LaserScan
+          marking: true
+          clearing: true
+          # No-return rays must clear old marks after a person moves away.
+          # Near-range rejects stay NaN in the scan filter so they
+          # cannot be mistaken for clear space by this setting.
+          inf_is_valid: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 15.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 12.0
+          obstacle_min_range: 0.12
+          # 0.0 = never mark this layer stale. The LiDAR is the primary
+          # safety sensor; if it dies we would rather Nav2 keep the last
+          # marks than silently treat the world as empty. The supervised
+          # operator is the watchdog for the first runs.
+          expected_update_rate: 0.0
+
+      depth_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        combination_method: 1
+        observation_sources: pointcloud
+        pointcloud:
+          topic: "$(var robot_ns)/camera/depth/points"
+          data_type: PointCloud2
+          marking: true
+          clearing: true
+          # Astra Pro spec is 0.6-8 m, but depth noise grows with range^2 and
+          # the local costmap is only 3x3 m.
+          obstacle_min_range: 0.60
+          obstacle_max_range: 3.00
+          raytrace_min_range: 0.60
+          raytrace_max_range: 3.50
+          # Heights in the costmap frame (odom), z=0 at the floor. 0.08 m is
+          # the floor-rejection threshold from the Phase 2 mount calibration
+          # (ground plane within 20 mm of z=0, ground noise <= 30 mm). Skip
+          # that calibration and the floor becomes a wall.
+          min_obstacle_height: 0.08
+          max_obstacle_height: 1.20
+          # 0.0 is what makes enable_camera:=false safe: with no publisher on
+          # the topic the layer simply never marks, stays "current", and the
+          # costmap keeps updating from LiDAR. A positive value here
+          # would mark the layer stale and block navigation whenever the
+          # camera is off or unplugged.
+          expected_update_rate: 0.0
+          inf_is_valid: false
+
+      # Four SR04T. They cover the one case the other two sensors miss: a LOW
+      # obstacle CLOSER than 0.85 m, where the Astra is blind and the LiDAR
+      # plane raytraces over it and clears the mark.
+      #
+      # LIMITATIONS - do not read this layer as 360 deg protection:
+      #   - The four sonars point diagonally out of the four chassis corners.
+      #     There are blind wedges dead ahead, dead astern, very close to the
+      #     sensor face, and in the volume swept while the robot rotates.
+      #   - Poses in sensors.xacro are schematic, not measured.
+      #   - no_readings_timeout is NOT a per-sensor watchdog. RangeSensorLayer
+      #     keeps ONE last_reading_time_ for all four topics, so a single live
+      #     sonar keeps the whole layer "current" while the other three are
+      #     dead. There is no per-sensor health signal anywhere in this stack.
+      #   - mode_manager does not read sonar at all. Nothing stops the robot
+      #     on a sonar reading except the costmap -> RPP collision check.
+      sonar_layer:
+        plugin: "nav2_costmap_2d::RangeSensorLayer"
+        # Dormant: also excluded from plugins above. Revisit the bridge's
+        # invalid-reading semantics and Humble timeout recovery before reuse.
+        enabled: false
+        topics: ["$(var robot_ns)/ultrasonic/sonar1/range",
+                 "$(var robot_ns)/ultrasonic/sonar2/range",
+                 "$(var robot_ns)/ultrasonic/sonar3/range",
+                 "$(var robot_ns)/ultrasonic/sonar4/range"]
+        input_sensor_type: "ALL"
+        clear_on_max_reading: true
+        no_readings_timeout: 2.0
+        mark_threshold: 0.9
+        clear_threshold: 0.2
+        phi: 1.2
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # Keep the existing inflation settings. Humble measures distance
+        # FROM THE OBSTACLE and derives its inscribed radius from the polygon
+        # (~0.28135 m here); inflation_radius must cover that radius.
+        # 0.60 is a cost-field extent, not a fixed clearance from the chassis.
+        # Inflation alone does not check the rectangle's corners at every yaw.
+        inflation_radius: 0.60
+        # Must equal FollowPath.inflation_cost_scaling_factor above.
+        cost_scaling_factor: 3.0
+
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: false
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      resolution: 0.05
+      track_unknown_space: true
+      # Same CAD polygon and padding as the local costmap; keep in sync.
+      footprint: "[[0.4010999755, 0.281449967], [-0.4010999755, 0.281449967], [-0.4010999755, -0.281350021], [0.4010999755, -0.281350021]]"
+      footprint_padding: 0.0
+
+      # LiDAR is the ONLY dynamic obstacle source here. The global costmap
+      # does not roll, and neither the depth camera (~58 deg cone) nor the
+      # sonars can raytrace-clear a mark once the robot has turned away from
+      # it - the mark would freeze into the map permanently and the planner
+      # would route around obstacles that stopped existing ten minutes ago.
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        combination_method: 1
+        observation_sources: scan
+        scan:
+          topic: "$(var robot_ns)/scan"
+          data_type: LaserScan
+          marking: true
+          clearing: true
+          # Same no-return clearing policy as the local LiDAR layer.
+          inf_is_valid: true
+          max_obstacle_height: 2.0
+          raytrace_max_range: 15.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 12.0
+          obstacle_min_range: 0.12
+          expected_update_rate: 0.0
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # EXPERIMENT: 0.60/3.0 in nav2_params.yaml left a ~1.7 m zero-cost
+        # band in the 2.9 m START corridor, so Smac2D hugged the inner wall
+        # (~0.26 m footprint clearance). 1.5/2.0 keeps cost > 0 up to the
+        # corridor centre; offline it moved the START->POI_01 path to the
+        # centre line with >= 1.0 m footprint clearance in the stuck zone and
+        # corner. Local costmap / RPP stay at 0.60/3.0.
+        inflation_radius: 1.50
+        cost_scaling_factor: 2.0
+
+      always_send_full_costmap: true
+
+planner_server:
+  ros__parameters:
+    use_sim_time: false
+    expected_planner_frequency: 5.0
+    planner_plugins: ["GridBased"]
+    # SmacPlanner2D: grid A* with a configurable cost penalty. Chosen over
+    # Hybrid-A* / State Lattice because this base is differential drive, can
+    # rotate in place, and runs corridors - a kinematically feasible curve
+    # planner buys nothing and costs predictability.
+    # Plugin id comes from smac_plugin_2d.xml class name="...".
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      # >1.0 pushes the path away from inflated obstacles instead of hugging
+      # the shortest route. 2.0 keeps the robot nearer the corridor centre.
+      # TUNE ON HARDWARE: lower if the planner refuses tight passages.
+      cost_travel_multiplier: 2.0
+      # Leave the final pose orientation to the goal checker / RPP rather
+      # than to the straight-line approach of the grid path.
+      use_final_approach_orientation: false
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: false
+    # PATH smoother (geometry). Not the velocity smoother - different thing,
+    # different node. The baseline BT does not call SmoothPath; this stays
+    # configured and lifecycle-managed for later use.
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: true
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: false
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    # backup/drive_on_heading stay LOADED so a human can trigger a reverse
+    # deliberately over the action interface during rear-coverage testing.
+    # The baseline behavior trees never invoke them - see bt_navigator.
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    global_frame: odom
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.2
+    simulate_ahead_time: 2.0
+    # Recovery Spin has its own speed settings, separate from RPP heading
+    # alignment. In Humble its acceleration parameter controls the stopping
+    # speed calculation; the downstream smoother provides the startup ramp.
+    max_rotational_vel: 0.45
+    min_rotational_vel: 0.10
+    rotational_acc_lim: 0.50
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: false
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: wait_at_waypoint
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: true
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: OPEN_LOOP
+    # Bound both rotation directions, including path turns and recovery.
+    # The unchanged 250 mm/s bridge wheel cap passes straight 0.24 m/s and
+    # in-place 0.45 rad/s; combined commands may be pair-scaled downstream.
+    max_velocity: [0.24, 0.0, 0.45]
+    min_velocity: [-0.20, 0.0, -0.45]
+    max_accel: [0.50, 0.0, 0.50]
+    # Preserve braking limits for this test; lowering startup acceleration
+    # must not also lengthen commanded stopping distance. This is not a
+    # jerk-limited controller, and manual/e-stop commands bypass this node.
+    max_decel: [-0.50, 0.0, -2.50]
+    odom_topic: odom
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 0.5
+
+map_saver:
+  ros__parameters:
+    use_sim_time: false
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: true
