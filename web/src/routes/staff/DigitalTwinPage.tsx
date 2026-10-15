@@ -3,13 +3,11 @@ import { Link } from 'react-router'
 import { PageHeader } from '../../components/ui/ConsolePrimitives'
 import { StaffPage } from '../../features/staff/StaffUi'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { SimulatorPreview } from '../../features/digital-twin/SimulatorPreview'
 import { PhysicalRobotTwin } from '../../features/digital-twin/PhysicalRobotTwin'
 import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
 
 /**
- * Local fleet workbench, with separate physical preparation and legacy
- * simulator previews below. The Robot page links here for the wider view.
+ * Local fleet workbench, with the separate physical-robot preparation below. The Robot page links here for the wider view.
  */
 export default function DigitalTwinPage() {
   return (
@@ -18,7 +16,6 @@ export default function DigitalTwinPage() {
       <PageHeader eyebrow="Đội robot" title="Digital Twin" description="6 robot chạy theo vòng · 10 điểm · Camera cố định tại point, điều phối và thử nghiệm kịch bản. Kết nối miniPC thật được chuẩn bị riêng bên dưới." />
       <OperationalTwin robots={[]} className="mb-6 h-[820px]" />
       <PhysicalRobotTwin />
-      <SimulatorPreview />
     </StaffPage>
   )
 }

@@ -2,14 +2,20 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient, ApiError } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
-import '../student.css'
+import { StudentHeader } from '../components/StudentHeader'
+import { StudentWaitingRoom } from '../components/StudentWaitingRoom'
+import { StudentLiveView } from '../components/StudentLiveView'
+import { StudentEndScreen } from '../components/StudentEndScreen'
+import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
+import { buildLiveSnapshot, getStudentTourView, isVideoFile, type StudentTourInfo } from './student-tour-view'
 import '../../landing/landing.css'
+import '../student.css'
+import '../student-expedition.css'
 import './invitation.css'
 
-type TourInfo = { tourId: string; tourName: string; tourState: string; scheduledStartAt: string; invitationExpiresAt: string; rowType: string; fallbackVideoUrl: string | null }
 const path = (id: string) => `/api/student/tours/${encodeURIComponent(id)}`
 async function access(tourId: string, action: string, code?: string, signal?: AbortSignal) {
-  return (await apiClient<ApiResponse<TourInfo | null>>(`${path(tourId)}/${action}`, {
+  return (await apiClient<ApiResponse<StudentTourInfo | null>>(`${path(tourId)}/${action}`, {
     method: 'POST', credentials: 'include', auth: false, signal, ...(code ? { json: { accessCode: code } } : {}),
   })).data
 }
@@ -23,6 +29,25 @@ function accessError(error: unknown) {
   }
   return 'Không kết nối được hệ thống. Vui lòng thử lại.'
 }
+const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+
+/** The drifting light behind every student screen (decorative). */
+function Backdrop() {
+  return <div className="st-x-bg" aria-hidden="true"><i /><i /><i /></div>
+}
+
+function FallbackVideoLink({ url }: { url: string | null }) {
+  if (!url) return null
+  return <p className="st-invitation-fallback">
+    <a href={url} target="_blank" rel="noreferrer">Xem video dự phòng</a>
+  </p>
+}
+
+/**
+ * Invited Student page for a SQL Tour (docs/architecture.md §3.2.3, §7.1): access-code entry, then the same
+ * waiting room / live / end screens as the labelled demo, filled with real data only. No student identity is shown:
+ * the cookie session carries none. The 2D map stays hidden until a robot pose feed exists.
+ */
 export function StudentInvitationPage({ tourId }: { tourId: string }) {
   const client = useQueryClient()
   const key = ['student-invitation', tourId]
@@ -39,20 +64,26 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     retry: false, enabled: !left && !join.isPending && !leave.isPending, refetchInterval: 30000, refetchIntervalInBackground: true })
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
   const info = left || accessDenied ? null : session.data
-  const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
-  return <div className="lp st st--entry">
-    <header className="st-header"><div className="st-ctn st-header__inner">
-      <div className="st-brand"><img className="st-brand__mark" src="/images/logo.png" alt="" width={40} height={40} /><div><span className="st-brand__name">CampusTour</span><h1 className="st-brand__title">{info?.tourName ?? 'Tham gia Tour được mời'}</h1></div></div>
-      {info && <button className="st-leave" disabled={leave.isPending} onClick={() => leave.mutate()}>Thoát phiên</button>}
-    </div></header>
-    <main className="st-main"><section className="st-invitation-card">
-      {session.isPending && !left ? <p aria-busy="true">Đang kiểm tra phiên…</p> : info ? <>
-        <h2 className="mb-3 text-2xl font-semibold">{info.tourState === 'RUNNING' ? 'Tour đang diễn ra' : info.tourState === 'CANCELLED' ? 'Tour đã kết thúc sớm' : 'Bạn đã vào phòng chờ'}</h2>
-        <p>{info.tourName} · {date(info.scheduledStartAt)}</p>
-        <p className="mt-2 text-sm">{info.rowType === 'SHARED_VIEWING' ? 'Phiên dành cho màn hình xem chung.' : 'Phiên lời mời cá nhân.'} Mã còn hạn tới {date(info.invitationExpiresAt)}.</p>
-        {info.fallbackVideoUrl ? <a className="mt-4 inline-block underline" href={info.fallbackVideoUrl} target="_blank" rel="noreferrer">Xem video dự phòng</a>
-          : <p className="mt-4 text-sm text-slate-600">{info.tourState === 'RUNNING' ? 'Livestream và nội dung hướng dẫn chưa được kết nối cho buổi này.' : 'Buổi tham quan sẽ bắt đầu khi nhân viên vận hành mở Tour.'}</p>}
-      </> : <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
+  // Route and progress; a failure only hides the stops, the session above stays the access authority.
+  const view = useQuery({ queryKey: ['student-tour-view', tourId], queryFn: ({ signal }) => getStudentTourView(tourId, signal),
+    retry: false, enabled: !!info && !leave.isPending, refetchInterval: info?.tourState === 'RUNNING' ? 5000 : 30000 })
+
+  const shared = info?.rowType === 'SHARED_VIEWING'
+  const sessionLabel = shared ? 'Màn hình xem chung' : 'Phiên lời mời cá nhân'
+  const snapshot = info ? buildLiveSnapshot(info, view.data) : null
+  const fallback = info?.fallbackVideoUrl ?? null
+  const status = <>
+    {leave.isError && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(leave.error)}</p>}
+    {info && session.isError && <p role="alert" className="mt-3 text-sm text-red-700">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
+    {session.isError && !left && <button type="button" className="mt-3 underline" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
+  </>
+
+  let body
+  if (session.isPending && !left) {
+    body = <section className="st-invitation-card"><p aria-busy="true">Đang kiểm tra phiên…</p></section>
+  } else if (!info || !snapshot) {
+    body = <section className="st-invitation-card">
+      <form onSubmit={event => { event.preventDefault(); join.mutate() }}>
         <h2 className="mb-3 text-2xl font-semibold">Nhập mã truy cập</h2>
         <p className="mb-5 text-sm text-slate-600">Sao chép mã trong email lời mời. Mỗi lời mời dùng trên một browser; không cần tài khoản học sinh.</p>
         <label className="block font-medium" htmlFor="invitation-code">Mã truy cập</label>
@@ -62,10 +93,60 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         {session.isError && !(session.error instanceof ApiError && session.error.status === 401) && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(session.error)}</p>}
         <button className="st-btn st-invitation-submit" disabled={join.isPending || !code.trim()}>Vào Tour</button>
         <p className="mt-4 text-sm text-slate-600">Mất email hoặc mã đang bị dùng? Liên hệ đại diện đoàn để gửi lại hoặc cấp mã mới.</p>
-      </form>}
-      {leave.isError && <p role="alert" className="mt-3 text-sm text-red-700">{accessError(leave.error)}</p>}
-      {info && session.isError && <p role="alert" className="mt-3 text-sm text-red-700">Đang mất kết nối; thông tin hiển thị có thể đã cũ. Phiên có thể hết hạn trong thời gian mất kết nối; kết nối lại để kiểm tra.</p>}
-      {session.isError && !left && <button type="button" className="mt-3 underline" disabled={session.isFetching || join.isPending || leave.isPending} onClick={() => void session.refetch()}>Kiểm tra lại phiên</button>}
-    </section></main>
+      </form>
+      {status}
+    </section>
+  } else if (snapshot.tourState === 'Running') {
+    body = <>
+      <StudentLiveView
+        snapshot={snapshot}
+        showMap={false}
+        idleTitle="Buổi tham quan đang diễn ra"
+        narrationIdleText={snapshot.step === 'in_progress'
+          ? 'Thuyết minh sẽ hiện khi robot tới từng điểm dừng. Trong lúc chờ, bạn xem thẻ Lộ trình hoặc hỏi Trợ lý AI nhé.'
+          : undefined}
+        video={{
+          badge: snapshot.videoStreamUrl ? 'Video dự phòng' : undefined,
+          emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
+        }}
+        notice={!isVideoFile(fallback) && <FallbackVideoLink url={fallback} />}
+        ai={<LiveStudentAiAssistant tourId={tourId} shared={shared} poiName={snapshot.currentPoi?.title} />}
+      />
+      <div className="st-ctn st-invitation-status">{status}</div>
+    </>
+  } else if (snapshot.tourState === 'Completed' || snapshot.tourState === 'Cancelled') {
+    body = <>
+      <StudentEndScreen snapshot={snapshot} name="bạn" meta={`${info.tourName} • ${date(info.scheduledStartAt)}`}
+        onLeave={leave.isPending ? undefined : () => leave.mutate()} />
+      <div className="st-ctn st-invitation-status">{status}</div>
+    </>
+  } else {
+    body = <>
+      <StudentWaitingRoom
+        snapshot={snapshot}
+        heading="Bạn đã vào phòng chờ"
+        intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${date(info.invitationExpiresAt)}.`}
+        meta={`${info.tourName} • Giờ dự kiến ${date(info.scheduledStartAt)}`}
+        showMicCheck={false}
+      >
+        <FallbackVideoLink url={fallback} />
+      </StudentWaitingRoom>
+      <div className="st-ctn st-invitation-status">{status}</div>
+    </>
+  }
+
+  return <div className={info ? 'lp st st-x' : 'lp st st-x st--entry'}>
+    <Backdrop />
+    <StudentHeader
+      session={null}
+      tourName={info?.tourName ?? 'Tham gia Tour được mời'}
+      isLive={info?.tourState === 'RUNNING'}
+      liveLabel="LIVE"
+      portalLabel={info ? sessionLabel : undefined}
+      onLeave={info ? () => leave.mutate() : undefined}
+      leaveLabel="Thoát phiên"
+      leaveDisabled={leave.isPending}
+    />
+    <main className="st-main">{body}</main>
   </div>
 }

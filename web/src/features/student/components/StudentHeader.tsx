@@ -8,6 +8,13 @@ interface StudentHeaderProps {
   tourName?: string
   isLive?: boolean
   onLeave?: () => void
+  /** Text of the leave button (default "Thoát"). */
+  leaveLabel?: string
+  leaveDisabled?: boolean
+  /** Badge beside the brand while live (default: "PHIÊN MẪU" in mock mode, else "LIVE"). */
+  liveLabel?: string
+  /** Right-hand label when there is no named student session, e.g. the invitation type. */
+  portalLabel?: string
 }
 
 /** The landing page's mark, so every surface opens with the same brand. */
@@ -20,12 +27,22 @@ export function StudentHeader({
   tourName = 'Tham quan Campus từ xa',
   isLive = false,
   onLeave,
+  leaveLabel = 'Thoát',
+  leaveDisabled = false,
+  liveLabel = USE_MOCK_API ? 'PHIÊN MẪU' : 'LIVE',
+  portalLabel = 'Cổng tham quan học sinh',
 }: StudentHeaderProps) {
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
   const themeButton = (
     <button type="button" className="st-theme" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối'} title={theme === 'dark' ? 'Nền sáng' : 'Nền tối'}>
       {theme === 'dark' ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+    </button>
+  )
+  const leaveButton = onLeave && (
+    <button type="button" onClick={onLeave} disabled={leaveDisabled} title="Thoát phiên tham quan" className="st-leave">
+      <LogOut size={14} />
+      <span>{leaveLabel}</span>
     </button>
   )
   return (
@@ -37,7 +54,7 @@ export function StudentHeader({
             <div className="st-brand__top">
               <span className="st-brand__name">CampusTour</span>
               {isLive && (
-                <span className="st-live"><i />{USE_MOCK_API ? 'PHIÊN MẪU' : 'LIVE'}</span>
+                <span className="st-live"><i />{liveLabel}</span>
               )}
             </div>
             <h1 className="st-brand__title">{tourName}</h1>
@@ -54,17 +71,13 @@ export function StudentHeader({
               </p>
             </div>
             <div className="st-avatar" aria-hidden="true">{session.studentName.trim().charAt(0)}</div>
-            {onLeave && (
-              <button type="button" onClick={onLeave} title="Thoát phiên tham quan" className="st-leave">
-                <LogOut size={14} />
-                <span>Thoát</span>
-              </button>
-            )}
+            {leaveButton}
           </div>
         ) : (
           <div className="st-user">
             {themeButton}
-            <div className="st-portal"><i />Cổng tham quan học sinh</div>
+            <div className="st-portal"><i />{portalLabel}</div>
+            {leaveButton}
           </div>
         )}
       </div>

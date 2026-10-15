@@ -102,6 +102,13 @@ export function getStudentStatusDisplay(
         description: 'Đường truyền hoặc trạng thái đang cần nhân viên hỗ trợ xử lý. Bạn vẫn có thể hỏi đáp cùng AI.',
       }
 
+    case 'in_progress':
+      return {
+        label: 'Buổi tham quan đang diễn ra',
+        tone: 'info',
+        description: 'Hệ thống chưa gửi vị trí của robot. Bạn vẫn xem được lộ trình và hỏi Trợ lý AI.',
+      }
+
     case 'reconnecting':
       return {
         label: 'Đang kết nối lại; chưa biết trạng thái hiện tại',

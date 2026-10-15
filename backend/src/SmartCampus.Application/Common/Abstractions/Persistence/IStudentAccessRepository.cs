@@ -19,4 +19,11 @@ public interface IStudentAccessRepository
     void Add(BrowserSession session);
     Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct);
     void AddAudit(AuditLog audit);
+    /// <summary>
+    /// Read-only check for Student Q&amp;A: an open, unexpired session of an unrevoked, unexpired invitation on an
+    /// active row of an APPROVED registration of this Tour. Null when any condition fails.
+    /// </summary>
+    Task<StudentQuestionAccess?> FindQuestionAccessAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct);
 }
+
+public sealed record StudentQuestionAccess(Guid SessionId, string TourState, string RowType);

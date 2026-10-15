@@ -18,6 +18,9 @@ interface ImportMetaEnv {
   readonly VITE_QUEST_STATUS_URL?: string
   /** Optional STUN URLs for the Quest stream, comma separated. */
   readonly VITE_QUEST_ICE_SERVERS?: string
+  /** HTTPS MediaMTX stream paths without /whip or /whep; no credentials. */
+  readonly VITE_QUEST_AUDIO_PATH?: string
+  readonly VITE_STAFF_AUDIO_PATH?: string
   /** @deprecated The old HLS address; only read to warn that it is ignored. */
   readonly VITE_QUEST_STREAM_URL?: string
 }

@@ -23,6 +23,7 @@ export type StudentOperationalStep =
   | 'reconnecting'           // Đang kết nối lại; chưa biết trạng thái hiện tại
   | 'ended_completed'        // Buổi đã hoàn thành
   | 'ended_cancelled'        // Buổi đã hủy
+  | 'in_progress'            // Trang thật: Tour RUNNING nhưng chưa có tiến độ robot
 
 export interface PoiDetail {
   id: string
@@ -99,4 +100,12 @@ export interface AiChatMessage {
   poiContext?: string
   status?: 'sending' | 'sent' | 'error'
   isAudioPlaying?: boolean
+  /** Live Q&A: the id sent to the backend, reused when the student retries the same question. */
+  questionId?: string
+  /** Live Q&A: why a student question failed, shown under the bubble. */
+  errorText?: string
+  /** Live Q&A: whether "Thử lại" is offered for a failed question. */
+  retryable?: boolean
+  /** Live Q&A: the POI the answer refers to (the POI at question time), when the backend sent one. */
+  poiName?: string
 }

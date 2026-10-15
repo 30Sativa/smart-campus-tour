@@ -30,6 +30,8 @@ import { homePathForRole } from '../../auth/roles'
  * chunk an operator opening `/staff` downloaded all of it before seeing a tour.
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
+const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
+const QuestIntercomPage = lazy(() => import('../../routes/staff/QuestIntercomPage'))
 
 const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
 const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
@@ -164,6 +166,7 @@ function AdminArea() {
  * clicking through a running app is behaviour that quietly regresses.
  */
 export const routes = [
+  { path: '/quest/intercom', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><QuestAudioPage /></Suspense> },
   {
     path: '/',
     element: (
@@ -239,6 +242,7 @@ export const routes = [
     element: <StaffArea />,
     children: [
       { index: true, element: <OverviewPage /> },
+      { path: 'intercom', element: <QuestIntercomPage /> },
       // Sessions (remote-tour scope): today's list, any day, detail & log,
       // and the pre-start check for a Ready one.
       { path: 'tours', element: <ToursTodayPage /> },

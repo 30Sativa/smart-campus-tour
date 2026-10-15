@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent } from 'react'
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { Bot, Captions, Check, Compass, Flag, ListOrdered, MessageSquare } from 'lucide-react'
 import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
@@ -12,8 +12,21 @@ import '../student.css'
 import '../student-live.css'
 
 interface StudentLiveViewProps {
-  session: StudentSession
+  /** Demo only; the view does not show student identity. */
+  session?: StudentSession
   snapshot: StudentTourSnapshot
+  /** The "Hỏi AI" panel. Defaults to the demo assistant with simulated answers. */
+  ai?: ReactNode
+  /** False hides the 2D map tab, for Tours without a robot pose feed. */
+  showMap?: boolean
+  /** Caption title while no stop is known (default: the Tour name). */
+  idleTitle?: string
+  /** Narration tab text while no stop is being presented. */
+  narrationIdleText?: string
+  /** Badge and empty-state message of the video player. */
+  video?: { badge?: string; emptyMessage?: string }
+  /** Extra content under the journey rail, e.g. a fallback video link. */
+  notice?: ReactNode
 }
 
 const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
@@ -29,8 +42,10 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
  * drops under the video and its tab bar sits at the bottom like an app.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
-export function StudentLiveView({ snapshot }: StudentLiveViewProps) {
-  const tab = useStudentStore((s) => s.activeTab)
+export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice }: StudentLiveViewProps) {
+  const tabs = showMap ? TABS : TABS.filter((t) => t.key !== 'map')
+  const storedTab = useStudentStore((s) => s.activeTab)
+  const tab = tabs.some((t) => t.key === storedTab) ? storedTab : tabs[0].key
   const setTab = useStudentStore((s) => s.setActiveTab)
   const baseId = useId()
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -44,8 +59,8 @@ export function StudentLiveView({ snapshot }: StudentLiveViewProps) {
     const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
     if (!step) return
     event.preventDefault()
-    const index = (TABS.findIndex((t) => t.key === tab) + step + TABS.length) % TABS.length
-    setTab(TABS[index].key)
+    const index = (tabs.findIndex((t) => t.key === tab) + step + tabs.length) % tabs.length
+    setTab(tabs[index].key)
     tabRefs.current[index]?.focus()
   }
 
@@ -62,22 +77,24 @@ export function StudentLiveView({ snapshot }: StudentLiveViewProps) {
       <div className="st-e-grid">
         <div className="st-e-main">
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
-            <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl} statusLabel={stopLabel} />
+            <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
+              badge={video?.badge} emptyMessage={video?.emptyMessage} />
             {/* What is happening, over the picture (the player keeps its own controls below it). */}
             <div className="st-x-caption" aria-live="polite">
               <small><i aria-hidden="true" />{statusDisplay.label}</small>
-              <h2>{snapshot.step === 'returning' ? 'Về điểm kết thúc' : snapshot.currentPoi?.title ?? snapshot.nextPoi?.title ?? snapshot.tourName}</h2>
+              <h2>{snapshot.step === 'returning' ? 'Về điểm kết thúc' : snapshot.currentPoi?.title ?? snapshot.nextPoi?.title ?? idleTitle ?? snapshot.tourName}</h2>
               {statusDisplay.description && <p>{statusDisplay.description}</p>}
             </div>
           </div>
-          <JourneyRail pois={pois} snapshot={snapshot} />
+          {pois.length > 0 && <JourneyRail pois={pois} snapshot={snapshot} />}
+          {notice}
         </div>
 
         <section className="st-e-panel" aria-label="Thông tin buổi tham quan">
           <div className="st-e-tabs" role="tablist" aria-label="Nội dung buổi tham quan" onKeyDown={onTabKey}
-            style={{ ['--tab' as string]: Math.max(0, TABS.findIndex((t) => t.key === tab)) }}>
+            style={{ ['--tab' as string]: Math.max(0, tabs.findIndex((t) => t.key === tab)), ['--tabs' as string]: tabs.length }}>
             <span className="st-e-tabs__ind" aria-hidden="true" />
-            {TABS.map(({ key, label, Icon }, index) => (
+            {tabs.map(({ key, label, Icon }, index) => (
               <button
                 key={key}
                 ref={(el) => { tabRefs.current[index] = el }}
@@ -100,6 +117,7 @@ export function StudentLiveView({ snapshot }: StudentLiveViewProps) {
               title={snapshot.narration?.title || snapshot.currentPoi?.title}
               text={snapshot.narration?.text || snapshot.currentPoi?.description}
               isPlaying={snapshot.narration?.isPlaying}
+              idleText={narrationIdleText}
             />
             {snapshot.nextPoi && (
               <div className="st-e-next">
@@ -112,17 +130,19 @@ export function StudentLiveView({ snapshot }: StudentLiveViewProps) {
             )}
           </div>
 
-          <div {...panel('map')}>
-            <Student2DMap
-              pois={snapshot.pois}
-              currentPoi={snapshot.currentPoi}
-              nextPoi={snapshot.nextPoi}
-              robotPose={snapshot.robotPose}
-            />
-          </div>
+          {showMap && (
+            <div {...panel('map')}>
+              <Student2DMap
+                pois={snapshot.pois}
+                currentPoi={snapshot.currentPoi}
+                nextPoi={snapshot.nextPoi}
+                robotPose={snapshot.robotPose}
+              />
+            </div>
+          )}
 
           <div {...panel('ai')}>
-            <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />
+            {ai ?? <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />}
           </div>
 
           <div {...panel('route')}>

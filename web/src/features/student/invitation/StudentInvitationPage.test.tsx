@@ -9,11 +9,18 @@ import { useAuthStore } from '../../../stores/auth-store'
 const tourId = '11111111-1111-1111-1111-111111111111'
 const otherTour = '22222222-2222-2222-2222-222222222222'
 const key = ['student-invitation', tourId]
+const view = { stops: [
+  { order: 1, poiId: 'p1', name: 'Thư viện trung tâm', description: 'Ba tầng sách.', narrationText: 'Đây là thư viện trung tâm.', audioUrl: null, narrationSeconds: 40, dwellSeconds: 120 },
+  { order: 2, poiId: 'p2', name: 'AI Lab', description: null, narrationText: null, audioUrl: null, narrationSeconds: null, dwellSeconds: 60 },
+], progress: null }
 const info = { tourId, tourName: 'Tour được mời', tourState: 'SCHEDULED', scheduledStartAt: '2026-10-20T02:00:00Z',
   invitationExpiresAt: '2026-10-21T02:00:00Z', rowType: 'INDIVIDUAL', fallbackVideoUrl: null }
 let client: QueryClient
 function response(data: unknown = info, status = 200) {
   return new Response(JSON.stringify({ success: status === 200, data }), { status })
+}
+function fetchCalls() {
+  return (vi.mocked(globalThis.fetch).mock.calls as unknown as [string][]).map(([url]) => url)
 }
 function mount() {
   return render(<QueryClientProvider client={client}><StudentInvitationPage tourId={tourId} /></QueryClientProvider>)
@@ -34,19 +41,22 @@ beforeEach(() => {
 afterEach(() => { client.clear(); vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 it('recovers a cookie session without an access code, account JWT or account refresh', async () => {
-  const fetch = vi.fn(async (_url: string, options: RequestInit) => {
-    expect(options.credentials).toBe('include')
-    expect(options.method).toBe('POST')
-    expect(options.body).toBeUndefined()
-    expect(new Headers(options.headers).get('Authorization')).toBeNull()
-    return response()
-  })
+  const fetch = vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response())
   vi.stubGlobal('fetch', fetch)
   mount()
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
   expect(screen.queryByLabelText('Mã truy cập')).not.toBeInTheDocument()
-  expect(fetch).toHaveBeenCalledTimes(1)
-  expect(fetch.mock.calls[0][0]).toMatch(/\/session$/)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith('/view'))).toBe(true))
+  const calls = fetch.mock.calls as unknown as [string, RequestInit][]
+  expect(calls[0][0]).toMatch(/\/session$/)
+  expect(calls.filter(([url]) => url.endsWith('/session'))).toHaveLength(1)
+  for (const [url, options] of calls) {
+    expect(url).toMatch(/\/(session|view)$/)
+    expect(options.credentials).toBe('include')
+    expect(options.body).toBeUndefined()
+    expect(new Headers(options.headers).get('Authorization')).toBeNull()
+    expect(options.method).toBe(url.endsWith('/session') ? 'POST' : undefined)
+  }
   expect(useAuthStore.getState().accessToken).toBe('account-token')
 })
 
@@ -132,6 +142,7 @@ it('does not let a late anonymous heartbeat discard a successful join', async ()
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/join')) return response()
+    if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response(null, 401) : heartbeat.promise
   }))
   mount()
@@ -151,6 +162,7 @@ it('cancels a pending heartbeat before leave and keeps the room cache empty', as
   let sessions = 0
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     if (url.endsWith('/leave')) return response(null)
+    if (url.endsWith('/view')) return response(view)
     return ++sessions === 1 ? response() : heartbeat.promise
   }))
   mount()
@@ -178,3 +190,50 @@ it('checks the new Tour session after leaving another Tour instead of carrying o
   expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
   expect(fetch.mock.calls.some(([url]) => url.includes(otherTour) && url.endsWith('/session'))).toBe(true)
 })
+
+it('shows the route stops in the waiting room once the view loads', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response()))
+  mount()
+  expect(await screen.findByText('Xem trước 02 điểm dừng')).toBeVisible()
+  expect(screen.getByText('Thư viện trung tâm')).toBeVisible()
+  expect(screen.queryByRole('button', { name: /Micro/ })).not.toBeInTheDocument()
+})
+
+it('keeps the waiting room usable when the route view fails', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(null, 500) : response()))
+  mount()
+  expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
+  await waitFor(() => expect(fetchCalls().some(url => url.endsWith('/view'))).toBe(true))
+  expect(screen.queryByText(/^Xem trước/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+it('shows the live Tour with the current stop, its narration and no map tab', async () => {
+  const running = { ...info, tourState: 'RUNNING' }
+  const live = { ...view, progress: { step: 'OBSERVING', currentPoiId: 'p1', lastArrivedPoiId: 'p1', needsAssistance: false, isHeld: false } }
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(live) : response(running)))
+  mount()
+  expect(await screen.findByText('Đang giới thiệu Thư viện trung tâm')).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Thư viện trung tâm', level: 2 })).toBeVisible()
+  expect(screen.getByText('Thuyết minh điểm dừng')).toBeVisible()
+  expect(screen.queryByRole('tab', { name: /Bản đồ/ })).not.toBeInTheDocument()
+  expect(screen.getAllByRole('tab')).toHaveLength(3)
+  expect(screen.getByText(/Livestream chưa được kết nối/)).toBeVisible()
+  expect(screen.getByText('Đang gắn ngữ cảnh: Điểm Thư viện trung tâm và thông tin chung')).toBeInTheDocument()
+})
+
+it('says the Tour is running when the robot has not reported progress yet', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, tourState: 'RUNNING' })))
+  mount()
+  expect(await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra', level: 2 })).toBeVisible()
+  fireEvent.click(screen.getByRole('tab', { name: /Lộ trình/ }))
+  expect((await screen.findAllByText('AI Lab')).length).toBeGreaterThan(0)
+})
+
+it.each([['CANCELLED', 'Buổi tham quan đã kết thúc sớm'], ['COMPLETED', 'Hoàn thành chuyến tham quan!']])(
+  'shows the end screen for a %s Tour', async (tourState, title) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, tourState })))
+    mount()
+    expect(await screen.findByRole('heading', { name: title })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Thoát phiên' })).toBeEnabled()
+  })

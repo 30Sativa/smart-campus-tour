@@ -3,12 +3,15 @@ import type { StudentSession, StudentTourSnapshot } from '../student-types'
 import { Confetti } from './Confetti'
 
 interface StudentEndScreenProps {
-  session: StudentSession
+  /** Demo session; the invited page has no student identity and passes `name` and `meta` instead. */
+  session?: StudentSession
   snapshot: StudentTourSnapshot
   onLeave?: () => void
+  name?: string
+  meta?: string
 }
 
-export function StudentEndScreen({ session, snapshot, onLeave }: StudentEndScreenProps) {
+export function StudentEndScreen({ session, snapshot, onLeave, name, meta }: StudentEndScreenProps) {
   const isCancelled = snapshot.tourState === 'Cancelled' || snapshot.step === 'ended_cancelled'
 
   const stops = [...snapshot.pois].sort((a, b) => a.order - b.order)
@@ -22,18 +25,18 @@ export function StudentEndScreen({ session, snapshot, onLeave }: StudentEndScree
       <div className="st-kicker">{isCancelled ? 'Buổi tham quan đã dừng' : 'Buổi tham quan đã xong'}</div>
       <h2 className="st-x-display">{isCancelled ? 'Buổi tham quan đã kết thúc sớm' : 'Hoàn thành chuyến tham quan!'}</h2>
       <p className="st-x-lead">
-        Cảm ơn {session.studentName} đã đồng hành cùng Robot AMR.{' '}
+        Cảm ơn {name ?? session?.studentName ?? 'bạn'} đã đồng hành cùng Robot AMR.{' '}
         {isCancelled
           ? 'Buổi tham quan được nhân viên vận hành kết thúc sớm. Hình ảnh trực tiếp và trợ lý AI đã dừng hoạt động.'
           : 'Robot đã hoàn thành chặng đường và về tới vị trí kết thúc an toàn. Hy vọng bạn đã có trải nghiệm thú vị về khuôn viên!'}
       </p>
-      <p className="st-x-meta"><School size={16} /><span>{snapshot.schoolName} • Đoàn {session.groupCode}</span></p>
+      <p className="st-x-meta"><School size={16} /><span>{meta ?? `${snapshot.schoolName} • Đoàn ${session?.groupCode ?? ''}`}</span></p>
 
-      {!isCancelled && (
+      {!isCancelled && stops.length > 0 && (
         <>
           <div className="st-x-stats">
             <div><b>{stops.length}</b><span>điểm dừng đã xem</span></div>
-            {session.studentClass && <div><b>{session.studentClass}</b><span>lớp tham gia</span></div>}
+            {session?.studentClass && <div><b>{session.studentClass}</b><span>lớp tham gia</span></div>}
           </div>
           <h4 className="st-x-sec">Các điểm tham quan trong lộ trình</h4>
           <ol className="st-x-recap">

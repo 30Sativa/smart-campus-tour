@@ -302,4 +302,62 @@ public sealed class InvitationEndpointTests
         Assert.Contains(view.EnumerateArray(), i => i.GetProperty("emailStatus").GetString() == "UNKNOWN");
         Assert.Equal("APPROVED", (await db.GroupRegistrations.SingleAsync()).State);
     }
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> AskAsync(HttpClient client, Guid tour, string? cookie, string text)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/student/tours/{tour}/questions");
+        request.Content = JsonContent.Create(new { questionId = Guid.NewGuid(), text, recentTurns = Array.Empty<object>() });
+        if (cookie is not null) request.Headers.Add("Cookie", cookie);
+        using var response = await client.SendAsync(request);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return (response.StatusCode, json.RootElement.Clone());
+    }
+
+    [SchemaV11Fact]
+    public async Task StudentQuestions_RequireRunningTourAndLiveAccess_AndSendNoSessionData()
+    {
+        await using var assistant = new FakeAssistantServer();
+        await using var f = await Fixture.CreateAsync();
+        var settings = Settings().ToDictionary(p => p.Key, p => p.Value);
+        settings["AiAssistant__BaseUrl"] = assistant.BaseUrl;
+        settings["AiAssistant__ServiceKey"] = "integration-test-service-key";
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId));
+        var cookie = join.Cookie!.Split(';')[0];
+        var sessionToken = cookie.Split('=')[1];
+
+        var early = await AskAsync(host.Client, f.TourId, cookie, "Robot dùng cảm biến gì?");
+        Assert.Equal(HttpStatusCode.Conflict, early.Status);
+        Assert.Equal("TOUR_NOT_RUNNING", early.Body.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Empty(assistant.Requests);
+
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");
+        var answered = await AskAsync(host.Client, f.TourId, cookie, "Robot dùng cảm biến gì?");
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal("Robot dùng LiDAR.", answered.Body.GetProperty("data").GetProperty("answer").GetString());
+        Assert.Equal(JsonValueKind.Null, answered.Body.GetProperty("data").GetProperty("poi").ValueKind);
+        var sent = Assert.Single(assistant.Requests);
+        Assert.Equal("Bearer integration-test-service-key", sent.Authorization);
+        Assert.DoesNotContain("@", sent.Body);
+        Assert.DoesNotContain(sessionToken, sent.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AskAsync(host.Client, f.TourId, null, "Robot?")).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AskAsync(host.Client, f.TourId, cookie, "   ")).Status);
+
+        assistant.Status = 503;
+        assistant.ResponseBody = """{"error":"unavailable"}""";
+        var down = await AskAsync(host.Client, f.TourId, cookie, "Câu khác?");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, down.Status);
+        Assert.Equal("AI_UNAVAILABLE", down.Body.GetProperty("errors").GetProperty("code").GetString());
+
+        assistant.Status = 200;
+        assistant.ResponseBody = """{"answer":"Sau thu hồi.","outOfScope":false,"usedSources":[],"contentVersion":"t"}""";
+        var current = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitationId}/revoke", Write(current, Guid.NewGuid()))).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AskAsync(host.Client, f.TourId, cookie, "Câu sau thu hồi?")).Status);
+        Assert.Equal(2, assistant.Requests.Count);
+    }
 }

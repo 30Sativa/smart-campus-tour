@@ -1,4 +1,4 @@
-import { Bot, CalendarDays, History, LayoutDashboard, ListChecks, MonitorPlay, ShieldCheck } from 'lucide-react'
+import { Bot, CalendarDays, History, LayoutDashboard, ListChecks, MonitorPlay, ShieldCheck, Headset } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -26,6 +26,7 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
+      { label: 'Đàm thoại Quest', path: '/staff/intercom', icon: Headset },
     ],
   },
   {

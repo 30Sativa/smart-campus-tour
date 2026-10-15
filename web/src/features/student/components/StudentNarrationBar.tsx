@@ -6,6 +6,8 @@ interface StudentNarrationBarProps {
   text?: string
   isPlaying?: boolean
   onReplay?: () => void
+  /** Shown when there is no narration for the moment. */
+  idleText?: string
 }
 
 export function StudentNarrationBar({
@@ -13,6 +15,7 @@ export function StudentNarrationBar({
   text,
   isPlaying = false,
   onReplay,
+  idleText = 'Robot đang di chuyển giữa các điểm dừng. Thuyết minh tự động sẽ phát khi tới POI tiếp theo.',
 }: StudentNarrationBarProps) {
   const isAiSpeaking = useStudentStore((s) => s.isAiSpeaking)
 
@@ -20,7 +23,7 @@ export function StudentNarrationBar({
     return (
       <div className="st-narr st-narr--idle">
         <Info size={18} />
-        <span>Robot đang di chuyển giữa các điểm dừng. Thuyết minh tự động sẽ phát khi tới POI tiếp theo.</span>
+        <span>{idleText}</span>
       </div>
     )
   }

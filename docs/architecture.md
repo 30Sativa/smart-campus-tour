@@ -921,9 +921,28 @@ Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain 
 session for configured SessionIdleMinutes (default 10), bounded by invitation
 expiry. First successful entry records INVITATION_ENTERED once per invitation.
 
+Student GET /api/student/tours/{tourId}/view (same cookie and exact-origin check,
+no body, `Cache-Control: no-store`) returns the read-only route for the session's
+Tour: `{ stops: [{ order, poiId, name, description, narrationText, audioUrl,
+narrationSeconds, dwellSeconds }], progress }`. Stops are the active route's
+RouteStops in StopOrder with their POI's approved fields; `audioUrl` is null
+unless it is an https URL without credentials or a same-site path. `progress` is
+null unless the Tour is RUNNING, then `{ step, currentPoiId, lastArrivedPoiId,
+needsAssistance, isHeld }` copied from Tours.CurrentStep (null until the first
+dispatch writes it), CurrentRouteStopId/LastArrivedRouteStopId (as POI IDs),
+OperationalStatus = NEEDS_ASSISTANCE and IsHeld. Any state with a valid session is
+allowed; no session/invitation/Tour → generic 401. No roster, invitation or
+account data. Implementation: `Features/StudentTour/GetStudentTourViewQuery.cs`,
+`EfStudentTourViewReader`, `Api/Controllers/StudentTourController.cs`.
+
 Live Admin review and owner Representative detail share real invitation support.
-SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state;
-non-GUID fixtures retain the labelled demo. No simulated stream/AI/robot state
+SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state, then
+show the same waiting-room, live and end screens as the demo, filled only from
+join/session and /view (polled every 5 s while RUNNING, 30 s otherwise). The page
+shows no student identity, hides the 2D map (no pose feed yet) and says so when
+there is no livestream; a fallback video plays inline only when it is an
+https/same-site .mp4/.webm file, otherwise it is a link. Non-GUID fixtures retain
+the labelled demo. No simulated stream/AI/robot state
 is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
 roster replacement after issuance and retention remain separate. Admin email
 correction is implemented below.
@@ -1400,7 +1419,7 @@ never publishes `/cmd_vel`, sets Nav2 goals, alters `/speed_limit`, or makes a
 movement/safety decision. Student audio/Q&A and livestream use browser/cloud
 paths; their final media transports remain undecided.
 
-### 7.1 Student private Q&A contract (accepted, not implemented)
+### 7.1 Student private Q&A contract (implemented; integration verification pending)
 
 Decision record: [ADR-0016](decisions/0016-student-qa-assistant-stack.md).
 Business rules: `docs/requirements/campus-tour-scope.md` (P0-07, R1-06,
@@ -1415,6 +1434,21 @@ The browser never calls `ai-assistant` or the LLM provider directly. The
 backend owns access checks and the POI snapshot; `ai-assistant` is stateless,
 has no database access and never receives roster data, email, access codes,
 session tokens or account identities.
+
+Implementation: `ai-assistant/` (service), backend
+`Features/StudentQuestions/AskStudentQuestionCommand.cs`,
+`Infrastructure/Integrations/Assistant/HttpAiAssistantClient.cs` and
+`Api/Controllers/StudentQuestionsController.cs`, and the web panel on the invited
+Student page (`web/src/features/student/components/LiveStudentAiAssistant.tsx`,
+shown only while the Tour is `RUNNING`, in the live view's "Hỏi AI" tab). The labelled demo Tour page keeps its
+simulated answers. Voice input is off on the live page until server-side STT
+(P1-01).
+
+Backend configuration (opt-in, validated at startup; secrets outside Git):
+`AiAssistant:BaseUrl` (absolute http(s) URL of the private assistant) and
+`AiAssistant:ServiceKey` (≥ 16 characters, equal to the assistant's
+`AI_SERVICE_KEY`). Without `AiAssistant:BaseUrl` the endpoint returns 503
+`AI_UNAVAILABLE`. Student sessions also require `Invitations:Enabled` (§3.2.3).
 
 #### Public endpoint (backend)
 
@@ -1439,7 +1473,7 @@ session tokens or account identities.
 
 | Status | Code | Meaning |
 |---|---|---|
-| 400 | (validation errors) | Empty/too long text, bad UUID, too many turns |
+| 400 | (validation errors, existing `BaseResponse` format) | Empty/too long text, missing/empty `questionId`, too many or too long turns |
 | 401 | — | No, expired, closed or revoked session; same generic body as §3.2.3 |
 | 409 | `TOUR_NOT_RUNNING` | Tour is not `RUNNING` at acceptance or at answer time |
 | 409 | `QUESTION_ID_REUSED` | Same `questionId` with different text |
@@ -1451,10 +1485,12 @@ Processing order:
 
 1. Validate the request and the session; check invitation not revoked or
    expired and Tour `RUNNING`.
-2. Snapshot the current POI from authoritative Tour progress (§3.2). Until
-   the dispatch use cases exist, the snapshot is `null` (general context).
-   The snapshot includes the POI's approved `Name`, `Description` and
-   `NarrationText` only.
+2. Snapshot the current POI from authoritative Tour progress (§3.2): the POI
+   of `Tours.CurrentRouteStopId` while the Tour is `RUNNING` and `CurrentStep`
+   is `PREPARING_VIEW` or `OBSERVING` (the robot is at the stop); otherwise
+   `null` (general context), including while navigating and until the dispatch
+   use cases write progress. The snapshot includes the POI's approved `Name`,
+   `Description` and `NarrationText` only.
 3. Call `ai-assistant` with the backend budget (below).
 4. Re-check session, invitation and Tour state. If access ended while the
    assistant was working, discard the answer and return 401/409, never the
@@ -1549,7 +1585,7 @@ the data-use condition of the provider tier.
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
 | `backend/` | multi-stage .NET 10 image (`backend/Dockerfile`) | `backend/docker-compose.yml`: HTTPS API + SQL Server + one-shot database bootstrap | one x86_64 AWS EC2 |
-| `ai-assistant/` | Python 3.11+ / FastAPI (ADR-0016); build pipeline TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
+| `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; image TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
 CI never flashes the STM32 and the miniPC never auto-flashes it; see
