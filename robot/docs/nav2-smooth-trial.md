@@ -121,11 +121,17 @@ Overlay chứa branch này: `robot_description`, `robot_control`,
 worktree của branch:
 
 ```bash
-source robot/scripts/source-minipc
-colcon build --symlink-install --base-paths robot/ros2_ws/src \
+source /opt/ros/humble/setup.bash
+source ~/smart-campus-tour/robot/ros2_ws/install/setup.bash
+colcon --log-base ~/.cache/armtc/smoothws/log build --symlink-install \
+  --base-paths robot/ros2_ws/src \
   --packages-select robot_description robot_control robot_navigation robot_nav_plugins \
   --build-base ~/.cache/armtc/smoothws/build --install-base ~/.cache/armtc/smoothws/install
 ```
+
+(`source-minipc` không dùng được từ worktree, nên phải source thẳng install
+chính làm underlay.) Trên miniPC, overlay này đã được build sẵn từ branch, nên
+ngày test không cần build lại.
 
 ## Chạy test
 
