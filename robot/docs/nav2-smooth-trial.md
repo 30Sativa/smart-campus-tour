@@ -197,11 +197,17 @@ source ~/.cache/armtc/smoothws/install/setup.bash
 SHARE=$(ros2 pkg prefix robot_control)/share/robot_control/config
 PARAMS=$SHARE/nav2_params_wide_global_inflation.yaml   # A
 PARAMS=$SHARE/nav2_params_smooth.yaml                  # B1, B2
-ROS_SUPER_CLIENT=TRUE ros2 launch robot_navigation navigation.launch.py \
+ros2 launch robot_navigation navigation.launch.py \
   robot_id:=robot_01 map:="$HOME/smart-campus-tour/robot/robot_maps/map2.yaml" \
   enable_camera:=false rviz:=false nav2_params_file:="$PARAMS" \
   2>&1 | tee "$AMR_RUN_DIR/launch.log"
 ```
+
+Không đặt `ROS_SUPER_CLIENT` cho lệnh launch: biến này chỉ dành cho CLI/daemon
+(`robot/scripts/source-minipc`, `robot/docs/network-ros-discovery.md`). Lượt A/B1
+ngày 16/10 lỡ launch Nav2 kèm biến này, và cùng lúc `/scan` bị đứng tới 2.5 s
+(15/10 không có). Nguyên nhân chưa chứng minh; xem
+`analysis_B1.md` của lượt đó.
 
 **Kiểm tra trước khi gửi goal** (ghi kết quả vào `notes.md`):
 
