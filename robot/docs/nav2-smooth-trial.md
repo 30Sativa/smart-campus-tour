@@ -1,8 +1,12 @@
 # Nav2 — thử nghiệm độ mượt: goal checker giữ latch + 0.20 m/s
 
-Trạng thái: **READY FOR HARDWARE TEST** (chỉ mới kiểm thử offline). Chạy cùng
-bản hiệu chỉnh LiDAR `lidar_yaw=-0.2225` (mặc định của launch robot thật trên
-branch này). Opt-in bằng `nav2_params_file`; launch mặc định không đổi.
+Trạng thái: **LỊCH SỬ.** Đây là kế hoạch và bằng chứng offline của thử nghiệm
+dẫn tới **[Nav2 Baseline V1](nav2-baseline-v1.md)**. Dùng file baseline cho cấu
+hình, cách chạy và giới hạn hiện hành.
+
+**Lưu ý đã sửa (16/10):** không đặt `ROS_SUPER_CLIENT` cho lệnh launch Nav2.
+Gián đoạn `/scan` trong các lượt A/B1/B2 **không** do biến này. Nguyên nhân là
+một subscriber `/scan` ở máy khác qua Wi-Fi (xem baseline, mục 6).
 
 ## Thay đổi
 
@@ -197,7 +201,7 @@ source ~/.cache/armtc/smoothws/install/setup.bash
 SHARE=$(ros2 pkg prefix robot_control)/share/robot_control/config
 PARAMS=$SHARE/nav2_params_wide_global_inflation.yaml   # A
 PARAMS=$SHARE/nav2_params_smooth.yaml                  # B1, B2
-ROS_SUPER_CLIENT=TRUE ros2 launch robot_navigation navigation.launch.py \
+ros2 launch robot_navigation navigation.launch.py \
   robot_id:=robot_01 map:="$HOME/smart-campus-tour/robot/robot_maps/map2.yaml" \
   enable_camera:=false rviz:=false nav2_params_file:="$PARAMS" \
   2>&1 | tee "$AMR_RUN_DIR/launch.log"

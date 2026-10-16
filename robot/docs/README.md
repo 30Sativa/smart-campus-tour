@@ -15,9 +15,11 @@ changing robot code.
   discovery and debugging.
 - [Nav2 turn test](nav2-turn-test.md) — hardware-test procedure; check its
   READY FOR HARDWARE TEST status before relying on the parameters.
-- [Nav2 smoothness trial](nav2-smooth-trial.md) — opt-in
-  `nav2_params_smooth.yaml` (LatchedGoalChecker + 0.20 m/s): offline evidence,
-  launch, bag, rollback and acceptance criteria. READY FOR HARDWARE TEST.
+- [Nav2 Baseline V1](nav2-baseline-v1.md) — current development/test baseline
+  (LiDAR yaw −0.2225, LatchedGoalChecker, 0.20 m/s): definition, run rules,
+  expected behaviour, evidence, known limits. Not production-ready.
+- [Nav2 smoothness trial](nav2-smooth-trial.md) — historical trial plan and
+  offline evidence that led to Baseline V1.
 - [RViz / TF / Nav2 debug note](rviz-tf-nav2-debug-note.md) — operator-reported
   observations, lifecycle/planner triage and Docker comparison plan; not a
   verified hardware fix.
