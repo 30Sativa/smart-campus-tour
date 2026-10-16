@@ -1,9 +1,11 @@
 // Copyright 2026 Smart Campus Tour
 // Licensed under the Apache License, Version 2.0
 
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -68,10 +70,48 @@ TEST(LatchedGoalChecker, DefaultsBehaveLikeSimpleGoalChecker)
   EXPECT_FALSE(f.checker.isGoalReached(pose(7.70, 7.70, 1.0), kGoal, f.still));
   EXPECT_TRUE(f.checker.latched());
   EXPECT_DOUBLE_EQ(f.reportedXy(), 0.15);
-  // Stock behaviour: a path update resets the latch.
+  // Stock behaviour: no radius check while latched...
+  EXPECT_FALSE(f.checker.isGoalReached(pose(7.30, 7.78, 1.0), kGoal, f.still));  // 0.48 m
+  EXPECT_TRUE(f.checker.latched());
+  // ...and a path update resets the latch.
   f.checker.reset();
   EXPECT_FALSE(f.checker.latched());
   EXPECT_FALSE(f.checker.isGoalReached(pose(7.62, 7.70, -1.37), kGoal, f.still));  // 0.18 m
+}
+
+TEST(LatchedGoalChecker, LiveRollbackParametersRestoreSimpleGoalChecker)
+{
+  Fixture f(kEnabled);
+  EXPECT_FALSE(f.checker.isGoalReached(pose(7.66, 7.70, 1.0), kGoal, f.still));
+  ASSERT_TRUE(f.checker.latched());
+  ASSERT_TRUE(f.node->set_parameter(rclcpp::Parameter("gc.relatch_distance", 0.0)).successful);
+  ASSERT_TRUE(
+    f.node->set_parameter(rclcpp::Parameter("gc.latched_xy_tolerance", 0.15)).successful);
+  EXPECT_FALSE(f.checker.extensionsEnabled());
+  EXPECT_DOUBLE_EQ(f.reportedXy(), 0.15);
+  // Like SimpleGoalChecker: no radius check while latched, reset clears.
+  EXPECT_FALSE(f.checker.isGoalReached(pose(7.30, 7.78, 1.0), kGoal, f.still));
+  EXPECT_TRUE(f.checker.latched());
+  f.checker.reset();
+  EXPECT_FALSE(f.checker.latched());
+}
+
+TEST(LatchedGoalChecker, NewFollowPathAfterAPauseStartsUnlatched)
+{
+  // A success, cancel or recovery ends the control loop; the next FollowPath
+  // (even to the same place) must earn the latch again.
+  auto params = kEnabled;
+  params.push_back(rclcpp::Parameter("gc.relatch_max_gap", 0.05));
+  Fixture f(params);
+  EXPECT_FALSE(f.checker.isGoalReached(pose(7.66, 7.70, 1.0), kGoal, f.still));  // 0.144 m
+  ASSERT_TRUE(f.checker.latched());
+  std::this_thread::sleep_for(std::chrono::milliseconds(120));
+  f.checker.reset();
+  EXPECT_FALSE(f.checker.latched());
+  EXPECT_DOUBLE_EQ(f.reportedXy(), 0.15);
+  // Robot nudged to 0.19 m meanwhile: right heading is not enough any more.
+  EXPECT_FALSE(f.checker.isGoalReached(pose(7.61, 7.70, -1.37), kGoal, f.still));
+  EXPECT_FALSE(f.checker.latched());
 }
 
 TEST(LatchedGoalChecker, NotReachedOutsideXyEvenWithRightHeading)

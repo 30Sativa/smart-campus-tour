@@ -54,6 +54,10 @@ def test_latch_parameters_are_bounded():
     assert xy < checker['latched_xy_tolerance'] <= 0.40
     # A path end that moved more than this is a different goal.
     assert 0.0 < checker['relatch_distance'] <= xy
+    # Longer than a few control periods (replans arrive inside the loop), far
+    # shorter than any success -> new goal or recovery round trip.
+    period = 1.0 / _controller(_load(SMOOTH))['controller_frequency']
+    assert 3 * period <= checker['relatch_max_gap'] <= 2.0
 
 
 def test_goal_checker_plugin_is_exported_and_a_dependency():

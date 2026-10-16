@@ -4,6 +4,7 @@
 #include "robot_nav_plugins/latched_goal_checker.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -50,8 +51,11 @@ void LatchedGoalChecker::initialize(
     node, plugin_name + ".latched_xy_tolerance", rclcpp::ParameterValue(xy_goal_tolerance_));
   nav2_util::declare_parameter_if_not_declared(
     node, plugin_name + ".relatch_distance", rclcpp::ParameterValue(0.0));
+  nav2_util::declare_parameter_if_not_declared(
+    node, plugin_name + ".relatch_max_gap", rclcpp::ParameterValue(1.0));
   node->get_parameter(plugin_name + ".latched_xy_tolerance", latched_xy_tolerance_);
   node->get_parameter(plugin_name + ".relatch_distance", relatch_distance_);
+  node->get_parameter(plugin_name + ".relatch_max_gap", relatch_max_gap_);
 
   if (!(latched_xy_tolerance_ >= xy_goal_tolerance_)) {
     RCLCPP_WARN(
@@ -63,10 +67,16 @@ void LatchedGoalChecker::initialize(
     RCLCPP_WARN(logger_, "%s.relatch_distance < 0; disabled.", plugin_name.c_str());
     relatch_distance_ = 0.0;
   }
+  if (!(relatch_max_gap_ > 0.0)) {
+    RCLCPP_WARN(logger_, "%s.relatch_max_gap <= 0; using 1.0 s.", plugin_name.c_str());
+    relatch_max_gap_ = 1.0;
+  }
   RCLCPP_INFO(
-    logger_, "%s: xy %.3f, yaw %.3f, stateful %d, latched_xy %.3f, relatch_distance %.3f",
+    logger_,
+    "%s: xy %.3f, yaw %.3f, stateful %d, latched_xy %.3f, relatch_distance %.3f, "
+    "relatch_max_gap %.2f s",
     plugin_name.c_str(), xy_goal_tolerance_, yaw_goal_tolerance_, stateful_,
-    latched_xy_tolerance_, relatch_distance_);
+    latched_xy_tolerance_, relatch_distance_, relatch_max_gap_);
 
   latch_params_handler_ = node->add_on_set_parameters_callback(
     std::bind(&LatchedGoalChecker::latchParametersCallback, this, std::placeholders::_1));
@@ -75,6 +85,13 @@ void LatchedGoalChecker::initialize(
 double LatchedGoalChecker::latchedXyTolerance() const
 {
   return std::max(latched_xy_tolerance_, xy_goal_tolerance_);
+}
+
+bool LatchedGoalChecker::extensionsEnabled() const
+{
+  // relatch_distance 0 and latched_xy_tolerance == xy_goal_tolerance make this
+  // class behave exactly like SimpleGoalChecker (the live rollback).
+  return relatch_distance_ > 0.0 || latchedXyTolerance() > xy_goal_tolerance_;
 }
 
 void LatchedGoalChecker::release(const char * why)
@@ -89,10 +106,20 @@ void LatchedGoalChecker::release(const char * why)
 
 void LatchedGoalChecker::reset()
 {
-  if (!check_xy_ && have_latched_goal_ && relatch_distance_ > 0.0) {
+  // controller_server resets on every path update inside one control loop
+  // (BT replan, ~1 Hz) and also when a NEW FollowPath starts after a success,
+  // cancel or recovery. Only the former may keep the latch: the previous check
+  // must be from the running loop (the controller checks every cycle).
+  const bool same_loop = have_latched_goal_ &&
+    std::chrono::duration<double>(std::chrono::steady_clock::now() - last_check_).count() <=
+    relatch_max_gap_;
+  if (!check_xy_ && same_loop && relatch_distance_ > 0.0) {
     // Decide on the next isGoalReached(), which carries the new path end.
     reset_pending_ = true;
     return;
+  }
+  if (!check_xy_) {
+    RCLCPP_INFO(logger_, "Goal xy latch cleared (new path).");
   }
   SimpleGoalChecker::reset();
   have_latched_goal_ = false;
@@ -103,6 +130,7 @@ bool LatchedGoalChecker::isGoalReached(
   const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose & goal_pose,
   const geometry_msgs::msg::Twist & velocity)
 {
+  last_check_ = std::chrono::steady_clock::now();
   const bool path_updated = reset_pending_;
   if (reset_pending_) {
     reset_pending_ = false;
@@ -111,7 +139,9 @@ bool LatchedGoalChecker::isGoalReached(
       release("goal moved");
     }
   }
-  if (!check_xy_ && planarDistance(query_pose, goal_pose) > latchedXyTolerance()) {
+  if (!check_xy_ && extensionsEnabled() &&
+    planarDistance(query_pose, goal_pose) > latchedXyTolerance())
+  {
     release("robot left the latched radius");
   }
 
@@ -157,6 +187,8 @@ LatchedGoalChecker::latchParametersCallback(std::vector<rclcpp::Parameter> param
       latched_xy_tolerance_ = parameter.as_double();
     } else if (name == plugin_name_ + ".relatch_distance") {
       relatch_distance_ = std::max(0.0, parameter.as_double());
+    } else if (name == plugin_name_ + ".relatch_max_gap" && parameter.as_double() > 0.0) {
+      relatch_max_gap_ = parameter.as_double();
     }
   }
   return result;

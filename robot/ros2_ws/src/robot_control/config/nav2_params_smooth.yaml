@@ -15,7 +15,8 @@
 #   ros2 param set /robot_01/controller_server FollowPath.desired_linear_vel 0.24
 #   ros2 param set /robot_01/controller_server goal_checker.relatch_distance 0.0
 #   ros2 param set /robot_01/controller_server goal_checker.latched_xy_tolerance 0.15
-# (the last two make LatchedGoalChecker behave exactly like SimpleGoalChecker).
+# (the last two together make LatchedGoalChecker behave exactly like
+# SimpleGoalChecker; covered by its unit tests).
 # =============================================================================
 # nav2_params.yaml - Nav2 baseline for the campus-tour AMR (ROS 2 Humble).
 #
@@ -115,6 +116,10 @@ controller_server:
       stateful: true
       latched_xy_tolerance: 0.35
       relatch_distance: 0.10
+      # A path update keeps the latch only inside a running control loop (last
+      # check <= this long ago). A new FollowPath after a success, cancel or
+      # recovery always starts unlatched.
+      relatch_max_gap: 1.0
 
     # -----------------------------------------------------------------------
     # Regulated Pure Pursuit. Plugin id is the fully qualified type: the class

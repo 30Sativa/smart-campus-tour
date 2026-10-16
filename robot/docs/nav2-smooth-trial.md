@@ -14,6 +14,7 @@ cộng đúng 2 thay đổi (contract test `test_nav2_smooth_contract.py` khoá 
 | 1 | `controller_server.goal_checker.plugin` | `nav2_controller::SimpleGoalChecker` | `robot_nav_plugins::LatchedGoalChecker` |
 |   | `goal_checker.latched_xy_tolerance` | — | 0.35 m |
 |   | `goal_checker.relatch_distance` | — | 0.10 m |
+|   | `goal_checker.relatch_max_gap` | — | 1.0 s |
 | 2 | `controller_server.FollowPath.desired_linear_vel` | 0.24 | 0.20 m/s |
 
 Giữ nguyên: ngưỡng chấp nhận goal (0.15 m, 0.30 rad, stateful), velocity
@@ -40,20 +41,50 @@ Bằng chứng:
 - **Bag 13/10:** 4 lần quay rời nhau ở đích.
 - **Bag 15/10:** robot lượn ở 0.16–0.21 m quanh POI_01 khoảng 8 s.
 
-Plugin này kế thừa `SimpleGoalChecker` và chỉ thêm hai việc:
+Đối chiếu source Nav2 1.1.20 (bản đang cài):
 
-- Giữ latch qua các lần path cập nhật nếu vector robot→goal đổi
-  ≤ `relatch_distance` **và** robot còn trong `latched_xy_tolerance`. Goal ở
-  chỗ khác thì xoá latch. Plugin so vector tương đối chứ không so toạ độ
-  tuyệt đối: controller đưa goal theo frame `odom`, nên khi AMCL chỉnh 1° góc
-  thì goal ở POI_01 (cách gốc `odom` khoảng 11 m) "nhảy" khoảng 0.19 m. Lỗi này
-  đã bắt được trong mô phỏng nhiễu cao và đã có test riêng.
-- Sau khi đã latch, báo `latched_xy_tolerance` cho RPP để RPP ở yên chế độ
-  quay về hướng goal.
+- `controller_server.cpp`: `setPlannerPath()` gọi `goal_checker->reset()`.
+  Hàm này chạy cả khi bắt đầu FollowPath (`computeControl`) lẫn khi bị preempt
+  (`updateGlobalPath`, mỗi lần BT replan). `isGoalReached()` so robot với **cuối
+  path** đã đổi sang frame `odom`. Thứ tự mỗi chu kỳ là: cập nhật path → RPP
+  tính lệnh → `isGoalReached`.
+- `regulated_pure_pursuit_controller.cpp`: `goal_dist_tol_` lấy từ
+  `getTolerances()` mỗi chu kỳ. RPP quay về hướng goal (`v = 0`) khi
+  `hypot(carrot) < goal_dist_tol_`; gần cuối path thì carrot chính là điểm cuối
+  path. `rotateToHeading` đã có giảm tốc trước khi tới góc đích.
 
-Robot rời xa hơn `latched_xy_tolerance` thì mất latch. Điều kiện chấp nhận
-goal không đổi. Nếu đặt `relatch_distance=0` và `latched_xy_tolerance` bằng
-`xy_goal_tolerance`, plugin chạy y hệt `SimpleGoalChecker` (đã có unit test).
+Plugin kế thừa `SimpleGoalChecker` và chỉ thêm hai việc:
+
+- **Giữ latch qua replan.** Một lần reset chỉ giữ latch khi đủ cả ba điều kiện:
+  - lần kiểm tra trước nằm trong cùng vòng điều khiển (≤ `relatch_max_gap`
+    = 1 s);
+  - vector robot→goal đổi ≤ `relatch_distance` (0.10 m). Plugin so vector
+    tương đối, vì so toạ độ tuyệt đối trong frame `odom` sẽ "nhảy" khoảng 0.19 m
+    mỗi 1° AMCL chỉnh góc ở POI_01;
+  - robot còn trong `latched_xy_tolerance`.
+- **Sau khi đã latch,** báo `latched_xy_tolerance` (0.35 m) cho RPP để RPP ở yên
+  chế độ quay về hướng goal.
+
+Rà soát rủi ro (mỗi dòng có unit test; 8/8 mutant bị test bắt):
+
+| Tình huống | Hành vi |
+|---|---|
+| BT replan cùng goal (~1 Hz) khi đang quay ở đích | giữ latch, RPP tiếp tục quay; log `xy latch kept` |
+| Goal mới (`GoalUpdated`/preempt) cách goal cũ > 0.10 m | xoá latch ngay ở chu kỳ đó (`goal moved`) |
+| Goal xong hoặc bị cancel, rồi FollowPath mới (kể cả cùng chỗ) | bắt đầu chưa latch, phải vào lại ≤ 0.15 m |
+| Recovery (spin/wait/clear costmap) rồi FollowPath lại | như trên (vòng điều khiển đã dừng > 1 s) |
+| Robot thật sự rời xa > 0.35 m (bị đẩy, trượt, AMCL nhảy) | xoá latch, RPP chạy lại về đích bình thường |
+| Robot lệch 0.15–0.35 m khi đang latch | vẫn quay tại chỗ (`v = 0`). Thành công khi đúng góc, giống `SimpleGoalChecker` stateful khi không bị reset |
+
+**Plugin không làm goal thành công sớm hơn về vị trí.** Robot vẫn phải vào
+≤ 0.15 m (so với cuối path) mới latch. Sau khi latch, RPP chỉ quay (`v = 0`),
+nên vị trí lúc báo thành công chính là vị trí lúc latch. Mô phỏng cho sai số vị
+trí thật 0.12–0.17 m, cấu hình cũ là 0.11–0.14 m. Điều plugin chặn là việc RPP
+quay ngược về cuối path khi nhiễu đẩy khoảng cách vượt 0.15 m.
+
+Chưa xử lý: robot lượn chậm ở 0.16–0.21 m mà chưa từng vào 0.15 m (bag 15/10).
+Hiện tượng này không tái hiện được trong mô phỏng. Nhiễu định vị giảm khoảng
+một nửa sau khi sửa LiDAR. Nếu còn thấy trong bag test thì đó là việc riêng.
 
 ### 2. `desired_linear_vel` 0.24 → 0.20
 
@@ -98,6 +129,16 @@ Kiểm tra độ bền với nhiễu cao, như trước khi sửa LiDAR (hiệu 
 | 0.6 m cuối (s) | 20.8 (9.6–26.5) | 9.7 (8.1–21.8) | 9.7 (9.5–10.4) |
 | Sai số vị trí cuối (m) | 0.12 (0.06–0.14) | 0.20 (0.15–0.24) | 0.15 (0.09–0.19) |
 
+Code cuối, sau review ngày 16/10 (thêm `relatch_max_gap`, rollback đúng như
+bản gốc), chạy lại 5 vòng (10 lượt, cả hai mức nhiễu):
+
+- 0 lần quay qua lại.
+- Robot chỉ tịnh tiến 0–1.2 cm từ lúc latch tới lúc báo thành công.
+- Mỗi lần sang goal mới đều có log `latch cleared (new path)`.
+
+Một lượt có recovery giữa đường do planner bị trễ, vì lúc đó máy chạy song song
+pytest. Chạy lại seed đó khi máy rảnh thì bình thường.
+
 Sai số vị trí thật tăng nhẹ (tối đa 0.17 so với 0.14 m) vì latch được giữ
 trong khi nhiễu định vị vẫn còn; ngưỡng chấp nhận không đổi. Góc quay ở đích
 (khoảng 130°) là do hướng POI so với hướng tới, không phải do
@@ -135,33 +176,43 @@ ngày test không cần build lại.
 
 ## Chạy test
 
-Mỗi cấu hình là một session log riêng (`robot/docs/logging.md`). Đặt cùng
-initial pose ở START, và gửi cùng một cặp goal như dưới đây.
+Cả ba cấu hình chạy từ **cùng overlay, cùng launch**, nên cùng có bản sửa LiDAR
+(`lidar_yaw` mặc định −0.2225 nằm ở launch, không ở params Nav2). Cấu hình
+chỉ khác nhau ở params Nav2, mỗi bước thêm đúng một thay đổi:
 
-Terminal 1, Nav2:
+| | `nav2_params_file` | Thêm sau khi launch |
+|---|---|---|
+| **A** đối chứng | `nav2_params_wide_global_inflation.yaml` | — |
+| **B1** chỉ plugin | `nav2_params_smooth.yaml` | `ros2 param set /robot_01/controller_server FollowPath.desired_linear_vel 0.24` |
+| **B2** plugin + 0.20 m/s | `nav2_params_smooth.yaml` | — |
+
+Mỗi cấu hình là một session log mới (`robot/docs/logging.md`), cùng initial
+pose ở START, một vòng START→POI_01→START (B2 hai vòng nếu kịp).
+
+**Terminal 1, Nav2:**
 
 ```bash
 source robot/scripts/source-minipc
 source ~/.cache/armtc/smoothws/install/setup.bash
 SHARE=$(ros2 pkg prefix robot_control)/share/robot_control/config
-# A = đối chứng (LiDAR đã sửa, params đang dùng); B = thử nghiệm
 PARAMS=$SHARE/nav2_params_wide_global_inflation.yaml   # A
-PARAMS=$SHARE/nav2_params_smooth.yaml                  # B
+PARAMS=$SHARE/nav2_params_smooth.yaml                  # B1, B2
 ROS_SUPER_CLIENT=TRUE ros2 launch robot_navigation navigation.launch.py \
   robot_id:=robot_01 map:="$HOME/smart-campus-tour/robot/robot_maps/map2.yaml" \
   enable_camera:=false rviz:=false nav2_params_file:="$PARAMS" \
   2>&1 | tee "$AMR_RUN_DIR/launch.log"
 ```
 
-Trước khi gửi goal, kiểm tra ba điều:
+**Kiểm tra trước khi gửi goal** (ghi kết quả vào `notes.md`):
 
-- `ros2 run tf2_ros tf2_echo base_link lidar_link`: yaw khoảng −12.75°.
-- `launch.log` (chỉ với B) có dòng
-  `goal_checker: xy 0.150, yaw 0.300, stateful 1, latched_xy 0.350, relatch_distance 0.100`.
-- `ros2 param get /robot_01/controller_server FollowPath.desired_linear_vel`:
-  0.24 với A, 0.2 với B.
+```bash
+grep -c "Managed nodes are active" "$AMR_RUN_DIR/launch.log"                # phải >= 2 (localization + navigation); nếu không: Ctrl+C, launch lại
+ROS_SUPER_CLIENT=TRUE ros2 run tf2_ros tf2_echo base_link lidar_link        # cả 3: yaw ≈ -12.75°
+grep "goal_checker" "$AMR_RUN_DIR/launch.log"                               # A: SimpleGoalChecker; B: LatchedGoalChecker ... relatch_max_gap 1.00 s
+ROS_SUPER_CLIENT=TRUE ros2 param get /robot_01/controller_server FollowPath.desired_linear_vel   # A 0.24, B1 0.24 (sau set), B2 0.2
+```
 
-Terminal 2, bag (bật **trước** khi gửi goal; dừng bằng Ctrl+C rồi đợi ghi xong):
+**Terminal 2, bag:** bật trước goal; dừng bằng Ctrl+C rồi đợi ghi xong.
 
 ```bash
 ROS_SUPER_CLIENT=TRUE ros2 bag record --include-hidden-topics -o "$AMR_RUN_DIR/bag" \
@@ -177,7 +228,7 @@ ROS_SUPER_CLIENT=TRUE ros2 bag record --include-hidden-topics -o "$AMR_RUN_DIR/b
   2>&1 | tee "$AMR_RUN_DIR/bag_record.log"
 ```
 
-Terminal 3, goal (cùng toạ độ với lần 15/10 để so sánh):
+**Terminal 3, goal** (cùng toạ độ với lần 15/10):
 
 ```bash
 ROS_SUPER_CLIENT=TRUE ros2 action send_goal /robot_01/navigate_to_pose nav2_msgs/action/NavigateToPose \
@@ -188,41 +239,41 @@ ROS_SUPER_CLIENT=TRUE ros2 action send_goal /robot_01/navigate_to_pose nav2_msgs
   --feedback 2>&1 | tee -a "$AMR_RUN_DIR/goal.log"
 ```
 
-Thứ tự đề xuất: A một vòng, B hai vòng.
-
 ## Rollback
 
-Ưu tiên theo thứ tự:
-
-1. **Từng mục, ngay khi đang chạy** (không cần restart):
+1. **Từng mục, ngay khi đang chạy** (đã kiểm trong mô phỏng: có hiệu lực ngay,
+   không cần restart):
 
    ```bash
-   ROS_SUPER_CLIENT=TRUE ros2 param set /robot_01/controller_server FollowPath.desired_linear_vel 0.24
-   ROS_SUPER_CLIENT=TRUE ros2 param set /robot_01/controller_server goal_checker.relatch_distance 0.0
-   ROS_SUPER_CLIENT=TRUE ros2 param set /robot_01/controller_server goal_checker.latched_xy_tolerance 0.15
+   C=/robot_01/controller_server
+   ROS_SUPER_CLIENT=TRUE ros2 param set $C FollowPath.desired_linear_vel 0.24     # bỏ 0.20 m/s
+   ROS_SUPER_CLIENT=TRUE ros2 param set $C goal_checker.relatch_distance 0.0      # } hai lệnh này cùng nhau:
+   ROS_SUPER_CLIENT=TRUE ros2 param set $C goal_checker.latched_xy_tolerance 0.15 # } plugin = SimpleGoalChecker
    ```
 
-   Lệnh 2 và 3 cùng nhau đưa plugin về đúng hành vi `SimpleGoalChecker`.
-2. **Toàn bộ cấu hình độ mượt:** launch lại với
-   `nav2_params_wide_global_inflation.yaml`.
-3. **Cả bản sửa LiDAR:** thêm `lidar_yaw:=0.0`, hoặc không source overlay.
+2. **Bỏ toàn bộ độ mượt:** launch lại với `nav2_params_wide_global_inflation.yaml`
+   (cấu hình A, plugin không được nạp).
+3. **Bỏ cả bản sửa LiDAR:** thêm `lidar_yaw:=0.0`, hoặc không source overlay.
 
 ## Tiêu chí đánh giá
 
 Phân tích bag bằng `trips.py`, `extract.py`, `smooth.py`, `metrics.py`
 (`~/.cache/armtc/analysis`).
 
-| Chỉ số | 15/10 (cũ) | Đạt (B) |
+So **B1 với A** để đánh giá plugin (hành vi ở đích). So **B2 với B1** để đánh
+giá tốc độ (bridge scale, gia tốc góc, thời gian).
+
+| Chỉ số | 15/10 (cũ) | Đạt |
 |---|---|---|
-| Quay qua lại / lượn ở đích; lỗi progress | có (POI_01) | 0 |
-| 0.6 m cuối | 12.5 / 11.0 s | ≤ 11 s, gồm cả lần quay theo yaw POI |
-| Quay tại chỗ ở đích | 22° / 148° | chỉ một lần, đúng chiều, ≤ góc cần + 20° |
-| Dừng ≥ 0.3 s giữa đường | 0 / 1 | 0 |
-| Lệnh bị bridge scale | 39 / 50 % | < 5 % |
-| \|dω/dt\| thực p95 khi chạy | 0.22–0.24 rad/s² | ≤ giá trị của A |
+| Quay qua lại / lượn ở đích; lỗi progress | có (POI_01) | B1, B2: 0 |
+| 0.6 m cuối | 12.5 / 11.0 s | B1, B2: ≤ 11 s, gồm cả lần quay theo yaw POI |
+| Quay tại chỗ ở đích | 22° / 148° | một lần, đúng chiều, ≤ góc cần + 20° |
+| Tịnh tiến sau khi latch (log `xy latched` → `Goal succeeded`) | — | ≤ 0.05 m |
 | Sai số dừng (AMCL so với goal) | — | ≤ 0.20 m; yaw ≤ 0.30 rad |
-| Khoảng hở khi chạy | 0.44 m | ≥ 0.7 m (nhờ bản sửa LiDAR), không kém A |
-| Recovery, collision stop | 0 (trừ goal bị chiếm) | 0 |
+| Lệnh bị bridge scale | 39 / 50 % | B2: < 5 % |
+| \|dω/dt\| thực p95 khi chạy | 0.22–0.24 rad/s² | B2 ≤ B1 |
+| Khoảng hở khi chạy | 0.44 m | ≥ 0.7 m, không kém A |
+| Dừng ≥ 0.3 s giữa đường; recovery; collision stop | 0 / 1; 0 | 0 |
 
 Rollback ngay nếu thấy một trong các dấu hiệu sau:
 
