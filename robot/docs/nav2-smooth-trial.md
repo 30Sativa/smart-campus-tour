@@ -6,7 +6,7 @@ hình, cách chạy và giới hạn hiện hành.
 
 **Lưu ý đã sửa (16/10):** không đặt `ROS_SUPER_CLIENT` cho lệnh launch Nav2.
 Gián đoạn `/scan` trong các lượt A/B1/B2 **không** do biến này. Nguyên nhân là
-một subscriber `/scan` ở máy khác qua Wi-Fi (xem baseline, mục 5).
+một subscriber `/scan` ở máy khác qua Wi-Fi (xem baseline, mục 6).
 
 ## Thay đổi
 
