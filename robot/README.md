@@ -13,6 +13,7 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `robot_control` | mode manager (cmd_vel mux), manual / manual-mapping / auto-explore launches, Nav2 + SLAM configs, frontier explorer |
 | `robot_description` | URDF/xacro robot model, Gazebo + display launches |
 | `robot_navigation` | localization (map_server + AMCL) and navigation on a saved map |
+| `robot_nav_plugins` | Nav2 plugins (C++): `LatchedGoalChecker`, used only by the opt-in `nav2_params_smooth.yaml` |
 | `orbbec_bringup` | Astra Pro depth camera bringup + mount TF + Phase 2 depth diagnostics |
 | `robot_perception` | Phase 4 person perception -> Nav2 speed limit |
 | `gazebo_preview_bridge` | Development-only Gazebo telemetry -> local backend `SimulationPreview` |

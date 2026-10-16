@@ -23,6 +23,7 @@ def generate_launch_description():
     odom_frame = LaunchConfiguration('odom_frame')
     initial_mode = LaunchConfiguration('initial_mode')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    lidar_yaw = LaunchConfiguration('lidar_yaw')
     ekf_params_file = LaunchConfiguration('ekf_params_file')
 
     default_ekf_params = PathJoinSubstitution([
@@ -43,7 +44,8 @@ def generate_launch_description():
     # la min: chay ros2_control_node mot cai la gianh cong LiDAR.
     robot_description = ParameterValue(
         Command(['xacro ', robot_xacro,
-                 ' use_sim:=false use_ros2_control:=false']),
+                 ' use_sim:=false use_ros2_control:=false',
+                 ' lidar_yaw:=', lidar_yaw]),
         value_type=str,
     )
 
@@ -98,6 +100,16 @@ def generate_launch_description():
                               description='manual or explore.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='Use simulation clock.'),
+        # Measured 2026-10-15: in the straight corridor the walls appear
+        # rotated 12.5-13.3 deg in the scan while wheel odometry and the
+        # LiDAR wall distances show the robot driving parallel to them (4
+        # passes, 2 days, both directions, scan handedness checked). Offline
+        # AMCL replays: lateral error -0.09..-0.20 m at 0 rad, 0.02-0.04 m at
+        # this value. Pass lidar_yaw:=0.0 to roll back without rebuilding.
+        DeclareLaunchArgument(
+            'lidar_yaw', default_value='-0.2225',
+            description='Real-robot base_link->lidar_link yaw calibration '
+                        '(rad). 0.0 = nominal CAD mount.'),
         DeclareLaunchArgument(
             'ekf_params_file', default_value=default_ekf_params,
             description='robot_localization EKF parameter file. Default '

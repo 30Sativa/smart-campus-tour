@@ -26,6 +26,7 @@
   <exec_depend>robot_control</exec_depend>
   <exec_depend>robot_description</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>robot_nav_plugins</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>nav2_rviz_plugins</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>

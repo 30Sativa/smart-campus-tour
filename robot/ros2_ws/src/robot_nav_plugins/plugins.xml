@@ -1,0 +1,7 @@
+<class_libraries>
+  <library path="latched_goal_checker">
+    <class type="robot_nav_plugins::LatchedGoalChecker" base_class_type="nav2_core::GoalChecker">
+      <description>SimpleGoalChecker whose xy latch survives path updates to the same goal and widens the tolerance the controller sees once latched.</description>
+    </class>
+  </library>
+</class_libraries>
