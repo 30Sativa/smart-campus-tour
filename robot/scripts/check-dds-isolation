@@ -166,8 +166,8 @@ def check_host(sshd_config='/etc/ssh/sshd_config'):
         text += open(sshd_config).read()
         m = re.search(r'^\s*PasswordAuthentication\s+(\w+)', text, re.M | re.I)
         if not m or m.group(1).lower() != 'no':
-            res.append(('WARN', 'sshd allows password logins: the SSH tunnel is the only door '
-                                'to the robot, prefer keys only (PasswordAuthentication no)'))
+            res.append(('WARN', 'sshd may allow password logins: R3 access uses SSH; '
+                                'prefer keys only (PasswordAuthentication no)'))
         else:
             res.append(('INFO', 'PasswordAuthentication no in readable config; effective sshd '
                                 'Match/Include/keyboard-interactive policy not verified'))

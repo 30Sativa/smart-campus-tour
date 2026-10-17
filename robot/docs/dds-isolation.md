@@ -1,8 +1,9 @@
 # Cô lập DDS của robot và debug từ xa bằng RViz qua SSH (R3)
 
-**Trạng thái (17/10):** code và kiểm thử offline đã xong trên branch. **Chưa áp
-dụng lên robot:** discovery server, `robot/.env`, SSH và package trên miniPC
-vẫn như cũ. Các bước chuyển đổi nằm ở mục 8, user chạy từng bước.
+**Trạng thái (17/10):** đường debug S0b đã chạy trên robot thật; wrapper,
+adapter và guard được harden qua review đứng yên. Discovery server,
+`robot/.env`, mạng, SSH và Nav2 Baseline V1 chưa đổi. Chỉ overlay debug riêng
+được cập nhật. Các bước cô lập DDS vẫn ở mục 8, chưa thực hiện.
 
 **Cập nhật review S0b:** user đã xác nhận RViz thật hiện map, LiDAR, TF và
 RobotModel sau khi source workspace laptop. Những sửa tiếp theo gồm wrapper
@@ -47,6 +48,8 @@ Chi tiết và số liệu: `~/amr_logs/dds_isolation/PROPOSAL_v2.md` trên mini
 
 ## 2. Kiến trúc
 
+Sơ đồ dưới là đích sau S3. Trong S0b robot vẫn dùng DDS chưa cô lập.
+
 ```text
 miniPC (robot)                                               laptop (Wi-Fi khác)
 ┌───────────────────────────────────────────────┐
@@ -88,6 +91,7 @@ miniPC (robot)                                               laptop (Wi-Fi khác
 | `robot/config/fastdds/discovery_server_loopback.xml` | robot | Profile cho discovery server: mọi socket trên `127.0.0.1` (S3) |
 | `robot/scripts/source-minipc` | robot | Thêm chặn: `LOCALHOST_ONLY=1` thì `ROS_DISCOVERY_SERVER` phải là `127.0.0.1`; server đang ở S3 thì `LOCALHOST_ONLY` phải là 1 |
 | `robot/tools/rviz_over_ssh/rviz-over-ssh` | laptop | Mở tunnel, chạy `fox2ros` và RViz; tự nối lại; dọn tiến trình khi thoát |
+| `robot_navigation/robot_navigation/scan_rviz.py` | laptop | Utility có sẵn, không đổi code: chiếu scan trong DDS laptop, tránh đợi TF cuối scan ở UI RViz |
 | `robot/tools/rviz_over_ssh/fox2ros.py`, `fox2ros_topics.yaml` | laptop | WebSocket → DDS cục bộ của laptop (chuyển nguyên CDR); gửi initial pose |
 | test: `test_debug_bridge_contract.py`, `test_initialpose_guard.py`, `tools/rviz_over_ssh/test_fox2ros.py`, `scripts/tests/` | — | Hợp đồng bảo mật, guard, giao thức, reconnect, script (`verify` Tier 1.7) |
 
@@ -115,8 +119,7 @@ rollback cấu hình robot theo mục 8.
 
 Để cài từ checkout R3 trên laptop (không phải trên miniPC): lưu script cũ
 thành `amr-rviz.legacy` trước, chép `amr-rviz`, `rviz-over-ssh`, `fox2ros.py`,
-`fox2ros_topics.yaml` từ `robot/tools/rviz_over_ssh/` cùng
-`robot/ros2_ws/src/robot_navigation/rviz/navigation.rviz` vào
+`fox2ros_topics.yaml` và `navigation.rviz` từ `robot/tools/rviz_over_ssh/` vào
 `~/.local/share/amr-rviz/r3/`, rồi liên kết `~/.local/bin/amr-rviz` tới wrapper
 đã chép. Thư mục cài độc lập với vòng đời worktree. Không ghi đè bản legacy.
 Rollback lệnh laptop bằng bản legacy đã lưu; không cần sửa robot để chỉ dừng R3.
@@ -136,6 +139,14 @@ robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
 
 - RViz mở `navigation.rviz` trong namespace `/robot_01`, cùng tên topic như
   trên robot.
+- Layout R3 riêng ở `robot/tools/rviz_over_ssh/navigation.rviz`: bật scan/model
+  sẵn; bỏ panel Nav2, Goal Tool và Astra không được bridge chuyển tiếp. Layout
+  Nav2 V1 và layout legacy giữ nguyên. `2D Pose Estimate` vẫn qua guard.
+- Launcher chạy thêm `scan_rviz` có sẵn trên laptop, cùng domain cục bộ; không
+  dùng TF relay và không subscribe DDS của robot. Output PointCloud2
+  `/robot_01/scan_rviz` giữ stamp scan, target frame bằng Fixed Frame (lấy từ
+  config hoặc `-f`). Không có TF tại stamp đó thì bỏ scan ngay; không đợi trong
+  UI, không dùng TF "latest", không sửa timestamp. Raw scan trên robot không đổi.
 - Kết quả "2D Pose Estimate" in ở terminal với tiền tố `[robot]`.
 - Không tới được robot: Nav2 Goal, panel Nav2 (action/service), param,
   `cmd_vel`.
@@ -145,14 +156,25 @@ robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
 
 - Topic của robot nằm trong `/robot_01/...`; TF là global (`/tf`,
   `/tf_static`). Tên và kiểu topic đã đối chiếu với bag B2c.
-- Publisher phía laptop luôn `RELIABLE`, nên khớp mọi yêu cầu của RViz.
+- Publisher của `fox2ros` phía laptop luôn `RELIABLE`, nên khớp mọi yêu cầu RViz.
   - Topic latched (`map`, `tf_static`, `robot_description`, costmap,
     `amcl_pose`) dùng `TRANSIENT_LOCAL`: RViz mở sau, hoặc mở sau khi nối lại,
     vẫn nhận ngay.
   - Stream (`scan`, `tf`, footprint, plan, particle cloud) dùng `VOLATILE`.
+  - Riêng cloud suy ra bởi `scan_rviz` là BEST_EFFORT/VOLATILE, depth 1;
+    layout R3 yêu cầu đúng QoS đó. Đây là topic cục bộ, không phải downlink mới.
 - Đã kiểm bằng một probe subscribe **đúng QoS ghi trong `navigation.rviz`**:
   0 lỗi incompatible QoS. Probe vào muộn nhận map, costmap và TF trong
   0.1–5 s.
+- **Bridge 3.6.0 có cuộc đua discovery/QoS:** channel có thể được quảng bá trước
+  khi `get_publishers_info_by_topic()` có endpoint. Khi đó bridge chọn
+  BEST_EFFORT/VOLATILE và mất map/TF tĩnh đã publish. Đã tái hiện trên miniPC
+  khi restart bridge. Adapter chờ 2 s trước subscribe topic latched; nếu chưa
+  có dữ liệu của map, TF tĩnh hoặc model sau 30 s thì unsubscribe, đợi rồi thử
+  lại để bridge tạo reader với metadata mới. Không lặp lại map đã nhận.
+  Bridge chia sẻ reader giữa client: adapter cũ giữ subscription sai có thể
+  cản sửa QoS; nâng các adapter cùng lượt và đóng client cũ khi xử lý lỗi này.
+  `LIVE` yêu cầu scan mới **và** đủ map/TF tĩnh/model của kết nối hiện tại.
 - Global costmap (khoảng 2.8 MB, 1 Hz) mặc định tắt. Thêm `-e
   global_costmap/costmap` để nhận một snapshot mỗi 10 s.
 - Thêm topic: sửa **cả** `fox2ros_topics.yaml` và `topic_whitelist`. Contract
@@ -391,7 +413,7 @@ mở terminal mới, `source robot/scripts/source-minipc`, chạy stack,
 
 ## 10. Đã kiểm thử và chưa kiểm thử
 
-**Đã kiểm:**
+**Đã kiểm trước lượt review đứng yên (kết quả lịch sử):**
 - 117 test: hợp đồng bảo mật; guard (gồm node thật với rclpy, goal active,
   server chết, chuyển động ngắn, `cmd_vel`); giao thức; reconnect với bridge
   giả; `discovery-server-stage` với `systemctl`, `ss` và `/proc` giả; profile
@@ -418,15 +440,17 @@ mở terminal mới, `source robot/scripts/source-minipc`, chạy stack,
   - guard chấp nhận initial pose khi goal đang tạm dừng (bản trước của review
     này).
 
-**Chưa kiểm (S0/S5 sẽ kiểm):**
-- RViz2 thật: miniPC không có rviz2.
-- SSH thật: dùng TCP forward thay thế.
+**S0b/review đứng yên:** RViz2 trên laptop thật, SSH thật, tunnel reconnect,
+cold restart bridge, hash map/model, QoS, guard từ chối, cleanup và tài nguyên
+được ghi riêng ở `robot/docs/r3-stationary-review-2026-10-17.md`.
+
+**Vẫn chưa kiểm trên robot thật trong lượt này:**
+- Initial pose hợp lệ/AMCL ACCEPTED tại vị trí đã biết trên đúng map.
 - Roam Wi-Fi thật: dùng `tc` giả lập.
 - systemd thật: drop-in, `daemon-reload` và restart với sudo; logic đã kiểm
   bằng `systemctl` giả, dòng lệnh đã kiểm bằng `fastdds` thật.
-- `robot_description`, sonar, `go_to_stop` và `cmd_vel` của mode_manager:
-  không có trong mô phỏng (chỉ có unit test).
-- CPU và băng thông trên robot thật. Đo trong mô phỏng: bridge khoảng 1–4 %
+- `go_to_stop`, goal active và chuyển động: không kích hoạt trên robot thật.
+- Băng thông khi roam/vận hành. Đo trong mô phỏng: bridge khoảng 1–4 %
   một core khi có laptop nối (0 khi không có client); guard khoảng 0.4 %;
   dữ liệu khoảng 0.2 MB/s, cộng 2.8 MB mỗi lần nối (map).
 
