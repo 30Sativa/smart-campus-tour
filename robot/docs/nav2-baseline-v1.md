@@ -1,13 +1,20 @@
 # Nav2 Baseline V1 (robot AMR, chốt 2026-10-16)
 
+> This page defines the V1 configuration and records its bounded test evidence.
+> Its cited commit is the baseline introduction, not the current GitHub `main`
+> head or proof of the current MiniPC install. The 2026-10-17 source/runtime
+> comparison is in [project-status.md](project-status.md).
+
 **Mức:** baseline **phát triển và kiểm thử**, đã chạy trên robot thật. **Chưa
 phải production-ready.** Launch mặc định vẫn là `nav2_params.yaml`. Baseline V1
 là opt-in qua `nav2_params_file`.
 
 ## 1. Định nghĩa
 
-Code nằm ở `main` @ `5976d44` (PR #56 + #57). Phần ROS giống từng byte với
-`dfcf889`, chính là bản đã chạy trong các lượt B2 và B2c.
+Baseline code was introduced at `5976d44` (PR #56 + #57). The ROS files used
+for B2/B2c matched the configuration snapshot at `dfcf889`; `5976d44` is not
+the current `main` head. Current deployment provenance is recorded in
+[project-status.md](project-status.md).
 
 | Thành phần | Nơi định nghĩa | Giá trị V1 |
 |---|---|---|
@@ -54,17 +61,22 @@ Install phải được build từ commit có `robot_nav_plugins`.
 
 - **Không** đặt `ROS_SUPER_CLIENT` cho lệnh launch. Biến này chỉ dành cho CLI
   (xem `robot/scripts/source-minipc`).
-- **Không có node ROS nào trên máy khác** (laptop, RViz, `remote_rviz.launch.py`,
-  `ros2 topic echo`…) đang subscribe dữ liệu của robot.
-  - RViz chỉ dùng để đặt initial pose khi robot đứng yên, rồi **dừng cả launch**.
-    Đóng cửa sổ RViz không dừng `scan_rviz` / `tf_rviz_relay`.
+- **Không có node máy khác tham gia trực tiếp DDS của robot khi robot tự hành.**
+  Laptop RViz/CLI qua Discovery Server và `remote_rviz.launch.py` thuộc đường
+  direct-DDS cũ; chúng có thể gây backpressure qua Wi-Fi. Chỉ dùng đường đó
+  khi robot đứng yên và kết thúc cả launch trước khi chạy Nav2.
+  - R3 S0b dùng bridge cục bộ và DDS riêng trên laptop, nhưng mới được kiểm
+    chứng khi đứng yên. Chưa có phép thử S5 qua vùng roam, nên chưa coi R3 là
+    ngoại lệ đã nghiệm thu cho các lượt chạy Baseline V1.
   - Kiểm tra trước khi chạy:
 
     ```bash
     ROS_SUPER_CLIENT=TRUE ros2 node list
     ```
 
-    Không được có `scan_rviz`, `tf_rviz_relay`, `rviz2`.
+    Không được có `scan_rviz`, `tf_rviz_relay` hoặc node client direct-DDS từ
+    máy khác. R3 laptop viewer chạy domain riêng nên không hiện trong graph
+    này; việc đó không thay cho bài nghiệm thu roaming.
 - Kiểm tra sau khi launch:
   - `tf2_echo base_link lidar_link` cho yaw khoảng −12.75°;
   - `launch.log` có `LatchedGoalChecker ... relatch_max_gap 1.00 s`;
@@ -136,12 +148,15 @@ công cụ phân tích nằm ở `$HOME/amr_logs/baselines/nav2_baseline_v1/`
 
 ## 6. Giới hạn đã biết
 
-1. **Nghẽn DDS qua Wi-Fi (chưa sửa ở tầng kỹ thuật).**
+1. **Nghẽn DDS qua Wi-Fi (chưa đóng ranh giới DDS).**
    - Fast DDS publish đồng bộ: một subscriber ở máy khác, khi Wi-Fi yếu hoặc
      chuyển AP, chặn publisher `/scan`.
    - Hệ quả: AMCL mất dữ liệu tới 2.5 s, FollowPath bị huỷ.
-   - Hiện chỉ tránh bằng quy trình (mục 2). Cách sửa ở tầng kỹ thuật:
-     [dds-isolation.md](dds-isolation.md) (đã code, chưa áp dụng lên robot).
+   - R3 S0b đã triển khai cầu debug qua SSH và kiểm tra hiển thị khi robot
+     đứng yên. MiniPC vẫn ở trạng thái trước S1, vì vậy direct DDS còn mở;
+     roaming với R3 trong khi chạy robot chưa được kiểm. Xem
+     [project-status.md](project-status.md) và
+     [dds-isolation.md](dds-isolation.md).
 2. **Số lượt thử ít.** 1 vòng sạch (B2c) và 1 vòng có nhiễu (B2), trên một tuyến,
    một map, ở 0.20 m/s. Chưa thử tuyến/POI khác, chưa thử có người đi lại nhiều.
 3. **Yaw của POI** buộc robot quay khoảng 120° ở cả hai đích. Đây là lựa chọn
@@ -157,11 +172,11 @@ công cụ phân tích nằm ở `$HOME/amr_logs/baselines/nav2_baseline_v1/`
 
 ## 7. Việc tiếp theo
 
-1. Sửa gốc giới hạn 1: cô lập DDS của robot và debug bằng RViz qua SSH,
-   theo [dds-isolation.md](dds-isolation.md). Kế hoạch cũ (relay trên robot,
-   profile Fast DDS) đã bị thay vì cả hai vẫn để laptop trong graph DDS.
-
-   Kiểm chứng bằng một lượt có RViz từ xa đi qua vùng chuyển AP (bước S5).
+1. Chuyển DDS S1–S3 theo [r3-dds-readiness-2026-10-17.md](r3-dds-readiness-2026-10-17.md)
+   khi có maintenance window. Robot có thể đứng yên tại vị trí chưa biết trên
+   map; kiểm Initial Pose sau này khi ở vị trí đã lập bản đồ. Sau cô lập, chạy
+   phép thử âm direct-DDS và kiểm tra R3 hoạt động. S5 roaming với RViz qua
+   SSH là acceptance riêng trước khi dùng đường này trong lượt chuyển động.
 2. Thêm 2–3 vòng sạch, gồm ít nhất một tuyến/POI khác. Đạt thì mới đề xuất V1
    (hoặc V2) làm mặc định.
 3. Chốt yaw của POI; xem lại map nhánh Bắc.

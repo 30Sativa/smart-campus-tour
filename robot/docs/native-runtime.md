@@ -2,6 +2,12 @@
 
 The single physical robot runs its ROS 2 Humble graph directly on Ubuntu 22.04 on the miniPC. There is one owner for STM32, RPLiDAR, EKF, mode manager, map_server/AMCL and Nav2. Docker remains available for CI image builds, laptop debug tools and Gazebo simulation; it is not a second physical startup path.
 
+The provisioning steps below describe a fresh native installation. The
+existing MiniPC has a V1 Nav2 overlay and a separate R3 debug overlay; their
+checkout and install provenance is recorded in
+[project-status.md](project-status.md). Do not infer the active runtime from
+the checkout at `$HOME/smart-campus-tour` alone.
+
 ## Fresh miniPC
 
 Install Ubuntu 22.04 and ROS 2 Humble, then clone this repository onto a Linux filesystem. Do not use a network/shared folder for the colcon workspace.
