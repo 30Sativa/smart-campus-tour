@@ -38,9 +38,12 @@ robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
   `navigation.rviz` dùng được nguyên.
 - **2D Pose Estimate:** chuyển tới `initialpose_guard` trên robot. Kết quả
   (`FORWARDED`/`ACCEPTED`/`REJECTED`…) hiện trong terminal với tiền tố
-  `[robot]`. Guard từ chối khi robot đang chạy, khi Fixed Frame không phải
-  `map`, hoặc khi bấm hai lần trong vòng 1 s.
-- **Không chuyển:** Nav2 Goal, panel Nav2 (action/service), param, `cmd_vel`.
+  `[robot]`. Guard từ chối khi robot không đứng yên suốt 0.5 s, khi
+  Fixed Frame không phải `map`, hoặc khi bấm hai lần trong vòng 1 s.
+- **Guard trên robot** cũng từ chối khi đang có goal Nav2 hoặc `go_to_stop`,
+  kể cả khi robot đang tạm đứng yên.
+- **Không chuyển:** Nav2 Goal (terminal sẽ cảnh báo nếu bấm), panel Nav2
+  (action/service), param, `cmd_vel`.
 
 ## Khi mạng chập chờn
 
@@ -48,7 +51,7 @@ robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
 |---|---|
 | Wi-Fi/SSH rớt | RViz giữ dữ liệu cuối. Tunnel tự nối lại sau 3 s, `fox2ros` sau 1–5 s. Map được latch sẵn trên laptop |
 | Bridge trên robot restart | `fox2ros` nối lại và subscribe theo channel id mới |
-| Link sống nhưng không có dữ liệu | Sau 6 s `fox2ros` coi là chết và nối lại |
+| Link sống nhưng không có dữ liệu | Sau 10 s `fox2ros` coi là chết và nối lại |
 | Bấm Initial Pose lúc link đứt | **Không gửi và không xếp hàng** (để không có pose cũ tới muộn); terminal báo `NOT sent` |
 | Đồng hồ laptop lệch robot > 1 s | Có cảnh báo; nên đồng bộ NTP (guard trên robot đã đóng dấu lại thời gian cho Initial Pose) |
 

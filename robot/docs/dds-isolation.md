@@ -75,9 +75,11 @@ miniPC (robot)                                               laptop (Wi-Fi khác
 | `robot_navigation/launch/debug_bridge.launch.py` | robot | Chạy bridge và guard; dừng launch không ảnh hưởng Nav2. Báo cách cài nếu thiếu `foxglove_bridge` |
 | `robot_navigation/config/debug_bridge.yaml` | robot | Bridge: `127.0.0.1`, chỉ đọc, allowlist topic, buffer 4 MB |
 | `robot_navigation/robot_navigation/initialpose_guard.py` | robot | Cổng `127.0.0.1:8766`; kiểm tra rồi mới chuyển `initialpose`; báo kết quả |
-| `robot/scripts/check-dds-isolation` | robot | Kiểm tra chỉ đọc: env, socket DDS, bind của bridge, sshd |
+| `robot/scripts/check-dds-isolation` | robot | Kiểm tra chỉ đọc: env, socket DDS, bậc của server (bắt được E1b và lệch S3/`.env`), bind của bridge, sshd |
+| `robot/scripts/discovery-server-stage` | robot (sudo) | Đổi server từng bậc `original ↔ s1 ↔ s3` bằng một drop-in; kiểm tra rồi tự quay lại nếu hỏng |
+| `robot/scripts/foxglove-bridge-portable` | robot | Cài bridge **không qua apt**: hai `.deb` ghim phiên bản và sha256, giải nén vào `~/.local/opt` |
 | `robot/config/fastdds/discovery_server_loopback.xml` | robot | Profile cho discovery server: mọi socket trên `127.0.0.1` (S3) |
-| `robot/scripts/source-minipc` | robot | Thêm chặn: `LOCALHOST_ONLY=1` thì discovery server phải là `127.0.0.1` |
+| `robot/scripts/source-minipc` | robot | Thêm chặn: `LOCALHOST_ONLY=1` thì `ROS_DISCOVERY_SERVER` phải là `127.0.0.1`; server đang ở S3 thì `LOCALHOST_ONLY` phải là 1 |
 | `robot/tools/rviz_over_ssh/rviz-over-ssh` | laptop | Mở tunnel, chạy `fox2ros` và RViz; tự nối lại; dọn tiến trình khi thoát |
 | `robot/tools/rviz_over_ssh/fox2ros.py`, `fox2ros_topics.yaml` | laptop | WebSocket → DDS cục bộ của laptop (chuyển nguyên CDR); gửi initial pose |
 | test: `test_debug_bridge_contract.py`, `test_initialpose_guard.py`, `tools/rviz_over_ssh/test_fox2ros.py`, `scripts/tests/` | — | Hợp đồng bảo mật, guard, giao thức, reconnect, script (`verify` Tier 1.7) |
@@ -134,7 +136,23 @@ RViz "2D Pose Estimate" -> /robot_01/initialpose (laptop)
 ```
 
 Guard từ chối khi:
-- robot đang chạy: odom > 0.02 m/s hoặc > 0.05 rad/s;
+- **còn goal đang chạy** (ACCEPTED, EXECUTING hoặc CANCELING) trên bất kỳ
+  action nào có thể làm robot di chuyển: `navigate_to_pose`,
+  `navigate_through_poses`, `follow_waypoints`, `follow_path`, `spin`,
+  `backup`, `drive_on_heading`, `assisted_teleop`, `wait`, `go_to_stop`.
+  - Lý do: robot có thể **đang đứng yên tạm thời** (controller chờ, recovery
+    Wait, gặp vật cản). Khi chạy tiếp, nó sẽ bám theo một `map→odom` vừa bị
+    nhảy.
+  - Đã kiểm với bt_navigator thật: goal active, robot không chạy được →
+    `REJECTED ... navigate_to_pose, follow_path`; huỷ goal → `FORWARDED`.
+  - Nếu action server đã chết mà trạng thái cuối vẫn là EXECUTING (latched),
+    guard không chặn, vì không còn ai điều khiển được robot.
+- robot không đứng yên **suốt 0.5 s**: có bất kỳ mẫu odom nào > 0.02 m/s hoặc
+  > 0.05 rad/s, có ít hơn 3 mẫu, hoặc có `cmd_vel` khác 0 (teleop, controller).
+  - Số liệu từ bag B2c: khi đứng yên, EKF cho `v = 0` và `|ω|` ≤ 0.026, nên
+    không bị từ chối nhầm.
+  - 0.6 % số mẫu lấy lúc đang chạy nằm dưới ngưỡng (lúc khởi động hoặc dừng).
+    Đó là lý do phải xét cả cửa sổ chứ không xét một mẫu.
 - odom cũ hơn 0.5 s, hoặc không nhận được odom trong 2 s;
 - frame khác `map`;
 - giá trị NaN/inf, hoặc quaternion suy biến;
@@ -142,7 +160,9 @@ Guard từ chối khi:
 - request sai định dạng, hoặc dài hơn 8 KiB.
 
 Một số chi tiết khác:
-- **Odom lấy theo yêu cầu:** guard chỉ subscribe odom khi có request.
+- **Odom và `cmd_vel` lấy theo yêu cầu:** guard chỉ subscribe hai topic này
+  khi có request. Topic trạng thái action được subscribe thường trực, vì là
+  latched và chỉ phát khi goal đổi trạng thái.
   - Đo được: subscription thường trực 25 Hz tốn khoảng 7 % một core J5005.
   - Lấy theo yêu cầu: lúc rảnh khoảng 0.4 %; lấy được mẫu trong khoảng 26 ms
     (tối đa 0.9 s).
@@ -176,6 +196,7 @@ Một số chi tiết khác:
 | Bridge 8765 | — | `127.0.0.1`, chỉ đọc, allowlist, không param/service/asset |
 | Guard 8766 | — | `127.0.0.1`, chỉ initial pose, kiểm tra chặt |
 | Truy cập vào hai cổng | — | chỉ qua SSH (người có SSH vào robot vốn đã làm được mọi thứ) |
+| CPU | — | bridge và guard chạy `nice -n 10`: một client gây quá tải chỉ làm chậm phần hiển thị, không lấy CPU của Nav2 |
 
 **Không bao giờ** đổi `address` của bridge sang `0.0.0.0` hay IP LAN, và
 không bật `clientPublish`. Contract test chặn cả hai.
@@ -191,91 +212,108 @@ không bật `clientPublish`. Contract test chặn cả hai.
 - Robot đứng yên khi đổi cấu hình.
 - Thứ tự dừng như mọi khi: công cụ đo → bag → Nav2 (SIGINT).
 
-**Cài code lên robot.** Robot chạy từ install cũ cộng overlay. Build overlay
-`robot_navigation` từ main (sau khi merge) hoặc từ branch này, giống cách V1
-dùng `smoothws`:
+**Cài code lên robot (không đụng Nav2 Baseline V1).**
+- Robot chạy từ install cũ cộng overlay V1 (`~/.cache/armtc/smoothws`).
+- Build overlay `robot_navigation` của R3 vào một thư mục **mới**, chồng lên
+  `smoothws`, và **chỉ source nó trong terminal debug**. Terminal Nav2 vẫn dùng
+  đúng môi trường V1.
+- Các script (`check-dds-isolation`, `discovery-server-stage`,
+  `foxglove-bridge-portable`) chạy thẳng từ checkout của branch (hoặc main sau
+  khi merge), không cần build.
 
 ```bash
-cd <thư-mục-overlay-mới> && source /opt/ros/humble/setup.bash \
+mkdir -p ~/.cache/armtc/r3_runtime && cd ~/.cache/armtc/r3_runtime \
+  && source /opt/ros/humble/setup.bash \
   && source ~/smart-campus-tour/robot/ros2_ws/install/setup.bash \
   && source ~/.cache/armtc/smoothws/install/setup.bash \
-  && colcon build --base-paths <worktree>/robot/ros2_ws/src/robot_navigation
+  && colcon build --base-paths ~/sct-dds-r3/robot/ros2_ws/src/robot_navigation
 ```
 
 ### S0: dựng đường debug mới khi chưa cô lập (an toàn, chưa cắt đường cũ)
 
-1. Trên robot: `sudo apt install ros-humble-foxglove-bridge` (kéo theo
-   `ros-humble-rosx-introspection`), rồi
-   `sudo apt-mark hold ros-humble-foxglove-bridge ros-humble-rosx-introspection`.
-2. Trên laptop: kiểm tra đăng nhập bằng key với
-   `ssh -o BatchMode=yes sativa@<ip-robot> true`.
-3. Robot đứng yên, chạy navigation, rồi `debug_bridge.launch.py`. Trên laptop
-   chạy `rviz-over-ssh`.
+**Không dùng `apt install` trên miniPC lúc này.** Lý do (đo ngày 17/10):
+- `v4l2loopback-dkms` đang ở trạng thái half-configured (`iF`): bản build DKMS
+  cho kernel 6.8 bị lỗi, và module đang dùng do thành viên khác build tay;
+  `quest-stream.service` `modprobe` lại module này mỗi lần khởi động.
+- `apt-get -s install ros-humble-foxglove-bridge` cho thấy apt sẽ cấu hình lại
+  gói đó trong cùng lệnh. Nếu lỗi, dpkg kẹt ở trạng thái lỗi; nếu thành công,
+  module của Quest có thể bị thay.
+
+Vì vậy dùng bản portable:
+
+1. Trên robot, không cần root:
+
+   ```bash
+   robot/scripts/foxglove-bridge-portable install --debs ~/amr_logs/deps/foxglove-bridge-3.6.0
+   robot/scripts/foxglove-bridge-portable check
+   ```
+
+   - Kho ROS chỉ giữ bản mới nhất, nên hai `.deb` đã kiểm thử được lưu sẵn ở
+     `~/amr_logs/deps/`.
+   - Thiếu `--debs` thì script tải bằng `apt-get download` (không root, không
+     đụng dpkg).
+   - Sha256 được kiểm cho cả hai cách.
+   - Gỡ: `foxglove-bridge-portable remove`.
+2. Build overlay `robot_navigation` của branch (mục trên), rồi **trong một
+   terminal riêng**:
+
+   ```bash
+   source robot/scripts/source-minipc && source ~/.cache/armtc/r3_runtime/install/setup.bash
+   source ~/.local/opt/foxglove-bridge-3.6.0/env.sh
+   ros2 launch robot_navigation debug_bridge.launch.py robot_id:=robot_01
+   ```
+
+   - Terminal chạy Nav2 không source `env.sh`, nên không bị ảnh hưởng.
+3. Trên laptop: kiểm tra `ssh -o BatchMode=yes sativa@<ip-robot> true` chạy
+   được mà không hỏi mật khẩu, rồi chạy `rviz-over-ssh sativa@<ip-robot>`.
 4. Đạt khi:
    - RViz hiện map, scan, TF, costmap, RobotModel;
-   - "2D Pose Estimate" → `ACCEPTED`;
-   - `ss -tlnp | grep -E '8765|8766'` trên robot chỉ có `127.0.0.1`.
-5. Rollback: dừng `debug_bridge.launch.py`.
+   - "2D Pose Estimate" lúc robot đứng yên và không có goal → `ACCEPTED`;
+   - bấm lúc đang có goal → `REJECTED`;
+   - trên robot, `ss -tlnp | grep -E '8765|8766'` chỉ có `127.0.0.1`;
+   - `ps -o ni,comm -C foxglove_bridge` cho `10`.
+5. Rollback: Ctrl+C launch debug. Gỡ hẳn: `foxglove-bridge-portable remove`.
+
+### S1–S3: discovery server và `.env`
 
 Thứ tự S1 → S2 → S3 là bắt buộc. Mỗi bước chỉ đổi một thứ, và sau bước nào
-robot cũng chạy được (đã đo trong namespace):
+robot cũng chạy được (đã đo trong namespace, kể cả với đúng dòng `ExecStart`
+do script sinh ra):
 
 | Server | Node `LOCALHOST_ONLY=0` (hiện tại) | Node `LOCALHOST_ONLY=1` | Laptop discovery được? |
 |---|---|---|---|
-| hiện tại (không có `-l`) | chạy | **hỏng** (E1b) | có |
-| S1: `-l 127.0.0.1` | chạy | chạy | **vẫn có**: socket vẫn bind `0.0.0.0` |
-| S3: profile `discovery_server_loopback.xml` | **hỏng** | chạy | không |
+| `original` (hiện tại) | chạy | **hỏng** (E1b) | có |
+| `s1`: `-l 127.0.0.1` | chạy | chạy | **vẫn có**: socket vẫn bind `0.0.0.0` |
+| `s3`: profile `discovery_server_loopback.xml` | **hỏng** (an toàn: không lộ gì) | chạy | không |
 
-`-l` chỉ đổi địa chỉ mà server **quảng bá**. Chỉ có profile XML (whitelist UDP
-`127.0.0.1`, tắt transport mặc định) mới giới hạn được socket.
+`-l` chỉ đổi địa chỉ mà server **quảng bá**; chỉ có profile XML mới giới hạn
+được socket.
 
-Server chạy bằng drop-in systemd, không sửa unit gốc. Rollback của mỗi bước là
-xoá file drop-in hoặc trả lại dòng cũ.
+Mọi thay đổi server đều qua `discovery-server-stage`. Script:
+- chỉ đi từng bậc;
+- từ chối khi stack còn chạy (trừ CLI daemon), khi có drop-in lạ, hoặc khi
+  `.env` không khớp với bậc đích;
+- sau khi restart, kiểm tra service và socket; hỏng thì **tự quay về bậc
+  trước**.
 
-### S1: server quảng bá loopback
+Unit gốc không bị sửa; script chỉ dùng một file
+`/etc/systemd/system/fastdds-discovery.service.d/10-dds-isolation.conf`.
+`discovery-server-stage status` chạy không cần root.
 
-```bash
-sudo mkdir -p /etc/systemd/system/fastdds-discovery.service.d
-printf '[Service]\nExecStart=\nExecStart=/bin/bash /opt/ros/humble/bin/fastdds discovery --server-id 0 -l 127.0.0.1 -p 11811\n' \
-  | sudo tee /etc/systemd/system/fastdds-discovery.service.d/10-loopback.conf
-sudo systemctl daemon-reload && sudo systemctl restart fastdds-discovery.service
-```
+Trước mỗi bước: dừng stack (công cụ đo → bag → Nav2, SIGINT). Sau mỗi bước:
+mở terminal mới, `source robot/scripts/source-minipc`, chạy stack,
+`ros2 daemon stop`, rồi `robot/scripts/check-dds-isolation`.
 
-- Sau đó khởi động lại toàn bộ stack và `ros2 daemon stop`.
-- Đạt khi: stack lên đủ và CLI trên robot thấy đủ node. Laptop vẫn còn
-  discovery được: chưa đóng.
-- Rollback: xoá `10-loopback.conf`, chạy `daemon-reload` rồi `restart`.
+| Bước | Lệnh | Đạt khi | Rollback |
+|---|---|---|---|
+| S1 | `sudo robot/scripts/discovery-server-stage s1` | stack lên đủ; CLI trên robot thấy đủ node (laptop vẫn discovery được: chưa đóng) | `sudo …stage original --env ~/smart-campus-tour/robot/.env` |
+| S2 | sửa `~/smart-campus-tour/robot/.env`: `ROS_LOCALHOST_ONLY=1` | `check-dds-isolation` chỉ còn **một** FAIL (socket server); node đều ở `127.0.0.1`; `ros2 bag record` chạy | `.env` về `0` (server vẫn ở S1, chạy với cả hai) |
+| S3 | `sudo robot/scripts/discovery-server-stage s3 --env ~/smart-campus-tour/robot/.env` | `check-dds-isolation` → `ISOLATED` (chỉ còn WARN sshd); laptop nối thẳng DDS không thấy gì | `sudo …stage s1 --env …` |
 
-### S2: node chỉ dùng loopback (`ROS_LOCALHOST_ONLY=1`)
-
-- Sửa `~/smart-campus-tour/robot/.env`: `ROS_LOCALHOST_ONLY=1`.
-- Mở terminal mới, `source robot/scripts/source-minipc` (lệnh này từ chối nếu
-  server không phải loopback), khởi động lại stack, `ros2 daemon stop`.
-- Đạt khi:
-  - `robot/scripts/check-dds-isolation` chỉ còn **một** FAIL: socket của
-    discovery server (bước S3 đóng nốt);
-  - mọi node có socket DDS trên `127.0.0.1`;
-  - `ros2 bag record` trên robot vẫn ghi được.
-- Từ bước này, dữ liệu của robot không còn gửi tới máy khác.
-- Rollback: `.env` về `0`, khởi động lại stack.
-
-### S3: server chỉ nghe loopback
-
-```bash
-sudo install -D -m 644 <checkout>/robot/config/fastdds/discovery_server_loopback.xml \
-  /etc/fastdds/discovery_server_loopback.xml
-printf '[Service]\nExecStart=\nExecStart=/bin/bash /opt/ros/humble/bin/fastdds discovery -x /etc/fastdds/discovery_server_loopback.xml\n' \
-  | sudo tee /etc/systemd/system/fastdds-discovery.service.d/10-loopback.conf
-sudo systemctl daemon-reload && sudo systemctl restart fastdds-discovery.service
-ss -uanpH | grep fast-discovery     # mọi dòng phải là 127.0.0.1
-```
-
-- Khởi động lại stack.
-- Đạt khi: `check-dds-isolation` báo `ISOLATED` (chỉ còn WARN về sshd); laptop
-  nối thẳng DDS không thấy gì.
-- Mọi tiến trình trên robot chưa `LOCALHOST_ONLY=1` sẽ không discovery được.
-  Đây là hỏng an toàn: không có gì bị lộ ra ngoài.
-- Rollback về S2: ghi lại drop-in của S1.
+**Thang rollback** luôn đi qua S1, vì S1 chạy với cả hai loại node:
+- S3 → S1 → (`.env` về `0`) → original.
+- Script từ chối `original` khi `.env` còn `LOCALHOST_ONLY=1` (E1b).
+- `source-minipc` từ chối `LOCALHOST_ONLY=0` khi server còn ở S3.
 
 ### S4–S6
 
@@ -291,10 +329,13 @@ ss -uanpH | grep fast-discovery     # mọi dòng phải là 127.0.0.1
 
 ## 9. Phụ thuộc và ảnh hưởng tới người khác
 
-- **miniPC:** thêm `ros-humble-foxglove-bridge` 3.6.0 và
-  `ros-humble-rosx-introspection` qua apt (bước S0, cần sudo).
+- **miniPC:** `foxglove_bridge` 3.6.0 và `rosx_introspection` 2.3.0 ở dạng
+  portable trong `~/.local/opt` (bước S0). Không qua apt, không root, không
+  đụng dpkg, nên không chạm vào gói half-configured của thành viên khác.
   - Đây **không** phải dependency trong `package.xml`, nên rosdep, Docker image
     và CI không đổi.
+  - Khi dpkg của máy đã sạch (`v4l2loopback-dkms` được người phụ trách xử lý),
+    có thể chuyển sang apt và `apt-mark hold` hai gói này.
   - Bridge 3.x chỉ nhận protocol `foxglove.sdk.v1`. Nâng phiên bản bridge thì
     phải chạy lại test và E2E.
 - **Laptop:** không thêm package. Cần ROS Humble, `rviz2`,
@@ -308,29 +349,40 @@ ss -uanpH | grep fast-discovery     # mọi dòng phải là 127.0.0.1
 ## 10. Đã kiểm thử và chưa kiểm thử
 
 **Đã kiểm:**
-- 100 test: hợp đồng bảo mật, guard (gồm node thật với rclpy), giao thức,
-  reconnect với bridge giả, script, profile của server, chốt chặn trong
-  `source-minipc`. Có thêm test đóng băng của V1.
-- 29/29 mutant của các kiểm tra an toàn bị bắt.
-- E2E trong network namespace với AMCL, map_server và Nav2 thật,
-  `foxglove_bridge` 3.6.0 thật (giải nén, không cài hệ thống), discovery
-  server bằng profile trong repo, probe theo QoS của `navigation.rviz`.
+- 117 test: hợp đồng bảo mật; guard (gồm node thật với rclpy, goal active,
+  server chết, chuyển động ngắn, `cmd_vel`); giao thức; reconnect với bridge
+  giả; `discovery-server-stage` với `systemctl`, `ss` và `/proc` giả; profile
+  server; `check-dds-isolation`; chốt chặn trong `source-minipc`. Có thêm test
+  đóng băng của V1.
+- 45/45 mutant của các kiểm tra an toàn bị bắt.
+- E2E trong network namespace với AMCL, map_server, Nav2 và bt_navigator thật;
+  bridge cài **portable** bằng `foxglove-bridge-portable`; discovery server
+  bằng profile trong repo; probe theo QoS của `navigation.rviz`.
   - Kịch bản: tunnel đứt, bridge crash, link đứng, client tấn công, nối thẳng
-    DDS hoặc nối thẳng cổng 8765, chạy nhầm adapter trên robot.
-  - Kết quả: `check-dds-isolation` báo `ISOLATED`.
-- E2E đã tìm ra và sửa 5 lỗi thật:
+    DDS hoặc nối thẳng cổng 8765, chạy nhầm adapter trên robot, goal Nav2
+    active khi robot đứng yên.
+  - Kết quả: `/scan` phía robot hở tối đa 0.14 s; `ISOLATED`; `nice` = 10.
+- Dòng `ExecStart` mà `discovery-server-stage` sinh cho S1/S3 được chạy với
+  `fastdds` thật, với cả hai loại node (bảng ở mục 8).
+- `foxglove-bridge-portable`: cài từ bản sao, tải qua `apt-get download`, sai
+  checksum, cài lại, gỡ; dpkg không thay đổi.
+- E2E đã tìm ra và sửa:
   - bridge không thực thi `client_topic_whitelist`;
   - `-l` không giới hạn socket của server;
   - guard crash vì logger rclpy;
-  - adapter không tự chặn khi bị chạy trên robot (khi có Discovery Server,
-    nó không thấy publisher khác);
-  - guard tốn CPU do subscribe odom thường trực.
+  - adapter chạy được trên robot;
+  - guard tốn CPU do subscribe odom thường trực;
+  - guard chấp nhận initial pose khi goal đang tạm dừng (bản trước của review
+    này).
 
-**Chưa kiểm (S0/S4 sẽ kiểm):**
+**Chưa kiểm (S0/S5 sẽ kiểm):**
 - RViz2 thật: miniPC không có rviz2.
 - SSH thật: dùng TCP forward thay thế.
 - Roam Wi-Fi thật: dùng `tc` giả lập.
-- `robot_description` và sonar: không có trong mô phỏng.
+- systemd thật: drop-in, `daemon-reload` và restart với sudo; logic đã kiểm
+  bằng `systemctl` giả, dòng lệnh đã kiểm bằng `fastdds` thật.
+- `robot_description`, sonar, `go_to_stop` và `cmd_vel` của mode_manager:
+  không có trong mô phỏng (chỉ có unit test).
 - CPU và băng thông trên robot thật. Đo trong mô phỏng: bridge khoảng 1–4 %
   một core khi có laptop nối (0 khi không có client); guard khoảng 0.4 %;
   dữ liệu khoảng 0.2 MB/s, cộng 2.8 MB mỗi lần nối (map).
@@ -339,6 +391,10 @@ ss -uanpH | grep fast-discovery     # mọi dòng phải là 127.0.0.1
 
 | Triệu chứng | Nguyên nhân thường gặp |
 |---|---|
+| `REJECTED: a goal is active on …` | Huỷ goal (hoặc chờ nó xong), rồi đặt lại pose. Robot đứng yên không có nghĩa là hết goal |
+| `REJECTED: … cmd_vel …` | Teleop hoặc một nguồn lệnh khác đang gửi; dừng nó trước |
+| `source-minipc`: `discovery server is loopback-only (S3)` | `.env` đã về `0` nhưng server còn ở S3: đặt lại `1`, hoặc `discovery-server-stage s1` |
+| `discovery-server-stage`: `ROS nodes are running` | Dừng stack trước (CLI daemon không tính) |
 | `fox2ros refused to start` | Còn `ROS_DISCOVERY_SERVER`, hoặc `LOCALHOST_ONLY` khác 1. Chỉ chạy qua `rviz-over-ssh` trên laptop, không chạy trên robot |
 | `handshake refused ... 400` | Phiên bản bridge không dùng `foxglove.sdk.v1` |
 | `connection closed during handshake` | Tunnel lên nhưng `debug_bridge.launch.py` chưa chạy trên robot |

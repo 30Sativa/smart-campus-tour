@@ -1615,3 +1615,17 @@ validation remain separate from the normal backend verification script.
 ### Physical robot deployment
 
 The single physical robot has one native ROS 2 runtime owner on the miniPC. Base/odom, STM32 bridge, LiDAR, EKF, localization and Nav2 are built and launched from `robot/ros2_ws` on Ubuntu 22.04. Astra USB setup is a separate native host step, and camera/perception are opt-in after the LiDAR-only baseline. Docker is retained for CI image reproducibility, laptop inspection and Gazebo simulation; the compose file has no hardware service.
+
+**Robot DDS boundary (designed, not yet applied on the robot).** A remote DDS
+subscriber can block robot publishers during Wi-Fi roaming (Nav2 Baseline V1,
+limit 1), and the robot's DDS graph has no authentication. The planned switch-over
+in [robot/docs/dds-isolation.md](../robot/docs/dds-isolation.md) closes the robot's
+DDS graph to the network (loopback-only discovery server and nodes). Remote
+inspection then goes through an SSH tunnel to two robot-loopback ports: a
+read-only `foxglove_bridge` and `initialpose_guard`, the only remote write. That
+write is the initial pose, accepted only while the robot is stationary with no
+active goal. Laptops render in their own local DDS graph (RViz2). No other work
+package uses DDS to reach the robot: the backend and the Twin use `fleet_bridge`
+over SignalR (Section 3.1), which runs on the robot and is unaffected. Once this
+boundary is applied, laptop access by `ROS_DISCOVERY_SERVER`/`remote_rviz` stops
+working.
