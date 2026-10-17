@@ -1,0 +1,42 @@
+# Topics fox2ros carries between the robot bridge and the laptop-local graph.
+# Relative names resolve under --namespace (robot_id, default robot_01);
+# TF stays global, exactly as on the robot.
+#
+# Every downlink topic must also match the robot's topic_whitelist in
+# robot_navigation/config/debug_bridge.yaml (test_debug_bridge_contract.py
+# checks both files together).
+#
+# Laptop-side publishers are always RELIABLE, which satisfies RViz displays
+# asking for reliable or best effort. latched: true makes them TRANSIENT_LOCAL
+# (what Map, RobotModel and the TF static listener request); streams stay
+# VOLATILE so a late display never draws an old sample.
+#   depth            laptop-side history (tf_static: one message per static
+#                    publisher, re-sent after every reconnect)
+#   snapshot_period  take one message, pause the stream for this many seconds
+#                    (cuts link load for big messages; the latest is latched)
+#   optional         only with --enable <name>
+downlink:
+  - {name: /tf, depth: 100}
+  - {name: /tf_static, latched: true, depth: 20}
+  - {name: map, latched: true}
+  - {name: robot_description, latched: true}
+  - {name: scan, depth: 5}
+  - {name: amcl_pose, latched: true}
+  - {name: particle_cloud}
+  - {name: plan}
+  - {name: received_global_plan}
+  - {name: local_costmap/costmap, latched: true}
+  - {name: local_costmap/published_footprint}
+  - {name: ultrasonic/sonar1/range}
+  - {name: ultrasonic/sonar2/range}
+  - {name: ultrasonic/sonar3/range}
+  - {name: ultrasonic/sonar4/range}
+  - {name: robot_mode_state, latched: true}
+  - {name: emergency_stop_state, latched: true}
+  # ~2.8 MB per message at 1 Hz on map2: too much for two Wi-Fi hops as a
+  # stream. --enable global_costmap/costmap sends one every 10 s.
+  - {name: global_costmap/costmap, latched: true, snapshot_period: 10.0, optional: true}
+
+# Laptop -> robot is not a topic: RViz "2D Pose Estimate" (initialpose) goes
+# to the robot's initialpose_guard over its own tunnelled port (fox2ros --pose-url).
+# Goals, cmd_vel and parameters never reach the robot.
