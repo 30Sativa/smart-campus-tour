@@ -8,8 +8,29 @@ import subprocess
 import time
 
 import pytest
+import yaml
 
 HERE = Path(__file__).resolve().parent
+
+
+def test_r3_layout_only_offers_supported_displays_and_guarded_pose():
+    cfg = yaml.safe_load((HERE / 'navigation.rviz').read_text())
+    topic_cfg = yaml.safe_load((HERE / 'fox2ros_topics.yaml').read_text())
+    allowed = {t['name'] for t in topic_cfg['downlink']}
+    manager = cfg['Visualization Manager']
+    displays = manager['Displays']
+    for display in displays:
+        for d in display.get('Displays', [display]):
+            value = d.get('Topic', d.get('Description Topic', {})).get('Value')
+            assert value is None or value in allowed or value == 'scan_rviz'
+    scan = next(d for d in displays if d['Name'] == 'LiDAR /scan')
+    assert scan['Class'] == 'rviz_default_plugins/PointCloud2'
+    assert scan['Topic']['Value'] == 'scan_rviz' and scan['Topic']['Depth'] == 1
+    for name in ('LiDAR /scan', 'RobotModel'):
+        assert next(d for d in displays if d['Name'] == name)['Enabled']
+    assert not any(p['Class'] == 'nav2_rviz_plugins/Navigation 2' for p in cfg['Panels'])
+    assert not any(t['Class'] == 'nav2_rviz_plugins/GoalTool' for t in manager['Tools'])
+    assert next(t for t in manager['Tools'] if t['Class'].endswith('/SetInitialPose'))['Topic']['Value'] == 'initialpose'
 
 
 def until(predicate, timeout=5):
@@ -30,17 +51,25 @@ import json, os, pathlib, signal, sys, time
 name = pathlib.Path(sys.argv[0]).name
 if name == 'ss': sys.exit(0)
 if name == 'ros2':
-    print('/fake/robot_description')
+    print(os.environ['STUB_ROOT'] + '/prefix' if sys.argv[-1] == 'robot_navigation' else '/fake/robot_description')
     sys.exit(0)
+if name == 'python3' and sys.argv[1] == '-c':
+    os.execv('/usr/bin/python3', ['/usr/bin/python3', *sys.argv[1:]])
 root = pathlib.Path(os.environ['STUB_ROOT'])
 (root / (name + '.json')).write_text(json.dumps({'pid': os.getpid(), 'env': {k:v for k,v in os.environ.items() if k.startswith(('ROS_', 'RMW_', 'FASTDDS_', 'FASTRTPS_'))}, 'args': sys.argv[1:]}))
 if name == 'python3' and os.environ.get('ADAPTER_REFUSE'): sys.exit(2)
+if name == 'scan_rviz':
+    time.sleep(float(os.environ.get('SCAN_INIT_DELAY', '0')))
+    signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
 while not (name == 'rviz2' and (root / 'close-rviz').exists()): time.sleep(.03)
 '''
-    for name in ('ss', 'ros2', 'ssh', 'python3', 'rviz2'):
+    for name in ('ss', 'ros2', 'ssh', 'python3', 'rviz2', 'scan_rviz'):
         p = bindir / name
         p.write_text(stub)
         p.chmod(0o755)
+    executables = tmp_path / 'prefix/lib/robot_navigation'
+    executables.mkdir(parents=True)
+    (executables / 'scan_rviz').symlink_to(bindir / 'scan_rviz')
     env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'],
                STUB_ROOT=str(tmp_path), ROS_DISTRO='humble', ROS_DOMAIN_ID='30',
                ROS_DISCOVERY_SERVER='10.86.7.244:11811', ROS_LOCALHOST_ONLY='0',
@@ -79,11 +108,14 @@ def finish(proc, root):
 
 def test_term_parent_stops_rviz_adapter_and_tunnel(fake_tools):
     root, env = fake_tools
-    proc = launch(env, '-c', str(HERE / 'fox2ros_topics.yaml'), 'user@robot')
+    proc = launch(env, '-c', str(HERE / 'navigation.rviz'), '-f', 'odom', 'user@robot')
     try:
         assert until(lambda: all((root / (n + '.json')).exists()
-                                for n in ('rviz2', 'ssh', 'python3')))
+                                for n in ('rviz2', 'ssh', 'python3', 'scan_rviz')))
         children = [json.loads(p.read_text())['pid'] for p in root.glob('*.json')]
+        projection = json.loads((root / 'scan_rviz.json').read_text())
+        assert projection['args'][-1] == 'target_frame:=odom'
+        assert 'odom' in json.loads((root / 'rviz2.json').read_text())['args']
         proc.terminate()
         assert until(lambda: proc.poll() is not None), 'launcher stuck waiting for foreground RViz'
         assert until(lambda: not any(alive(p) for p in children)), 'orphaned viewer or tunnel'
@@ -93,10 +125,10 @@ def test_term_parent_stops_rviz_adapter_and_tunnel(fake_tools):
 
 def test_closing_rviz_cleans_children_and_sanitizes_environment(fake_tools):
     root, env = fake_tools
-    proc = launch(env, '-c', str(HERE / 'fox2ros_topics.yaml'), 'user@robot')
+    proc = launch(env, '-c', str(HERE / 'navigation.rviz'), 'user@robot')
     try:
         assert until(lambda: all((root / (n + '.json')).exists()
-                                for n in ('rviz2', 'ssh', 'python3')))
+                                for n in ('rviz2', 'ssh', 'python3', 'scan_rviz')))
         records = [json.loads(p.read_text()) for p in root.glob('*.json')]
         for record in records:
             e = record['env']
@@ -126,7 +158,8 @@ def test_invalid_options_fail_before_starting_children(fake_tools, args):
 def test_adapter_refusal_exits_and_cleans_viewer(fake_tools):
     root, env = fake_tools
     env['ADAPTER_REFUSE'] = '1'
-    proc = launch(env, '-c', str(HERE / 'fox2ros_topics.yaml'), 'user@robot')
+    env['SCAN_INIT_DELAY'] = '0.3'
+    proc = launch(env, '-c', str(HERE / 'navigation.rviz'), 'user@robot')
     try:
         assert until(lambda: proc.poll() is not None), 'adapter refusal left RViz waiting forever'
         assert proc.returncode != 0

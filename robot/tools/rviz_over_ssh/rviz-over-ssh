@@ -20,7 +20,7 @@
 #   -n NS        robot namespace (default robot_01)
 #   -p PORT      local port for the bridge (default 8765); the pose port is PORT+1
 #   -r PORT      bridge port on the robot (default 8765); guard port is PORT+1
-#   -c FILE      RViz config (default: navigation.rviz from this checkout)
+#   -c FILE      RViz config (default: bundled R3 navigation.rviz)
 #   -f FRAME     RViz Fixed Frame (e.g. odom for an unlocalized stationary robot)
 #   -e LIST      fox2ros --enable list, e.g. global_costmap/costmap
 #   --no-rviz    tunnel + adapter only (run your own rviz2 in this environment)
@@ -90,6 +90,15 @@ if [[ $RVIZ -eq 1 ]] && ! ros2 pkg prefix robot_description >/dev/null 2>&1; the
        'or use amr-rviz --r3 (AMR_ROS_WS_SETUP selects the workspace setup.bash).' >&2
   exit 2
 fi
+SCAN_NODE=''
+if [[ $RVIZ -eq 1 ]]; then
+  SCAN_NODE="$(ros2 pkg prefix robot_navigation)/lib/robot_navigation/scan_rviz"
+  [[ -x $SCAN_NODE ]] || { echo 'Source a laptop workspace containing robot_navigation/scan_rviz.' >&2; exit 2; }
+  if [[ -z $FRAME ]]; then
+    FRAME="$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["Visualization Manager"]["Global Options"]["Fixed Frame"])' "$RVIZ_CONFIG")"
+  fi
+  [[ -n $FRAME && $FRAME != /* ]] || { echo 'Fixed Frame must be nonempty, without a leading /' >&2; exit 2; }
+fi
 LPOSE=$((LPORT + 1)) RPOSE=$((RPORT + 1))
 for port in "$LPORT" "$LPOSE"; do
   if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
@@ -98,11 +107,14 @@ for port in "$LPORT" "$LPOSE"; do
   fi
 done
 
-PIDS=()
+PIDS=() SCAN_PID=''
 cleanup() {
   trap - EXIT
   trap '' INT TERM
-  for p in "${PIDS[@]}"; do kill -TERM "$p" 2>/dev/null || true; done
+  for p in "${PIDS[@]}"; do
+    if [[ $p == "$SCAN_PID" ]]; then kill -INT "$p" 2>/dev/null || true
+    else kill -TERM "$p" 2>/dev/null || true; fi
+  done
   wait 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -156,6 +168,13 @@ adapter & PIDS+=($!)
 echo "[rviz-over-ssh] tunnel -> $TARGET (127.0.0.1:$RPORT data, :$RPOSE initial pose);" \
      "laptop graph domain $ROS_DOMAIN_ID, localhost only"
 if [[ $RVIZ -eq 1 ]]; then
+  # Reuse the existing non-blocking scan projector, entirely in laptop DDS.
+  # Native RViz LaserScan also looks up the end-of-scan TF and can extrapolate
+  # even when TF at the scan header is available. Do not move that wait to UI.
+  # Bash background jobs initially ignore SIGINT. Reset it before exec, so
+  # cleanup also works if a fatal adapter error occurs before rclpy.init().
+  env --default-signal=INT "$SCAN_NODE" --ros-args -r "__ns:=/${NS#/}" -p "target_frame:=$FRAME" &
+  SCAN_PID=$!; PIDS+=("$SCAN_PID")
   RVIZ_ARGS=(-d "$RVIZ_CONFIG")
   [[ -z $FRAME ]] || RVIZ_ARGS+=(-f "$FRAME")
   rviz2 "${RVIZ_ARGS[@]}" --ros-args -r "__ns:=/${NS#/}" & PIDS+=($!)

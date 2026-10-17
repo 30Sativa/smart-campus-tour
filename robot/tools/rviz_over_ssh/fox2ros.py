@@ -170,6 +170,11 @@ def resolve(name, namespace):
     return f'{ns}/{name}'
 
 
+def needs_history(topic):
+    """These must replay even before AMCL is initialized; AMCL silence is normal."""
+    return topic == '/tf_static' or topic.rsplit('/', 1)[-1] in ('map', 'robot_description')
+
+
 class Downlink:
     KEYS = {'name', 'latched', 'depth', 'snapshot_period', 'optional'}
 
@@ -275,12 +280,14 @@ class BridgeSession:
     """foxglove.sdk.v1 client state for one connection. Pure: returns the
     frames to send and the decoded messages; owns no socket."""
 
-    def __init__(self, downlinks, clock=time.monotonic):
+    def __init__(self, downlinks, clock=time.monotonic, settle_delay=2.0, latched_timeout=30.0):
         self.downlinks, self.clock = downlinks, clock
         self.channels = {}        # server channel id -> (topic, schema)
         self.sub_of_topic = {}    # topic -> subscription id
         self.topic_of_sub = {}    # subscription id -> topic
         self.resubscribe_at = {}  # snapshot topic -> monotonic time
+        self.awaiting_latched = {}
+        self.settle_delay, self.latched_timeout = settle_delay, latched_timeout
         self.next_sub_id = 1
         self.server_info = None
 
@@ -302,6 +309,8 @@ class BridgeSession:
                 if sid is not None:
                     self.topic_of_sub.pop(sid, None)
                     log.info('robot stopped publishing %s', topic)
+                self.resubscribe_at.pop(topic, None)
+                self.awaiting_latched.pop(topic, None)
             return []
         if op == 'status':
             level = {0: logging.INFO, 1: logging.WARNING}.get(msg.get('level'), logging.ERROR)
@@ -318,6 +327,14 @@ class BridgeSession:
                 continue
             if topic in self.sub_of_topic:
                 continue
+            if topic in self.resubscribe_at:
+                continue
+            if self.downlinks[topic].latched and self.settle_delay:
+                # Bridge 3.6.0 can advertise names before endpoint QoS is known.
+                # An early subscription then gets stuck as VOLATILE, losing
+                # already-published map/static TF after a bridge restart.
+                self.resubscribe_at[topic] = self.clock() + self.settle_delay
+                continue
             subs.append(self._new_sub(topic, cid))
         return [text_frame({'op': 'subscribe', 'subscriptions': subs})] if subs else []
 
@@ -326,6 +343,8 @@ class BridgeSession:
         self.next_sub_id += 1
         self.sub_of_topic[topic], self.topic_of_sub[sid] = sid, topic
         self.resubscribe_at.pop(topic, None)
+        if self.downlinks[topic].latched and needs_history(topic):
+            self.awaiting_latched[topic] = self.clock()
         return {'id': sid, 'channelId': cid}
 
     def on_binary(self, payload):
@@ -336,6 +355,7 @@ class BridgeSession:
         topic = self.topic_of_sub.get(sid)
         if topic is None:
             return [], None                      # late message of a dropped subscription
+        self.awaiting_latched.pop(topic, None)
         schema = next((s for t, s in self.channels.values() if t == topic), None)
         out = []
         period = self.downlinks[topic].snapshot_period
@@ -346,8 +366,17 @@ class BridgeSession:
         return out, (topic, schema, payload[13:])
 
     def due(self):
-        """Snapshot topics whose pause is over."""
-        now, subs = self.clock(), []
+        """Snapshot timers and missing latched data (re-evaluate bridge QoS)."""
+        now, subs, frames = self.clock(), [], []
+        for topic, started in list(self.awaiting_latched.items()):
+            if now - started < self.latched_timeout:
+                continue
+            sid = self.sub_of_topic.pop(topic)
+            self.topic_of_sub.pop(sid, None)
+            del self.awaiting_latched[topic]
+            self.resubscribe_at[topic] = now + max(2.0, self.settle_delay)
+            frames.append(text_frame({'op': 'unsubscribe', 'subscriptionIds': [sid]}))
+            log.warning('no latched data on %s; retrying after bridge QoS discovery', topic)
         for topic, t in list(self.resubscribe_at.items()):
             if t > now:
                 continue
@@ -356,7 +385,9 @@ class BridgeSession:
                 del self.resubscribe_at[topic]   # robot no longer advertises it
                 continue
             subs.append(self._new_sub(topic, cid))
-        return [text_frame({'op': 'subscribe', 'subscriptions': subs})] if subs else []
+        if subs:
+            frames.append(text_frame({'op': 'subscribe', 'subscriptions': subs}))
+        return frames
 
     def missing(self):
         advertised = {t for t, _ in self.channels.values()}
@@ -485,6 +516,9 @@ class Link:
                 continue
             if not chunk:
                 raise ProtocolError('robot link closed')
+            # A large map can take longer than dead_after on a slow link.
+            # Receiving bytes is transport progress even before a full frame.
+            last_rx = time.monotonic()
             pending = parser.feed(chunk)
 
 
@@ -610,6 +644,8 @@ def run_ros(args, downlinks):
     clock = ClockCheck(args.clock_tolerance)
     freshness = ScanFreshness()
     state = {'clock_sampled': 0.0, 'clock_warned': 0.0, 'live': None}
+    required_latched = {t for t in downlinks if needs_history(t)}
+    received_latched = set()
     scan_topic = resolve('scan', args.namespace)
 
     def qos(d):
@@ -628,6 +664,8 @@ def run_ros(args, downlinks):
                 pub = pubs[topic] = node.create_publisher(get_message(schema), topic,
                                                           qos(downlinks[topic]))
         pub.publish(cdr)
+        if topic in required_latched:
+            received_latched.add(topic)
         stats[topic] += 1
         now = time.monotonic()
         if topic == scan_topic:
@@ -641,15 +679,20 @@ def run_ros(args, downlinks):
                 rlog.warning(f'scan stamps differ from laptop time by {off:.1f} s '
                              '(clock skew or transport delay): RViz may drop old/new data. '
                              'Check NTP and link latency. '
-                             'Initial poses are re-stamped on the robot and are not affected.')
+                             'The guard rejects expired/future initial-pose requests.')
 
     def on_state(up):
+        received_latched.clear()  # old DDS caches do not prove a new robot session
+        if link.stop.is_set() or not rclpy.ok():
+            return
         if up:
             rlog.info(f'robot data link UP ({args.url}); subscribing {len(downlinks)} topics')
         else:
             rlog.warning('robot data link DOWN: RViz keeps the last data; reconnecting')
 
     def on_reply(status, text):
+        if pose_link.stop.is_set() or not rclpy.ok():
+            return
         line = f'[robot] {status}: {text}'
         if status in ('READY', 'FORWARDED', 'ACCEPTED'):
             rlog.info(line)
@@ -662,10 +705,11 @@ def run_ros(args, downlinks):
     pose_link = PoseLink(phost, int(pport), on_reply)
 
     def on_initialpose(msg):
-        if freshness.live(link.up) and pose_link.send(pose_request(msg)):
+        if (freshness.live(link.up) and required_latched <= received_latched
+                and pose_link.send(pose_request(msg))):
             rlog.info('initial pose sent to robot; waiting for its verdict')
         else:
-            rlog.error('initial pose NOT sent: no fresh scan/data link, guard unavailable, '
+            rlog.error('initial pose NOT sent: stale scan, missing map/static TF/model, guard unavailable, '
                        'or previous request still pending (nothing is queued)')
 
     initialpose = resolve('initialpose', args.namespace)
@@ -708,13 +752,14 @@ def run_ros(args, downlinks):
             rlog.error(f'data worker failed: {link.error}; stopping adapter')
             rclpy.try_shutdown()
             return
-        live = freshness.live(link.up)
+        live = freshness.live(link.up) and required_latched <= received_latched
         if live != state['live']:
             if live:
                 rlog.info('LIVE: fresh robot scan data is arriving')
             else:
-                rlog.warning('STALE: no fresh robot scan data; RViz may retain old map/TF. '
-                             'Initial pose is disabled until live data returns.')
+                waiting = sorted(required_latched - received_latched)
+                rlog.warning('STALE: no fresh scan or missing session map/static TF/model '
+                             f'{waiting}; RViz may retain old data. Initial pose is disabled.')
             state['live'] = live
 
     node.create_timer(args.stats_period, report)

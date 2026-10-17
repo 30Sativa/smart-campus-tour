@@ -187,7 +187,26 @@ def test_clock_check_ignores_link_delay_but_catches_offset():
 
 def make_session(enable=(), clock=None):
     down = fx.load_config(TOPICS, 'robot_01', enable=enable)
-    return fx.BridgeSession(down, **({'clock': clock} if clock else {}))
+    return fx.BridgeSession(down, settle_delay=0, **({'clock': clock} if clock else {}))
+
+
+def test_latched_topics_wait_for_metadata_and_retry_if_history_is_missing():
+    now = [0.0]
+    s = fx.BridgeSession(fx.load_config(TOPICS, 'robot_01'), clock=lambda: now[0],
+                         latched_timeout=5.0)
+    assert s.on_text(advertise((1, '/robot_01/map', 'cdr'))) == []
+    now[0] = 1.9
+    assert s.due() == []
+    now[0] = 2.0
+    assert sent(s.due()) == [{'op': 'subscribe', 'subscriptions': [{'id': 1, 'channelId': 1}]}]
+    now[0] = 7.1
+    assert sent(s.due()) == [{'op': 'unsubscribe', 'subscriptionIds': [1]}]
+    assert s.on_binary(msg_data(1))[1] is None
+    now[0] = 9.2
+    assert sent(s.due()) == [{'op': 'subscribe', 'subscriptions': [{'id': 2, 'channelId': 1}]}]
+    assert s.on_binary(msg_data(2))[1][0] == '/robot_01/map'
+    now[0] = 100
+    assert s.due() == [], 'do not continuously retransmit a received latched map'
 
 
 def sent(frames):
@@ -403,6 +422,52 @@ def test_link_detects_silent_dead_link():
     finally:
         link.stop.set()
         b.close()
+
+
+def test_slow_large_frame_is_progress_not_a_dead_link():
+    listener = socket.socket()
+    listener.bind(('127.0.0.1', 0))
+    listener.listen()
+    payload = b'SCAN' * 25000
+
+    def serve():
+        server = None
+        try:
+            server, _ = listener.accept()
+            request = b''
+            while b'\r\n\r\n' not in request:
+                request += server.recv(4096)
+            key = next(line.split(':', 1)[1].strip() for line in request.decode().split('\r\n')
+                       if line.lower().startswith('sec-websocket-key'))
+            server.sendall((f'HTTP/1.1 101 Switching Protocols\r\n'
+                            f'Sec-WebSocket-Accept: {accept_for(key)}\r\n'
+                            f'Sec-WebSocket-Protocol: {fx.PROTOCOL}\r\n\r\n').encode())
+            server.sendall(server_frame(fx.OP_TEXT, advertise((1, '/robot_01/scan', 'cdr'))))
+            server.recv(4096)                # subscription
+            frame = server_frame(fx.OP_BINARY, msg_data(1, payload))
+            for i in range(0, len(frame), 2000):
+                server.sendall(frame[i:i + 2000])
+                time.sleep(.02)              # whole frame > 1 s; bytes never stop
+        except OSError:
+            pass
+        finally:
+            if server is not None:
+                server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    got = []
+    link = fx.Link('127.0.0.1', listener.getsockname()[1], fx.load_config(TOPICS, 'robot_01'),
+                   lambda t, s, c: got.append(c), lambda up: None,
+                   dead_after=.3, ping_interval=10)
+    worker = threading.Thread(target=link.run, daemon=True)
+    worker.start()
+    try:
+        assert wait_for(lambda: got, timeout=4), 'discarded a frame despite continuous TCP progress'
+        assert got == [payload]
+    finally:
+        link.stop.set()
+        listener.close()
+        worker.join(timeout=1)
 
 
 class FakeGuard:

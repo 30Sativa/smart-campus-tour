@@ -473,8 +473,9 @@ sau S3. SSH warning là advisory, không tự sửa SSH trong phiên đổi DDS.
 
 **S0b/review đứng yên:** RViz2 trên laptop thật, SSH thật, tunnel reconnect,
 cold restart bridge, hash map/model, QoS, guard từ chối, cleanup và tài nguyên
-được ghi riêng ở [project-status.md](project-status.md) và
-[r3-dds-readiness-2026-10-17.md](r3-dds-readiness-2026-10-17.md).
+được ghi riêng ở [project-status.md](project-status.md),
+[r3-dds-readiness-2026-10-17.md](r3-dds-readiness-2026-10-17.md) và bằng chứng
+chi tiết ở [r3-stationary-review-2026-10-17.md](r3-stationary-review-2026-10-17.md).
 
 **Vẫn chưa kiểm trên robot thật trong lượt này:**
 - Initial pose hợp lệ/AMCL ACCEPTED tại vị trí đã biết trên đúng map.

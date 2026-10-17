@@ -232,7 +232,8 @@ def live_guard(monkeypatch):
     from rclpy.executors import SingleThreadedExecutor
     from rclpy.parameter import Parameter
     from robot_navigation.initialpose_guard import InitialPoseGuard
-    for var in ('ROS_DISCOVERY_SERVER', 'ROS_SUPER_CLIENT', 'FASTRTPS_DEFAULT_PROFILES_FILE'):
+    for var in ('ROS_DISCOVERY_SERVER', 'ROS_SUPER_CLIENT', 'ROS_STATIC_PEERS',
+                'FASTRTPS_DEFAULT_PROFILES_FILE', 'FASTDDS_DEFAULT_PROFILES_FILE'):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
     ctx = rclpy.Context()
