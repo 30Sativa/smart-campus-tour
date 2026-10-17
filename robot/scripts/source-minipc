@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Source in every native runtime/inspection terminal. No ROS exports in bashrc.
-ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# A reviewed helper may live in a different checkout from the native install.
+# Explicit opt-in; never select a worktree install just because it exists.
+if ! ROBOT_ROOT="$(cd "${ROBOT_RUNTIME_ROOT:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"; then
+    return 1 2>/dev/null || exit 1
+fi
 if [[ ! -f "$ROBOT_ROOT/.env" || ! -f /opt/ros/humble/setup.bash ||
       ! -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]]; then
     echo 'Missing robot/.env, ROS Humble, or native install space. See robot/docs/native-runtime.md.' >&2
@@ -19,6 +23,7 @@ if [[ "${RMW_IMPLEMENTATION:-}" != rmw_fastrtps_cpp ||
 fi
 # Localhost-only nodes cannot reach a discovery server on a LAN address: the
 # whole robot graph would silently stop discovering (robot/docs/dds-isolation.md).
+_robot_server_cmds="$(pgrep -a fast-discovery 2>/dev/null || true)"
 if [[ "${ROS_LOCALHOST_ONLY:-0}" == 1 ]]; then
     IFS=';' read -ra _robot_servers <<< "$ROS_DISCOVERY_SERVER"
     for _robot_server in "${_robot_servers[@]}"; do
@@ -30,12 +35,25 @@ if [[ "${ROS_LOCALHOST_ONLY:-0}" == 1 ]]; then
         esac
     done
     unset _robot_servers _robot_server
-elif pgrep -a fast-discovery 2>/dev/null | grep -q -- ' -x '; then
+    # The original server advertises LAN locators even when .env points at
+    # 127.0.0.1. S1 must precede S2 (E1b); an IP-only check is insufficient.
+    while IFS= read -r _robot_server_cmd; do
+        [[ -z "$_robot_server_cmd" ]] && continue
+        if [[ ! "$_robot_server_cmd" =~ [[:space:]](-l|--udp-address)[[:space:]]+127\.0\.0\.1([[:space:]]|$) &&
+              ! "$_robot_server_cmd" =~ [[:space:]](-x|--xml-file)[[:space:]] ]]; then
+            echo 'ROS_LOCALHOST_ONLY=1 needs discovery-server-stage s1 before S2 (E1b).' >&2
+            unset _robot_server_cmds _robot_server_cmd
+            return 1 2>/dev/null || exit 1
+        fi
+    done <<< "$_robot_server_cmds"
+    unset _robot_server_cmd
+elif grep -Eq -- ' (-x|--xml-file) ' <<< "$_robot_server_cmds"; then
     # Loopback-only server (dds-isolation.md S3): nodes must be localhost-only too.
     echo 'The discovery server is loopback-only (S3): set ROS_LOCALHOST_ONLY=1 in robot/.env,' \
          'or roll back with robot/scripts/discovery-server-stage s1.' >&2
     return 1 2>/dev/null || exit 1
 fi
+unset _robot_server_cmds
 # Humble setup scripts are not nounset-safe; preserve the caller setting.
 _robot_nounset=false
 [[ $- == *u* ]] && _robot_nounset=true
