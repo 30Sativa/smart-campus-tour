@@ -3,6 +3,13 @@
 Ghi lại lỗi "VM ping được NUC nhưng `ros2 topic list` trên VM chỉ ra
 `/parameter_events` + `/rosout`" — đã fix ngày 2026-08-27.
 
+> **Lịch sử cho phần laptop/VM.** Cho laptop tham gia graph DDS của robot đã
+> làm treo publisher `/scan` khi Wi-Fi roam (Nav2 Baseline V1, giới hạn 1), và
+> mở graph cho cả mạng trường. Sau các bước S1–S3 trong
+> [dds-isolation.md](dds-isolation.md), discovery server chỉ nghe
+> `127.0.0.1`: laptop dùng `robot/tools/rviz_over_ssh/rviz-over-ssh`, CLI chạy
+> qua SSH trên robot. Phần Discovery Server cho các node trên robot vẫn đúng.
+
 ## Triệu chứng
 
 - NUC (robot thật, `<OLD_MINIPC_LAN_IP>`) chạy đầy đủ node: `ros2 topic list` ra

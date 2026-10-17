@@ -12,7 +12,12 @@ changing robot code.
 - [STM32 ↔ ROS serial protocol](PROTOCOL_FB.md) — source of truth before
   changing either side of the USB CDC contract.
 - [ROS discovery troubleshooting](network-ros-discovery.md) — VM/miniPC
-  discovery and debugging.
+  discovery and debugging. Laptop access over DDS is historical once the robot
+  is isolated; see the next entry.
+- [DDS isolation and RViz over SSH](dds-isolation.md) — why the robot's DDS
+  graph is closed to the network, the read-only debug bridge, guarded initial
+  pose, security, and the S0–S6 switch-over with rollback. Not yet applied on
+  the robot.
 - [Nav2 turn test](nav2-turn-test.md) — hardware-test procedure; check its
   READY FOR HARDWARE TEST status before relying on the parameters.
 - [Nav2 Baseline V1](nav2-baseline-v1.md) — current development/test baseline

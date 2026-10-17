@@ -140,7 +140,8 @@ công cụ phân tích nằm ở `$HOME/amr_logs/baselines/nav2_baseline_v1/`
    - Fast DDS publish đồng bộ: một subscriber ở máy khác, khi Wi-Fi yếu hoặc
      chuyển AP, chặn publisher `/scan`.
    - Hệ quả: AMCL mất dữ liệu tới 2.5 s, FollowPath bị huỷ.
-   - Hiện chỉ tránh bằng quy trình (mục 2).
+   - Hiện chỉ tránh bằng quy trình (mục 2). Cách sửa ở tầng kỹ thuật:
+     [dds-isolation.md](dds-isolation.md) (đã code, chưa áp dụng lên robot).
 2. **Số lượt thử ít.** 1 vòng sạch (B2c) và 1 vòng có nhiễu (B2), trên một tuyến,
    một map, ở 0.20 m/s. Chưa thử tuyến/POI khác, chưa thử có người đi lại nhiều.
 3. **Yaw của POI** buộc robot quay khoảng 120° ở cả hai đích. Đây là lựa chọn
@@ -156,11 +157,11 @@ công cụ phân tích nằm ở `$HOME/amr_logs/baselines/nav2_baseline_v1/`
 
 ## 7. Việc tiếp theo
 
-1. Sửa gốc giới hạn 1:
-   - relay hiển thị chạy trên robot;
-   - profile Fast DDS chỉ dùng transport nội bộ cho stack điều khiển.
+1. Sửa gốc giới hạn 1: cô lập DDS của robot và debug bằng RViz qua SSH,
+   theo [dds-isolation.md](dds-isolation.md). Kế hoạch cũ (relay trên robot,
+   profile Fast DDS) đã bị thay vì cả hai vẫn để laptop trong graph DDS.
 
-   Kiểm chứng bằng một lượt có RViz từ xa đi qua vùng chuyển AP.
+   Kiểm chứng bằng một lượt có RViz từ xa đi qua vùng chuyển AP (bước S5).
 2. Thêm 2–3 vòng sạch, gồm ít nhất một tuyến/POI khác. Đạt thì mới đề xuất V1
    (hoặc V2) làm mặc định.
 3. Chốt yaw của POI; xem lại map nhánh Bắc.
