@@ -125,9 +125,12 @@ def check_sockets(udp, tcp, pids):
         else:
             res.append(('PASS', f'discovery server on loopback only ({len(server)} sockets)'))
     exposed = {}
-    for a, p, procs in udp:
+    for a, p, procs in udp + tcp:
         for n, pid in procs:
             if pid not in pids or n.startswith('fast-discovery'):
+                continue
+            # Bridge/guard are checked below with their own diagnostic.
+            if n.startswith(('foxglove', 'initialpose')) and (a, p, procs) in tcp:
                 continue
             if not is_loopback(a) and not is_multicast(a):
                 exposed.setdefault(f'{pids[pid]}[{pid}]', []).append(f'{a}:{p}')
@@ -137,14 +140,14 @@ def check_sockets(udp, tcp, pids):
     else:
         nodes = [c for c in pids.values() if not c.startswith('fast-discovery')]
         res.append(('PASS', f'{len(nodes)} Fast DDS processes, all sockets on loopback'))
-    bridge = [(a, p) for a, p, procs in tcp for n, _ in procs if n.startswith('foxglove')]
-    if bridge:
-        open_ = [f'{a}:{p}' for a, p in bridge if not is_loopback(a)]
-        if open_:
-            res.append(('FAIL', f'foxglove_bridge listens on {open_}: '
-                                'anyone on the network can connect'))
-        else:
-            res.append(('PASS', 'foxglove_bridge listens on loopback only'))
+    for prefix, label in (('foxglove', 'foxglove_bridge'), ('initialpose', 'initialpose_guard')):
+        listeners = [(a, p) for a, p, procs in tcp for n, _ in procs if n.startswith(prefix)]
+        if listeners:
+            open_ = [f'{a}:{p}' for a, p in listeners if not is_loopback(a)]
+            if open_:
+                res.append(('FAIL', f'{label} listens on {open_}: anyone on the network can connect'))
+            else:
+                res.append(('PASS', f'{label} listens on loopback only'))
     return res
 
 
@@ -166,7 +169,8 @@ def check_host(sshd_config='/etc/ssh/sshd_config'):
             res.append(('WARN', 'sshd allows password logins: the SSH tunnel is the only door '
                                 'to the robot, prefer keys only (PasswordAuthentication no)'))
         else:
-            res.append(('PASS', 'sshd: keys only'))
+            res.append(('INFO', 'PasswordAuthentication no in readable config; effective sshd '
+                                'Match/Include/keyboard-interactive policy not verified'))
     except OSError:
         res.append(('WARN', f'cannot read {sshd_config}'))
     return res
@@ -198,9 +202,13 @@ def main():
     for level, text in results:
         print(f'{level:4s}  {text}')
     fails = sum(level == 'FAIL' for level, _ in results)
-    print(f'\n{"ISOLATED" if not fails else "NOT ISOLATED"}: {fails} FAIL, '
+    has_nodes = any(not c.startswith('fast-discovery') for c in pids.values())
+    has_server = mode is not None and any(n.startswith('fast-discovery')
+                                        for _, _, procs in udp for n, _ in procs)
+    verdict = 'NOT ISOLATED' if fails else ('ISOLATED' if has_nodes and has_server else 'INCOMPLETE')
+    print(f'\n{verdict}: {fails} FAIL, '
           f'{sum(level == "WARN" for level, _ in results)} WARN')
-    return 1 if fails else 0
+    return 1 if fails else (0 if has_nodes and has_server else 2)
 
 
 if __name__ == '__main__':

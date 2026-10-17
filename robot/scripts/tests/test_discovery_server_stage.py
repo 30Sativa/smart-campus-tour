@@ -23,6 +23,7 @@ case $1 in
     [ -f $d ] && st=s1
     [ -f $d ] && grep -q -- '-x ' $d && st=s3
     echo $st >> $S/restarts
+    if [ "${FAKE_RESTART_FAILS:-}" = $st ]; then echo inactive > $S/active; exit 1; fi
     if [ "${FAKE_BROKEN:-}" = $st ]; then echo inactive > $S/active; : > $S/ss; exit 0; fi
     echo active > $S/active
     if [ $st = s3 ] && [ -z "${FAKE_S3_LEAKS:-}" ]; then lo=127.0.0.1; else lo=0.0.0.0; fi
@@ -159,3 +160,12 @@ def test_s3_that_still_binds_all_interfaces_is_rolled_back(env):
     r = env('s3', '--env', env.dotenv, localhost_only=1, FAKE_S3_LEAKS='1')
     assert r.returncode == 1 and 'off loopback' in r.stderr and 'restored s1' in r.stderr
     assert stage_of(env) == 's1'
+
+
+def test_nonzero_systemctl_restart_also_rolls_back(env):
+    assert env('s1').returncode == 0
+    before = env.dropin.read_text()
+    r = env('s3', '--env', env.dotenv, localhost_only=1, FAKE_RESTART_FAILS='s3')
+    assert r.returncode == 1 and 'restored s1' in r.stderr
+    assert env.dropin.read_text() == before
+    assert (env.state / 'restarts').read_text().split()[-2:] == ['s3', 's1']

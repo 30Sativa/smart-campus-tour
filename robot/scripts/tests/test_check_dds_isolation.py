@@ -80,9 +80,27 @@ def test_sshd_password_warning(tmp_path):
     assert levels(cdi.check_host(str(cfg))) == ['WARN']
     (tmp_path / 'sshd_config.d').mkdir()
     (tmp_path / 'sshd_config.d' / '50-keys.conf').write_text('PasswordAuthentication no\n')
-    assert levels(cdi.check_host(str(cfg))) == ['PASS']
+    assert levels(cdi.check_host(str(cfg))) == ['INFO']
     cfg.write_text('PasswordAuthentication yes\n')       # first match wins: the .d file
-    assert levels(cdi.check_host(str(cfg))) == ['PASS']
+    assert levels(cdi.check_host(str(cfg))) == ['INFO']
+
+
+def test_tcp_dds_and_guard_cannot_leak_off_loopback():
+    tcp = ('LISTEN 0 5 0.0.0.0:8766 0.0.0.0:* users:(("initialpose_gua",pid=5001,fd=8))\n'
+           'LISTEN 0 5 0.0.0.0:53000 0.0.0.0:* users:(("amcl",pid=4001,fd=9))\n')
+    res = cdi.check_sockets(cdi.parse_ss(UDP_CLOSED), cdi.parse_ss(tcp), DDS)
+    assert levels(res).count('FAIL') == 2
+    assert any('initialpose_guard' in text for level, text in res if level == 'FAIL')
+
+
+def test_empty_graph_is_incomplete_instead_of_isolated(monkeypatch, capsys):
+    monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
+    monkeypatch.setenv('ROS_DISCOVERY_SERVER', '127.0.0.1:11811')
+    monkeypatch.setattr(cdi, 'ss', lambda flags: '')
+    monkeypatch.setattr(cdi, 'dds_pids', lambda: {})
+    monkeypatch.setattr(cdi, 'check_host', lambda: [])
+    assert cdi.main() == 2
+    assert 'INCOMPLETE' in capsys.readouterr().out
 
 
 def test_server_mode_from_cmdline():

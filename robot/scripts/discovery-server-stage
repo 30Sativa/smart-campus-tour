@@ -73,8 +73,8 @@ write_dropin() {     # write_dropin EXEC | write_dropin '' (remove)
 }
 
 restart() {
-  "$SYSTEMCTL" daemon-reload
-  "$SYSTEMCTL" restart "$UNIT"
+  "$SYSTEMCTL" daemon-reload || return 1
+  "$SYSTEMCTL" restart "$UNIT" || return 1
   sleep "$SETTLE"
 }
 
@@ -148,12 +148,10 @@ esac
 
 echo "fastdds-discovery: $current -> $target"
 write_dropin "$next"
-restart
-if ! why=$(verify "$target"); then
+if ! why=$(restart && verify "$target"); then
   echo "check failed ($why): restoring $current" >&2
   write_dropin "$previous"
-  restart
-  if verify "$current" >/dev/null; then
+  if restart && verify "$current" >/dev/null; then
     echo "restored $current" >&2
   else
     echo "WARNING: $current did not come back either: systemctl status $UNIT" >&2

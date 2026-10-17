@@ -35,6 +35,7 @@ OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG = 0, 1, 2, 8, 9, 10
 SERVER_MESSAGE_DATA = 0x01   # [op][u32 subscription id][u64 log time][payload]
 LOOPBACK_HOSTS = ('127.0.0.1', 'localhost', '::1')
 CLASH_TOPICS = ('/tf', '/tf_static')   # always published by the robot itself
+MAX_MESSAGE = 16 * 1024 * 1024       # map2 is ~2.8 MB; bound corrupt peer input
 
 log = logging.getLogger('fox2ros')
 
@@ -88,12 +89,18 @@ class FrameParser:
                 if self.partial_op is None:
                     raise ProtocolError('continuation without a first fragment')
                 self.partial += payload
+                if len(self.partial) > MAX_MESSAGE:
+                    raise ProtocolError('WebSocket message exceeds size limit')
                 if fin:
                     out.append((self.partial_op, bytes(self.partial)))
                     self.partial_op, self.partial = None, bytearray()
             elif fin:
+                if self.partial_op is not None:
+                    raise ProtocolError('new data frame during a fragmented message')
                 out.append((op, payload))
             else:
+                if self.partial_op is not None:
+                    raise ProtocolError('new fragment before the previous message ended')
                 self.partial_op, self.partial = op, bytearray(payload)
 
     def _take_frame(self):
@@ -101,6 +108,10 @@ class FrameParser:
         if len(b) < 2:
             return None
         fin, op, masked, n = b[0] & 0x80, b[0] & 0x0f, b[1] & 0x80, b[1] & 0x7f
+        if b[0] & 0x70 or op not in (OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG):
+            raise ProtocolError('unsupported WebSocket opcode or reserved bits')
+        if op >= 8 and (not fin or n > 125):
+            raise ProtocolError('invalid WebSocket control frame')
         pos = 2
         if n == 126:
             if len(b) < 4:
@@ -110,6 +121,8 @@ class FrameParser:
             if len(b) < 10:
                 return None
             n, pos = struct.unpack('>Q', b[2:10])[0], 10
+        if n > MAX_MESSAGE:
+            raise ProtocolError('WebSocket frame exceeds size limit')
         mask = None
         if masked:
             if len(b) < pos + 4:
@@ -220,6 +233,23 @@ class ClockCheck:
         return est if abs(est) > self.tolerance else None
 
 
+class ScanFreshness:
+    """Transport UP is not proof of live sensor data (pongs can keep arriving)."""
+
+    def __init__(self, timeout=2.0, clock=time.monotonic, wall_clock=time.time):
+        self.timeout, self.clock, self.last = timeout, clock, None
+        self.wall_clock, self.stamp = wall_clock, None
+
+    def received(self, stamp):
+        self.last = self.clock()
+        self.stamp = stamp
+
+    def live(self, connected):
+        return (connected and self.last is not None and self.stamp is not None
+                and self.clock() - self.last <= self.timeout
+                and -0.5 <= self.wall_clock() - self.stamp <= self.timeout)
+
+
 def check_local_env(environ):
     """The adapter must publish into a laptop-local graph only. Republishing
     /tf and /map into the robot's own graph would corrupt it (and loop back
@@ -232,6 +262,10 @@ def check_local_env(environ):
     if environ.get('ROS_DISCOVERY_SERVER'):
         errors.append(f'ROS_DISCOVERY_SERVER={environ["ROS_DISCOVERY_SERVER"]} is set: unset it. '
                       'fox2ros runs on the laptop, in a graph of its own, never on the robot')
+    for key in ('ROS_SUPER_CLIENT', 'ROS_STATIC_PEERS', 'FASTDDS_DEFAULT_PROFILES_FILE',
+                'FASTRTPS_DEFAULT_PROFILES_FILE'):
+        if environ.get(key):
+            errors.append(f'{key} must be unset: use rviz-over-ssh to sanitize the environment')
     return errors
 
 
@@ -256,8 +290,8 @@ class BridgeSession:
         if op == 'serverInfo':
             self.server_info = msg
             if 'clientPublish' in msg.get('capabilities', []):
-                log.warning('robot bridge accepts client publishing: it should be read-only '
-                            '(robot_navigation/config/debug_bridge.yaml)')
+                raise ProtocolError('robot bridge accepts client publishing: it must be read-only '
+                                    '(robot_navigation/config/debug_bridge.yaml)')
             return []
         if op == 'advertise':
             return self._subscribe(msg.get('channels', []))
@@ -347,10 +381,11 @@ class Link:
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.connects = 0
+        self.error = None
 
     @property
     def up(self):
-        return self.sock is not None
+        return self.session is not None
 
     def send(self, frames):
         with self.lock:
@@ -372,6 +407,11 @@ class Link:
                 if str(e) != last_error:            # log each new reason once
                     log.warning('robot link: %s', e)
                     last_error = str(e)
+            except Exception as e:
+                # A dead worker must not leave a frozen RViz looking connected.
+                self.error = str(e)
+                log.exception('robot data worker failed')
+                return
             finally:
                 self._close()
             if self.stop.wait(delay):
@@ -392,6 +432,9 @@ class Link:
 
     def _session(self):
         s = socket.create_connection((self.host, self.port), timeout=3.0)
+        # Own the socket even if the handshake fails, so every retry closes it.
+        with self.lock:
+            self.sock = s
         s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         key = base64.b64encode(os.urandom(16)).decode()
         s.sendall(handshake_request(self.host, self.port, key))
@@ -402,13 +445,13 @@ class Link:
                 raise ProtocolError('connection closed during handshake'
                                     ' (is the SSH tunnel up and the robot bridge running?)')
             head += chunk
+            if len(head) > 16384:
+                raise ProtocolError('WebSocket handshake exceeds size limit')
         head, rest = head.split(b'\r\n\r\n', 1)
         check_handshake_response(head + b'\r\n\r\n', key)
         s.settimeout(0.5)
         session = BridgeSession(self.downlinks)
         parser = FrameParser()
-        with self.lock:
-            self.sock = s
         self.session = session
         self.connects += 1
         self.on_state(True)
@@ -450,7 +493,7 @@ class Link:
 def pose_request(msg):
     """PoseWithCovarianceStamped (anything with that shape) -> guard request."""
     p, q = msg.pose.pose.position, msg.pose.pose.orientation
-    return {'op': 'initialpose', 'frame_id': msg.header.frame_id,
+    return {'op': 'initialpose', 'frame_id': msg.header.frame_id, 'sent_at': time.time(),
             'x': p.x, 'y': p.y, 'z': p.z, 'qx': q.x, 'qy': q.y, 'qz': q.z, 'qw': q.w,
             'covariance': [float(v) for v in msg.pose.covariance]}
 
@@ -460,12 +503,14 @@ class PoseLink:
     on_reply(status, text) runs on the link thread. send() never queues: an
     initial pose that cannot go now must not arrive later."""
 
-    def __init__(self, host, port, on_reply, retry_max=5.0):
+    def __init__(self, host, port, on_reply, retry_max=5.0, reply_timeout=5.0):
         self.host, self.port, self.on_reply, self.retry_max = host, port, on_reply, retry_max
         self.sock = None
         self.ready = False   # the guard answered READY on this connection
         self.lock = threading.Lock()
         self.stop = threading.Event()
+        self.pending_at = None
+        self.reply_timeout = reply_timeout
 
     @property
     def up(self):
@@ -474,12 +519,19 @@ class PoseLink:
     def send(self, request):
         data = (json.dumps(request) + '\n').encode()
         with self.lock:
-            if self.sock is None or not self.ready:
+            if self.sock is None or not self.ready or self.pending_at is not None:
                 return False
             try:
-                self.sock.sendall(data)
+                self.pending_at = time.monotonic()
+                if self.sock.send(data, socket.MSG_DONTWAIT) != len(data):
+                    raise ConnectionError('partial initial pose write')
                 return True
             except OSError:
+                self.ready = False
+                try:
+                    self.sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
                 return False
 
     def run(self):
@@ -492,6 +544,9 @@ class PoseLink:
                     self.sock = s
                 buf, last_error, delay = b'', None, 1.0
                 while not self.stop.is_set():
+                    if self.pending_at is not None and time.monotonic() - self.pending_at > self.reply_timeout:
+                        self.on_reply('NO_ANSWER', 'guard reply timed out; reconnecting, request is NOT replayed')
+                        raise ConnectionError('guard reply timeout')
                     try:
                         chunk = s.recv(4096)
                     except socket.timeout:
@@ -499,12 +554,19 @@ class PoseLink:
                     if not chunk:
                         raise ConnectionError('closed by robot')
                     buf += chunk
+                    if len(buf) > 8192:
+                        raise ConnectionError('oversized guard reply')
                     while b'\n' in buf:
                         line, buf = buf.split(b'\n', 1)
                         try:
                             r = json.loads(line)
-                            if r.get('status') == 'READY':
-                                self.ready = True
+                            if not isinstance(r, dict):
+                                raise ValueError('reply must be an object')
+                            with self.lock:
+                                if r.get('status') == 'READY':
+                                    self.ready = True
+                                elif r.get('status') != 'FORWARDED':
+                                    self.pending_at = None
                             self.on_reply(str(r.get('status')), str(r.get('text')))
                         except ValueError:
                             self.on_reply('ERROR', f'unreadable reply {line[:80]!r}')
@@ -522,6 +584,7 @@ class PoseLink:
                     # The local tunnel end accepts even when the robot side is
                     # gone; only a connection the guard answered counts as up.
                     was_up, self.sock, self.ready = self.ready, None, False
+                    self.pending_at = None
                 if was_up:
                     self.on_reply('DOWN', 'initial pose link lost; reconnecting')
             if self.stop.wait(delay):
@@ -535,6 +598,7 @@ def run_ros(args, downlinks):
     import rclpy
     from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
     from rclpy.node import Node
+    from rclpy.executors import ExternalShutdownException
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from rosidl_runtime_py.utilities import get_message
 
@@ -544,7 +608,8 @@ def run_ros(args, downlinks):
     pubs, pubs_lock = {}, threading.Lock()
     stats = {t: 0 for t in downlinks}
     clock = ClockCheck(args.clock_tolerance)
-    state = {'clock_sampled': 0.0, 'clock_warned': 0.0}
+    freshness = ScanFreshness()
+    state = {'clock_sampled': 0.0, 'clock_warned': 0.0, 'live': None}
     scan_topic = resolve('scan', args.namespace)
 
     def qos(d):
@@ -565,15 +630,17 @@ def run_ros(args, downlinks):
         pub.publish(cdr)
         stats[topic] += 1
         now = time.monotonic()
+        if topic == scan_topic:
+            freshness.received(cdr_header_stamp(cdr))
         if topic == scan_topic and now - state['clock_sampled'] > 0.5:
             state['clock_sampled'] = now
             stamp = cdr_header_stamp(cdr)
             off = clock.add(time.time(), stamp) if stamp else None
             if off is not None and now - state['clock_warned'] > 60:
                 state['clock_warned'] = now
-                side = 'ahead of' if off > 0 else 'behind'
-                rlog.warning(f'laptop clock is {abs(off):.1f} s {side} the robot: RViz may drop '
-                             'data as too old/new. Sync the laptop clock (NTP). '
+                rlog.warning(f'scan stamps differ from laptop time by {off:.1f} s '
+                             '(clock skew or transport delay): RViz may drop old/new data. '
+                             'Check NTP and link latency. '
                              'Initial poses are re-stamped on the robot and are not affected.')
 
     def on_state(up):
@@ -595,10 +662,11 @@ def run_ros(args, downlinks):
     pose_link = PoseLink(phost, int(pport), on_reply)
 
     def on_initialpose(msg):
-        if pose_link.send(pose_request(msg)):
+        if freshness.live(link.up) and pose_link.send(pose_request(msg)):
             rlog.info('initial pose sent to robot; waiting for its verdict')
         else:
-            rlog.error('initial pose NOT sent: link to the robot is down (nothing is queued)')
+            rlog.error('initial pose NOT sent: no fresh scan/data link, guard unavailable, '
+                       'or previous request still pending (nothing is queued)')
 
     initialpose = resolve('initialpose', args.namespace)
     node.create_subscription(PoseWithCovarianceStamped, initialpose, on_initialpose,
@@ -635,19 +703,45 @@ def run_ros(args, downlinks):
         for t in stats:
             stats[t] = 0
 
+    def report_health():
+        if link.error is not None:
+            rlog.error(f'data worker failed: {link.error}; stopping adapter')
+            rclpy.try_shutdown()
+            return
+        live = freshness.live(link.up)
+        if live != state['live']:
+            if live:
+                rlog.info('LIVE: fresh robot scan data is arriving')
+            else:
+                rlog.warning('STALE: no fresh robot scan data; RViz may retain old map/TF. '
+                             'Initial pose is disabled until live data returns.')
+            state['live'] = live
+
     node.create_timer(args.stats_period, report)
-    threading.Thread(target=link.run, name='robot-data', daemon=True).start()
-    threading.Thread(target=pose_link.run, name='robot-pose', daemon=True).start()
+    node.create_timer(1.0, report_health)
+    threads = [threading.Thread(target=link.run, name='robot-data', daemon=True),
+               threading.Thread(target=pose_link.run, name='robot-pose', daemon=True)]
+    for thread in threads:
+        thread.start()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         link.stop.set()
         pose_link.stop.set()
+        for worker in (link, pose_link):
+            with worker.lock:
+                if worker.sock is not None:
+                    try:
+                        worker.sock.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+        for thread in threads:
+            thread.join(timeout=4)
         node.destroy_node()
         rclpy.try_shutdown()
-    return 0
+    return 1 if link.error is not None else 0
 
 
 def is_loopback_url(url, scheme):
