@@ -125,14 +125,20 @@ map. The current robot snapshot had no AMCL pose or `map→odom` transform, so i
 does not establish successful localization. No S1/S2/S3 systemd transition,
 valid Initial Pose acceptance, A→B→A, or real AP-roam acceptance is recorded.
 
-The external inputs `dds-isolation.md`, `PROPOSAL_v2.md`,
-`RUNBOOK__AMR_Van-hanh-va-debug__2026-10-16_NATIVE_v7_3_NAV2_BASELINE_B2c.md`
-and `S0b_runbook.md` under `Desktop/New Folder/newnew` were reviewed as
-supporting evidence. They are not in Git and are not authoritative
-instructions for future agents. Their useful findings are summarized in the
-checked-in status and runbook; the checked-in record corrects the `-l` versus
-socket-binding claim and defers valid Initial Pose acceptance until the robot
-is at a known map location. Re-verify machine state before acting.
+The external files below were reviewed as evidence. They remain outside Git;
+their imperative steps are not standing instructions for future agents.
+
+| External input under `Desktop/New Folder/newnew` | Carried into the Git documentation | Kept as historical / not copied verbatim |
+|---|---|---|
+| `dds-isolation.md` | R3 architecture, S0b/S1–S3 boundaries, security implications, run/rollback design; see [DDS isolation](dds-isolation.md). | Older draft wording is superseded by the checked-in runbook and readiness report. |
+| `PROPOSAL_v2.md` | DDS/Wi-Fi experiment rationale and the correction that `fastdds discovery -l` does not constrain listening sockets. | Raw proposal and every experiment log remain outside Git; the proposal is not an executable transition plan. |
+| `RUNBOOK__AMR_Van-hanh-va-debug__2026-10-16_NATIVE_v7_3_NAV2_BASELINE_B2c.md` | Native runtime model, V1 launch/configuration context and bounded B2/B2c evidence; see [native runtime](native-runtime.md) and [Nav2 Baseline V1](nav2-baseline-v1.md). | The full chronological operator runbook remains external; use checked-in current guides for future operations. |
+| `S0b_runbook.md` | S0b hardware display result, the need to defer valid Initial Pose until a known map location, and the stationary S1–S3 readiness criteria; see the [readiness report](r3-dds-readiness-2026-10-17.md). | Unperformed pose, movement and live-service steps remain explicitly pending; the source checklist is not proof they ran. |
+
+Machine-local JSON, logs and raw test output also remain outside Git under the
+evidence directory above. The checked-in reports summarize their relevant
+results without copying runtime environment files or credentials. Re-verify
+machine state before acting.
 
 ## Next steps
 
