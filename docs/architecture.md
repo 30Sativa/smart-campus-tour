@@ -259,6 +259,32 @@ Two further namespace notes, both load-bearing:
   They are written as `$(var robot_ns)/scan` in `nav2_params.yaml` and
   substituted at launch time.
 
+### 2.2 R3 remote debug boundary (opt-in, hardware rollout in progress)
+
+R3 keeps laptop DDS separate from robot DDS. The robot's read-only debug bridge
+listens on `127.0.0.1:8765`; a separate initial-pose guard listens on
+`127.0.0.1:8766`. A dedicated SSH connection forwards both ports. The laptop
+adapter republishes only the documented downlink allowlist into a localhost-only
+graph (default domain 42); TF remains global and frame IDs are unchanged.
+Nav2 actions, services, parameters and velocity commands do not cross this
+debug boundary. This does not change the production fleet contract.
+
+Guard request protocol v2 requires `sent_at` (Unix seconds at the laptop send)
+alongside the existing initial-pose JSON fields. Requests older than 2 seconds
+or more than 0.5 seconds in the future are rejected, including after sampling
+motion. This bounds delayed TCP delivery and requires reasonably synchronized
+clocks; AMCL still receives a new robot-clock stamp. Concurrent requests are
+rejected rather than queued; disconnected clients are checked before forward.
+Deploy adapter and guard together: v1 requests without `sent_at` are rejected.
+These checks supplement the existing idle-goal and stationary-window checks;
+they do not authorize remote driving or prove localization readiness.
+
+The old direct-DDS viewer remains the operator command's default during rollout.
+S0b exercises the SSH data path with existing robot DDS settings; isolation is
+only achieved after S1, S2 and S3. See
+[`robot/docs/dds-isolation.md`](../robot/docs/dds-isolation.md) for the staged
+runtime changes, rollback and hardware acceptance gates.
+
 ---
 
 ## 3. Backend-owned tour orchestration and fleet contract

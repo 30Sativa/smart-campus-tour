@@ -4,6 +4,13 @@
 dụng lên robot:** discovery server, `robot/.env`, SSH và package trên miniPC
 vẫn như cũ. Các bước chuyển đổi nằm ở mục 8, user chạy từng bước.
 
+**Cập nhật review S0b:** user đã xác nhận RViz thật hiện map, LiDAR, TF và
+RobotModel sau khi source workspace laptop. Những sửa tiếp theo gồm wrapper
+`amr-rviz --r3`, cleanup, kiểm dữ liệu cũ và guard protocol v2 (`sent_at` bắt
+buộc). Đây không phải bằng chứng S1–S3 đã được áp dụng, cũng không thay cho
+kiểm thử localization/navigation. Kết quả của lượt review đứng yên nằm ở
+`robot/docs/r3-stationary-review-2026-10-17.md`.
+
 **Đính chính so với đề xuất v2:**
 - `fastdds discovery -l 127.0.0.1` **không** đóng discovery; socket vẫn bind
   `0.0.0.0`.
@@ -89,6 +96,31 @@ rollback. Sau S2 nó không còn chạy được.
 
 ## 4. Dùng hằng ngày
 
+Lệnh vận hành ổn định là `amr-rviz`: mặc định vẫn gọi nguyên script cũ đã
+lưu thành `~/.local/bin/amr-rviz.legacy`. Chọn R3 bằng:
+
+```bash
+amr-rviz --r3
+# Robot chưa được định vị: kiểm TF/model/scan cục bộ trong odom.
+amr-rviz --r3 -f odom
+```
+
+Wrapper source Humble và workspace laptop ở
+`~/Desktop/smart-campus-tour/robot/ros2_ws/install/setup.bash`; chọn workspace
+khác bằng `AMR_ROS_WS_SETUP`. `AMR_RVIZ_TARGET` chọn SSH host (mặc định
+`sativa@10.86.7.244`). Mọi option được chuyển cho `rviz-over-ssh`.
+Thiếu workspace hoặc `robot_description` thì dừng trước khi mở cửa sổ lỗi.
+R3 không tự fallback sang DDS cũ. Sau S2, `--legacy` chỉ dùng được khi đã
+rollback cấu hình robot theo mục 8.
+
+Để cài từ checkout R3 trên laptop (không phải trên miniPC): lưu script cũ
+thành `amr-rviz.legacy` trước, chép `amr-rviz`, `rviz-over-ssh`, `fox2ros.py`,
+`fox2ros_topics.yaml` từ `robot/tools/rviz_over_ssh/` cùng
+`robot/ros2_ws/src/robot_navigation/rviz/navigation.rviz` vào
+`~/.local/share/amr-rviz/r3/`, rồi liên kết `~/.local/bin/amr-rviz` tới wrapper
+đã chép. Thư mục cài độc lập với vòng đời worktree. Không ghi đè bản legacy.
+Rollback lệnh laptop bằng bản legacy đã lưu; không cần sửa robot để chỉ dừng R3.
+
 Trên robot, ngoài navigation như cũ:
 
 ```bash
@@ -158,6 +190,10 @@ Guard từ chối khi:
 - giá trị NaN/inf, hoặc quaternion suy biến;
 - bấm hai lần trong vòng 1 s;
 - request sai định dạng, hoặc dài hơn 8 KiB.
+- request protocol v1 thiếu `sent_at`, quá 2 s hoặc hơn 0.5 s trong tương lai;
+  kiểm lại hạn dùng ngay trước khi publish sau cửa sổ lấy odom;
+- request khác đang được kiểm hoặc đang chờ AMCL xác nhận; client đã ngắt
+  kết nối trong lúc kiểm. Những request này không xếp hàng.
 
 Một số chi tiết khác:
 - **Odom và `cmd_vel` lấy theo yêu cầu:** guard chỉ subscribe hai topic này
@@ -167,11 +203,18 @@ Một số chi tiết khác:
   - Lấy theo yêu cầu: lúc rảnh khoảng 0.4 %; lấy được mẫu trong khoảng 26 ms
     (tối đa 0.9 s).
 - **Stamp:** thay bằng đồng hồ robot, vì đồng hồ laptop có thể lệch.
-- **Khi link đứt:** không gửi và không xếp hàng (`NOT sent`). Một pose cũ
-  không bao giờ tới robot muộn.
-- **Lệch đồng hồ:** `fox2ros` cảnh báo khi đồng hồ laptop lệch robot quá
-  0.5 s. Ước lượng lấy giá trị nhỏ nhất trên stamp của `/scan`, nên độ trễ
-  link không gây báo động giả.
+- **Khi link đứt:** không gửi mới, không retry request cũ. Request đã vào TCP
+  được guard chặn khi quá hạn; đây là hạn dùng 2 s, không phải bảo đảm thu hồi
+  một request đã tới robot. Adapter chỉ cho gửi khi có scan mới (cả thời điểm
+  nhận lẫn header stamp), guard READY và không có request đang chờ.
+- **Phản hồi bị đứng:** sau 5 s adapter báo `NO_ANSWER`, nối lại, không phát lại
+  request. Kết quả cuối chỉ là `ACCEPTED`, `DIFFERENT`, `REJECTED`, `ERROR` hoặc
+  `NO_ANSWER`; `FORWARDED` chưa phải xác nhận AMCL.
+- **Dữ liệu cũ:** transport còn UP/pong nhưng scan đứng hoặc header cũ quá 2 s
+  thì báo `STALE`; RViz có thể vẫn giữ map/model cũ. Có scan mới lại báo `LIVE`.
+- **Đồng hồ:** độ chênh stamp gồm cả clock skew và trễ mạng. Một giá trị dương
+  lớn không đủ để kết luận NTP sai; kiểm cả NTP và link. Timestamp của map
+  latched và TF tĩnh có thể cũ một cách bình thường.
 - **Cảnh báo vô hại:** AMCL có thể in `Failed to transform initial pose in
   time`. Robot đứng yên nên không cần bù odom; hiện tượng này cũng có khi đặt
   pose từ RViz trên robot.
@@ -401,4 +444,6 @@ mở terminal mới, `source robot/scripts/source-minipc`, chạy stack,
 | `not advertised by robot` | Topic đó chưa có publisher trên robot (stack chưa chạy, camera tắt…) |
 | `SSH tunnel down` lặp lại | Không đăng nhập bằng key được (BatchMode), hoặc mất mạng |
 | RViz không có `map→base_link` | Chưa đặt initial pose; xem dòng `[robot] ...` |
-| `laptop clock is … ahead/behind` | Bật NTP trên laptop |
+| `scan stamps differ from laptop time` | Kiểm NTP và độ trễ mạng; không tự đổi cấu hình robot |
+| `STALE` nhưng transport UP | Scan chưa có, đứng, backlog hoặc clock lệch; đợi `LIVE`, không dùng hình cũ để đặt pose |
+| `missing fields ['sent_at']` | Adapter cũ; nâng adapter/guard cùng protocol v2 |

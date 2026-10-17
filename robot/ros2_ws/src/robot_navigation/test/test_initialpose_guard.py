@@ -34,6 +34,7 @@ STILL = window()
 
 def pose(frame='map', x=1.0, y=2.0, yaw=0.5, q=None):
     m = PoseWithCovarianceStamped()
+    m.header.stamp.sec = int(NOW)
     m.header.frame_id = frame
     o = m.pose.pose.orientation
     if q is None:
@@ -102,6 +103,29 @@ def test_rejects_wrong_frame_bad_values_and_double_click():
     assert check(pose(), last=NOW - 1.5)[0]
 
 
+@pytest.mark.parametrize('stamp', [NOW - 3, NOW + 1, 0])
+def test_rejects_expired_or_future_requests(stamp):
+    m = pose()
+    m.header.stamp.sec = int(stamp)
+    ok, reason = check(m)
+    assert not ok and 'timestamp' in reason
+
+
+def test_rejects_invalid_motion_and_negative_variance():
+    assert not check(pose(), motion=window((float('nan'), 0.0), (0.0, 0.0), (0.0, 0.0)))[0]
+    assert not check(pose(), motion=window(age=-1))[0]
+    m = pose()
+    m.pose.covariance[0] = -1.0
+    assert not check(m)[0]
+
+
+def test_large_quaternion_normalization_does_not_overflow():
+    m = pose(q=(0.0, 0.0, 1e200, 1e200))
+    assert check(m)[0]
+    out = normalized(m, Time())
+    assert math.isclose(math.hypot(out.pose.pose.orientation.z, out.pose.pose.orientation.w), 1.0)
+
+
 def test_normalized_uses_robot_stamp_and_unit_quaternion():
     stamp = Time(sec=42, nanosec=7)
     out = normalized(pose(frame='/map', q=(0.0, 0.0, 0.6, 0.8 * 2)), stamp)
@@ -120,7 +144,8 @@ def test_yaw_and_result_reporting():
 
 def request(**over):
     r = {'op': 'initialpose', 'frame_id': 'map', 'x': 1.0, 'y': 2.0, 'z': 0.0,
-         'qx': 0.0, 'qy': 0.0, 'qz': 0.0, 'qw': 1.0, 'covariance': [0.0] * 36}
+         'qx': 0.0, 'qy': 0.0, 'qz': 0.0, 'qw': 1.0, 'covariance': [0.0] * 36,
+         'sent_at': time.time()}
     r.update(over)
     return json.dumps(r).encode()
 
@@ -140,6 +165,8 @@ def test_parse_request_builds_the_pose():
     (request(x='1'), 'numbers'),
     (request(x=True), 'numbers'),
     (request(frame_id=3), 'string'),
+    (request(sent_at=float('inf')), 'finite'),
+    (request(x=10 ** 1000), 'finite'),
 ])
 def test_parse_request_is_strict(line, word):
     with pytest.raises(ValueError, match=word):
@@ -221,6 +248,10 @@ def live_guard(monkeypatch):
     pub = odom_node.create_publisher(Odometry, 'odom', 10)
     cmd_pub = odom_node.create_publisher(Twist, 'cmd_vel', 10)
     speed = {'v': None, 'blip': False, 'cmd': 0.0}
+    speed['guard'] = guard
+    speed['poses'] = []
+    odom_node.create_subscription(PoseWithCovarianceStamped, 'initialpose',
+                                  speed['poses'].append, 10)
     latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.TRANSIENT_LOCAL)
     nav = {}
@@ -312,3 +343,51 @@ def test_live_guard_rejects_paused_goal_motion_blips_and_teleop(live_guard):
     speed['cmd'] = 0.3
     r = ask()
     assert r['status'] == 'REJECTED' and 'cmd_vel' in r['text']
+
+
+def test_live_guard_does_not_queue_concurrent_requests(live_guard):
+    import socket
+    speed, ask = live_guard
+    speed['v'] = 0.0
+    guard = speed['guard']
+    with socket.create_connection(('127.0.0.1', guard.server.port), timeout=5) as c:
+        f = c.makefile('rwb')
+        f.readline()                         # READY
+        f.write(request() + b'\n')
+        f.flush()
+        end = time.monotonic() + 2
+        while not guard.request_lock.locked() and time.monotonic() < end:
+            time.sleep(.01)
+        r = ask()
+        assert r['status'] == 'REJECTED' and 'nothing queued' in r['text']
+        assert json.loads(f.readline())['status'] == 'FORWARDED'
+        r = ask()
+        assert r['status'] == 'REJECTED' and 'awaiting AMCL' in r['text']
+        time.sleep(.1)
+        assert len(speed['poses']) == 1
+
+
+def test_live_guard_discards_request_if_client_disconnects_during_check(live_guard):
+    import socket
+    speed, _ = live_guard
+    speed['v'] = 0.0
+    guard = speed['guard']
+    c = socket.create_connection(('127.0.0.1', guard.server.port), timeout=5)
+    c.recv(4096)                             # READY
+    c.sendall(request() + b'\n')
+    end = time.monotonic() + 2
+    while not guard.request_lock.locked() and time.monotonic() < end:
+        time.sleep(.01)
+    c.shutdown(socket.SHUT_RDWR)
+    c.close()
+    time.sleep(1)
+    assert not speed['poses']
+
+
+def test_live_guard_checks_expiry_again_after_sampling(live_guard):
+    speed, ask = live_guard
+    speed['v'] = 0.0
+    speed['guard'].still_window = 2.1
+    r = ask()
+    assert r['status'] == 'REJECTED' and 'timestamp' in r['text']
+    assert not speed['poses']

@@ -29,13 +29,15 @@ READY, FORWARDED, ACCEPTED, DIFFERENT, NO_ANSWER, REJECTED, ERROR.
 
 Wire format, one UTF-8 JSON object per line (max 8 KiB):
   request  {"op": "initialpose", "frame_id": "map", "x": 1.0, "y": 2.0, "z": 0.0,
-            "qx": 0, "qy": 0, "qz": 0, "qw": 1, "covariance": [36 numbers]}
+            "qx": 0, "qy": 0, "qz": 0, "qw": 1, "covariance": [36 numbers],
+            "sent_at": 1792225000.0}  # protocol v2, Unix time at laptop send
   reply    {"status": "FORWARDED", "text": "..."}
 
 Only launched by debug_bridge.launch.py; navigation.launch.py does not use it.
 """
 import json
 import math
+import socket
 import socketserver
 import threading
 import time
@@ -54,7 +56,7 @@ ACTIVE_GOAL = {GoalStatus.STATUS_ACCEPTED, GoalStatus.STATUS_EXECUTING,
 # Every action on the robot that can command motion.
 BUSY_ACTIONS = ['navigate_to_pose', 'navigate_through_poses', 'follow_waypoints', 'follow_path',
                 'spin', 'backup', 'drive_on_heading', 'assisted_teleop', 'wait', 'go_to_stop']
-REQUEST_KEYS = {'op', 'frame_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'covariance'}
+REQUEST_KEYS = {'op', 'frame_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'covariance', 'sent_at'}
 
 
 def yaw_of(q):
@@ -81,13 +83,24 @@ def parse_request(line):
         raise ValueError(f'missing fields {sorted(missing)}')
     if not isinstance(req['frame_id'], str):
         raise ValueError('frame_id must be a string')
-    numbers = [req[k] for k in ('x', 'y', 'z', 'qx', 'qy', 'qz', 'qw')]
+    numbers = [req[k] for k in ('x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'sent_at')]
     cov = req['covariance']
     if not isinstance(cov, list) or len(cov) != 36:
         raise ValueError('covariance must be a list of 36 numbers')
     if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in numbers + cov):
         raise ValueError('pose and covariance must be numbers')
+    try:
+        values = [float(v) for v in numbers + cov]
+    except (ValueError, OverflowError):
+        raise ValueError('pose, covariance and sent_at must be finite numbers') from None
+    if not all(math.isfinite(v) for v in values):
+        raise ValueError('pose, covariance and sent_at must be finite numbers')
+    if not 0 <= req['sent_at'] < 2147483647:
+        raise ValueError('sent_at must be a Unix timestamp within ROS Time range')
     msg = PoseWithCovarianceStamped()
+    # A transport expiry timestamp, never the timestamp forwarded to AMCL.
+    msg.header.stamp.sec = int(req['sent_at'])
+    msg.header.stamp.nanosec = int((req['sent_at'] % 1) * 1e9)
     msg.header.frame_id = req['frame_id']
     p, q = msg.pose.pose.position, msg.pose.pose.orientation
     p.x, p.y, p.z = float(req['x']), float(req['y']), float(req['z'])
@@ -106,22 +119,38 @@ def summarize_motion(odom, cmd):
         return None
     return {'n': len(odom), 'last_stamp': max(o[0] for o in odom),
             'max_v': max(o[1] for o in odom), 'max_w': max(o[2] for o in odom),
-            'cmd_n': len(cmd), 'cmd_nonzero': any(cmd)}
+            'cmd_n': len(cmd), 'cmd_nonzero': any(cmd),
+            'finite': all(math.isfinite(v) for sample in odom for v in sample)}
+
+
+def validate_pose(msg, global_frame, now_s, limits):
+    """Reject malformed/expired input before subscribing to high-rate topics."""
+    if msg.header.frame_id.lstrip('/') != global_frame:
+        return (f'frame_id "{msg.header.frame_id}" is not "{global_frame}": '
+                'set RViz Fixed Frame to map')
+    p, q = msg.pose.pose.position, msg.pose.pose.orientation
+    values = [p.x, p.y, p.z, q.x, q.y, q.z, q.w] + list(msg.pose.covariance)
+    if not all(math.isfinite(v) for v in values):
+        return 'pose contains NaN/inf'
+    norm = math.hypot(q.x, q.y, q.z, q.w)
+    if not math.isfinite(norm) or norm < 0.5:
+        return 'orientation quaternion is degenerate or too large'
+    if any(msg.pose.covariance[i] < 0 for i in (0, 7, 14, 21, 28, 35)):
+        return 'covariance diagonal must be non-negative'
+    sent_at = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+    age = now_s - sent_at
+    if age > limits.get('request_timeout', 2.0) or age < -0.5:
+        return f'request timestamp is {age:.2f} s old/future: expired or clocks differ; retry, sync NTP'
+    return None
 
 
 def check_request(msg, global_frame, motion, now_s, last_forward_s, limits, busy=()):
     """Return (ok, reason). motion: summarize_motion() or None. busy: names of
     actions with an active goal. limits: max_linear, max_angular, odom_timeout,
     min_interval, min_samples."""
-    if msg.header.frame_id.lstrip('/') != global_frame:
-        return False, (f'frame_id "{msg.header.frame_id}" is not "{global_frame}": '
-                       'set RViz Fixed Frame to map')
-    p, q = msg.pose.pose.position, msg.pose.pose.orientation
-    values = [p.x, p.y, p.z, q.x, q.y, q.z, q.w] + list(msg.pose.covariance)
-    if not all(math.isfinite(v) for v in values):
-        return False, 'pose contains NaN/inf'
-    if math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w) < 0.5:
-        return False, 'orientation quaternion is degenerate'
+    invalid = validate_pose(msg, global_frame, now_s, limits)
+    if invalid:
+        return False, invalid
     if last_forward_s is not None and now_s - last_forward_s < limits['min_interval']:
         return False, (f'ignored: previous initial pose less than '
                        f'{limits["min_interval"]:.1f} s ago')
@@ -133,6 +162,8 @@ def check_request(msg, global_frame, motion, now_s, last_forward_s, limits, busy
     if motion['n'] < limits['min_samples']:
         return False, (f'only {motion["n"]} odom samples in the window: '
                        'cannot confirm the robot is stationary')
+    if not motion['finite'] or now_s - motion['last_stamp'] < -0.5:
+        return False, 'invalid or future odom: cannot confirm the robot is stationary'
     if now_s - motion['last_stamp'] > limits['odom_timeout']:
         return False, (f'odom is {now_s - motion["last_stamp"]:.1f} s old: '
                        'cannot confirm the robot is stationary')
@@ -151,7 +182,7 @@ def normalized(msg, stamp):
     out.header.stamp = stamp
     out.pose = msg.pose
     q = out.pose.pose.orientation
-    n = math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w)
+    n = math.hypot(q.x, q.y, q.z, q.w)
     q.x, q.y, q.z, q.w = q.x / n, q.y / n, q.z / n, q.w / n
     return out
 
@@ -184,10 +215,19 @@ class PoseServer:
                 data = (json.dumps({'status': status, 'text': text}) + '\n').encode()
                 with self.lock:
                     try:
-                        self.wfile.write(data)
-                        self.wfile.flush()
+                        # Never block the ROS executor behind a client that
+                        # stopped reading its replies.
+                        self.request.sendall(data, socket.MSG_DONTWAIT)
                     except OSError:
                         pass
+
+            def connected(self):
+                try:
+                    return self.request.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT) != b''
+                except BlockingIOError:
+                    return True
+                except OSError:
+                    return False
 
             def handle(self):
                 if on_connect:
@@ -200,7 +240,10 @@ class PoseServer:
                         self.reply('ERROR', f'line longer than {MAX_LINE} bytes; closing')
                         return
                     if line.strip():
-                        outer.on_line(line, self.reply)
+                        def reply(status, text):
+                            self.reply(status, text)
+                        reply.connected = self.connected
+                        outer.on_line(line, reply)
 
         class Server(socketserver.ThreadingTCPServer):
             allow_reuse_address = True
@@ -231,6 +274,7 @@ class InitialPoseGuard(Node):
             'odom_timeout': self.declare_parameter('odom_timeout', 0.5).value,
             'min_interval': self.declare_parameter('min_interval', 1.0).value,
             'min_samples': self.declare_parameter('min_odom_samples', 3).value,
+            'request_timeout': self.declare_parameter('request_timeout', 2.0).value,
         }
         self.still_window = self.declare_parameter('still_window', 0.5).value
         busy_actions = self.declare_parameter('busy_actions', BUSY_ACTIONS).value
@@ -264,7 +308,8 @@ class InitialPoseGuard(Node):
                 GoalStatusArray, f'{action}/_action/status',
                 lambda m, a=action: self.on_goal_status(a, m), status_qos)
         self.create_timer(0.5, self.check_timeout)
-        ready = f'initialpose_guard {self.get_namespace()} (frame {self.global_frame})'
+        ready = (f'initialpose_guard {self.get_namespace()} (frame {self.global_frame}; '
+                 'protocol v2, sent_at required)')
         self.server = PoseServer(port, self.on_line,
                                  on_connect=lambda reply: reply('READY', ready)).start()
         self.get_logger().info(
@@ -305,12 +350,13 @@ class InitialPoseGuard(Node):
         def on_odom(m):
             t = m.twist.twist
             stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
-            odom.append((stamp if stamp > 0 else self.now_s(),   # unset stamp: now
+            odom.append((stamp,
                          math.hypot(t.linear.x, t.linear.y), abs(t.angular.z)))
             first.set()
 
         def on_cmd(m):
-            cmd.append(any(abs(v) > 1e-6 for v in (m.linear.x, m.linear.y, m.angular.z)))
+            cmd.append(any(not math.isfinite(v) or abs(v) > 1e-6
+                           for v in (m.linear.x, m.linear.y, m.angular.z)))
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         subs = [self.create_subscription(Odometry, 'odom', on_odom, qos),
                 self.create_subscription(Twist, 'cmd_vel', on_cmd, qos)]
@@ -328,8 +374,22 @@ class InitialPoseGuard(Node):
         except ValueError as e:
             self.report('ERROR', f'bad request: {e}', reply)
             return
-        with self.request_lock:
+        invalid = validate_pose(msg, self.global_frame, self.now_s(), self.limits)
+        if invalid:
+            self.report('REJECTED', invalid, reply)
+            return
+        if not self.request_lock.acquire(blocking=False):
+            self.report('REJECTED', 'another request is being checked; nothing queued', reply)
+            return
+        try:
+            with self.lock:
+                awaiting = self.pending is not None
+            if awaiting:
+                self.report('REJECTED', 'previous request is awaiting AMCL; nothing queued', reply)
+                return
             self.process_request(msg, reply)
+        finally:
+            self.request_lock.release()
 
     def process_request(self, msg, reply):
         motion = self.sample_motion()
@@ -338,6 +398,8 @@ class InitialPoseGuard(Node):
             now = self.now_s()
             ok, reason = check_request(msg, self.global_frame, motion, now,
                                        self.last_forward, self.limits, busy)
+            if not getattr(reply, 'connected', lambda: True)():
+                ok, reason = False, 'client disconnected during checks; nothing forwarded'
             if ok:
                 out = normalized(msg, self.get_clock().now().to_msg())
                 self.pose_pub.publish(out)
