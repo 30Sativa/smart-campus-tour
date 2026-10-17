@@ -13,7 +13,8 @@ publishes nothing but guarded initial poses.
   ros2 launch robot_navigation debug_bridge.launch.py robot_id:=robot_01
 
 foxglove_bridge is not a package dependency on purpose (most machines never run
-it); this launch stops with install instructions when it is missing.
+it); this launch stops with install instructions when it is missing. On the
+miniPC it comes from robot/scripts/foxglove-bridge-portable, not apt.
 """
 import os
 
@@ -30,11 +31,12 @@ def _preflight(context, *args, **kwargs):
     try:
         get_package_share_directory('foxglove_bridge')
     except PackageNotFoundError:
-        return [LogInfo(msg='\n[debug_bridge] foxglove_bridge is not installed. On the robot:\n'
-                            '  sudo apt install ros-humble-foxglove-bridge\n'
-                            'then pin it: sudo apt-mark hold ros-humble-foxglove-bridge '
-                            'ros-humble-rosx-introspection. '
-                            'See robot/docs/dds-isolation.md.'),
+        return [LogInfo(msg='\n[debug_bridge] foxglove_bridge not found. On the miniPC use the '
+                            'portable install (no apt; apt would also re-run other pending '
+                            'package configurations):\n'
+                            '  robot/scripts/foxglove-bridge-portable install\n'
+                            '  source ~/.local/opt/foxglove-bridge-3.6.0/env.sh  # this terminal\n'
+                            'See robot/docs/dds-isolation.md, S0.'),
                 Shutdown(reason='foxglove_bridge not installed')]
     actions = []
     if os.environ.get('ROS_LOCALHOST_ONLY') != '1':
@@ -70,6 +72,9 @@ def generate_launch_description():
             # matches, so the bridge would never see the robot's topics. This is
             # the only robot process that is a super client.
             additional_env={'ROS_SUPER_CLIENT': 'TRUE'},
+            # Lower CPU priority: a busy or hostile client may slow the debug
+            # view, never Nav2 (J5005, 4 cores shared with the whole stack).
+            prefix='nice -n 10',
             respawn=True, respawn_delay=2.0, emulate_tty=True,
         ),
         Node(
@@ -77,6 +82,7 @@ def generate_launch_description():
             namespace=robot_id, output='screen',
             parameters=[{'listen_port': ParameterValue(LaunchConfiguration('pose_port'),
                                                        value_type=int)}],
+            prefix='nice -n 10',
             respawn=True, respawn_delay=2.0, emulate_tty=True,
         ),
     ])

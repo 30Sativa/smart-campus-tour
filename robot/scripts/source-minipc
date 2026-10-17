@@ -30,6 +30,11 @@ if [[ "${ROS_LOCALHOST_ONLY:-0}" == 1 ]]; then
         esac
     done
     unset _robot_servers _robot_server
+elif pgrep -a fast-discovery 2>/dev/null | grep -q -- ' -x '; then
+    # Loopback-only server (dds-isolation.md S3): nodes must be localhost-only too.
+    echo 'The discovery server is loopback-only (S3): set ROS_LOCALHOST_ONLY=1 in robot/.env,' \
+         'or roll back with robot/scripts/discovery-server-stage s1.' >&2
+    return 1 2>/dev/null || exit 1
 fi
 # Humble setup scripts are not nounset-safe; preserve the caller setting.
 _robot_nounset=false

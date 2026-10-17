@@ -9,15 +9,27 @@ import pytest
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
-from robot_navigation.initialpose_guard import (PoseServer, check_request, describe_result,
-                                                normalized, parse_request, yaw_of)
+from robot_navigation.initialpose_guard import (BUSY_ACTIONS, PoseServer, active_goals,
+                                                check_request, describe_result, normalized,
+                                                parse_request, summarize_motion, yaw_of)
 
 TOOLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'tools',
                      'rviz_over_ssh')
 
-LIMITS = {'max_linear': 0.02, 'max_angular': 0.05, 'odom_timeout': 0.5, 'min_interval': 1.0}
+LIMITS = {'max_linear': 0.02, 'max_angular': 0.05, 'odom_timeout': 0.5, 'min_interval': 1.0,
+          'min_samples': 3}
 NOW = 1000.0
-STILL = (NOW - 0.05, 0.0, 0.0)
+
+
+def window(*speeds, age=0.05, cmd=(False,) * 10):
+    """Odom window ending `age` s before NOW; speeds: (v, w) per sample."""
+    speeds = speeds or ((0.0, 0.0),) * 12
+    n = len(speeds)
+    odom = [(NOW - age - 0.04 * (n - 1 - i), v, w) for i, (v, w) in enumerate(speeds)]
+    return summarize_motion(odom, list(cmd))
+
+
+STILL = window()
 
 
 def pose(frame='map', x=1.0, y=2.0, yaw=0.5, q=None):
@@ -32,8 +44,8 @@ def pose(frame='map', x=1.0, y=2.0, yaw=0.5, q=None):
     return m
 
 
-def check(msg, odom=STILL, last=None):
-    return check_request(msg, 'map', odom, NOW, last, LIMITS)
+def check(msg, motion=STILL, last=None, busy=()):
+    return check_request(msg, 'map', motion, NOW, last, LIMITS, busy)
 
 
 def test_accepts_stationary_well_formed_request():
@@ -41,15 +53,40 @@ def test_accepts_stationary_well_formed_request():
     assert check(pose(frame='/map'))[0], 'leading slash is the same frame'
 
 
-@pytest.mark.parametrize('odom,word', [
-    ((NOW, 0.10, 0.0), 'moving'),
-    ((NOW, 0.0, 0.30), 'moving'),
-    ((NOW - 2.0, 0.0, 0.0), 'old'),
+@pytest.mark.parametrize('motion,word', [
+    (window(*[(0.10, 0.0)] * 12), 'moving'),
+    (window(*[(0.0, 0.30)] * 12), 'moving'),
+    # One fast sample inside an otherwise still window (stop/start transition).
+    (window(*([(0.0, 0.0)] * 6 + [(0.15, 0.0)] + [(0.0, 0.0)] * 5)), 'moving'),
+    (window(age=2.0), 'old'),
+    (window((0.0, 0.0), (0.0, 0.0)), 'only 2'),
+    (window(cmd=(False, True, False)), 'cmd_vel'),
     (None, 'no odom'),
 ])
-def test_rejects_when_motion_cannot_be_excluded(odom, word):
-    ok, reason = check(pose(), odom=odom)
+def test_rejects_when_motion_cannot_be_excluded(motion, word):
+    ok, reason = check(pose(), motion=motion)
     assert not ok and word in reason
+
+
+def test_rejects_while_a_goal_is_active_even_if_stationary():
+    """Nav2 goal paused (controller waiting, Wait recovery, obstacle): robot
+    still, but it would drive off on the jumped pose when it resumes."""
+    ok, reason = check(pose(), busy=['navigate_to_pose'])
+    assert not ok and 'navigate_to_pose' in reason and 'Cancel' in reason
+    assert check(pose(), busy=[])[0]
+
+
+def test_busy_actions_cover_nav2_and_bus_manager():
+    for a in ('navigate_to_pose', 'navigate_through_poses', 'follow_path', 'follow_waypoints',
+              'spin', 'backup', 'wait', 'go_to_stop'):
+        assert a in BUSY_ACTIONS, a
+
+
+def test_active_goals_counts_accepted_executing_canceling_only():
+    from action_msgs.msg import GoalStatus, GoalStatusArray
+    arr = GoalStatusArray(status_list=[GoalStatus(status=s) for s in range(7)])
+    assert active_goals(arr) == 3     # ACCEPTED 1, EXECUTING 2, CANCELING 3
+    assert active_goals(GoalStatusArray()) == 0
 
 
 def test_rejects_wrong_frame_bad_values_and_double_click():
@@ -175,17 +212,44 @@ def live_guard(monkeypatch):
     rclpy.init(context=ctx, domain_id=random.randint(150, 230))
     guard = InitialPoseGuard(context=ctx, parameter_overrides=[
         Parameter('listen_port', value=0), Parameter('confirm_timeout', value=1.0),
-        Parameter('odom_wait', value=1.5), Parameter('min_interval', value=0.0)])
+        Parameter('odom_wait', value=1.5), Parameter('min_interval', value=0.0),
+        Parameter('still_window', value=0.5)])
+    from action_msgs.msg import GoalStatus, GoalStatusArray
+    from geometry_msgs.msg import Twist
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
     odom_node = rclpy.create_node('fake_ekf', context=ctx)
     pub = odom_node.create_publisher(Odometry, 'odom', 10)
-    speed = {'v': None}
+    cmd_pub = odom_node.create_publisher(Twist, 'cmd_vel', 10)
+    speed = {'v': None, 'blip': False, 'cmd': 0.0}
+    latched = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
+    nav = {}
+
+    def set_goal(status):
+        """Fake bt_navigator status topic; None destroys the 'server'."""
+        if status is None:
+            odom_node.destroy_publisher(nav.pop('pub'))
+            return
+        if 'pub' not in nav:
+            nav['pub'] = odom_node.create_publisher(
+                GoalStatusArray, 'navigate_to_pose/_action/status', latched)
+        nav['pub'].publish(GoalStatusArray(status_list=[GoalStatus(status=status)]))
+    speed['set_goal'] = set_goal
+    n = {'i': 0}
 
     def tick():
         if speed['v'] is not None:
             m = Odometry()
             m.header.stamp = odom_node.get_clock().now().to_msg()
-            m.twist.twist.linear.x = speed['v']
+            n['i'] += 1
+            # 'blip': one fast sample every 10 (40 ms of motion in 0.4 s).
+            m.twist.twist.linear.x = 0.2 if speed['blip'] and n['i'] % 10 == 0 else speed['v']
             pub.publish(m)
+            cmd_pub.publish(Twist())
+            if speed['cmd']:
+                t = Twist()
+                t.angular.z = speed['cmd']
+                cmd_pub.publish(t)
     odom_node.create_timer(0.04, tick)
     ex = SingleThreadedExecutor(context=ctx)
     ex.add_node(guard)
@@ -221,6 +285,30 @@ def test_live_guard_forwards_only_when_stationary(live_guard):
     assert r['status'] == 'REJECTED' and 'moving' in r['text']
     speed['v'] = 0.0
     assert ask()['status'] == 'FORWARDED'
-    # No AMCL here: after confirm_timeout the guard says so instead of staying silent.
-    r = ask.next_reply()
-    assert r['status'] == 'NO_ANSWER'
+    assert ask.next_reply()['status'] == 'NO_ANSWER'   # no AMCL in this test
+
+
+def test_live_guard_rejects_paused_goal_motion_blips_and_teleop(live_guard):
+    speed, ask = live_guard
+    speed['v'] = 0.0
+    speed['set_goal'](2)                       # EXECUTING, robot standing still
+    time.sleep(0.5)
+    r = ask()
+    assert r['status'] == 'REJECTED' and 'navigate_to_pose' in r['text']
+    speed['set_goal'](4)                       # SUCCEEDED
+    time.sleep(0.3)
+    assert ask()['status'] == 'FORWARDED'
+    ask.next_reply()                           # NO_ANSWER (no AMCL)
+    speed['set_goal'](2)
+    time.sleep(0.3)
+    speed['set_goal'](None)                    # server gone, EXECUTING left latched
+    time.sleep(0.5)
+    assert ask()['status'] == 'FORWARDED', 'a dead server cannot be moving the robot'
+    ask.next_reply()
+    speed['blip'] = True
+    r = ask()
+    assert r['status'] == 'REJECTED' and 'moving' in r['text']
+    speed['blip'] = False
+    speed['cmd'] = 0.3
+    r = ask()
+    assert r['status'] == 'REJECTED' and 'cmd_vel' in r['text']

@@ -83,3 +83,21 @@ def test_sshd_password_warning(tmp_path):
     assert levels(cdi.check_host(str(cfg))) == ['PASS']
     cfg.write_text('PasswordAuthentication yes\n')       # first match wins: the .d file
     assert levels(cdi.check_host(str(cfg))) == ['PASS']
+
+
+def test_server_mode_from_cmdline():
+    assert cdi.server_mode('/opt/ros/humble/bin/fast-discovery-server --server-id 0') == 'original'
+    assert cdi.server_mode('fast-discovery-server --server-id 0 -l 127.0.0.1 -p 11811') == 's1'
+    assert cdi.server_mode('fast-discovery-server -x /etc/fastdds/x.xml') == 's3'
+    assert cdi.server_mode('fast-discovery-server -l 10.86.7.244') == 'original'
+
+
+def test_e1b_combination_is_a_fail():
+    lo = {'ROS_LOCALHOST_ONLY': '1'}
+    assert levels(cdi.check_server_mode('original', lo)) == ['FAIL']
+    assert levels(cdi.check_server_mode('s1', lo)) == ['INFO']
+    assert levels(cdi.check_server_mode('original', {'ROS_LOCALHOST_ONLY': '0'})) == ['INFO']
+    assert cdi.check_server_mode(None, lo) == []
+    # Rolled back .env but the server is still at S3.
+    assert levels(cdi.check_server_mode('s3', {'ROS_LOCALHOST_ONLY': '0'})) == ['FAIL']
+    assert levels(cdi.check_server_mode('s3', lo)) == ['INFO']

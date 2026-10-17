@@ -83,6 +83,32 @@ def check_env(env):
     return res
 
 
+def server_mode(cmdline):
+    """original | s1 | s3 from the fast-discovery-server command line."""
+    args = cmdline.split()
+    if '-x' in args or '--xml-file' in args:
+        return 's3'
+    for flag in ('-l', '--udp-address'):
+        i = args.index(flag) if flag in args else -1
+        if 0 <= i < len(args) - 1 and args[i + 1] == '127.0.0.1':
+            return 's1'
+    return 'original'
+
+
+def check_server_mode(mode, env):
+    """E1b: localhost-only nodes with a server that announces LAN addresses."""
+    if mode is None:
+        return []
+    if env.get('ROS_LOCALHOST_ONLY') == '1' and mode == 'original':
+        return [('FAIL', 'ROS_LOCALHOST_ONLY=1 but the discovery server announces LAN addresses: '
+                         'nodes cannot discover each other (E1b). Run discovery-server-stage s1')]
+    if env.get('ROS_LOCALHOST_ONLY') != '1' and mode == 's3':
+        return [('FAIL', 'the discovery server is loopback-only (S3) but ROS_LOCALHOST_ONLY '
+                         'is not 1: nodes cannot discover each other. Set it in robot/.env '
+                         'or run discovery-server-stage s1')]
+    return [('INFO', f'discovery server stage: {mode}')]
+
+
 def check_sockets(udp, tcp, pids):
     """udp/tcp: parse_ss output. pids: {pid: comm} of Fast DDS processes."""
     res = []
@@ -157,7 +183,16 @@ def main():
         print(f'cannot run ss: {e}')
         return 2
     pids = dds_pids()
-    results = check_env(os.environ) + check_sockets(udp, tcp, pids) + check_host()
+    mode = None
+    for pid, comm in pids.items():
+        if comm.startswith('fast-discovery'):
+            try:
+                with open(f'/proc/{pid}/cmdline') as f:
+                    mode = server_mode(f.read().replace('\0', ' '))
+            except OSError:
+                pass
+    results = (check_env(os.environ) + check_server_mode(mode, os.environ)
+               + check_sockets(udp, tcp, pids) + check_host())
     if not [c for c in pids.values() if not c.startswith('fast-discovery')]:
         results.append(('WARN', 'no Fast DDS process running: start the stack, then re-run'))
     for level, text in results:

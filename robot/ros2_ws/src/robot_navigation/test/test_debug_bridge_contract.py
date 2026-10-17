@@ -101,6 +101,8 @@ def test_launch_super_client_only_for_bridge_and_both_nodes_respawn():
         else:
             assert 'ROS_SUPER_CLIENT' not in env
         assert n._ExecuteLocal__respawn is True
+        prefix = ''.join(x.text for x in n.process_description._Executable__prefix)
+        assert prefix == 'nice -n 10', 'debug tools must yield the CPU to Nav2'
 
 
 def test_guard_port_address_is_not_configurable():

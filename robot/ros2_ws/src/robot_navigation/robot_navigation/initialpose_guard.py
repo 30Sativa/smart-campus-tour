@@ -6,11 +6,18 @@ robot/docs/dds-isolation.md). Instead this node listens on 127.0.0.1:<port>,
 reached through the same SSH tunnel, and accepts one thing: an initial pose as
 one JSON line. It forwards it to initialpose only when it is safe:
 
-- the robot is stationary (a fresh odom sample below the speed limits):
-  re-seeding AMCL while driving makes map->odom jump under the controller.
-  Odom is sampled only when a request arrives: a permanent 25 Hz rclpy
-  subscription cost ~7 % of a J5005 core (measured) for a tool that is idle
-  almost always;
+- no goal is active on any action that can move the robot (Nav2 and
+  bus_manager go_to_stop, parameter busy_actions): a robot paused by its
+  controller, a Wait recovery or an obstacle is stationary but would drive off
+  on a jumped map->odom as soon as it resumes;
+- the robot is stationary for a whole window (still_window, default 0.5 s):
+  every odom sample below the speed limits and every cmd_vel sample zero. One
+  odom sample is not enough: 0.6 % of the samples taken while driving in run
+  B2c were below the limits (start/stop transitions).
+  Odom and cmd_vel are sampled only when a request arrives: a permanent 25 Hz
+  rclpy subscription cost ~7 % of a J5005 core (measured) for a tool that is
+  idle almost always. Action status topics are latched and only change on goal
+  events, so those subscriptions stay;
 - frame_id is AMCL's global frame, values are finite, the quaternion is not
   degenerate;
 - at most one request per min_interval (double clicks).
@@ -31,15 +38,22 @@ import json
 import math
 import socketserver
 import threading
+import time
 
 import rclpy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from action_msgs.msg import GoalStatus, GoalStatusArray
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
 MAX_LINE = 8192
+ACTIVE_GOAL = {GoalStatus.STATUS_ACCEPTED, GoalStatus.STATUS_EXECUTING,
+               GoalStatus.STATUS_CANCELING}
+# Every action on the robot that can command motion.
+BUSY_ACTIONS = ['navigate_to_pose', 'navigate_through_poses', 'follow_waypoints', 'follow_path',
+                'spin', 'backup', 'drive_on_heading', 'assisted_teleop', 'wait', 'go_to_stop']
 REQUEST_KEYS = {'op', 'frame_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'covariance'}
 
 
@@ -82,9 +96,23 @@ def parse_request(line):
     return msg
 
 
-def check_request(msg, global_frame, odom, now_s, last_forward_s, limits):
-    """Return (ok, reason). odom: (stamp_s, |v_lin|, |v_ang|) or None.
-    limits: dict max_linear, max_angular, odom_timeout, min_interval."""
+def active_goals(status_array):
+    return sum(1 for s in status_array.status_list if s.status in ACTIVE_GOAL)
+
+
+def summarize_motion(odom, cmd):
+    """odom: [(stamp_s, |v_lin|, |v_ang|)], cmd: [is_nonzero] over the window."""
+    if not odom:
+        return None
+    return {'n': len(odom), 'last_stamp': max(o[0] for o in odom),
+            'max_v': max(o[1] for o in odom), 'max_w': max(o[2] for o in odom),
+            'cmd_n': len(cmd), 'cmd_nonzero': any(cmd)}
+
+
+def check_request(msg, global_frame, motion, now_s, last_forward_s, limits, busy=()):
+    """Return (ok, reason). motion: summarize_motion() or None. busy: names of
+    actions with an active goal. limits: max_linear, max_angular, odom_timeout,
+    min_interval, min_samples."""
     if msg.header.frame_id.lstrip('/') != global_frame:
         return False, (f'frame_id "{msg.header.frame_id}" is not "{global_frame}": '
                        'set RViz Fixed Frame to map')
@@ -97,15 +125,22 @@ def check_request(msg, global_frame, odom, now_s, last_forward_s, limits):
     if last_forward_s is not None and now_s - last_forward_s < limits['min_interval']:
         return False, (f'ignored: previous initial pose less than '
                        f'{limits["min_interval"]:.1f} s ago')
-    if odom is None:
+    if busy:
+        return False, (f'a goal is active on {", ".join(busy)}: the robot may only be paused. '
+                       'Cancel the goal (or wait for it to finish) first')
+    if motion is None:
         return False, 'no odom received: cannot confirm the robot is stationary'
-    stamp_s, v_lin, v_ang = odom
-    if now_s - stamp_s > limits['odom_timeout']:
-        return False, (f'odom is {now_s - stamp_s:.1f} s old: '
+    if motion['n'] < limits['min_samples']:
+        return False, (f'only {motion["n"]} odom samples in the window: '
                        'cannot confirm the robot is stationary')
-    if v_lin > limits['max_linear'] or v_ang > limits['max_angular']:
-        return False, (f'robot is moving ({v_lin:.2f} m/s, {v_ang:.2f} rad/s): '
-                       'stop it before setting the initial pose')
+    if now_s - motion['last_stamp'] > limits['odom_timeout']:
+        return False, (f'odom is {now_s - motion["last_stamp"]:.1f} s old: '
+                       'cannot confirm the robot is stationary')
+    if motion['max_v'] > limits['max_linear'] or motion['max_w'] > limits['max_angular']:
+        return False, (f'robot is moving (up to {motion["max_v"]:.2f} m/s, '
+                       f'{motion["max_w"]:.2f} rad/s): stop it before setting the initial pose')
+    if motion['cmd_nonzero']:
+        return False, 'a non-zero cmd_vel is being sent (teleop or controller): stop it first'
     return True, 'ok'
 
 
@@ -195,7 +230,10 @@ class InitialPoseGuard(Node):
             'max_angular': self.declare_parameter('max_angular_speed', 0.05).value,
             'odom_timeout': self.declare_parameter('odom_timeout', 0.5).value,
             'min_interval': self.declare_parameter('min_interval', 1.0).value,
+            'min_samples': self.declare_parameter('min_odom_samples', 3).value,
         }
+        self.still_window = self.declare_parameter('still_window', 0.5).value
+        busy_actions = self.declare_parameter('busy_actions', BUSY_ACTIONS).value
         self.confirm_timeout = self.declare_parameter('confirm_timeout', 3.0).value
         self.odom_wait = self.declare_parameter('odom_wait', 2.0).value
         self.tol_xy = self.declare_parameter('confirm_xy_tolerance', 0.25).value
@@ -216,6 +254,15 @@ class InitialPoseGuard(Node):
         # forwarded request count as its answer.
         self.create_subscription(PoseWithCovarianceStamped, 'amcl_pose', self.on_amcl, QoSProfile(
             depth=1, reliability=reliable, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        # Latched (TRANSIENT_LOCAL) like every action status publisher.
+        self.goal_subs = {}
+        self.goals = {}
+        status_qos = QoSProfile(depth=1, reliability=reliable,
+                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        for action in busy_actions:
+            self.goal_subs[action] = self.create_subscription(
+                GoalStatusArray, f'{action}/_action/status',
+                lambda m, a=action: self.on_goal_status(a, m), status_qos)
         self.create_timer(0.5, self.check_timeout)
         ready = f'initialpose_guard {self.get_namespace()} (frame {self.global_frame})'
         self.server = PoseServer(port, self.on_line,
@@ -238,25 +285,42 @@ class InitialPoseGuard(Node):
         if reply:
             reply(status, text)
 
-    def sample_odom(self):
-        """(stamp_s, |v_lin|, |v_ang|) of the next odom message, or None.
-        Runs on the request thread while the executor spins elsewhere."""
-        got, ev = [], threading.Event()
+    def on_goal_status(self, action, msg):
+        with self.lock:
+            self.goals[action] = active_goals(msg)
 
-        def cb(m):
-            if not got:
-                t = m.twist.twist
-                stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
-                got.append((stamp if stamp > 0 else self.now_s(),   # unset stamp: now
-                            math.hypot(t.linear.x, t.linear.y), abs(t.angular.z)))
-                ev.set()
-        sub = self.create_subscription(
-            Odometry, 'odom', cb, QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+    def busy(self):
+        """Actions whose latest status lists an active goal and whose server
+        still exists (a crashed server leaves its last status latched)."""
+        with self.lock:
+            active = [a for a, n in self.goals.items() if n]
+        return [a for a in active if self.count_publishers(self.goal_subs[a].topic_name) > 0]
+
+    def sample_motion(self):
+        """Odom and cmd_vel over still_window, starting at the first odom sample
+        (waiting up to odom_wait for it). Runs on the request thread while the
+        executor spins elsewhere."""
+        odom, cmd, first = [], [], threading.Event()
+
+        def on_odom(m):
+            t = m.twist.twist
+            stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
+            odom.append((stamp if stamp > 0 else self.now_s(),   # unset stamp: now
+                         math.hypot(t.linear.x, t.linear.y), abs(t.angular.z)))
+            first.set()
+
+        def on_cmd(m):
+            cmd.append(any(abs(v) > 1e-6 for v in (m.linear.x, m.linear.y, m.angular.z)))
+        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        subs = [self.create_subscription(Odometry, 'odom', on_odom, qos),
+                self.create_subscription(Twist, 'cmd_vel', on_cmd, qos)]
         try:
-            ev.wait(self.odom_wait)
+            if first.wait(self.odom_wait):
+                time.sleep(self.still_window)
         finally:
-            self.destroy_subscription(sub)
-        return got[0] if got else None
+            for sub in subs:
+                self.destroy_subscription(sub)
+        return summarize_motion(list(odom), list(cmd))
 
     def on_line(self, line, reply):
         try:
@@ -268,11 +332,12 @@ class InitialPoseGuard(Node):
             self.process_request(msg, reply)
 
     def process_request(self, msg, reply):
-        odom = self.sample_odom()
+        motion = self.sample_motion()
+        busy = self.busy()          # after the window: a goal sent meanwhile counts
         with self.lock:
             now = self.now_s()
-            ok, reason = check_request(msg, self.global_frame, odom, now,
-                                       self.last_forward, self.limits)
+            ok, reason = check_request(msg, self.global_frame, motion, now,
+                                       self.last_forward, self.limits, busy)
             if ok:
                 out = normalized(msg, self.get_clock().now().to_msg())
                 self.pose_pub.publish(out)

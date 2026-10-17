@@ -533,7 +533,7 @@ class PoseLink:
 
 def run_ros(args, downlinks):
     import rclpy
-    from geometry_msgs.msg import PoseWithCovarianceStamped
+    from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
     from rclpy.node import Node
     from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
     from rosidl_runtime_py.utilities import get_message
@@ -603,6 +603,12 @@ def run_ros(args, downlinks):
     initialpose = resolve('initialpose', args.namespace)
     node.create_subscription(PoseWithCovarianceStamped, initialpose, on_initialpose,
                              QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
+    # RViz "Nav2 Goal" publishes here too; say clearly that nothing moves.
+    node.create_subscription(
+        PoseStamped, resolve('goal_pose', args.namespace),
+        lambda m: rlog.warning('Nav2 Goal is NOT sent to the robot: this RViz is a debug view. '
+                               'Send goals on the robot (or through the backend).'),
+        QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE))
 
     # Refuse to start inside a graph that already has the robot's data (for
     # example on the robot itself, or with a bag playing): duplicate /tf.
