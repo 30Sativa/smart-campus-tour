@@ -18,6 +18,9 @@ changing robot code.
   graph is closed to the network, the read-only debug bridge, guarded initial
   pose, security, and the S0–S6 switch-over with rollback. Not yet applied on
   the robot.
+- [R3 DDS readiness, 2026-10-17](r3-dds-readiness-2026-10-17.md) — actual
+  MiniPC checkout/runtime differences, stationary S1–S3 prerequisites and
+  verification/rollback; valid localization can follow isolation.
 - [Nav2 turn test](nav2-turn-test.md) — hardware-test procedure; check its
   READY FOR HARDWARE TEST status before relying on the parameters.
 - [Nav2 Baseline V1](nav2-baseline-v1.md) — current development/test baseline

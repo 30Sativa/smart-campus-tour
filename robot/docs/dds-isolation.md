@@ -5,6 +5,13 @@ adapter và guard được harden qua review đứng yên. Discovery server,
 `robot/.env`, mạng, SSH và Nav2 Baseline V1 chưa đổi. Chỉ overlay debug riêng
 được cập nhật. Các bước cô lập DDS vẫn ở mục 8, chưa thực hiện.
 
+**Review điều kiện chuyển đổi:**
+`robot/docs/r3-dds-readiness-2026-10-17.md` đối chiếu runtime MiniPC với R3
+và hướng dẫn dùng helper mới với install V1 hiện tại. Có thể chuyển S1–S3
+khi robot đứng yên ở vị trí chưa biết trên map; Initial Pose hợp lệ để sau.
+Vẫn cần phiên bảo trì, sudo, stop/restart toàn bộ ROS process và kiểm từng
+bước. Đây là kết luận sẵn sàng triển khai, không phải xác nhận đã cô lập.
+
 **Cập nhật review S0b:** user đã xác nhận RViz thật hiện map, LiDAR, TF và
 RobotModel sau khi source workspace laptop. Những sửa tiếp theo gồm wrapper
 `amr-rviz --r3`, cleanup, kiểm dữ liệu cũ và guard protocol v2 (`sent_at` bắt
@@ -89,7 +96,7 @@ miniPC (robot)                                               laptop (Wi-Fi khác
 | `robot/scripts/discovery-server-stage` | robot (sudo) | Đổi server từng bậc `original ↔ s1 ↔ s3` bằng một drop-in; kiểm tra rồi tự quay lại nếu hỏng |
 | `robot/scripts/foxglove-bridge-portable` | robot | Cài bridge **không qua apt**: hai `.deb` ghim phiên bản và sha256, giải nén vào `~/.local/opt` |
 | `robot/config/fastdds/discovery_server_loopback.xml` | robot | Profile cho discovery server: mọi socket trên `127.0.0.1` (S3) |
-| `robot/scripts/source-minipc` | robot | Thêm chặn: `LOCALHOST_ONLY=1` thì `ROS_DISCOVERY_SERVER` phải là `127.0.0.1`; server đang ở S3 thì `LOCALHOST_ONLY` phải là 1 |
+| `robot/scripts/source-minipc` | robot | Chặn discovery LAN với localhost-only, S2 trước S1 và S3 với node chưa localhost-only; `ROBOT_RUNTIME_ROOT` chọn install runtime khi helper nằm ở worktree khác |
 | `robot/tools/rviz_over_ssh/rviz-over-ssh` | laptop | Mở tunnel, chạy `fox2ros` và RViz; tự nối lại; dọn tiến trình khi thoát |
 | `robot_navigation/robot_navigation/scan_rviz.py` | laptop | Utility có sẵn, không đổi code: chiếu scan trong DDS laptop, tránh đợi TF cuối scan ở UI RViz |
 | `robot/tools/rviz_over_ssh/fox2ros.py`, `fox2ros_topics.yaml` | laptop | WebSocket → DDS cục bộ của laptop (chuyển nguyên CDR); gửi initial pose |
@@ -323,7 +330,10 @@ Vì vậy dùng bản portable:
    terminal riêng**:
 
    ```bash
-   source robot/scripts/source-minipc && source ~/.cache/armtc/r3_runtime/install/setup.bash
+   export ROBOT_RUNTIME_ROOT="$HOME/smart-campus-tour/robot"
+   source "$HOME/sct-dds-r3/robot/scripts/source-minipc"
+   source ~/.cache/armtc/smoothws/install/setup.bash
+   source ~/.cache/armtc/r3_runtime/install/setup.bash
    source ~/.local/opt/foxglove-bridge-3.6.0/env.sh
    ros2 launch robot_navigation debug_bridge.launch.py robot_id:=robot_01
    ```
@@ -332,11 +342,14 @@ Vì vậy dùng bản portable:
 3. Trên laptop: kiểm tra `ssh -o BatchMode=yes sativa@<ip-robot> true` chạy
    được mà không hỏi mật khẩu, rồi chạy `rviz-over-ssh sativa@<ip-robot>`.
 4. Đạt khi:
-   - RViz hiện map, scan, TF, costmap, RobotModel;
-   - "2D Pose Estimate" lúc robot đứng yên và không có goal → `ACCEPTED`;
-   - bấm lúc đang có goal → `REJECTED`;
+   - RViz nhận map, scan mới, TF, RobotModel; adapter báo LIVE;
+     khi chưa định vị dùng `-f odom` kiểm scan/model, không yêu cầu map overlay
+     đúng hoặc global costmap có dữ liệu;
    - trên robot, `ss -tlnp | grep -E '8765|8766'` chỉ có `127.0.0.1`;
    - `ps -o ni,comm -C foxglove_bridge` cho `10`.
+   Initial Pose hợp lệ/AMCL ACCEPTED kiểm khi biết vị trí trên đúng map;
+   guard với goal thật kiểm ở phiên được phép gửi goal. Hai bài này không
+   chặn chuyển DDS. S0b hiện đã có bằng chứng đứng yên, không cần lặp toàn bộ.
 5. Rollback: Ctrl+C launch debug. Gỡ hẳn: `foxglove-bridge-portable remove`.
 
 ### S1–S3: discovery server và `.env`
@@ -356,29 +369,40 @@ do script sinh ra):
 
 Mọi thay đổi server đều qua `discovery-server-stage`. Script:
 - chỉ đi từng bậc;
-- từ chối khi stack còn chạy (trừ CLI daemon), khi có drop-in lạ, hoặc khi
+- từ chối khi stack/CLI daemon còn chạy, khi có drop-in lạ/bị sửa, hoặc khi
   `.env` không khớp với bậc đích;
-- sau khi restart, kiểm tra service và socket; hỏng thì **tự quay về bậc
-  trước**.
+- sau khi restart, kiểm tra service, command line thật và socket; hỏng hoặc
+  bị INT/TERM/HUP thì **tự quay về bậc trước**. Không tự đổi `.env`, restart
+  Nav2 hoặc nghiệm thu topic; SIGKILL/mất điện phải phục hồi thủ công.
 
 Unit gốc không bị sửa; script chỉ dùng một file
 `/etc/systemd/system/fastdds-discovery.service.d/10-dds-isolation.conf`.
 `discovery-server-stage status` chạy không cần root.
 
-Trước mỗi bước: dừng stack (công cụ đo → bag → Nav2, SIGINT). Sau mỗi bước:
-mở terminal mới, `source robot/scripts/source-minipc`, chạy stack,
-`ros2 daemon stop`, rồi `robot/scripts/check-dds-isolation`.
+Trước mỗi bước, kể cả S2: báo phiên bảo trì, chuẩn bị sudo/bản sao cấu hình,
+dừng stack (công cụ đo → bag nếu có → debug → Nav2, SIGINT) và
+`ros2 daemon stop` trong môi trường domain 30 hiện tại. Sau đổi, mở terminal
+mới với helper R3 trỏ đúng runtime, chạy cùng V1 và debug, rồi checker cùng
+probe dữ liệu. Không source install R3 vào terminal Nav2. Lệnh và rollback
+cụ thể theo runtime đã kiểm: `robot/docs/r3-dds-readiness-2026-10-17.md`.
 
 | Bước | Lệnh | Đạt khi | Rollback |
 |---|---|---|---|
-| S1 | `sudo robot/scripts/discovery-server-stage s1` | stack lên đủ; CLI trên robot thấy đủ node (laptop vẫn discovery được: chưa đóng) | `sudo …stage original --env ~/smart-campus-tour/robot/.env` |
-| S2 | sửa `~/smart-campus-tour/robot/.env`: `ROS_LOCALHOST_ONLY=1` | `check-dds-isolation` chỉ còn **một** FAIL (socket server); node đều ở `127.0.0.1`; `ros2 bag record` chạy | `.env` về `0` (server vẫn ở S1, chạy với cả hai) |
-| S3 | `sudo robot/scripts/discovery-server-stage s3 --env ~/smart-campus-tour/robot/.env` | `check-dds-isolation` → `ISOLATED` (chỉ còn WARN sshd); laptop nối thẳng DDS không thấy gì | `sudo …stage s1 --env …` |
+| S1 | `sudo robot/scripts/discovery-server-stage s1` | server thật có `-l 127.0.0.1`; dữ liệu cục bộ/R3 trở lại như trước, vẫn chưa cô lập | `sudo …stage original --env ~/smart-campus-tour/robot/.env` |
+| S2 | sửa `~/smart-campus-tour/robot/.env`: `ROS_LOCALHOST_ONLY=1` | mọi node/daemon được tạo mới với env=1; checker hết FAIL node, chỉ còn FAIL socket server; scan/odom/TF cục bộ vẫn chạy | `.env` về `0` (server vẫn ở S1, chạy với cả hai) |
+| S3 | `sudo robot/scripts/discovery-server-stage s3 --env ~/smart-campus-tour/robot/.env` | checker → `ISOLATED`, exit 0; R3 nhận dữ liệu mới và lịch sử; subscriber chỉ đọc từ LAN không nhận DDS trong khi robot vẫn có dữ liệu | `sudo …stage s1 --env …` |
+
+Robot chưa định vị: AMCL chờ pose, thiếu map→odom và một số Nav2 lifecycle
+chưa active là mốc đã biết, không phải lỗi DDS mới. Không yêu cầu Initial
+Pose/A→B→A trước S1; không đặt pose giả để kiểm. Bag ngắn local có thể kiểm
+sau S3. SSH warning là advisory, không tự sửa SSH trong phiên đổi DDS.
 
 **Thang rollback** luôn đi qua S1, vì S1 chạy với cả hai loại node:
 - S3 → S1 → (`.env` về `0`) → original.
 - Script từ chối `original` khi `.env` còn `LOCALHOST_ONLY=1` (E1b).
 - `source-minipc` từ chối `LOCALHOST_ONLY=0` khi server còn ở S3.
+- `source-minipc` từ chối `LOCALHOST_ONLY=1` khi server còn original (E1b),
+  kể cả `.env` đã trỏ `127.0.0.1`.
 
 ### S4–S6
 

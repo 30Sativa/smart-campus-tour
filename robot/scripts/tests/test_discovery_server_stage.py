@@ -3,7 +3,9 @@
 The ExecStart lines themselves were run against the real fastdds CLI in
 network namespaces (dds-isolation.md, section 10)."""
 import os
+import signal
 import subprocess
+import time
 
 import pytest
 
@@ -23,9 +25,16 @@ case $1 in
     [ -f $d ] && st=s1
     [ -f $d ] && grep -q -- '-x ' $d && st=s3
     echo $st >> $S/restarts
+    sleep "${FAKE_RESTART_DELAY:-0}"
     if [ "${FAKE_RESTART_FAILS:-}" = $st ]; then echo inactive > $S/active; exit 1; fi
     if [ "${FAKE_BROKEN:-}" = $st ]; then echo inactive > $S/active; : > $S/ss; exit 0; fi
     echo active > $S/active
+    cmd='/opt/ros/humble/tools/fastdds/fast-discovery-server --server-id 0'
+    case ${FAKE_RUNNING_STAGE:-$st} in
+      s1) cmd="$cmd -l 127.0.0.1 -p 11811" ;;
+      s3) cmd="/opt/ros/humble/tools/fastdds/fast-discovery-server -x $DSS_XML_DEST" ;;
+    esac
+    printf '%s\0' $cmd > "$DSS_PROC/9000/cmdline"
     if [ $st = s3 ] && [ -z "${FAKE_S3_LEAKS:-}" ]; then lo=127.0.0.1; else lo=0.0.0.0; fi
     printf 'UNCONN 0 0 %s:11811 0.0.0.0:* users:(("fast-discovery-",pid=9,fd=3))\n' $lo > $S/ss
     lan='UNCONN 0 0 10.86.7.244:47970 0.0.0.0:* users:(("fast-discovery-",pid=9,fd=4))'
@@ -52,6 +61,11 @@ def env(tmp_path):
     state, proc = tmp_path / 'state', tmp_path / 'proc'
     state.mkdir()
     proc.mkdir()
+    server = proc / '9000'
+    server.mkdir()
+    (server / 'comm').write_text('fast-discovery-\n')
+    (server / 'cmdline').write_bytes(b'fast-discovery-server\0--server-id\x000\0')
+    (server / 'maps').write_text('/opt/ros/humble/lib/libfastrtps.so.2.6\n')
     (state / 'active').write_text('active\n')
     (state / 'ss').write_text(
         'UNCONN 0 0 0.0.0.0:11811 0.0.0.0:* users:(("fast-discovery-",pid=9,fd=3))\n')
@@ -76,6 +90,7 @@ def env(tmp_path):
         (d / 'maps').write_text(lib if fastdds else '')
 
     run.dotenv, run.state, run.add_process = str(dotenv), state, add_process
+    run.environ = e
     run.dropin = tmp_path / 'fastdds-discovery.service.d' / '10-dds-isolation.conf'
     run.xml = tmp_path / 'etc' / 'discovery_server_loopback.xml'
     return run
@@ -117,11 +132,12 @@ def test_s3_needs_localhost_only_and_original_needs_it_off(env):
     assert stage_of(env) == 's1'
 
 
-def test_refuses_while_the_stack_runs_but_ignores_server_and_cli_daemon(env):
-    env.add_process(9, 'fast-discovery-')
-    env.add_process(10, 'python3', '/usr/bin/python3 -c from ros2cli.daemon.daemonize import main')
+def test_refuses_stale_cli_daemon_as_well_as_runtime_nodes(env):
     env.add_process(11, 'bash', fastdds=False)
     assert env('s1').returncode == 0
+    env.add_process(10, 'python3', '/usr/bin/python3 -c from ros2cli.daemon.daemonize import main')
+    r = env('s3', '--env', env.dotenv, localhost_only=1)
+    assert r.returncode != 0 and '10 python3' in r.stderr
     env.add_process(12, 'amcl')
     r = env('s3', '--env', env.dotenv, localhost_only=1)
     assert r.returncode != 0 and 'stop the stack' in r.stderr and '12 amcl' in r.stderr
@@ -169,3 +185,50 @@ def test_nonzero_systemctl_restart_also_rolls_back(env):
     assert r.returncode == 1 and 'restored s1' in r.stderr
     assert env.dropin.read_text() == before
     assert (env.state / 'restarts').read_text().split()[-2:] == ['s3', 's1']
+
+
+def test_running_command_must_match_the_stage_even_when_sockets_are_healthy(env):
+    r = env('s1', FAKE_RUNNING_STAGE='original')
+    assert r.returncode == 1 and 'running server is original, expected s1' in r.stderr
+    assert stage_of(env) == 'original' and 'restored original' in r.stderr
+
+
+def test_refuses_modified_owned_dropin_instead_of_overwriting_it(env):
+    assert env('s1').returncode == 0
+    modified = env.dropin.read_text() + 'Environment=EXTRA=custom\n'
+    env.dropin.write_text(modified)
+    r = env('original', '--env', env.dotenv, localhost_only=0)
+    assert r.returncode != 0 and 'unexpected content' in r.stderr
+    assert env.dropin.read_text() == modified
+
+
+@pytest.mark.parametrize('sig,exitcode', [(signal.SIGINT, 130), (signal.SIGTERM, 143),
+                                        (signal.SIGHUP, 129)])
+def test_signal_during_restart_restores_previous_stage(env, sig, exitcode):
+    assert env('s1').returncode == 0
+    before = env.dropin.read_text()
+    env('status', localhost_only=1)
+    with subprocess.Popen([SCRIPT, 's3', '--env', env.dotenv], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True,
+                          env=dict(env.environ, FAKE_RESTART_DELAY='0.3')) as p:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if (env.state / 'restarts').read_text().split()[-1] == 's3':
+                break
+            time.sleep(0.01)
+        else:
+            p.kill()
+            pytest.fail('did not reach S3 restart')
+        p.send_signal(sig)
+        _, err = p.communicate(timeout=5)
+    assert p.returncode == exitcode and 'restored s1' in err
+    assert env.dropin.read_text() == before
+    assert (env.state / 'restarts').read_text().split()[-2:] == ['s3', 's1']
+
+
+def test_other_ros_middleware_process_also_blocks_the_switch(env):
+    env.add_process(12, 'cyclone', fastdds=False)
+    proc = env.state.parent / 'proc' / '12' / 'maps'
+    proc.write_text('/opt/ros/humble/lib/librmw_cyclonedds_cpp.so\n')
+    r = env('s1')
+    assert r.returncode != 0 and '12 cyclone' in r.stderr

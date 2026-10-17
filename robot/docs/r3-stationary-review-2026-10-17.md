@@ -1,5 +1,10 @@
 # R3 stationary review — 2026-10-17
 
+**Follow-up:** `robot/docs/r3-dds-readiness-2026-10-17.md` supersedes the
+rollout prerequisite below. Valid localization is deferred until the robot
+is at a known mapped location; it does not block stationary DDS isolation.
+The measurements in this report remain the S0b evidence.
+
 Status: **READY FOR HARDWARE TEST; not DONE/verified.** The R3-specific suite
 passes, but the robot verification gate retains pre-existing failures. S1–S3
 were not performed. No Nav2 goal, velocity command, accepted initial pose,
@@ -107,18 +112,14 @@ The miniPC uses a new debug-only overlay
 not changed. The reviewed guard is protocol v2. The wrapper never starts,
 stops or reconfigures the robot control runtime over SSH.
 
-**Decision: do not execute S1–S3 yet, and do not promote R3 to the default.**
-The SSH data path and stationary negative checks are ready for the remaining
-S0b acceptance test. First place/identify the stationary robot at a known pose
-on the correct map and verify a valid 2D Pose Estimate -> FORWARDED -> ACCEPTED,
-with `map -> odom -> base_footprint` and the expected overlay. This does not
-require A -> B -> A, but cannot be established from an unknown room pose.
-The existing verification failures also prevent marking the branch verified.
-Before S2/S3, use the reviewed `source-minipc` safeguards as described in the
-rollout plan; the old runtime checkout still has the old source helper.
-
-After those gates, S1 -> S2 -> S3 remain controlled stationary changes with
-stack stop/restart and rollback. The current robot is still **NOT ISOLATED**,
-as expected before those steps: `isolation-before.txt` reports open DDS sockets.
-Navigation, roam, active-goal rejection on physical hardware and lost robot
-Wi-Fi still require their separate authorized hardware sessions.
+**Updated rollout decision:** S1 -> S2 -> S3 can be performed stationary,
+with the maintenance prerequisites and runtime selection in
+`robot/docs/r3-dds-readiness-2026-10-17.md`. A valid 2D Pose Estimate ->
+FORWARDED -> ACCEPTED, `map -> odom` and map alignment remain localization
+acceptance tests at a known mapped location, after isolation if necessary.
+They do not gate a network transport change. Existing verification failures
+still prevent calling the branch verified/DONE; they are not evidence that
+localization must precede DDS isolation. Legacy remains the default for now.
+The robot was **NOT ISOLATED** in this review: `isolation-before.txt` reports
+open DDS sockets. Navigation, roam, active-goal rejection on physical hardware
+and lost robot Wi-Fi require their separate authorized hardware sessions.
