@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Laptop: RViz2 on the robot's data without joining the robot's DDS graph.
+#
+#   rviz-over-ssh [options] sativa@<robot-ip>
+#
+# 1. One SSH tunnel carrying two robot loopback ports, both started on the robot
+#    with: ros2 launch robot_navigation debug_bridge.launch.py robot_id:=robot_01
+#      127.0.0.1:8765  foxglove_bridge (read-only data)
+#      127.0.0.1:8766  initialpose_guard (initial pose only)
+#    Its own SSH connection, key auth only (BatchMode), kept alive and restarted
+#    when Wi-Fi drops. Do not use the same connection for the terminal that runs
+#    the software stop (stopkey.py).
+# 2. fox2ros republishes the robot topics into a laptop-local graph
+#    (ROS_LOCALHOST_ONLY=1, domain LAPTOP_ROS_DOMAIN_ID, default 42).
+# 3. RViz2 with robot_navigation/rviz/navigation.rviz under the robot namespace.
+#    "2D Pose Estimate" goes to the robot's initialpose_guard; its verdict
+#    (FORWARDED, ACCEPTED, REJECTED: ...) is printed in this terminal. Nav2 Goal and the Nav2 panel do not reach the robot.
+#
+# Options:
+#   -n NS        robot namespace (default robot_01)
+#   -p PORT      local port for the bridge (default 8765); the pose port is PORT+1
+#   -r PORT      bridge port on the robot (default 8765); guard port is PORT+1
+#   -c FILE      RViz config (default: navigation.rviz from this checkout)
+#   -e LIST      fox2ros --enable list, e.g. global_costmap/costmap
+#   --no-rviz    tunnel + adapter only (run your own rviz2 in this environment)
+#
+# Ctrl+C (or closing RViz) stops the tunnel and the adapter.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROBOT="$(cd "$HERE/../.." && pwd)"
+NS=robot_01 LPORT=8765 RPORT=8765 ENABLE='' RVIZ=1
+RVIZ_CONFIG="$REPO_ROBOT/ros2_ws/src/robot_navigation/rviz/navigation.rviz"
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -n) NS=$2; shift 2 ;;
+    -p) LPORT=$2; shift 2 ;;
+    -r) RPORT=$2; shift 2 ;;
+    -c) RVIZ_CONFIG=$2; shift 2 ;;
+    -e) ENABLE=$2; shift 2 ;;
+    --no-rviz) RVIZ=0; shift ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -*) echo "unknown option $1" >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+[[ $# -eq 1 ]] || { echo "usage: $(basename "$0") [options] user@robot-ip   (-h for help)" >&2; exit 2; }
+TARGET=$1
+
+# Laptop-local graph only. Anything pointing at the robot graph is removed.
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT ROS_STATIC_PEERS \
+      FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+export ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID="${LAPTOP_ROS_DOMAIN_ID:-42}" \
+       RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+if [[ -z "${ROS_DISTRO:-}" ]]; then
+  set +u; source /opt/ros/humble/setup.bash; set -u
+fi
+# RobotModel resolves package://robot_description meshes on this laptop.
+if ! ros2 pkg prefix robot_description >/dev/null 2>&1; then
+  echo "[rviz-over-ssh] note: robot_description is not in this environment; RViz RobotModel" \
+       "will miss meshes (source your robot workspace install first)." >&2
+fi
+LPOSE=$((LPORT + 1)) RPOSE=$((RPORT + 1))
+for port in "$LPORT" "$LPOSE"; do
+  if ss -ltnH "sport = :$port" 2>/dev/null | grep -q .; then
+    echo "[rviz-over-ssh] local port $port is already in use (another rviz-over-ssh?). Use -p." >&2
+    exit 1
+  fi
+done
+
+PIDS=()
+cleanup() {
+  trap - EXIT INT TERM
+  # Children first: killing a loop subshell alone would orphan its ssh/python3.
+  for p in "${PIDS[@]}"; do pkill -TERM -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+  wait 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+tunnel() {
+  while true; do
+    ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o ConnectTimeout=10 \
+        -o ControlMaster=no -o ControlPath=none \
+        -L "127.0.0.1:$LPORT:127.0.0.1:$RPORT" -L "127.0.0.1:$LPOSE:127.0.0.1:$RPOSE" "$TARGET" \
+      || echo "[rviz-over-ssh] SSH tunnel down (exit $?); retrying in 3 s" >&2
+    sleep 3
+  done
+}
+adapter() {
+  while true; do
+    python3 "$HERE/fox2ros.py" --url "ws://127.0.0.1:$LPORT" --pose-url "tcp://127.0.0.1:$LPOSE" \
+      --namespace "$NS" \
+      ${ENABLE:+--enable "$ENABLE"} && break
+    rc=$?
+    [[ $rc -eq 2 ]] && { echo "[rviz-over-ssh] fox2ros refused to start (see above)" >&2; kill $$; }
+    echo "[rviz-over-ssh] fox2ros exited ($rc); restarting in 2 s" >&2
+    sleep 2
+  done
+}
+
+tunnel & PIDS+=($!)
+adapter & PIDS+=($!)
+echo "[rviz-over-ssh] tunnel -> $TARGET (127.0.0.1:$RPORT data, :$RPOSE initial pose);" \
+     "laptop graph domain $ROS_DOMAIN_ID, localhost only"
+if [[ $RVIZ -eq 1 ]]; then
+  rviz2 -d "$RVIZ_CONFIG" --ros-args -r "__ns:=/${NS#/}"
+else
+  echo "[rviz-over-ssh] --no-rviz: run rviz2 in a shell with ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
+  wait
+fi

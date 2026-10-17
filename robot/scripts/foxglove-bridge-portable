@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# foxglove_bridge for debug_bridge.launch.py WITHOUT apt/dpkg (no root).
+#
+# Why not apt: on the miniPC any `apt install` also re-runs the pending
+# configuration of other packages (2026-10-17: v4l2loopback-dkms is
+# half-configured; its DKMS build fails on kernel 6.8 and the module in use was
+# installed by hand). This extracts two pinned, checksummed .debs into PREFIX.
+# Nothing outside PREFIX changes; `remove` undoes it.
+#
+#   foxglove-bridge-portable install [--debs DIR]   # DIR: local copies of the two .debs
+#   foxglove-bridge-portable check
+#   foxglove-bridge-portable remove
+#   source "$PREFIX/env.sh"    # only in the terminal that runs debug_bridge.launch.py
+#
+# PREFIX defaults to ~/.local/opt/foxglove-bridge-3.6.0 (FOXGLOVE_PREFIX overrides).
+set -euo pipefail
+
+PREFIX="${FOXGLOVE_PREFIX:-$HOME/.local/opt/foxglove-bridge-3.6.0}"
+# Tested with robot_navigation debug_bridge (dds-isolation.md). The ROS apt
+# repository keeps only the newest build: keep a copy of these files.
+PKGS=(
+  "ros-humble-foxglove-bridge 3.6.0-1jammy.20260930.010807 59ef11a7d749df6e77815bf6b3bd8acb4ef8067e3d7797abcf7556426c210625"
+  "ros-humble-rosx-introspection 2.3.0-1jammy.20260908.091006 92b946b5bbf58f6aa9f5b50888d2b77e83e556ecd9a6bbd4865787f11631eaef"
+)
+ROSLIB=opt/ros/humble
+
+die() { echo "foxglove-bridge-portable: $*" >&2; exit 1; }
+[[ $EUID -ne 0 ]] || die "run as the robot user, not root (nothing here needs root)"
+case "$PREFIX" in
+  "$HOME"/.local/opt/*) ;;
+  *) [[ -n "${FOXGLOVE_PREFIX:-}" ]] || die "bad PREFIX $PREFIX" ;;
+esac
+
+fetch() {   # fetch DEST_DIR [LOCAL_DIR]
+  local dest=$1 src=${2:-} name ver sum file
+  for p in "${PKGS[@]}"; do
+    read -r name ver sum <<< "$p"
+    file="${name}_${ver}_amd64.deb"
+    if [[ -n "$src" ]]; then
+      [[ -f "$src/$file" ]] || die "missing $src/$file"
+      cp "$src/$file" "$dest/"
+    else
+      (cd "$dest" && apt-get download "$name=$ver") \
+        || die "cannot download $name=$ver" \
+               "(the repository keeps only the newest build; use --debs)"
+    fi
+    echo "$sum  $dest/$file" | sha256sum --check --quiet - || die "checksum mismatch: $file"
+  done
+}
+
+check() {
+  local bin="$PREFIX/root/$ROSLIB/lib/foxglove_bridge/foxglove_bridge"
+  [[ -x "$bin" ]] || die "not installed in $PREFIX"
+  [[ -f /opt/ros/humble/setup.bash ]] || die "ROS 2 Humble not found"
+  local missing
+  missing=$(set +u; source /opt/ros/humble/setup.bash; source "$PREFIX/env.sh"
+            for f in "$bin" "$PREFIX/root/$ROSLIB/lib/"*.so; do ldd "$f"; done \
+              | grep 'not found' | sort -u || true)
+  [[ -z "$missing" ]] || die "missing libraries: $missing"
+  (set +u; source /opt/ros/humble/setup.bash; source "$PREFIX/env.sh"
+   [[ "$(ros2 pkg prefix foxglove_bridge)" == "$PREFIX/root/$ROSLIB" ]]) \
+    || die "ros2 does not resolve foxglove_bridge to $PREFIX"
+  echo "foxglove_bridge 3.6.0 OK in $PREFIX (source $PREFIX/env.sh)"
+}
+
+case "${1:-}" in
+  install)
+    src=''
+    [[ "${2:-}" == --debs ]] && src=${3:?--debs needs a directory}
+    [[ ! -e "$PREFIX" ]] || die "$PREFIX exists: run remove first"
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    fetch "$tmp" "$src"
+    mkdir -p "$PREFIX/root"
+    for deb in "$tmp"/*.deb; do dpkg-deb -x "$deb" "$PREFIX/root"; done
+    cat > "$PREFIX/env.sh" <<ENV
+# foxglove_bridge (portable, robot/scripts/foxglove-bridge-portable). Source it
+# only in the terminal that runs debug_bridge.launch.py, after source-minipc.
+_fg="$PREFIX/root/$ROSLIB"
+export AMENT_PREFIX_PATH="\$_fg\${AMENT_PREFIX_PATH:+:\$AMENT_PREFIX_PATH}"
+export LD_LIBRARY_PATH="\$_fg/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+unset _fg
+ENV
+    check ;;
+  check) check ;;
+  remove)
+    [[ -d "$PREFIX" ]] || { echo "nothing to remove ($PREFIX)"; exit 0; }
+    rm -rf -- "$PREFIX"
+    echo "removed $PREFIX" ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
+esac

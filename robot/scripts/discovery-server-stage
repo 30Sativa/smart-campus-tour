@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Move fastdds-discovery.service one step along robot/docs/dds-isolation.md,
+# verify it, and put the previous configuration back if the check fails.
+#
+#   discovery-server-stage status                                  (no root)
+#   sudo discovery-server-stage s1                                 original -> S1
+#   sudo discovery-server-stage s3       --env <robot/.env>        S1 -> S3
+#   sudo discovery-server-stage s1       --env <robot/.env>        S3 -> S1 (rollback)
+#   sudo discovery-server-stage original --env <robot/.env>        S1 -> original (rollback)
+#
+# Stages (only one systemd drop-in, the unit file itself is never edited):
+#   original  no drop-in: the unit's own ExecStart (binds and announces every interface)
+#   s1        -l 127.0.0.1: announces loopback, still binds 0.0.0.0. Works for nodes
+#             with ROS_LOCALHOST_ONLY=0 and =1, so it is the safe rollback point.
+#   s3        -x discovery_server_loopback.xml: every socket on 127.0.0.1. Needs
+#             ROS_LOCALHOST_ONLY=1 in robot/.env (step S2), or nodes stop discovering.
+#
+# Refuses while ROS nodes other than the ros2 CLI daemon are running: stop the
+# stack first (tools -> bag -> Nav2, SIGINT), restart it afterwards.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UNIT="${DSS_UNIT:-fastdds-discovery.service}"
+DROPIN_DIR="${DSS_DROPIN_DIR:-/etc/systemd/system/$UNIT.d}"
+DROPIN="$DROPIN_DIR/10-dds-isolation.conf"
+XML_SRC="$HERE/../config/fastdds/discovery_server_loopback.xml"
+XML_DEST="${DSS_XML_DEST:-/etc/fastdds/discovery_server_loopback.xml}"
+SYSTEMCTL="${DSS_SYSTEMCTL:-systemctl}"
+SS="${DSS_SS:-ss}"
+PROC="${DSS_PROC:-/proc}"
+SETTLE="${DSS_SETTLE:-2}"
+FASTDDS=/opt/ros/humble/bin/fastdds
+EXEC_S1="/bin/bash $FASTDDS discovery --server-id 0 -l 127.0.0.1 -p 11811"
+EXEC_S3="/bin/bash $FASTDDS discovery -x $XML_DEST"
+
+die() { echo "discovery-server-stage: $*" >&2; exit 1; }
+
+stage() {
+  [[ -f "$DROPIN" ]] || { echo original; return; }
+  if grep -qF -- "-x $XML_DEST" "$DROPIN"; then echo s3
+  elif grep -qF -- "-l 127.0.0.1" "$DROPIN"; then echo s1
+  else echo unknown; fi
+}
+
+server_sockets() {
+  "$SS" -H -uanp 2>/dev/null | awk '/fast-discovery/ {print $4}' | sort -u
+}
+
+localhost_only() {   # value of ROS_LOCALHOST_ONLY in an env file ('' when unset)
+  sed -n 's/^[[:space:]]*ROS_LOCALHOST_ONLY=["'\'']\{0,1\}\([0-9]*\).*/\1/p' "$1" | tail -1
+}
+
+running_nodes() {    # Fast DDS processes other than the server and the CLI daemon
+  local d comm cmd
+  for d in "$PROC"/[0-9]*; do
+    [[ -r "$d/maps" ]] && grep -q libfastrtps "$d/maps" 2>/dev/null || continue
+    comm=$(cat "$d/comm" 2>/dev/null || true)
+    cmd=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null || true)
+    [[ "$comm" == fast-discovery* || "$cmd" == *ros2cli.daemon* ]] && continue
+    echo "${d##*/} $comm"
+  done
+}
+
+write_dropin() {     # write_dropin EXEC | write_dropin '' (remove)
+  if [[ -z "$1" ]]; then
+    rm -f "$DROPIN"
+    rmdir "$DROPIN_DIR" 2>/dev/null || true
+  else
+    mkdir -p "$DROPIN_DIR"
+    printf '%s\n' '# robot/scripts/discovery-server-stage (robot/docs/dds-isolation.md)' \
+      '[Service]' 'ExecStart=' "ExecStart=$1" > "$DROPIN"
+  fi
+}
+
+restart() {
+  "$SYSTEMCTL" daemon-reload
+  "$SYSTEMCTL" restart "$UNIT"
+  sleep "$SETTLE"
+}
+
+verify() {           # verify STAGE -> 0 when the running server matches it
+  "$SYSTEMCTL" is-active --quiet "$UNIT" || { echo "service not active"; return 1; }
+  local socks
+  socks=$(server_sockets)
+  [[ -n "$socks" ]] || { echo "no fast-discovery-server socket"; return 1; }
+  grep -q ':11811$' <<< "$socks" || { echo "nothing on port 11811: $socks"; return 1; }
+  if [[ "$1" == s3 ]] && grep -qv '^127\.0\.0\.1:' <<< "$socks"; then
+    echo "sockets off loopback: $(tr '\n' ' ' <<< "$socks")"; return 1
+  fi
+  return 0
+}
+
+status() {
+  echo "stage: $(stage)   (drop-in: $DROPIN)"
+  echo "service: $("$SYSTEMCTL" is-active "$UNIT" 2>/dev/null || true)"
+  echo "server sockets: $(server_sockets | tr '\n' ' ')"
+}
+
+target=${1:-}
+envfile=''
+[[ "${2:-}" == --env ]] && envfile=${3:?--env needs the robot/.env path}
+case "$target" in
+  status) status; exit 0 ;;
+  s1|s3|original) ;;
+  *) sed -n '2,22p' "$0"; exit 2 ;;
+esac
+
+[[ $EUID -eq 0 || -n "${DSS_ALLOW_NONROOT:-}" ]] || die "changing the service needs sudo"
+"$SYSTEMCTL" cat "$UNIT" >/dev/null 2>&1 || die "unit $UNIT not found"
+others=$(find "$DROPIN_DIR" -maxdepth 1 -name '*.conf' ! -name "${DROPIN##*/}" 2>/dev/null || true)
+[[ -z "$others" ]] || die "other drop-ins exist, resolve them by hand first: $others"
+
+current=$(stage)
+[[ "$current" != unknown ]] || die "$DROPIN has unexpected content; fix it by hand"
+[[ "$current" != "$target" ]] || { echo "already at $target"; status; exit 0; }
+case "$current>$target" in
+  "original>s1"|"s1>s3"|"s3>s1"|"s1>original") ;;
+  *) die "one step at a time: $current -> $target is not allowed (original <-> s1 <-> s3)" ;;
+esac
+
+if [[ "$target" == s3 || "$target" == original ]]; then
+  [[ -n "$envfile" && -f "$envfile" ]] || die "$target needs --env <the robot/.env the stack uses>"
+  lo=$(localhost_only "$envfile")
+  if [[ "$target" == s3 && "$lo" != 1 ]]; then
+    die "s3 needs ROS_LOCALHOST_ONLY=1 in $envfile (step S2), found '${lo:-unset}'"
+  fi
+  if [[ "$target" == original && "$lo" == 1 ]]; then
+    die "set ROS_LOCALHOST_ONLY=0 in $envfile first:" \
+        "localhost-only nodes cannot use the original server (E1b)"
+  fi
+fi
+
+nodes=$(running_nodes)
+[[ -z "$nodes" ]] || die "ROS nodes are running, stop the stack first:
+$nodes"
+
+case "$current" in
+  original) previous='' ;;
+  s1) previous="$EXEC_S1" ;;
+  s3) previous="$EXEC_S3" ;;
+esac
+case "$target" in
+  original) next='' ;;
+  s1) next="$EXEC_S1" ;;
+  s3) next="$EXEC_S3"
+      install -D -m 644 "$XML_SRC" "$XML_DEST" ;;
+esac
+
+echo "fastdds-discovery: $current -> $target"
+write_dropin "$next"
+restart
+if ! why=$(verify "$target"); then
+  echo "check failed ($why): restoring $current" >&2
+  write_dropin "$previous"
+  restart
+  if verify "$current" >/dev/null; then
+    echo "restored $current" >&2
+  else
+    echo "WARNING: $current did not come back either: systemctl status $UNIT" >&2
+  fi
+  exit 1
+fi
+status
+echo
+echo "Next: start the stack in a new terminal (source robot/scripts/source-minipc),"
+echo "      ros2 daemon stop, then robot/scripts/check-dds-isolation."
