@@ -27,12 +27,15 @@ def test_relay_and_launch_are_installed(monkeypatch):
     assert 'robot_navigation' in metadata['packages']
     assert metadata['entry_points']['console_scripts'] == [
         'tf_rviz_relay = robot_navigation.tf_rviz_relay:main',
-        'scan_rviz = robot_navigation.scan_rviz:main']
+        'scan_rviz = robot_navigation.scan_rviz:main',
+        'initialpose_guard = robot_navigation.initialpose_guard:main']
     installed = dict(metadata['data_files'])
     assert 'launch/remote_rviz.launch.py' in installed['share/robot_navigation/launch']
     assert 'rviz/navigation.rviz' in installed['share/robot_navigation/rviz']
     assert 'rviz/remote_navigation.rviz' in installed['share/robot_navigation/rviz']
     assert 'config/scan_rviz.yaml' in installed['share/robot_navigation/config']
+    assert 'launch/debug_bridge.launch.py' in installed['share/robot_navigation/launch']
+    assert 'config/debug_bridge.yaml' in installed['share/robot_navigation/config']
     manifest = ET.parse(PACKAGE / 'package.xml').getroot()
     dependencies = {entry.text for entry in manifest.findall('exec_depend')}
     assert {'rclpy', 'tf2_msgs', 'rviz2', 'nav2_rviz_plugins'} <= dependencies

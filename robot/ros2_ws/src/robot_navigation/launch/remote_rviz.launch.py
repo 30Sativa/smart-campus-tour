@@ -1,4 +1,10 @@
-"""Laptop-only TF relay and scan projection outside RViz's UI thread."""
+"""Laptop-only TF relay and scan projection outside RViz's UI thread.
+
+HISTORICAL: this joins the robot's DDS graph from the laptop, which blocked the
+robot's /scan publisher during Wi-Fi roaming (Nav2 Baseline V1, limit 1). It
+stops working once the robot is isolated (robot/docs/dds-isolation.md, S2);
+use robot/tools/rviz_over_ssh/rviz-over-ssh instead. Kept for rollback.
+"""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument

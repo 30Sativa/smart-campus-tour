@@ -17,6 +17,20 @@ if [[ "${RMW_IMPLEMENTATION:-}" != rmw_fastrtps_cpp ||
     echo 'Set RMW_IMPLEMENTATION=rmw_fastrtps_cpp, ROS_DOMAIN_ID and ROS_DISCOVERY_SERVER in robot/.env.' >&2
     return 1 2>/dev/null || exit 1
 fi
+# Localhost-only nodes cannot reach a discovery server on a LAN address: the
+# whole robot graph would silently stop discovering (robot/docs/dds-isolation.md).
+if [[ "${ROS_LOCALHOST_ONLY:-0}" == 1 ]]; then
+    IFS=';' read -ra _robot_servers <<< "$ROS_DISCOVERY_SERVER"
+    for _robot_server in "${_robot_servers[@]}"; do
+        case "${_robot_server%:*}" in
+            127.0.0.1|localhost|'') ;;
+            *) echo "ROS_LOCALHOST_ONLY=1 needs ROS_DISCOVERY_SERVER on 127.0.0.1, got $ROS_DISCOVERY_SERVER." >&2
+               unset _robot_servers _robot_server
+               return 1 2>/dev/null || exit 1 ;;
+        esac
+    done
+    unset _robot_servers _robot_server
+fi
 # Humble setup scripts are not nounset-safe; preserve the caller setting.
 _robot_nounset=false
 [[ $- == *u* ]] && _robot_nounset=true
