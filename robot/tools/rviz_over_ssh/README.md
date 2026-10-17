@@ -1,5 +1,13 @@
 # rviz_over_ssh: RViz2 trên laptop, không tham gia DDS của robot
 
+> The SSH viewer code in this folder is the R3 opt-in path. At the 2026-10-17
+> snapshot, the current laptop also had an `amr-rviz` wrapper installed from
+> the post-`main` R3 branch: `amr-rviz --r3` selects this viewer, while bare
+> `amr-rviz` still dispatches to the saved legacy viewer. That wrapper is not
+> present in the GitHub `main` checkout yet. See
+> [robot project status](../../docs/project-status.md) before assuming a fresh
+> laptop has it installed or changing the default.
+
 Dùng trên **laptop**. Thiết kế và quy trình chuyển đổi nằm ở
 [`robot/docs/dds-isolation.md`](../../docs/dds-isolation.md).
 
@@ -20,11 +28,11 @@ Trên laptop, từ checkout này. Source ROS Humble và workspace có
 `robot_description` để RViz hiện mesh:
 
 ```bash
-robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
+robot/tools/rviz_over_ssh/rviz-over-ssh <user>@<ip-robot>
 ```
 
 - SSH phải đăng nhập được bằng key không hỏi mật khẩu (`BatchMode=yes`).
-  Kiểm tra trước bằng `ssh -o BatchMode=yes sativa@<ip-robot> true`.
+  Kiểm tra trước bằng `ssh -o BatchMode=yes <user>@<ip-robot> true`.
 - Laptop chạy graph riêng: `ROS_LOCALHOST_ONLY=1`, domain
   `LAPTOP_ROS_DOMAIN_ID` (mặc định 42). Script tự bỏ `ROS_DISCOVERY_SERVER`.
 - Cần global costmap thì thêm `-e global_costmap/costmap`: nhận một snapshot

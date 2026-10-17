@@ -166,6 +166,6 @@ make the observation UNKNOWN, just as repeated RGB stamps already did.
 Heartbeat does not refresh observation freshness. A timer inside this node
 cannot handle total process or executor failure.
 
-See [`robot/docs/phase4-ai.md`](../../../../docs/phase4-ai.md) for P0–P5
+See [`robot/docs/phase4-ai.md`](../../../../robot/docs/phase4-ai.md) for P0–P5
 hardware procedure and rollback. Camera mount, calibration, model artifact,
 and P0–P4 evidence are not verified by offline tests.
