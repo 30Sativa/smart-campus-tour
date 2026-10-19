@@ -17,9 +17,13 @@
  * cung ra mot lan rearm, bo dem mat y nghia; sau reset that chip im lang nen
  * dieu kien stale bat duoc trong 500 ms. Toi da mot lan moi
  * BNO08X_REARM_MIN_INTERVAL_MS. Chi gui lai feature, KHONG reset chip: reset
- * mat hang tram ms va chan vong lap chinh. Mot lan ghi Set Feature la mot
- * giao dich I2C ~21 byte (~7 ms o bus bit-bang hien tai, toi da ~50 ms neu
- * bus bi giu -- cung bac voi doc ma vong lap da lam moi chu ky).
+ * mat hang tram ms va chan vong lap chinh. Mot lan ghi Set Feature la 22 byte
+ * I2C = 198 clock, ~6.7 ms o bus do duoc 29.5 kHz (DIAG CLK=29500, 19/10) --
+ * it hon mot lan doc report binh thuong (~9 ms), va khi chip im lang moi vong
+ * chi doc header 4 byte (~1.7 ms). Bus bi giu: that bai sau mot lan timeout
+ * stretch 25 ms. Gioi han chung cua driver bit-bang (khong do thay doi nay):
+ * slave stretch moi bit sat 25 ms co the keo dai BAT KY giao dich nao; khi do
+ * watchdog ISR 500 ms (MOTOR_ISR_WATCHDOG_MS) van dung xung dong co.
  */
 
 #include <stdint.h>

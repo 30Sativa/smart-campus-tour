@@ -55,7 +55,7 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 8–15 | 4 cặp sonar | `<mm>,<valid>` cho SONAR1–4 |
 | 16 | `yaw_acc` | 0–3: 2 bit status của report hướng firmware đang dùng. Với Rotation Vector (0x05): **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ**. Với Game Rotation Vector (0x08, mặc định) không có từ kế, trường này không mô tả sai số heading |
 | 17 | `imu_rearm` | Số lần firmware tự gửi lại Set Feature vì BNO085 im lặng > 500 ms (tối đa 1 lần/2 s; boot khoẻ mạnh = 0). Tích luỹ từ lúc STM32 boot |
-| 18 | `imu_reset_seen` | Số gói SH-2 "reset complete" đọc được khi polling (gồm cả gói sau cấp nguồn và sau self-test của `DIAG`). Tích luỹ từ lúc STM32 boot |
+| 18 | `imu_reset_seen` | Số gói SH-2 "reset complete" đọc được khi polling (có thể gồm gói sau cấp nguồn, nên lúc boot là 0 hoặc 1). Tích luỹ từ lúc STM32 boot |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
 Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data`. Với

@@ -180,16 +180,22 @@ mục đích gắn thời điểm cho sự kiện lần sau.
 - Không có mẫu > `BNO08X_REARM_STALE_MS` (500 ms) thì gửi lại Set Feature.
   Tối đa một lần mỗi `BNO08X_REARM_MIN_INTERVAL_MS` (2 s), tính cả lần gửi lúc
   boot và lần của `DIAG`.
-- Gói channel 1 `0x01` (reset complete) chỉ được **đếm** (`imu_reset_seen`),
+- Gói channel 1 `0x01` (reset complete) chỉ được **đếm** (`imu_reset_seen`; lúc
+  boot có thể là 0 hoặc 1 tuỳ gói sau cấp nguồn đến trước hay sau init),
   không dùng để kích hoạt. Gói này cũng đến sau mỗi lần cấp nguồn; nếu dùng nó
   để kích hoạt thì boot khoẻ mạnh cũng ra `imu_rearm=1`. Sau reset thật, chip im
   lặng, nên điều kiện 500 ms đã đủ.
-- **Chỉ** gửi lại Set Feature: một giao dịch I2C khoảng 21 byte, khoảng 7 ms ở
-  bus hiện tại, tối đa khoảng 50 ms nếu slave giữ SCL (mỗi bit có timeout
-  stretch 25 ms, ghi dừng ở lỗi đầu tiên). Không reset chip (hàng trăm ms, chặn
-  main loop), không chờ trả lời. Xung động cơ chạy trong ISR TIM2, không phụ
-  thuộc main loop. Watchdog lệnh 300 ms và FB 50 Hz chỉ trễ tối đa một khung,
-  và chỉ trong lúc IMU đang mất.
+- **Chỉ** gửi lại Set Feature: 22 byte I2C = 198 clock, khoảng **6.7 ms** ở bus
+  đo được 29.5 kHz (`DIAG CLK=29500`, 19/10). Mức này ít hơn một lần đọc report
+  bình thường (khoảng 9 ms). Khi chip im lặng, mỗi vòng chỉ đọc header 4 byte
+  (khoảng 1.7 ms), nên **lúc IMU mất main loop còn nhẹ hơn lúc khoẻ**, kể cả
+  thêm 6.7 ms mỗi 2 s. Không reset chip (hàng trăm ms) và không chờ trả lời. Xung
+  STEP chạy trong ISR TIM2; FB 50 Hz chỉ lệch tối đa khoảng 7 ms một lần mỗi 2 s.
+- Bus bị giữ: giao dịch thất bại sau một lần timeout stretch 25 ms. Giới hạn
+  chung của driver bit-bang, có sẵn trước thay đổi này và áp dụng cho cả lệnh
+  đọc: slave kéo dài clock ở mọi bit nhưng luôn dưới 25 ms có thể làm một giao
+  dịch kéo dài vài giây. Khi đó watchdog ISR 500 ms (`MOTOR_ISR_WATCHDOG_MS`)
+  vẫn dừng xung động cơ, và bridge thấy FB mất rồi vào safe stop.
 - Chip chết hẳn: thử lại mỗi 2 s, mỗi lần NACK rất nhanh. `imu_rearm` tăng dần,
   bridge giữ WARN.
 
