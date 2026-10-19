@@ -32,6 +32,18 @@ describe('StaffShell', () => {
     expect(screen.getByRole('button', { name: /Đăng xuất/ })).toBeInTheDocument()
   })
 
+  it('opens the account menu with the profile and sign-out', () => {
+    renderShell()
+    const trigger = within(screen.getByLabelText('Tài khoản đang đăng nhập')).getByRole('button', { name: 'Tài khoản staff' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('menu', { name: 'Tài khoản' })
+    expect(within(menu).getByRole('menuitem', { name: 'Hồ sơ của tôi' })).toHaveAttribute('href', '/staff/profile')
+    expect(within(menu).getByRole('menuitem', { name: 'Đăng xuất' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
   it('opens the mobile navigation and restores focus when dismissed', () => {
     renderShell()
     const open = screen.getByRole('button', { name: 'Mở điều hướng vận hành' })

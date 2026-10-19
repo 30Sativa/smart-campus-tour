@@ -58,6 +58,7 @@ const RepTourDetailPage = lazy(() => import('../../routes/representative/RepTour
 const RepRegisterPage = lazy(() => import('../../routes/representative/RepRegisterPage'))
 const RepRegistrationsPage = lazy(() => import('../../routes/representative/RepRegistrationsPage'))
 const RepRegistrationDetailPage = lazy(() => import('../../routes/representative/RepRegistrationDetailPage'))
+const RepProfilePage = lazy(() => import('../../routes/representative/RepProfilePage'))
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
@@ -69,6 +70,7 @@ const LiveOperationsPage = lazy(() => import('../../routes/staff/LiveOperationsP
 const RobotPage = lazy(() => import('../../routes/staff/RobotPage'))
 const TourHistoryPage = lazy(() => import('../../routes/staff/TourHistoryPage'))
 const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
+const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
 const AdminDashboardPage = lazy(() => import('../../routes/admin/AdminDashboardPage'))
@@ -210,6 +212,7 @@ export const routes = [
       { path: 'dang-ky', element: <RepRegistrationsPage /> },
       { path: 'dang-ky/:registrationId', element: <RepRegistrationDetailPage /> },
       { path: 'dang-ky/:registrationId/sua', element: <RepRegisterPage /> },
+      { path: 'ho-so', element: <RepProfilePage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/dai-dien" replace /> },
     ],
@@ -255,6 +258,7 @@ export const routes = [
       { path: 'robot', element: <RobotPage /> },
       { path: 'digital-twin', element: <DigitalTwinPage /> },
       { path: 'history', element: <TourHistoryPage /> },
+      { path: 'profile', element: <StaffProfilePage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.
       { path: 'amr', element: <Navigate to="/staff/robot" replace /> },
