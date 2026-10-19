@@ -58,6 +58,8 @@ uint32_t BNO08x_GetSampleRate(void) { return 0U; }
 uint32_t BNO08x_GetBusWarnCount(void) { return 0U; }
 uint32_t BNO08x_GetBusRecoverCount(void) { return 0U; }
 uint8_t BNO08x_IsDwtOk(void) { return 1U; }
+uint32_t BNO08x_GetRearmCount(void) { return 7U; }
+uint32_t BNO08x_GetResetSeenCount(void) { return 2U; }
 
 static int g_busy_for_err = 0;            /* CDC refuses ERR lines when set */
 static int g_n_fb = 0, g_n_err = 0;
@@ -142,12 +144,25 @@ static void test_line_overflow_reports_bad(void)
     CHECK(g_nlog == 0, "and no motor call was made for it");
 }
 
+static void test_fb_appends_imu_recovery_counters(void)
+{
+    printf("test_fb_appends_imu_recovery_counters\n");
+    Protocol_Init(); g_n_fb = 0; g_last_fb[0] = '\0';
+    run_ms(25);
+    int fields = 1;
+    for (const char *c = g_last_fb; *c && *c != '\r'; c++) if (*c == ',') fields++;
+    CHECK(g_n_fb >= 1, "an FB frame was sent");
+    CHECK(fields == 19, "FB has 19 fields (17 + imu_rearm + imu_reset_seen)");
+    CHECK(strstr(g_last_fb, ",3,7,2\r\n") != NULL, "yaw_acc stays field 17; counters appended at the end");
+}
+
 int main(void)
 {
     test_cmd_feeds_watchdog_first();
     test_main_loop_timeout();
     test_pending_err_does_not_block_fb();
     test_line_overflow_reports_bad();
+    test_fb_appends_imu_recovery_counters();
     if (g_fail == 0) { printf("\nTAT CA TEST PASS\n"); return 0; }
     printf("\n%d TEST FAIL\n", g_fail);
     return 1;

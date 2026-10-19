@@ -159,6 +159,50 @@ chuẩn) rồi thử lại một lần. Đếm vào `REC`.
 `WARN` và `REC` phải đứng yên ở 0 khi bus khoẻ. Tăng dần trong lúc chạy là dấu
 hiệu phần cứng có vấn đề.
 
+## Tự phục hồi khi BNO085 ngừng phát report
+
+**Sự cố đã đo (19/10/2026).** Giữa hai lượt chạy, IMU câm: FB có
+`yaw_valid=0` liên tục, EKF chạy chỉ với wheel odometry, không có cảnh báo
+nào. `DIAG` (đo trước khi reset chip): `ACK`, `SCAN=4A`, `EXTPU=11`, bus rảnh,
+`RV_NONE`, `PKT=0`, `REC=2`, `WARN=1`. Chip sống, đúng địa chỉ, nhưng không có
+feature nào bật. Theo SH-2, sau mỗi lần chip reset mọi feature đều tắt. Firmware
+cũ chỉ gửi Set Feature một lần lúc boot và bỏ qua gói "reset complete", nên IMU
+câm tới khi STM32 reset. `DIAG` bật lại feature thì mẫu trở lại 100 %. STM32
+không re-enumerate USB trong thời gian đó.
+
+**Chưa biết** vì sao chip reset hay bus bị giữ (`REC=2`). Nguồn, nhiễu và cắm
+rút USB mới là giả thuyết. Hai bộ đếm FB mới (`imu_rearm`, `imu_reset_seen`) có
+mục đích gắn thời điểm cho sự kiện lần sau.
+
+**Cơ chế** (`imu/bno08x_rearm.[ch]`, gọi qua `BNO08x_Service()` mỗi vòng
+`App_Loop()`):
+
+- Không có mẫu > `BNO08X_REARM_STALE_MS` (500 ms) thì gửi lại Set Feature.
+  Tối đa một lần mỗi `BNO08X_REARM_MIN_INTERVAL_MS` (2 s), tính cả lần gửi lúc
+  boot và lần của `DIAG`.
+- Gói channel 1 `0x01` (reset complete) chỉ được **đếm** (`imu_reset_seen`),
+  không dùng để kích hoạt. Gói này cũng đến sau mỗi lần cấp nguồn; nếu dùng nó
+  để kích hoạt thì boot khoẻ mạnh cũng ra `imu_rearm=1`. Sau reset thật, chip im
+  lặng, nên điều kiện 500 ms đã đủ.
+- **Chỉ** gửi lại Set Feature: một giao dịch I2C khoảng 21 byte, khoảng 7 ms ở
+  bus hiện tại, tối đa khoảng 50 ms nếu slave giữ SCL (mỗi bit có timeout
+  stretch 25 ms, ghi dừng ở lỗi đầu tiên). Không reset chip (hàng trăm ms, chặn
+  main loop), không chờ trả lời. Xung động cơ chạy trong ISR TIM2, không phụ
+  thuộc main loop. Watchdog lệnh 300 ms và FB 50 Hz chỉ trễ tối đa một khung,
+  và chỉ trong lúc IMU đang mất.
+- Chip chết hẳn: thử lại mỗi 2 s, mỗi lần NACK rất nhanh. `imu_rearm` tăng dần,
+  bridge giữ WARN.
+
+**Phía ROS:** bridge cảnh báo khi `yaw_valid=0` quá `imu_stale_timeout`,
+báo khi IMU trở lại (kèm thời gian mất), và publish `/diagnostics`
+(`<node>: imu`, OK/WARN, kèm `last_valid_age_s`, `outages` và hai bộ đếm). Bridge
+không tự sửa dữ liệu, cũng không chặn EKF.
+
+**Kiểm chứng trên phần cứng:** xem PR. Cách gây sự cố có kiểm soát: gửi
+`DIAG` (self-test reset chip rồi bật lại), hoặc ngắt nguồn riêng BNO trong
+khoảng 1 s khi robot đứng yên. Kỳ vọng: `imu_reset_seen` và/hoặc `imu_rearm`
+tăng, `yaw_valid` trở lại trong khoảng 0.5–2.5 s, FB không gián đoạn.
+
 ## Accuracy
 
 **Mặc định firmware stream Game Rotation Vector (0x08)**, xem mục
