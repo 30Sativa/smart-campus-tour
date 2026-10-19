@@ -6,6 +6,7 @@
  */
 #include "imu/bno08x.h"
 #include "imu/bno08x_parse.h"
+#include "imu/bno08x_rearm.h"
 #include "main.h"
 #include <string.h>
 #include <math.h>
@@ -32,6 +33,7 @@
 
 #define SHTP_CH_EXECUTABLE             1
 #define EXEC_CMD_RESET                 0x01
+#define EXEC_RESP_RESET_COMPLETE       0x01  /* chip -> host, channel 1 (SH-2) */
 #define SHTP_CH_CONTROL                 2
 #define SHTP_REPORT_PRODUCT_ID_REQUEST  0xF9
 #define SHTP_REPORT_PRODUCT_ID_RESPONSE 0xF8
@@ -69,6 +71,10 @@ static uint8_t  s_accuracy = 0U;   /* muc tin cay 0..3 cua mau gan nhat */
 static uint32_t s_bus_warn = 0U;   /* so lan STOP ket thuc bat thuong */
 static uint32_t s_bus_recover_n = 0U; /* so lan phai phuc hoi bus */
 static uint8_t  s_dwt_ok = 0U;     /* CYCCNT co that su chay khong */
+/* Tu phuc hoi khi chip ngung phat report (xem imu/bno08x_rearm.h). */
+static bno08x_rearm_t s_rearm;
+static uint32_t s_rearm_n = 0U;      /* so lan tu dong gui lai Set Feature */
+static uint32_t s_reset_seen_n = 0U; /* so goi "reset complete" doc duoc khi polling */
 static uint32_t s_nop_loops = 1U;  /* duong du phong khi DWT chet */
 
 /* ---- delay & line control ----
@@ -349,6 +355,9 @@ void BNO08x_Init(void)
     s_accuracy = 0U;
     s_bus_warn = 0U;
     s_bus_recover_n = 0U;
+    s_rearm_n = 0U;
+    s_reset_seen_n = 0U;
+    bno08x_rearm_note_request(&s_rearm, HAL_GetTick());
 
 #if BNO08X_USE_HW_RST || BNO08X_USE_INT_PIN
     GPIO_InitTypeDef g = {0};
@@ -522,6 +531,7 @@ static uint8_t shtp_set_feature(uint8_t report_id, uint32_t interval_us)
 uint8_t BNO08x_EnableRotationVector(uint16_t interval_ms)
 {
     if (interval_ms == 0U) interval_ms = 20U;
+    bno08x_rearm_note_request(&s_rearm, HAL_GetTick());
     return shtp_set_feature(ORIENTATION_REPORT_ID,
                             (uint32_t)interval_ms * 1000U);
 }
@@ -552,6 +562,14 @@ uint8_t BNO08x_ReadRotationVector(float *qi, float *qj, float *qk, float *qr,
         if (plen == 0) break;        /* hang doi rong */
         if (plen == -2) continue;    /* goi qua co, da bo qua */
         if (plen < 0) break;         /* loi bus */
+        if ((buf[2] == SHTP_CH_EXECUTABLE) && (plen >= 1) &&
+            (buf[4] == EXEC_RESP_RESET_COMPLETE))
+        {
+            /* Chip vua reset (gom ca lan cap nguon): moi feature da tat. Chi dem
+             * de lam bang chung; BNO08x_Service() bat lai khi het mau. */
+            s_reset_seen_n++;
+            continue;
+        }
         if (buf[2] != SHTP_CH_REPORTS) continue;
 
         const uint8_t *rep = bno08x_find_report_last(buf + 4, plen,
@@ -619,6 +637,30 @@ uint32_t BNO08x_GetBusWarnCount(void)
 uint32_t BNO08x_GetBusRecoverCount(void)
 {
     return s_bus_recover_n;
+}
+
+void BNO08x_Service(void)
+{
+    uint32_t now = HAL_GetTick();
+    if (bno08x_rearm_due(&s_rearm, now, s_yaw_valid, s_last_yaw_ms) == 0U)
+    {
+        return;
+    }
+    s_rearm_n++;
+    /* Chi gui lai Set Feature; khong reset chip (xem bno08x_rearm.h). Ket qua
+     * bo qua co y: that bai thi lan sau (sau MIN_INTERVAL) thu lai. */
+    (void)shtp_set_feature(ORIENTATION_REPORT_ID,
+                           (uint32_t)BNO08X_RV_INTERVAL_MS * 1000U);
+}
+
+uint32_t BNO08x_GetRearmCount(void)
+{
+    return s_rearm_n;
+}
+
+uint32_t BNO08x_GetResetSeenCount(void)
+{
+    return s_reset_seen_n;
 }
 
 uint8_t BNO08x_IsDwtOk(void)

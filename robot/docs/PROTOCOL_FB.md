@@ -41,7 +41,7 @@ Kết thúc dòng bằng `\n`. Sai cú pháp → `ERR,bad_command`.
 FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
    <yaw_cdeg>,<yaw_valid>,
    <s1_mm>,<s1_valid>,<s2_mm>,<s2_valid>,<s3_mm>,<s3_valid>,<s4_mm>,<s4_valid>,
-   <yaw_acc>
+   <yaw_acc>,<imu_rearm>,<imu_reset_seen>
 ```
 
 | Vị trí | Trường | Ghi chú |
@@ -54,6 +54,8 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 7 | `yaw_valid` | 1 = mẫu IMU còn mới (dưới 200 ms) |
 | 8–15 | 4 cặp sonar | `<mm>,<valid>` cho SONAR1–4 |
 | 16 | `yaw_acc` | 0–3: 2 bit status của report hướng firmware đang dùng. Với Rotation Vector (0x05): **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ**. Với Game Rotation Vector (0x08, mặc định) không có từ kế, trường này không mô tả sai số heading |
+| 17 | `imu_rearm` | Số lần firmware tự gửi lại Set Feature vì BNO085 im lặng > 500 ms (tối đa 1 lần/2 s; boot khoẻ mạnh = 0). Tích luỹ từ lúc STM32 boot |
+| 18 | `imu_reset_seen` | Số gói SH-2 "reset complete" đọc được khi polling (có thể gồm gói sau cấp nguồn, nên lúc boot là 0 hoặc 1). Tích luỹ từ lúc STM32 boot |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
 Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data`. Với
@@ -62,6 +64,11 @@ covariance; với `game_rotation_vector` (mặc định, khớp firmware mặc �
 dùng variance cố định; `robot_localization` dùng covariance
 đó khi fuse yaw với wheel velocity. Bridge không còn dùng yaw để sửa wheel
 odometry.
+
+`yaw_valid=0` kéo dài là IMU đang mất dữ liệu: bridge cảnh báo sau
+`imu_stale_timeout` (1 s) và báo WARN trên `/diagnostics`; EKF khi đó chỉ còn
+wheel odometry. Firmware tự bật lại report (trường 17 tăng). Hai bộ đếm là để
+biết *khi nào* sự cố xảy ra, đối chiếu với log, không dùng để điều khiển.
 
 ### Các độ dài đã từng tồn tại
 
@@ -74,8 +81,13 @@ Bridge vẫn đọc được hết, để firmware cũ không làm chết node:
 | 8 | thêm `yaw_cdeg`, `yaw_valid` |
 | 12 | thêm 2 sonar |
 | 16 | thêm sonar 3–4 |
-| **17** | thêm `yaw_acc` ← hiện tại |
-| 18+ | trường lạ ở cuối được bỏ qua |
+| 17 | thêm `yaw_acc` |
+| **19** | thêm `imu_rearm`, `imu_reset_seen` ← hiện tại |
+| 20+ | trường lạ ở cuối được bỏ qua |
+
+Bridge cũ (17 trường) bỏ qua hai bộ đếm; bridge mới với firmware cũ chỉ thiếu
+bộ đếm, vẫn phát hiện được IMU mất qua `yaw_valid`. Thứ tự cập nhật firmware
+và bridge vì vậy không quan trọng.
 
 ## Khung `DIAG`
 
