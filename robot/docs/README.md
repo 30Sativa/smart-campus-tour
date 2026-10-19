@@ -28,6 +28,9 @@ permission to execute it.
   configuration, hardware evidence and limits.
 - [DDS isolation and RViz over SSH](dds-isolation.md) — R3 design, viewer,
   bridge, safeguards and staged transition.
+- [Robot status 2026-10-19](robot-status-2026-10-19.md) — **latest**: S3
+  deployed, S4/S5a results, CPU contention with the Quest stream, silent IMU
+  outage and the PR #63 fix, open issues and next steps.
 - [R3 DDS readiness snapshot (2026-10-17)](r3-dds-readiness-2026-10-17.md) —
   actual MiniPC state, stationary S1–S3 prerequisites, verification and
   rollback. S1–S3 were **not deployed** in that snapshot.

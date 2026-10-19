@@ -1,5 +1,10 @@
 # Cô lập DDS của robot và debug từ xa bằng RViz qua SSH (R3)
 
+**Trạng thái (19/10): S3 ĐÃ TRIỂN KHAI trên MiniPC, ISOLATED.** S5a xác nhận robot
+không bị ảnh hưởng khi roam Wi-Fi. Một lần khởi động S2 lỗi discovery mà chưa rõ
+nguyên nhân, nên luôn chạy health gate sau khởi động. Chi tiết, bằng chứng và
+cách vận hành ở S3: [robot-status-2026-10-19.md](robot-status-2026-10-19.md).
+
 **Trạng thái (17/10):** đường debug S0b đã chạy trên robot thật; wrapper,
 adapter và guard được harden qua review đứng yên. Discovery server,
 `robot/.env`, mạng, SSH và Nav2 Baseline V1 chưa đổi. Chỉ overlay debug riêng

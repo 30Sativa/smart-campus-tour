@@ -169,6 +169,19 @@ công cụ phân tích nằm ở `$HOME/amr_logs/baselines/nav2_baseline_v1/`
 6. **Chưa giải thích:** EKF chỉ 20 Hz ở B2 (23–25 Hz ở các lượt khác). Chưa ảnh
    hưởng controller.
 7. 0.20 m/s chậm hơn khoảng 15 % so với 0.24.
+8. **(19/10) Nghẽn DDS qua Wi-Fi đã đóng bằng S3.** S5a: 2 lần roam, robot 0
+   lần `/scan` hở. Xem [robot-status-2026-10-19.md](robot-status-2026-10-19.md).
+   Mục 1 ở trên chỉ còn đúng cho trạng thái trước S3.
+9. **(19/10) CPU bão hoà khi Quest stream chạy** (máy bận khoảng 97 %). BT
+   `default_server_timeout: 20` ms bị vượt: 6 lần FollowPath ACK timeout, 11
+   recovery, quay thừa +177° ở đích. B2c và S4 (không có Quest) đều 0 lần. Chưa
+   có đối chứng A/B. Không chỉnh tham số V1 khi chưa có bằng chứng; nếu cần thì
+   làm như V2.
+10. **(19/10) Né người ở cự ly gần chưa an toàn:** robot chạy 0.15–0.19 m/s khi
+    mép footprint cách người 2.5–10 cm. RPP chỉ kiểm va chạm phía trước; V1
+    không có `collision_monitor`.
+11. **(19/10) IMU có thể câm âm thầm**, và khi đó EKF chỉ dùng odom bánh xe. S5a
+    chạy trong tình trạng này. Bản sửa ở PR #63, chưa flash.
 
 ## 7. Việc tiếp theo
 
