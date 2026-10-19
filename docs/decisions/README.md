@@ -49,6 +49,8 @@ adding a test, bumping a patch version.
 | [0014](0014-admin-poi-management.md) | Admin manages POI content and only edits geometry before route/history use | implementation scope authorized; group/GVHD review at Review 2 |
 | [0015](0015-invitation-issuance-and-resend-email.md) | Secure invitation codes, Resend queue and minimal Student entry | implementation scope authorized; opt-in configuration required |
 | [0016](0016-student-qa-assistant-stack.md) | Backend-mediated Student Q&A; Python/FastAPI assistant; Gemini via provider adapter; approved content pack | accepted by team; implementation pending |
+| [0017](0017-admin-route-management.md) | Admin Route CRUD; frozen referenced itineraries; CRUD, bootstrap seed and technical import boundaries | owner-authorized implementation scope; supersedes seed-only Route/dwell portions of 0009/0012 |
+| [0018](0018-admin-tour-management.md) | Backend SCHEDULED Tour CRUD, durable retries and pre-Start cancellation with access revocation | owner-authorized implementation scope; no runtime or frontend integration |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

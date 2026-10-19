@@ -47,6 +47,21 @@ The current local target is `SmartCampusTourV11` on `localhost,1433`; the local 
 
 ## Registration submission implementation
 
+Admin Tour creation, preparation updates and pre-Start cancellation now use
+the existing v1.1 schema under ADR-0018. Request receipts use append-only
+AuditLogs plus transaction-owned application locks, with no new table/column.
+Selected Route/POI data uses the existing Route repository. Cancellation retains
+relationship history, closes pending review work and revokes invitation/session
+access. See `backend/docs/admin-tour-management.md` for request examples,
+locking, SQL verification and lifecycle boundaries.
+
+Admin Route Management uses the existing Routes/RouteStops model without a
+schema patch. It records an aggregate revision and serializable usage/POI
+checks, rather than adding a second route model. See
+`docs/decisions/0017-admin-route-management.md` and
+`web/docs/route-management.md`. Route SQL tests use disposable databases and
+exercise reorder, concurrency, reference locks and audit rollback.
+
 The Representative submission API now enforces Tour-first locks, owned mutations,
 rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
 The schema is unchanged. See `web/docs/representative-registration.md` for the

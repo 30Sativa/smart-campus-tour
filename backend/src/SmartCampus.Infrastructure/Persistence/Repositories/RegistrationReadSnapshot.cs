@@ -17,10 +17,15 @@ internal static class RegistrationReadSnapshot
             .Where(r => r.Id == registrationId && (owner == null || r.RepresentativeUserId == owner))
             .Select(r => (Guid?)r.TourId).SingleOrDefaultAsync(ct);
         if (tourId is null) return null;
+        return await ForTourAsync(context, tourId.Value, ct);
+    }
+
+    internal static async Task<IDbContextTransaction> ForTourAsync(ApplicationDbContext context, Guid tourId, CancellationToken ct)
+    {
         var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         try
         {
-            _ = await context.Tours.FromSqlInterpolated($"SELECT * FROM dbo.Tours WITH (UPDLOCK, ROWLOCK) WHERE Id = {tourId.Value}")
+            _ = await context.Tours.FromSqlInterpolated($"SELECT * FROM dbo.Tours WITH (UPDLOCK, ROWLOCK) WHERE Id = {tourId}")
                 .AsNoTracking().SingleOrDefaultAsync(ct);
             return transaction;
         }

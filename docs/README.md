@@ -28,6 +28,15 @@ copying them here.
 
 ## 3. Architecture and Product Decisions
 
+The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)
+replaces seed-only business Route/dwell preparation; earlier ADRs retain their
+original text with explicit supersession notices. Usage:
+`web/docs/route-management.md`.
+
+The [Admin Tour backend slice](decisions/0018-admin-tour-management.md) adds
+SCHEDULED creation/update and pre-Start cancellation without frontend/runtime
+integration. API usage: `backend/docs/admin-tour-management.md`.
+
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility
 gate; check its status before treating it as realized.

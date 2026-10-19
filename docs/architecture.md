@@ -1,5 +1,121 @@
 # System Architecture
 
+## Admin Tour Management API (ADR-0018, backend implemented)
+
+This is the pre-execution SQL slice in
+`docs/decisions/0018-admin-tour-management.md`. All endpoints require Admin;
+CreatedByUserId records attribution and does not restrict other Admin accounts.
+Frontend Tour/demo bindings remain unchanged. No READY/Finalize/Reopen, robot
+assignment, Staff operation or branch-request endpoint is implemented here.
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | `/api/admin/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/admin/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
+| POST | `/api/admin/tours` | `{requestId, expectedRouteVersion, configuration}`; creates SCHEDULED, no robot/execution state. |
+| PUT | `/api/admin/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; SCHEDULED before execution only. |
+| POST | `/api/admin/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
+
+`configuration` is `{name, description?, routeId, scheduledStartAt,
+fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
+absolute HTTP(S) without embedded credentials. Schedule is a DateTimeOffset,
+normalized to UTC, with millisecond precision. New/changed schedules must be
+in the future. Creating or changing Route requires its current opaque version,
+active Route, active POIs and valid data/map/pose/stops/head configuration.
+Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
+
+List returns PagedResponse with Tour summaries: id, name, description, routeId,
+routeName, activeRouteId, scheduledStartAt, state, createdByUserId, createdAt,
+updatedAt, base64 SQL rowVersion, registrationCount and invitationCount. Detail
+is BaseResponse data `{tour, route, activeRoute, fallbackVideoUrl, startedAt,
+endedAt, endReason, usage, permissions}`. Permission fields are canEditMetadata,
+canChangeScheduleAndRoute, canCancel and canDelete (always false). Responses
+are advisory until rechecked under locks. Writes return BaseResponse `{id}`;
+reload detail for the committed RowVersion. No DELETE endpoint is provided;
+append-only audit and relationship history are preserved even for unused Tours.
+
+Any registration (including terminal history), allowed branch, operational
+history or runtime ownership blocks schedule/Route changes. Metadata still
+needs SCHEDULED and no execution. Registered rescheduling requires the deferred
+notification/coordination/expiry workflow, rather than silent schedule changes.
+Route replacement before registration updates both route IDs and appends a
+configuration-only `TOUR_ROUTE_CHANGED` event with RouteId = old Route, retaining
+its ADR-0017 protection without claiming an arrival or sending robot commands.
+
+Cancel retains registrations/approval history and all relationships. Pending
+SUBMITTED registrations become CANCELLED with timestamps/audit; prior decisions
+stay unchanged, keeping cancelled pending work out of the existing review queue. It stores
+CANCELLED, EndedAt, EndReason; revokes invitations and uses existing invitation
+session closure semantics. StartedAt stays null and no fallback entitlement is
+created. Existing pending email claims recheck access and cannot grant new
+rights; an already claimed external send may finish with a now-invalid code.
+Cancellation notification email is not implemented in this slice.
+
+Mutation requestIds are durable and scoped to (Admin, requestId) across these
+Tour actions. A transaction-owned SQL application lock serializes a key; an
+AuditLog receipt contains action, Tour ID and canonical payload SHA-256, never
+raw descriptions, cancellation reason or invitation secrets. Committed matching
+retries replay before current version/state/time checks; changed payload,
+resource or action conflicts. Expected Tour RowVersion is excluded from the
+payload hash, but Route version is included. No-op updates do not consume a
+receipt or change the RowVersion. All other update/cancel attempts require
+the current SQL RowVersion. Create has a server-generated Tour ID.
+
+Tour transactions are read committed and acquire the same Tour UPDLOCK used
+by registration, review, invitation and Student admission writers. Selected
+Routes and POIs are held with update locks through commit via the existing
+Route repository. Detail queries use the shared Tour read-lock snapshot and
+do not save. Route/Tour/audit/access changes commit together through UnitOfWork;
+SQL deadlock/key-lock conflicts return 409, and audit/storage failures roll back.
+Errors use BaseResponse: 400 validation, 401/403 auth/role, 404 missing Tour/Route,
+409 STALE_VERSION, STALE_ROUTE, IDEMPOTENCY_CONFLICT, TOUR_LOCKED,
+TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
+TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
+commissioning or readiness for robot operation.
+
+## Admin Route Management contract (ADR-0017, 2026-10-19)
+
+The live Admin catalog at `/admin/routes` uses SQL-backed endpoints below;
+Tour authoring/operations fixtures retain their separate mock Route contract.
+See `docs/decisions/0017-admin-route-management.md` for the authorized change
+from seed-only preparation, preservation policy and commissioning boundary.
+
+- Admin-only `GET /api/admin/routes?search=&page=1&size=20&isActive=` returns
+  `PagedResponse` with id, name, description, mapKey, mapFrame, isActive,
+  stopCount, createdAt and updatedAt. Supports `sort=name,-name,createdAt,-createdAt`
+  (one field per request, default name), then id; size 1–100. Expansion is rejected.
+- `GET /api/admin/routes/{id}` returns `BaseResponse` detail: the same Route
+  fields, startX/startY/startYaw, endMode/endX/endY/endYaw, ordered `stops`
+  (id, poiId, poiName, stopOrder, dwellSeconds, headSteps), opaque `version`,
+  `usage` (hasReferences, hasReadyOrRunningTours, canEditConfiguration,
+  canEditMetadataAndAvailability, canDelete), `configurationIssues` and
+  `availabilityIssues`. Issue entries are stable codes; they are not physical
+  verification or a Tour READY verdict.
+- `POST /api/admin/routes` takes name, description, mapKey, mapFrame,
+  startX/startY/startYaw, endMode (`LAST_POI` or `POSE`), nullable End pose,
+  and ordered stops `{poiId,dwellSeconds,headSteps:[{preset,holdSeconds}]}`.
+  Order is derived from array position. It creates an inactive Route and
+  returns `{id}`. Copying uses the same endpoint with a new identity.
+- `PUT /api/admin/routes/{id}` takes `{expectedVersion, configuration}`, where
+  `configuration` has the POST fields above.
+  `POST /api/admin/routes/{id}/activate` and `/deactivate`, and
+  `DELETE /api/admin/routes/{id}` take `{expectedVersion}`. Successful writes
+  use `BaseResponse`; reload detail for the current version. Delete is only
+  allowed without any configuration/history reference. Deactivation retains
+  existing Tour/variant references. No operation sends robot commands.
+- Responses: 400 invalid fields/POI/map/activation configuration, 401/403
+  authentication/role failure, 404 missing Route, 409 `STALE_ROUTE` or
+  `ROUTE_IN_USE` or `ROUTE_CONCURRENT_CHANGE` conflicts. Every successful change appends an AuditLog with
+  actor, Route id and changed field names, atomically with SQL changes.
+
+No schema change: version is a SHA-256 aggregate revision compared under a
+Route UPDLOCK in a serializable transaction. Referenced route configuration
+is immutable for every Tour state and every variant; READY/RUNNING use also
+locks metadata and availability. Active POIs and exact map/frame consistency
+are rechecked on activation/configuration writes. SQL reads protect those
+checks until commit. Future Tour selection/readiness and technical imports
+must coordinate the same route/POI locks and revalidate these inputs.
+
 How the pieces of CampusTour DT-AMR fit together. This file covers what
 crosses a folder boundary. Anything internal to one folder is documented
 inside that folder.
@@ -716,9 +832,10 @@ are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestr
 invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
-Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
-seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to
-fit, with no per-Tour dwell editor. Every active STAFF account may operate every
+Under ADR-0012 as amended by `docs/decisions/0017-admin-route-management.md`,
+dwell is fixed in RouteStops and Admin can edit unreferenced Route configuration
+through CRUD. Technical staff still verify physical execution; there is no
+per-Tour dwell editor. Every active STAFF account may operate every
 Tour. There is no operator assignment field or takeover screen; all state,
 readiness, time and robot-claim checks still apply. Admin-only cannot operate and
 Staff-only cannot recover invitation codes. RowVersion must be checked on writes;
@@ -1094,11 +1211,12 @@ constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
 The backend implements development SimulationPreview, user JWT login/session
-authentication, Representative owned registration management, Admin account
-management, and Admin POI management. Admin role
-authorization is enforced for the account and POI management APIs. Authorization
-for future Admin Tour/review, invitation, branch-request, and fleet business
-APIs remains unimplemented, as does robot/machine authentication. Production
+authentication, Representative owned registration management, Admin account,
+POI, Route and Tour preparation management, Admin registration review,
+invitation support and Student access. Admin role authorization is enforced
+for the Admin APIs; invitation support applies its owner/Admin rules and
+Student access applies its invitation/session rules. Runtime branch-request
+and fleet business APIs remain unimplemented, as does robot/machine authentication. Production
 fleet and operations Hubs and fleet dispatch remain unimplemented. A single
 backend process with per-robot latest state is the initial implementation
 baseline; multiple instances would require shared-state and connection-routing

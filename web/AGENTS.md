@@ -51,6 +51,11 @@ shared rules; this file only covers what is specific to `web/`.
     POI catalog at `/admin/pois` is API-backed: it edits content and only edits
     map/pose before route/history use (ADR-0014). P1 audio upload/dwell warning
     remains separate. Screen map: `web/docs/admin-tours.md`.
+    Route CRUD at `/admin/routes`, `/admin/routes/new`, `/admin/routes/:routeId`
+    and `/admin/routes/:routeId/edit` is API/SQL-backed under ADR-0017. Reuse
+    `features/administration/routes/`; its cache/contracts are separate from
+    the retained Tour demo Route service. Referenced itineraries are immutable;
+    copy to create a new route. Availability never certifies physical safety.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
