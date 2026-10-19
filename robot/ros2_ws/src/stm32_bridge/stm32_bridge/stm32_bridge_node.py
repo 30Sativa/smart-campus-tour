@@ -2,12 +2,15 @@ import math
 import time
 from typing import Optional, Sequence, Tuple
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, Range
 from tf2_ros import TransformBroadcaster
+
+from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WARN
 
 try:
     import serial
@@ -147,6 +150,9 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')
+        # FB yaw_valid=0 longer than this -> WARN + /diagnostics WARN (EKF then
+        # runs on wheel odometry only). Does not change what is published.
+        self.declare_parameter('imu_stale_timeout', 1.0)
         # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
         self.declare_parameter(
             'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
@@ -303,6 +309,9 @@ class Stm32BridgeNode(Node):
         self._last_feedback_timeout_warn_time = 0.0
         self._last_invalid_dt_warn_time = 0.0
         self._last_count_jump_warn_time = 0.0
+        self._imu_health = ImuHealth(
+            stale_timeout=float(self.get_parameter('imu_stale_timeout').value),
+            start=self._node_start_mono)
 
         self._odom_pub = None
         self._tf_broadcaster = None
@@ -352,6 +361,8 @@ class Stm32BridgeNode(Node):
         self.create_subscription(Twist, 'cmd_vel', self._cmd_vel_callback, 10)
         self._timer = self.create_timer(
             1.0 / self.send_rate_hz, self._timer_callback)
+        self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
 
     def _cmd_vel_callback(self, msg: Twist):
         if not self._is_finite_twist(msg):
@@ -547,6 +558,9 @@ class Stm32BridgeNode(Node):
          sonar1, sonar2, sonar3, sonar4) = parsed
 
         now_mono = time.monotonic()
+        rearm, reset_seen = parse_fb_counters(line)
+        self._log_imu_events(self._imu_health.on_feedback(
+            now_mono, yaw_rad is not None, rearm, reset_seen))
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
@@ -866,6 +880,33 @@ class Stm32BridgeNode(Node):
             range_msg.range = float('nan')
 
         publisher.publish(range_msg)
+
+    def _imu_feedback_alive(self, now: float) -> bool:
+        last = self._last_feedback_mono
+        return last is not None and now - last <= self.feedback_timeout
+
+    def _log_imu_events(self, events):
+        for level, text in events:
+            if level >= IMU_WARN:
+                self.get_logger().warn(text)
+            else:
+                self.get_logger().info(text)
+
+    def _imu_health_callback(self):
+        now = time.monotonic()
+        alive = self._imu_feedback_alive(now)
+        self._log_imu_events(self._imu_health.check(now, alive))
+        level, message, values = self._imu_health.status(now, alive)
+        status = DiagnosticStatus()
+        status.level = bytes([level])
+        status.name = f'{self.get_fully_qualified_name()}: imu'
+        status.message = message
+        status.hardware_id = self.port
+        status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+        array = DiagnosticArray()
+        array.header.stamp = self.get_clock().now().to_msg()
+        array.status = [status]
+        self._diag_pub.publish(array)
 
     def _check_feedback_timeout(self, now: float):
         if not self.publish_odom and not self.publish_tf:

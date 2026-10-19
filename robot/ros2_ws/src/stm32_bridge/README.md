@@ -286,6 +286,7 @@ ros2 run tf2_tools view_frames
 | `imu_topic` | `imu/data` | Relative IMU topic name |
 | `imu_frame` | `imu_link` | IMU message frame |
 | `imu_orientation_report` | `game_rotation_vector` | Must match firmware `BNO08X_USE_GAME_ROTATION_VECTOR`. `game_rotation_vector`: fixed yaw variance 0.01 (no magnetometer, `yaw_acc` ignored). `rotation_vector`: variance from `yaw_acc` |
+| `imu_stale_timeout` | `1.0` | Seconds of FB `yaw_valid=0` before the bridge warns that the IMU is missing (EKF then uses wheel odometry only) and reports WARN on `/diagnostics` (`<node>: imu`). Recovery is logged with the outage length. Publishing is unchanged |
 | `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |

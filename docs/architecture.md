@@ -123,6 +123,13 @@ constraint and wheel-derived `vyaw` from `wheel/odom`, plus BNO085 **orientation
 yaw** from `imu/data`. Firmware publishes no raw gyro rate, so nothing in this
 stack fuses gyro yaw-rate.
 
+IMU availability is reported, not hidden: `stm32_bridge` publishes
+`/diagnostics` (`DiagnosticArray`, status `<node>: imu`, OK/WARN) and warns when
+the STM32 feedback carries `yaw_valid=0` for longer than `imu_stale_timeout`;
+the EKF then runs on wheel odometry only. The firmware re-requests the BNO085
+report on its own and counts it in feedback fields 17-18
+(`robot/docs/PROTOCOL_FB.md`).
+
 ### 2.0 Navigation baseline
 
 Planner `nav2_smac_planner/SmacPlanner2D`, controller

@@ -35,6 +35,12 @@ def _install_ros_stubs():
     geometry_msgs_msg.TransformStamped = type('TransformStamped', (), {})
     geometry_msgs_msg.Twist = type('Twist', (), {})
 
+    diagnostic_msgs = _stub_module('diagnostic_msgs')
+    diagnostic_msgs_msg = _stub_module('diagnostic_msgs.msg')
+    diagnostic_msgs.msg = diagnostic_msgs_msg
+    for _name in ('DiagnosticArray', 'DiagnosticStatus', 'KeyValue'):
+        setattr(diagnostic_msgs_msg, _name, type(_name, (), {}))
+
     nav_msgs = _stub_module('nav_msgs')
     nav_msgs_msg = _stub_module('nav_msgs.msg')
     nav_msgs.msg = nav_msgs_msg
@@ -95,6 +101,7 @@ _PKG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
+from stm32_bridge.imu_health import ImuHealth  # noqa: E402
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
@@ -516,10 +523,12 @@ class _FeedbackHarness:
         self.odom_invert_left = False
         self.odom_invert_right = False
         self.published_odometry = []
+        self._imu_health = ImuHealth()
 
     def get_logger(self):
         return SimpleNamespace(
             debug=lambda *args, **kwargs: None,
+            info=lambda *args, **kwargs: None,
             warn=lambda *args, **kwargs: None,
         )
 
@@ -530,6 +539,7 @@ class _FeedbackHarness:
     _update_odometry = Stm32BridgeNode._update_odometry
     _publish_joint_state = Stm32BridgeNode._publish_joint_state
     _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
+    _log_imu_events = Stm32BridgeNode._log_imu_events
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
