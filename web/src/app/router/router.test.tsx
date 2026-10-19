@@ -147,6 +147,12 @@ describe('route table', () => {
       await settled(router, '/staff')
     })
 
+    it.each(['/admin/routes', '/admin/routes/new', '/admin/routes/sql-id', '/admin/routes/sql-id/edit'])('guards Route management at %s', async path => {
+      signIn('Staff')
+      const router = renderAt(path)
+      await settled(router, '/staff')
+    })
+
     it('lets an operator into /staff', async () => {
       signIn('Staff')
       const router = renderAt('/staff')
@@ -196,7 +202,7 @@ describe('route table', () => {
       ['/admin/tours/new', /Tạo Tour mới/],
       ['/admin/registrations/pending', /Đăng ký chờ duyệt/],
       ['/admin/registrations', /Tất cả đăng ký/],
-      ['/admin/routes', /Danh mục tuyến/],
+      ['/admin/routes', /Quản lý tuyến/],
       ['/admin/history', /Lịch sử Tour/],
     ])('serves %s as a real admin page', async (path, heading) => {
       signIn('Admin')

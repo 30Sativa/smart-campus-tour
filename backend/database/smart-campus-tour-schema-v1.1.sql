@@ -85,7 +85,7 @@ CREATE TABLE dbo.RefreshTokens
 GO
 
 
--- 04. Routes — Tuyến hoàn chỉnh đã được đội kỹ thuật chuẩn bị/kiểm chứng.
+-- 04. Routes — Cấu hình hành trình do Admin CRUD quản lý (ADR-0017); không tự chứng nhận kiểm chứng vật lý.
 CREATE TABLE dbo.Routes
 (
     Id                       UNIQUEIDENTIFIER          NOT NULL, -- Khóa chính GUID của bản ghi; ứng dụng cấp khi INSERT vì chưa có DEFAULT.
@@ -141,7 +141,7 @@ CREATE TABLE dbo.RouteStops
     RouteId                  UNIQUEIDENTIFIER          NOT NULL, -- FK tới Routes.Id.
     PoiId                    UNIQUEIDENTIFIER          NOT NULL, -- FK tới Pois.Id.
     StopOrder                INT                       NOT NULL, -- Thứ tự điểm dừng trong Route, bắt đầu từ 1; UNIQUE(RouteId, StopOrder).
-    DwellSeconds             INT                       NOT NULL, -- Thời gian quan sát cố định theo Route, giây; kỹ thuật seed/kiểm chứng, Admin không chỉnh riêng theo Tour.
+    DwellSeconds             INT                       NOT NULL, -- Thời gian quan sát cố định theo Route, giây; Admin CRUD trước khi có tham chiếu, kỹ thuật kiểm chứng; không chỉnh riêng theo Tour (ADR-0017).
     HeadStepsJson            NVARCHAR(MAX)             NOT NULL, -- Chuỗi preset đầu và thời gian giữ, ví dụ [{"preset":"RIGHT","holdSeconds":35}]; chưa có CHECK JSON.
 
     CONSTRAINT UQ_RouteStops_Order UNIQUE (RouteId, StopOrder),

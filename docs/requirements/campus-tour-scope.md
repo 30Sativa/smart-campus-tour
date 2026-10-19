@@ -1,5 +1,10 @@
 # CampusTour DT-AMR — Phạm vi và nghiệp vụ chốt trong nhóm sau Review 1
 
+> **Điều chỉnh có chủ đích 19/10/2026:** [ADR-0017](../decisions/0017-admin-route-management.md)
+> thay giới hạn seed-only Route/dwell bằng Admin CRUD. Quy tắc hiện hành ở §6;
+> các ghi chú đồng bộ tháng 9 bên dưới là lịch sử, không ghi nhận phê duyệt mới
+> từ GVHD. Ranh giới kiểm chứng kỹ thuật và Tour runtime vẫn giữ riêng.
+
 > Ngày biên soạn: 28/09/2026; chốt nghiệp vụ trong nhóm: 30/09/2026, cập nhật phạm vi dữ liệu sau Review 1. GVHD giao nhóm tự quyết theo thông tin nhóm cung cấp và sẽ xem lại ở Review 2; chưa xác nhận GVHD đã duyệt từng thay đổi hoặc chức năng đã triển khai. Quyết định được lưu tại `docs/decisions/0009-review-1-tour-business-scope.md`, `docs/decisions/0010-personal-access-code-entry.md` và `docs/decisions/0011-student-data-use-for-tour.md`.
 >
 > Căn cứ: phạm vi 19/09/2026; ảnh ghi chú Review 1; phiếu FA26SE184 có lịch sử cập nhật v1.2 ngày 19/09/2026 trong file `FA26SE184_SRS_CampusTour-DT-AMR_v0.1.pdf` (tên file khác phiên bản nội dung); UI-FLOW 21/09 cập nhật cùng lượt này; `docs/architecture.md` đọc lại ngày 30/09. Đã đối chiếu phần nghiệp vụ, vai trò và giới hạn của phiếu, không suy thành bằng chứng GVHD đã duyệt mọi điều chỉnh.
@@ -26,7 +31,7 @@ Không nên đưa mọi ví dụ trong ghi chú thành tính năng bắt buộc.
 | Nhiều robot cùng một tour | Nhóm loại khỏi V1 | Giữ một Tour–một robot; ranh giới một AMR thật phù hợp LI-02. Không suy LI-02 cấm mọi kịch bản nhiều robot giả |
 | Đại diện muốn khám phá góc khác, có hoặc chưa có điểm visit | Tiếp thu phần có kiểm soát | Cho yêu cầu POI/nhánh đã kiểm chứng trước; điểm mới phải được khảo sát, bổ sung và thử trước buổi sau. Chưa cho click bất kỳ trên map để lái robot |
 | Nên có map 3D/sa bàn | Tiếp thu có giới hạn | Giữ Twin 3D cho Staff; Student dùng 2D rõ ràng. Sa bàn 3D chỉ đọc cho Student là phần mở rộng tận dụng mô hình hiện có, không bắt buộc làm thêm bản đồ 3D toàn trường |
-| Ghi rõ làm cho trường F, Admin cấu hình tuyến thế nào | Tiếp thu | Demo vật lý tại tầng 6 của NVH theo nhóm; còn cần gắn nội dung campus với POI thực tế. Admin chọn tuyến/biến thể đã được kiểm chứng; Admin có thể sửa hình học POI chưa được tham chiếu theo ADR-0014, còn kỹ thuật chuẩn bị Route và kiểm chứng tọa độ/vùng chạy |
+| Ghi rõ làm cho trường F, Admin cấu hình tuyến thế nào | Tiếp thu | Demo vật lý tại tầng 6 của NVH theo nhóm; còn cần gắn nội dung campus với POI thực tế. Admin CRUD Route theo ADR-0017 và sửa POI chưa được tham chiếu theo ADR-0014; đội kỹ thuật kiểm chứng tọa độ, các chặng và vùng chạy. Lưu hoặc kích hoạt tuyến không xác nhận kiểm chứng vật lý |
 
 ## 2. Mục tiêu sản phẩm và giới hạn địa điểm
 
@@ -76,7 +81,7 @@ Với vài nhánh định sẵn, video tương tác cũng cho phép chọn nhán
 | Student | Xem trực tiếp hoặc nội dung dự phòng, theo dõi map, hỏi AI riêng khi có quyền |
 | Staff | Kiểm tra trước Start, vận hành, quyết định yêu cầu thay đổi, xử lý lỗi và kết thúc buổi |
 | Người hỗ trợ tại chỗ | Kiểm tra robot/vùng chạy và can thiệp vật lý khi cần; có thể đảm nhiệm công việc Staff nếu điều kiện buổi thử cho phép |
-| Đội kỹ thuật | Khảo sát và kiểm chứng map/POI/đường nối; nạp hình học tuyến/nhánh bằng seed/script ngoài web. Admin quản lý nội dung và hình học POI chưa được tham chiếu theo ADR-0014; tuyến/nhánh vẫn phải do kỹ thuật chuẩn bị và kiểm chứng |
+| Đội kỹ thuật | Khảo sát/kiểm chứng map, POI, đường nối và điều kiện di chuyển; ROS2 là nguồn map vật lý. Admin quản lý POI và Route qua CRUD theo ADR-0014/0017; seed không còn là workflow đổi tuyến thường xuyên |
 
 Mỗi account V1 chỉ có đúng một role hệ thống: Admin, Representative hoặc Staff. Nếu một người cần nhiều role hệ thống thì dùng account riêng cho từng role. Đại diện đăng nhập bằng tài khoản vai trò **Representative**, được cấp qua cơ chế account/role của hệ thống như hướng UI-FLOW; mã/phiên Student không cấp quyền quản lý đoàn. Tại **My Registration/Đăng ký của tôi**, khối **Lời mời** hỗ trợ truy cập; khi Tour RUNNING có khối **Yêu cầu đổi nhánh** hiển thị POI hiện tại, điểm phân nhánh được phép yêu cầu, lựa chọn hợp lệ và trạng thái yêu cầu. Backend kiểm tra tài khoản sở hữu đúng registration APPROVED của Tour, không tin ID do browser gửi. Đây là đặc tả cần triển khai/kiểm chứng, không khẳng định màn/API đã tồn tại.
 
@@ -202,17 +207,17 @@ Chỉ giữ dữ liệu cá nhân trong thời gian cần cho đăng ký, quyề
 
 ### 6.1 Chuẩn bị trước Tour
 
-**Cập nhật theo ADR-0012 (30/09/2026):** nhóm chọn dwell cố định theo tuyến trong seed và mọi Staff vận hành mọi Tour; không thêm bảng dwell theo Tour hoặc phân công operator. Đây là quyết định thiết kế, chưa xác nhận backend/UI đã triển khai.
+**Cập nhật 19/10/2026 theo ADR-0017:** Admin quản lý Route/RouteStops bằng CRUD qua ứng dụng; thay phần seed-only của ADR-0009/0012. Dwell cố định theo RouteStop, không có dwell riêng theo Tour; mọi Staff vẫn vận hành mọi Tour. Đây là phạm vi implementation được chủ dự án cho phép, không phải ghi nhận GVHD đã duyệt.
 
-Đội kỹ thuật tạo POI và các tuyến/nhánh có đường nối đã thử, kèm map, điểm dừng, hướng quan sát, narration và thời lượng dự kiến. Admin chọn một tuyến và các biến thể được phép, xem trước POI/thời lượng rồi chốt buổi. Admin có thể sửa mô tả buổi khi SCHEDULED; thay đổi cấu hình ảnh hưởng đường chạy phải qua kiểm chứng kỹ thuật.
+Đội kỹ thuật khảo sát và kiểm chứng map/POI, các chặng di chuyển, dwell và góc nhìn thực tế. Admin tạo tuyến từ các POI hiện có, quản lý thứ tự/Start/End/dwell/head steps qua Web, rồi lựa chọn tuyến cho Tour ở task quản trị Tour riêng. Route mô tả hành trình nghiệp vụ; ROS2/Nav2 tính đường đi và điều khiển robot.
 
-**Cách nạp V1 đã chốt:** đội kỹ thuật dùng seed/script có kiểm soát nạp map/frame, tọa độ và hướng quan sát, tuyến/thứ tự POI/Start/End, đường nối/nhánh đã thử và giới hạn thời lượng vào DB. DB là nguồn điều phối, không sửa hình học của POI đã được dùng trong tuyến hoặc lịch sử. Admin trên web chọn tuyến, bật/tắt nhánh và xem thời gian dừng cố định theo tuyến. Dwell do kỹ thuật seed và kiểm chứng; V1 không có cấu hình dwell riêng theo Tour (ADR-0012). **Điều chỉnh cho Admin POI Management theo ADR-0014:** Admin có thể tạo POI mới ở trạng thái không khả dụng, sửa nội dung và kích hoạt/vô hiệu hóa; chỉ được sửa map/frame/x/y/yaw trước khi có `RouteStop` hoặc sự kiện lịch sử tham chiếu POI. Không có hard delete. POI đã được tham chiếu vẫn cho sửa nội dung/trạng thái, trừ khi Tour `READY`/`RUNNING` dùng POI qua tuyến gốc, tuyến hiện hành hoặc nhánh đã bật; lúc đó mọi sửa đổi bị khóa. Đây là khả năng quản trị danh mục POI, không phải editor tuyến, xác nhận đường đi, hay khẳng định robot đã kiểm chứng vị trí. Form vẫn không vẽ tuyến. Form P1 upload audio và kiểm tra thời lượng/dwell theo yêu cầu cũ là phần riêng chưa được thay thế bởi việc chỉnh URL nội dung ở POI Management.
+**Quản lý danh mục hiện hành (ADR-0017):** Route CRUD dùng Routes/RouteStops hiện có và SQL thật. Tuyến mới inactive; draft được chứa POI inactive nhưng kích hoạt yêu cầu POI active và cùng MapKey/MapFrame, pose/thứ tự/dwell/head steps hợp lệ. Cấu hình bị khóa ngay khi có bất kỳ Tour (kể cả SCHEDULED/đã kết thúc), RouteVariant hoặc tham chiếu lịch sử/thực thi; đổi hành trình bằng sao chép tuyến mới. Không xóa tuyến đã tham chiếu. Tên/mô tả/trạng thái còn sửa được nếu không có Tour READY/RUNNING dùng tuyến gốc, tuyến hiện hành hoặc nhánh bật. Vô hiệu hóa chỉ chặn lựa chọn mới, không sửa hay hủy Tour cũ. RouteVariant authoring và Tour READY/runtime chưa triển khai trong Route CRUD. POI Management theo ADR-0014 vẫn khóa map/pose sau RouteStop/history use và khóa mọi sửa đổi khi Tour READY/RUNNING sử dụng POI. Seed giữ cho bootstrap/dữ liệu nền/test/demo cách ly; import kỹ thuật dành cho manifest map/waypoint có provenance và validation. Không chạy seed/import để ghi đè lịch sử hay dữ liệu đang vận hành.
 
-Không cần editor vẽ đường tự do. Admin cũng không được tùy ý đảo mọi POI chỉ vì các POI riêng lẻ đã hợp lệ: đường nối và thứ tự mới có thể chưa được kiểm chứng. Nếu UI cho chọn thứ tự thì chỉ chấp nhận những tổ hợp đã được phê chuẩn.
+Không cần editor vẽ đường tự do. Admin có thể lưu thứ tự POI mới để phát triển cấu hình; lưu hợp lệ và IsActive không chứng minh các chặng đã được robot thử. Kỹ thuật phải kiểm chứng toàn bộ hành trình/Start/End trong đúng map/frame trước vận hành; không tự sửa ROS map hoặc tọa độ để hợp thức hóa tuyến.
 
 READY khóa tuyến cơ sở **và tập biến thể cho phép**. Chọn một biến thể trong lúc RUNNING là thao tác vận hành đã được dự liệu, không sửa map/tọa độ hoặc nội dung dùng chung sau Chốt.
 
-**Phân biệt tạo buổi với tạo tuyến:** Admin tạo một buổi mới bằng cách chọn một tuyến có sẵn. Việc thêm một tuyến chạy hoàn toàn mới chưa phải chức năng editor của V1; đội kỹ thuật chuẩn bị và kiểm chứng cấu hình để Admin có thêm lựa chọn. Người cấu hình kỹ thuật có thể cùng là Admin ngoài đời; POI Management sửa hình học POI chưa được dùng, còn quyền sửa Route/đường nối không nằm trong màn hình vận hành Tour.
+**Phân biệt tạo buổi với tạo tuyến:** Route Management là CRUD danh mục; Tour Management chọn tuyến có sẵn cho một buổi và kiểm tra readiness riêng. Route không phải Nav2 path. Tour runtime/Fleet Bridge/điều khiển robot không thuộc Route CRUD. Bất kỳ Tour tham chiếu nào cũng khóa cấu hình tuyến để bảo toàn hành trình, thay vì đợi tới READY.
 
 Ví dụ cấu hình minh họa:
 
@@ -230,10 +235,10 @@ Hai nhánh đều phải được thử đường chạy, có nội dung và th�
 | Nhập tên, lịch dự kiến, mô tả buổi | Sửa khi SCHEDULED; giờ đến không tự Start |
 | Chọn tuyến từ danh sách và xem map/thứ tự POI | Ví dụ chọn tuyến mặc định ở trên; không tự kéo điểm tới tọa độ mới |
 | Bật/tắt lựa chọn nhánh đã chuẩn bị cho buổi | Ví dụ cho phép chọn D tại A, hoặc giữ tuyến mặc định |
-| Xem thời gian dừng cố định theo tuyến | Kỹ thuật seed và chạy thử dwell cùng narration/góc quay, trong giới hạn buổi đã công bố; Admin không chỉnh dwell theo Tour |
+| Xem thời gian dừng cố định theo tuyến | Admin chỉnh dwell ở Route chưa tham chiếu, kỹ thuật kiểm chứng cùng narration/góc quay; không chỉnh riêng theo Tour |
 | Xem lại và Chốt nội dung | READY khóa cấu hình. Thay nhánh hợp lệ lúc chạy do Staff xử lý, không phải mở editor sửa tuyến |
 
-Thêm tuyến, thứ tự điểm dừng, đường nối/nhánh và dwell vẫn thuộc chuẩn bị kỹ thuật. Admin chỉ sửa hình học một POI chưa được tuyến hoặc lịch sử tham chiếu; sau khi có tham chiếu, map/frame/x/y/yaw bị khóa để bảo toàn cấu hình đã dùng. Mọi cập nhật POI bị khóa khi Tour READY/RUNNING sử dụng POI qua tuyến gốc, tuyến hiện hành hoặc nhánh đã bật; backend kiểm tra lại khi ghi. Nội dung P1 giữ truy vết buổi đã kết thúc: mỗi lần upload audio tạo asset/URL mới, giữ asset cũ còn cần cho lịch sử; khi kích hoạt narration ghi snapshot AudioUrl, NarrationText và NarrationSeconds đã dùng trong TourEvents theo ADR-0012. Khi đổi audio, hiện thời lượng và cảnh báo nếu dài hơn dwell tại các cấu hình đang dùng; Admin phải chỉnh audio cho phù hợp dwell cố định trước Chốt READY. Nếu cần đổi dwell, kỹ thuật sửa cấu hình seed và kiểm chứng lại, không sửa cấu hình đang được Tour READY/RUNNING dùng. Chưa xử lý thì backend chặn READY kèm lý do. Không cần tự tối ưu thời gian hoặc dùng Hold trong live để thay việc chuẩn bị. Form POI Management cho phép nhập số tạm thời; hệ thống không có cờ xác minh vật lý và không đổi pixel map thành tọa độ ROS nếu chưa có transform đo/calibrate.
+Admin thêm tuyến/thứ tự/dwell qua Route CRUD theo ADR-0017; kỹ thuật kiểm chứng khả năng di chuyển thực tế. Tuyến đã tham chiếu phải sao chép để sửa cấu hình. POI map/frame/x/y/yaw vẫn khóa sau RouteStop hoặc lịch sử tham chiếu; mọi cập nhật POI bị khóa khi Tour READY/RUNNING dùng POI qua tuyến gốc/hiện hành/nhánh bật. Audio upload và cảnh báo thời lượng/dwell P1, snapshot narration trong TourEvents, kiểm tra READY và giới hạn buổi vẫn là yêu cầu riêng: Route CRUD chưa triển khai các use case đó. Khi đổi dwell, cấu hình mới cần kiểm chứng lại. Picker POI dùng occupancy map ROS theo ADR-0014; hệ thống chưa có cờ chứng nhận vật lý. Lưu thành công, hợp lệ dữ liệu, khả dụng và kiểm chứng phần cứng là bốn khái niệm riêng. Nội dung P1 giữ truy vết buổi đã kết thúc: mỗi lần upload audio tạo asset/URL mới, giữ asset cũ còn cần cho lịch sử; khi kích hoạt narration ghi snapshot AudioUrl, NarrationText và NarrationSeconds đã dùng trong TourEvents theo ADR-0012. Khi đổi audio, hiện thời lượng và cảnh báo nếu dài hơn dwell tại các cấu hình đang dùng; Admin phải chỉnh audio cho phù hợp dwell cố định trước Chốt READY. Chưa xử lý thì backend chặn READY kèm lý do. Không cần tự tối ưu thời gian hoặc dùng Hold trong live để thay việc chuẩn bị.
 
 ### 6.2 Yêu cầu đổi nhánh trong buổi
 
@@ -368,7 +373,7 @@ Nguồn: phiếu FA26SE184 v1.2, mục 3.2(b)–(d), trang 2–4 và 3.2(h), tra
 | Nội dung trong phiếu | Bản V1 sau Review 1 | Tình trạng cần ghi nhận |
 |---|---|---|
 | Student vào bằng mã đoàn + tên/lớp; đại diện chia sẻ lời mời | Excel cấp lời mời qua email gồm link trang Tour + mã cá nhân; phòng xem chung dùng một dòng “Điểm xem chung” và email người phụ trách | Nhóm chốt; GVHD xem lại Review 2. Không cần roster cá nhân của lớp chỉ xem máy chiếu; hỗ trợ mã truy cập khi RUNNING |
-| Admin quản lý routes, POIs, narration assets | Kỹ thuật seed hình học tuyến/nhánh; Admin chọn tuyến và sửa tên/mô tả/audio bằng form P1 | Nhóm chốt form nội dung; vẫn công khai giới hạn quản lý hình học, không coi đã đáp ứng toàn bộ CRUD route/POI |
+| Admin quản lý routes, POIs, narration assets | Route CRUD SQL thật và POI Management; giữ kiểm chứng kỹ thuật riêng, audio upload P1 riêng | ADR-0017 thay giới hạn seed-only; Tour Management/readiness và variant authoring vẫn riêng |
 | Admin xem system-wide analytics | P1: Tour hoàn thành/hủy; email dịch vụ chấp nhận gửi/gửi lỗi; lời mời vào phòng thành công | Mức cơ sở nhóm chốt; không BI, tracking đọc email hoặc attendance. Chi tiết đếm ở mục 10.2 |
 | Immutable audit trails cho lệnh vận hành | Log chỉ ghi thêm; quyết định gửi, đã gửi, robot phản hồi ghi riêng theo bằng chứng | API/UI và tài khoản DB app không sửa/xóa; không tuyên bố chống quản trị DB đặc quyền. Log lệnh thuộc P0, mục 10.2 |
 | Registration, Student remote và Staff vận hành đã có trong phiếu | Đại diện có account/role, gửi yêu cầu từ My Registration; Staff xử lý trên dashboard | Account Student/booking cá nhân cũ không còn là FR phải xin bỏ. Quyền yêu cầu nhánh là bổ sung sau Review 1 |
@@ -468,7 +473,7 @@ Kịch bản trình bày chỉ minh họa một lượt mở link/nhập mã và
 
 Đề xuất phản hồi với thầy:
 
-> Nhóm đã chốt email gồm link trang Tour và mã riêng; nhập mã để tạo session; một dòng điểm xem chung đủ quyền máy chiếu nhưng chỉ lưu thông tin người phụ trách. Dữ liệu Excel chỉ phục vụ đăng ký, lời mời và thống kê Tour; không liên hệ tuyển sinh sau Tour. Admin sửa riêng email khi SCHEDULED; form nội dung POI và thống kê cơ sở ở P1, hình học tuyến vẫn do kỹ thuật chuẩn bị. Đại diện yêu cầu, Staff chấp nhận tối đa một lần đổi nhánh tại điểm hợp lệ; Staff chỉ Start từ giờ công bố. Video dự phòng dùng lúc live lỗi và sau End Early theo hạn lời mời, không làm giả kết quả robot. Nhóm trình các quyết định này để GVHD xem lại ở Review 2; không coi emulator là bằng chứng nhiều robot thật.
+> Nhóm đã chốt email gồm link trang Tour và mã riêng; nhập mã để tạo session; một dòng điểm xem chung đủ quyền máy chiếu nhưng chỉ lưu thông tin người phụ trách. Dữ liệu Excel chỉ phục vụ đăng ký, lời mời và thống kê Tour; không liên hệ tuyển sinh sau Tour. Admin sửa riêng email khi SCHEDULED; form nội dung POI và thống kê cơ sở ở P1; Admin Route CRUD theo ADR-0017 quản lý hành trình, đội kỹ thuật kiểm chứng vật lý. Đại diện yêu cầu, Staff chấp nhận tối đa một lần đổi nhánh tại điểm hợp lệ; Staff chỉ Start từ giờ công bố. Video dự phòng dùng lúc live lỗi và sau End Early theo hạn lời mời, không làm giả kết quả robot. Nhóm trình các quyết định này để GVHD xem lại ở Review 2; không coi emulator là bằng chứng nhiều robot thật.
 
 ## 13. Bảng thay thế nội dung bản 19/09 khi cập nhật đặc tả chi tiết
 

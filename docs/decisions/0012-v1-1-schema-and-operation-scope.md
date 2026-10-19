@@ -6,6 +6,13 @@
 
 ## Context
 
+> **Điều chỉnh 19/10/2026, ADR-0017:** Admin quản lý Route/thứ tự POI/Start/End,
+> dwell và góc nhìn qua CRUD, thay yêu cầu kỹ thuật phải seed dwell. Không có
+> dwell riêng theo Tour; schema v1.1 giữ nguyên. Cấu hình đã có bất kỳ Tour hay
+> variant tham chiếu được bảo toàn bằng khóa sửa và sao chép tuyến mới.
+> [ADR-0017](0017-admin-route-management.md) thay phần quyết định này; nội dung
+> lịch sử bên dưới được giữ nguyên và không chứng nhận kiểm chứng robot.
+
 Review `backend/database/smart-campus-tour-schema-v1.1.sql` xác định cần khóa duy nhất cho lời mời/phiên/nhánh, định danh stop ổn định khi đổi tuyến và quy ước audit. Nhóm chọn cấu hình vận hành gọn cho V1 thay vì thêm bảng dwell theo Tour hoặc phân công operator.
 
 ## Decision

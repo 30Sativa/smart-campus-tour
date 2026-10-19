@@ -63,6 +63,12 @@ schema, and a technical contract conflict, report the conflict and identify
 which document/status applies; do not silently treat a target as implemented
 or change a public contract to make the documents agree.
 
+The owner-authorized Route Management update is recorded in
+`docs/decisions/0017-admin-route-management.md`: Admin CRUD replaces the
+seed-only Route/dwell preparation portions of ADR-0009/0012. Physical
+commissioning remains technical work; pending Tour runtime/branch authoring
+is not implicitly authorized or implemented by that update.
+
 ---
 
 ## 3. Working on a Task

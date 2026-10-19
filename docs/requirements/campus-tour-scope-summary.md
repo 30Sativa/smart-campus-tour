@@ -1,5 +1,13 @@
 # CampusTour DT-AMR — Scope tóm tắt sau Review 1
 
+**Cập nhật 19/10/2026, ADR-0017:** Admin Route CRUD quản lý tuyến, thứ tự POI,
+Start/End, dwell và góc nhìn qua SQL thật. Seed giữ cho bootstrap/test/demo;
+import kỹ thuật giữ cho manifest map/waypoint. Cấu hình có bất kỳ Tour/variant/
+history tham chiếu bị khóa, đổi bằng sao chép tuyến mới. READY/RUNNING còn khóa
+nội dung/trạng thái. Khả dụng không chứng nhận kiểm chứng robot; đội kỹ thuật
+vẫn khảo sát và thử hành trình. Tour Management/runtime và variant authoring
+là task riêng. Chi tiết hiện hành ở scope §6 và ADR-0017.
+
 **Nhóm chốt nghiệp vụ 30/09/2026 • GVHD giao nhóm tự quyết và sẽ xem lại ở Review 2 • Chưa xác nhận GVHD duyệt từng thay đổi hoặc chức năng đã triển khai.** ADR: `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật truy cập `docs/decisions/0010-personal-access-code-entry.md` và giới hạn dữ liệu tại `docs/decisions/0011-student-data-use-for-tour.md`; chi tiết/backlog tại đặc tả Review 1.
 
 **Vấn đề.** Học sinh cần khám phá campus từ xa; hệ thống phải thể hiện giá trị của robot live qua khả năng điều chỉnh hành trình có kiểm soát, bên cạnh nội dung giới thiệu và hỏi đáp.
