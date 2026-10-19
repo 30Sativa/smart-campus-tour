@@ -31,6 +31,10 @@ permission to execute it.
 - [R3 DDS readiness snapshot (2026-10-17)](r3-dds-readiness-2026-10-17.md) —
   actual MiniPC state, stationary S1–S3 prerequisites, verification and
   rollback. S1–S3 were **not deployed** in that snapshot.
+- [R3 stationary review (2026-10-17)](r3-stationary-review-2026-10-17.md) —
+  S0b real-device evidence (viewer, tunnel/bridge restart, QoS, guard
+  rejections, cleanup, resources). Its rollout prerequisite is superseded by
+  the readiness snapshot.
 - [ROS Discovery Server troubleshooting](network-ros-discovery.md) — legacy
   multi-machine diagnosis; follow the R3 boundary before connecting a laptop
   directly to robot DDS.

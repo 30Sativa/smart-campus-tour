@@ -62,6 +62,27 @@ def test_parser_rejects_orphan_continuation():
         fx.FrameParser().feed(server_frame(fx.OP_CONT, b'x'))
 
 
+def test_parser_rejects_oversized_frame_before_buffering_payload():
+    with pytest.raises(fx.ProtocolError, match='size limit'):
+        fx.FrameParser().feed(b'\x82\x7f' + struct.pack('>Q', fx.MAX_MESSAGE + 1))
+
+
+def test_scan_freshness_requires_both_arrival_and_header_time():
+    now = [100.0]
+    f = fx.ScanFreshness(clock=lambda: now[0], wall_clock=lambda: now[0])
+    assert not f.live(True)
+    f.received(99.9)
+    assert f.live(True) and not f.live(False)
+    now[0] += 3
+    assert not f.live(True)
+    f.received(99.9)                         # old TCP backlog arriving now
+    assert not f.live(True)
+    f.received(110.0)                        # future stamp / wrong clock
+    assert not f.live(True)
+    f.received(102.9)
+    assert f.live(True)
+
+
 def accept_for(key):
     return base64.b64encode(hashlib.sha1((key + fx.WS_GUID).encode()).digest()).decode()
 
@@ -128,6 +149,9 @@ def test_env_guard_refuses_robot_graph():
     errs = fx.check_local_env(robot_env)
     assert errs and 'never on the robot' in errs[0]
     assert fx.check_local_env(dict(robot_env, ROS_DISCOVERY_SERVER='10.86.7.244:11811'))
+    for key in ('FASTDDS_DEFAULT_PROFILES_FILE', 'FASTRTPS_DEFAULT_PROFILES_FILE',
+                'ROS_STATIC_PEERS', 'ROS_SUPER_CLIENT'):
+        assert fx.check_local_env({'ROS_LOCALHOST_ONLY': '1', key: 'override'})
 
 
 @pytest.mark.parametrize('argv', [['--url', 'ws://10.86.7.244:8765'],
@@ -163,7 +187,26 @@ def test_clock_check_ignores_link_delay_but_catches_offset():
 
 def make_session(enable=(), clock=None):
     down = fx.load_config(TOPICS, 'robot_01', enable=enable)
-    return fx.BridgeSession(down, **({'clock': clock} if clock else {}))
+    return fx.BridgeSession(down, settle_delay=0, **({'clock': clock} if clock else {}))
+
+
+def test_latched_topics_wait_for_metadata_and_retry_if_history_is_missing():
+    now = [0.0]
+    s = fx.BridgeSession(fx.load_config(TOPICS, 'robot_01'), clock=lambda: now[0],
+                         latched_timeout=5.0)
+    assert s.on_text(advertise((1, '/robot_01/map', 'cdr'))) == []
+    now[0] = 1.9
+    assert s.due() == []
+    now[0] = 2.0
+    assert sent(s.due()) == [{'op': 'subscribe', 'subscriptions': [{'id': 1, 'channelId': 1}]}]
+    now[0] = 7.1
+    assert sent(s.due()) == [{'op': 'unsubscribe', 'subscriptionIds': [1]}]
+    assert s.on_binary(msg_data(1))[1] is None
+    now[0] = 9.2
+    assert sent(s.due()) == [{'op': 'subscribe', 'subscriptions': [{'id': 2, 'channelId': 1}]}]
+    assert s.on_binary(msg_data(2))[1][0] == '/robot_01/map'
+    now[0] = 100
+    assert s.due() == [], 'do not continuously retransmit a received latched map'
 
 
 def sent(frames):
@@ -180,15 +223,11 @@ def advertise(*chans):
         for cid, t, enc in chans]}).encode()
 
 
-def test_warns_when_bridge_accepts_client_publishing(monkeypatch):
-    # Record the call itself: other packages' tests (launch) reconfigure logging.
-    warned = []
-    monkeypatch.setattr(fx.log, 'warning', lambda msg, *a: warned.append(msg % a if a else msg))
+def test_refuses_bridge_that_accepts_client_publishing():
     s = make_session()
-    s.on_text(json.dumps({'op': 'serverInfo', 'capabilities': ['clientPublish']}).encode())
-    assert warned and 'read-only' in warned[0]
+    with pytest.raises(fx.ProtocolError, match='read-only'):
+        s.on_text(json.dumps({'op': 'serverInfo', 'capabilities': ['clientPublish']}).encode())
     s.on_text(json.dumps({'op': 'serverInfo', 'capabilities': ['connectionGraph']}).encode())
-    assert len(warned) == 1
 
 
 def test_subscribes_only_configured_cdr_topics_once():
@@ -300,7 +339,7 @@ class FakeBridge:
         self.connections += 1
         cid = 10 + self.connections               # channel ids change on every restart
         self.conn = c
-        info = {'op': 'serverInfo', 'capabilities': ['clientPublish']}
+        info = {'op': 'serverInfo', 'capabilities': ['connectionGraph']}
         c.sendall(server_frame(fx.OP_TEXT, json.dumps(info).encode()))
         c.sendall(server_frame(fx.OP_TEXT, advertise((cid, '/robot_01/scan', 'cdr'))))
         parser, sub_id = fx.FrameParser(), None
@@ -385,6 +424,52 @@ def test_link_detects_silent_dead_link():
         b.close()
 
 
+def test_slow_large_frame_is_progress_not_a_dead_link():
+    listener = socket.socket()
+    listener.bind(('127.0.0.1', 0))
+    listener.listen()
+    payload = b'SCAN' * 25000
+
+    def serve():
+        server = None
+        try:
+            server, _ = listener.accept()
+            request = b''
+            while b'\r\n\r\n' not in request:
+                request += server.recv(4096)
+            key = next(line.split(':', 1)[1].strip() for line in request.decode().split('\r\n')
+                       if line.lower().startswith('sec-websocket-key'))
+            server.sendall((f'HTTP/1.1 101 Switching Protocols\r\n'
+                            f'Sec-WebSocket-Accept: {accept_for(key)}\r\n'
+                            f'Sec-WebSocket-Protocol: {fx.PROTOCOL}\r\n\r\n').encode())
+            server.sendall(server_frame(fx.OP_TEXT, advertise((1, '/robot_01/scan', 'cdr'))))
+            server.recv(4096)                # subscription
+            frame = server_frame(fx.OP_BINARY, msg_data(1, payload))
+            for i in range(0, len(frame), 2000):
+                server.sendall(frame[i:i + 2000])
+                time.sleep(.02)              # whole frame > 1 s; bytes never stop
+        except OSError:
+            pass
+        finally:
+            if server is not None:
+                server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    got = []
+    link = fx.Link('127.0.0.1', listener.getsockname()[1], fx.load_config(TOPICS, 'robot_01'),
+                   lambda t, s, c: got.append(c), lambda up: None,
+                   dead_after=.3, ping_interval=10)
+    worker = threading.Thread(target=link.run, daemon=True)
+    worker.start()
+    try:
+        assert wait_for(lambda: got, timeout=4), 'discarded a frame despite continuous TCP progress'
+        assert got == [payload]
+    finally:
+        link.stop.set()
+        listener.close()
+        worker.join(timeout=1)
+
+
 class FakeGuard:
     """Line-JSON server like initialpose_guard: READY on connect, then one
     FORWARDED reply per request."""
@@ -436,7 +521,8 @@ class Pose:
 
 def test_pose_request_carries_every_field_the_guard_requires():
     req = fx.pose_request(Pose())
-    assert set(req) == {'op', 'frame_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'covariance'}
+    assert set(req) == {'op', 'frame_id', 'x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'covariance', 'sent_at'}
+    assert abs(req['sent_at'] - time.time()) < 1
     assert req['op'] == 'initialpose' and len(req['covariance']) == 36
 
 
@@ -513,3 +599,20 @@ def test_pose_link_does_not_send_on_a_silent_connection():
     finally:
         link.stop.set()
         srv.close()
+
+
+def test_pose_link_reply_timeout_reconnects_without_replaying():
+    g = FakeGuard()                          # only FORWARDED, no final verdict
+    replies = []
+    link = fx.PoseLink('127.0.0.1', g.port, lambda st, tx: replies.append(st),
+                       reply_timeout=0.2, retry_max=0.1)
+    threading.Thread(target=link.run, daemon=True).start()
+    try:
+        assert wait_for(lambda: link.up)
+        assert link.send(fx.pose_request(Pose()))
+        assert not link.send(fx.pose_request(Pose())), 'must not queue a double-click'
+        assert wait_for(lambda: 'NO_ANSWER' in replies and replies.count('READY') >= 2)
+        assert len(g.requests) == 1
+    finally:
+        link.stop.set()
+        g.srv.close()

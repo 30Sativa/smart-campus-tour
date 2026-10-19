@@ -3,8 +3,9 @@
 > The SSH viewer code in this folder is the R3 opt-in path. At the 2026-10-17
 > snapshot, the current laptop also had an `amr-rviz` wrapper installed from
 > the post-`main` R3 branch: `amr-rviz --r3` selects this viewer, while bare
-> `amr-rviz` still dispatches to the saved legacy viewer. That wrapper is not
-> present in the GitHub `main` checkout yet. See
+> `amr-rviz` still dispatches to the saved legacy viewer. The wrapper source is
+> `amr-rviz` in this folder; it reaches GitHub `main` with branch
+> `feature/claude/r3-hardening`. See
 > [robot project status](../../docs/project-status.md) before assuming a fresh
 > laptop has it installed or changing the default.
 

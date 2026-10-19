@@ -20,7 +20,8 @@
 #   -n NS        robot namespace (default robot_01)
 #   -p PORT      local port for the bridge (default 8765); the pose port is PORT+1
 #   -r PORT      bridge port on the robot (default 8765); guard port is PORT+1
-#   -c FILE      RViz config (default: navigation.rviz from this checkout)
+#   -c FILE      RViz config (default: bundled R3 navigation.rviz)
+#   -f FRAME     RViz Fixed Frame (e.g. odom for an unlocalized stationary robot)
 #   -e LIST      fox2ros --enable list, e.g. global_costmap/costmap
 #   --no-rviz    tunnel + adapter only (run your own rviz2 in this environment)
 #
@@ -29,14 +30,20 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROBOT="$(cd "$HERE/../.." && pwd)"
-NS=robot_01 LPORT=8765 RPORT=8765 ENABLE='' RVIZ=1
+NS=robot_01 LPORT=8765 RPORT=8765 ENABLE='' RVIZ=1 FRAME=''
 RVIZ_CONFIG="$REPO_ROBOT/ros2_ws/src/robot_navigation/rviz/navigation.rviz"
+[[ ! -r $HERE/navigation.rviz ]] || RVIZ_CONFIG="$HERE/navigation.rviz"
 while [[ $# -gt 0 ]]; do
+  case $1 in
+    -n|-p|-r|-c|-e|-f)
+      [[ $# -ge 2 ]] || { echo "missing value for $1" >&2; exit 2; } ;;
+  esac
   case $1 in
     -n) NS=$2; shift 2 ;;
     -p) LPORT=$2; shift 2 ;;
     -r) RPORT=$2; shift 2 ;;
     -c) RVIZ_CONFIG=$2; shift 2 ;;
+    -f) FRAME=$2; shift 2 ;;
     -e) ENABLE=$2; shift 2 ;;
     --no-rviz) RVIZ=0; shift ;;
     -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
@@ -46,19 +53,51 @@ while [[ $# -gt 0 ]]; do
 done
 [[ $# -eq 1 ]] || { echo "usage: $(basename "$0") [options] user@robot-ip   (-h for help)" >&2; exit 2; }
 TARGET=$1
+[[ $TARGET != -* && $TARGET != *[[:space:]]* ]] || { echo 'invalid SSH target' >&2; exit 2; }
+[[ $NS =~ ^/?[A-Za-z_][A-Za-z0-9_]*$ || -z $NS ]] || {
+  echo 'namespace must be one robot ID (for example robot_01)' >&2; exit 2;
+}
+for port in "$LPORT" "$RPORT"; do
+  [[ $port =~ ^[0-9]{1,5}$ ]] && ((10#$port >= 1 && 10#$port <= 65534)) || {
+    echo 'ports must be in 1..65534 (the next port is used for initial pose)' >&2; exit 2;
+  }
+done
+LPORT=$((10#$LPORT)) RPORT=$((10#$RPORT))
+[[ ${LAPTOP_ROS_DOMAIN_ID:-42} =~ ^[0-9]{1,3}$ ]] &&
+  ((10#${LAPTOP_ROS_DOMAIN_ID:-42} <= 232)) || {
+    echo 'LAPTOP_ROS_DOMAIN_ID must be in 0..232' >&2; exit 2;
+  }
+if [[ $RVIZ -eq 1 && ! -r $RVIZ_CONFIG ]]; then
+  echo "RViz config not readable: $RVIZ_CONFIG (use -c when copying only this tool directory)" >&2
+  exit 2
+fi
 
 # Laptop-local graph only. Anything pointing at the robot graph is removed.
 unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT ROS_STATIC_PEERS \
       FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
-export ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID="${LAPTOP_ROS_DOMAIN_ID:-42}" \
-       RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 if [[ -z "${ROS_DISTRO:-}" ]]; then
   set +u; source /opt/ros/humble/setup.bash; set -u
 fi
+[[ $ROS_DISTRO == humble ]] || { echo 'ROS Humble is required; use a clean shell' >&2; exit 2; }
+export ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID="$((10#${LAPTOP_ROS_DOMAIN_ID:-42}))" \
+       RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+# A setup script can export transport settings too: sanitize after sourcing.
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT ROS_STATIC_PEERS \
+      FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
 # RobotModel resolves package://robot_description meshes on this laptop.
-if ! ros2 pkg prefix robot_description >/dev/null 2>&1; then
-  echo "[rviz-over-ssh] note: robot_description is not in this environment; RViz RobotModel" \
-       "will miss meshes (source your robot workspace install first)." >&2
+if [[ $RVIZ -eq 1 ]] && ! ros2 pkg prefix robot_description >/dev/null 2>&1; then
+  echo '[rviz-over-ssh] robot_description is missing. Source the laptop workspace first,' \
+       'or use amr-rviz --r3 (AMR_ROS_WS_SETUP selects the workspace setup.bash).' >&2
+  exit 2
+fi
+SCAN_NODE=''
+if [[ $RVIZ -eq 1 ]]; then
+  SCAN_NODE="$(ros2 pkg prefix robot_navigation)/lib/robot_navigation/scan_rviz"
+  [[ -x $SCAN_NODE ]] || { echo 'Source a laptop workspace containing robot_navigation/scan_rviz.' >&2; exit 2; }
+  if [[ -z $FRAME ]]; then
+    FRAME="$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["Visualization Manager"]["Global Options"]["Fixed Frame"])' "$RVIZ_CONFIG")"
+  fi
+  [[ -n $FRAME && $FRAME != /* ]] || { echo 'Fixed Frame must be nonempty, without a leading /' >&2; exit 2; }
 fi
 LPOSE=$((LPORT + 1)) RPOSE=$((RPORT + 1))
 for port in "$LPORT" "$LPOSE"; do
@@ -68,34 +107,59 @@ for port in "$LPORT" "$LPOSE"; do
   fi
 done
 
-PIDS=()
+PIDS=() SCAN_PID=''
 cleanup() {
-  trap - EXIT INT TERM
-  # Children first: killing a loop subshell alone would orphan its ssh/python3.
-  for p in "${PIDS[@]}"; do pkill -TERM -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+  trap - EXIT
+  trap '' INT TERM
+  for p in "${PIDS[@]}"; do
+    if [[ $p == "$SCAN_PID" ]]; then kill -INT "$p" 2>/dev/null || true
+    else kill -TERM "$p" 2>/dev/null || true; fi
+  done
   wait 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Each restart loop owns exactly one child, including its retry sleep. An
+# explicit TERM to the launcher must also stop RViz, not just the two loops.
+stop_child() {
+  trap '' INT TERM
+  if [[ -n ${child:-} ]]; then
+    kill -TERM "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  exit 0
+}
+pause_retry() { sleep "$1" & child=$!; wait "$child" || true; }
 
 tunnel() {
+  child=''
+  trap stop_child TERM INT
   while true; do
     ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes \
         -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o ConnectTimeout=10 \
-        -o ControlMaster=no -o ControlPath=none \
-        -L "127.0.0.1:$LPORT:127.0.0.1:$RPORT" -L "127.0.0.1:$LPOSE:127.0.0.1:$RPOSE" "$TARGET" \
-      || echo "[rviz-over-ssh] SSH tunnel down (exit $?); retrying in 3 s" >&2
-    sleep 3
+        -o ControlMaster=no -o ControlPath=none -o StrictHostKeyChecking=yes \
+        -L "127.0.0.1:$LPORT:127.0.0.1:$RPORT" -L "127.0.0.1:$LPOSE:127.0.0.1:$RPOSE" "$TARGET" &
+    child=$!
+    wait "$child" || echo "[rviz-over-ssh] SSH tunnel down (exit $?); retrying in 3 s" >&2
+    pause_retry 3
   done
 }
 adapter() {
+  child=''
+  trap stop_child TERM INT
   while true; do
     python3 "$HERE/fox2ros.py" --url "ws://127.0.0.1:$LPORT" --pose-url "tcp://127.0.0.1:$LPOSE" \
       --namespace "$NS" \
-      ${ENABLE:+--enable "$ENABLE"} && break
-    rc=$?
-    [[ $rc -eq 2 ]] && { echo "[rviz-over-ssh] fox2ros refused to start (see above)" >&2; kill $$; }
+      ${ENABLE:+--enable "$ENABLE"} &
+    child=$!
+    rc=0
+    wait "$child" || rc=$?
+    [[ $rc -eq 0 ]] && return 0
+    [[ $rc -eq 2 ]] && { echo "[rviz-over-ssh] fox2ros refused to start (see above)" >&2; return 2; }
     echo "[rviz-over-ssh] fox2ros exited ($rc); restarting in 2 s" >&2
-    sleep 2
+    pause_retry 2
   done
 }
 
@@ -104,8 +168,18 @@ adapter & PIDS+=($!)
 echo "[rviz-over-ssh] tunnel -> $TARGET (127.0.0.1:$RPORT data, :$RPOSE initial pose);" \
      "laptop graph domain $ROS_DOMAIN_ID, localhost only"
 if [[ $RVIZ -eq 1 ]]; then
-  rviz2 -d "$RVIZ_CONFIG" --ros-args -r "__ns:=/${NS#/}"
+  # Reuse the existing non-blocking scan projector, entirely in laptop DDS.
+  # Native RViz LaserScan also looks up the end-of-scan TF and can extrapolate
+  # even when TF at the scan header is available. Do not move that wait to UI.
+  # Bash background jobs initially ignore SIGINT. Reset it before exec, so
+  # cleanup also works if a fatal adapter error occurs before rclpy.init().
+  env --default-signal=INT "$SCAN_NODE" --ros-args -r "__ns:=/${NS#/}" -p "target_frame:=$FRAME" &
+  SCAN_PID=$!; PIDS+=("$SCAN_PID")
+  RVIZ_ARGS=(-d "$RVIZ_CONFIG")
+  [[ -z $FRAME ]] || RVIZ_ARGS+=(-f "$FRAME")
+  rviz2 "${RVIZ_ARGS[@]}" --ros-args -r "__ns:=/${NS#/}" & PIDS+=($!)
 else
   echo "[rviz-over-ssh] --no-rviz: run rviz2 in a shell with ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
-  wait
 fi
+# A closed RViz, a fatal adapter error or a stopped supervisor ends this session.
+wait -n "${PIDS[@]}"
