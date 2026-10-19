@@ -84,6 +84,18 @@ These refs are distinct and must not be substituted for one another:
 | MiniPC R3 debug overlay | `$HOME/.cache/armtc/r3_runtime_review_20261017/install` | A separate overlay was running bridge and guard processes on loopback ports 8765/8766. Its installed guard matched R3 `483fcb8`. The later `c4abcf3` delta changed the discovery-stage/runtime helper scripts and tests, not the installed bridge/guard package; use those scripts from the `c4abcf3` checkout. Source changes do not update an installed overlay automatically. |
 | Laptop viewer | `~/.local/bin/amr-rviz` resolves to `~/.local/share/amr-rviz/r3/amr-rviz`; VERSION reports `483fcb8` | The wrapper dispatches bare `amr-rviz` to `~/.local/bin/amr-rviz.legacy`. `--r3` sources Humble and the robot-description workspace, then uses the SSH adapter in domain 42 with `ROS_LOCALHOST_ONLY=1` and no Discovery Server. |
 
+**Integration update, 2026-10-19:** the three local commits were
+cherry-picked onto `main` (`f8ce53d`) in branch `feature/claude/r3-hardening` with `-x`
+(`fc33c40`→`0b09c23`, `483fcb8`→`73887f3`, `c4abcf3`→`35c2da6`). The
+non-documentation tree of that branch is byte-identical to `c4abcf3`, so the
+scripts reviewed in the readiness report are unchanged. Commands that name
+`$HOME/sct-dds-r3` remain valid while that worktree stays at `c4abcf3`. After
+the PR merges, use the scripts from a checkout of GitHub `main`. Installed
+overlays and the laptop wrapper are not changed by this integration. The table
+above is still the 2026-10-17 snapshot. At a 2026-10-19 read-only check after a
+MiniPC reboot, no Nav2 or R3 debug process was running, and the Discovery
+Server was still the original unit without a drop-in.
+
 ### MiniPC DDS state
 
 The read-only inventory at 16:27 +07 recorded domain 30, `rmw_fastrtps_cpp`,
@@ -154,5 +166,5 @@ machine state before acting.
 4. At a known mapped location, separately test an Initial Pose through AMCL
    and confirm `map→odom` and scan/map alignment. Only then plan any permitted
    movement acceptance.
-5. Merge the post-`main` R3 code through its own reviewed PR when ready. This
-   documentation PR intentionally does not include code or runtime changes.
+5. Merge the post-`main` R3 code through its own reviewed PR (branch
+   `feature/claude/r3-hardening`) before relying on GitHub `main` for the stage scripts.

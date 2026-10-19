@@ -9,7 +9,9 @@ Source `c4abcf3` used for the reviewed stage scripts was present in the local
 MiniPC checkout at the time, but was not on GitHub `main` or a published
 branch. A future operator must verify that exact commit is available before
 using these commands; the dirty runtime checkout at `1cc5b33` is not a
-substitute.
+substitute. On 2026-10-19 the same tree was integrated as branch
+`feature/claude/r3-hardening` (commit `35c2da6`, non-documentation files identical to
+`c4abcf3`).
 
 Kết luận này thay thế đề xuất trước đó yêu cầu AMCL chấp nhận Initial Pose
 trước S1–S3. Initial Pose hợp lệ là bài nghiệm thu localization sau này,

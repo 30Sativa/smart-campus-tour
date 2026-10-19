@@ -288,9 +288,9 @@ không bật `clientPublish`. Contract test chặn cả hai.
 - Thứ tự dừng như mọi khi: công cụ đo → bag → Nav2 (SIGINT).
 
 **Cài code lên robot (không đụng Nav2 Baseline V1).** The exact safeguard
-behavior described here is in the local R3 branch at `c4abcf3`; GitHub `main`
-at the evidence snapshot has only the initial R3 code from PR #59. The
-documentation PR does not add or deploy those later code commits.
+behavior described here is the R3 code at `c4abcf3`, integrated onto `main`
+as branch `feature/claude/r3-hardening` (same non-documentation tree). Merging that branch
+does not deploy anything to the robot.
 - Robot chạy từ install cũ cộng overlay V1 (`~/.cache/armtc/smoothws`).
 - Build overlay `robot_navigation` của R3 vào một thư mục **mới**, chồng lên
   `smoothws`, và **chỉ source nó trong terminal debug**. Terminal Nav2 vẫn dùng

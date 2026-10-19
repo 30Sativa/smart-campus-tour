@@ -150,8 +150,9 @@ through SSH-forwarded loopback ports. On the current laptop, run
 `amr-rviz --r3` to opt in. Bare `amr-rviz` still uses the legacy direct-DDS
 script for rollback and pre-isolation use; do not change that default until
 the R3 gates have been accepted. The wrapper is present on the current laptop
-but comes from the post-`main` R3 branch at this snapshot, so a fresh checkout
-of GitHub `main` does not yet install that command.
+but comes from the post-`main` R3 commits (integration branch
+`feature/claude/r3-hardening`). Until that branch merges, a fresh checkout of GitHub `main` does
+not contain the wrapper.
 
 After S2, direct-DDS laptop inspection and the old `remote_rviz` relay will no
 longer work; use the SSH viewer or SSH into the robot for CLI inspection. The
