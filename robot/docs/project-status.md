@@ -1,5 +1,13 @@
 # Robot architecture and handoff status
 
+> **Latest update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
+> (checker ISOLATED). R3 was exercised while the robot drove A→B→A (S5a): Wi-Fi
+> roaming no longer disturbs the robot. Open issues: CPU saturation while the
+> Quest stream runs (Nav2 FollowPath ACK timeouts and recoveries); an IMU outage
+> that was silent (fixed in PR #63, **not yet flashed**); and close-range person
+> avoidance. Read [robot-status-2026-10-19.md](robot-status-2026-10-19.md) first.
+> The tables below are the 2026-10-17 snapshot unless marked otherwise.
+
 **Evidence snapshot: 2026-10-17, UTC+07.** This page is the entry point for
 new contributors and AI agents. It records what is in source, what was tested,
 and what is actually running. It does not grant permission to operate the
@@ -68,7 +76,10 @@ separate deployment change and remain unapplied in this snapshot.
 | R3 S0b viewer and bridge | R3 base implementation is in GitHub `main` through merged PR #59. The local R3 branch adds later viewer, adapter and runtime-safeguard commits. Focused R3 suite: **TESTED OFFLINE**, 162 passed on the later local branch snapshot. | **TESTED ON HARDWARE** for remote RViz map, LiDAR, TF and RobotModel, plus the stationary S0b review. **DEPLOYED** as a separate MiniPC debug overlay and laptop opt-in viewer. Do not infer real Wi-Fi roaming from namespace reconnect tests. |
 | Laptop `amr-rviz` | The installed wrapper corresponds to R3 commit `483fcb8`; that wrapper is not present on GitHub `main` at this snapshot. | **DEPLOYED** on the current laptop. Bare `amr-rviz` still dispatches to the saved legacy direct-DDS script; `amr-rviz --r3` opts into SSH. The R3 process was running at the laptop snapshot. |
 | Initial Pose accepted by AMCL | Guard and protocol are **IMPLEMENTED**; guard behavior has **TESTED OFFLINE** coverage. | **NOT TESTED ON HARDWARE** as a valid AMCL localization. The robot's exact location on `map2` is unknown. Defer this check until it is at a known mapped position; it is not a prerequisite for stationary S1–S3. |
-| DDS isolation S1–S3 | Staging scripts/profile and checks are **IMPLEMENTED**. The later R3 branch has **TESTED OFFLINE** results, including mocked systemd/socket checks and network-namespace cases. | **READY FOR HARDWARE TEST** while the robot is stationary, subject to the maintenance, process-stop, sudo, backup and per-stage checks in the readiness report. **NOT DEPLOYED**: the original Discovery Server, `.env`, network and SSH configuration were unchanged. No real systemd stage switch was exercised. |
+| **DDS isolation S1–S3 (updated 2026-10-19)** | Stage scripts and the profile are in `main` (PR #62). | **DEPLOYED at S3** on 2026-10-19: loopback-only server, `ROS_LOCALHOST_ONLY=1`, checker ISOLATED (exit 0), laptop negative probes 0/5, R3 viewer LIVE. One S2 start failed discovery (cause unknown; see the dated report). Run the health gate after every start. |
+| DDS isolation S1–S3 (2026-10-17 snapshot) | Staging scripts/profile and checks are **IMPLEMENTED**. The later R3 branch has **TESTED OFFLINE** results, including mocked systemd/socket checks and network-namespace cases. | **READY FOR HARDWARE TEST** while the robot is stationary, subject to the maintenance, process-stop, sudo, backup and per-stage checks in the readiness report. **NOT DEPLOYED**: the original Discovery Server, `.env`, network and SSH configuration were unchanged. No real systemd stage switch was exercised. |
+| **R3 while moving (S5a, 2026-10-19)** | — | **TESTED ON HARDWARE**, 1 run: 2 AP roams and 2.1 s laptop RTT with 0 robot `/scan` gaps > 0.3 s. Navigation degraded by CPU saturation (Quest stream), not by DDS. IMU was silent during this run. |
+| **IMU recovery (PR #63)** | **IMPLEMENTED** + **TESTED OFFLINE** (host tests, ARM build, bridge integration). | **NOT DEPLOYED**: firmware not flashed yet. |
 | Movement acceptance (A→B→A, S5 roaming) | Procedure is documented. | **NOT TESTED** in the current R3 stationary review. It requires a separate authorized movement session; it is not a gate before stationary DDS isolation. |
 
 ## Git, runtime and overlay provenance
@@ -153,6 +164,12 @@ results without copying runtime environment files or credentials. Re-verify
 machine state before acting.
 
 ## Next steps
+
+As of 2026-10-19 the order is in
+[robot-status-2026-10-19.md §5](robot-status-2026-10-19.md#5-việc-tiếp-theo-đề-xuất-theo-thứ-tự):
+flash and accept PR #63, run a CPU A/B with the Quest stream, re-run S5a, fix
+the guard stamp tolerance, then add a person-safety layer. The list below is
+the 2026-10-17 plan; items 1–3 and 5 are done.
 
 1. Keep Nav2 Baseline V1 and the legacy `amr-rviz` default unchanged until the
    R3 transition and viewer gates are accepted.
