@@ -24,6 +24,7 @@ from .content import ContentPack
 from .models import AnswerRequest
 from .providers.fake import ContentEchoProvider
 from .providers.gemini import GeminiProvider
+from .providers.openai_compat import OpenAICompatProvider
 from .resilience import CircuitBreaker, ConcurrencyLimit
 from .service import AnswerService, AssistantTimeout, AssistantUnavailable, Budget
 
@@ -41,6 +42,8 @@ def build_service(settings: Settings) -> AnswerService:
             settings.gemini_base_url,
             thinking_level=settings.gemini_thinking_level,
         )
+    elif settings.provider == "openai_compat":
+        provider = OpenAICompatProvider(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
     else:
         provider = ContentEchoProvider()
     return AnswerService(

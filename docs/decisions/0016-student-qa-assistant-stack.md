@@ -79,3 +79,25 @@ implementation could not install packages from PyPI, while these choices let
 the full test suite run there. Requests and responses still use pydantic and
 the §7.1 contract is unchanged. Switching to FastAPI later only affects
 `src/campus_assistant/api.py`.
+
+## Addendum: OpenAI-compatible gateway adapter (2026-10-19)
+
+The team's available key is for a third-party gateway that serves Gemini
+models through the OpenAI chat-completions format, not a Google AI Studio key.
+`AI_PROVIDER=openai_compat` adds a second adapter
+(`providers/openai_compat.py`, configured by `OPENAI_BASE_URL`,
+`OPENAI_API_KEY`, `OPENAI_MODEL`) behind the same provider interface. Still
+one provider per deployment and no fallback; the `/v1/answer` contract is
+unchanged and `gemini` stays the default.
+
+Consequences: student questions and approved content pass through the gateway
+operator as well as the model provider, so the data and terms concerns above
+apply to that operator too. Gateway availability is outside the team's
+control; a Google AI Studio key is the fallback, switched by configuration
+only. The adapter does not request structured output; it relies on the system
+prompt and strips a Markdown fence, so a live evaluation run is needed before
+relying on it. First live run (2026-10-19, `ag/gemini-3.8-flash-low`, same
+content version and question set as the recorded Gemini baseline): 64/64
+gradable questions passed (baseline 63/64), no regressions. Grading is by
+keywords; reports stay untracked and `evals/recorded/latest.json` remains the
+Gemini baseline.

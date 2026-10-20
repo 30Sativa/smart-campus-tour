@@ -348,6 +348,24 @@ html.dark .rep-attention-icon { color: #3a0d09; }
 .rep-reg-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; color: var(--rep-ink-3); font-size: 12.5px; }
 .rep-reg-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 @media (max-width: 900px) { .rep-reg { grid-template-columns: 1fr; } .rep-reg-side { flex-direction: row; align-items: center; justify-content: space-between; } }
+.rep-reg-fix { margin-top: 10px; color: var(--rep-bad); font-size: 13px; line-height: 1.45; }
+.rep-chip-count { margin-left: 8px; border-radius: 999px; padding: 1px 8px; background: var(--rep-surface); color: var(--rep-ink-2); font-size: 12px; font-weight: 800; }
+.rep-chips button[aria-pressed="true"] .rep-chip-count { background: var(--rep-accent); color: var(--rep-accent-ink); }
+.rep-reg-section + .rep-reg-section { margin-top: 34px; }
+.rep-reg-section-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.rep-reg-section-head h2 { font-size: 1.1rem; font-weight: 750; letter-spacing: -.02em; }
+.rep-reg-section-head span { color: var(--rep-ink-3); font-size: 13px; }
+
+/* An ended registration: no route, no action, only why it ended. */
+.rep-closed { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 24px; border: 1px solid var(--rep-line); border-radius: 20px; padding: 18px 22px; background: var(--rep-surface); animation: rep-fade .7s var(--rep-ease) both; }
+.rep-closed-main { flex: 1 1 280px; min-width: 0; }
+.rep-closed-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.rep-closed h3 { color: var(--rep-ink-2); font-size: 1rem; font-weight: 700; letter-spacing: -.02em; }
+.rep-closed h3 a:hover { color: var(--rep-green); }
+.rep-closed-why { flex: 1.2 1 320px; min-width: 0; border: 1px dashed var(--rep-line-2); border-radius: 14px; padding: 12px 14px; background: var(--rep-bg); }
+.rep-closed-by { color: var(--rep-ink-3); font-size: 11.5px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.rep-closed-reason { margin-top: 4px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.rep-closed-at { margin-top: 6px; color: var(--rep-ink-3); font-size: 12px; }
 
 .rep-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); color: var(--rep-ink-3); font-size: 11.5px; font-weight: 650; }
 .rep-track-line { position: absolute; top: 9px; left: 12.5%; width: 75%; height: 6px; overflow: visible; }

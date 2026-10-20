@@ -25,6 +25,9 @@ class Settings:
     gemini_model: str = ""
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     gemini_thinking_level: str = "low"
+    openai_api_key: str = field(default="", repr=False)
+    openai_model: str = ""
+    openai_base_url: str = ""
     host: str = "127.0.0.1"
     port: int = 8090
     content_dir: Path = PACKAGE_ROOT / "content"
@@ -42,10 +45,13 @@ class Settings:
     def validate(self) -> Settings:
         if len(self.service_key) < 16:
             raise ConfigError("AI_SERVICE_KEY must be set (at least 16 characters)")
-        if self.provider not in ("gemini", "fake"):
-            raise ConfigError("AI_PROVIDER must be 'gemini' or 'fake'")
+        if self.provider not in ("gemini", "openai_compat", "fake"):
+            raise ConfigError("AI_PROVIDER must be 'gemini', 'openai_compat' or 'fake'")
         if self.provider == "gemini" and (not self.gemini_api_key or not self.gemini_model):
             raise ConfigError("GEMINI_API_KEY and GEMINI_MODEL are required when AI_PROVIDER=gemini")
+        openai_ready = self.openai_api_key and self.openai_model and self.openai_base_url
+        if self.provider == "openai_compat" and not openai_ready:
+            raise ConfigError("OPENAI_API_KEY, OPENAI_MODEL and OPENAI_BASE_URL are required for openai_compat")
         if not self.content_dir.is_dir():
             raise ConfigError(f"AI_CONTENT_DIR does not exist: {self.content_dir}")
         if not 0 < self.llm_attempt_timeout_s <= self.request_budget_s:
@@ -75,6 +81,9 @@ class Settings:
             gemini_model=e.get("GEMINI_MODEL", "").strip(),
             gemini_base_url=e.get("GEMINI_BASE_URL", "").strip() or cls.gemini_base_url,
             gemini_thinking_level=e.get("GEMINI_THINKING_LEVEL", cls.gemini_thinking_level).strip(),
+            openai_api_key=e.get("OPENAI_API_KEY", "").strip(),
+            openai_model=e.get("OPENAI_MODEL", "").strip(),
+            openai_base_url=e.get("OPENAI_BASE_URL", "").strip(),
             host=e.get("AI_HOST", "").strip() or cls.host,
             port=num("AI_PORT", cls.port, int),
             content_dir=Path(content) if content else PACKAGE_ROOT / "content",
