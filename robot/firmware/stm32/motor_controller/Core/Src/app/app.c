@@ -107,6 +107,10 @@ void App_Loop(void)
 			(void)e;
 #endif
 		}
+
+		/* Chip im lang (tu reset, bus bi giu) -> gui lai Set Feature, co
+		 * gioi han tan suat. Khong reset chip, khong cho doi. */
+		BNO08x_Service();
 	}
 }
 

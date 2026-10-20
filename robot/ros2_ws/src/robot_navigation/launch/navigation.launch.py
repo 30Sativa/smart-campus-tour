@@ -82,6 +82,8 @@ def generate_launch_description():
     map_yaml = LaunchConfiguration('map')
     localization_params_file = LaunchConfiguration('localization_params_file')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
+    ekf_params_file = LaunchConfiguration('ekf_params_file')
+    lidar_yaw = LaunchConfiguration('lidar_yaw')
     enable_camera = LaunchConfiguration('enable_camera')
     rviz = LaunchConfiguration('rviz')
 
@@ -119,6 +121,11 @@ def generate_launch_description():
         FindPackageShare('robot_control'),
         'config',
         'nav2_params.yaml',
+    ])
+    default_ekf_params = PathJoinSubstitution([
+        FindPackageShare('robot_control'),
+        'config',
+        'ekf.yaml',
     ])
     scan_filter_params = PathJoinSubstitution([
         FindPackageShare('robot_control'),
@@ -163,6 +170,13 @@ def generate_launch_description():
         DeclareLaunchArgument('nav2_params_file',
                               default_value=default_nav2_params,
                               description='Nav2 parameter file.'),
+        DeclareLaunchArgument('lidar_yaw', default_value='-0.2225',
+                              description='LiDAR yaw calibration (rad) passed to '
+                                          'manual_mode.launch.py; 0.0 = nominal mount.'),
+        DeclareLaunchArgument('ekf_params_file',
+                              default_value=default_ekf_params,
+                              description='EKF parameter file passed to '
+                                          'manual_mode.launch.py.'),
         DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
                                           'local costmap. Enable only after the '
@@ -212,6 +226,8 @@ def generate_launch_description():
                 'initial_mode': 'explore',
                 'use_sim_time': use_sim_time,
                 'enable_teleop': enable_teleop,
+                'ekf_params_file': ekf_params_file,
+                'lidar_yaw': lidar_yaw,
             }.items(),
         ),
 

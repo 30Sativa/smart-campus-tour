@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fast DDS Discovery Server 0 of the robot, reachable from the robot only.
+  Used by fastdds-discovery.service from step S3 of robot/docs/dds-isolation.md:
+
+    fastdds discovery -x /etc/fastdds/discovery_server_loopback.xml
+
+  `fastdds discovery -l 127.0.0.1` alone only changes the announced address: it
+  still binds 0.0.0.0:11811 and 0.0.0.0:7411, so other machines can still run
+  discovery against it (measured 2026-10-17). The UDP interface whitelist below
+  is what binds every socket to 127.0.0.1.
+
+  Precondition: every robot node runs with ROS_LOCALHOST_ONLY=1 (step S2). A
+  node announcing only LAN addresses cannot be reached by this server and will
+  not discover anything (fails closed).
+  Locked by robot/scripts/tests/test_discovery_server_profile.py.
+-->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>udp_loopback</transport_id>
+        <type>UDPv4</type>
+        <interfaceWhiteList>
+          <address>127.0.0.1</address>
+        </interfaceWhiteList>
+      </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="robot_discovery_server" is_default_profile="true">
+      <rtps>
+        <!-- Server id 0: the prefix clients derive from ROS_DISCOVERY_SERVER position 0. -->
+        <prefix>44.53.00.5f.45.50.52.4f.53.49.4d.41</prefix>
+        <userTransports>
+          <transport_id>udp_loopback</transport_id>
+        </userTransports>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        <builtin>
+          <discovery_config>
+            <discoveryProtocol>SERVER</discoveryProtocol>
+          </discovery_config>
+          <metatrafficUnicastLocatorList>
+            <locator>
+              <udpv4>
+                <address>127.0.0.1</address>
+                <port>11811</port>
+              </udpv4>
+            </locator>
+          </metatrafficUnicastLocatorList>
+        </builtin>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>

@@ -44,6 +44,14 @@ void Motor_Stop(uint8_t motor_id);
 void Motor_StopAll(void);
 void Motor_Update(void);
 void Motor_HandleTimerInterrupt(void);
+
+/* Re-arm the ISR backstop watchdog; call on every accepted motion command.
+ * Must stay longer than CMD_TIMEOUT_MS so the main-loop timeout (which also
+ * reports TIMEOUT in FB) normally fires first. */
+#ifndef MOTOR_ISR_WATCHDOG_MS
+#define MOTOR_ISR_WATCHDOG_MS 500U
+#endif
+void Motor_FeedWatchdog(void);
 int32_t Motor_GetLeftCount(void);
 int32_t Motor_GetRightCount(void);
 float Motor_GetWheelSpeedMMPS(uint8_t motor_id);

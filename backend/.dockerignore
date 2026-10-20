@@ -1,0 +1,19 @@
+# Only the four runtime projects belong in the build context.
+**
+!src/
+!src/**
+!Dockerfile
+!Dockerfile.preview
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.pdb
+**/*.env
+**/.env*
+**/appsettings.Development.json
+**/appsettings.*.local.json
+**/*.pfx
+**/*.pem
+**/*.key
+**/secrets.json

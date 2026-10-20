@@ -54,7 +54,7 @@ it('recovers a cookie session without an access code, account JWT or account ref
     expect(url).toMatch(/\/(session|view)$/)
     expect(options.credentials).toBe('include')
     expect(options.body).toBeUndefined()
-    expect((options.headers as Record<string, string>).Authorization).toBeUndefined()
+    expect(new Headers(options.headers).get('Authorization')).toBeNull()
     expect(options.method).toBe(url.endsWith('/session') ? 'POST' : undefined)
   }
   expect(useAuthStore.getState().accessToken).toBe('account-token')
@@ -227,7 +227,7 @@ it('says the Tour is running when the robot has not reported progress yet', asyn
   mount()
   expect(await screen.findByRole('heading', { name: 'Buổi tham quan đang diễn ra', level: 2 })).toBeVisible()
   fireEvent.click(screen.getByRole('tab', { name: /Lộ trình/ }))
-  expect(screen.getAllByText('AI Lab').length).toBeGreaterThan(0)
+  expect((await screen.findAllByText('AI Lab')).length).toBeGreaterThan(0)
 })
 
 it.each([['CANCELLED', 'Buổi tham quan đã kết thúc sớm'], ['COMPLETED', 'Hoàn thành chuyến tham quan!']])(

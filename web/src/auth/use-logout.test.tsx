@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../stores/auth-store'
@@ -21,6 +21,18 @@ afterEach(() => {
 })
 
 describe('useLogout', () => {
+  it('does not clear a newer login when an older logout finishes', async () => {
+    useAuthStore.getState().setAuth('old-token', { userId: 'old-user', username: 'old', role: 'Staff' })
+    let finish!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+    render(<MemoryRouter initialEntries={['/staff']}><LogoutHarness /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    useAuthStore.getState().setAuth('new-login', { userId: 'new-user', username: 'new', role: 'Staff' })
+    await act(async () => { finish(new Response(null, { status: 204 })) })
+    await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('new-login'))
+    expect(screen.getByLabelText('Location')).toHaveTextContent('/staff')
+  })
+
   it('revokes the cookie session before clearing local auth and navigating', async () => {
     useAuthStore.getState().setAuth('token', { userId: 'user-1', username: 'staff', role: 'Staff' })
     let finish!: (response: Response) => void

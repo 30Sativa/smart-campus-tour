@@ -39,7 +39,7 @@ beforeEach(() => {
   clients = []; requests = []; decisions = []; corrections = []; registration = structuredClone(initial); failure = null
   useAuthStore.getState().setAuth('admin-token', { userId: 'sql-admin', username: 'admin', role: 'Admin' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
-    expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer admin-token')
+    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer admin-token')
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/registrations/registration/invitations')
       return response({ enabled: false, canIssue: false, items: [] })

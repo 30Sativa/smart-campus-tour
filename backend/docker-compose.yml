@@ -1,0 +1,140 @@
+name: ${COMPOSE_PROJECT_NAME:-campustour}
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-api: &api
+  image: ${BACKEND_IMAGE:-campustour-backend:local}
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - ${API_ENV_FILE:-./deploy/api.env}
+  environment:
+    ASPNETCORE_ENVIRONMENT: Production
+    ASPNETCORE_HTTP_PORTS: ""
+    ASPNETCORE_URLS: https://+:8443
+    ASPNETCORE_Kestrel__Certificates__Default__Path: /run/tls/fullchain.pem
+    ASPNETCORE_Kestrel__Certificates__Default__KeyPath: /run/tls/privkey.pem
+    AllowedHosts: "${API_HOST:?Set API_HOST in backend/.env};localhost"
+    ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=SmartCampusTourV11;User ID=smartcampus_api;Password=${SQL_APP_PASSWORD:?Set SQL_APP_PASSWORD in backend/.env};Encrypt=True;TrustServerCertificate=True;Connect Timeout=15"
+    Authentication__Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in backend/.env}
+    Cors__AllowedOrigins__0: ${WEB_ORIGIN:?Set WEB_ORIGIN in backend/.env}
+    SimulationPreview__Enabled: "false"
+  volumes:
+    - type: bind
+      source: ${TLS_CERT_PATH:?Set TLS_CERT_PATH in backend/.env}
+      target: /run/tls/fullchain.pem
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${TLS_KEY_PATH:?Set TLS_KEY_PATH in backend/.env}
+      target: /run/tls/privkey.pem
+      read_only: true
+      bind:
+        create_host_path: false
+  networks: [database, outbound]
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  mem_limit: 1g
+  cpus: 1.0
+  init: true
+  logging: *logging
+  depends_on:
+    sqlserver:
+      condition: service_healthy
+    db-init:
+      condition: service_completed_successfully
+
+services:
+  sqlserver:
+    image: ${SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04}
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: ${MSSQL_PID:-Express}
+      MSSQL_SA_PASSWORD: ${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in backend/.env}
+      MSSQL_MEMORY_LIMIT_MB: "3072"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks: [database]
+    # Database traffic stays inside Docker. No host/public port 1433.
+    healthcheck:
+      test: [CMD-SHELL, 'SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SELECT 1" -o /dev/null']
+      interval: 10s
+      timeout: 6s
+      start_period: 60s
+      retries: 12
+    mem_limit: 4g
+    cpus: 1.5
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+  db-init:
+    image: ${SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04}
+    platform: linux/amd64
+    entrypoint: [/bin/bash, /deployment/init-db.sh]
+    environment:
+      SQLCMDPASSWORD: ${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in backend/.env}
+      SQL_APP_PASSWORD: ${SQL_APP_PASSWORD:?Set SQL_APP_PASSWORD in backend/.env}
+    volumes:
+      - ./deploy/init-db.sh:/deployment/init-db.sh:ro
+      - ./database:/database:ro
+    networks: [database]
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    restart: "no"
+    logging: *logging
+
+  api:
+    <<: *api
+    ports:
+      - "${API_BIND_IP:-0.0.0.0}:${API_HTTPS_PORT:-443}:8443"
+    # This checks HTTP hosting/auth middleware, not database readiness.
+    # No refresh cookie is supplied, so the existing route must return 401.
+    healthcheck:
+      test: [CMD-SHELL, 'test "$$(curl --silent --show-error --insecure --max-time 5 --output /dev/null --write-out "%{http_code}" --request POST https://localhost:8443/api/auth/refresh)" = 401']
+      interval: 30s
+      timeout: 6s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+
+  seed-admin:
+    <<: *api
+    profiles: [tools]
+    command: [--seed-initial-admin]
+    # Supplied only when this one-shot service is explicitly run.
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=SmartCampusTourV11;User ID=smartcampus_api;Password=${SQL_APP_PASSWORD:?Set SQL_APP_PASSWORD in backend/.env};Encrypt=True;TrustServerCertificate=True;Connect Timeout=15"
+      InitialAdminSeed__Username: ${INITIAL_ADMIN_USERNAME:-}
+      InitialAdminSeed__Password: ${INITIAL_ADMIN_PASSWORD:-}
+      InitialAdminSeed__FullName: ${INITIAL_ADMIN_FULL_NAME:-}
+    healthcheck:
+      disable: true
+    restart: "no"
+
+volumes:
+  sqlserver-data:
+
+networks:
+  database:
+    internal: true
+  outbound:

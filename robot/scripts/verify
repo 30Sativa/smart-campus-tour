@@ -132,6 +132,13 @@ else
   if python3 -B docker/test_image_profiles.py; then ok; else fail; fi
 fi
 
+section "Tier 1.7 - Remote-debug tools and robot scripts (pytest)"
+if ! python3 -c 'import pytest, yaml' >/dev/null 2>&1; then
+  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + script tests"
+else
+  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh scripts/tests; then ok; else fail; fi
+fi
+
 # ---------------------------------------------------------------- TIER 2
 
 section "Tier 2 - colcon build + test"

@@ -15,7 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PROTOCOL_TX_BUFFER_SIZE 224U
+_Static_assert(MOTOR_ISR_WATCHDOG_MS > CMD_TIMEOUT_MS,
+               "ISR watchdog is a backstop: it must outlast the main-loop CMD timeout");
+
+#define PROTOCOL_TX_BUFFER_SIZE 256U  /* DIAG worst case ~236 B; truncation would drop "\r\n" */
 #define PROTOCOL_TX_BUFFER_COUNT 2U
 
 typedef enum
@@ -84,6 +87,10 @@ void Protocol_Update(void)
 	now = HAL_GetTick();
 	Protocol_CheckTimeout(now);
 
+	/* An ERR line only takes this iteration's USB slot when it was actually
+	 * queued. While it waits (rate limit or CDC busy) FB keeps flowing:
+	 * blocking FB here turned a burst of dropped lines into seconds without
+	 * odometry, and the host then entered its feedback-timeout safe stop. */
 	if (Protocol_TrySendPendingError() != 0U)
 	{
 		return;
@@ -169,6 +176,7 @@ void Protocol_ProcessLine(char *line)
 		last_seq = seq;
 		last_valid_rx_ms = HAL_GetTick();
 		protocol_status = PROTOCOL_STATUS_OK;
+		Motor_FeedWatchdog();
 		Motor_SetWheelSpeedMMPS(MOTOR_LEFT, left_mm_s);
 		Motor_SetWheelSpeedMMPS(MOTOR_RIGHT, right_mm_s);
 		return;
@@ -330,7 +338,7 @@ void Protocol_ProcessLine(char *line)
 		for (uint32_t retry = 0U; retry < 100U; retry++)
 		{
 			if (Protocol_TrySendFormatted(
-					"DIAG,%lu,%s,%s,%u.%u,%s,SDA=%u,SCL=%u,EXTPU=%u%u,SCAN=%s,PKT=%u/ch%u,RATE=%lu,CLK=%lu,SYS=%luMHz,ACC=%u,WARN=%lu,REC=%lu,DWT=%u\r\n",
+					"DIAG,%lu,%s,%s,%u.%u,%s,SDA=%u,SCL=%u,EXTPU=%u%u,SCAN=%s,PKT=%u/ch%u,RATE=%lu,CLK=%lu,SYS=%luMHz,ACC=%u,WARN=%lu,REC=%lu,DWT=%u,REARM=%lu,RST=%lu\r\n",
 					(unsigned long)seq,
 					(ack != 0U) ? "ACK" : "NOACK",
 					(selftest != 0U) ? "SELFTEST_OK" : "SELFTEST_FAIL",
@@ -345,7 +353,9 @@ void Protocol_ProcessLine(char *line)
 					(unsigned)BNO08x_GetAccuracy(),
 					(unsigned long)BNO08x_GetBusWarnCount(),
 					(unsigned long)BNO08x_GetBusRecoverCount(),
-					(unsigned)BNO08x_IsDwtOk()) != 0U)
+					(unsigned)BNO08x_IsDwtOk(),
+					(unsigned long)BNO08x_GetRearmCount(),
+					(unsigned long)BNO08x_GetResetSeenCount()) != 0U)
 			{
 				break;
 			}
@@ -468,7 +478,7 @@ static uint8_t Protocol_TrySendPendingError(void)
 	now = HAL_GetTick();
 	if ((uint32_t)(now - last_error_attempt_ms) < FEEDBACK_PERIOD_MS)
 	{
-		return 1U;
+		return 0U;
 	}
 
 	last_error_attempt_ms = now;
@@ -478,7 +488,7 @@ static uint8_t Protocol_TrySendPendingError(void)
 		return 1U;
 	}
 
-	return 1U;
+	return 0U;
 }
 
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
@@ -502,8 +512,10 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	 * Format moi (tuong thich nguoc, them yaw va 4 SR04T):
 	 *   FB,<seq>,<left>,<right>,<dt_ms>,<status>,<yaw_cdeg>,<yaw_valid>,
 	 *      <sonar1_mm>,<sonar1_valid>,<sonar2_mm>,<sonar2_valid>,
-	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>
-	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do. */
+	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>,
+ *      <imu_rearm>,<imu_reset_seen>
+	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do.
+ * imu_rearm / imu_reset_seen: bo dem tich luy tu luc boot (BNO08x_Service). */
 	uint8_t yaw_valid = 0U;
 	float   yaw_deg   = BNO08x_GetLastYaw(&yaw_valid);
 	long    yaw_cdeg  = (long)(yaw_deg * 100.0f);
@@ -513,7 +525,7 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	SR04T_GetReading(3U, &sonar4_mm, &sonar4_valid);
 
 	return Protocol_TrySendFormatted(
-		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu\r\n",
 		(unsigned long)last_seq,
 		(long)Motor_GetLeftCount(),
 		(long)Motor_GetRightCount(),
@@ -529,7 +541,9 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 		(unsigned)sonar3_valid,
 		(unsigned)sonar4_mm,
 		(unsigned)sonar4_valid,
-		(unsigned)BNO08x_GetAccuracy());
+		(unsigned)BNO08x_GetAccuracy(),
+		(unsigned long)BNO08x_GetRearmCount(),
+		(unsigned long)BNO08x_GetResetSeenCount());
 }
 
 static uint8_t Protocol_TrySendRaw(const char *text)

@@ -24,6 +24,8 @@ describe('resolveDeviceUrl', () => {
     expect(resolveDeviceUrl('http://10.0.0.5:8080')).toBe('http://10.0.0.5:8080/device')
     expect(resolveDeviceUrl(' http://10.0.0.5:8080/ ')).toBe('http://10.0.0.5:8080/device')
     expect(resolveDeviceUrl('http://10.0.0.5:8080/device')).toBe('http://10.0.0.5:8080/device')
+    expect(resolveDeviceUrl('http://10.0.0.5:8080/device/')).toBe('http://10.0.0.5:8080/device')
+    expect(resolveDeviceUrl('https://nuc.example/quest/?status=1')).toBe('https://nuc.example/quest/device?status=1')
   })
 
   it('rejects empty and non-http values', () => {

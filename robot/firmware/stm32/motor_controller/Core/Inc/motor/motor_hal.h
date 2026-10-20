@@ -37,4 +37,9 @@ void MotorHal_WriteDir(const MotorHalPins *pins, int8_t direction);
 void MotorHal_WriteStepHigh(const MotorHalPins *pins);
 void MotorHal_WriteStepLow(const MotorHalPins *pins);
 
+/* Same writes as MotorHal_WriteStepHigh/Low, as macros for the 50 kHz ISR:
+ * a call into this -O0 translation unit costs more than the store itself. */
+#define MOTOR_HAL_STEP_HIGH(pins) ((pins)->step_port->BSRR = (uint32_t)(pins)->step_pin)
+#define MOTOR_HAL_STEP_LOW(pins)  ((pins)->step_port->BSRR = ((uint32_t)(pins)->step_pin << 16U))
+
 #endif

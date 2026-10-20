@@ -34,9 +34,9 @@
     odom0_relative: false
     odom0_nodelay: true
 
-    # Firmware exposes BNO085 Rotation Vector orientation but no raw gyro or
-    # acceleration. Fuse yaw only. Relative mode makes the first valid yaw the
-    # odom heading reference instead of snapping startup to magnetic north.
+    # Firmware exposes BNO085 Game Rotation Vector orientation (gyro + accel,
+    # no magnetometer) but no raw gyro or acceleration. Fuse yaw only.
+    # Relative mode makes the first valid yaw the odom heading reference.
     imu0: imu/data
     imu0_config: [false, false, false,
                   false, false, true,

@@ -1,0 +1,46 @@
+# foxglove_bridge for remote debugging (debug_bridge.launch.py). READ-ONLY.
+# Security-relevant values are locked by test/test_debug_bridge_contract.py.
+#
+# The bridge has no authentication. It listens on the robot loopback only;
+# laptops reach it through an SSH tunnel (key auth), see
+# robot/docs/dds-isolation.md. Never change address to 0.0.0.0 or a LAN IP:
+# anyone on the campus network could then read the robot's data.
+#
+# Write access is OFF: foxglove_bridge 3.6.0 does not enforce
+# client_topic_whitelist (a test client published /robot_01/cmd_vel through
+# it). Without the clientPublish capability it refuses every client channel.
+# The only remote write, the initial pose, goes to initialpose_guard on its own
+# loopback port instead.
+#
+# Read side: an explicit allowlist (no cmd_vel, no actions, no camera).
+# Every fox2ros downlink must match topic_whitelist.
+foxglove_bridge:
+  ros__parameters:
+    address: 127.0.0.1
+    port: 8765
+    tls: false                      # SSH already encrypts and authenticates
+    # Must not be empty (the bridge aborts); connectionGraph only lists names.
+    capabilities: [connectionGraph]
+    client_topic_whitelist: ['(?!)']  # never-matching; defence in depth only
+    param_whitelist: ['(?!)']
+    service_whitelist: ['(?!)']
+    asset_uri_allowlist: ['(?!)']
+    topic_whitelist:
+      - '^/tf$'
+      - '^/tf_static$'
+      - '^(/[A-Za-z0-9_]+)?/(map|robot_description|scan|amcl_pose|particle_cloud|plan|received_global_plan)$'
+      - '^(/[A-Za-z0-9_]+)?/(local_costmap|global_costmap)/costmap$'
+      - '^(/[A-Za-z0-9_]+)?/local_costmap/published_footprint$'
+      - '^(/[A-Za-z0-9_]+)?/ultrasonic/sonar[1-4]/range$'
+      - '^(/[A-Za-z0-9_]+)?/(robot_mode_state|emergency_stop_state)$'
+    include_hidden: false
+    remote_access: false
+    sysinfo: false
+    publish_client_count: false
+    min_qos_depth: 1
+    max_qos_depth: 10
+    # Per-connection buffer: a stalled link drops data instead of queueing an
+    # ever older backlog. Must exceed the largest message sent (map2 map and
+    # global costmap are ~2.8 MB), or that message is never delivered.
+    send_buffer_limit: 4000000
+    use_sim_time: false

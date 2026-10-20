@@ -55,8 +55,8 @@ export function resolveDeviceUrl(value: string | null | undefined): string | nul
     return null
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-  url.pathname = url.pathname.replace(/\/+$/, '')
-  if (!/\/device$/i.test(url.pathname)) url.pathname += '/device'
+  const path = url.pathname.replace(/\/+$/, '')
+  url.pathname = /\/device$/i.test(path) ? path : `${path}/device`
   return url.toString()
 }
 

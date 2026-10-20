@@ -34,7 +34,7 @@ backend/
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
 │   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Invitations,Pois,
-│   │                               Registrations,RegistrationReview,Representative,Simulation}/
+│   │                               Registrations,RegistrationReview,Representative,Routes,Simulation,Tours}/
 │   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/Invitations/,
 │   │                               Persistence/{Repositories,Seeding}/
 │   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
@@ -45,21 +45,21 @@ backend/
     └── SignalRCompatibilityHarness/
 ```
 
-Current API controllers cover Auth, Admin account management, Admin POI
-management, Representative submission/pre-approval registration, Admin
+Current API controllers cover Auth, Admin account management, Admin POI and Route
+management, Admin Tour preparation/cancellation (ADR-0018), Representative submission/pre-approval registration, Admin
 registration review, owner/Admin invitation support, anonymous Student cookie
 entry/session/leave, and development SimulationPreview. The Representative
 contract and Tour-first transaction are recorded in `docs/architecture.md`
 Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation issuance,
 Resend delivery and minimal Student sessions in Section 3.2.3. Application has matching Auth,
-Accounts, POI, Invitations, Representative and RegistrationReview features, shared Registrations
+Accounts, POI, Routes, Tours, Invitations, Representative and RegistrationReview features, shared Registrations
 invariants, and the in-memory pose publisher used by SimulationPreview.
-Infrastructure has specific Auth, account, POI, Representative read and shared
+Infrastructure has specific Auth, account, POI, Route, Tour, Representative read and shared
 registration mutation/review, invitation and Student-access repositories.
 Invitation cryptography/configuration and the Resend HTTP adapter are in
 Infrastructure; the hosted delivery worker is in Api and dispatches Application
 claim/result commands before/after external HTTP. The temporary robot pose endpoint and read-only fleet
-pose Hub were removed. Production fleet/operations Hubs, tour/dispatch use
+pose Hub were removed. Production fleet/operations Hubs, runtime/dispatch use
 cases, and repositories for those future flows remain unimplemented. An absent
 extension folder on GitHub is not missing setup.
 
@@ -164,7 +164,8 @@ issues an access token, and returns the same refresh token and stored expiry; it
 does not mutate persistence, so it remains a query. The Auth session result
 stays feature-local under `Features/Auth/`.
 
-The Tours example describes future placement, not existing files. Do not create
+The StartTour example describes a future use case; the Tours feature currently
+contains Admin preparation CRUD and pre-Start cancellation. Do not create
 global `Features/Commands/`, `Features/Queries/`, `DTOs/`, `Validators/`,
 `Handlers/`, or `Services/` buckets. A MediatR handler is the default use-case
 orchestrator. Add an Application service near its capability only for meaningful
@@ -181,7 +182,7 @@ Decisions and operating notes are in
 `docs/decisions/0012-v1-1-schema-and-operation-scope.md` and
 `backend/database/README.md`. This did not migrate v1.0 data. Do not manually
 edit generated entities to stand in for a SQL schema change.
-V1 target: fixed seeded dwell, every active STAFF account can operate every Tour,
+V1 target: fixed RouteStop dwell managed by Admin Route CRUD (ADR-0017), every active STAFF account can operate every Tour,
 no per-Tour dwell editor or operator assignment. Production branch use cases,
 Tour readiness/state writers and retention cleanup remain implementation work;
 pre-approval roster mutations already enforce the Tour write window and locks.
@@ -254,7 +255,7 @@ for a shared projector room, one active browser session per invitation,
 revocation/reissue, Admin correction of one email while SCHEDULED, and
 representative branch requests accepted by Staff at a verified POI. Staff Start
 is allowed from the published time only. Admin POI-content editing and summary
-statistics are P1; route geometry remains technically prepared/seeded. Command
+statistics are P1; Admin Route CRUD now owns business itineraries while technical staff verify physical feasibility (ADR-0017). Command
 audit records decision-to-send, sent, and robot-response stages separately.
 These are target behaviors to implement and verify, not invariants in the
 current database.
@@ -301,6 +302,20 @@ version serialize into one success and one stale-version conflict. Do not move
 these commands to an independent save or remove the transaction without
 replacing that invariant.
 
+Admin Route mutations use `IRouteMutationCommand` and
+`RouteMutationTransactionBehavior` around the ordinary UnitOfWork save.
+Infrastructure executes it in a serializable transaction and translates SQL
+deadlock/reference races into 409 conflicts. Lock the Route root with UPDLOCK
+before reading its stops/references. Routes has no RowVersion: compare its
+opaque aggregate revision after taking that lock. Any Tour, variant, history
+or execution reference freezes configuration; READY/RUNNING use additionally
+locks metadata and availability. Unreferenced stop replacement explicitly
+deletes old rows inside that same transaction before inserting new stop IDs
+to avoid unique-order collisions. No repository independently commits. See
+`docs/decisions/0017-admin-route-management.md` and
+`web/docs/route-management.md`; future Tour/variant/import writers must share
+the route/POI locking and revalidation discipline.
+
 The Representative create, replace, resubmit and cancel commands follow the same
 shape as registration mutations: `RegistrationTransactionBehavior` wraps their
 UnitOfWork save in a read-committed SQL transaction, and each handler takes an
@@ -311,6 +326,20 @@ support use the same transaction. Writers of an existing registration acquire
 locks only through `IRegistrationRepository.LockRegistrationAsync`, which owns
 the Tour-first order; create and Tour-only writers lock the Tour first. Do not
 lock a registration or its rows by another path.
+
+Admin Tour create/update/cancel commands use `ITourMutationCommand` and their
+feature-specific read-committed transaction wrapper. Existing Tour writes
+reuse `IRegistrationRepository.LockTourAsync`; selected Route/POI locks use
+the existing Route repository's `FindForTourSelectionAsync`. A transaction-owned
+application lock on (Admin, requestId) and append-only audit receipts make
+committed retries durable. Do not create a parallel Route repository/model.
+Route changes before registration retain the old Route via configuration-only
+TourEvents. Schedule/Route changes after any registration/allowed branch or
+operational use are blocked until the notification/readiness workflow exists.
+Cancel preserves registration decisions, revokes invitations and closes sessions
+in the same transaction; hard DELETE and runtime transitions are absent. Tour
+detail reads share the Tour read-lock snapshot used by registration detail.
+See `backend/docs/admin-tour-management.md` and ADR-0018 for the API and limits.
 
 Student join/session/leave and email claim/result commands also use this
 registration transaction and acquire the Tour lock. Session is a command:
@@ -414,7 +443,7 @@ account in V1; the physical `UserRoles` primary key remains unchanged.
 The backend also implements Admin account and POI management, plus
 Representative Tour reads and owner-scoped registration submission/management.
 User JWT and role authorization for those APIs are present. Authorization for
-future Admin Tour, dispatch, and fleet business APIs, and
+future READY/Staff runtime, dispatch, and fleet business APIs, and
 robot/fleet machine authentication, remain unimplemented. Production fleet and
 operations Hubs remain pending; before
 robot navigation commands are enabled outside the local compatibility spike,
@@ -449,8 +478,9 @@ invalid credentials, authenticated reconnect, and backend restart tests.
   avoid fake tests added only for coverage.
 - From the repo root, run `scripts/verify backend`. It restores, builds
   `backend/SmartCampus.slnx` with warnings as errors, and runs xUnit tests.
-  It does not connect to SQL Server, invoke the scaffold script, or run EF
-  migration checks. Do not report completion while it fails.
+  SQL tests are opt-in through `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` and create
+  disposable databases; without it they report SKIPPED. Verification never
+  invokes scaffolding or EF migrations. Do not report completion while it fails.
 
 Do not introduce by default `IRepository<T>`, `GenericRepository<T>`, another
 `IUnitOfWork` or `TransactionBehavior`, generic CRUD services/base controllers,

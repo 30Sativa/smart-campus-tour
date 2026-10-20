@@ -38,30 +38,42 @@ export type AuthResponse = {
 }
 
 /**
- * Single-flight refresh: concurrent 401s share one refresh call. The shared
+ * Single-flight refresh per session: concurrent 401s share one refresh call. The shared
  * promise is what callers await, so a failed refresh rejects every waiter
  * instead of leaving them pending forever.
  */
-let refreshInFlight: Promise<AuthResponse> | null = null
+let refreshInFlight: { revision: number; promise: Promise<AuthResponse> } | null = null
 
-async function requestRefresh(): Promise<AuthResponse> {
+async function requestRefresh(revision: number): Promise<AuthResponse> {
   // credentials: 'include' sends the HttpOnly refresh cookie.
   const response = await fetch(apiUrl('/api/auth/refresh'), { method: 'POST', credentials: 'include' })
-  if (!response.ok) throw new ApiError(response.status, await response.text().catch(() => ''))
+  if (!response.ok) {
+    // Only a confirmed rejection of this session signs it out. Network/5xx
+    // failures and an old session's rejection must not clear a newer login.
+    if ([401, 403].includes(response.status) && useAuthStore.getState().sessionRevision === revision)
+      useAuthStore.getState().logout()
+    throw new ApiError(response.status, await response.text().catch(() => ''))
+  }
 
   const data = (await response.json()) as AuthResponse
   if (!isAuthResponse(data)) throw new Error('Invalid authentication response')
-  useAuthStore.getState().setAuth(data.accessToken, {
+  const applied = useAuthStore.getState().applyRefresh(data.accessToken, {
     userId: data.userId,
     username: data.username,
     role: data.role,
-  })
+  }, revision)
+  if (!applied) throw new DOMException('Authentication session changed', 'AbortError')
   return data
 }
 
 function refreshSession(): Promise<AuthResponse> {
-  refreshInFlight = refreshInFlight ?? requestRefresh().finally(() => { refreshInFlight = null })
-  return refreshInFlight
+  const revision = useAuthStore.getState().sessionRevision
+  if (refreshInFlight?.revision === revision) return refreshInFlight.promise
+  const promise = requestRefresh(revision).finally(() => {
+    if (refreshInFlight?.promise === promise) refreshInFlight = null
+  })
+  refreshInFlight = { revision, promise }
+  return promise
 }
 
 function isAuthResponse(value: unknown): value is AuthResponse {
@@ -75,33 +87,49 @@ function isAuthResponse(value: unknown): value is AuthResponse {
     && response.username.length > 0
     && ['Admin', 'Staff', 'Representative'].includes(response.role ?? '')
 }
-/** Re-derive the in-memory session from the HttpOnly cookie after a page load. */
+/** Restore the current session from its HttpOnly cookie; stale responses reject with AbortError. */
 export async function restoreAuthSession(): Promise<void> {
   await refreshSession()
 }
 
+/**
+ * Sends JSON and retries one authenticated 401 after a shared cookie refresh.
+ * `auth: false` isolates Student/public requests from account tokens and refresh.
+ * A session switch discards authenticated results with AbortError. Cancelling a
+ * caller's request does not cancel the refresh shared by other callers.
+ */
 export async function apiClient<T>(
   path: string,
   { json, headers, auth = true, ...options }: ApiRequestOptions = {},
 ): Promise<T> {
-  const doRequest = (token?: string | null) =>
-    fetch(apiUrl(path), {
+  const revision = useAuthStore.getState().sessionRevision
+  const ensureCurrentSession = () => {
+    if (auth && useAuthStore.getState().sessionRevision !== revision)
+      throw new DOMException('Authentication session changed', 'AbortError')
+  }
+  const doRequest = (token?: string | null) => {
+    const requestHeaders = new Headers(headers)
+    if (json !== undefined && !requestHeaders.has('Content-Type')) requestHeaders.set('Content-Type', 'application/json')
+    if (token && !requestHeaders.has('Authorization')) requestHeaders.set('Authorization', `Bearer ${token}`)
+    return fetch(apiUrl(path), {
       ...options,
-      headers: {
-        ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...headers,
-      },
+      headers: requestHeaders,
       body: json === undefined ? undefined : JSON.stringify(json),
     })
+  }
 
   let response = await doRequest(auth ? useAuthStore.getState().accessToken : null)
+  ensureCurrentSession()
 
   if (response.status === 401 && auth && !path.startsWith('/api/auth/')) {
-    try {
-      response = await doRequest((await refreshSession()).accessToken)
-    } catch {
-      useAuthStore.getState().logout()
+    let refreshed: AuthResponse | undefined
+    try { refreshed = await refreshSession() } catch { /* Keep the original 401; refresh owns session rejection. */ }
+    if (refreshed) {
+      ensureCurrentSession()
+      options.signal?.throwIfAborted()
+      // Cancellation/offline errors from the retry are request failures, not logout.
+      response = await doRequest(refreshed.accessToken)
+      ensureCurrentSession()
     }
   }
 
@@ -114,6 +142,7 @@ export async function apiClient<T>(
   }
 
   const body = await response.text()
+  ensureCurrentSession()
   return body.trim() ? (JSON.parse(body) as T) : (undefined as T)
 }
 

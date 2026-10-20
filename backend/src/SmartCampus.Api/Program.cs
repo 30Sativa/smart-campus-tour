@@ -55,6 +55,11 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
         client.Timeout = TimeSpan.FromSeconds(20));
     if (builder.Configuration.GetValue<bool?>("Invitations:EmailWorkerEnabled") != false)
         builder.Services.AddHostedService<SmartCampus.Api.Invitations.InvitationEmailWorker>();
+}
+if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
+{
+    // Application handlers are validated during bootstrap too; registering the
+    // optional client does not send requests or enable Student Q&A.
     // Student private Q&A (docs/architecture.md §7.1): opt-in via AiAssistant:BaseUrl, validated at startup.
     builder.Services.AddSingleton(new SmartCampus.Infrastructure.Integrations.Assistant.AiAssistantConfiguration(builder.Configuration));
     builder.Services.AddHttpClient<SmartCampus.Application.Common.Abstractions.Assistant.IAiAssistantClient,

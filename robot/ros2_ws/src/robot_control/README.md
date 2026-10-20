@@ -30,7 +30,7 @@ subscribes only to `/cmd_vel`.
 | `/emergency_stop_state` | `std_msgs/msg/Bool` | Emergency stop state |
 | `/scan` | `sensor_msgs/msg/LaserScan` | RPLiDAR scan |
 | `/wheel/odom` | `nav_msgs/msg/Odometry` | Wheel-only odometry from STM32 STEP counts |
-| `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Rotation Vector orientation |
+| `/imu/data` | `sensor_msgs/msg/Imu` | BNO085 Game Rotation Vector yaw (no magnetometer) |
 | `/odom` | `nav_msgs/msg/Odometry` | EKF output consumed by SLAM/Nav2 |
 | `/ultrasonic/sonar1/range` | `sensor_msgs/msg/Range` | SR04T SONAR1 |
 | `/ultrasonic/sonar2/range` | `sensor_msgs/msg/Range` | SR04T SONAR2 |
@@ -50,6 +50,18 @@ The real launch files run `robot_state_publisher` and `robot_localization`.
 `stm32_bridge` publishes measurements without TF; the EKF is the only publisher
 of `odom -> base_footprint`. SLAM or AMCL publishes `map -> odom`, and the URDF
 publishes fixed robot frames below `base_footprint`.
+
+The EKF reads `config/ekf.yaml` (wheel twist + BNO085 relative yaw) unless
+`ekf_params_file:=...` is passed to `manual_mode.launch.py` or
+`robot_navigation/navigation.launch.py`. `config/ekf_wheel_only.yaml` is a
+heading experiment that drops `imu/data`; it is not the default. Omitting the
+argument rolls back to `ekf.yaml`.
+
+Likewise `config/nav2_params_wide_global_inflation.yaml` is an opt-in Nav2
+experiment (`nav2_params_file:=...` on `navigation.launch.py`): identical to
+`nav2_params.yaml` except the GLOBAL inflation layer (1.50 m / 2.0 instead of
+0.60 m / 3.0), so Smac2D keeps away from corridor walls. The local costmap
+and RPP are unchanged.
 
 The RPLiDAR launch default uses `frame_id=lidar_link` to match the current URDF.
 If your hardware driver is already publishing `laser`, either set

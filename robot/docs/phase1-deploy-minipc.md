@@ -1,5 +1,13 @@
 # Phase 1 → miniPC deploy checklist
 
+> **Historical checklist.** The old `fleet-management-system` clone path and
+> camera-only build steps below predate the native MiniPC deployment. Do not
+> use them to provision or update the current robot. Follow
+> [native-runtime.md](native-runtime.md) and
+> [robot/README.md](../README.md) for current host setup and layered bring-up.
+> The Phase 1 observations and measurements are retained as historical
+> evidence.
+
 Camera đã chứng minh chạy đúng trên VMware (RGB+Depth+PointCloud+TF vào RViz2).
 Việc còn lại là chạy trên miniPC — nơi RGB sẽ đạt tốc độ thật và ổn định.
 Tài liệu này ghi lại chính xác những gì đã học được để miniPC không vấp lại.

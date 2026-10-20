@@ -226,6 +226,8 @@ def test_real_bridge_accepts_straight_and_spin_maxima_without_raising_wheel_cap(
             if isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
             and call.func.id == 'DeclareLaunchArgument'
             for keyword in call.keywords if keyword.arg == 'default_value'
+            # Path defaults (e.g. ekf_params_file) are substitutions.
+            and isinstance(keyword.value, ast.Constant)
         }
         assert float(defaults['max_wheel_speed_mm_s']) == 250.0
         assert float(defaults['speed_scale']) == 1.0
@@ -529,6 +531,21 @@ def test_inflation_settings_stay_at_the_existing_baseline():
     for costmap in (_local_costmap(), _global_costmap()):
         assert costmap['inflation_layer']['inflation_radius'] == 0.60
         assert costmap['inflation_layer']['cost_scaling_factor'] == 3.0
+
+
+def test_wide_global_inflation_experiment_changes_only_global_inflation():
+    """The opt-in experiment file must not drift from the baseline elsewhere."""
+    baseline = _nav2_params()
+    experiment = yaml.safe_load(
+        _read('robot_control/config/nav2_params_wide_global_inflation.yaml'))
+    inflation = (experiment['global_costmap']['global_costmap']
+                 ['ros__parameters']['inflation_layer'])
+    assert inflation['inflation_radius'] == 1.50
+    assert inflation['cost_scaling_factor'] == 2.0
+    inflation.update(_global_costmap()['inflation_layer'])
+    assert experiment == baseline
+    navigation = _read('robot_navigation/launch/navigation.launch.py')
+    assert 'nav2_params_wide_global_inflation' not in navigation
 
 
 def test_costmaps_use_polygon_without_radius_or_extra_padding():

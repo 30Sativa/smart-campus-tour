@@ -51,6 +51,11 @@ shared rules; this file only covers what is specific to `web/`.
     POI catalog at `/admin/pois` is API-backed: it edits content and only edits
     map/pose before route/history use (ADR-0014). P1 audio upload/dwell warning
     remains separate. Screen map: `web/docs/admin-tours.md`.
+    Route CRUD at `/admin/routes`, `/admin/routes/new`, `/admin/routes/:routeId`
+    and `/admin/routes/:routeId/edit` is API/SQL-backed under ADR-0017. Reuse
+    `features/administration/routes/`; its cache/contracts are separate from
+    the retained Tour demo Route service. Referenced itineraries are immutable;
+    copy to create a new route. Availability never certifies physical safety.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
@@ -404,8 +409,8 @@ architecture decisions in the Stack section.
 
 - Use TypeScript for all application source.
 - Avoid `any`. Use explicit types or `unknown` plus narrowing at uncertain
-  boundaries. TypeScript `strict` is **not** enabled in `web/tsconfig.app.json`,
-  so this is enforced by review, not by `npm run typecheck`.
+  boundaries. TypeScript `strict` is explicitly enabled in `web/tsconfig.app.json`
+  and checked by `npm run typecheck`; ESLint also rejects explicit `any`.
 - Use explicit types at important module boundaries: component props, API
   request/response models, shared hooks, and public utilities.
 - Do not duplicate the same DTO/type in multiple feature folders when one

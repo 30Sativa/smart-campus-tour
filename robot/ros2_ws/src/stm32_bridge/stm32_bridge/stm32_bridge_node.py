@@ -2,12 +2,15 @@ import math
 import time
 from typing import Optional, Sequence, Tuple
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, Range
 from tf2_ros import TransformBroadcaster
+
+from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WARN
 
 try:
     import serial
@@ -46,7 +49,18 @@ DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     0.1,
 ]
 
+# Report huong ma firmware dang stream (BNO08X_USE_GAME_ROTATION_VECTOR).
+# game_rotation_vector (0x08, mac dinh): gyro + accel, khong tu ke -> yaw_acc
+#   khong mo ta sai so heading, dung variance co dinh.
+# rotation_vector (0x05, firmware cu): yaw_acc = muc hieu chuan tu ke.
+IMU_ORIENTATION_REPORTS = ('game_rotation_vector', 'rotation_vector')
+DEFAULT_IMU_ORIENTATION_REPORT = 'game_rotation_vector'
+# ~5.7 do 1-sigma. EKF dung yaw IMU tuong doi (imu0_relative); do tren xe
+# that, yaw khong tu ke lech LiDAR 3-4 % moi vong quay va troi < 0.5 do/phut.
+GAME_ROTATION_VECTOR_YAW_VARIANCE = 0.01
+
 # Variance cua yaw theo muc accuracy BNO08x bao ve (truong yaw_acc cua khung FB).
+# Chi dung voi rotation_vector.
 # 0 = tu ke chua hieu chuan: heading van co gia tri nhung co the sai hang chuc do.
 IMU_YAW_VARIANCE_BY_ACCURACY = {
     3: 0.0020,    # ~2.5 do 1-sigma
@@ -56,7 +70,7 @@ IMU_YAW_VARIANCE_BY_ACCURACY = {
 }
 # Firmware cu khong gui yaw_acc: gia dinh trung binh thay vi tin tuyet doi.
 DEFAULT_IMU_YAW_VARIANCE = 0.05
-# Roll/pitch khong duoc do (chi bat Rotation Vector, va xe chay nen phang).
+# Roll/pitch khong duoc do (chi publish yaw, va xe chay nen phang).
 IMU_UNMEASURED_VARIANCE = 99999.0
 
 
@@ -65,6 +79,14 @@ def imu_yaw_variance(yaw_acc: Optional[int]) -> float:
     if yaw_acc is None:
         return DEFAULT_IMU_YAW_VARIANCE
     return IMU_YAW_VARIANCE_BY_ACCURACY.get(yaw_acc, DEFAULT_IMU_YAW_VARIANCE)
+
+
+def imu_orientation_variance(yaw_acc: Optional[int],
+                             orientation_report: str) -> float:
+    """Variance cua yaw cho report huong firmware dang dung."""
+    if orientation_report == 'game_rotation_vector':
+        return GAME_ROTATION_VECTOR_YAW_VARIANCE
+    return imu_yaw_variance(yaw_acc)
 
 
 def yaw_to_quaternion_z(yaw_rad: float) -> Tuple[float, float]:
@@ -128,6 +150,12 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')
+        # FB yaw_valid=0 longer than this -> WARN + /diagnostics WARN (EKF then
+        # runs on wheel odometry only). Does not change what is published.
+        self.declare_parameter('imu_stale_timeout', 1.0)
+        # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
+        self.declare_parameter(
+            'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
         self.declare_parameter(
             'odom_covariance_diagonal',
             DEFAULT_ODOM_COVARIANCE_DIAGONAL,
@@ -185,6 +213,14 @@ class Stm32BridgeNode(Node):
         self.publish_imu = bool(self.get_parameter('publish_imu').value)
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.imu_frame = str(self.get_parameter('imu_frame').value)
+        self.imu_orientation_report = str(
+            self.get_parameter('imu_orientation_report').value)
+        if self.imu_orientation_report not in IMU_ORIENTATION_REPORTS:
+            self.get_logger().error(
+                f'imu_orientation_report={self.imu_orientation_report!r} '
+                f'khong hop le {IMU_ORIENTATION_REPORTS}; dung '
+                f'{DEFAULT_IMU_ORIENTATION_REPORT}.')
+            self.imu_orientation_report = DEFAULT_IMU_ORIENTATION_REPORT
         self.reset_odom_on_start = bool(
             self.get_parameter('reset_odom_on_start').value)
         self.odom_covariance_diagonal = self._read_diagonal_parameter(
@@ -273,6 +309,9 @@ class Stm32BridgeNode(Node):
         self._last_feedback_timeout_warn_time = 0.0
         self._last_invalid_dt_warn_time = 0.0
         self._last_count_jump_warn_time = 0.0
+        self._imu_health = ImuHealth(
+            stale_timeout=float(self.get_parameter('imu_stale_timeout').value),
+            start=self._node_start_mono)
 
         self._odom_pub = None
         self._tf_broadcaster = None
@@ -311,6 +350,7 @@ class Stm32BridgeNode(Node):
             f'publish_odom={self.publish_odom}, publish_tf={self.publish_tf}, '
             f'odom_frame={self.odom_frame}, base_frame={self.base_frame}, '
             f'wheel_odom_topic=wheel/odom, imu_topic={self.imu_topic}, '
+            f'imu_orientation_report={self.imu_orientation_report}, '
             f'publish_sonar={self.publish_sonar}, '
             f'sonar_topics=({self.sonar1_topic},{self.sonar2_topic},'
             f'{self.sonar3_topic},{self.sonar4_topic}), '
@@ -321,6 +361,8 @@ class Stm32BridgeNode(Node):
         self.create_subscription(Twist, 'cmd_vel', self._cmd_vel_callback, 10)
         self._timer = self.create_timer(
             1.0 / self.send_rate_hz, self._timer_callback)
+        self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
 
     def _cmd_vel_callback(self, msg: Twist):
         if not self._is_finite_twist(msg):
@@ -516,6 +558,9 @@ class Stm32BridgeNode(Node):
          sonar1, sonar2, sonar3, sonar4) = parsed
 
         now_mono = time.monotonic()
+        rearm, reset_seen = parse_fb_counters(line)
+        self._log_imu_events(self._imu_health.on_feedback(
+            now_mono, yaw_rad is not None, rearm, reset_seen))
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
@@ -604,7 +649,7 @@ class Stm32BridgeNode(Node):
                      yaw_acc: Optional[int]):
         """Publish sensor_msgs/Imu chi voi orientation yaw.
 
-        Khong co gyro/accel tho (firmware chi bat Rotation Vector) nen dat -1
+        Khong co gyro/accel tho (firmware chi stream report huong) nen dat -1
         vao phan tu dau cua hai covariance con lai -- quy uoc chuan cua ROS de
         bao "khong co du lieu nay", robot_localization se bo qua chung.
         """
@@ -630,7 +675,8 @@ class Stm32BridgeNode(Node):
         msg.orientation_covariance = [
             IMU_UNMEASURED_VARIANCE, 0.0, 0.0,
             0.0, IMU_UNMEASURED_VARIANCE, 0.0,
-            0.0, 0.0, imu_yaw_variance(yaw_acc),
+            0.0, 0.0, imu_orientation_variance(
+                yaw_acc, self.imu_orientation_report),
         ]
         msg.angular_velocity_covariance[0] = -1.0
         msg.linear_acceleration_covariance[0] = -1.0
@@ -834,6 +880,33 @@ class Stm32BridgeNode(Node):
             range_msg.range = float('nan')
 
         publisher.publish(range_msg)
+
+    def _imu_feedback_alive(self, now: float) -> bool:
+        last = self._last_feedback_mono
+        return last is not None and now - last <= self.feedback_timeout
+
+    def _log_imu_events(self, events):
+        for level, text in events:
+            if level >= IMU_WARN:
+                self.get_logger().warn(text)
+            else:
+                self.get_logger().info(text)
+
+    def _imu_health_callback(self):
+        now = time.monotonic()
+        alive = self._imu_feedback_alive(now)
+        self._log_imu_events(self._imu_health.check(now, alive))
+        level, message, values = self._imu_health.status(now, alive)
+        status = DiagnosticStatus()
+        status.level = bytes([level])
+        status.name = f'{self.get_fully_qualified_name()}: imu'
+        status.message = message
+        status.hardware_id = self.port
+        status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+        array = DiagnosticArray()
+        array.header.stamp = self.get_clock().now().to_msg()
+        array.status = [status]
+        self._diag_pub.publish(array)
 
     def _check_feedback_timeout(self, now: float):
         if not self.publish_odom and not self.publish_tf:

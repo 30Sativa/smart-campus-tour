@@ -1,7 +1,17 @@
-# ROS 2 multi-machine: NUC ↔ VM không thấy topic của nhau
+# ROS 2 multi-machine discovery — historical troubleshooting
 
 Ghi lại lỗi "VM ping được NUC nhưng `ros2 topic list` trên VM chỉ ra
 `/parameter_events` + `/rosout`" — đã fix ngày 2026-08-27.
+
+> **Historical procedure; not the current laptop connection guide.** This
+> records the old VM/laptop direct-DDS setup. At the 2026-10-17 snapshot the
+> original Discovery Server was still active, so the graph had not yet been
+> isolated. Direct laptop DDS had caused `/scan` stalls during Wi-Fi disruption
+> and exposes an unauthenticated graph. Do not leave a remote DDS subscriber
+> connected while the robot moves. The approved R3 path is the SSH viewer in
+> [dds-isolation.md](dds-isolation.md). After S2, direct laptop discovery no
+> longer works; CLI inspection must run on the robot over SSH. Recheck
+> [project-status.md](project-status.md) for the latest state before use.
 
 ## Triệu chứng
 
@@ -38,7 +48,11 @@ ros2 multicast receive
 Kết luận: multicast bị chặn giữa NUC và VM dù cùng subnet `<OLD_LAN_SUBNET>`
 và ping thông.
 
-## Cách fix: Fast DDS Discovery Server (bypass multicast)
+## Historical setup: Fast DDS Discovery Server (bypass multicast)
+
+The commands below document the original setup from 2026-08-27. They are kept
+for provenance and must not be applied over the current native MiniPC service
+without following the staged R3 procedure and recording a rollback point.
 
 Thay vì multicast, dùng 1 Discovery Server trung tâm mà các máy trỏ về
 qua **TCP unicast** — không phụ thuộc router có chặn multicast hay không.

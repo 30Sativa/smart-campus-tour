@@ -36,4 +36,10 @@ void     MotorCore_SetDirIfIdle(uint8_t index, int8_t direction);
 /* Goi tu TIM2_IRQHandler. Tick tat ca motor. */
 void MotorCore_HandleTimerInterrupt(void);
 
+/* ISR-level command watchdog: a backstop for a stalled main loop, which is
+ * where the normal CMD_TIMEOUT_MS check lives. The timer ISR stops stepping
+ * once timeout_ms passes without another feed. Starts expired, so nothing
+ * steps until the first feed. */
+void MotorCore_FeedWatchdog(uint32_t timeout_ms);
+
 #endif

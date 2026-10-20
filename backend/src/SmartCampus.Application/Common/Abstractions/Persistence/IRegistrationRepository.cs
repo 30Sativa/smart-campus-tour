@@ -8,6 +8,7 @@ namespace SmartCampus.Application.Common.Abstractions.Persistence;
 /// </summary>
 public interface IRegistrationRepository
 {
+    /// <summary>Acquires the parent update lock, held by the caller's transaction until commit/disposal.</summary>
     Task<Tour?> LockTourAsync(Guid id, CancellationToken ct);
 
     /// <summary>

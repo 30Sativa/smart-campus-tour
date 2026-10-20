@@ -1,5 +1,8 @@
 import map2Manifest from './map2-v2.generated.json'
 import map2LegacyManifest from './map2-v1.generated.json'
+
+/** Retained immutable map snapshots; registration does not establish 3D calibration. */
+
 import type { GridGeometry } from './occupancy-grid'
 
 export type OccupancyMap = GridGeometry & {
@@ -11,6 +14,7 @@ export type OccupancyMap = GridGeometry & {
   fingerprint: string
   sourceYaml: string
 }
+
 
 function registeredMap(value: typeof map2Manifest): OccupancyMap {
   if (value.schemaVersion !== 1 || value.frameId !== 'map' || !value.mapKey ||
@@ -27,4 +31,5 @@ export const DEFAULT_POI_MAP = OCCUPANCY_MAPS[0]
 
 export function occupancyMapFor(mapKey: string, frameId: string): OccupancyMap | null {
   return OCCUPANCY_MAPS.find((map) => map.mapKey === mapKey && map.frameId === frameId) ?? null
+
 }

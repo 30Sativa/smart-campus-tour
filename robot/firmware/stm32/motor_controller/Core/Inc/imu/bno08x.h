@@ -56,6 +56,21 @@
 #define BNO08X_RV_INTERVAL_MS 50U
 #endif
 
+/* Report huong dung cho yaw (ten ham *RotationVector giu nguyen cho ca hai).
+ *
+ * 1 (mac dinh) = Game Rotation Vector 0x08: gyro + accel, KHONG dung tu ke.
+ *   Yaw tuong doi on dinh, troi cham theo thoi gian (AMCL bu), khong bao gio
+ *   nhay khi tu ke hieu chuan. Phu hop vi ROS chi dung yaw TUONG DOI
+ *   (ekf imu0_relative) va xe chi quay tren mat phang nen tu ke khong hieu
+ *   chuan duoc (accuracy ket o 0, xem IMU_BNO085.md).
+ * 0 = Rotation Vector 0x05: co tu ke -> heading tuyet doi, nhung nhay hang
+ *   chuc do luc tu ke hieu chuan. Doi ve 0 thi dat bridge
+ *   imu_orientation_report:=rotation_vector cho khop.
+ */
+#ifndef BNO08X_USE_GAME_ROTATION_VECTOR
+#define BNO08X_USE_GAME_ROTATION_VECTOR 1
+#endif
+
 typedef struct
 {
     float yaw;     /* quay quanh Z (heading) */
@@ -75,8 +90,9 @@ float BNO08x_GetLastYaw(uint8_t *valid);
  * doc khong kip. */
 uint32_t BNO08x_GetSampleRate(void);
 
-/* Muc tin cay cua mau gan nhat: 0 = tu ke chua hieu chuan, 3 = tot.
- * Heading van co gia tri khi accuracy = 0 nhung co the sai hang chuc do. */
+/* Muc tin cay (2 bit status) cua mau gan nhat, 0..3.
+ * Rotation Vector: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do.
+ * Game Rotation Vector: khong co tu ke, gia tri nay khong mo ta sai so heading. */
 uint8_t BNO08x_GetAccuracy(void);
 
 /* Bo dem suc khoe bus. Tang len trong luc chay = bus dang co van de. */
@@ -85,6 +101,16 @@ uint32_t BNO08x_GetBusRecoverCount(void);
 
 /* 0 = DWT CYCCNT khong chay, bb_delay dang dung duong du phong (bus se cham hon). */
 uint8_t BNO08x_IsDwtOk(void);
+
+/* Goi moi vong App_Loop() sau ReadRotationVector(). Neu chip im lang qua
+ * BNO08X_REARM_STALE_MS, gui lai Set Feature (toi da 1 lan moi
+ * BNO08X_REARM_MIN_INTERVAL_MS). Khong reset chip, khong cho doi. */
+void BNO08x_Service(void);
+/* So lan BNO08x_Service() da gui lai Set Feature tu luc boot. */
+uint32_t BNO08x_GetRearmCount(void);
+/* So goi SH-2 "reset complete" doc duoc trong luc polling (gom ca goi sau
+ * cap nguon neu no den sau BNO08x_Init, va sau self-test cua DIAG). */
+uint32_t BNO08x_GetResetSeenCount(void);
 
 /* Tare mem (chi anh huong yaw, khong ghi flash cua BNO08x).
  * SetYawDeg(0) = "huong dang quay mat vao la 0 do". */

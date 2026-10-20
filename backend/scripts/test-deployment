@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Opt-in Linux Docker smoke test. Own project/volume, ephemeral test credentials.
+# From repo root: bash backend/scripts/test-deployment
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+for tool in docker openssl curl; do
+  command -v "$tool" >/dev/null || { echo "Required tool: $tool" >&2; exit 1; }
+done
+docker info >/dev/null
+scratch=$(mktemp -d)
+project="campustour-test-$(date +%s)-$$"
+dc=(docker compose --project-name "$project" --env-file "$scratch/test.env" -f backend/docker-compose.yml)
+cleanup() {
+  "${dc[@]}" down --volumes --remove-orphans >/dev/null
+  # This directory contains only this test's files. Avoid a recursive delete.
+  rm -f "$scratch/test.env" "$scratch/api.env" "$scratch/cert.pem" "$scratch/key.pem" \
+    "$scratch/login.json" "$scratch/cookies" "$scratch/response.json"
+  rmdir "$scratch"
+}
+trap cleanup EXIT
+password="Aa1!$(openssl rand -hex 32)"
+cat > "$scratch/test.env" <<ENV
+BACKEND_IMAGE=campustour-backend:deployment-test
+SQL_SA_PASSWORD=Aa1!$(openssl rand -hex 32)
+SQL_APP_PASSWORD=Aa1!$(openssl rand -hex 32)
+JWT_SIGNING_KEY=$(openssl rand -hex 32)
+API_HOST=localhost
+WEB_ORIGIN=https://tour.example.test
+API_HTTPS_PORT=${DEPLOYMENT_TEST_PORT:-18443}
+API_BIND_IP=127.0.0.1
+API_ENV_FILE=$scratch/api.env
+TLS_CERT_PATH=$scratch/cert.pem
+TLS_KEY_PATH=$scratch/key.pem
+INITIAL_ADMIN_USERNAME=deployment.admin
+INITIAL_ADMIN_PASSWORD=$password
+INITIAL_ADMIN_FULL_NAME=Deployment Test Admin
+ENV
+cp backend/deploy/api.env.example "$scratch/api.env"
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=localhost' \
+  -addext 'subjectAltName=DNS:localhost' -keyout "$scratch/key.pem" -out "$scratch/cert.pem" >/dev/null 2>&1
+# Disposable self-signed test key; permit the container's unprivileged UID.
+chmod 644 "$scratch/key.pem" "$scratch/cert.pem"
+"${dc[@]}" config --quiet
+"${dc[@]}" build api
+"${dc[@]}" up -d --wait --wait-timeout 240 api
+"${dc[@]}" run -T --rm --no-deps seed-admin
+"${dc[@]}" run -T --rm --no-deps seed-admin
+"${dc[@]}" run -T --rm --no-deps db-init
+
+admin_sql() {
+  "${dc[@]}" exec -T sqlserver /bin/bash -c \
+    'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 10 -d SmartCampusTourV11 "$@"' -- "$@"
+}
+assert_login() {
+  printf '{"username":"deployment.admin","password":"%s"}' "$password" > "$scratch/login.json"
+  curl --fail --silent --show-error --insecure \
+    "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/api/auth/login" \
+    -H 'Content-Type: application/json' --data-binary "@$scratch/login.json" \
+    -D "$scratch/cookies" -o "$scratch/response.json"
+  grep -qi 'campustour.refresh=.*secure' "$scratch/cookies"
+  grep -q 'accessToken' "$scratch/response.json"
+}
+assert_login
+test "$("${dc[@]}" exec -T api id -u | tr -d '\r')" != 0
+"${dc[@]}" exec -T api test ! -e /app/appsettings.Development.json
+if "${dc[@]}" port sqlserver 1433 >/dev/null 2>&1; then
+  echo 'Database port must not be published.' >&2
+  exit 1
+fi
+
+# Verify effective permissions with the actual API login, not sa.
+"${dc[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init -c \
+  'export SQLCMDPASSWORD="$SQL_APP_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U smartcampus_api -C -b -d SmartCampusTourV11' <<'SQL'
+SET NOCOUNT ON;
+IF IS_SRVROLEMEMBER('sysadmin') <> 0 OR IS_ROLEMEMBER('db_owner') <> 0
+    THROW 51000, 'Runtime user is privileged.', 1;
+IF (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) <> 17
+    THROW 51001, 'Expected all 17 v1.1 tables.', 1;
+IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1
+    THROW 51002, 'Seed must be idempotent.', 1;
+IF HAS_PERMS_BY_NAME('dbo.AuditLogs', 'OBJECT', 'INSERT') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.TourEvents', 'OBJECT', 'INSERT') <> 1
+    THROW 51006, 'Runtime must be able to append logs.', 1;
+SELECT TOP (1) Id FROM dbo.Tours WITH (UPDLOCK, ROWLOCK);
+BEGIN TRY
+    EXEC(N'UPDATE dbo.AuditLogs SET ResultCode=''FAILED'' WHERE 1=0;');
+    THROW 51003, 'Audit update must be denied.', 1;
+END TRY
+BEGIN CATCH
+    IF ERROR_NUMBER() <> 229 THROW;
+END CATCH;
+BEGIN TRY
+    EXEC(N'DELETE FROM dbo.TourEvents WHERE 1=0;');
+    THROW 51004, 'Tour log delete must be denied.', 1;
+END TRY
+BEGIN CATCH
+    IF ERROR_NUMBER() <> 229 THROW;
+END CATCH;
+BEGIN TRY
+    EXEC(N'CREATE TABLE dbo.DeploymentTestForbidden(Id int);');
+    THROW 51005, 'DDL must be denied.', 1;
+END TRY
+BEGIN CATCH
+    IF ERROR_NUMBER() <> 262 THROW;
+END CATCH;
+SQL
+
+# Recreate containers while retaining the owned volume, then authenticate again.
+"${dc[@]}" down
+"${dc[@]}" up -d --wait --wait-timeout 240 api
+assert_login
+admin_sql -Q "EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';"
+if "${dc[@]}" run -T --rm --no-deps db-init; then
+  echo 'Initializer must reject an existing unmarked database.' >&2
+  exit 1
+fi
+admin_sql -Q "IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1 THROW 51000, 'Guard changed existing data.', 1;"
+echo 'PASS: HTTPS login/cookie, non-root image, private SQL, bootstrap rerun, permissions, persistence and existing-database guard.'

@@ -9,6 +9,7 @@ không thể tự tạo. POI fixture phục vụ phát triển dữ liệu trư�
 | Khái niệm | Mục đích | Phạm vi |
 |---|---|---|
 | Bootstrap seed | Account/role bắt buộc để bắt đầu quản trị | 1 Admin + role ADMIN |
+| Business CRUD | Danh mục thường xuyên thay đổi | Admin POI và Route APIs, không seed lại mỗi lần đổi tuyến (ADR-0017) |
 | Catalog import | Nạp cấu hình kỹ thuật đã khảo sát/kiểm chứng | Tác vụ riêng sau này |
 | Test/demo fixtures | Automated tests hoặc kịch bản demo riêng | Không chạy ngầm vào DB ứng dụng |
 
@@ -74,11 +75,20 @@ Invitations, BrowserSessions, BranchRequests, RefreshTokens, TourEvents,
 AuditLogs, Robots, Routes, Pois, RouteStops hoặc RouteVariants. Các bảng này
 được tạo từ flow nghiệp vụ thật hoặc catalog import riêng.
 
-## 5. Catalog sau này
+## 5. Catalog CRUD và import kỹ thuật
 
-Routes/POIs/stops/variants chỉ được nạp riêng khi có manifest map/tuyến thật đã
-khảo sát và kiểm chứng. Không tạo dữ liệu vận hành giả. Catalog import chưa
-được implement. POI fixture dev/demo bên dưới không thay quy trình này.
+Admin quản lý POI và Route/RouteStops qua API + SQL thật. Route CRUD tạo bản
+inactive, không tự xác nhận đã thử robot; không cần sửa seed khi thêm POI vào
+tuyến chưa được tham chiếu. Route đã có Tour/variant/historical references phải
+sao chép thành bản mới để đổi hành trình. Dwell thuộc RouteStop, không có
+override theo Tour. Xem `docs/decisions/0017-admin-route-management.md`.
+
+Import kỹ thuật dành cho manifest map/waypoint đã khảo sát, có provenance và
+validation, phải tôn trọng khóa dữ liệu đã dùng. ROS2 là nguồn map vật lý.
+Catalog/variant import chưa được implement. Initial-admin bootstrap, POI demo,
+Representative demo và test fixtures vẫn giữ vì phục vụ khởi tạo hoặc môi
+trường cách ly, không chạy ngầm trên dữ liệu vận hành và không chứng nhận an
+toàn. Không tạo dữ liệu vận hành giả.
 
 ## 6. Schema/runtime
 

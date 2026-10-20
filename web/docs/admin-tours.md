@@ -6,8 +6,6 @@ the source of truth; this file maps it onto the web area.
 
 ## Current implementation boundary
 
-<<<<<<< Updated upstream
-=======
 `/admin/routes` now provides live SQL Route CRUD, separate from the Tour demo
 route selector. See `web/docs/route-management.md` and ADR-0017.
 
@@ -19,7 +17,6 @@ within server permissions, and Cancel with a reason. READY (Chốt / Mở lại)
 no backend endpoint yet and is not offered. The dashboard and `/admin/history`
 remain labelled simulation consumers.
 
->>>>>>> Stashed changes
 `/admin/registrations` and `/admin/registrations/pending` now use the real SQL
 review API; see `web/docs/admin-registration-review.md`. Their row counts
 represent invitation rows, including shared viewing, rather than attendance.
@@ -34,7 +31,8 @@ that simulation. Admin account and POI screens also use their existing APIs.
 |---|---|
 | Create a Tour (name, time, description, prepared route) → **Scheduled** | Start / Hold / Next / End Early / recovery: Staff (`/staff/*`) |
 | Edit it while Scheduled | Robot, camera or head control, choosing or swapping a robot |
-| Review groups: **Approve**, or **Reject** with a reason | Route / route-stop / angle editing, robot control, arbitrary route geometry |
+| Review groups: **Approve**, or **Reject** with a reason | Robot control, arbitrary drawn navigation geometry |
+| Manage Route/ordered POIs/Start/End/dwell/head steps via `/admin/routes` (ADR-0017) | Editing referenced itineraries, certifying physical safety, variant authoring |
 | Manage POI catalog, content and unused map/pose values at `/admin/pois` (ADR-0014) | Changing geometry after a route/history reference; claiming a stored pose was verified on hardware |
 | Send / re-send the participation e-mail (representative only) | Fleet, scenario editor, what-if, maintenance, analytics, marketing |
 | **Chốt Tour** Scheduled → Ready, **Mở lại** Ready → Scheduled (before Start) | Student accounts, attendance, self-booking, capacity, schedule optimisation |
@@ -63,7 +61,10 @@ release checks.
 | `/admin/tours/:id/edit` | Sửa Tour (Scheduled only; otherwise says why) |
 | `/admin/registrations/pending` | Review queue (Submitted), drawer via `?review=<id>` |
 | `/admin/registrations` | All registrations, state filter |
-| `/admin/routes` | Danh mục tuyến (read-only) |
+| `/admin/routes` | Live Route catalog, search/status/paging and create |
+| `/admin/routes/new` | Create inactive Route through the four-step form, optionally copy an existing Route |
+| `/admin/routes/:routeId` | Detail, reference locks, activate/deactivate and delete unused Route |
+| `/admin/routes/:routeId/edit` | Edit metadata and unreferenced itinerary configuration |
 | `/admin/pois` | POI catalog, search/status filter/paging; create inactive; content and eligible pose edits; usage lock details |
 | `/admin/pois/new` | Create inactive POI; select pose on the ROS occupancy map or fine-tune numerically; optional narration/media metadata |
 | `/admin/pois/:id` | Edit POI, inspect route/history/READY-RUNNING use, activate/deactivate with confirmation |

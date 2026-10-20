@@ -121,9 +121,10 @@ describe('LoginPage', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/login'), expect.objectContaining({
       method: 'POST',
       credentials: 'include',
-      headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+      headers: expect.any(Headers),
       body: JSON.stringify({ username: 'staff', password: 'password' }),
     }))
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Content-Type')).toBe('application/json')
     expect(useAuthStore.getState().accessToken).toBe('access-token.test')
     expect(useAuthStore.getState().user).toEqual({ userId: 'user-1', username: 'staff', role: 'Staff' })
   })

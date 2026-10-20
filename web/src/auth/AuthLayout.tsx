@@ -9,7 +9,6 @@ const CAPTION = {
   title: 'Khám phá khuôn viên từ một điểm chạm.',
   lead: 'Cùng SmartBus bắt đầu hành trình tham quan campus theo một cách mới.',
 } as const
-
 /** Furthest the card leans toward the pointer, in degrees. */
 const MAX_TILT = 4
 
@@ -99,6 +98,7 @@ function useAuroraPointer(rootRef: RefObject<HTMLElement | null>, cardRef: RefOb
   }, [rootRef, cardRef])
 }
 
+
 /**
  * The sign-in shell: "Aurora Glass".
  *
@@ -129,7 +129,6 @@ export function AuthLayout() {
         <p className="auth-caption__title">{CAPTION.title}</p>
         <p className="auth-caption__lead">{CAPTION.lead}</p>
       </section>
-
       <div className="auth-stage">
         <div ref={cardRef} className="auth-card">
           <div className="auth-col">
@@ -152,12 +151,17 @@ export function AuthLayout() {
         </div>
       </div>
 
+
       {/* Business fixtures remain visible during development; sign-in itself
           uses the backend. */}
       {import.meta.env.DEV && (
         <details className="auth-devbadge" data-dev-only="true">
           <summary>Dữ liệu nghiệp vụ mẫu</summary>
           <p>DEV: các màn nghiệp vụ chưa nối backend vẫn dùng dữ liệu mẫu.</p>
+
+
+
+
         </details>
       )}
     </main>
