@@ -46,6 +46,14 @@ beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: tru
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 describe('live Route management', () => {
+  it('opens the create Route form from the catalog without loading the removed preview', async () => {
+    api(() => response({ data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }))
+    renderAt('/admin/routes')
+    expect(await screen.findByText('Chưa có tuyến phù hợp')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'Tạo tuyến' }))
+    expect(await screen.findByRole('heading', { name: 'Tạo tuyến' })).toBeInTheDocument()
+  })
+
   it('creates an inactive Route from real API POIs and sends the edited stop order without fixture fields', async () => {
     let posted: Record<string, unknown> | undefined
     api((_, init) => {
@@ -53,16 +61,22 @@ describe('live Route management', () => {
       return detail()
     })
     renderAt('/admin/routes/new')
-    expect(screen.getByLabelText('Start x (m)')).toHaveValue(null)
     fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Tuyến đầu tiên' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'Dùng làm Start: POI 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm POI 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm POI 2' }))
+    await screen.findByRole('option', { name: 'map2-v1 / map · 2 POI' })
+    fireEvent.change(screen.getByLabelText('Map'), { target: { value: JSON.stringify(['map2-v1', 'map']) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
+    fireEvent.click(screen.getByLabelText('Chọn POI 1'))
+    fireEvent.click(screen.getByLabelText('Chọn POI 2'))
+    expect(screen.getByRole('button', { name: 'Tiếp →' })).toBeDisabled()
     for (const i of [1, 2]) {
       fireEvent.change(screen.getByLabelText(`Thời gian dừng ${i} (giây)`), { target: { value: '30' } })
       fireEvent.change(screen.getByLabelText(`Giữ ${i}.1 (giây)`), { target: { value: '30' } })
     }
     fireEvent.click(screen.getByRole('button', { name: 'Đưa POI 2 lên' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
+    expect(screen.getByLabelText('Start x (m)')).toHaveValue(null)
+    fireEvent.change(screen.getByLabelText('Lấy pose từ POI'), { target: { value: 'poi-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
     await screen.findByRole('heading', { name: 'Tuyến thử' })
     expect(posted).toMatchObject({ name: 'Tuyến đầu tiên', mapKey: 'map2-v1', mapFrame: 'map', startX: 1, startY: -1, endMode: 'LAST_POI', endX: null })
@@ -80,9 +94,11 @@ describe('live Route management', () => {
     renderAt('/admin/routes/route-1/edit')
     const name = await screen.findByLabelText('Tên tuyến')
     fireEvent.change(name, { target: { value: 'Nội dung chưa lưu' } })
+    fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
     expect(await screen.findByText(/^Tuyến đã thay đổi/)).toBeInTheDocument()
-    expect(name).toHaveValue('Nội dung chưa lưu')
+    fireEvent.click(screen.getByRole('button', { name: /Thông tin & map/ }))
+    expect(screen.getByLabelText('Tên tuyến')).toHaveValue('Nội dung chưa lưu')
     const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
     expect(writes).toHaveLength(1)
     expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ expectedVersion: VERSION, configuration: { name: 'Nội dung chưa lưu' } })
@@ -92,7 +108,8 @@ describe('live Route management', () => {
     api(() => detail(route({ usage: { hasReferences: true, hasReadyOrRunningTours: false, canEditConfiguration: false, canEditMetadataAndAvailability: true, canDelete: false } })))
     renderAt('/admin/routes/route-1/edit')
     expect(await screen.findByLabelText('Tên tuyến')).toBeEnabled()
-    expect(screen.getByLabelText('MapKey')).toBeDisabled()
+    expect(await screen.findByLabelText('Map')).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
     expect(screen.getByRole('button', { name: 'Đưa POI 2 lên' })).toBeDisabled()
   })
 
@@ -104,7 +121,8 @@ describe('live Route management', () => {
     })
     renderAt('/admin/routes/new?copyFrom=route-1')
     expect(await screen.findByLabelText('Tên tuyến')).toHaveValue('Tuyến thử (bản sao)')
-    expect(screen.getByLabelText('MapKey')).toBeEnabled()
+    expect(await screen.findByLabelText('Map')).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
     await waitFor(() => expect(posted).toBeDefined())
     expect(posted).not.toHaveProperty('id')

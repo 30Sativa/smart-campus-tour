@@ -27,7 +27,10 @@ describe('OperationalTwin default fleet', () => {
     expect(await screen.findByTestId('scene')).toHaveTextContent('nvh-v3 · perspective · no points · 6 robots')
     expect(screen.getByText('6 robot · Chưa kết nối miniPC')).toBeInTheDocument()
     for (const name of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6']) expect(screen.getByText(name)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /mô phỏng/i })).not.toBeInTheDocument()
+    // The simulation explanation is informational; there is no demo mode switch.
+    expect(screen.getAllByRole('button', { name: /mô phỏng/i })).toEqual([
+      screen.getByRole('button', { name: 'Cách mô phỏng hoạt động' }),
+    ])
     // Route / sensor / point toggles live in the "Hiển thị" menu of the one map toolbar.
     fireEvent.click(screen.getByRole('button', { name: /Hiển thị/ }))
     expect(screen.getByRole('button', { name: 'Điểm point' })).toHaveAttribute('aria-pressed', 'false')

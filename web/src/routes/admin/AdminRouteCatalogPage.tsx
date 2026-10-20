@@ -15,7 +15,7 @@ export default function AdminRouteCatalogPage() {
   const term = useDebouncedValue(search, 300)
   const routes = useRoutes({ search: term, page, size: 20, isActive: active === 'all' ? undefined : active === 'active' })
   return <AdminPage>
-    <PageHeader eyebrow="Tuyến" title="Quản lý tuyến" description="Sắp xếp hành trình từ các POI đã có. Khả dụng không đồng nghĩa đã kiểm chứng robot thực tế."
+    <PageHeader eyebrow="Tuyến" title="Danh mục tuyến" description="Sắp xếp hành trình từ các POI đã có. Khả dụng không đồng nghĩa đã kiểm chứng robot thực tế."
       action={<Link to="/admin/routes/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo tuyến</Link>} />
     <section className={panelClass} aria-label="Danh sách tuyến">
       <div className="flex flex-wrap gap-3 border-b border-[#e2e8f0] p-4">

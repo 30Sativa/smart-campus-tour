@@ -1,4 +1,5 @@
 import { ApiError } from '../../../api/client'
+import type { StopDraft } from './RouteStopsEditor'
 
 const ISSUES: Record<string, string> = {
   MAP_REQUIRED: 'Chưa có map và frame.', START_POSE_INVALID: 'Pose bắt đầu không hợp lệ.',
@@ -30,4 +31,12 @@ export function routeError(error: unknown): string {
     return codes.length ? [...new Set(codes)].map(routeIssue).join(' ') : 'Dữ liệu chưa hợp lệ. Kiểm tra tên, map, pose, điểm dừng và thời gian giữ góc nhìn.'
   }
   return 'Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.'
+}
+
+/** Same rule the backend enforces (HEAD_STEPS_INVALID / DWELL_INVALID), checked early so the wizard can block "Tiếp". */
+export function stopIssue(stop: StopDraft): string | null {
+  if (!(stop.dwellSeconds > 0)) return 'Nhập thời gian dừng lớn hơn 0.'
+  if (stop.headSteps.some(h => !(h.holdSeconds > 0))) return 'Nhập thời gian giữ lớn hơn 0 cho mọi góc nhìn.'
+  const total = stop.headSteps.reduce((sum, h) => sum + h.holdSeconds, 0)
+  return total > stop.dwellSeconds ? `Tổng góc nhìn ${total}s vượt thời gian dừng ${stop.dwellSeconds}s.` : null
 }

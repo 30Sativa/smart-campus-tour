@@ -1,60 +1,44 @@
+import { useRef } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ArrowLeft } from 'lucide-react'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../features/administration/AdminUi'
-import { useAdminRoutes, useAdminTour, useUpdateTour } from '../../features/administration/admin-hooks'
-import { isStale, readAdminError } from '../../features/administration/admin-status'
-import { TourForm } from '../../features/administration/components/TourForm'
+import { newRequestId, useTour, useUpdateTour } from '../../features/administration/tours/hooks'
+import { tourError } from '../../features/administration/tours/tour-messages'
+import { TourForm } from '../../features/administration/tours/TourForm'
+import type { TourInput } from '../../features/administration/tours/types'
 
-/**
- * Edit a Tour while it is Scheduled (UC-01 step 5). Ready, Running and
- * finished Tours are locked: the page says why and offers the way back
- * instead of a form that would be refused.
- */
+/** Edit a SCHEDULED Tour. Schedule and Route lock once it has registrations or history (ADR-0018). */
 export default function AdminTourEditPage() {
   const { tourId = '' } = useParams()
   const navigate = useNavigate()
-  const tour = useAdminTour(tourId)
-  const routes = useAdminRoutes()
+  const detail = useTour(tourId)
   const update = useUpdateTour()
-  const error = update.isError ? readAdminError(update.error, 'Không lưu được thay đổi. Kiểm tra kết nối rồi thử lại.') : null
-  const data = tour.data
+  const attempt = useRef<{ key: string; id: string } | null>(null)
   const back = `/admin/tours/${tourId}`
+  const data = detail.data
 
-  return (
-    <AdminPage>
-      <Link to={back} className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-[#2563eb] hover:underline"><ArrowLeft size={15} aria-hidden="true" />Về chi tiết Tour</Link>
-      <PageHeader eyebrow="Quản lý Tour" title={data ? `Sửa ${data.name}` : 'Sửa Tour'} description="Chỉ sửa được khi Tour đang chuẩn bị. Nếu đã gửi thông tin tham gia mà đổi giờ, hãy gửi lại cho các đoàn." />
-      {tour.isError || routes.isError ? (
-        <AdminErrorPanel title="Không tải được Tour." onRetry={() => { void tour.refetch(); void routes.refetch() }} />
-      ) : !data || routes.isLoading ? (
-        <SkeletonRows rows={5} label="Đang tải biểu mẫu" />
-      ) : !data.allowedActions.edit.allowed ? (
-        <div className={`${panelClass} space-y-4 p-6`}>
-          <Notice tone="warn">{data.allowedActions.edit.reason}</Notice>
-          <Link to={back} className={buttonClass('secondary')}>Về chi tiết Tour</Link>
-        </div>
-      ) : (
-        <>
-          {error && isStale(update.error) && (
-            <div className="mb-4">
-              <Notice tone="warn" action={<button type="button" onClick={() => { update.reset(); void tour.refetch() }} className={buttonClass('secondary', 'sm')}>Tải lại</button>}>Dữ liệu đã thay đổi. Vui lòng tải lại.</Notice>
-            </div>
-          )}
-          <TourForm
-            key={data.version}
-            initial={{ name: data.name, scheduledAt: data.scheduledAt, description: data.description, routeId: data.routeId }}
-            routes={routes.data ?? []}
-            submitLabel="Lưu thay đổi"
-            busy={update.isPending}
-            serverErrors={error?.fieldErrors}
-            serverMessage={error && !isStale(update.error) ? (Object.keys(error.fieldErrors).length ? 'Vui lòng kiểm tra lại các trường được đánh dấu.' : error.message) : null}
-            cancelTo={back}
-            onSubmit={(input) => update.mutate({ id: data.id, input, version: data.version }, { onSuccess: () => navigate(back) })}
-          />
-        </>
-      )}
-    </AdminPage>
-  )
+  const submit = (input: TourInput, routeVersion: string) => {
+    if (!data) return
+    const key = JSON.stringify([input, routeVersion, data.tour.rowVersion])
+    if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
+    update.mutate({ id: tourId, requestId: attempt.current.id, rowVersion: data.tour.rowVersion,
+      routeVersion: input.routeId === data.tour.routeId ? null : routeVersion, input }, { onSuccess: () => navigate(back) })
+  }
+
+  return <AdminPage>
+    <Link to={back} className="mb-4 inline-block text-sm text-[#2d719e]">← Về chi tiết Tour</Link>
+    <PageHeader eyebrow="Quản lý Tour" title={data ? `Sửa ${data.tour.name}` : 'Sửa Tour'} description="Chỉ sửa được khi Tour đang nhận đăng ký và chưa vận hành." />
+    {detail.isError ? <AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} />
+      : !data ? <SkeletonRows rows={5} label="Đang tải biểu mẫu" />
+      : !data.permissions.canEditMetadata ? <div className={`${panelClass} space-y-4 p-6`}>
+        <Notice tone="warn">Tour không còn sửa được ở trạng thái hiện tại.</Notice>
+        <Link to={back} className={buttonClass('secondary')}>Về chi tiết Tour</Link>
+      </div>
+      : <TourForm key={data.tour.rowVersion}
+        initial={{ name: data.tour.name, description: data.tour.description, routeId: data.tour.routeId, scheduledStartAt: data.tour.scheduledStartAt, fallbackVideoUrl: data.fallbackVideoUrl }}
+        currentRoute={{ id: data.tour.routeId, name: data.tour.routeName }}
+        scheduleLocked={!data.permissions.canChangeScheduleAndRoute}
+        submitLabel="Lưu thay đổi" busy={update.isPending} error={update.isError ? tourError(update.error) : null} cancelTo={back} onSubmit={submit} />}
+  </AdminPage>
 }
