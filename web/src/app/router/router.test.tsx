@@ -208,17 +208,12 @@ describe('route table', () => {
 
     it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
       signIn('Admin')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
       const router = renderAt('/admin/tours/tour-03')
       await settled(router, '/admin/tours/tour-03')
-
-
-      // AdminTourDetailPage renders the tour name in h2 and its code in h1.
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
-
-
-
-      expect(await screen.findByRole('heading', { name: /Tour T-03/i, level: 1 })).toBeInTheDocument()
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
+      // The live detail page asks the Tour API; an unknown id stays on the admin page.
+      expect(await screen.findByText(/Không tìm thấy Tour/)).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/admin/tours/tour-03')
     })
 
     it('keeps a mistyped admin path inside administration', async () => {
