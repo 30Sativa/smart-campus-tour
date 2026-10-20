@@ -1,6 +1,11 @@
 # Robot architecture and handoff status
 
-> **Latest update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
+> **Latest update, 2026-10-20:** STM32 firmware from PR #63 is flashed; the
+> long-corridor AMCL drift is traced to an odometry distance scale (offline);
+> Localization V2 is on the feature branch `feature/claude/localization-v2` (PR for review), not deployed. Read
+> [robot-status-2026-10-20.md](robot-status-2026-10-20.md) first.
+>
+> **Update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
 > (checker ISOLATED). R3 was exercised while the robot drove A→B→A (S5a): Wi-Fi
 > roaming no longer disturbs the robot. Open issues: CPU saturation while the
 > Quest stream runs (Nav2 FollowPath ACK timeouts and recoveries); an IMU outage

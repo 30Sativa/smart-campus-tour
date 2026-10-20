@@ -24,11 +24,17 @@ permission to execute it.
 
 - [Native runtime](native-runtime.md) — provisioning, build and layered
   operation on the physical MiniPC.
+- [Localization V2 (candidate)](localization-v2.md) — odometry distance scale
+  and AMCL update thresholds for long low-feature corridors; offline evidence,
+  calibration procedure and rollback. Not the default.
 - [Nav2 Baseline V1](nav2-baseline-v1.md) — locked development/test
   configuration, hardware evidence and limits.
 - [DDS isolation and RViz over SSH](dds-isolation.md) — R3 design, viewer,
   bridge, safeguards and staged transition.
-- [Robot status 2026-10-19](robot-status-2026-10-19.md) — **latest**: S3
+- [Robot status 2026-10-20](robot-status-2026-10-20.md) — **latest**: firmware
+  PR #63 flashed, long-route POI survey, localization root cause (odometry
+  distance scale), Localization V2 branch state and next steps.
+- [Robot status 2026-10-19](robot-status-2026-10-19.md) — S3
   deployed, S4/S5a results, CPU contention with the Quest stream, silent IMU
   outage and the PR #63 fix, open issues and next steps.
 - [R3 DDS readiness snapshot (2026-10-17)](r3-dds-readiness-2026-10-17.md) —
