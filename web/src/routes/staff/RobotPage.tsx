@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, CheckCheck, Cpu, ShieldAlert, Sparkles, Wrench } from 'lucide-react'
+import { Bot, CheckCheck, Cpu, PanelRightClose, PanelRightOpen, ShieldAlert, Wrench } from 'lucide-react'
 import { Link } from 'react-router'
 import { ApiError } from '../../api/client'
 import type { AmrStatus } from '../../api/contracts/staff'
@@ -15,6 +15,7 @@ import { robotIssues } from '../../features/staff/attention'
 import { statusInfo } from '../../features/staff/status'
 import { formatHeartbeat } from '../../features/staff/formatters'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
+import { useDeviceRailStore } from '../../stores/device-rail-store'
 
 /**
  * Robot & devices management. Monitors physical, Gazebo and emulator fleet.
@@ -22,6 +23,11 @@ import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 export default function RobotPage() {
   const robots = useStaffAmrs()
   const now = useNow(1000)
+  const railHidden = useDeviceRailStore((state) => state.hidden)
+  const toggleRail = useDeviceRailStore((state) => state.toggle)
+  // A full-screen map must paint above the device column: the sticky map column
+  // is its own stacking context, so it is lifted while the map is expanded.
+  const [mapExpanded, setMapExpanded] = useState(false)
 
   const data = robots.data ?? []
   const total = data.length
@@ -40,66 +46,29 @@ export default function RobotPage() {
         description="Kết nối, định vị, đầu xoay, telemetry và trạng thái phục vụ của hạm đội robot tự hành trong khuôn viên."
         action={
           <Link to="/staff/digital-twin" className={buttonClass('secondary', 'md')}>
-            <Cpu size={16} />
+            <Cpu size={16} aria-hidden="true" />
             Mô phỏng 3D Digital Twin
           </Link>
         }
       />
 
-      {/* ── Summary Stats ────────────────────────────────────────────────────── */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f8fafc] text-[#64748b]">
-            <Bot size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#64748b]">Tổng số robot</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{total}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#ecfdf5] text-[#16a34a]">
-            <Sparkles size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#16a34a]">Sẵn sàng nhận tour</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{available}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]">
-            <Cpu size={20} />
-          </span>
-          <div>
-            <span className="text-xs font-bold text-[#2563eb]">Đang chạy tour</span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">{inTour}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-xs">
-          <span
-            className={`grid size-10 shrink-0 place-items-center rounded-xl ${
-              needsCheck > 0 ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#f8fafc] text-[#64748b]'
-            }`}
-          >
-            <ShieldAlert size={20} />
-          </span>
-          <div>
-            <span className={`text-xs font-bold ${needsCheck > 0 ? 'text-[#dc2626]' : 'text-[#64748b]'}`}>
-              Cần kiểm tra
-            </span>
-            <span className="block text-2xl font-black text-[#0f172a] tabular-nums leading-none mt-1">
-              {needsCheck}
-            </span>
-          </div>
-        </div>
+      <div className="-mt-2 mb-5 flex flex-wrap items-center gap-2" aria-label="Tóm tắt hạm đội">
+        <SummaryChip label="Tổng số robot" value={total} dot="#64748b" />
+        <SummaryChip label="Sẵn sàng nhận tour" value={available} dot="#10b981" />
+        <SummaryChip label="Đang chạy tour" value={inTour} dot="#2563eb" />
+        <SummaryChip label="Cần kiểm tra" value={needsCheck} dot={needsCheck > 0 ? '#dc2626' : '#cbd5e1'} alert={needsCheck > 0} />
+        <button type="button" onClick={toggleRail} aria-pressed={!railHidden} className={`${buttonClass('secondary', 'md')} ml-auto`}>
+          {railHidden ? <PanelRightOpen size={16} aria-hidden="true" /> : <PanelRightClose size={16} aria-hidden="true" />}
+          {railHidden ? 'Hiện robot & kính' : 'Ẩn robot & kính'}
+        </button>
       </div>
 
       {/* The fleet map is the centre of the page; robots and the Meta Quest 3 headset sit
           beside it as compact cards that open in place ("Xem chi tiết"). The headset reads
           its own source (the robot miniPC), so it shows even when the robot list fails.
           Map beside the rail from xl, map first then the cards below. */}
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="min-w-0 xl:sticky xl:top-20" aria-label="Bản đồ vị trí hạm đội">
+      <div className={`grid grid-cols-1 items-start gap-5 ${railHidden ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
+        <section className={`min-w-0 xl:sticky xl:top-20 ${mapExpanded ? 'z-[60]' : ''}`} aria-label="Bản đồ vị trí hạm đội">
           {robots.isPending ? (
             <LoadingPanel />
           ) : robots.isError ? (
@@ -107,19 +76,12 @@ export default function RobotPage() {
           ) : data.length === 0 ? (
             <EmptyPanel>Chưa có robot nào kết nối tới hệ thống.</EmptyPanel>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] px-5 py-3.5">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-[#10b981] animate-pulse" />
-                  <h3 className="text-sm font-bold text-[#0f172a]">Bản đồ vị trí hạm đội</h3>
-                </div>
-                <span className="text-xs text-[#64748b]">Vị trí robot · 3D · {data.length} robot</span>
-              </div>
-              <OperationalTwin robots={data} className="h-[420px] sm:h-[520px] xl:h-[clamp(540px,calc(100vh-250px),780px)]" />
-            </div>
+            <OperationalTwin robots={data} title="Bản đồ vị trí hạm đội" onExpandedChange={setMapExpanded} className="h-[560px] sm:h-[600px] xl:h-[clamp(600px,calc(100vh-230px),820px)]" />
           )}
         </section>
-        <aside className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Thiết bị">
+        {/* Hidden means unmounted: the headset card stops polling the miniPC too. */}
+        {!railHidden && <aside className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Thiết bị">
+          <h2 className="text-[11px] font-extrabold tracking-[0.1em] text-[#94a3b8] uppercase sm:col-span-2 xl:col-span-1">Thiết bị trên xe</h2>
           {onCar.map((robot) => (
             <RobotCard key={robot.id} robot={robot} now={now} />
           ))}
@@ -127,9 +89,20 @@ export default function RobotPage() {
           {others.map((robot) => (
             <RobotCard key={robot.id} robot={robot} now={now} />
           ))}
-        </aside>
+        </aside>}
       </div>
     </StaffPage>
+  )
+}
+
+/** One number of the fleet summary, as a small chip beside the page title. */
+function SummaryChip({ label, value, dot, alert = false }: { label: string; value: number; dot: string; alert?: boolean }) {
+  return (
+    <span className={`inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold whitespace-nowrap shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.06)] ${alert ? 'text-[#b91c1c]' : 'text-[#475569]'}`}>
+      <span aria-hidden="true" className="size-2 rounded-full" style={{ background: dot }} />
+      {label}
+      <b className="text-base font-extrabold text-[#0f172a] tabular-nums">{value}</b>
+    </span>
   )
 }
 

@@ -6,7 +6,7 @@ import { RepPage, RepPageHeader, Panel, InfoList, Callout, GatedAction, Registra
 import { RosterPreview } from '../../features/registrations/RosterPreview'
 import { InvitationPanel } from '../../features/registrations/invitations/InvitationPanel'
 import { RegistrationTrack } from '../../features/representative/components/RegistrationTrack'
-import { formatDateTime, groupLabel, readRepError } from '../../features/representative/rep-format'
+import { closedNote, formatDateTime, groupLabel, isClosedRegistration, readRepError } from '../../features/representative/rep-format'
 
 export default function RepRegistrationDetailPage() {
   const { registrationId } = useParams()
@@ -49,7 +49,8 @@ export default function RepRegistrationDetailPage() {
     {message && <div style={{ marginBottom: 20 }}><Callout title={message} role="status" /></div>}
     {summary.state === 'APPROVED' && <div style={{ marginBottom: 20 }}><InvitationPanel registrationId={summary.id} rowVersion={r.rowVersion} tourRowVersion={r.tourRowVersion} /></div>}
     {summary.state === 'REJECTED' && <div style={{ marginBottom: 20 }}><Callout tone="danger" title="Đăng ký bị từ chối">{r.rejectionReason || 'Không có lý do được lưu.'}</Callout></div>}
-    <div className="rep-panel" style={{ padding: '26px 24px 22px', marginBottom: 24 }}><RegistrationTrack state={summary.state} tourState={summary.tourState} /></div>
+    {isClosedRegistration(summary) && summary.state !== 'REJECTED' && <div style={{ marginBottom: 20 }}><Callout tone="muted" title={closedNote(summary).badge}>{closedNote(summary).reason}</Callout></div>}
+    {!isClosedRegistration(summary) && <div className="rep-panel" style={{ padding: '26px 24px 22px', marginBottom: 24 }}><RegistrationTrack state={summary.state} tourState={summary.tourState} /></div>}
     <div className="rep-detail"><div className="rep-stack" style={{ minWidth: 0 }}>
       <Panel title="Thông tin đoàn"><InfoList items={[
         { label: 'Trường', value: summary.schoolName }, { label: 'Đoàn', value: summary.groupName },

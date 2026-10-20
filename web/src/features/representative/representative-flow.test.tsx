@@ -10,7 +10,7 @@ import RepRegistrationsPage from '../../routes/representative/RepRegistrationsPa
 import RepRegistrationDetailPage from '../../routes/representative/RepRegistrationDetailPage'
 import RepRegisterPage from '../../routes/representative/RepRegisterPage'
 import { useAuthStore } from '../../stores/auth-store'
-import type { RegistrationInput, RepresentativeRegistration, RepresentativeTour } from './api/types'
+import type { RegistrationInput, RegistrationSummary, RepresentativeRegistration, RepresentativeTour } from './api/types'
 import { rosterTemplateBytes } from './roster-import'
 
 const version = 'AAAAAAAAAAE='
@@ -31,6 +31,7 @@ let cancelledVersion: string | null
 let replacedVersion: string | null
 let clients: QueryClient[]
 let missingRegistration: boolean
+let closedRegistrations: RegistrationSummary[]
 function response(data: unknown, status = 200, extra: object = {}) {
   return new Response(JSON.stringify({ success: status === 200, message: status === 409 ? 'Dữ liệu đã thay đổi.' : 'OK', data,
     errors: status === 409 ? { code: 'STALE_VERSION', fields: null } : null, ...extra }), { status })
@@ -50,7 +51,7 @@ function renderAt(path: string) {
 }
 beforeEach(() => {
   registration = structuredClone(initial)
-  clients = []; submitAttempts = []; failSubmit = false; failUpdate = false; replacedVersion = null; cancelledVersion = null; missingRegistration = false
+  clients = []; submitAttempts = []; failSubmit = false; failUpdate = false; replacedVersion = null; cancelledVersion = null; missingRegistration = false; closedRegistrations = []
   useAuthStore.getState().setAuth('real-test-token', { userId: 'owner', username: 'real.representative', role: 'Representative' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
     expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer real-test-token')
@@ -77,6 +78,8 @@ beforeEach(() => {
     if (path === '/tours/tour') return response(tour)
     if (path === '/tours') return response([tour], 200, { pagination: { page: 1, pageSize: 20, totalItems: 42, totalPages: 3 } })
     if (path === '/registrations/registration') return missingRegistration ? response(null, 404, { message: 'Không tìm thấy dữ liệu.' }) : response(structuredClone(registration))
+    if (path === '/registrations' && url.searchParams.get('group') === 'closed')
+      return response(closedRegistrations, 200, { pagination: { page: 1, pageSize: 20, totalItems: closedRegistrations.length, totalPages: 1 } })
     if (path === '/registrations') return response([registration.summary], 200, { pagination: { page: 1, pageSize: 20, totalItems: 25, totalPages: 2 } })
     throw new Error('Unexpected endpoint ' + path)
   }))
@@ -84,6 +87,20 @@ beforeEach(() => {
 afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals() })
 
 describe('Representative real HTTP contract', () => {
+  it('splits Đăng ký của tôi into active and cancelled tabs; an ended registration shows only its reason', async () => {
+    closedRegistrations = [{ ...initial.summary, id: 'old', tourName: 'Buổi đã chốt', state: 'REJECTED', tourState: 'READY',
+      rejectionReason: 'Danh sách thiếu lớp.', reviewedAt: initial.summary.updatedAt }]
+    renderAt('/dai-dien/dang-ky')
+    expect(await screen.findByRole('heading', { name: 'Đang chờ duyệt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tour thật' })).toBeInTheDocument()
+    expect(screen.queryByText('Buổi đã chốt')).toBeNull()
+    fireEvent.click(await screen.findByRole('tab', { name: /Đã hủy\s*1/ }))
+    expect(await screen.findByRole('link', { name: 'Buổi đã chốt' })).toBeInTheDocument()
+    expect(screen.getByText('Danh sách thiếu lớp.')).toBeInTheDocument()
+    expect(screen.getByText('Bị từ chối')).toBeInTheDocument()
+    expect(screen.queryByText('Ngày tham quan')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Sửa và gửi lại' })).toBeNull()
+  })
   it('shows a registration error instead of an infinite loading skeleton', async () => {
     missingRegistration = true
     renderAt('/dai-dien/dang-ky/registration/sua')

@@ -19,5 +19,7 @@ internal sealed class RepresentativeListValidator : AbstractValidator<Representa
             sortFields.Any(field => value == field || value == "-" + field)).WithMessage("Thứ tự sắp xếp không được hỗ trợ.");
         RuleFor(x => x.State).Must(value => value is null || RegistrationStates.IsKnown(value))
             .WithMessage("Trạng thái đăng ký không hợp lệ.");
+        RuleFor(x => x.Group).Must(value => value is null || RegistrationGroups.IsKnown(value))
+            .WithMessage("Nhóm đăng ký không hợp lệ.");
     }
 }

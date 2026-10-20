@@ -21,6 +21,7 @@ class ConfigTest(unittest.TestCase):
             {"AI_SERVICE_KEY": "short", "AI_PROVIDER": "fake"},
             {"AI_SERVICE_KEY": SERVICE_KEY},  # gemini without key/model
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "openai"},
+            {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "openai_compat", "OPENAI_API_KEY": "k", "OPENAI_MODEL": "m"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_PORT": "abc"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_LLM_ATTEMPT_TIMEOUT_SECONDS": "30"},
             {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "fake", "AI_CONTENT_DIR": "/khong/ton/tai"},
@@ -29,6 +30,13 @@ class ConfigTest(unittest.TestCase):
             with self.subTest(env=env):
                 with self.assertRaises(ConfigError):
                     Settings.from_env(env).validate()
+
+    def test_openai_compat_settings(self) -> None:
+        env = {"AI_SERVICE_KEY": SERVICE_KEY, "AI_PROVIDER": "openai_compat", "OPENAI_API_KEY": "sk-hidden",
+               "OPENAI_MODEL": "ag/m", "OPENAI_BASE_URL": "https://gateway.example.test/v1"}
+        s = Settings.from_env(env).validate()
+        self.assertEqual((s.openai_model, s.openai_base_url), ("ag/m", "https://gateway.example.test/v1"))
+        self.assertNotIn("sk-hidden", repr(s))
 
     def test_repr_hides_secrets(self) -> None:
         s = Settings.from_env({"AI_SERVICE_KEY": SERVICE_KEY, "GEMINI_API_KEY": "AIza-hidden", "GEMINI_MODEL": "m"})

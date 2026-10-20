@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Radio, ShieldAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, LogOut, ShieldAlert, UserRound, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
@@ -7,6 +7,7 @@ import { isAdminRole, roleLabel } from '../../auth/roles'
 import { LiveDot } from './StaffUi'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
+import { useDismiss } from '../../components/ui/use-dismiss'
 import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, activeNavPath } from './staff-nav'
@@ -46,7 +47,7 @@ export default function StaffShell() {
   const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
 
   const currentPath = activeNavPath(location.pathname)
-  const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
+  const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
   useEffect(() => {
     if (!menuOpen) return
     const menuButton = menuButtonRef.current
@@ -99,15 +100,8 @@ export default function StaffShell() {
 
             <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <StaffBell />
-              {/* The signed-in account, top right. Sign-out stays in the sidebar. */}
-              <div role="group" className="ml-1 flex min-w-0 items-center gap-2.5 border-l border-[#e5e7eb] pl-3.5" aria-label="Tài khoản đang đăng nhập">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#2d719e] text-white"><Radio size={15} aria-hidden="true" /></span>
-                <div className="hidden min-w-0 sm:block">
-                  <p className="max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username || 'Nhân viên vận hành'}</p>
-                  <p className="max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(user?.role)}</p>
-                </div>
-                <ChevronDown size={14} aria-hidden="true" className="hidden shrink-0 text-[#9ca3af] sm:block" />
-              </div>
+              {/* The signed-in account, top right: its profile and sign-out. */}
+              <AccountMenu username={user?.username} role={user?.role} onLogout={handleLogout} />
             </div>
           </div>
         </header>
@@ -122,6 +116,55 @@ export default function StaffShell() {
 
         {toast && <AssistanceToast notice={toast} onClose={() => setToast(null)} />}
       </div>
+    </div>
+  )
+}
+
+/** Initials for an account avatar, from a username like "staff" or "nguyen.anh". */
+function initialsOf(name: string) {
+  const parts = name.split(/[\s._-]+/).filter(Boolean)
+  return (parts.length > 1 ? parts.slice(-2).map((part) => part[0]).join('') : name.slice(0, 2)).toUpperCase()
+}
+
+function AccountMenu({ username, role, onLogout }: { username?: string; role?: string; onLogout: () => void }) {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const ref = useDismiss<HTMLDivElement>(open, close)
+  const name = username || 'Nhân viên vận hành'
+  const item = 'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-semibold transition-colors'
+  return (
+    <div ref={ref} role="group" aria-label="Tài khoản đang đăng nhập" className="relative ml-1 border-l border-[#e5e7eb] pl-2">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Tài khoản ${name}`}
+        onClick={() => setOpen((value) => !value)}
+        className={`flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-2 pl-1.5 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-white' : ''}`}
+      >
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-[#2d719e] text-[11.5px] font-extrabold text-white">{initialsOf(name)}</span>
+        <span className="hidden min-w-0 text-left sm:block">
+          <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{name}</span>
+          <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(role)}</span>
+        </span>
+        <ChevronDown size={14} aria-hidden="true" className={`hidden shrink-0 text-[#9ca3af] transition-transform duration-200 sm:block ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div role="menu" aria-label="Tài khoản" className="absolute top-[calc(100%+8px)] right-0 z-40 w-60 rounded-xl border border-[#e5e7eb] bg-white p-1.5 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.35)] transition-[opacity,translate] duration-150 starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none">
+          <div className="mb-1 border-b border-[#f1f5f9] px-2.5 pt-1.5 pb-2.5">
+            <p className="truncate text-[13.5px] font-bold text-[#0f172a]">{name}</p>
+            <p className="truncate text-xs text-[#64748b]">{roleLabel(role)}</p>
+          </div>
+          <Link role="menuitem" to="/staff/profile" onClick={close} className={`${item} text-[#0f172a] hover:bg-[#f1f5f9]`}>
+            <UserRound size={16} aria-hidden="true" className="text-[#64748b]" />
+            Hồ sơ của tôi
+          </Link>
+          <button role="menuitem" type="button" onClick={() => { close(); onLogout() }} className={`${item} mt-1 border-t border-[#f1f5f9] text-[#dc2626] hover:bg-[#fef2f2]`}>
+            <LogOut size={16} aria-hidden="true" />
+            Đăng xuất
+          </button>
+        </div>
+      )}
     </div>
   )
 }

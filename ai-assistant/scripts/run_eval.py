@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the evaluation set against the assistant and write a report.
 
-Live run with Gemini (reads ai-assistant/.env), from inside ai-assistant/:
+Live run with the provider set in ai-assistant/.env (AI_PROVIDER), from inside ai-assistant/:
     .venv/Scripts/python scripts/run_eval.py            (Windows)
     .venv/bin/python scripts/run_eval.py                (Linux/macOS)
 
@@ -9,11 +9,13 @@ Options:
     --limit N           only the first N gradable questions (quick check)
     --only CAT[,CAT]    only these categories, e.g. robot,tour
     --delay S           seconds between LLM calls (default 5, for free-tier limits)
-    --provider fake     no network; checks the pipeline only
+    --provider P        gemini, openai_compat or fake (default: AI_PROVIDER from .env);
+                        fake has no network and checks the pipeline only
     --replay FILE       re-grade recorded answers offline (no network)
 
-Writes evals/reports/<time>-<model>.md/.json. A live Gemini run also writes
-evals/recorded/latest.json, which scripts/verify replays offline.
+Writes evals/reports/<time>-<model>.md/.json. A full live run with AI_PROVIDER=gemini
+also writes evals/recorded/latest.json, which scripts/verify replays offline; an
+openai_compat run writes reports only, so the recorded Gemini baseline is kept.
 Question texts in evals/ are synthetic; never put real student questions there.
 """
 
@@ -36,12 +38,13 @@ from campus_assistant.content import ContentPack  # noqa: E402
 from campus_assistant.prompting import SYSTEM_PROMPT  # noqa: E402
 from campus_assistant.providers.fake import ContentEchoProvider  # noqa: E402
 from campus_assistant.providers.gemini import GeminiProvider  # noqa: E402
+from campus_assistant.providers.openai_compat import OpenAICompatProvider  # noqa: E402
 
 FATAL_HINTS = {
     "auth_error_400": "Key không hợp lệ.",
-    "auth_error_401": "Key không hợp lệ hoặc đã bị xóa. Kiểm tra GEMINI_API_KEY trong .env.",
-    "auth_error_403": "Key không có quyền dùng Gemini API (project chưa bật API?).",
-    "http_404": "Không tìm thấy model. Kiểm tra GEMINI_MODEL trong .env (thử gemini-3.5-flash-lite).",
+    "auth_error_401": "Key không hợp lệ hoặc đã bị xóa. Kiểm tra GEMINI_API_KEY / OPENAI_API_KEY trong .env.",
+    "auth_error_403": "Key bị từ chối (403): key sai, hết quyền, hoặc project chưa bật Gemini API.",
+    "http_404": "Không tìm thấy model. Kiểm tra GEMINI_MODEL / OPENAI_MODEL trong .env.",
     "http_400": "Gemini từ chối request (400). Thử đặt GEMINI_THINKING_LEVEL= (để trống) hoặc đổi model.",
     "rate_limited_daily": "Hết lượt miễn phí trong ngày của model này. Các câu đã chạy được lưu lại; "
     "chạy lại cùng lệnh vào ngày mai để làm tiếp, hoặc đổi GEMINI_MODEL (mỗi model có hạn mức riêng; "
@@ -53,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--provider", choices=["gemini", "fake"], default="gemini")
+    ap.add_argument("--provider", choices=["gemini", "openai_compat", "fake"])
     ap.add_argument("--replay", type=Path)
     ap.add_argument("--limit", type=int)
     ap.add_argument("--only")
@@ -70,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Lỗi cấu hình: {exc}")
         return 2
     pack = ContentPack.load(settings.content_dir)
+    provider_name = args.provider or settings.provider
 
     recorded_meta: dict = {}
     if args.replay:
@@ -77,13 +81,26 @@ def main(argv: list[str] | None = None) -> int:
         recorded_meta = data["meta"]
         provider = ev.ReplayProvider(data["records"])
         model = f"replay:{recorded_meta.get('model', '?')}"
-    elif args.provider == "fake":
+    elif provider_name == "fake":
         provider, model = ContentEchoProvider(), "fake"
     else:
-        if not settings.gemini_api_key or not settings.gemini_model:
-            print("Thiếu GEMINI_API_KEY hoặc GEMINI_MODEL trong ai-assistant/.env")
-            return 2
-        model = settings.gemini_model
+        if provider_name == "openai_compat":
+            if not (settings.openai_api_key and settings.openai_model and settings.openai_base_url):
+                print("Thiếu OPENAI_API_KEY, OPENAI_MODEL hoặc OPENAI_BASE_URL trong ai-assistant/.env")
+                return 2
+            model = settings.openai_model
+            live = OpenAICompatProvider(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
+        else:
+            if not settings.gemini_api_key or not settings.gemini_model:
+                print("Thiếu GEMINI_API_KEY hoặc GEMINI_MODEL trong ai-assistant/.env")
+                return 2
+            model = settings.gemini_model
+            live = GeminiProvider(
+                settings.gemini_api_key,
+                settings.gemini_model,
+                settings.gemini_base_url,
+                thinking_level=settings.gemini_thinking_level,
+            )
         partial_path = args.out / "recorded" / f"partial-{_safe(model)}.json"
         saved: dict[str, str] = {}
         if partial_path.exists() and not args.fresh:
@@ -91,15 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             if data.get("key") == _resume_key(model, pack.version, args.questions):
                 saved = data.get("records", {})
                 print(f"Tiếp tục lần chạy trước: {len(saved)} câu đã có câu trả lời, không gọi lại.")
-        provider = ev.RecordingProvider(
-            GeminiProvider(
-                settings.gemini_api_key,
-                settings.gemini_model,
-                settings.gemini_base_url,
-                thinking_level=settings.gemini_thinking_level,
-            ),
-            saved,
-        )
+        provider = ev.RecordingProvider(live, saved)
 
     items = ev.load_items(args.questions)
     selected = ev.gradable(items, pack)
@@ -161,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(ev.to_json(results, meta), ensure_ascii=False, indent=2), encoding="utf-8"
     )
     if isinstance(provider, ev.RecordingProvider) and not args.only and not args.limit:
+        if provider_name != "gemini" and not any(r.status == "error" for r in results):
+            partial_path.unlink(missing_ok=True)
+    if provider_name == "gemini" and isinstance(provider, ev.RecordingProvider) and not args.only and not args.limit:
         recorded = args.out / "recorded"
         recorded.mkdir(parents=True, exist_ok=True)
         payload = {

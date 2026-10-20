@@ -41,8 +41,8 @@ public sealed class RepresentativeController(ISender sender) : ControllerBase
         Ok(Success(await sender.Send(new GetRepresentativeTourQuery(id, User.GetRequiredUserId()), ct)));
     [HttpGet("registrations")]
     public async Task<ActionResult<PagedResponse<RegistrationListItem>>> Registrations([FromQuery] CollectionQueryParameters p,
-        [FromQuery] Guid? tourId, [FromQuery] string? state, CancellationToken ct) =>
-        Ok(Page(await sender.Send(new GetRepresentativeRegistrationsQuery(User.GetRequiredUserId(), ListRequest(p, tourId, state)), ct)));
+        [FromQuery] Guid? tourId, [FromQuery] string? state, [FromQuery] string? group, CancellationToken ct) =>
+        Ok(Page(await sender.Send(new GetRepresentativeRegistrationsQuery(User.GetRequiredUserId(), ListRequest(p, tourId, state, group)), ct)));
     [HttpGet("registrations/{id:guid}")]
     public async Task<ActionResult<BaseResponse<RegistrationDetails>>> Registration(Guid id, CancellationToken ct) =>
         Ok(Success(await sender.Send(new GetRepresentativeRegistrationQuery(id, User.GetRequiredUserId()), ct)));
@@ -72,8 +72,8 @@ public sealed class RepresentativeController(ISender sender) : ControllerBase
         await sender.Send(new CancelRegistrationCommand(id, User.GetRequiredUserId(), request), ct);
         return Ok(Success<object?>(null));
     }
-    private static RepresentativeListRequest ListRequest(CollectionQueryParameters p, Guid? tour = null, string? state = null) =>
-        new(p.Search, p.Sort, p.Page, p.Size, p.Expand, tour, state);
+    private static RepresentativeListRequest ListRequest(CollectionQueryParameters p, Guid? tour = null, string? state = null, string? group = null) =>
+        new(p.Search, p.Sort, p.Page, p.Size, p.Expand, tour, state, group);
     private static BaseResponse<T> Success<T>(T? data) => new() { Success = true, Message = "OK", Data = data };
     private static PagedResponse<T> Page<T>(PagedResult<T> page) => new()
     {

@@ -15,7 +15,16 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
 {
     private static readonly Expression<Func<GroupRegistration, RegistrationListItem>> Summary = r =>
         new(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State, r.SchoolName, r.GroupName,
-            r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt);
+            r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
+            r.RejectionReason, r.ReviewedAt);
+
+    // Mirrors RegistrationGroups: ended by cancellation, by a cancelled Tour, or refused after the Tour stopped taking changes.
+    private static readonly Expression<Func<GroupRegistration, bool>> IsClosed = r =>
+        r.State == RegistrationStates.Cancelled || r.Tour.State == "CANCELLED" ||
+        (r.State == RegistrationStates.Rejected && r.Tour.State != RegistrationGate.OpenTourState);
+    private static readonly Expression<Func<GroupRegistration, bool>> IsActive = r =>
+        !(r.State == RegistrationStates.Cancelled || r.Tour.State == "CANCELLED" ||
+          (r.State == RegistrationStates.Rejected && r.Tour.State != RegistrationGate.OpenTourState));
 
     public async Task<PagedResult<TourReadModel>> ListToursAsync(RepresentativeListRequest request, CancellationToken ct)
     {
@@ -49,6 +58,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         var query = context.GroupRegistrations.AsNoTracking().Where(r => r.RepresentativeUserId == owner);
         if (request.TourId is not null) query = query.Where(r => r.TourId == request.TourId);
         if (request.State is not null) query = query.Where(r => r.State == request.State);
+        if (request.Group == RegistrationGroups.Closed) query = query.Where(IsClosed);
+        else if (request.Group == RegistrationGroups.Active) query = query.Where(IsActive);
         if (!string.IsNullOrWhiteSpace(request.Search))
             query = query.Where(r => r.GroupName.Contains(request.Search.Trim()) || r.SchoolName.Contains(request.Search.Trim()) ||
                 r.Tour.Name.Contains(request.Search.Trim()));
@@ -74,7 +85,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             .Select(r => new
             {
                 Summary = new RegistrationListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,
-                    r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt),
+                    r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
+                    r.RejectionReason, r.ReviewedAt),
                 r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion, r.RejectionReason, r.ReviewedAt,
                 HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
                 Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)

@@ -61,6 +61,12 @@ public sealed class RepresentativeEndpointTests
             Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel", cancelBody)).Status);
             details = await fixture.DataAsync($"/registrations/{id}");
             Assert.Equal("CANCELLED", details.GetProperty("summary").GetProperty("state").GetString());
+            // "Đăng ký của tôi" splits the list: the cancelled one is closed, the other group stays active.
+            var closed = await fixture.SendAsync(HttpMethod.Get, "/registrations?group=closed");
+            Assert.Equal(id, Assert.Single(closed.Data.EnumerateArray()).GetProperty("id").GetGuid());
+            Assert.Equal(JsonValueKind.Null, closed.Data[0].GetProperty("rejectionReason").ValueKind);
+            var active = await fixture.SendAsync(HttpMethod.Get, "/registrations?group=active");
+            Assert.NotEqual(id, Assert.Single(active.Data.EnumerateArray()).GetProperty("id").GetGuid());
 
             // Cancellation releases the email, so the original group must recheck on re-registration.
             Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/tours/{fixture.TourId}/registrations",
@@ -98,7 +104,7 @@ public sealed class RepresentativeEndpointTests
         Assert.Equal(HttpStatusCode.Forbidden, (await fixture.SendAsync(HttpMethod.Get, "/registrations")).Status);
         fixture.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var tour = await fixture.DataAsync($"/tours/{fixture.TourId}");
-        foreach (var query in new[] { "/tours?page=0", "/tours?size=101", "/tours?sort=capacity", "/registrations?state=UNKNOWN", "/tours?expand=route" })
+        foreach (var query in new[] { "/tours?page=0", "/tours?size=101", "/tours?sort=capacity", "/registrations?state=UNKNOWN", "/registrations?group=UNKNOWN", "/tours?expand=route" })
             Assert.Equal(HttpStatusCode.BadRequest, (await fixture.SendAsync(HttpMethod.Get, query)).Status);
         var body = Input(tour, "A", "person@example.com");
         Assert.Equal(HttpStatusCode.BadRequest, (await fixture.SendAsync(HttpMethod.Post, $"/tours/{fixture.TourId}/registrations", body)).Status);

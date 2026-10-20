@@ -28,6 +28,8 @@ describe('OperationalTwin default fleet', () => {
     expect(screen.getByText('6 robot · Chưa kết nối miniPC')).toBeInTheDocument()
     for (const name of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6']) expect(screen.getByText(name)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /mô phỏng/i })).not.toBeInTheDocument()
+    // Route / sensor / point toggles live in the "Hiển thị" menu of the one map toolbar.
+    fireEvent.click(screen.getByRole('button', { name: /Hiển thị/ }))
     expect(screen.getByRole('button', { name: 'Điểm point' })).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(screen.getByRole('button', { name: 'Điểm point' }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhìn từ trên' }))

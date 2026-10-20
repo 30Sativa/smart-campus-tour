@@ -12,7 +12,11 @@ export type RepresentativeTour = {
 export type RegistrationSummary = {
   id: string; tourId: string; tourName: string; tourScheduledStartAt: string; tourState: TourState
   schoolName: string; groupName: string; state: RegistrationState; rowCount: number; submittedAt: string; updatedAt: string
+  /** Admin's refusal reason and review time; the list carries them so a refusal reads without opening the detail. */
+  rejectionReason?: string | null; reviewedAt?: string | null
 }
+/** "Đăng ký của tôi" halves: still in play, or ended (cancelled, Tour cancelled, refused with no way back). */
+export type RegistrationGroup = 'active' | 'closed'
 export type RepresentativeRegistration = {
   summary: RegistrationSummary; contactName: string; contactEmail: string; rowVersion: string; tourRowVersion: string
   rejectionReason: string | null; reviewedAt: string | null; roster: RosterRow[]
@@ -21,5 +25,5 @@ export type RepresentativeRegistration = {
 export type RegistrationInput = {
   schoolName: string; groupName: string; contactName: string; contactEmail: string; expectedTourRowVersion: string; roster: RosterRow[]
 }
-export type ListParameters = { search?: string; sort?: string; page?: number; size?: number; tourId?: string; state?: RegistrationState }
+export type ListParameters = { search?: string; sort?: string; page?: number; size?: number; tourId?: string; state?: RegistrationState; group?: RegistrationGroup }
 
