@@ -134,9 +134,9 @@ fi
 
 section "Tier 1.7 - Remote-debug tools and robot scripts (pytest)"
 if ! python3 -c 'import pytest, yaml' >/dev/null 2>&1; then
-  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + script tests"
+  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + odom_calibration + script tests"
 else
-  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh scripts/tests; then ok; else fail; fi
+  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh tools/odom_calibration scripts/tests; then ok; else fail; fi
 fi
 
 # ---------------------------------------------------------------- TIER 2

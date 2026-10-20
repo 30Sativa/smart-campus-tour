@@ -105,6 +105,12 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('wheel_base', DEFAULT_WHEEL_BASE)
         self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
+        # Odometry-only correction of the travelled distance (Localization V2).
+        # 1.0 = unchanged. Scales the translation integrated from STEP counts,
+        # not the rotation, not the commands sent to the STM32 and not
+        # joint_states. Set it from a measured straight run
+        # (measured / wheel-odom distance); see robot/docs/localization-v2.md.
+        self.declare_parameter('odom_linear_scale', 1.0)
         self.declare_parameter('steps_per_rev', 200.0)
         self.declare_parameter('microstep', 8.0)
         self.declare_parameter('gear_ratio', 10.0)
@@ -169,6 +175,12 @@ class Stm32BridgeNode(Node):
         self.baudrate = int(self.get_parameter('baudrate').value)
         self.wheel_base = float(self.get_parameter('wheel_base').value)
         self.wheel_radius = float(self.get_parameter('wheel_radius').value)
+        requested_scale = float(self.get_parameter('odom_linear_scale').value)
+        self.odom_linear_scale = self._valid_odom_linear_scale(requested_scale)
+        if self.odom_linear_scale != requested_scale:
+            self.get_logger().warn(
+                f'odom_linear_scale={requested_scale} outside [0.8, 1.2]. '
+                'Falling back to 1.0.')
         self.steps_per_rev = float(self.get_parameter('steps_per_rev').value)
         self.microstep = float(self.get_parameter('microstep').value)
         self.gear_ratio = float(self.get_parameter('gear_ratio').value)
@@ -342,6 +354,7 @@ class Stm32BridgeNode(Node):
             f'microstep={self.microstep:.1f}, '
             f'gear_ratio={self.gear_ratio:.3f}, '
             f'steps_per_meter={self.steps_per_meter:.3f}, '
+            f'odom_linear_scale={self.odom_linear_scale:.4f}, '
             f'max_wheel_speed_mm_s={self.max_wheel_speed_mm_s:.1f}, '
             f'speed_scale={self.speed_scale:.3f}, '
             f'invert_left={self.invert_left}, invert_right={self.invert_right}, '
@@ -784,6 +797,14 @@ class Stm32BridgeNode(Node):
             self._last_invalid_dt_warn_time = now_mono
         return 0.0
 
+    @staticmethod
+    def _valid_odom_linear_scale(value: float) -> float:
+        """A measured odometry scale is a few percent; anything outside
+        [0.8, 1.2] is a typo and falls back to 1.0 (V1 behaviour)."""
+        if not math.isfinite(value) or not 0.8 <= value <= 1.2:
+            return 1.0
+        return value
+
     def _update_odometry(
             self,
             delta_left_count: int,
@@ -792,7 +813,7 @@ class Stm32BridgeNode(Node):
         left_distance = delta_left_count / self.steps_per_meter
         right_distance = delta_right_count / self.steps_per_meter
 
-        delta_s = (right_distance + left_distance) / 2.0
+        delta_s = (right_distance + left_distance) / 2.0 * self.odom_linear_scale
         delta_theta = (right_distance - left_distance) / self.wheel_base
         heading = self._theta + delta_theta / 2.0
         self._x += delta_s * math.cos(heading)

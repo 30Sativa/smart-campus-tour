@@ -84,6 +84,9 @@ def generate_launch_description():
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     ekf_params_file = LaunchConfiguration('ekf_params_file')
     lidar_yaw = LaunchConfiguration('lidar_yaw')
+    wheel_base = LaunchConfiguration('wheel_base')
+    wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     enable_camera = LaunchConfiguration('enable_camera')
     rviz = LaunchConfiguration('rviz')
 
@@ -173,6 +176,19 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar_yaw', default_value='-0.2225',
                               description='LiDAR yaw calibration (rad) passed to '
                                           'manual_mode.launch.py; 0.0 = nominal mount.'),
+        # Odometry geometry, forwarded to manual_mode.launch.py -> stm32_bridge.
+        # Defaults must equal manual_mode.launch.py (locked by
+        # robot_navigation/test/test_odometry_args.py). Localization V2 sets
+        # odom_linear_scale from a measured straight run.
+        DeclareLaunchArgument('wheel_base', default_value='0.4714',
+                              description='Calibrated effective wheel base (m), '
+                                          'forwarded to manual_mode.launch.py.'),
+        DeclareLaunchArgument('wheel_radius', default_value='0.09725',
+                              description='Wheel radius (m) for odometry, '
+                                          'forwarded to manual_mode.launch.py.'),
+        DeclareLaunchArgument('odom_linear_scale', default_value='1.0',
+                              description='Odometry-only translation scale '
+                                          '(Localization V2); 1.0 = V1.'),
         DeclareLaunchArgument('ekf_params_file',
                               default_value=default_ekf_params,
                               description='EKF parameter file passed to '
@@ -228,6 +244,9 @@ def generate_launch_description():
                 'enable_teleop': enable_teleop,
                 'ekf_params_file': ekf_params_file,
                 'lidar_yaw': lidar_yaw,
+                'wheel_base': wheel_base,
+                'wheel_radius': wheel_radius,
+                'odom_linear_scale': odom_linear_scale,
             }.items(),
         ),
 
