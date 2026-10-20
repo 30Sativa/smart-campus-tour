@@ -80,6 +80,8 @@ const AdminTourDetailPage = lazy(() => import('../../routes/admin/AdminTourDetai
 const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPage'))
 const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
+const AdminRouteDetailsPage = lazy(() => import('../../routes/admin/AdminRouteDetailsPage'))
+const AdminRouteFormPage = lazy(() => import('../../routes/admin/AdminRouteFormPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
 const AdminPoisPage = lazy(() => import('../../routes/admin/AdminPoisPage'))
@@ -281,6 +283,9 @@ export const routes = [
       { path: 'registrations', element: <AdminRegistrationsPage mode="all" /> },
       { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
       { path: 'routes', element: <AdminRouteCatalogPage /> },
+      { path: 'routes/new', element: <AdminRouteFormPage /> },
+      { path: 'routes/:routeId', element: <AdminRouteDetailsPage /> },
+      { path: 'routes/:routeId/edit', element: <AdminRouteFormPage /> },
       { path: 'history', element: <AdminTourHistoryPage /> },
       { path: 'accounts', element: <AdminAccountsPage /> },
       { path: 'pois', element: <AdminPoisPage /> },

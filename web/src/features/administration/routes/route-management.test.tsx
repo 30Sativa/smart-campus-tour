@@ -46,6 +46,14 @@ beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: tru
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 describe('live Route management', () => {
+  it('opens the create Route form from the catalog without loading the removed preview', async () => {
+    api(() => response({ data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }))
+    renderAt('/admin/routes')
+    expect(await screen.findByText('Chưa có tuyến phù hợp')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'Tạo tuyến' }))
+    expect(await screen.findByRole('heading', { name: 'Tạo tuyến' })).toBeInTheDocument()
+  })
+
   it('creates an inactive Route from real API POIs and sends the edited stop order without fixture fields', async () => {
     let posted: Record<string, unknown> | undefined
     api((_, init) => {
