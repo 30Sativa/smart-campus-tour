@@ -202,7 +202,7 @@ describe('route table', () => {
       ['/admin/tours/new', /Tạo Tour mới/],
       ['/admin/registrations/pending', /Đăng ký chờ duyệt/],
       ['/admin/registrations', /Tất cả đăng ký/],
-      ['/admin/routes', /Quản lý tuyến/],
+      ['/admin/routes', /Danh mục tuyến/],
       ['/admin/history', /Lịch sử Tour/],
     ])('serves %s as a real admin page', async (path, heading) => {
       signIn('Admin')
