@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IAuthRepository, EfAuthRepository>();
+        services.AddScoped<IAccountTransaction, EfAccountTransaction>();
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
         services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();

@@ -52,6 +52,10 @@ Lần sau script dùng lại fixture. Sau khi mã hết hạn hoặc muốn fixt
 
 Fixture mới dùng database mới và thay hai file trên; database cũ vẫn còn.
 Chỉ xóa database test mang tên chính xác trong SQL Server sau khi không cần nữa.
+Reuse luôn kiểm tra lại Development, SQL local và đúng catalog GUID của loại
+fixture trước kết nối; ticket bị sửa sang database sản phẩm sẽ bị từ chối.
+Setup thất bại sau CREATE DATABASE dọn chính database vừa tạo. File entry/ticket
+chứa credentials; Git ignore không thay quyền đọc an toàn hoặc cleanup khi hết dùng.
 
 Terminal 3 — web ở cổng 5174:
 

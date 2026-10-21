@@ -15,9 +15,20 @@ namespace SmartCampus.IntegrationTests;
 public sealed class InitialAdminSeederTests
 {
     private const string Username = "system.admin";
-    private const string Password = "integration-test-password";
+    internal const string Password = "integration-test-password";
     private const string FullName = "System Administrator";
     internal const string TestJwtSigningKey = "integration-test-jwt-signing-key-32-bytes-minimum";
+
+    [SchemaV11Fact]
+    public async Task SeedPasswordPolicy_RejectsNewWeakCredentials_WithoutChangingExistingAdminOnRerun()
+    {
+        await using var database = await EmptySchemaDatabase.CreateAsync();
+        await Assert.ThrowsAsync<ArgumentException>(() => database.SeedAsync(Username, "short", FullName));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.Users"));
+        Assert.Equal(InitialAdminSeedResult.Created, await database.SeedAsync(Username, Password, FullName));
+        Assert.Equal(InitialAdminSeedResult.Skipped, await database.SeedAsync(Username, "short", FullName));
+        Assert.True(new IdentityPasswordHasher().Verify(Password, (await database.GetOnlyUserAsync()).PasswordHash));
+    }
 
     [Theory]
     [InlineData(" system.admin")]

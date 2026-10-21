@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Authentication;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Persistence;
 
@@ -97,6 +98,8 @@ public sealed class InitialAdminSeeder(
             return InitialAdminSeedResult.Skipped;
         }
 
+        if (!AccountPasswordPolicy.IsValid(password))
+            throw new ArgumentException("Initial password must contain 12 to 128 characters.", nameof(password));
         var user = new User
         {
             Id = Guid.NewGuid(),

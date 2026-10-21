@@ -1,4 +1,6 @@
 using FluentValidation;
+using System.Diagnostics;
+using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Diagnostics;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Exceptions;
@@ -67,8 +69,9 @@ public sealed class GlobalExceptionHandler(
         if (statusCode == StatusCodes.Status500InternalServerError)
         {
             logger.LogError(
-                "An unhandled exception of type {ExceptionType} occurred.",
-                exception.GetType().FullName);
+                "Request {TraceId} failed with {ExceptionType}; SQL error {SqlNumber}.",
+                Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier,
+                exception.GetType().FullName, SqlNumber(exception));
         }
 
         httpContext.Response.StatusCode = statusCode;
@@ -85,6 +88,9 @@ public sealed class GlobalExceptionHandler(
 
         return true;
     }
+
+    private static int? SqlNumber(Exception error) => error is SqlException sql ? sql.Number :
+        error.InnerException is null ? null : SqlNumber(error.InnerException);
 
     private static IReadOnlyDictionary<string, string[]> CreateValidationErrors(
         ValidationException exception)

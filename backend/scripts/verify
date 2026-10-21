@@ -20,6 +20,12 @@ if [ ! -f "$SOLUTION" ]; then
   exit 1
 fi
 
+sql_test_connection=${SMARTCAMPUS_SCHEMA_TEST_CONNECTION:-}
+if [[ ${SMARTCAMPUS_REQUIRE_SQL_TESTS:-false} == true && -z ${sql_test_connection//[[:space:]]/} ]]; then
+  echo 'FAIL: required SQL verification needs a disposable SMARTCAMPUS_SCHEMA_TEST_CONNECTION.' >&2
+  exit 1
+fi
+
 bash -n deploy/init-db.sh scripts/test-deployment
 
 "$DOTNET" restore "$SOLUTION"

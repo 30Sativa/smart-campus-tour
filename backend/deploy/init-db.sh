@@ -12,19 +12,7 @@ schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.1.sql | sha256
 export SchemaHash="$schema_hash" AppPassword="$SQL_APP_PASSWORD"
 
 "${sql[@]}" -d master -Q "IF DB_ID(N'SmartCampusTourV11') IS NULL CREATE DATABASE SmartCampusTourV11;"
-state=$("${sql[@]}" -d SmartCampusTourV11 -h -1 -W <<'SQL'
-SET NOCOUNT ON;
-DECLARE @hash nvarchar(64) = (
-    SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
-    WHERE class = 0 AND name = N'CampusTourBootstrapHash');
-IF @hash = N'$(SchemaHash)'
-    SELECT 'READY';
-ELSE IF @hash IS NULL AND NOT EXISTS (SELECT 1 FROM sys.tables WHERE is_ms_shipped = 0)
-    SELECT 'EMPTY';
-ELSE
-    THROW 51000, 'Existing database is unmarked or has a different schema snapshot. Review it manually; automatic migration is disabled.', 1;
-SQL
-)
+state=$("${sql[@]}" -d SmartCampusTourV11 -h -1 -W -i /database/smart-campus-tour-bootstrap-check.sql)
 state=$(printf '%s' "$state" | tr -d '\r\n ')
 
 if [[ "$state" == EMPTY ]]; then
@@ -69,21 +57,7 @@ IF IS_ROLEMEMBER(N'db_owner', N'smartcampus_api') = 1
     THROW 51002, 'Runtime user must not be db_owner.', 1;
 IF IS_ROLEMEMBER(N'campus_tour_app', N'smartcampus_api') <> 1
     ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Users TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.UserRoles TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RefreshTokens TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Pois TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.GroupRegistrations TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RosterRows TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Invitations TO campus_tour_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.BrowserSessions TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.Routes TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.RouteStops TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.Robots TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.Tours TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.TourAllowedBranches TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.BranchRequests TO campus_tour_app;
+:r /database/smart-campus-tour-runtime-permissions.sql
 COMMIT TRANSACTION;
 GO
 SQL

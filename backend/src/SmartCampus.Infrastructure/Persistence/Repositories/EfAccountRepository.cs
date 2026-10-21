@@ -49,16 +49,17 @@ public sealed class EfAccountRepository(ApplicationDbContext dbContext) : IAccou
     public Task<bool> NormalizedUsernameExistsAsync(
         string normalizedUsername,
         CancellationToken cancellationToken = default) =>
-        dbContext.Users.AnyAsync(
-            user => user.NormalizedUsername == normalizedUsername,
-            cancellationToken);
+        // The unique-index range lock also serializes two creates when no User exists yet.
+        dbContext.Users.FromSqlInterpolated($"SELECT * FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE NormalizedUsername = {normalizedUsername}")
+            .AnyAsync(cancellationToken);
 
     public Task<User?> FindForManagementAsync(
         Guid userId,
         CancellationToken cancellationToken = default) =>
         dbContext.Users
+            .FromSqlInterpolated($"SELECT * FROM dbo.Users WITH (UPDLOCK, ROWLOCK) WHERE Id = {userId}")
             .Include(user => user.UserRoles)
-            .Include(user => user.RefreshTokens)
+            .Include(user => user.RefreshTokens.Where(token => token.RevokedAt == null))
             .SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
 
     public void AddAccount(User user) => dbContext.Users.Add(user);

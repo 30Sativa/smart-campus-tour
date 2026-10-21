@@ -1,4 +1,5 @@
 using FluentValidation;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 
 namespace SmartCampus.Application.Features.Accounts.Commands.CreateAccount;
@@ -27,7 +28,8 @@ public sealed class CreateAccountCommandValidator : AbstractValidator<CreateAcco
                 .WithMessage("Role must be Staff or Representative.")
                 .OverridePropertyName(nameof(CreateAccountRequest.Role));
             RuleFor(command => command.Request.InitialPassword)
-                .NotEmpty()
+                .Must(AccountPasswordPolicy.IsValid)
+                .WithMessage("Initial password must contain 12 to 128 characters and must not be blank.")
                 .OverridePropertyName(nameof(CreateAccountRequest.InitialPassword));
         });
     }

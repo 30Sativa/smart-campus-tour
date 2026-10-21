@@ -6,7 +6,10 @@ using SmartCampus.Application.Common.Authentication;
 
 namespace SmartCampus.Application.Features.Auth.Queries.Refresh;
 
-public sealed record RefreshSessionQuery(string? RefreshToken) : IQuery<AuthSessionResult>;
+public sealed record RefreshSessionQuery(string? RefreshToken) : IQuery<AuthSessionResult>, IAccountTransactionRequest
+{
+    public bool RequiresAccountTransaction => !string.IsNullOrWhiteSpace(RefreshToken);
+}
 
 public sealed class RefreshSessionQueryHandler(
     IAuthRepository authRepository,

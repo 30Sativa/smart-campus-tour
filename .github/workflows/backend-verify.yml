@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - "backend/**"
       - "docs/architecture.md"
@@ -22,6 +23,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: CI-only-Sql-Password-2026!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd='/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "CI-only-Sql-Password-2026!" -C -Q "SELECT 1" -b'
+          --health-interval=10s --health-timeout=5s --health-retries=12 --health-start-period=30s
+    env:
+      SMARTCAMPUS_REQUIRE_SQL_TESTS: "true"
+      SMARTCAMPUS_SCHEMA_TEST_CONNECTION: "Server=localhost,1433;Database=master;User ID=sa;Password=CI-only-Sql-Password-2026!;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15"
 
     steps:
       - name: Checkout

@@ -22,11 +22,9 @@ public sealed class CancelTourCommandHandler(ITourManagementRepository repositor
         if (!TourPreparation.Permissions(tour, await repository.GetUsageAsync(tour.Id, ct)).CanCancel)
             throw new ConflictException("Chỉ hủy Tour SCHEDULED/READY chưa Start và chưa có dấu vết vận hành.", "TOUR_LOCKED");
         var now = clock.GetUtcNow();
-        foreach (var registrationId in await repository.GetRegistrationIdsAsync(tour.Id, ct))
+        // Every registration/access writer owns this same Tour lock; no per-group roster/session history is needed.
+        foreach (var registration in await repository.LoadCancellationRegistrationsAsync(tour.Id, ct))
         {
-            var locked = await registrations.LockRegistrationAsync(registrationId, null, ct)
-                ?? throw new NotFoundException("Không tìm thấy đăng ký của Tour.");
-            var registration = locked.Registration;
             if (registration.State == RegistrationStates.Submitted)
             {
                 // Pending work must leave the review queue; prior approval/rejection decisions remain history.
@@ -35,18 +33,17 @@ public sealed class CancelTourCommandHandler(ITourManagementRepository repositor
                 registration.UpdatedAt = now;
                 repository.AddAudit(RegistrationAudit.Create(registration, command.Actor, "TOUR_REGISTRATION_CANCELLED", now));
             }
-            foreach (var invitation in await invitations.LoadAsync(registrationId, ct))
+        }
+        foreach (var invitation in await invitations.LoadForTourCancellationAsync(tour.Id, ct))
+        {
+            InvitationIssuer.CloseSessions(invitation, now);
+            invitation.RevokedAt ??= now;
+            repository.AddAudit(new AuditLog
             {
-                if (invitation.RevokedAt.HasValue && invitation.BrowserSessions.All(s => s.EndedAt.HasValue)) continue;
-                InvitationIssuer.CloseSessions(invitation, now);
-                invitation.RevokedAt ??= now;
-                repository.AddAudit(new AuditLog
-                {
-                    TourId = tour.Id, ActorUserId = command.Actor, CorrelationId = Guid.NewGuid(),
-                    Action = "TOUR_INVITATION_REVOKED", EntityType = "Invitation", EntityId = invitation.Id.ToString("D"),
-                    ResultCode = "SUCCESS", OccurredAt = now
-                });
-            }
+                TourId = tour.Id, ActorUserId = command.Actor, CorrelationId = Guid.NewGuid(),
+                Action = "TOUR_INVITATION_REVOKED", EntityType = "Invitation", EntityId = invitation.Id.ToString("D"),
+                ResultCode = "SUCCESS", OccurredAt = now
+            });
         }
         tour.State = "CANCELLED";
         tour.EndedAt = now;

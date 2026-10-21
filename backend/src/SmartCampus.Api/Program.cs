@@ -10,17 +10,40 @@ using System.Threading.RateLimiting;
 
 var studentAiLocal = args.Contains(StudentAiLocalCommand.Argument, StringComparer.Ordinal);
 var registrationLocal = args.Contains(RegistrationLocalCommand.Argument, StringComparer.Ordinal);
-var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args.Where(argument => argument != StudentAiLocalCommand.Argument && argument != RegistrationLocalCommand.Argument).ToArray());
+var reuseStudentAi = args.Contains(LocalFixtureDatabase.ReuseStudentAi, StringComparer.Ordinal);
+var reuseRegistration = args.Contains(LocalFixtureDatabase.ReuseRegistration, StringComparer.Ordinal);
+var localRealEmail = args.Contains(LocalFixtureDatabase.RealEmail, StringComparer.Ordinal);
+var localArguments = new[] { StudentAiLocalCommand.Argument, RegistrationLocalCommand.Argument,
+    LocalFixtureDatabase.ReuseStudentAi, LocalFixtureDatabase.ReuseRegistration, LocalFixtureDatabase.RealEmail };
+var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args.Where(argument => !localArguments.Contains(argument, StringComparer.Ordinal)).ToArray());
 var demoPoiSeedCommand = DemoPoiSeedCommand.Parse(initialAdminSeedCommand.GetHostArguments());
 var builder = WebApplication.CreateBuilder(demoPoiSeedCommand.GetHostArguments());
-if (studentAiLocal || registrationLocal)
+if (studentAiLocal || registrationLocal || reuseStudentAi || reuseRegistration || localRealEmail)
 {
     try
     {
-        if (initialAdminSeedCommand.Requested || demoPoiSeedCommand.Requested || (studentAiLocal && registrationLocal))
+        if (initialAdminSeedCommand.Requested || demoPoiSeedCommand.Requested ||
+            new[] { studentAiLocal, registrationLocal, reuseStudentAi, reuseRegistration }.Count(value => value) != 1)
             throw new StudentAiLocalSetupException("Run local setup separately from other seed commands.");
+        if (localRealEmail && !registrationLocal && !reuseRegistration)
+            throw new StudentAiLocalSetupException("Real email requires the local registration fixture.");
+        if (registrationLocal || reuseRegistration)
+        {
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Invitations:EmailWorkerEnabled"] = localRealEmail ? "true" : "false"
+            });
+            if (!localRealEmail)
+                builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Resend:ApiKey"] = "local-disabled-email-worker",
+                    ["Resend:From"] = "CampusTour <noreply@example.test>"
+                });
+        }
         if (registrationLocal) await RegistrationLocalCommand.PrepareAsync(builder);
-        else await StudentAiLocalCommand.PrepareAsync(builder);
+        else if (studentAiLocal) await StudentAiLocalCommand.PrepareAsync(builder);
+        else LocalFixtureDatabase.Validate(builder,
+            reuseStudentAi ? StudentAiLocalCommand.DatabasePrefix : RegistrationLocalCommand.DatabasePrefix, reuse: true);
     }
     catch (Exception exception)
     {
@@ -86,6 +109,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("InvitationJoin", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("AccountLogin", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {

@@ -1,4 +1,4 @@
-param([switch]$Web, [switch]$NewFixture)
+param([switch]$Web, [switch]$NewFixture, [switch]$SendRealEmail)
 $ErrorActionPreference = 'Stop'
 $backendRoot = Split-Path $PSScriptRoot -Parent
 $repoRoot = Split-Path $backendRoot -Parent
@@ -28,7 +28,9 @@ if ($Web) {
         foreach ($line in Get-Content $ticket) {
             if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
         }
+        $arguments += '--reuse-registration-local'
     }
+    if ($SendRealEmail) { $arguments += '--local-real-email' }
     & dotnet @arguments
 }
 exit $LASTEXITCODE

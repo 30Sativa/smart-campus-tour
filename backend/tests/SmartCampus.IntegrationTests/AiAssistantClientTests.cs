@@ -80,6 +80,10 @@ public sealed class AiAssistantClientTests
         await using var slow = new FakeAssistantServer { Delay = TimeSpan.FromSeconds(5) };
         Assert.Equal("AI_TIMEOUT", (await Assert.ThrowsAsync<GatewayTimeoutException>(() =>
             Client(Config(slow.BaseUrl), TimeSpan.FromMilliseconds(300)).AnswerAsync(Question(), CancellationToken.None))).Code);
+
+        await using var slowBody = new FakeAssistantServer { BodyDelay = TimeSpan.FromSeconds(5) };
+        Assert.Equal("AI_TIMEOUT", (await Assert.ThrowsAsync<GatewayTimeoutException>(() =>
+            Client(Config(slowBody.BaseUrl), TimeSpan.FromMilliseconds(300)).AnswerAsync(Question(), CancellationToken.None))).Code);
     }
 
     [Theory]
@@ -104,6 +108,60 @@ public sealed class AiAssistantClientTests
         probe.Stop();
         await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
             Client(Config($"http://127.0.0.1:{closedPort}")).AnswerAsync(Question(), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(1201)]
+    [InlineData(5000)]
+    [InlineData(40000)]
+    public async Task Answer_RejectsOversizedUpstreamAnswersOrBodies(int length)
+    {
+        await using var server = new FakeAssistantServer
+        { ResponseBody = JsonSerializer.Serialize(new { answer = new string('a', length), outOfScope = false }) };
+        var error = await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
+            Client(Config(server.BaseUrl)).AnswerAsync(Question(), CancellationToken.None));
+        Assert.Equal("AI_UNAVAILABLE", error.Code);
+    }
+
+    [Fact]
+    public async Task Answer_RequiresOutcomeFlag_AndHonorsCallerCancellation()
+    {
+        await using var malformed = new FakeAssistantServer { ResponseBody = """{"answer":"test"}""" };
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => Client(Config(malformed.BaseUrl)).AnswerAsync(Question(), default));
+        await using var slow = new FakeAssistantServer { Delay = TimeSpan.FromSeconds(5) };
+        using var cancelled = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Client(Config(slow.BaseUrl)).AnswerAsync(Question(), cancelled.Token));
+    }
+
+    [Fact]
+    public async Task Answer_RejectsBodyWithoutContentLengthBeyondBudget_AndLogsOnlySafeMetadata()
+    {
+        var logger = new RecordingLogger<HttpAiAssistantClient>();
+        using var http = new HttpClient(new UnboundedReply());
+        var question = new AssistantQuestion(Guid.NewGuid(), "private-question", [], null);
+        var adapter = new HttpAiAssistantClient(http, Config("http://127.0.0.1:1"), logger);
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => adapter.AnswerAsync(question, default));
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains(question.RequestId.ToString(), entry);
+        Assert.Contains("UNAVAILABLE", entry);
+        Assert.DoesNotContain("private-question", entry);
+        Assert.DoesNotContain(Key, entry);
+        Assert.DoesNotContain("upstream-private-padding", entry);
+    }
+
+    private sealed class UnboundedReply : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new {
+                answer = "Short answer", outOfScope = false, padding = "upstream-private-padding" + new string('x', 40_000) }));
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new NonSeekable(bytes)) });
+        }
+    }
+
+    private sealed class NonSeekable(byte[] bytes) : MemoryStream(bytes)
+    {
+        public override bool CanSeek => false;
     }
 
     [Theory]

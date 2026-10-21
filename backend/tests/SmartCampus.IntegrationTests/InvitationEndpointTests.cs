@@ -303,6 +303,71 @@ public sealed class InvitationEndpointTests
         Assert.Equal("APPROVED", (await db.GroupRegistrations.SingleAsync()).State);
     }
 
+    [SchemaV11Fact]
+    public async Task InvitationReadsAndMutations_DoNotHydrateHistoricalSessionsOrEmailAttempts()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        Guid invitation;
+        await using (var seed = f.Context())
+        {
+            invitation = await seed.Invitations.Select(i => i.Id).FirstAsync();
+            var now = DateTimeOffset.UtcNow;
+            for (var i = 0; i < 100; i++)
+            {
+                var correlation = Guid.NewGuid();
+                seed.AuditLogs.AddRange(
+                    new SmartCampus.Domain.Entities.AuditLog { Action = "EMAIL_SEND_REQUESTED", EntityType = "Invitation", EntityId = invitation.ToString("D"), TourId = f.TourId, CorrelationId = correlation, OccurredAt = now, ResultCode = "PENDING" },
+                    new SmartCampus.Domain.Entities.AuditLog { Action = "EMAIL_SEND_RESULT", EntityType = "Invitation", EntityId = invitation.ToString("D"), TourId = f.TourId, CorrelationId = correlation, OccurredAt = now, ResultCode = "FAILED" });
+                seed.BrowserSessions.Add(new SmartCampus.Domain.Entities.BrowserSession { Id = Guid.NewGuid(), InvitationId = invitation,
+                    SessionTokenHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("history-" + i)),
+                    CreatedAt = now.AddMinutes(-2), ExpiresAt = now.AddMinutes(-1), EndedAt = now, EndReason = "LOGOUT" });
+            }
+            await seed.SaveChangesAsync();
+        }
+        await using var db = f.Context();
+        var repository = new SmartCampus.Infrastructure.Persistence.Repositories.EfInvitationRepository(db);
+        var read = await repository.ReadAsync(registration, null, default);
+        Assert.NotNull(read);
+        Assert.InRange(read.Audits.Count, 1, read.Invitations.Count * 2);
+        Assert.Contains(read.Audits, a => a.Action == "EMAIL_SEND_RESULT" && a.ResultCode == "FAILED");
+        await using var transaction = await new SmartCampus.Infrastructure.Persistence.EfRegistrationTransaction(db).BeginAsync(default);
+        await new SmartCampus.Infrastructure.Persistence.Repositories.EfRegistrationRepository(db).LockTourAsync(f.TourId, default);
+        var loaded = await repository.LoadAsync(registration, default);
+        Assert.All(loaded, i => Assert.Empty(i.BrowserSessions));
+        Assert.Empty(db.ChangeTracker.Entries<SmartCampus.Domain.Entities.BrowserSession>());
+    }
+
+    [SchemaV11Fact]
+    public async Task StudentQuestionRevokedDuringTheHttpCall_DiscardsLateAnswerWithoutHoldingTourLock()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var assistant = new FakeAssistantServer { BeforeResponse = release.Task };
+        await using var f = await Fixture.CreateAsync();
+        var settings = Settings().ToDictionary(p => p.Key, p => p.Value);
+        settings["AiAssistant__BaseUrl"] = assistant.BaseUrl;
+        settings["AiAssistant__ServiceKey"] = "integration-test-service-key";
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0];
+        var invitation = item.GetProperty("id").GetGuid();
+        var joined = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
+        await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");
+        var answering = AskAsync(host.Client, f.TourId, joined.Cookie!.Split(';')[0], "Synthetic question?");
+        try
+        {
+            await assistant.Received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            item = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0];
+            Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(registration) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()))).Status);
+        }
+        finally { release.TrySetResult(); }
+        Assert.Equal(HttpStatusCode.Unauthorized, (await answering).Status);
+        Assert.Single(assistant.Requests);
+    }
+
     private static async Task<(HttpStatusCode Status, JsonElement Body)> AskAsync(HttpClient client, Guid tour, string? cookie, string text)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/student/tours/{tour}/questions");

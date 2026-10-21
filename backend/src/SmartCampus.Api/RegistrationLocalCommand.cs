@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Domain.Entities;
@@ -14,15 +12,11 @@ namespace SmartCampus.Api;
 internal static class RegistrationLocalCommand
 {
     public const string Argument = "--registration-local";
+    public const string DatabasePrefix = "SmartCampusRegistrationLocal_";
 
     public static async Task PrepareAsync(WebApplicationBuilder builder)
     {
-        if (!builder.Environment.IsDevelopment())
-            throw new StudentAiLocalSetupException("Registration local setup requires Development.");
-        var connection = new SqlConnectionStringBuilder(builder.Configuration.GetConnectionString("DefaultConnection"));
-        var host = connection.DataSource.Split(',')[0].Split('\\')[0].ToLowerInvariant();
-        if (host is not ("localhost" or "127.0.0.1" or "." or "(local)" or "(localdb)"))
-            throw new StudentAiLocalSetupException("Registration local setup requires a local SQL Server.");
+        var connection = LocalFixtureDatabase.Validate(builder, DatabasePrefix, reuse: false);
         if (string.IsNullOrWhiteSpace(builder.Configuration["Resend:ApiKey"]) ||
             string.IsNullOrWhiteSpace(builder.Configuration["Resend:From"]))
             throw new StudentAiLocalSetupException("Configure Resend:ApiKey and Resend:From before local setup.");
@@ -34,7 +28,7 @@ internal static class RegistrationLocalCommand
             ["Invitations:ProtectionKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             ["Invitations:PublicBaseUrl"] = "https://localhost:5175",
             ["Invitations:SupportEmail"] = builder.Configuration["Invitations:SupportEmail"] ?? "support@example.test",
-            ["Invitations:EmailWorkerEnabled"] = "true",
+            ["Invitations:EmailWorkerEnabled"] = builder.Configuration["Invitations:EmailWorkerEnabled"],
             ["Authentication:Jwt:SigningKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)),
             ["Cors:AllowedOrigins:0"] = "https://localhost:5175",
             ["Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command"] = "Warning"
@@ -43,25 +37,9 @@ internal static class RegistrationLocalCommand
         _ = new InvitationConfiguration(builder.Configuration);
         var backendRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../.."));
         var schema = await File.ReadAllTextAsync(Path.Combine(backendRoot, "database/smart-campus-tour-schema-v1.1.sql"));
-        var database = "SmartCampusRegistrationLocal_" + Guid.NewGuid().ToString("N");
-        connection.InitialCatalog = "master";
-        await using (var master = new SqlConnection(connection.ConnectionString))
-        {
-            await master.OpenAsync();
-            await using var create = new SqlCommand($"CREATE DATABASE [{database}]", master);
-            await create.ExecuteNonQueryAsync();
-        }
-        connection.InitialCatalog = database;
-        await using (var sql = new SqlConnection(connection.ConnectionString))
-        {
-            await sql.OpenAsync();
-            foreach (var batch in Regex.Split(schema, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
-            {
-                if (string.IsNullOrWhiteSpace(batch)) continue;
-                await using var command = new SqlCommand(batch, sql);
-                await command.ExecuteNonQueryAsync();
-            }
-        }
+        await using var fixture = await LocalFixtureDatabase.CreateAsync(connection, DatabasePrefix, schema);
+        connection.ConnectionString = fixture.ConnectionString;
+        var database = connection.InitialCatalog;
         values["ConnectionStrings:DefaultConnection"] = connection.ConnectionString;
         builder.Configuration.AddInMemoryCollection(values);
         await using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -86,11 +64,15 @@ internal static class RegistrationLocalCommand
         db.Tours.Add(tour);
         await db.SaveChangesAsync();
         await File.WriteAllLinesAsync(Path.Combine(backendRoot, "registration-local.env"),
-            values.Select(pair => $"{pair.Key.Replace(":", "__")}={pair.Value}"));
+            values.Where(pair => !pair.Key.StartsWith("Resend:", StringComparison.Ordinal))
+                .Select(pair => $"{pair.Key.Replace(":", "__")}={pair.Value}"));
         await File.WriteAllLinesAsync(Path.Combine(backendRoot, "registration-entry.env"),
             [$"TOUR_ID={tour.Id:D}", "WEB_URL=https://localhost:5175", "ADMIN_USERNAME=happy-admin",
              $"ADMIN_PASSWORD={adminPassword}", "REP_USERNAME=happy-rep", $"REP_PASSWORD={repPassword}"]);
+        fixture.Retain();
         Console.WriteLine($"Registration fixture created in {database}. No registration or invitation has been seeded.");
-        Console.WriteLine("Test login details: backend/registration-entry.env (ignored by Git). Real email worker enabled.");
+        Console.WriteLine("Test login details: backend/registration-entry.env (ignored by Git).");
+        Console.WriteLine(builder.Configuration.GetValue<bool>("Invitations:EmailWorkerEnabled")
+            ? "Real email worker explicitly enabled for this run." : "Email worker disabled; use -SendRealEmail for an intentional provider test.");
     }
 }

@@ -1,4 +1,5 @@
 using FluentValidation;
+using SmartCampus.Application.Common.Authentication;
 
 namespace SmartCampus.Application.Features.Auth.Commands.Login;
 
@@ -12,6 +13,6 @@ public sealed class LoginCommandValidator : AbstractValidator<LoginCommand>
             .Must(username => username is null || !username.Any(char.IsWhiteSpace))
             .WithMessage("Username must not contain whitespace.");
         RuleFor(command => command.Password)
-            .NotEmpty();
+            .NotEmpty().MaximumLength(AccountPasswordPolicy.MaximumLength);
     }
 }
