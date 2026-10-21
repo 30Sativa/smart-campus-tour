@@ -8,6 +8,31 @@
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 
+### Bootstrap compatibility and runtime permissions (2026-10-19)
+
+Treat the deployed snapshot as immutable, including comments. Put changing
+business explanations in docs/ADRs; in particular ADR-0017 freezes Route
+configuration from any Tour reference even if an older SQL comment mentions READY.
+The initializer hashes the entire LF-normalized source and checks its marker via
+`backend/database/smart-campus-tour-bootstrap-check.sql`. Only this audited pair
+is compatible: current `96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
+and prior `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`.
+They differ only in two Route/dwell comments. Tests reconstruct those exact
+changes and check both hashes. Recognizing the old marker preserves it and all
+data; no automatic marker rewrite or unknown-schema adoption is performed.
+Any further executable schema change needs its own ADR/database change process.
+
+Apply `backend/database/smart-campus-tour-runtime-permissions.sql` after the log
+role script for runtime business permissions. Route/RouteStops CRUD and Tour
+SELECT/INSERT/UPDATE are included; Tour DELETE and runtime robot/branch writes
+are absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
+the real Route/Tour preparation pipeline under an impersonated restricted user.
+
+Backend CI provisions disposable SQL Server and sets
+`SMARTCAMPUS_REQUIRE_SQL_TESTS=true`; verification fails before tests if its SQL
+connection is missing. Local fast verification remains opt-in for SQL; use
+`SMARTCAMPUS_SCHEMA_TEST_CONNECTION` for the complete SQL suite.
+
 Admin POI Management adds `Pois.RowVersion` to the v1.1 schema for optimistic
 concurrency. New empty databases receive it from the snapshot. Existing v1.1
 databases must first run `patches/add-poi-rowversion-v1.1.sql`; do not rerun the

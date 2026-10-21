@@ -438,6 +438,32 @@ rather than trimming it. Username lookup remains case-insensitive;
 passwords are passed unchanged. Existing stored usernames are not migrated by
 this change; a username containing whitespace cannot be used in a login request.
 
+Account security hardening (2026-10-19): new account/bootstrap passwords require
+12–128 characters and must not be blank; spaces are preserved. Login accepts
+existing shorter passwords but rejects passwords over 128 characters. Login has
+an IP budget of 30 attempts/minute and a normalized-account budget of 10/minute,
+including successful attempts; exhausted budgets return 429 `RATE_LIMITED`.
+The bounded account budget is in memory for the single-instance V1 deployment,
+resets after its minute window and does not persist a permanent account lockout.
+
+Login, refresh and logout reject an explicit Origin unless it matches the API
+origin or an exact `Cors:AllowedOrigins` entry. `Origin: null` is rejected.
+With no Origin, browser requests declaring `Sec-Fetch-Site: same-site` or
+`cross-site` are rejected; non-browser probes without either header remain
+supported. A rejected origin returns 403 before credential/cookie state changes
+and does not clear the existing refresh cookie. The same origin policy applies
+to Student cookie endpoints. CORS alone is not the CSRF control.
+
+Account commands and refresh use a read-committed account transaction. Login
+verifies the initial password snapshot, then locks/re-reads the User and roles
+before issuing credentials; deactivate/reactivate and token reads use that same
+User-first order through commit. Deactivate therefore revokes a winning login's
+token or rejects a later issuance, without reviving revoked tokens on reactivate.
+Username creation reserves its unique-index range. Refresh remains read-only
+and has no UnitOfWork save. Missing-cookie refresh rejects without opening SQL,
+preserving the hosting-only health probe. SQL deadlock/lock conflicts map to 409
+`ACCOUNT_CONCURRENT_CHANGE`, without automatic mutation retries.
+
 Application exceptions and automatic `[ApiController]` model-binding
 validation errors use the same JSON envelope with `success: false`, a message,
 null data, and optional errors. `AddProblemDetails()` remains registered for
@@ -1093,8 +1119,9 @@ shows no student identity, hides the 2D map (no pose feed yet) and says so when
 there is no livestream; a fallback video plays inline only when it is an
 https/same-site .mp4/.webm file, otherwise it is a link. Non-GUID fixtures retain
 the labelled demo. No simulated stream/AI/robot state
-is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
-roster replacement after issuance and retention remain separate. Admin email
+is inserted into a SQL room. Tour preparation scheduling and text Q&A are now
+implemented; runtime/readiness, livestream, roster replacement after issuance
+and retention remain separate. Admin email
 correction is implemented below.
 HTTPS and browser cookie/local-network permissions still apply to local BE use.
 
@@ -1653,6 +1680,15 @@ backend cache (10-minute TTL). Nothing is persisted: no question/answer table,
 no audit row containing text. One backend instance is assumed for V1; a
 multi-instance deployment needs a shared idempotency store first.
 
+Backend hardening (2026-10-19): cache lookup and session reservation are atomic.
+Null recent-turn items return validation 400 before mapping; upstream replies
+must contain a nonblank answer of at most 1200 characters and an explicit boolean
+outOfScope. The backend reads at most 32 KiB of response bytes, even without a
+Content-Length, under a 20 s deadline covering headers and body. Invalid/oversized
+replies return 503 AI_UNAVAILABLE. Caller cancellation propagates. Safe telemetry
+records internal requestId, status, outcome and duration; the
+`SmartCampus.Assistant` meter exposes `assistant.duration` in milliseconds.
+
 A `DIEM_XEM_CHUNG` session may ask questions. The answer is private to that
 session but visible to everyone in that room; the web labels it as shared.
 
@@ -1754,9 +1790,13 @@ The API has a separate outbound network for invitation delivery.
 The one-shot `db-init` waits for SQL health, applies the existing v1.1 snapshot
 transactionally only to an empty database, marks its canonical snapshot hash in
 database metadata, and provisions the dedicated `smartcampus_api` login. It
-rejects existing unmarked/different snapshots instead of migrating them. Runtime
+rejects existing unmarked/different snapshots instead of migrating them; the
+bootstrap check recognizes only the two explicitly audited comment-equivalent
+snapshots documented in `backend/database/README.md`, preserving the old marker.
+Runtime
 permissions preserve append-only AuditLogs/TourEvents, grant writes for current
-implemented features, and grant read access only to Tour/route/robot/branch data.
+implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
+and read access only to robot/variant/branch data.
 This deployment introduces no API route or schema migration. The API process
 probe expects 401 from the existing refresh route without a cookie; it is not a
 database/business readiness check. Docker smoke testing and real EC2/browser TLS

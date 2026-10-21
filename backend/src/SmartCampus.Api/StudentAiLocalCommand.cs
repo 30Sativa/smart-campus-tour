@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Integrations.Invitations;
@@ -13,42 +11,20 @@ internal sealed class StudentAiLocalSetupException(string message) : Exception(m
 internal static class StudentAiLocalCommand
 {
     public const string Argument = "--student-ai-local";
+    public const string DatabasePrefix = "SmartCampusStudentAiLocal_";
 
     public static async Task PrepareAsync(WebApplicationBuilder builder)
     {
-        if (!builder.Environment.IsDevelopment())
-            throw new StudentAiLocalSetupException("Student AI local setup requires Development.");
-        var connection = new SqlConnectionStringBuilder(
-            builder.Configuration.GetConnectionString("DefaultConnection"));
-        var host = connection.DataSource.Split(',')[0].Split('\\')[0].ToLowerInvariant();
-        if (host is not ("localhost" or "127.0.0.1" or "." or "(local)" or "(localdb)"))
-            throw new StudentAiLocalSetupException("Student AI local setup requires a local SQL Server.");
+        var connection = LocalFixtureDatabase.Validate(builder, DatabasePrefix, reuse: false);
         var serviceKey = builder.Configuration["AiAssistant:ServiceKey"];
         if (string.IsNullOrWhiteSpace(serviceKey) || serviceKey.Length < 16)
             throw new StudentAiLocalSetupException("Configure AiAssistant:ServiceKey before local setup.");
 
-        // The database name is generated here, never supplied by a caller or taken from product config.
-        var database = "SmartCampusStudentAiLocal_" + Guid.NewGuid().ToString("N");
-        connection.InitialCatalog = "master";
-        await using (var master = new SqlConnection(connection.ConnectionString))
-        {
-            await master.OpenAsync();
-            await using var create = new SqlCommand($"CREATE DATABASE [{database}]", master);
-            await create.ExecuteNonQueryAsync();
-        }
-        connection.InitialCatalog = database;
         var backendRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "../.."));
         var schema = await File.ReadAllTextAsync(Path.Combine(backendRoot, "database/smart-campus-tour-schema-v1.1.sql"));
-        await using (var sql = new SqlConnection(connection.ConnectionString))
-        {
-            await sql.OpenAsync();
-            foreach (var batch in Regex.Split(schema, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
-            {
-                if (string.IsNullOrWhiteSpace(batch)) continue;
-                await using var command = new SqlCommand(batch, sql);
-                await command.ExecuteNonQueryAsync();
-            }
-        }
+        await using var fixture = await LocalFixtureDatabase.CreateAsync(connection, DatabasePrefix, schema);
+        connection.ConnectionString = fixture.ConnectionString;
+        var database = connection.InitialCatalog;
 
         var values = new Dictionary<string, string?>
         {
@@ -121,6 +97,7 @@ internal static class StudentAiLocalCommand
         await File.WriteAllLinesAsync(Path.Combine(backendRoot, "student-ai-entry.env"),
             [$"STUDENT_TOUR_URL=http://localhost:5174/tour/{tour.Id:D}",
              $"STUDENT_ACCESS_CODE={codes.Reveal(invitationId, 1, code.Protected)}"]);
+        fixture.Retain();
         Console.WriteLine($"Local AI fixture created in {database}; expires in 24 hours. Email worker disabled.");
         Console.WriteLine($"Student page: http://localhost:5174/tour/{tour.Id:D}");
         Console.WriteLine("Entry code: backend/student-ai-entry.env; restart settings: backend/student-ai-local.env (ignored by Git).");

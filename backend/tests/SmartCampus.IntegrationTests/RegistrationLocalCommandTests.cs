@@ -10,7 +10,7 @@ public sealed class RegistrationLocalCommandTests
         string environment, string server, bool configuredSender, string message)
     {
         using var process = InitialAdminSeederTests.StartApiProcess(
-            $"Server={server};Database=DoNotChange;Integrated Security=true", ["--registration-local"],
+            $"Server={server};Database=DoNotChange;Integrated Security=true", ["--registration-local", "--local-real-email"],
             environment: environment, additionalSettings: new Dictionary<string, string>
             { ["Resend__ApiKey"] = configuredSender ? "test-key-never-sent" : "", ["Resend__From"] = "test@example.test" });
         var stdout = process.StandardOutput.ReadToEndAsync();

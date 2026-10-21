@@ -12,7 +12,8 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
         context.BrowserSessions.AsNoTracking().Where(s => s.Invitation.RosterRow.Registration.TourId == tourId && s.SessionTokenHash == tokenHash)
             .Select(s => (Guid?)s.InvitationId).SingleOrDefaultAsync(ct);
     public Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct) =>
-        context.Invitations.Include(i => i.RosterRow).ThenInclude(r => r.Registration).Include(i => i.BrowserSessions)
+        context.Invitations.Include(i => i.RosterRow).ThenInclude(r => r.Registration)
+            .Include(i => i.BrowserSessions.Where(s => s.EndedAt == null))
             .SingleOrDefaultAsync(i => i.Id == invitationId, ct);
     public void Add(BrowserSession session) => context.BrowserSessions.Add(session);
     public Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct) => context.AuditLogs

@@ -20,7 +20,7 @@ public sealed class AccountValidatorTests
     public void CreateAccountValidator_RejectsWhitespaceInUsername(string username)
     {
         var command = new CreateAccountCommand(
-            Guid.NewGuid(), new CreateAccountRequest(username, "Staff User", "Staff", " password "));
+            Guid.NewGuid(), new CreateAccountRequest(username, "Staff User", "Staff", " valid password "));
 
         var result = new CreateAccountCommandValidator().Validate(command);
 

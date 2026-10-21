@@ -15,6 +15,9 @@ internal sealed class FakeAssistantServer : IAsyncDisposable
     public ConcurrentQueue<(string Path, string Authorization, string Body)> Requests { get; } = new();
     public int Status { get; set; } = 200;
     public TimeSpan Delay { get; set; } = TimeSpan.Zero;
+    public TimeSpan BodyDelay { get; set; } = TimeSpan.Zero;
+    public TaskCompletionSource Received { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task? BeforeResponse { get; set; }
     public string ResponseBody { get; set; } =
         """{"answer":"Robot dùng LiDAR.","outOfScope":false,"usedSources":["Về robot"],"contentVersion":"test"}""";
 
@@ -77,12 +80,15 @@ internal sealed class FakeAssistantServer : IAsyncDisposable
         }
         var body = Encoding.UTF8.GetString(received.ToArray(), headerEnd + 4, (int)received.Length - headerEnd - 4);
         Requests.Enqueue((path, Header("Authorization"), body));
+        Received.TrySetResult();
+        if (BeforeResponse is not null) await BeforeResponse.WaitAsync(stop.Token);
 
         if (Delay > TimeSpan.Zero) await Task.Delay(Delay, stop.Token);
         var payload = Encoding.UTF8.GetBytes(ResponseBody);
         var head = Encoding.ASCII.GetBytes($"HTTP/1.1 {Status} Fake\r\nContent-Type: application/json; charset=utf-8\r\n" +
             $"Content-Length: {payload.Length}\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(head, stop.Token);
+        if (BodyDelay > TimeSpan.Zero) await Task.Delay(BodyDelay, stop.Token);
         await stream.WriteAsync(payload, stop.Token);
     }
 
