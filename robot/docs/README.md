@@ -24,6 +24,9 @@ permission to execute it.
 
 - [Native runtime](native-runtime.md) — provisioning, build and layered
   operation on the physical MiniPC.
+- [Localization V2 (candidate)](localization-v2.md) — odometry distance scale
+  and AMCL update thresholds for long low-feature corridors; offline evidence,
+  calibration procedure and rollback. Not the default.
 - [Nav2 Baseline V2](nav2-baseline-v2.md) — **current development baseline**
   (V1 + RPP lookahead 0.8 + angular decel −1.2): offline and on-robot evidence,
   limits, how to run/rollback and the criteria to call it hardware validated.
@@ -35,6 +38,9 @@ permission to execute it.
 - [Robot status 2026-10-22](robot-status-2026-10-22.md) — **latest**: LiDAR mount
   moved (yaw now about −4.8°, `lidar_yaw:=-0.0833` arg), START↔POI_03 done,
   Nav2 Baseline V2, sessions without rosbag and the `go.sh` guard, next steps.
+- [Robot status 2026-10-20](robot-status-2026-10-20.md) — firmware
+  PR #63 flashed, long-route POI survey, localization root cause (odometry
+  distance scale), Localization V2 branch state and next steps.
 - [Robot status 2026-10-19](robot-status-2026-10-19.md) — S3
   deployed, S4/S5a results, CPU contention with the Quest stream, silent IMU
   outage and the PR #63 fix, open issues and next steps.

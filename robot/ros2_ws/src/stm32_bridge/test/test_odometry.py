@@ -120,7 +120,9 @@ from stm32_bridge.stm32_bridge_node import (  # noqa: E402
 # ---------------------------------------------------------------------------
 class OdometryModel:
     def __init__(self, wheel_radius=0.09725, wheel_base=0.4325,
-                 steps_per_rev=200.0, microstep=8.0, gear_ratio=10.0):
+                 steps_per_rev=200.0, microstep=8.0, gear_ratio=10.0,
+                 odom_linear_scale=1.0):
+        self.odom_linear_scale = odom_linear_scale
         circ = 2.0 * math.pi * wheel_radius
         self.steps_per_meter = steps_per_rev * microstep * gear_ratio / circ
         self.wheel_base = wheel_base
@@ -169,6 +171,48 @@ def approx(a, b, tol=1e-6):
 # ---------------------------------------------------------------------------
 # Tests.
 # ---------------------------------------------------------------------------
+def _drive(model, left_steps, right_steps, n=100, dt=0.02):
+    model.feed(0, 0, dt)
+    for k in range(1, n + 1):
+        model.feed(left_steps * k // n, right_steps * k // n, dt)
+
+
+def test_odom_linear_scale_default_is_v1():
+    a, b = OdometryModel(), OdometryModel(odom_linear_scale=1.0)
+    _drive(a, 8000, 9000); _drive(b, 8000, 9000)
+    approx(a.x, b.x); approx(a.y, b.y); approx(a.theta, b.theta)
+
+
+def test_odom_linear_scale_scales_straight_distance_only():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, 26180, 26180); _drive(v2, 26180, 26180)
+    approx(v2.x, base.x * 1.045, tol=1e-9); approx(v2.y, 0.0); approx(v2.theta, 0.0)
+
+
+def test_odom_linear_scale_leaves_rotation_unchanged():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, -5000, 5000); _drive(v2, -5000, 5000)     # turn in place
+    approx(v2.theta, base.theta, tol=1e-12); approx(v2.x, 0.0); approx(v2.y, 0.0)
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, 20000, 26000); _drive(v2, 20000, 26000)   # arc
+    approx(v2.theta, base.theta, tol=1e-12)
+    approx(math.hypot(v2.x, v2.y), 1.045 * math.hypot(base.x, base.y), tol=1e-9)
+
+
+def test_odom_linear_scale_velocity_is_scaled_too():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    base.feed(0, 0, 0.02); v2.feed(0, 0, 0.02)
+    lb, ab = base.feed(100, 120, 0.02); lv, av = v2.feed(100, 120, 0.02)
+    approx(lv, lb * 1.045, tol=1e-12); approx(av, ab, tol=1e-12)
+
+
+def test_odom_linear_scale_rejects_typos():
+    v = Stm32BridgeNode._valid_odom_linear_scale
+    assert v(1.045) == 1.045 and v(0.8) == 0.8 and v(1.2) == 1.2
+    for bad in (0.0, -1.0, 1.21, 10.45, float('nan'), float('inf')):
+        assert v(bad) == 1.0
+
+
 def test_steps_per_meter_matches_firmware():
     """1600 driver pulses/rev * 10 gear / (pi * 0.1945 m)."""
     m = OdometryModel()
@@ -524,6 +568,7 @@ class _FeedbackHarness:
         self.odom_invert_right = False
         self.published_odometry = []
         self._imu_health = ImuHealth()
+        self.odom_linear_scale = 1.0
 
     def get_logger(self):
         return SimpleNamespace(

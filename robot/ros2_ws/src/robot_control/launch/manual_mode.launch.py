@@ -13,6 +13,7 @@ def generate_launch_description():
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
     wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     max_wheel_speed_mm_s = LaunchConfiguration('max_wheel_speed_mm_s')
     speed_scale = LaunchConfiguration('speed_scale')
     invert_left = LaunchConfiguration('invert_left')
@@ -75,6 +76,9 @@ def generate_launch_description():
                                           'physical/CAD separation is 0.4325 m.'),
         DeclareLaunchArgument('wheel_radius', default_value='0.09725',
                               description='Real wheel radius for odometry.'),
+        DeclareLaunchArgument('odom_linear_scale', default_value='1.0',
+                              description='Odometry-only translation scale '
+                                          '(Localization V2); 1.0 = unchanged.'),
         DeclareLaunchArgument('max_wheel_speed_mm_s', default_value='250.0',
                               description='Peak wheel speed safety limit.'),
         DeclareLaunchArgument(
@@ -139,6 +143,7 @@ def generate_launch_description():
                     'baudrate': baudrate,
                     'wheel_base': wheel_base,
                     'wheel_radius': wheel_radius,
+                    'odom_linear_scale': odom_linear_scale,
                     'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
                     'speed_scale': speed_scale,
                     'invert_left': invert_left,
