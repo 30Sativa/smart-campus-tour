@@ -6,18 +6,33 @@ using SmartCampus.Infrastructure.Authentication.Jwt;
 using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using System.Threading.RateLimiting;
 
-var studentAiLocal = args.Contains(StudentAiLocalCommand.Argument, StringComparer.Ordinal);
-var registrationLocal = args.Contains(RegistrationLocalCommand.Argument, StringComparer.Ordinal);
-var reuseStudentAi = args.Contains(LocalFixtureDatabase.ReuseStudentAi, StringComparer.Ordinal);
-var reuseRegistration = args.Contains(LocalFixtureDatabase.ReuseRegistration, StringComparer.Ordinal);
-var localRealEmail = args.Contains(LocalFixtureDatabase.RealEmail, StringComparer.Ordinal);
+var fleetProvisioning = FleetRobotProvisionCommand.Parse(args);
+if (fleetProvisioning.Error is not null)
+{
+    Console.Error.WriteLine(fleetProvisioning.Error);
+    Environment.ExitCode = 2;
+    return;
+}
+
+var hostArguments = fleetProvisioning.HostArguments;
+var studentAiLocal = hostArguments.Contains(StudentAiLocalCommand.Argument, StringComparer.Ordinal);
+var registrationLocal = hostArguments.Contains(RegistrationLocalCommand.Argument, StringComparer.Ordinal);
+var reuseStudentAi = hostArguments.Contains(LocalFixtureDatabase.ReuseStudentAi, StringComparer.Ordinal);
+var reuseRegistration = hostArguments.Contains(LocalFixtureDatabase.ReuseRegistration, StringComparer.Ordinal);
+var localRealEmail = hostArguments.Contains(LocalFixtureDatabase.RealEmail, StringComparer.Ordinal);
 var localArguments = new[] { StudentAiLocalCommand.Argument, RegistrationLocalCommand.Argument,
     LocalFixtureDatabase.ReuseStudentAi, LocalFixtureDatabase.ReuseRegistration, LocalFixtureDatabase.RealEmail };
-var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(args.Where(argument => !localArguments.Contains(argument, StringComparer.Ordinal)).ToArray());
+var initialAdminSeedCommand = InitialAdminSeedCommand.Parse(hostArguments.Where(argument => !localArguments.Contains(argument, StringComparer.Ordinal)).ToArray());
 var demoPoiSeedCommand = DemoPoiSeedCommand.Parse(initialAdminSeedCommand.GetHostArguments());
-var builder = WebApplication.CreateBuilder(demoPoiSeedCommand.GetHostArguments());
+var builder = WebApplication.CreateBuilder(fleetProvisioning.Requested ? [] : demoPoiSeedCommand.GetHostArguments());
+if (fleetProvisioning.Requested)
+{
+    Environment.ExitCode = await FleetRobotProvisionCommand.RunAsync(builder.Configuration, fleetProvisioning.RobotCode!);
+    return;
+}
 if (studentAiLocal || registrationLocal || reuseStudentAi || reuseRegistration || localRealEmail)
 {
     try
@@ -92,6 +107,8 @@ if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
 
 // The opt-in Gazebo preview is isolated in Hubs/SimulationPreviewExtensions.cs.
 builder.Services.AddSimulationPreview();
+if (!simulationPreviewEnabled)
+    builder.Services.AddFleetSync(builder.Configuration);
 
 // Register HTTP endpoints, error responses, and the development API document.
 builder.Services.AddControllers().UseBaseResponseForInvalidModelState();
@@ -112,6 +129,13 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("AccountLogin", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    var fleetSyncPermitLimit = builder.Configuration.GetValue<int?>("FleetSync:RateLimit:PermitLimit") ?? 600;
+    var fleetSyncWindowSeconds = builder.Configuration.GetValue<int?>("FleetSync:RateLimit:WindowSeconds") ?? 60;
+    if (fleetSyncPermitLimit <= 0 || fleetSyncWindowSeconds <= 0)
+        throw new InvalidOperationException("FleetSync rate-limit permit limit and window must be positive.");
+    options.AddPolicy("FleetSync", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = fleetSyncPermitLimit, Window = TimeSpan.FromSeconds(fleetSyncWindowSeconds), QueueLimit = 0 }));
 });
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {
@@ -136,6 +160,16 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
             options.MapInboundClaims = false;
             options.TokenValidationParameters = new JwtTokenSettings(builder.Configuration)
                 .CreateValidationParameters();
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    if (context.Request.Path.StartsWithSegments(FleetSyncExtensions.FleetSyncHubPath) &&
+                        context.Request.Query.TryGetValue("access_token", out var accessToken))
+                        context.Token = accessToken;
+                    return Task.CompletedTask;
+                }
+            };
         });
     builder.Services.AddAuthorization();
 }
@@ -192,8 +226,23 @@ if (!simulationPreviewEnabled)
 
 // Applies preview-only loopback/origin checks and maps its Hub when enabled.
 app.UseSimulationPreview(simulationPreviewEnabled);
+if (simulationPreviewEnabled)
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api/fleet") ||
+            context.Request.Path.StartsWithSegments(FleetSyncExtensions.FleetSyncHubPath))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        await next();
+    });
+}
 
 app.MapControllers();
+if (!simulationPreviewEnabled)
+    app.MapFleetOperations();
 
 app.Run();
 

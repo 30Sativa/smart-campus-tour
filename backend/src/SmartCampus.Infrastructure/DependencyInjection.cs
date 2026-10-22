@@ -3,13 +3,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.Authentication;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Infrastructure.Authentication.Jwt;
+using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Authentication.PasswordHashing;
 using SmartCampus.Infrastructure.Authentication.Seeding;
 using SmartCampus.Infrastructure.Authentication.UsernameNormalization;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
 using SmartCampus.Infrastructure.Persistence.Seeding;
+using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 
@@ -32,6 +35,8 @@ public static class DependencyInjection
             serviceProvider.GetRequiredService<ApplicationDbContext>());
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IUsernameNormalizer, InvariantUsernameNormalizer>();
+        services.AddScoped<IFleetRobotAuthenticator, FleetRobotAuthenticator>();
+        services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);

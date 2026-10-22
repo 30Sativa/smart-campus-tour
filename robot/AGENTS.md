@@ -72,12 +72,13 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   `docs/architecture.md`.
 - The **production fleet bridge** for the physical robot lives here (planned:
   `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
-  is `Backend fleet contract ↔ ROS navigation/state`. It is a translator
-  only — ROS 2 on one side, SignalR JSON Hub Protocol over TLS on the other
-  (`/hubs/fleet`, ADR-0008). Python compatibility with ASP.NET Core/.NET 10
-  is unproven and must pass the checkpoint in
-  `docs/decisions/0008-production-fleet-transport.md` before production bridge
-  implementation. It must not contain booking rules, scheduling, or
+  is `Backend fleet contract ↔ ROS navigation/state`. It is a translator only —
+  ROS 2 on one side and the telemetry-only HTTPS Fleet Sync v1 contract
+  (`POST /api/fleet/v1/sync`) on the other. See
+  `docs/contracts/fleet-sync/v1/` and ADR-0019. The ROS Fleet Bridge is still
+  planned work; Python HTTPS/TLS compatibility from the ROS Humble image and
+  the deployment proxy remain R1 verification gates. It must not contain
+  booking rules, scheduling, or
   robot-assignment logic; those are
   backend concerns (`docs/architecture.md` §3). The robot executes one leg at
   a time; it never receives a full tour to orchestrate. Bridge commands go

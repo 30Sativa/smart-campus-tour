@@ -88,9 +88,10 @@ miniPC (robot)                                               laptop (Wi-Fi khác
     từ chối mọi client channel (đo được: 0 bản tin `cmd_vel` lọt qua).
 - **Đường ghi duy nhất là initial pose.** Nó đi tới `initialpose_guard` qua
   một cổng riêng, bằng giao thức JSON một chức năng.
-- **Backend và Digital Twin** không dùng DDS (`fleet_bridge` dùng SignalR,
-  ADR-0008), nên không bị ảnh hưởng. `fleet_bridge` phải theo cùng nguyên tắc:
-  là tiến trình riêng, và I/O mạng không bao giờ chặn callback ROS.
+- **Backend và Digital Twin** không dùng DDS. Fleet Bridge gửi telemetry qua
+  HTTPS Fleet Sync v1 (`POST /api/fleet/v1/sync`, ADR-0019); đường này không
+  tham gia graph DDS. Bridge phải là tiến trình riêng, và I/O mạng không bao
+  giờ chặn callback ROS.
 
 ## 3. Thành phần
 
