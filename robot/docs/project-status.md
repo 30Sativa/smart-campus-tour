@@ -1,6 +1,13 @@
 # Robot architecture and handoff status
 
-> **Latest update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
+> **Latest update, 2026-10-22:** Nav2 **Baseline V2** is the development baseline
+> ([nav2-baseline-v2.md](nav2-baseline-v2.md); opt-in, not fully hardware validated;
+> V1 frozen for rollback). The LiDAR mount moved on 2026-10-20/21 (yaw about −4.8°;
+> runs use `lidar_yaw:=-0.0833`, the repo default is unchanged). START↔POI_03 was
+> driven both ways on 2026-10-21. Localization V2 is still an unmerged PR. Read
+> [robot-status-2026-10-22.md](robot-status-2026-10-22.md) first.
+>
+> **Update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
 > (checker ISOLATED). R3 was exercised while the robot drove A→B→A (S5a): Wi-Fi
 > roaming no longer disturbs the robot. Open issues: CPU saturation while the
 > Quest stream runs (Nav2 FollowPath ACK timeouts and recoveries); an IMU outage

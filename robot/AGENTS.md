@@ -31,7 +31,11 @@ Serial contract between the STM32 firmware and `stm32_bridge`:
 **`robot/docs/PROTOCOL_FB.md`** — single source of truth, read it before
 touching either side of the wire.
 Per-phase design, close-out criteria and error tables: **`robot/docs/phase*.md`**.
-Current Nav2 baseline: **`robot/docs/nav2-baseline-v1.md`**. Current R3 design,
+Current Nav2 development baseline: **`robot/docs/nav2-baseline-v2.md`** (V2, opt-in,
+not yet fully hardware validated); V1 stays frozen for comparison/rollback in
+**`robot/docs/nav2-baseline-v1.md`**. Latest robot status:
+**`robot/docs/robot-status-2026-10-22.md`**. Nav2 motion metrics, offline sim and
+hardware A/B tools: **`robot/tools/nav2_bench/`** (measure V3+ with the same tools). Current R3 design,
 deployment status and rollback: **`robot/docs/dds-isolation.md`** and
 **`robot/docs/r3-dds-readiness-2026-10-17.md`**. A command written in a runbook
 does not authorize hardware operation; verify the current task and machine

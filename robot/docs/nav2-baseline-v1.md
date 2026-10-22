@@ -1,5 +1,9 @@
 # Nav2 Baseline V1 (robot AMR, chốt 2026-10-16)
 
+> **2026-10-22:** superseded as the *development* baseline by
+> [Nav2 Baseline V2](nav2-baseline-v2.md). V1 stays frozen (file, hash and tests
+> unchanged) for A/B comparison and rollback.
+>
 > This page defines the V1 configuration and records its bounded test evidence.
 > Its cited commit is the baseline introduction, not the current GitHub `main`
 > head or proof of the current MiniPC install. The 2026-10-17 source/runtime
