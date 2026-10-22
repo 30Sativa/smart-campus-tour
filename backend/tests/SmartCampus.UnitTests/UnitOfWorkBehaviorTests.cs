@@ -1,6 +1,9 @@
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Behaviors;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
+using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.FleetSync.Commands.SyncFleetTelemetry;
 
 namespace SmartCampus.UnitTests;
 
@@ -36,6 +39,27 @@ public sealed class UnitOfWorkBehaviorTests
             CancellationToken.None);
 
         Assert.Equal("handled", response);
+        Assert.Equal(0, dbContext.SaveChangesCalls);
+        Assert.Equal(0, serviceProvider.DbContextResolutionCount);
+    }
+
+    [Fact]
+    public async Task Handle_FleetTelemetry_DoesNotResolvePersistenceOrCommit()
+    {
+        var dbContext = new RecordingDbContext();
+        var serviceProvider = new RecordingServiceProvider(dbContext);
+        var behavior = new UnitOfWorkBehavior<SyncFleetTelemetry, SyncFleetTelemetryResult>(serviceProvider);
+        var robot = new FleetRobotIdentity("robot_01", "PHYSICAL", null, false);
+        var report = new FleetTelemetryReport("robot_01", Guid.NewGuid(), 1, DateTimeOffset.UtcNow,
+            "test-map", "map", null, "IDLE", null, null, null, null, null);
+        var snapshot = new FleetTelemetrySnapshot(robot, report, DateTimeOffset.UtcNow);
+
+        var response = await behavior.Handle(
+            new SyncFleetTelemetry(robot, report),
+            _ => Task.FromResult(new SyncFleetTelemetryResult(false, snapshot.ReceivedAt, snapshot)),
+            CancellationToken.None);
+
+        Assert.Same(snapshot, response.Snapshot);
         Assert.Equal(0, dbContext.SaveChangesCalls);
         Assert.Equal(0, serviceProvider.DbContextResolutionCount);
     }

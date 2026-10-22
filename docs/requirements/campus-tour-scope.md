@@ -362,7 +362,7 @@ Các giới hạn đã có trong phiếu v1.2 không phải nghĩa vụ mới xi
 
 Lời mời, yêu cầu nhánh và quyền mới ảnh hưởng tích hợp backend/web và dữ liệu/contract ứng dụng. Không cần tự thay transport ROS để sửa scope, nhưng không được gọi đây là chỉ sửa chữ, không ảnh hưởng API/DB. Khi code phải cập nhật `docs/architecture.md` và review public contract.
 
-Đối chiếu hiện tại: `docs/architecture.md` đã mô tả Student từ xa, một ngôn ngữ, backend sở hữu tiến độ và transport fleet SignalR được chọn với cổng kiểm chứng Python. Vì vậy không dùng lại bảng hiện trạng ngày 19/09 để kết luận repo còn mặc định multilingual hoặc transport chưa chọn. Tài liệu kiến trúc không chứng minh các tính năng này đã chạy.
+Đối chiếu hiện tại: `docs/architecture.md` mô tả Student từ xa, một ngôn ngữ, backend sở hữu tiến độ và HTTPS Fleet Sync v1 theo ADR-0019. Backend M0/B1 có telemetry sync; robot bridge và kiểm chứng triển khai vẫn là công việc R1. Vì vậy không dùng lại bảng hiện trạng ngày 19/09 để kết luận repo còn mặc định multilingual hoặc transport chưa chọn. Tài liệu kiến trúc không chứng minh các tính năng này đã chạy.
 
 Về nghiên cứu, kiến trúc hiện tại hoãn implementation/benchmark tới sau khi đường Remote Tour end-to-end chạy được, đồng thời giữ nguyên nghĩa vụ nghiên cứu chính thức. Bản Review 1 này **không chốt lại A/B, telemetry rate, latency target, fleet size nghiên cứu hoặc lịch benchmark cũ**. Bài hai Tour chức năng ở mục 8 không thay benchmark hay nghiên cứu DT-first. Nhóm cần thống nhất kế hoạch với GVHD riêng nếu có mâu thuẫn với phiếu.
 

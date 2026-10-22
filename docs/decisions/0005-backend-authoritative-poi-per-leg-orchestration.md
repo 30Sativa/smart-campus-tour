@@ -25,12 +25,12 @@ Cancel { legId }
 ```
 
 The robot executes that leg and reports execution state; it does not receive
-an entire tour or own progression between stops. ADR-0008 selects SignalR JSON
-Hub Protocol over TLS, with a mandatory Python-to-ASP.NET Core/.NET 10
-compatibility checkpoint before production bridge implementation. The
-checkpoint has not passed. `docs/architecture.md` Section 3 records the
-conceptual report shapes, machine-auth requirements, and reconnect semantics;
-final DTO binding and implementations remain pending.
+an entire tour or own progression between stops. ADR-0008 originally selected
+SignalR JSON Hub Protocol over TLS for robot traffic. ADR-0019 supersedes that
+transport choice for the M0/B1 telemetry path with HTTPS report-and-reconcile.
+Its command/result semantics remain future M2 design. `docs/architecture.md`
+Section 3 records the implemented telemetry-only sync and the still-conceptual
+per-leg command/result boundary.
 
 Production `GoTo` maps directly to Nav2 `NavigateToPose`. `stopId` is optional
 metadata, not a local lookup instruction; end/return legs need not have a stop.

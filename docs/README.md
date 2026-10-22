@@ -37,6 +37,10 @@ The [Admin Tour backend slice](decisions/0018-admin-tour-management.md) adds
 SCHEDULED creation/update and pre-Start cancellation without frontend/runtime
 integration. API usage: `backend/docs/admin-tour-management.md`.
 
+The [Fleet Sync v1 backend slice](decisions/0019-https-fleet-sync.md) records
+HTTPS telemetry, per-robot credentials and the Staff operations projection.
+Contract fixtures and a Python probe are in `docs/contracts/fleet-sync/v1/`.
+
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility
 gate; check its status before treating it as realized.

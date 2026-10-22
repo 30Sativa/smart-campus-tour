@@ -16,12 +16,70 @@ using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Domain.Entities;
+using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Infrastructure.Persistence;
 
 namespace SmartCampus.IntegrationTests;
 
 public sealed class DeploymentDatabaseTests
 {
+    [SchemaV11Fact]
+    public async Task FleetCredentialProvisioner_CanUpdateOnlyCredentialHashForAnExistingRobot()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.ExecuteAsync($"""
+            INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
+            VALUES('{Guid.NewGuid():D}',N'robot_provision_test','EMULATOR',0x01,0,0,SYSDATETIMEOFFSET());
+            """);
+        await Apply(database, "fleet-credential-provisioning-permissions.sql");
+        await database.ExecuteAsync("CREATE USER fleet_provisioner_test WITHOUT LOGIN; ALTER ROLE campus_fleet_provisioner ADD MEMBER fleet_provisioner_test;");
+
+        await using var connection = new SqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        string? provisionedCredential = null;
+        await using (var impersonate = new SqlCommand("EXECUTE AS USER='fleet_provisioner_test';", connection))
+            await impersonate.ExecuteNonQueryAsync();
+        try
+        {
+            await using (var readCode = new SqlCommand("SELECT RobotCode FROM dbo.Robots;", connection))
+                Assert.Equal("robot_provision_test", await readCode.ExecuteScalarAsync());
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connection).Options;
+            await using (var provisionerContext = new ApplicationDbContext(options))
+            {
+                var provisioned = await new FleetRobotCredentialProvisioner()
+                    .ProvisionAsync(provisionerContext, "robot_provision_test");
+                Assert.NotNull(provisioned);
+                Assert.Equal("robot_provision_test", provisioned.RobotCode);
+                Assert.True(FleetRobotCredentialHash.IsValidFormat(provisioned.Credential));
+                provisionedCredential = provisioned.Credential;
+            }
+            foreach (var (statement, errorNumber) in new[]
+            {
+                ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_provision_test'", 230),
+                ("SELECT CredentialHash FROM dbo.Robots", 230),
+                ("INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES(NEWID(),N'other','EMULATOR',0x01,0,0,SYSDATETIMEOFFSET())", 229)
+            })
+            {
+                await using var denied = new SqlCommand(statement, connection);
+                Assert.Equal(errorNumber, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
+            }
+        }
+        finally
+        {
+            await using var revert = new SqlCommand("REVERT;", connection);
+            await revert.ExecuteNonQueryAsync();
+        }
+
+        await using var verify = Context(database.ConnectionString);
+        var storedHash = await verify.Robots.AsNoTracking()
+            .Where(robot => robot.RobotCode == "robot_provision_test")
+            .Select(robot => robot.CredentialHash)
+            .SingleAsync();
+        Assert.Equal(32, storedHash.Length);
+        Assert.True(FleetRobotCredentialHash.Verify(provisionedCredential!, storedHash));
+    }
+
     [SchemaV11Fact]
     public async Task RuntimeRole_CanPrepareRoutesAndCancelTours_ButCannotDeleteToursOrRewriteLogs()
     {

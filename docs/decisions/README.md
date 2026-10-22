@@ -40,7 +40,7 @@ adding a test, bumping a patch version.
 | [0005](0005-backend-authoritative-poi-per-leg-orchestration.md) | Backend owns authoritative POI navigation targets and per-leg tour orchestration | accepted |
 | [0006](0006-demo-first-tour-schema.md) | Use the v1.0 demo-first SQL Server schema as the Database First persistence source | superseded for the current schema by ADR-0012 |
 | [0007](0007-smac2d-rpp-no-autonomous-reverse.md) | SmacPlanner2D + Regulated Pure Pursuit, with autonomous reverse disabled | accepted |
-| [0008](0008-production-fleet-transport.md) | SignalR fleet transport, separate Hubs, and navigation MVP semantics | accepted; Python compatibility gate pending |
+| [0008](0008-production-fleet-transport.md) | SignalR fleet transport, separate Hubs, and navigation MVP semantics | superseded for robot transport by ADR-0019; M2 semantics retained |
 | [0009](0009-review-1-tour-business-scope.md) | Review 1: shared viewing rows, invitations, POI content, branches, Start time, fallback and audit | accepted by team; implementation pending; GVHD review at Review 2 |
 | [0010](0010-personal-access-code-entry.md) | Email a Tour page link and personal access code; enter code to create a browser session; resend versus revoke/reissue | accepted by team; supersedes ADR-0009 secret-link entry; implementation pending |
 | [0011](0011-student-data-use-for-tour.md) | Use student data only for Tour registration, invitations, and operational statistics; no post-Tour admissions contact | accepted by team; implementation pending |
@@ -51,6 +51,7 @@ adding a test, bumping a patch version.
 | [0016](0016-student-qa-assistant-stack.md) | Backend-mediated Student Q&A; Python/FastAPI assistant; Gemini via provider adapter; approved content pack | accepted by team; implementation pending |
 | [0017](0017-admin-route-management.md) | Admin Route CRUD; frozen referenced itineraries; CRUD, bootstrap seed and technical import boundaries | owner-authorized implementation scope; supersedes seed-only Route/dwell portions of 0009/0012 |
 | [0018](0018-admin-tour-management.md) | Backend SCHEDULED Tour CRUD, durable retries and pre-Start cancellation with access revocation | owner-authorized implementation scope; no runtime or frontend integration |
+| [0019](0019-https-fleet-sync.md) | HTTPS Fleet Sync v1 telemetry with per-robot credentials and Staff operations projection | selected for M0/B1 implementation; group confirmation and physical readiness remain pending |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -211,9 +211,10 @@ and robot assignment is a decided boundary; the dispatch use cases are not
 implemented yet. A robot is intended to execute one navigation leg at a time
 without owning the tour workflow. The web app owns the 3D Operational Digital
 Twin UI, while `digital-twin/` owns the Fleet Emulator scaffold and future
-load experiments, not the 3D frontend. Production fleet transport is selected
-by [ADR-0008](decisions/0008-production-fleet-transport.md), with a Python
-compatibility acceptance gate that has not passed yet.
+load experiments, not the 3D frontend. M0/B1 robot telemetry uses HTTPS
+report-and-reconcile under [ADR-0019](decisions/0019-https-fleet-sync.md).
+SignalR remains the Staff-facing operations projection and the development
+SimulationPreview transport. Per-leg commands remain M2 work.
 
 ---
 
@@ -614,23 +615,20 @@ threshold change requires a new key and source-parity check target.
 
 ### 3.1 Fleet contract
 
-**Decided contract, implementation and compatibility checkpoint pending:** the
+**M0/B1 telemetry implementation; command/runtime work remains pending:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
-defines ownership; [ADR-0008](decisions/0008-production-fleet-transport.md)
-selects **SignalR JSON Hub Protocol over TLS** for the physical `fleet_bridge`
-and Fleet Emulator. Production use depends on a successful Python client
-compatibility checkpoint against ASP.NET Core/.NET 10. That compatibility has
-not been demonstrated.
+defines ownership; [ADR-0019](decisions/0019-https-fleet-sync.md) selects
+**HTTPS report-and-reconcile** for robot telemetry. The S2/S2B SignalR harness
+is historical compatibility evidence and does not block the HTTPS sync path.
 
 ```text
-Physical fleet_bridge -- outbound --\
-                                    <-> /hubs/fleet <-> Backend Application
-Fleet Emulator ------- outbound --/                         |
-                                                  operations projection
-                                                           |
-                                                   /hubs/operations
-                                                           |
-                                                   Staff Web / 3D Twin
+Physical fleet_bridge -- HTTPS POST /api/fleet/v1/sync --> Backend Application
+Fleet Emulator -------- (future client) --------------->          |
+                                                     operations projection
+                                                              |
+                                                      /hubs/operations
+                                                              |
+                                                      Staff Web / 3D Twin
 
 Separate development path (already exists):
 Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
@@ -639,32 +637,28 @@ Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
 
 | Boundary | Clients and purpose |
 |---|---|
-| `/hubs/fleet` | Physical bridge and Fleet Emulator; bidirectional machine command/state contract. |
-| `/hubs/operations` | Backend-to-browser projections for Staff Web / Operational Digital Twin. |
+| `/api/fleet/v1/sync` | HTTPS robot-to-backend telemetry report and empty-command reconciliation response. |
+| `/hubs/operations` | Staff-only SignalR projection, including latest fleet telemetry. |
 | `/hubs/simulation` | Existing development-only SimulationPreview; unchanged. |
 
-Do not merge these Hubs. Browsers do not connect to the fleet Hub; robots do not
-connect to operations. Different URLs are not authorization: Section 3.7 defines
-the required identity separation. The production Hubs are not implemented yet.
+The robot sync API uses per-robot machine credentials. Staff use account JWTs
+for the operations Hub; robot credentials cannot join it. The HTTPS endpoint
+does not keep a robot socket open, and browsers never submit robot reports.
 
-A temporary one-way robot pose prototype (`POST /api/robots/telemetry` with a
-read-only `/hubs/fleet` browser stream) was removed. It did not implement the
-production machine command/state contract selected by ADR-0008. The
-`/hubs/fleet` contract and pose fields below remain planned and gated by the
-Python compatibility checkpoint.
+A previous temporary pose prototype (`POST /api/robots/telemetry`) was removed.
+Fleet Sync v1 is a separate, versioned contract; it writes latest state only to
+process memory and does not add a persistent pose table.
 
-Application owns a future gateway boundary such as `IFleetGateway`. Hubs and
-the thin SignalR adapter using `IHubContext` belong in Api, without an
+Application owns sync validation and the transient state-store boundary. The
+Operations Hub and thin SignalR projection adapter belong in Api, without an
 Infrastructure-to-Api reference. Application stays independent of SignalR and
-ROS types. The bridge translates fleet commands/state only; it owns no booking,
-scheduling, assignment, or tour state machine. Execution tracking and result
-retention belong to the adapter, not to tour orchestration.
+ROS types. A future bridge translates telemetry and later commands; it owns no
+booking, scheduling, assignment, or tour state machine.
 
-The conceptual MVP contract is below. Method names and semantics are selected;
-these are not implemented DTOs or new database entities. Exact binding,
-validation limits, and acknowledgement encoding remain implementation work.
-`?` denotes an optional/nullable value. Commands travel backend-to-robot;
-reports travel robot-to-backend.
+The following GoTo/Cancel and result shapes are reserved for M2. They are not
+Fleet Sync v1 DTOs or implemented endpoints. `?` denotes an
+optional/nullable value. Fleet Sync v1 request/response binding and validation
+are documented in [`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/).
 
 ```text
 GoTo { legId, mapKey, frameId, x, y, yaw, stopId? }
@@ -689,6 +683,65 @@ mapping to `Poi`/`RouteStop` is introduced. End/return legs need not have a stop
 The navigation MVP has no manual drive, raw `/cmd_vel`, cloud E-stop, or Head
 command. Head support remains separate despite the existing frontend/schema
 references; this MVP does not complete the full remote-tour feature set.
+
+#### 3.1.2 Fleet Sync v1 (implemented telemetry slice)
+
+The backend exposes `POST /api/fleet/v1/sync` over HTTPS. Each request uses a
+per-robot bearer credential plus `X-Robot-Code`; the code is resolved from
+`dbo.Robots` and JSON `robotId` must match that authenticated identity.
+`Robot.CredentialHash` stores SHA-256 of a 32-byte random Base64URL secret. API
+runtime access is read-only for Robots; the one-shot credential command uses a
+separate, column-limited provisioning SQL role and only updates existing Robot
+rows. No SQL schema change or migration is introduced.
+
+Request fields, response/error examples and shared fixtures are in
+[`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/). Reports carry
+`streamId`, browser-safe increasing `seq`, UTC `reportedAt`, configured
+`mapKey`/`frameId`, nullable pose and its distinct `capturedAt`, execution
+status, nullable localization, nullable motion readiness, and observed fault
+or battery data. Payloads are validated against the configured robot context.
+Exact duplicate reports are ACKed without refreshing liveness; sequence reuse
+with different content, out-of-order reports, and retired streams are rejected.
+A new bridge stream must begin at sequence 1 while another stream is current; a
+non-retired stream with another starting sequence receives
+`STREAM_START_REQUIRED`. The last 16 replaced stream IDs are rejected with
+`STALE_STREAM` while they remain in this process's history. A bridge process
+restart uses a new stream when its `reportedAt` is not older than current state.
+If the API process restarts, its store and tombstones are empty: the bridge
+preserves its current stream ID and sequence, and the API accepts any valid
+positive sequence as the first observed report. This creates a fresh ordering
+baseline and does not replay reports missed during the outage. A 400 validation
+rejection happens before storage; after correcting the payload, the bridge may
+retry the same stream and sequence. If a response is uncertain, it retries the
+exact same report; a still-latest report is acknowledged as a duplicate, while
+a report superseded by a later sequence receives `OUT_OF_ORDER`. Reports older
+than the age window return 400 before duplicate detection. Bridge retry actions
+are specified in the shared contract.
+Once a stream ID falls outside the bounded last-16 history, a delayed process
+using that ID can qualify for a new ownership change with sequence 1 and a
+recent timestamp. Keep one bridge process per robot identity.
+
+The backend keeps one latest report per robot and a bounded replaced-stream
+history in a thread-safe in-memory store. Credential authentication reads
+Robot data from SQL, but telemetry causes no SQL pose writes. The store clears
+on backend restart, after which the next authenticated report at any valid
+sequence rebuilds its ordering baseline. This is a single-instance B1 baseline,
+not a durable or shared multi-instance cache. Initial configurable age/freshness
+defaults are listed in the contract and backend runbook; operations must validate
+them against the bridge and network. Accepted reports signal a coalescing
+background broadcaster; HTTP success does not wait for a Staff client, and
+failed/time-limited sends are retried.
+
+Staff-only `/hubs/operations` emits `FleetUpdated` with a current snapshot on
+connect, after accepted reports, and when sync/pose freshness crosses a
+threshold. It refreshes age values at the configured interval; freshness flags
+can lag by one interval. Hub connections close when the Staff-role JWT expires.
+Account deactivation does not immediately revoke an already-issued JWT; it
+remains valid until expiry under current API authentication. Its legacy
+`connectionState: Live|Stale` describes recent HTTPS sync, not an open socket.
+`syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
+remain separate. Neither a new sync nor a pose sample implies localization or
+motion readiness. No command is emitted by v1.
 
 #### 3.1.1 POI target invariant
 
@@ -755,9 +808,9 @@ accepted branch request, and each invitation to one open browser session while
 allowing multiple other request/session records. EF initially inferred
 singular Tour-to-BranchRequest and Invitation-to-BrowserSession navigations
 from the filtered indexes; both mappings are corrected to one-to-many.
-In a future fleet implementation, live pose, connection, battery, and external
-execution state are transient fleet telemetry, separate from persisted tour
-business state and `TourEvent`.
+Fleet Sync v1 keeps live pose, sync liveness, battery, localization, motion
+readiness, and reported execution state as transient telemetry, separate from
+persisted tour business state and `TourEvent`.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
@@ -767,7 +820,8 @@ operational rules below are not backend implementations. Ignoring stale or
 duplicate results, eligibility checks and reconciling release still need
 application enforcement beyond the claim uniqueness indexes.
 
-FleetHub transport is not tour orchestration. The later Application work owns:
+Fleet Sync and the Operations projection are not tour orchestration. The later
+Application work owns:
 
 ```text
 Tour/dispatch -> derive current leg -> persist execution intent/current leg
@@ -1216,22 +1270,21 @@ must not receive every pose update. A controlled benchmark may write telemetry
 to a dedicated experiment log/file.
 
 
-Backend-to-browser realtime uses the selected `/hubs/operations` boundary.
-`FleetUpdated`, `TourUpdated(tourId, revision)`, and `AssistanceRequired` are
-the operations event vocabulary; payloads are backend projections, not raw
-fleet reports. `web/src/api/contracts/staff-realtime.ts` records the unwired
-frontend proposal. Exact payload mapping and reconnect/refetch behavior still
-need implementation agreement, including revision handling across backend
-restart. This decision does not approve or implement the proposed staff/admin
-HTTP APIs in `web/src/api/contracts/staff.ts` and
+Backend-to-browser realtime uses the Staff-authorized `/hubs/operations`
+boundary. `FleetUpdated` now carries the current fleet telemetry projection on
+connect, after new sync reports, and when freshness changes. The backend
+projection matches the existing `AmrStatus` shape and adds explicit sync/pose
+freshness and readiness fields. `TourUpdated(tourId, revision)` and
+`AssistanceRequired` remain planned events. The web still selects its mock
+realtime provider; wiring production auth, reconnect/refetch, and Staff data
+flows is separate work. This decision does not approve or implement the
+proposed staff/admin HTTP APIs in `web/src/api/contracts/staff.ts` and
 `web/src/api/contracts/admin.ts`, nor their error/version contracts.
 
-No robot-to-backend or backend-to-browser frequency is fixed in this decision.
-Production integration must declare configurable operational rates and
-freshness thresholds, independently of ROS internal rates. Send execution/fault
-changes promptly; bound buffers and
-keep network I/O off ROS callbacks. Latest-state pose delivery must not discard
-terminal results, which require separate retention/retry. The SimulationPreview
+Fleet Sync v1 has initial configurable age/freshness defaults; R1 must validate
+report rates and thresholds against the bridge/network, independently of ROS
+internal rates. Keep network I/O off ROS callbacks. M2 terminal results require
+separate retention/retry from latest-state pose delivery. The SimulationPreview
 10 Hz limit remains local to preview. Research implementation and benchmark
 execution are deferred under Section 5. Research requirements impose no
 constraints or acceptance gates on this production milestone; the Capstone
@@ -1240,16 +1293,20 @@ scope remains unchanged.
 The backend implements development SimulationPreview, user JWT login/session
 authentication, Representative owned registration management, Admin account,
 POI, Route and Tour preparation management, Admin registration review,
-invitation support and Student access. Admin role authorization is enforced
-for the Admin APIs; invitation support applies its owner/Admin rules and
-Student access applies its invitation/session rules. Runtime branch-request
-and fleet business APIs remain unimplemented, as does robot/machine authentication. Production
-fleet and operations Hubs and fleet dispatch remain unimplemented. A single
-backend process with per-robot latest state is the initial implementation
-baseline; multiple instances would require shared-state and connection-routing
-design, not just separate Hub names.
+invitation support, Student access, authenticated Fleet Sync v1, and the
+Staff-authorized Operations Hub projection. Admin role authorization is
+enforced for Admin APIs; invitation support applies owner/Admin rules and
+Student access applies invitation/session rules. Runtime branch-request,
+command/result, dispatch, and Tour runtime APIs remain unimplemented. Latest
+fleet state is single-process memory; multiple instances need shared-state and
+routing design.
 
-### 3.4 State and command-result semantics
+### 3.4 M2 execution and command-result semantics
+
+Fleet Sync v1 implements telemetry state reporting as described in §3.1.2.
+The per-leg result/command rules below are retained for M2 design; no
+`ReportCommandResult` endpoint, navigation command, or tour runtime is
+implemented by this backend slice.
 
 | Field | Requirement and meaning |
 |---|---|
@@ -1269,11 +1326,11 @@ design, not just separate Hub names.
 Numeric JSON `seq` must stay within `1..9007199254740991` for exact representation
 in the browser; a backend int64 type alone does not guarantee this.
 
-Use `reportedAt` and `pose.capturedAt` to distinguish a living bridge from a stale
-pose. ROS time and wall-clock conversion/freshness thresholds must be documented
-when implementing the bridge. Sequence ordering does not depend on synchronized
-wall clocks. Server-side source metadata comes from `Robot.SourceType`; no
-per-sample source/version field is required by this MVP.
+Use `reportedAt` and `pose.capturedAt` to distinguish a recent sync from a stale
+pose. R1 must document ROS-time-to-wall-clock conversion. Sequence ordering is
+per stream; timestamps are used for freshness and new-stream reconciliation.
+Server-side source metadata comes from `Robot.SourceType`; no per-sample
+source/version field is required by this MVP.
 
 Execution status is separate from both `Tour.State` and connection/freshness.
 `UNKNOWN` means the bridge/robot cannot determine execution, for example after
@@ -1337,16 +1394,29 @@ and readiness evidence. `set_initial_pose: false` is deliberate; neither an
 RViz initial-pose message nor `Route.StartX/Y/Yaw` proves the robot is localized
 at that position. This prerequisite does not block the transport-only spike.
 
-### 3.6 Connection lifecycle and idempotency
+### 3.6 HTTPS report lifecycle and M2 command idempotency
 
-- Retry initial connection failure and automatically reconnect after disconnect,
-  with bounded backoff and jitter. Register handlers once, not on every retry.
-- Keep one current authenticated connection per robot. A valid new connection
-  supersedes the old; reject reports from the old connection and prevent its
-  disconnect callback from removing the new one.
-- Reject duplicate/out-of-order state within `(robotId, streamId, seq)`. Bind
-  streams to the authenticated current connection; reconcile new streams after
-  process restart rather than comparing sequence numbers across streams.
+- R1 must retry HTTPS report failures with bounded backoff and retain the exact
+  report, `streamId`, and sequence until the response is known. A 400 validation
+  rejection occurs before storage; after correcting its payload, the same
+  sequence may be retried. When a response is uncertain, retry the same body.
+  If it is still the latest report, Fleet Sync v1 acknowledges it as a duplicate
+  without refreshing liveness. If a later sequence already replaced it, the
+  older retry receives `OUT_OF_ORDER` and must be dropped. Idempotency history
+  is process-local: if the API restarts first, an uncertain retry may be
+  accepted as the first observation with `duplicate: false`. Keep one report in
+  flight and retain its exact body until a response arrives; v1 has no durable
+  exactly-once delivery.
+- A robot bridge process restart creates a new stream at sequence 1 when
+  `reportedAt` is at least as new as the previous stream. Sequence values are
+  not compared across stream IDs. An API backend restart clears its
+  process-local projection and tombstones; a robot bridge that is still running
+  keeps its stream and continues at N+1, which the empty store accepts as its
+  first observed report. This establishes a fresh ordering baseline and does
+  not recover telemetry missed during downtime. While a current stream exists,
+  a new non-retired stream must start at sequence 1 (`STREAM_START_REQUIRED`),
+  and a stream in the retained retired history remains rejected (`STALE_STREAM`).
+  V1 does not replay commands.
 - Duplicate `GoTo` with the same leg and target returns existing execution/result
   information without creating a new goal. The same leg with a different target
   is rejected. A busy robot rejects other legs, without automatic preemption or
@@ -1364,37 +1434,41 @@ at that position. This prerequisite does not block the transport-only spike.
   Replaying a persisted intent after bridge restart is not automatically safe:
   in-memory idempotency history may be gone. Reconcile first.
 
-These are application guarantees, not exactly-once delivery or distributed
-consensus supplied by SignalR.
+These are M2 application guarantees, not exactly-once delivery or distributed
+consensus supplied by HTTPS or SignalR.
 
-### 3.7 Authentication and compatibility acceptance gate
+### 3.7 Fleet authentication and compatibility status
 
-The local-only spike may bootstrap with dummy/local identity. Passing the
-checkpoint requires valid credentials, invalid-credential rejection,
-authenticated reconnect, and backend restart. Outside that spike, before
-allowing navigation commands require TLS, a machine credential per robot, and
-a fleet-machine authorization policy. User/browser identities cannot submit
-robot state or use the fleet Hub. Operations requires separate user access.
-Reuse `Robot.CredentialHash`; robot credential verification and credential
-lifecycle are later work, without adding PKI/mTLS or a device-management
-platform to the MVP.
+Fleet Sync v1 authenticates each request using the existing
+`Robot.CredentialHash` field and a distinct per-robot credential. Credential
+verification and endpoint behavior are implemented in backend; one-shot
+provisioning updates only that hash with a separate SQL principal. TLS is a
+deployment requirement. The API runtime reads Robot rows and does not receive
+the provisioning connection string. Full provisioning role instructions and
+the client probe are in [`backend/docs/fleet-sync.md`](../backend/docs/fleet-sync.md).
+Fleet sync is currently rate-limited before authentication by connection IP.
+Before real R1 traffic, configure ASP.NET Core forwarded headers with only the
+actual trusted proxy addresses; otherwise robots may all share the proxy's
+bucket. Credential failures also consume the pre-auth bucket, so deployments
+must test the robot cadence plus retries and separate abuse protection from the
+authenticated per-robot reporting budget (or validate an equivalent design).
+Until those proxy and capacity conditions are exercised, this limiter is a
+blocker for real R1 traffic; controlled single-instance B1 verification can
+continue.
 
-After these docs are merged, the next task is a small Python SignalR client
-against an ASP.NET Core/.NET 10 test Hub. The acceptance checklist is in
-[ADR-0008](decisions/0008-production-fleet-transport.md#python-compatibility-checkpoint-next-step-after-documentation-merge):
-runtime parity with the robot's Humble image; verified TLS/auth; bidirectional
-representative payloads; initial retry; clean and silent loss detection;
-authenticated reconnect/backend restart; observable result acknowledgement and
-idempotent replay; bounded offline buffering; and an at least 30-minute soak
-at a declared configurable test rate with memory/queue/callback evidence.
-The test rate is not a production frequency or research requirement. No ROS
-nodes, TF, Nav2, or hardware is needed. Spike measurements do not establish a
-physical stop budget.
+`/hubs/operations` accepts Staff-role JWTs at connection time and closes each
+connection when its JWT expires. Account deactivation does not immediately
+revoke an issued JWT. SignalR browser WebSocket requests may send the JWT as
+`access_token` only on that Hub path. `/api/fleet/v1/sync` uses the robot scheme
+explicitly and does not accept user JWTs; robot credentials cannot join the
+Operations Hub.
 
-**Python SignalR compatibility with ASP.NET Core/.NET 10 is unproven and must
-pass this checkpoint before production fleet bridge implementation.** No Python
-client dependency is selected here. If it fails, review the transport for both
-the physical bridge and Fleet Emulator; no fallback implementation is chosen.
+The S2/S2B Python SignalR compatibility harness remains evidence about the
+tested SignalR clients. It is no longer a gate for HTTP Fleet Sync, and it does
+not show that SignalR is impossible. R1 must test the Python HTTPS client,
+verified TLS, invalid credentials, retries, process/backend restart, and
+sequence continuity. This transport test does not establish physical safety or
+a valid robot-local stop budget.
 
 
 ---
@@ -1427,8 +1501,9 @@ rosters or navigation commands. Audience authorization and exact delivery
 endpoint remain to be specified in the viewer integration patch; this decision
 does not select group-code authentication or a new Hub.
 
-Livestream is a separate media path, not payload on `/hubs/fleet` or a camera
-texture requirement for the operational Twin. Staff start/progression checks
+Livestream is a separate media path, not payload on Fleet Sync or the
+operations projection, and is not a camera-texture requirement for the
+operational Twin. Staff start/progression checks
 need an explicit, testable source of stream availability. Its owner, observation
 method, freshness, and manual-confirmation policy must be defined before full
 Remote Tour acceptance. A media outage is distinct from loss of the backend
@@ -1449,8 +1524,8 @@ add audio or head commands to the navigation fleet MVP.
 ### Local Gazebo display integration
 
 The first executable display integration is a **development-only, read-only,
-single-Gazebo-robot** path. It does not implement the production fleet command
-contract, robot authentication, dispatch, or physical localization above.
+single-Gazebo-robot** path. It does not use production Fleet Sync v1, implement
+fleet commands, dispatch, or provide physical localization evidence.
 
 - Enable backend `SimulationPreview:Enabled=true` in `Development` only.
   Preview endpoints accept loopback connections only; use an SSH tunnel when
@@ -1817,6 +1892,6 @@ read-only `foxglove_bridge` and `initialpose_guard`, the only remote write. That
 write is the initial pose, accepted only while the robot is stationary with no
 active goal. Laptops render in their own local DDS graph (RViz2). No other work
 package uses DDS to reach the robot: the backend and the Twin use `fleet_bridge`
-over SignalR (Section 3.1), which runs on the robot and is unaffected. Once this
+over HTTPS Fleet Sync (Section 3.1), which runs on the robot and is unaffected. Once this
 boundary is applied, laptop access by `ROS_DISCOVERY_SERVER`/`remote_rviz` stops
 working.

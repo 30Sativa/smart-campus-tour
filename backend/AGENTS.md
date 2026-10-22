@@ -17,9 +17,10 @@ describe features already present in this backend.
 - C# / .NET 10, controller-based ASP.NET Core Web API, MediatR,
   FluentValidation, xUnit.
 - SQL Server + EF Core **Database First**. No normal EF migrations.
-- SignalR serves the development SimulationPreview Hub. Production fleet and
-  operations Hubs are selected but not implemented; ADR-0008 requires a Python
-  compatibility checkpoint before production fleet bridge implementation.
+- SignalR serves the development SimulationPreview Hub and the Staff-only
+  `/hubs/operations` fleet projection. Robot telemetry uses authenticated HTTPS
+  `POST /api/fleet/v1/sync` under ADR-0019. The ROS Fleet Bridge and all
+  navigation/command-result runtime remain future work.
 - Four separate projects; no root-level backend project or extra architecture
   layer.
 
@@ -33,11 +34,11 @@ backend/
 │   └── scaffold-db
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
-│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Invitations,Pois,
+│   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,FleetSync,Invitations,Pois,
 │   │                               Registrations,RegistrationReview,Representative,Routes,Simulation,StudentQuestions,StudentTour,Tours}/
-│   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/Invitations/,
+│   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/{FleetSync,Invitations}/,
 │   │                               Persistence/{Repositories,Seeding}/
-│   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
+│   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, FleetRobotProvisionCommand.cs, ExceptionHandling/,
 │                                    Invitations/, Properties/, Program.cs, appsettings.json
 └── tests/
     ├── SmartCampus.UnitTests/
@@ -48,7 +49,8 @@ backend/
 Current API controllers cover Auth, Admin account management, Admin POI and Route
 management, Admin Tour preparation/cancellation (ADR-0018), Representative submission/pre-approval registration, Admin
 registration review, owner/Admin invitation support, anonymous Student cookie
-entry/session/leave, and development SimulationPreview.
+entry/session/leave, development SimulationPreview, and authenticated Fleet
+Sync v1 telemetry.
 Student view and private text Q&A are implemented under architecture §7.1;
 provider quality, voice and runtime/dispatch remain separate. The Representative
 contract and Tour-first transaction are recorded in `docs/architecture.md`
@@ -60,9 +62,11 @@ Infrastructure has specific Auth, account, POI, Route, Tour, Representative read
 registration mutation/review, invitation and Student-access repositories.
 Invitation cryptography/configuration and the Resend HTTP adapter are in
 Infrastructure; the hosted delivery worker is in Api and dispatches Application
-claim/result commands before/after external HTTP. The temporary robot pose endpoint and read-only fleet
-pose Hub were removed. Production fleet/operations Hubs, runtime/dispatch use
-cases, and repositories for those future flows remain unimplemented. An absent
+claim/result commands before/after external HTTP. Fleet Sync has a dedicated
+machine authentication scheme, Application validation/store boundaries, an
+in-memory Infrastructure store, a Staff-only operations projection, and a
+one-shot credential provisioner. No `/hubs/fleet`, navigation command, tour
+runtime, SQL telemetry writer, or ROS Fleet Bridge is implemented. An absent
 extension folder on GitHub is not missing setup.
 
 Compile-time dependencies: `Domain` has no project references; `Application`
@@ -89,6 +93,7 @@ backend/src/SmartCampus.Application/
 ├── Common/
 │   ├── Abstractions/
 │   │   ├── Authentication/          authentication use-case boundaries
+│   │   ├── FleetSync/               robot identity and telemetry-store boundaries
 │   │   ├── Invitations/             code/email boundaries and invitation settings
 │   │   ├── Messaging/               ICommand<T>, IQuery<T>
 │   │   └── Persistence/             commit boundary and feature repository interfaces
@@ -96,7 +101,7 @@ backend/src/SmartCampus.Application/
 │   ├── Behaviors/                    validation and command commit pipeline
 │   ├── Exceptions/
 │   └── Models/                       PagedResult<T>
-├── Features/                          current: Accounts, Auth, Invitations, Pois, Registrations,
+├── Features/                          current: Accounts, Auth, FleetSync, Invitations, Pois, Registrations,
 │                                       RegistrationReview, Representative, Simulation
 │   └── <Feature>/
 │       ├── Commands/<UseCase>/
@@ -104,14 +109,14 @@ backend/src/SmartCampus.Application/
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Infrastructure/
-├── Authentication/                   Jwt/, PasswordHashing/, Seeding/, UsernameNormalization/
+├── Authentication/                   Fleet robot credentials, Jwt/, PasswordHashing/, Seeding/, UsernameNormalization/
 ├── Persistence/
 │   ├── ApplicationDbContext.cs       generated EF mapping
 │   ├── ApplicationDbContext.Abstractions.cs  handwritten partial
 │   ├── Repositories/                 Auth, Accounts, POI, Representative, shared Registrations,
 │   │                                RegistrationReview, Invitations and StudentAccess
 │   └── Seeding/                      current demo POI seeding
-├── Integrations/Invitations/         current code protection, configuration, email template and Resend adapter
+├── Integrations/{FleetSync,Invitations}/ current in-memory telemetry store, credential provisioner, and invitation adapters
 └── DependencyInjection.cs
 
 backend/src/SmartCampus.Api/
@@ -213,23 +218,24 @@ treated as implemented invariants. Resolve any desired behavior against the
 current schema and record public contract changes in `docs/architecture.md`.
 
 The backend owns POI/navigation target data, robot assignment decisions, and
-tour progression; the robot bridge only translates external commands to ROS.
-For production targets, use the backend-managed map/frame context and send
-only the current navigation leg. Keep transient high-frequency robot telemetry
-out of transactional SQL. A future fleet boundary such as `IFleetGateway` is
-an Application abstraction. For the selected SignalR transport, the thin
-adapter using `IHubContext` belongs in Api alongside the Hubs; do not make
-Infrastructure reference Api to access a Hub. ADR-0008 and
-`docs/architecture.md` Section 3 select SignalR JSON Hub Protocol over TLS,
-separate `/hubs/fleet` and `/hubs/operations`, and the conceptual command/report
-contract with machine-auth requirements. Python compatibility remains unproven
-and gated; final DTO binding and implementations remain pending. ROS topics
-and message types stay outside Domain and Application. A controller must never
-call a fleet or ROS client directly.
+tour progression; the future robot bridge only translates approved telemetry
+and commands to ROS. Fleet Sync v1 validates per-robot HTTPS reports and stores
+the latest state in memory. Keep transient high-frequency telemetry out of
+transactional SQL. Robot authentication reads the existing `Robot` row; its
+credential provisioner is a one-shot operator command using a dedicated,
+column-limited database role. Never put that provisioning connection string in
+the runtime API configuration. `IFleetTelemetryStore` and
+`IFleetRobotAuthenticator` belong to Application; Infrastructure implements
+them. The Staff-only `/hubs/operations` projection and thin adapter using
+`IHubContext` belong in Api; Application must not depend on SignalR and
+Infrastructure must not reference Api to access a Hub. ADR-0019 and
+`docs/architecture.md` Section 3 define the current HTTPS telemetry contract.
+No robot command, ROS type, or Tour runtime belongs in this slice. A controller
+must never call a ROS client directly.
 
-The future FleetHub transport is not tour orchestration. Later Application
-work must persist the execution intent/current leg before external send and
-reconcile the outcome.
+Fleet Sync and the Operations Hub are not tour orchestration. Later Application
+work must persist the execution intent/current leg before any external command
+and reconcile the result.
 The current commit-after-handler pipeline does not make an external GoTo and
 SQL commit atomic; no distributed transaction or pipeline change is introduced
 by this decision. Transient state ingestion must not commit every pose to SQL.
@@ -458,29 +464,23 @@ account in V1; the physical `UserRoles` primary key remains unchanged.
 The backend also implements Admin account and POI management, plus
 Representative Tour reads and owner-scoped registration submission/management.
 User JWT and role authorization for those APIs are present. Authorization for
-future READY/Staff runtime, dispatch, and fleet business APIs, and
-robot/fleet machine authentication, remain unimplemented. Production fleet and
-operations Hubs remain pending; before
-robot navigation commands are enabled outside the local compatibility spike,
-require TLS and per-robot credentials using `Robot.CredentialHash`, with a
-fleet-machine policy distinct from user access. Browser/user credentials must
-not submit robot state. The
-local spike may bootstrap with dummy identity, but passing the checkpoint
-requires valid and invalid credentials, authenticated reconnect, and backend
-restart tests.
+future READY/Staff runtime, dispatch, and fleet business APIs remains
+unimplemented. Robot machine authentication is implemented for Fleet Sync v1
+using `Robot.CredentialHash`, with a separate Staff JWT policy for the
+Operations Hub. The API runtime must retain read-only Robot permissions;
+credential provisioning uses its own SQL role. Browser/user credentials cannot
+submit robot state. No command path or physical readiness policy is implemented.
 
-SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/` when a realtime
-use case exists. Application must not depend on SignalR types; add an
-Application notification boundary only when needed, then implement its
-transport adapter in Api or Infrastructure according to the transport. The
-fleet/operations boundaries and conceptual fleet methods are now recorded in
-`docs/architecture.md` and ADR-0008; production implementation is still pending.
-Before navigation commands are enabled outside the local compatibility spike,
-require TLS, per-robot credentials using the existing `Robot.CredentialHash`
-concept, and a fleet-machine policy distinct from operations user access.
-Browser/user credentials must not submit robot state. The local spike may
-bootstrap with dummy identity, but passing the checkpoint requires valid and
-invalid credentials, authenticated reconnect, and backend restart tests.
+SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/`. Application must
+not depend on SignalR types; the Operations Hub projects Application fleet
+state from Api. `/hubs/operations` requires a Staff-role JWT and closes the
+connection when that token expires. Existing JWTs are not revoked immediately
+when an account is deactivated. The sync endpoint accepts only the `FleetRobot`
+machine scheme. The production
+robot telemetry boundary and reserved M2 methods are recorded in
+`docs/architecture.md`, ADR-0008, and ADR-0019. Before navigation commands are
+enabled, require the robot-local safety and reconciliation evidence in
+`docs/architecture.md` Section 6.
 
 ## 7. Tests, verification, and limits
 
