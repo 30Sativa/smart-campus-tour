@@ -1,0 +1,14 @@
+[Unit]
+Description=Reconcile Smart Campus Tour containers after Docker starts
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/campustour-stack-start
+TimeoutStartSec=40min
+
+[Install]
+WantedBy=multi-user.target

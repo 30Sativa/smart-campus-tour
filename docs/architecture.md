@@ -1872,10 +1872,15 @@ Runtime
 permissions preserve append-only AuditLogs/TourEvents, grant writes for current
 implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
 and read access only to robot/variant/branch data.
-This deployment introduces no API route or schema migration. The API process
-probe expects 401 from the existing refresh route without a cookie; it is not a
-database/business readiness check. Docker smoke testing and real EC2/browser TLS
-validation remain separate from the normal backend verification script.
+The deployment adds two anonymous operational routes: `GET /health/live`
+returns 204 when the API process can serve a request; `GET /health/ready`
+performs a SQL connectivity check with a three-second timeout and returns 200
+with `{ "status": "ready" }` or a generic 503. Neither route returns connection
+details. Compose and deployment use readiness; liveness is useful to distinguish
+an API process from an API with a database outage. These routes do not change
+the database schema, and no migration is run during deployment. Docker smoke
+testing and real EC2/browser TLS and resource validation remain separate from
+the normal backend verification script.
 
 
 ### Physical robot deployment

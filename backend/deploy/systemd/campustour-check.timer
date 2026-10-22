@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic Smart Campus Tour host and service health check
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Unit=campustour-check.service
+
+[Install]
+WantedBy=timers.target
