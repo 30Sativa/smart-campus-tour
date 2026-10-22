@@ -1,9 +1,16 @@
 # Robot architecture and handoff status
 
-> **Latest update, 2026-10-20:** STM32 firmware from PR #63 is flashed; the
+> **Latest update, 2026-10-22:** Nav2 **Baseline V2** is the development baseline
+> ([nav2-baseline-v2.md](nav2-baseline-v2.md); opt-in, not fully hardware validated;
+> V1 frozen for rollback). The LiDAR mount moved on 2026-10-20/21 (yaw about −4.8°;
+> runs use `lidar_yaw:=-0.0833`, the repo default is unchanged). START↔POI_03 was
+> driven both ways on 2026-10-21. Localization V2 is still an unmerged PR. Read
+> [robot-status-2026-10-22.md](robot-status-2026-10-22.md) first.
+>
+> **Update, 2026-10-20:** STM32 firmware from PR #63 is flashed; the
 > long-corridor AMCL drift is traced to an odometry distance scale (offline);
 > Localization V2 is on the feature branch `feature/claude/localization-v2` (PR for review), not deployed. Read
-> [robot-status-2026-10-20.md](robot-status-2026-10-20.md) first.
+> [robot-status-2026-10-20.md](robot-status-2026-10-20.md) for that snapshot.
 >
 > **Update, 2026-10-19:** DDS isolation **S3 is deployed** on the MiniPC
 > (checker ISOLATED). R3 was exercised while the robot drove A→B→A (S5a): Wi-Fi

@@ -1,4 +1,6 @@
 using MediatR;
+using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Features.StudentQuestions;
@@ -17,6 +19,8 @@ public sealed class StudentQuestionsController(ISender sender, IConfiguration co
     public async Task<ActionResult<BaseResponse<StudentAnswer>>> Ask(Guid tourId, AskRequest request, CancellationToken ct)
     {
         StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
+        if (request.RecentTurns?.Any(t => t is null) == true)
+            throw new ValidationException([new ValidationFailure("RecentTurns", "Lượt hỏi đáp không được null.")]);
         var turns = (request.RecentTurns ?? []).Select(t => new StudentQuestionTurn(t.Question, t.Answer)).ToList();
         var answer = await sender.Send(new AskStudentQuestionCommand(tourId, Request.Cookies[StudentSessionCookie.Name(tourId)],
             request.QuestionId, request.Text, turns), ct);

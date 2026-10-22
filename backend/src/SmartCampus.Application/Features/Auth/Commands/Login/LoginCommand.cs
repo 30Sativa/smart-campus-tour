@@ -7,14 +7,15 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Auth.Commands.Login;
 
-public sealed record LoginCommand(string Username, string Password) : ICommand<AuthSessionResult>;
+public sealed record LoginCommand(string Username, string Password) : ICommand<AuthSessionResult>, IAccountTransactionRequest;
 
 public sealed class LoginCommandHandler(
     IAuthRepository authRepository,
     IPasswordHasher passwordHasher,
     IUsernameNormalizer usernameNormalizer,
     IAuthTokenService authTokenService,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    LoginAttemptGate attempts)
     : IRequestHandler<LoginCommand, AuthSessionResult>
 {
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
@@ -24,6 +25,7 @@ public sealed class LoginCommandHandler(
         CancellationToken cancellationToken)
     {
         var normalizedUsername = usernameNormalizer.Normalize(request.Username);
+        attempts.Enter(normalizedUsername);
         var user = await authRepository.FindUserByNormalizedUsernameAsync(
             normalizedUsername,
             cancellationToken);
@@ -31,6 +33,11 @@ public sealed class LoginCommandHandler(
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedException("Invalid username or password.");
 
+        // Hash outside the root lock, then revalidate the current snapshot before issuing credentials.
+        var current = await authRepository.LockUserAsync(user.Id, cancellationToken);
+        if (current is null || current.PasswordHash != user.PasswordHash)
+            throw new UnauthorizedException("Invalid username or password.");
+        user = current;
         if (!user.IsActive)
             throw new ForbiddenException("Account cannot access the system.");
 

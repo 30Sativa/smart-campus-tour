@@ -82,6 +82,14 @@ IF HAS_PERMS_BY_NAME('dbo.AuditLogs', 'OBJECT', 'INSERT') <> 1
     OR HAS_PERMS_BY_NAME('dbo.TourEvents', 'OBJECT', 'INSERT') <> 1
     THROW 51006, 'Runtime must be able to append logs.', 1;
 SELECT TOP (1) Id FROM dbo.Tours WITH (UPDLOCK, ROWLOCK);
+IF HAS_PERMS_BY_NAME('dbo.Routes', 'OBJECT', 'INSERT') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Routes', 'OBJECT', 'UPDATE') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Routes', 'OBJECT', 'DELETE') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.RouteStops', 'OBJECT', 'DELETE') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Tours', 'OBJECT', 'INSERT') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Tours', 'OBJECT', 'UPDATE') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Tours', 'OBJECT', 'DELETE') <> 0
+    THROW 51007, 'Runtime permissions do not match Route/Tour preparation.', 1;
 BEGIN TRY
     EXEC(N'UPDATE dbo.AuditLogs SET ResultCode=''FAILED'' WHERE 1=0;');
     THROW 51003, 'Audit update must be denied.', 1;

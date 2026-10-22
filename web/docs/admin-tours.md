@@ -7,14 +7,20 @@ the source of truth; this file maps it onto the web area.
 ## Current implementation boundary
 
 `/admin/routes` now provides live SQL Route CRUD, separate from the Tour demo
-route selector. See `web/docs/route-management.md` and ADR-0017. Tour creation,
-READY and runtime remain separate work; a live Route is not silently inserted
-into those demo catalogs.
+route selector. See `web/docs/route-management.md` and ADR-0017.
+
+`/admin/tours`, `/admin/tours/new`, `/admin/tours/:id` and `/admin/tours/:id/edit`
+now use the live `/api/admin/tours` API (ADR-0018) through
+`src/features/administration/tours/`: list/search/state filter, create from an
+active Route (route revision + idempotency key), metadata/schedule/Route edit
+within server permissions, and Cancel with a reason. READY (Chốt / Mở lại) has
+no backend endpoint yet and is not offered. The dashboard and `/admin/history`
+remain labelled simulation consumers.
 
 `/admin/registrations` and `/admin/registrations/pending` now use the real SQL
 review API; see `web/docs/admin-registration-review.md`. Their row counts
 represent invitation rows, including shared viewing, rather than attendance.
-The Tour/dashboard/READY/invitation screens described below remain labelled
+The dashboard/READY/invitation screens described below remain labelled
 simulation consumers. Their review drawer still reviews only demo records.
 Live review does not issue access codes or send email, and never falls back to
 that simulation. Admin account and POI screens also use their existing APIs.
@@ -56,7 +62,7 @@ release checks.
 | `/admin/registrations/pending` | Review queue (Submitted), drawer via `?review=<id>` |
 | `/admin/registrations` | All registrations, state filter |
 | `/admin/routes` | Live Route catalog, search/status/paging and create |
-| `/admin/routes/new` | Create inactive Route, optionally copy an existing Route |
+| `/admin/routes/new` | Create inactive Route through the four-step form, optionally copy an existing Route |
 | `/admin/routes/:routeId` | Detail, reference locks, activate/deactivate and delete unused Route |
 | `/admin/routes/:routeId/edit` | Edit metadata and unreferenced itinerary configuration |
 | `/admin/pois` | POI catalog, search/status filter/paging; create inactive; content and eligible pose edits; usage lock details |

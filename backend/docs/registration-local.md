@@ -8,7 +8,7 @@ SCHEDULED. Đơn, lời mời, mã và email đều đi qua workflow HTTP hiện
 
 - SQL Server cục bộ và `ConnectionStrings:DefaultConnection` trong User Secrets;
   tài khoản Windows cần quyền tạo database.
-- `Resend:ApiKey`, `Resend:From` trong User Secrets của API. Với sender
+- Chỉ khi chọn gửi email thật: `Resend:ApiKey`, `Resend:From` trong User Secrets của API. Với sender
   `CampusTour <onboarding@resend.dev>`, người nhận test phải là email của tài khoản
   Resend; xem https://resend.com/docs/knowledge-base/403-error-resend-dev-domain.
 - Dependencies web đã cài. Chứng chỉ Development .NET đã tin cậy
@@ -26,6 +26,18 @@ Terminal API:
 & backend/scripts/start-registration-local.ps1
 ```
 
+Mặc định email worker **tắt**, không cần Resend key để thử đăng ký/duyệt.
+Muốn kiểm tra nhà cung cấp thật, xác nhận các recipient và pending requests
+trong đúng fixture rồi chạy API với cờ chủ động:
+
+```powershell
+& backend/scripts/start-registration-local.ps1 -SendRealEmail
+```
+
+Cờ này cần truyền ở mỗi lần chạy có gửi thư thật; reuse ticket không tự bật lại.
+Nó sẽ xử lý cả các email đang chờ của fixture. Không dùng roster/dữ liệu thật
+hoặc key production cho bài thử. Không bật provider chỉ để xác nhận automated tests.
+
 Terminal web:
 
 ```powershell
@@ -40,6 +52,11 @@ Nếu Windows từ chối quyền SQL/certificate, dùng terminal có quyền c�
 Chạy lại dùng database/tài khoản cũ. `-NewFixture` tạo database mới và thay file
 settings/login; không xóa database cũ. Database test có thể xóa riêng bằng SQL
 Server tooling khi không còn cần. Không chạy fixture trên database sản phẩm.
+Reuse được backend kiểm tra lại Development, SQL local và đúng tên catalog
+`SmartCampusRegistrationLocal_<32 hex>` trước kết nối. Setup lỗi sau CREATE
+DATABASE sẽ dọn chính database GUID vừa tạo; không tự xóa fixtures cũ. Ticket và
+entry là file chứa credentials, Git ignore không phải mã hóa/quản lý secret;
+giới hạn quyền đọc và xóa bản cũ khi hết dùng.
 
 ## Luồng trên giao diện
 

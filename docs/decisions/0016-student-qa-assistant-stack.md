@@ -6,6 +6,12 @@
   approval is not implied.
 - Contract: `docs/architecture.md` §7.1.
 
+Implementation update, 2026-10-19: the backend-mediated text Q&A slice and invited
+Student integration now exist under the §7.1 contract, including SQL-backed
+access checks and offline/fake-service tests. The original planning status above
+is historical; it does not claim live provider quality, voice integration,
+production readiness or advisor approval. STT/TTS remain separate work.
+
 ## Context
 
 `ai-assistant/` was a skeleton with no runtime, provider or contract. The

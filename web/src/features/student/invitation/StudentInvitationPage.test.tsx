@@ -6,6 +6,12 @@ import { StudentInvitationPage } from './StudentInvitationPage'
 import StudentTourPage from '../../../routes/student/StudentTourPage'
 import { useAuthStore } from '../../../stores/auth-store'
 
+// These invitation cases exercise a Tour without a configured livestream.
+vi.mock('../../quest-stream/quest-stream-config', async importOriginal => ({
+  ...await importOriginal<typeof import('../../quest-stream/quest-stream-config')>(),
+  QUEST_WHEP_URL: null,
+}))
+
 const tourId = '11111111-1111-1111-1111-111111111111'
 const otherTour = '22222222-2222-2222-2222-222222222222'
 const key = ['student-invitation', tourId]

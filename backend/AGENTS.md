@@ -34,7 +34,7 @@ backend/
 ├── src/
 │   ├── SmartCampus.Domain/          Entities/, Exceptions/
 │   ├── SmartCampus.Application/     Common/, Features/{Accounts,Auth,Invitations,Pois,
-│   │                               Registrations,RegistrationReview,Representative,Routes,Simulation,Tours}/
+│   │                               Registrations,RegistrationReview,Representative,Routes,Simulation,StudentQuestions,StudentTour,Tours}/
 │   ├── SmartCampus.Infrastructure/  Authentication/, Integrations/Invitations/,
 │   │                               Persistence/{Repositories,Seeding}/
 │   └── SmartCampus.Api/             Common/, Controllers/, Hubs/, ExceptionHandling/,
@@ -48,7 +48,9 @@ backend/
 Current API controllers cover Auth, Admin account management, Admin POI and Route
 management, Admin Tour preparation/cancellation (ADR-0018), Representative submission/pre-approval registration, Admin
 registration review, owner/Admin invitation support, anonymous Student cookie
-entry/session/leave, and development SimulationPreview. The Representative
+entry/session/leave, and development SimulationPreview.
+Student view and private text Q&A are implemented under architecture §7.1;
+provider quality, voice and runtime/dispatch remain separate. The Representative
 contract and Tour-first transaction are recorded in `docs/architecture.md`
 Section 3.2.1; Admin review is recorded in Section 3.2.2; invitation issuance,
 Resend delivery and minimal Student sessions in Section 3.2.3. Application has matching Auth,
@@ -293,6 +295,15 @@ commit through that pipeline. The handler and repository normally do not save
 independently. External side effects and partial failures need explicit
 use-case design when implemented.
 
+Account create/deactivate/reactivate, login/logout and read-only refresh use
+`IAccountTransactionRequest` with `AccountTransactionBehavior` outside UnitOfWork.
+User roots are locked before current roles/tokens are read; login's initial
+password check is revalidated under that lock before issuing credentials.
+Account creation reserves the normalized-username index range. Refresh remains
+a query without a save. Missing-cookie refresh skips the transaction so the
+hosting-only health probe still does not query SQL. New-password policy,
+single-instance login budgets and cookie CSRF/origin rules are in architecture §3.0.
+
 Exception: Admin POI create, update, and availability commands are marked as POI
 mutations. `PoiMutationTransactionBehavior` wraps their normal UnitOfWork save
 in a POI-specific serializable SQL transaction so usage checks and POI/audit
@@ -322,10 +333,12 @@ UnitOfWork save in a read-committed SQL transaction, and each handler takes an
 update lock on the parent Tour before locking the registration, checking versions
 and effective emails, so roster/registration/audit rows commit together
 (`docs/architecture.md` Section 3.2.1). Admin approve/reject and invitation
-support use the same transaction. Writers of an existing registration acquire
+support use the same transaction. Individual writers of an existing registration acquire
 locks only through `IRegistrationRepository.LockRegistrationAsync`, which owns
 the Tour-first order; create and Tour-only writers lock the Tour first. Do not
-lock a registration or its rows by another path.
+lock a registration or its rows by another path. Tour-wide cancellation is the
+explicit bulk exception: it first owns that same Tour root through commit and
+loads registrations/invitations without per-registration or historical roster reads.
 
 Admin Tour create/update/cancel commands use `ITourMutationCommand` and their
 feature-specific read-committed transaction wrapper. Existing Tour writes
@@ -336,7 +349,9 @@ committed retries durable. Do not create a parallel Route repository/model.
 Route changes before registration retain the old Route via configuration-only
 TourEvents. Schedule/Route changes after any registration/allowed branch or
 operational use are blocked until the notification/readiness workflow exists.
-Cancel preserves registration decisions, revokes invitations and closes sessions
+Cancel owns the shared Tour root and batch-loads registrations and invitations
+needing revocation, without hydrating roster/closed-session history.
+It preserves registration decisions, revokes invitations and closes sessions
 in the same transaction; hard DELETE and runtime transitions are absent. Tour
 detail reads share the Tour read-lock snapshot used by registration detail.
 See `backend/docs/admin-tour-management.md` and ADR-0018 for the API and limits.

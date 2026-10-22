@@ -131,6 +131,22 @@ public sealed class GlobalExceptionHandlerTests
         Assert.DoesNotContain("Sensitive database detail.", json);
     }
 
+    [Fact]
+    public async Task UnexpectedLogs_KeepCorrelationWithoutExceptionMessagesOrPrivateData()
+    {
+        var context = CreateHttpContext();
+        context.TraceIdentifier = "synthetic-trace-id";
+        var logger = new RecordingLogger<GlobalExceptionHandler>();
+        await new GlobalExceptionHandler(logger).TryHandleAsync(context,
+            new InvalidOperationException("private question; viewer@example.test; secret-token"), default);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains(nameof(InvalidOperationException), entry);
+        Assert.DoesNotContain("private question", entry);
+        Assert.DoesNotContain("viewer@example.test", entry);
+        Assert.DoesNotContain("secret-token", entry);
+        Assert.Contains("SQL error", entry);
+    }
+
     public static TheoryData<Exception, HttpStatusCode> ExpectedErrorMappings => new()
     {
         { new ValidationException([]), HttpStatusCode.BadRequest },

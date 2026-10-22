@@ -68,8 +68,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             await db.BranchRequests.AnyAsync(b => b.TourId == id, ct),
         await db.Robots.AnyAsync(r => r.CurrentTourId == id, ct));
 
-    public async Task<IReadOnlyList<Guid>> GetRegistrationIdsAsync(Guid id, CancellationToken ct) =>
-        await db.GroupRegistrations.Where(r => r.TourId == id).OrderBy(r => r.Id).Select(r => r.Id).ToArrayAsync(ct);
+    public async Task<IReadOnlyList<GroupRegistration>> LoadCancellationRegistrationsAsync(Guid id, CancellationToken ct) =>
+        await db.GroupRegistrations.Where(r => r.TourId == id).OrderBy(r => r.Id).ToArrayAsync(ct);
 
     public void Add(Tour tour) => db.Tours.Add(tour);
     public void AddAudit(AuditLog audit) => db.AuditLogs.Add(audit);

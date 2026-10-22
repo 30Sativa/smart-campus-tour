@@ -5,6 +5,12 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import StudentTourPage from '../../routes/student/StudentTourPage'
 import { useStudentStore } from './student-store'
 
+// Fixture playback must not use the developer's local Quest endpoint.
+vi.mock('../quest-stream/quest-stream-config', async importOriginal => ({
+  ...await importOriginal<typeof import('../quest-stream/quest-stream-config')>(),
+  QUEST_WHEP_URL: null,
+}))
+
 const clients: QueryClient[] = []
 const scrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
 

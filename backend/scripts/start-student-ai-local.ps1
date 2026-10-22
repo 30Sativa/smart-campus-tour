@@ -24,6 +24,7 @@ if ($NewFixture -or -not (Test-Path -LiteralPath $ticketPath)) {
             [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
         }
     }
+    $arguments += '--reuse-student-ai-local'
     Write-Host 'Reusing the local fixture in backend/student-ai-local.env.'
 }
 & dotnet @arguments

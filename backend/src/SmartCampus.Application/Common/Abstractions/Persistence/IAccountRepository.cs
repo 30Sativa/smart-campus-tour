@@ -14,10 +14,12 @@ public interface IAccountRepository
         int pageSize,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Reserves the normalized username range until the account transaction commits.</summary>
     Task<bool> NormalizedUsernameExistsAsync(
         string normalizedUsername,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Locks the User root before reading roles and unrevoked refresh tokens; requires an account transaction.</summary>
     Task<User?> FindForManagementAsync(
         Guid userId,
         CancellationToken cancellationToken = default);

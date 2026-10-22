@@ -96,10 +96,18 @@ CRLF/LF. Chạy lại với cùng snapshot giữ dữ liệu, đồng bộ runti
 và áp dụng lại permissions. Database có bảng nhưng không có marker, hoặc hash
 khác, sẽ **fail**; không tự migration, drop hay thay thế database cũ.
 
+Ngoại lệ compatibility có giới hạn: bootstrap check chấp nhận marker snapshot
+trước Route CRUD khi file hiện tại đúng hash đã review; hai snapshot chỉ khác
+hai comment, được khóa bằng regression test. Giữ nguyên marker/dữ liệu, không
+auto-rehash hoặc chấp nhận schema lạ. Chi tiết ở `backend/database/README.md`.
+
 API login `smartcampus_api` không có `sysadmin`/`db_owner`/DDL. Chỉ các bảng mà
-use case hiện tại ghi mới có CRUD; bảng Tour/route/robot/branch chỉ được đọc.
+use case hiện tại ghi mới có CRUD. `Routes`/`RouteStops` có CRUD;
+`Tours` có SELECT/INSERT/UPDATE, không DELETE; robot/variant/branch vẫn chỉ đọc.
 `AuditLogs` và `TourEvents` chỉ SELECT/INSERT, DENY UPDATE/DELETE theo role hiện
 có. Việc vận hành Tour/dispatch tương lai cần review permissions theo use case.
+Business grants nằm trong `backend/database/smart-campus-tour-runtime-permissions.sql`
+để deployment và SQL tests dùng cùng một nguồn.
 Initializer dành cho SQL instance do deployment này quản lý; provisioning một
 database/user có quyền tùy chỉnh sẵn phải review thủ công trước khi đưa vào.
 
@@ -127,12 +135,14 @@ unset INITIAL_ADMIN_USERNAME INITIAL_ADMIN_FULL_NAME INITIAL_ADMIN_PASSWORD
 
 Chạy sau khi stack đã healthy. Seeder sẽ skip nếu Admin hợp lệ đã có, không reset
 mật khẩu cũ. Compose cấp các biến seed chỉ cho service `seed-admin`.
+Password Admin tạo mới phải có 12–128 ký tự, không blank; không bị trim.
 
 Trên Vercel, đặt `VITE_API_BASE_URL=https://api.example.com`, rồi redeploy FE.
 `WEB_ORIGIN` phải khớp origin FE vì API dùng cookie Secure/SameSite=None và CORS
 credentials. Kiểm tra login → refresh → logout trong browser thực.
 OpenAPI/SimulationPreview không public trong Production. Chưa có Tour/route demo
-chỉ từ việc deploy: nạp dữ liệu kỹ thuật đã được review bằng quy trình database.
+chỉ từ việc deploy. Admin dùng Route CRUD và Tour preparation; việc khảo sát/
+kiểm chứng POI vật lý và runtime/READY vẫn là các bước riêng.
 
 Email đang tắt trong `backend/deploy/api.env`. Muốn gửi invitation, điền tất cả
 keys theo `backend/docs/invitations-resend.md`, bật `Invitations__Enabled=true`
