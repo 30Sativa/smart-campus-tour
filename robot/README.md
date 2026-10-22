@@ -28,7 +28,7 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `robot_control` | mode manager (cmd_vel mux), manual / manual-mapping / auto-explore launches, Nav2 + SLAM configs, frontier explorer |
 | `robot_description` | URDF/xacro robot model, Gazebo + display launches |
 | `robot_navigation` | localization (map_server + AMCL) and navigation on a saved map |
-| `robot_nav_plugins` | Nav2 plugins (C++): `LatchedGoalChecker`, used only by the opt-in `nav2_params_smooth.yaml` |
+| `robot_nav_plugins` | Nav2 plugins (C++): `LatchedGoalChecker`, used by the opt-in baselines `nav2_params_smooth.yaml` (V1) and `nav2_params_v2.yaml` (V2) |
 | `orbbec_bringup` | Astra Pro depth camera bringup + mount TF + Phase 2 depth diagnostics |
 | `robot_perception` | Phase 4 person perception -> Nav2 speed limit |
 | `gazebo_preview_bridge` | Development-only Gazebo telemetry -> local backend `SimulationPreview` |
@@ -94,8 +94,8 @@ Astra Pro -> RGB                     -> Phase 4 person detection
 The original bring-up was recorded in four phase documents under `docs/`.
 These describe phase-specific evidence, not necessarily the current runtime
 configuration. In particular, Phase 3 is historical; use
-[`docs/nav2-baseline-v1.md`](docs/nav2-baseline-v1.md) for the active Nav2
-baseline and [`docs/project-status.md`](docs/project-status.md) for deployment
+[`docs/nav2-baseline-v2.md`](docs/nav2-baseline-v2.md) for the current Nav2
+development baseline (V1, frozen for rollback: [`docs/nav2-baseline-v1.md`](docs/nav2-baseline-v1.md)) and [`docs/project-status.md`](docs/project-status.md) for deployment
 evidence:
 
 1. **Phase 1 — Camera** (`docs/phase1-camera.md`): Astra Pro streaming

@@ -24,11 +24,18 @@ permission to execute it.
 
 - [Native runtime](native-runtime.md) — provisioning, build and layered
   operation on the physical MiniPC.
-- [Nav2 Baseline V1](nav2-baseline-v1.md) — locked development/test
-  configuration, hardware evidence and limits.
+- [Nav2 Baseline V2](nav2-baseline-v2.md) — **current development baseline**
+  (V1 + RPP lookahead 0.8 + angular decel −1.2): offline and on-robot evidence,
+  limits, how to run/rollback and the criteria to call it hardware validated.
+  Tools: [nav2_bench](../tools/nav2_bench/README.md).
+- [Nav2 Baseline V1](nav2-baseline-v1.md) — frozen previous baseline, kept for
+  comparison and rollback.
 - [DDS isolation and RViz over SSH](dds-isolation.md) — R3 design, viewer,
   bridge, safeguards and staged transition.
-- [Robot status 2026-10-19](robot-status-2026-10-19.md) — **latest**: S3
+- [Robot status 2026-10-22](robot-status-2026-10-22.md) — **latest**: LiDAR mount
+  moved (yaw now about −4.8°, `lidar_yaw:=-0.0833` arg), START↔POI_03 done,
+  Nav2 Baseline V2, sessions without rosbag and the `go.sh` guard, next steps.
+- [Robot status 2026-10-19](robot-status-2026-10-19.md) — S3
   deployed, S4/S5a results, CPU contention with the Quest stream, silent IMU
   outage and the PR #63 fix, open issues and next steps.
 - [R3 DDS readiness snapshot (2026-10-17)](r3-dds-readiness-2026-10-17.md) —
