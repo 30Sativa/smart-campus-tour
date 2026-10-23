@@ -57,12 +57,19 @@ current schema is still compatible.
 
 The ordinary application workflow retains the SQL image digest already stored
 in host state and the active release. A later upstream tag digest does not
-upgrade SQL or block an API release. SQL engine changes run only through the
-separate `Backend SQL Maintenance` workflow, which uses the selected verified
-release digest and requires a verified off-host backup. An engine upgrade can
-alter database files; SQL image downgrade is not an automatic rollback. The
-recovery plan restores the backup to a separate SQL instance/volume and
-requires an operator cutover after validation.
+upgrade SQL or block an API release. SQL engine and resource changes run only
+through the separate `Backend SQL Maintenance` workflow, which uses the
+selected verified release digest and requires a verified off-host backup.
+Maintenance permits a pinned SQL image change, `MSSQL_MEMORY_LIMIT_MB`, the
+container memory limit, and the SQL CPU limit. On the 4 GiB profile, the
+validator allows SQL memory from 512 to 2048 MiB, a container limit from 1536
+to 2560 MiB, at least 256 MiB between those limits, and 0.5 to 1.5 CPUs.
+Credentials, data volume, network, exposed ports, security options, and other
+SQL service settings remain fixed; credential rotation needs a separate
+reviewed procedure. A SQL image upgrade or resource update can interrupt
+service and an engine upgrade can alter database files. SQL image/data-file
+downgrade is not automatic. The recovery plan restores the backup to a
+separate SQL instance/volume and requires an operator cutover after validation.
 
 The deploy path does not use SSH, GitHub repository secrets for AWS keys, or
 build tools on EC2. SSM is preferred over SSH because it avoids opening inbound
@@ -103,12 +110,15 @@ Complete these settings outside the repository before dispatching a deploy:
    SSM needs outbound connectivity. Termius SSH access is not needed by the
    deployment workflow.
 
-Configure a `main` branch ruleset outside this repo: require pull requests,
+Configure the `Protect main` ruleset outside this repo: require pull requests,
 at least one approval, dismiss stale approvals after new commits, require the
 `Verify backend` and `Build and smoke-test backend images` checks, and disable
 administrative bypass unless there is a documented break-glass owner. Those
-check names remain present because backend CI has no path filters. This repo
-does not change branch protection automatically.
+check names remain present because backend CI has no path filters. As checked
+on 2026-10-23, the active ruleset exists but has no required-status-check rule;
+add both check names in GitHub Settings → Rules → Rulesets → `Protect main` →
+Edit rules → Require status checks to pass. This repository does not change
+branch protection automatically.
 
 The chosen instance `c7i-flex.large` is 2 vCPU / 4 GiB and `c7i-flex.xlarge` is
 4 vCPU / 8 GiB. The 4 GiB configuration below is a candidate that must pass
@@ -322,6 +332,19 @@ initializer accepts only the existing reviewed v1.1 snapshot and does not run
 EF migrations. A future schema change needs a separately reviewed
 expand/contract migration and restore plan.
 
+The host stores the last accepted SQL Compose config hash and a redacted
+maintenance fingerprint under `/var/lib/campustour`. Ordinary application
+deployments require the active hash and SQL service settings to match that
+baseline. SQL maintenance compares all non-tunable service settings with that
+baseline, verifies the current container credentials still match the requested
+configuration, takes the required backup, and then recreates only the SQL
+service if its pinned image or approved limits changed. The named SQL data
+volume is never removed or automatically restored. On an older host without a
+baseline, a maintenance run can initialize it only when the running SQL
+container still matches the active Compose configuration; if it does not,
+first deploy the current release without changing SQL settings, inspect the
+host state, and retry maintenance after that baseline is recorded.
+
 `GET /health/live` is a process liveness check (204). `GET /health/ready` tests
 SQL connectivity with a three-second timeout (200 when connected, generic 503
 otherwise). Docker restarts containers after process exit/reboot according to
@@ -362,10 +385,14 @@ An upstream SQL tag changing does not affect normal API deployment: the active
 SQL digest stays pinned in host state. Use `Backend SQL Maintenance` during an
 approved window to apply a different manifest digest. The script backs up,
 checks application/schema readiness against the existing SQL engine, then
-changes the SQL image and rechecks readiness before API promotion. SQL Server
-may upgrade database files when it starts; after this boundary the script
-preserves a pending marker and requires operator review instead of attempting
-an unsafe image downgrade. Restore the backup to a separate SQL instance and
+changes the SQL image or approved memory/CPU limits and rechecks readiness
+before API promotion. SQL Server may upgrade database files when it starts;
+after this boundary the script preserves a pending marker and requires operator
+review instead of attempting an unsafe image downgrade. `campustour-check`
+reports any `deployment.pending` marker and fails without removing it or
+initiating rollback. Confirm SQL health, the active release, initializer/schema
+compatibility, and backup state before an operator resolves the marker. Restore
+the backup to a separate SQL instance and
 volume, run `RESTORE VERIFYONLY` and `DBCC CHECKDB`, validate app compatibility,
 then perform a reviewed cutover. Never restore over the live database as a
 routine rollback.

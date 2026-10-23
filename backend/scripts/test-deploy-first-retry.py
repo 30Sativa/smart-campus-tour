@@ -19,6 +19,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 DEPLOY_SCRIPT = REPO / "backend" / "deploy" / "deploy-ec2.sh"
+CHECK_SCRIPT = REPO / "backend" / "deploy" / "check-ec2.sh"
 
 FAKE_CLI = r'''#!/usr/bin/env python3
 import hashlib, json, os, shutil, sys, uuid
@@ -59,10 +60,14 @@ def parse_envs():
 def model(env, content):
     owner = env.get("COMPOSE_OWNER", "")
     sql_image = env.get("SQLSERVER_IMAGE", "")
-    sql_memory = "2592m" if "TEST_SQL_DRIFT" in content else "2560m"
+    sql_memory = "2304m" if "TEST_SQL_DRIFT" in content else env.get("SQLSERVER_MEMORY_LIMIT", "2560m")
     sql = {
         "image": sql_image,
-        "environment": {"MSSQL_PID": "Express", "MSSQL_MEMORY_LIMIT_MB": "2048"},
+        "environment": {
+            "ACCEPT_EULA": "Y", "MSSQL_PID": "Express",
+            "MSSQL_SA_PASSWORD": env.get("SQL_SA_PASSWORD", ""),
+            "MSSQL_MEMORY_LIMIT_MB": env.get("MSSQL_MEMORY_LIMIT_MB", "2048"),
+        },
         "volumes": [
             {"type": "volume", "source": "campustour_sqlserver-data", "target": "/var/opt/mssql"},
             {"type": "bind", "source": env.get("SQL_BACKUP_DIR", ""), "target": "/var/opt/mssql/backup"},
@@ -70,9 +75,11 @@ def model(env, content):
         "networks": ["database"],
         "ports": [],
         "mem_limit": sql_memory,
-        "cpus": "1.25",
+        "cpus": env.get("SQLSERVER_CPUS", "1.25"),
         "labels": {"com.smartcampus.deployment.owner": owner},
     }
+    if "TEST_UNAUTHORIZED_SQL_DRIFT" in content:
+        sql["privileged"] = True
     return {
         "services": {
             "sqlserver": sql,
@@ -120,6 +127,7 @@ if name == "id":
     sys.exit(2)
 if name == "jq":
     expression = " ".join(arg for arg in args if not arg.startswith("--arg"))
+    normalized_expression = expression.replace("-r ", "").strip()
     try:
         document = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -127,13 +135,38 @@ if name == "jq":
         sys.exit(2)
     if "service:(.services.sqlserver" in expression:
         service = dict(document["services"]["sqlserver"])
-        service["image"] = "<pinned-sql-image>"
+        if "del(.image, .environment, .mem_limit, .cpus)" in expression:
+            for key in ("image", "environment", "mem_limit", "cpus"):
+                service.pop(key, None)
+        else:
+            service["image"] = "<pinned-sql-image>"
         value = {
             "service": service,
             "volume": document["volumes"]["sqlserver-data"],
             "database_network": document["networks"]["database"],
         }
         print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+    elif ".services.sqlserver.environment | keys | sort | join" in normalized_expression:
+        print(",".join(sorted(document["services"]["sqlserver"]["environment"])))
+    elif ".services.sqlserver.environment | del(.MSSQL_MEMORY_LIMIT_MB)" in normalized_expression:
+        values = dict(document["services"]["sqlserver"]["environment"])
+        values.pop("MSSQL_MEMORY_LIMIT_MB", None)
+        print(json.dumps(values, sort_keys=True, separators=(",", ":")))
+    elif "from_entries" in expression:
+        values = {}
+        for value in document:
+            if not value.startswith("PATH=") and not value.startswith("MSSQL_MEMORY_LIMIT_MB="):
+                key, _, item = value.partition("=")
+                values[key] = item
+        print(json.dumps(values, sort_keys=True, separators=(",", ":")))
+    elif normalized_expression.startswith(".services.sqlserver.environment."):
+        key = normalized_expression.removeprefix(".services.sqlserver.environment.").split()[0]
+        key = key.replace("//", "").strip()
+        print(document["services"]["sqlserver"]["environment"].get(key, ""))
+    elif normalized_expression.startswith(".services.sqlserver.mem_limit"):
+        print(document["services"]["sqlserver"].get("mem_limit", ""))
+    elif normalized_expression.startswith(".services.sqlserver.cpus"):
+        print(document["services"]["sqlserver"].get("cpus", ""))
     elif "(.services.sqlserver.ports // []) | length" in expression:
         print(len(document["services"]["sqlserver"].get("ports", [])))
     else:
@@ -167,6 +200,8 @@ if name == "curl":
         if str(dest) != "/dev/null":
             if os.environ.get("FAKE_SQL_DRIFT") == "1":
                 dest.write_text("TEST_SQL_DRIFT\n")
+            elif os.environ.get("FAKE_UNAUTHORIZED_SQL_DRIFT") == "1":
+                dest.write_text("TEST_UNAUTHORIZED_SQL_DRIFT\n")
             else:
                 shutil.copyfile(fixture, dest)
     sys.exit(0)
@@ -255,6 +290,8 @@ if args[:1] == ["inspect"]:
         print(labels.get("com.docker.compose.config-hash", ""))
     elif ".Config.Image" in fmt:
         print(container.get("image", ""))
+    elif ".Config.Env" in fmt:
+        print(json.dumps(container.get("env", [])))
     elif ".State.Health.Status" in fmt:
         print(container.get("health", "none"))
     elif ".State.Status" in fmt:
@@ -335,8 +372,17 @@ if compose_command == "up":
         state["containers"]["campustour-sqlserver-1"] = {
             "id": ident, "name": "campustour-sqlserver-1", "project": "campustour", "service": "sqlserver",
             "running": True, "health": "healthy", "oneoff": "False", "image": env.get("SQLSERVER_IMAGE", ""),
+            "env": [f"{key}={value}" for key, value in resolved["services"]["sqlserver"]["environment"].items()] + ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+            "memory_limit": resolved["services"]["sqlserver"]["mem_limit"],
+            "cpus": resolved["services"]["sqlserver"]["cpus"],
             "labels": {"com.smartcampus.deployment.owner": owner, "com.docker.compose.config-hash": config_hash},
         }
+        if os.environ.get("FAKE_FAIL_SQL_UPDATE") == "1" and existing:
+            state["containers"]["campustour-sqlserver-1"]["running"] = False
+            state["events"].append("failed-sql-update")
+            save()
+            print("injected SQL engine maintenance failure", file=sys.stderr)
+            sys.exit(1)
         state["events"].append("up-sqlserver")
         save()
         sys.exit(0)
@@ -471,7 +517,8 @@ def run() -> None:
             env: dict[str, str], release_sha: str = sha, *, fail_candidate: bool = False,
             fail_init: bool = False, fail_backup: bool = False, fail_promotion: bool = False,
             sql_drift: bool = False, manifest_sql_image: str = host_sql_image,
-            sql_maintenance: bool = False,
+            sql_maintenance: bool = False, unauthorized_sql_change: bool = False,
+            fail_sql_update: bool = False,
         ) -> subprocess.CompletedProcess[str]:
             child_env = os.environ.copy()
             child_env.update(env)
@@ -483,11 +530,19 @@ def run() -> None:
             child_env["FAKE_FAIL_API_PROMOTION"] = "1" if fail_promotion else "0"
             child_env["FAKE_FAIL_PROMOTION_SHA"] = release_sha
             child_env["FAKE_SQL_DRIFT"] = "1" if sql_drift else "0"
+            child_env["FAKE_UNAUTHORIZED_SQL_DRIFT"] = "1" if unauthorized_sql_change else "0"
+            child_env["FAKE_FAIL_SQL_UPDATE"] = "1" if fail_sql_update else "0"
             cmd = ["bash", str(DEPLOY_SCRIPT)]
             if sql_maintenance:
                 cmd.append("--sql-maintenance")
             cmd += [release_sha, api_digest, init_digest, manifest_sql_image, ops_sha]
             return subprocess.run(cmd, cwd=REPO, env=child_env, text=True, capture_output=True)
+
+        def set_backend_setting(env: dict[str, str], key: str, value: str) -> None:
+            path = Path(env["CAMPUS_CONFIG_DIR"]) / "backend.env"
+            lines = [line for line in path.read_text().splitlines() if not line.startswith(key + "=")]
+            lines.append(f"{key}={value}")
+            path.write_text("\n".join(lines) + "\n")
 
         host_env = setup_host("first-deploy")
         failed = invoke(host_env, fail_candidate=True)
@@ -566,6 +621,12 @@ def run() -> None:
         interrupted_candidate = promotion_sha
         pending_path = Path(host_env["CAMPUS_STATE_DIR"]) / "deployment.pending"
         pending_path.write_text(f"{interrupted_candidate}\n{sha}\napplication\n0\n")
+        pending_before_check = pending_path.read_text()
+        host_check = subprocess.run(["bash", str(CHECK_SCRIPT)], cwd=REPO, env=host_env, text=True, capture_output=True)
+        if host_check.returncode == 0 or "deployment.pending" not in host_check.stderr or "did not initiate rollback" not in host_check.stderr:
+            raise AssertionError(f"host check did not report the pending application marker before other checks\nstdout={host_check.stdout}\nstderr={host_check.stderr}")
+        if pending_path.read_text() != pending_before_check:
+            raise AssertionError("host check removed or modified deployment.pending")
         recovery_sha = "9" * 40
         recovered = invoke(host_env, recovery_sha)
         if recovered.returncode != 0:
@@ -619,14 +680,85 @@ def run() -> None:
             raise AssertionError("ordinary release metadata did not retain the active SQL image digest")
 
         maintenance_sha = "4" * 40
+        live_sql = state["containers"]["campustour-sqlserver-1"]
+        original_sa_password = next(value.split("=", 1)[1] for value in live_sql["env"] if value.startswith("MSSQL_SA_PASSWORD="))
+        original_volume_id = state["volumes"]["campustour_sqlserver-data"]["data_id"]
+        backup_count_before_rejections = len(Path(host_env["FAKE_BACKUP_LOG"]).read_text().splitlines())
+
+        set_backend_setting(host_env, "SQL_SA_PASSWORD", "Zz9!" + "z" * 64)
+        credential_rejected = invoke(host_env, "3" * 40, manifest_sql_image=future_sql_image, sql_maintenance=True)
+        if credential_rejected.returncode == 0 or "credentials or fixed environment differ" not in credential_rejected.stderr:
+            raise AssertionError(f"SQL maintenance accepted a changed SQL credential\nstdout={credential_rejected.stdout}\nstderr={credential_rejected.stderr}")
+        set_backend_setting(host_env, "SQL_SA_PASSWORD", original_sa_password)
+
+        unauthorized = invoke(host_env, "2" * 40, manifest_sql_image=future_sql_image,
+                              sql_maintenance=True, unauthorized_sql_change=True)
+        if unauthorized.returncode == 0 or "unapproved SQL service setting" not in unauthorized.stderr:
+            raise AssertionError(f"SQL maintenance accepted an unapproved service security change\nstdout={unauthorized.stdout}\nstderr={unauthorized.stderr}")
+
+        set_backend_setting(host_env, "SQLSERVER_MEMORY_LIMIT", "2592m")
+        oversized = invoke(host_env, "1" * 40, manifest_sql_image=future_sql_image, sql_maintenance=True)
+        if oversized.returncode == 0 or "between 1536 and 2560 MiB" not in oversized.stderr:
+            raise AssertionError(f"SQL maintenance accepted a container memory limit outside the 4 GiB profile\nstdout={oversized.stdout}\nstderr={oversized.stderr}")
+        set_backend_setting(host_env, "SQLSERVER_MEMORY_LIMIT", "1536m")
+        set_backend_setting(host_env, "MSSQL_MEMORY_LIMIT_MB", "2048")
+        insufficient_headroom = invoke(host_env, "0" * 40, manifest_sql_image=future_sql_image, sql_maintenance=True)
+        if insufficient_headroom.returncode == 0 or "leave at least 256 MiB" not in insufficient_headroom.stderr:
+            raise AssertionError(f"SQL maintenance accepted internal memory above its container headroom\nstdout={insufficient_headroom.stdout}\nstderr={insufficient_headroom.stderr}")
+        set_backend_setting(host_env, "SQLSERVER_MEMORY_LIMIT", "2304m")
+        set_backend_setting(host_env, "MSSQL_MEMORY_LIMIT_MB", "1792")
+        set_backend_setting(host_env, "SQLSERVER_CPUS", "2.0")
+        excessive_cpu = invoke(host_env, "a" * 40, manifest_sql_image=future_sql_image, sql_maintenance=True)
+        if excessive_cpu.returncode == 0 or "between 0.5 and 1.5 CPUs" not in excessive_cpu.stderr:
+            raise AssertionError(f"SQL maintenance accepted a CPU limit outside the 2 vCPU profile\nstdout={excessive_cpu.stdout}\nstderr={excessive_cpu.stderr}")
+        set_backend_setting(host_env, "SQLSERVER_MEMORY_LIMIT", "2304m")
+        set_backend_setting(host_env, "MSSQL_MEMORY_LIMIT_MB", "1792")
+        set_backend_setting(host_env, "SQLSERVER_CPUS", "1.0")
         maintenance = invoke(host_env, maintenance_sha, manifest_sql_image=future_sql_image, sql_maintenance=True)
         if maintenance.returncode != 0:
             raise AssertionError(f"explicit SQL maintenance failed\nstdout={maintenance.stdout}\nstderr={maintenance.stderr}")
         state = json.loads(state_path.read_text())
         if state["containers"]["campustour-sqlserver-1"]["image"] != future_sql_image:
             raise AssertionError("explicit SQL maintenance did not apply the selected SQL image digest")
+        sql_after_maintenance = state["containers"]["campustour-sqlserver-1"]
+        sql_env_after_maintenance = dict(value.split("=", 1) for value in sql_after_maintenance["env"] if "=" in value)
+        if (sql_env_after_maintenance.get("MSSQL_MEMORY_LIMIT_MB") != "1792" or
+                sql_after_maintenance.get("memory_limit") != "2304m" or sql_after_maintenance.get("cpus") != "1.0"):
+            raise AssertionError("explicit SQL maintenance did not apply the approved SQL RAM/CPU tuning")
+        if state["volumes"]["campustour_sqlserver-data"]["data_id"] != original_volume_id:
+            raise AssertionError("SQL maintenance replaced the persistent SQL data volume")
         if Path(host_env["CAMPUS_STATE_DIR"], "sqlserver-image").read_text().strip() != future_sql_image:
             raise AssertionError("SQL maintenance did not persist the new managed engine pin")
+        if Path(host_env["CAMPUS_STATE_DIR"], "sqlserver-config-hash").read_text().strip() != sql_after_maintenance["labels"]["com.docker.compose.config-hash"]:
+            raise AssertionError("successful SQL maintenance did not persist the active configuration hash")
+        backup_count_after_maintenance = len(Path(host_env["FAKE_BACKUP_LOG"]).read_text().splitlines())
+        if backup_count_after_maintenance != backup_count_before_rejections + 1:
+            raise AssertionError("SQL maintenance did not require exactly one verified pre-change backup")
+
+        set_backend_setting(host_env, "SQLSERVER_MEMORY_LIMIT", "2200m")
+        failed_sql_sha = "e" * 40
+        failed_sql = invoke(host_env, failed_sql_sha, manifest_sql_image=future_sql_image,
+                            sql_maintenance=True, fail_sql_update=True)
+        if failed_sql.returncode == 0 or "injected SQL engine maintenance failure" not in failed_sql.stderr:
+            raise AssertionError(f"SQL maintenance failure was not injected\nstdout={failed_sql.stdout}\nstderr={failed_sql.stderr}")
+        pending_after_sql_failure = pending_path.read_text()
+        if pending_after_sql_failure != f"{failed_sql_sha}\n{maintenance_sha}\nsql-maintenance\n1\n":
+            raise AssertionError("failed SQL maintenance did not preserve its pending database-recovery marker")
+        state_after_sql_failure = json.loads(state_path.read_text())
+        if state_after_sql_failure["volumes"]["campustour_sqlserver-data"]["data_id"] != original_volume_id:
+            raise AssertionError("failed SQL maintenance replaced the persistent SQL data volume")
+        sql_host_check = subprocess.run(["bash", str(CHECK_SCRIPT)], cwd=REPO, env=host_env, text=True, capture_output=True)
+        if sql_host_check.returncode == 0 or "sql_change_started=1" not in sql_host_check.stderr or "did not initiate rollback" not in sql_host_check.stderr:
+            raise AssertionError(f"host check did not clearly report interrupted SQL maintenance\nstdout={sql_host_check.stdout}\nstderr={sql_host_check.stderr}")
+        if pending_path.read_text() != pending_after_sql_failure:
+            raise AssertionError("host check removed or modified the failed SQL maintenance marker")
+        events_before_recovery_attempt = list(state_after_sql_failure["events"])
+        attempted_recovery = invoke(host_env, "6" * 40)
+        if attempted_recovery.returncode == 0 or "Automatic rollback is unsafe" not in attempted_recovery.stderr:
+            raise AssertionError(f"deployment did not stop for SQL recovery review\nstdout={attempted_recovery.stdout}\nstderr={attempted_recovery.stderr}")
+        state_after_recovery_attempt = json.loads(state_path.read_text())
+        if state_after_recovery_attempt["events"] != events_before_recovery_attempt or pending_path.read_text() != pending_after_sql_failure:
+            raise AssertionError("deployment recovery altered containers or pending state before database review")
 
         foreign_env = setup_host("foreign-volume", foreign_volume=True)
         foreign_state_path = Path(foreign_env["FAKE_DOCKER_STATE"])
@@ -635,7 +767,7 @@ def run() -> None:
         if rejected.returncode == 0 or foreign_state["volumes"]["campustour_sqlserver-data"]["data_id"] != "keep-this-data":
             raise AssertionError("deployment adopted or modified an unowned persistent volume")
 
-        print("PASS (mocked Docker): first deploy retained its SQL volume across retry; foreign/inconsistent state and SQL drift were rejected; schema/readiness/backup gates preserved the current API; failed promotion rolled back; pending interruption recovered; concurrent deploy was locked out; normal API release kept the SQL pin until explicit maintenance.")
+        print("PASS (mocked Docker): first deploy retained SQL data; application SQL drift, changed credentials, unsafe RAM limits, and unapproved SQL changes were rejected; explicit maintenance backed up then applied approved image/RAM/CPU changes without replacing data; SQL maintenance failure preserved pending state and blocked automatic recovery; host check reported pending state without mutation; deployment and API rollback gates remained intact.")
     finally:
         shutil.rmtree(root_tmp)
 

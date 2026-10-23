@@ -57,6 +57,12 @@ promotion_complete=0
 sql_engine_change_started=0
 api_promotion_started=0
 candidate_container=
+stored_sql_config_hash=
+stored_sql_maintenance_fingerprint=
+active_sql_config_hash=
+live_sql_config_hash=
+desired_sql_config_hash=
+candidate_sql_config_hash=
 
 preflight() {
   [[ $(id -u) == 0 ]] || fail 'SSM Run Command must execute this script as root.'
@@ -174,7 +180,7 @@ assert_owned_resources() {
 }
 
 assert_sql_healthy() {
-  local dir=$1 expected_image=$2 ids id count=0 state health image owner actual_hash expected_hash
+  local dir=$1 expected_image=$2 expected_hash=${3:-} ids id count=0 state health image owner actual_hash
   ids=$(docker ps -q --filter label=com.docker.compose.project=campustour \
     --filter label=com.docker.compose.service=sqlserver)
   while IFS= read -r id; do [[ -n "$id" ]] && ((count += 1)); done <<<"$ids"
@@ -185,7 +191,9 @@ assert_sql_healthy() {
   image=$(docker inspect --format '{{.Config.Image}}' "$id")
   owner=$(resource_owner container "$id") || fail 'Could not inspect SQL Server container ownership.'
   actual_hash=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' "$id")
-  expected_hash=$(compose_for "$dir" config --hash sqlserver | awk '$1 == "sqlserver" { print $2; exit }')
+  if [[ -z "$expected_hash" ]]; then
+    expected_hash=$(compose_for "$dir" config --hash sqlserver | awk '$1 == "sqlserver" { print $2; exit }')
+  fi
   [[ "$owner" == "$COMPOSE_OWNER" ]] || fail 'SQL Server container has a different deployment owner.'
   [[ "$state" == running && "$health" == healthy ]] ||
     fail "SQL Server must already be running and healthy (state=$state health=${health:-unknown})."
@@ -198,6 +206,66 @@ assert_sql_healthy() {
 sql_service_fingerprint() {
   local compose_json=$1
   jq -cS '{service:(.services.sqlserver | .image = "<pinned-sql-image>"),volume:.volumes["sqlserver-data"],database_network:.networks.database}' <<<"$compose_json"
+}
+
+sql_maintenance_fingerprint() {
+  local compose_json=$1
+  jq -cS '{service:(.services.sqlserver | del(.image, .environment, .mem_limit, .cpus)),volume:.volumes["sqlserver-data"],database_network:.networks.database}' <<<"$compose_json" |
+    sha256sum | awk '{ print $1 }'
+}
+
+validate_sql_settings() {
+  local compose_json=$1 memory_limit_mb container_limit cpu_limit memory_limit_mib
+  local env_keys accept_eula sql_pid
+  env_keys=$(jq -r '.services.sqlserver.environment | keys | sort | join(",")' <<<"$compose_json")
+  [[ "$env_keys" == 'ACCEPT_EULA,MSSQL_MEMORY_LIMIT_MB,MSSQL_PID,MSSQL_SA_PASSWORD' ]] ||
+    fail 'SQL Server environment contains an unapproved setting; only the managed password and memory setting are supported.'
+  accept_eula=$(jq -r '.services.sqlserver.environment.ACCEPT_EULA // empty' <<<"$compose_json")
+  sql_pid=$(jq -r '.services.sqlserver.environment.MSSQL_PID // empty' <<<"$compose_json")
+  [[ "$accept_eula" == Y && "$sql_pid" == Express ]] ||
+    fail 'SQL Server EULA and Express edition settings must remain managed defaults.'
+  memory_limit_mb=$(jq -r '.services.sqlserver.environment.MSSQL_MEMORY_LIMIT_MB // empty' <<<"$compose_json")
+  [[ "$memory_limit_mb" =~ ^[0-9]+$ ]] && (( memory_limit_mb >= 512 && memory_limit_mb <= 2048 )) ||
+    fail 'SQL Server memory limit must be between 512 and 2048 MiB for the 4 GiB host profile.'
+  container_limit=$(jq -r '.services.sqlserver.mem_limit // empty' <<<"$compose_json")
+  if [[ "$container_limit" =~ ^([0-9]+)[mM]$ ]]; then
+    memory_limit_mib=${BASH_REMATCH[1]}
+  elif [[ "$container_limit" =~ ^([0-9]+)$ ]]; then
+    memory_limit_mib=$((BASH_REMATCH[1] / 1024 / 1024))
+  else
+    fail 'SQL Server container memory limit must resolve to whole MiB.'
+  fi
+  (( memory_limit_mib >= 1536 && memory_limit_mib <= 2560 )) ||
+    fail 'SQL Server container memory limit must be between 1536 and 2560 MiB for the 4 GiB host profile.'
+  (( memory_limit_mb + 256 <= memory_limit_mib )) ||
+    fail 'SQL Server internal memory must leave at least 256 MiB inside its container limit.'
+  cpu_limit=$(jq -r '.services.sqlserver.cpus // empty' <<<"$compose_json")
+  awk -v value="$cpu_limit" 'BEGIN { exit !(value ~ /^[0-9]+([.][0-9]+)?$/ && value >= 0.5 && value <= 1.5) }' ||
+    fail 'SQL Server CPU limit must be between 0.5 and 1.5 CPUs for the 2 vCPU host profile.'
+}
+
+sql_container_config_hash() {
+  local ids id count=0
+  ids=$(docker ps -q --filter label=com.docker.compose.project=campustour \
+    --filter label=com.docker.compose.service=sqlserver)
+  while IFS= read -r id; do [[ -n "$id" ]] && ((count += 1)); done <<<"$ids"
+  (( count == 1 )) || fail "Expected one running managed SQL Server container; found $count."
+  id=$(tr -d '\r\n' <<<"$ids")
+  docker inspect --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' "$id"
+}
+
+assert_sql_credentials_match() {
+  local compose_json=$1 ids id actual_env expected_env
+  ids=$(docker ps -q --filter label=com.docker.compose.project=campustour \
+    --filter label=com.docker.compose.service=sqlserver)
+  id=$(tr -d '\r\n' <<<"$ids")
+  [[ -n "$id" ]] || fail 'SQL credentials cannot be checked because the managed SQL Server container is not running.'
+  actual_env=$(docker inspect --format '{{json .Config.Env}}' "$id") ||
+    fail 'Could not inspect the active SQL Server environment.'
+  expected_env=$(jq -cS '.services.sqlserver.environment | del(.MSSQL_MEMORY_LIMIT_MB)' <<<"$compose_json")
+  actual_env=$(jq -cS '[.[] | select(test("^(ACCEPT_EULA|MSSQL_PID|MSSQL_SA_PASSWORD)=")) | split("=") | {key:.[0],value:(.[1:] | join("="))}] | from_entries' <<<"$actual_env")
+  [[ "$actual_env" == "$expected_env" ]] ||
+    fail 'SQL Server credentials or fixed environment differ from the running database; credential rotation requires a separate reviewed procedure.'
 }
 
 prepare_candidate_api() {
@@ -494,6 +562,10 @@ else
 fi
 
 candidate_config=$(compose_for "$candidate_dir" config --format json)
+validate_sql_settings "$candidate_config"
+candidate_sql_maintenance_fingerprint=$(sql_maintenance_fingerprint "$candidate_config")
+candidate_sql_config_hash=$(compose_for "$candidate_dir" config --hash sqlserver | awk '$1 == "sqlserver" { print $2; exit }')
+[[ "$candidate_sql_config_hash" =~ ^[0-9a-f]{64}$ ]] || fail 'Could not resolve the candidate SQL configuration hash.'
 sql_volume=$(jq -r '.volumes["sqlserver-data"].name // empty' <<<"$candidate_config")
 [[ "$sql_volume" =~ ^[A-Za-z0-9_.-]+$ ]] || fail 'Could not resolve the managed SQL data volume name.'
 candidate_host=$(jq -r '.services.api.environment.AllowedHosts // empty' <<<"$candidate_config" | cut -d';' -f1)
@@ -511,15 +583,85 @@ if [[ -n "$previous_sha" ]]; then
   active_config=$(compose_for "$previous_dir" config --format json)
   active_sql_fingerprint=$(sql_service_fingerprint "$active_config")
   candidate_sql_fingerprint=$(sql_service_fingerprint "$candidate_config")
-  [[ "$active_sql_fingerprint" == "$candidate_sql_fingerprint" ]] ||
-    fail 'SQL Server service configuration drift detected. Review SQL settings in a separate maintenance change.'
+  active_sql_maintenance_fingerprint=$(sql_maintenance_fingerprint "$active_config")
+  if [[ -f "$STATE/sqlserver-config-hash" ]]; then
+    stored_sql_config_hash=$(cat "$STATE/sqlserver-config-hash")
+    [[ "$stored_sql_config_hash" =~ ^[0-9a-f]{64}$ ]] ||
+      fail 'Persistent SQL configuration hash is malformed; review the SQL maintenance record.'
+  fi
+  if [[ -f "$STATE/sqlserver-maintenance-fingerprint" ]]; then
+    stored_sql_maintenance_fingerprint=$(cat "$STATE/sqlserver-maintenance-fingerprint")
+    [[ "$stored_sql_maintenance_fingerprint" =~ ^[0-9a-f]{64}$ ]] ||
+      fail 'Persistent SQL maintenance fingerprint is malformed; review the SQL maintenance record.'
+  fi
+  active_sql_config_hash=$(compose_for "$previous_dir" config --hash sqlserver | awk '$1 == "sqlserver" { print $2; exit }')
+  if (( sql_maintenance == 0 )); then
+    [[ "$active_sql_fingerprint" == "$candidate_sql_fingerprint" ]] ||
+      fail 'SQL Server service configuration drift detected. Use the separate SQL maintenance workflow for an approved tuning or engine change.'
+    [[ -z "$stored_sql_config_hash" || -z "$stored_sql_maintenance_fingerprint" ||
+      "$active_sql_maintenance_fingerprint" == "$stored_sql_maintenance_fingerprint" ]] ||
+      fail 'Active SQL configuration differs from its last accepted maintenance fingerprint.'
+    assert_sql_healthy "$previous_dir" "$previous_sql_image" "$active_sql_config_hash"
+  else
+    [[ "$active_sql_maintenance_fingerprint" == "$candidate_sql_maintenance_fingerprint" ]] ||
+      fail 'SQL maintenance changed an unapproved SQL service setting (for example credentials, storage, networking, or security options).'
+    assert_sql_healthy "$previous_dir" "$previous_sql_image" "${stored_sql_config_hash:-$active_sql_config_hash}"
+    if [[ -z "$stored_sql_config_hash" ]]; then
+      stored_sql_config_hash=$(sql_container_config_hash)
+      [[ "$stored_sql_config_hash" =~ ^[0-9a-f]{64}$ ]] ||
+        fail 'Could not establish the existing managed SQL configuration baseline.'
+      atomic_write "$STATE/sqlserver-config-hash" 0600 "$stored_sql_config_hash"
+    fi
+    assert_sql_credentials_match "$candidate_config"
+  fi
+  live_sql_config_hash=$(sql_container_config_hash)
+  if [[ -n "$stored_sql_config_hash" && "$live_sql_config_hash" != "$stored_sql_config_hash" ]]; then
+    fail 'Running SQL Server configuration no longer matches the last accepted state; inspect database state before maintenance or deployment.'
+  fi
+  if [[ -z "$stored_sql_config_hash" ]]; then
+    stored_sql_config_hash=$active_sql_config_hash
+    atomic_write "$STATE/sqlserver-config-hash" 0600 "$stored_sql_config_hash"
+  fi
+  if [[ -z "$stored_sql_maintenance_fingerprint" ]]; then
+    stored_sql_maintenance_fingerprint=$active_sql_maintenance_fingerprint
+    atomic_write "$STATE/sqlserver-maintenance-fingerprint" 0600 "$stored_sql_maintenance_fingerprint"
+  fi
+  [[ "$active_sql_maintenance_fingerprint" == "$stored_sql_maintenance_fingerprint" ]] ||
+    fail 'Active SQL configuration differs from its last accepted maintenance fingerprint.'
+  if (( sql_maintenance == 0 )); then
+    [[ "$candidate_sql_maintenance_fingerprint" == "$stored_sql_maintenance_fingerprint" ]] ||
+      fail 'Application deployment attempted to change the managed SQL configuration.'
+  else
+    [[ "$candidate_sql_maintenance_fingerprint" == "$stored_sql_maintenance_fingerprint" ]] ||
+      fail 'SQL maintenance attempted to change an unapproved SQL service setting.'
+  fi
   assert_owned_resources "$COMPOSE_OWNER" >/dev/null
-  assert_sql_healthy "$previous_dir" "$previous_sql_image"
 else
   if docker volume inspect "$sql_volume" >/dev/null 2>&1; then
     volume_owner=$(resource_owner volume "$sql_volume") || fail "Could not inspect SQL volume $sql_volume."
     [[ "$volume_owner" == "$COMPOSE_OWNER" ]] ||
       fail "SQL data volume $sql_volume exists without this deployment's owner marker; it will not be adopted or deleted."
+  fi
+  existing_sql=$(docker ps -aq --filter label=com.docker.compose.project=campustour \
+    --filter label=com.docker.compose.service=sqlserver)
+  if [[ -n "$existing_sql" ]]; then
+    existing_sql_count=$(awk 'NF { count++ } END { print count+0 }' <<<"$existing_sql")
+    (( existing_sql_count == 1 )) || fail "Expected at most one managed SQL Server container before first-release recovery; found $existing_sql_count."
+    live_sql_config_hash=$(sql_container_config_hash)
+    [[ "$live_sql_config_hash" == "$candidate_sql_config_hash" ]] ||
+      fail 'A first-release SQL container has configuration drift and no active release baseline; preserve its data and use a reviewed recovery procedure.'
+    if [[ -f "$STATE/sqlserver-config-hash" ]]; then
+      stored_sql_config_hash=$(cat "$STATE/sqlserver-config-hash")
+      [[ "$stored_sql_config_hash" == "$live_sql_config_hash" ]] ||
+        fail 'First-release SQL container differs from its recorded configuration; preserve its data and review database state.'
+    fi
+    if [[ -f "$STATE/sqlserver-maintenance-fingerprint" ]]; then
+      stored_sql_maintenance_fingerprint=$(cat "$STATE/sqlserver-maintenance-fingerprint")
+      [[ "$stored_sql_maintenance_fingerprint" == "$candidate_sql_maintenance_fingerprint" ]] ||
+        fail 'First-release SQL configuration differs from its recorded maintenance fingerprint.'
+    fi
+  elif [[ -e "$STATE/sqlserver-config-hash" || -e "$STATE/sqlserver-maintenance-fingerprint" ]]; then
+    fail 'SQL configuration state exists but no SQL Server container is running; inspect database and volume state before starting it.'
   fi
 fi
 cleanup_stale_candidates
@@ -530,6 +672,7 @@ fi
 if (( sql_maintenance == 1 )) && [[ "$current_sql_image" != "$previous_sql_image" ]]; then
   echo "SQL maintenance requested: $previous_sql_image -> $current_sql_image"
 fi
+desired_sql_config_hash=$candidate_sql_config_hash
 
 compose_for "$candidate_dir" pull api db-init
 if [[ -z "$previous_sha" || "$current_sql_image" != "$previous_sql_image" ]]; then
@@ -555,13 +698,18 @@ trap on_exit EXIT
 if [[ -z "$previous_sha" ]]; then
   compose_for "$candidate_dir" up -d --wait --wait-timeout 300 sqlserver
   assert_sql_healthy "$candidate_dir" "$current_sql_image"
+  live_sql_config_hash=$(sql_container_config_hash)
+  atomic_write "$STATE/sqlserver-config-hash" 0600 "$live_sql_config_hash"
+  atomic_write "$STATE/sqlserver-maintenance-fingerprint" 0600 "$candidate_sql_maintenance_fingerprint"
 fi
 compose_for "$candidate_dir" run -T --rm --no-deps db-init
 prepare_candidate_api "$candidate_dir" "$release_sha"
 
-if (( sql_maintenance == 1 )) && [[ "$current_sql_image" != "$previous_sql_image" ]]; then
+if (( sql_maintenance == 1 )) && [[ "$desired_sql_config_hash" != "$live_sql_config_hash" ]]; then
   mark_sql_engine_change_started
-  atomic_write "$STATE/sqlserver-image" 0600 "$current_sql_image"
+  if [[ "$current_sql_image" != "$previous_sql_image" ]]; then
+    atomic_write "$STATE/sqlserver-image" 0600 "$current_sql_image"
+  fi
   compose_for "$candidate_dir" up -d --wait --wait-timeout 420 sqlserver
   assert_sql_healthy "$candidate_dir" "$current_sql_image"
   compose_for "$candidate_dir" run -T --rm --no-deps db-init
@@ -575,6 +723,8 @@ compose_for "$candidate_dir" up -d --no-deps --force-recreate --wait --wait-time
 health_probe "$release_sha"
 compose_for "$candidate_dir" ps --all
 
+atomic_write "$STATE/sqlserver-config-hash" 0600 "$desired_sql_config_hash"
+atomic_write "$STATE/sqlserver-maintenance-fingerprint" 0600 "$candidate_sql_maintenance_fingerprint"
 set_current_link "$candidate_dir"
 atomic_write "$STATE/sqlserver-image" 0600 "$current_sql_image"
 atomic_write "$STATE/operations-release" 0600 "$ops_sha"

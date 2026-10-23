@@ -7,10 +7,29 @@ CONFIG=${CAMPUS_CONFIG_DIR:-/etc/campustour}
 STATE=${CAMPUS_STATE_DIR:-/var/lib/campustour}
 CERT_ROOT=${CAMPUS_TLS_CERT_ROOT:-/etc/campustour/certs}
 TLS_CERT=${CAMPUS_TLS_CERT_PATH:-/etc/campustour/certs/active/fullchain.pem}
+PENDING_FILE=$STATE/deployment.pending
 MIN_FREE_GIB=${CAMPUS_MIN_FREE_GIB:-12}
 MIN_AVAILABLE_MIB=${CAMPUS_MIN_AVAILABLE_MIB:-512}
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+  [[ -f "$PENDING_FILE" && ! -L "$PENDING_FILE" ]] ||
+    fail 'deployment.pending exists but is not a regular file; inspect host deployment state manually.'
+  mapfile -t pending_state < "$PENDING_FILE"
+  [[ ${#pending_state[@]} == 4 ]] ||
+    fail 'deployment.pending is malformed; preserve it and inspect host deployment state manually.'
+  pending_candidate=${pending_state[0]:-}
+  pending_previous=${pending_state[1]:-}
+  pending_mode=${pending_state[2]:-application}
+  sql_change_started=${pending_state[3]:-0}
+  [[ "$pending_candidate" =~ ^[0-9a-f]{40}$ &&
+    ( -z "$pending_previous" || "$pending_previous" =~ ^[0-9a-f]{40}$ ) &&
+    ( "$pending_mode" == application || "$pending_mode" == sql-maintenance ) &&
+    ( "$sql_change_started" == 0 || "$sql_change_started" == 1 ) ]] ||
+    fail 'deployment.pending is malformed; preserve it and inspect host deployment state manually.'
+  echo "Pending deployment: candidate=$pending_candidate previous=${pending_previous:-none} mode=$pending_mode sql_change_started=$sql_change_started" >&2
+  fail 'Database and release state require operator review. This check preserved deployment.pending and did not initiate rollback.'
+fi
 [[ $(id -u) == 0 ]] || fail 'Run with sudo so Docker and system service state can be inspected.'
 command -v docker >/dev/null || fail 'Docker is not installed.'
 command -v jq >/dev/null || fail 'jq is required.'
