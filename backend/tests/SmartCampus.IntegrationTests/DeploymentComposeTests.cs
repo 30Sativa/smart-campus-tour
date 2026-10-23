@@ -151,6 +151,7 @@ public sealed class DeploymentComposeTests
             var environment = new Dictionary<string, string>
             {
                 ["COMPOSE_PROJECT_NAME"] = "campustour-config-test",
+                ["COMPOSE_OWNER"] = "a1b2c3d4e5f60718293a4b5c6d7e8f90",
                 ["BACKEND_IMAGE"] = missingReleaseImages ? "" : "campustour-backend:config-test",
                 ["DB_INIT_IMAGE"] = "campustour-db-init:config-test",
                 ["SQLSERVER_IMAGE"] = "mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04",

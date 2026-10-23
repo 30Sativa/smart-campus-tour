@@ -4,6 +4,8 @@ set -euo pipefail
 
 ROOT=${CAMPUS_DEPLOY_ROOT:-/opt/campustour}
 CONFIG=${CAMPUS_CONFIG_DIR:-/etc/campustour}
+STATE=${CAMPUS_STATE_DIR:-/var/lib/campustour}
+CERT_ROOT=${CAMPUS_TLS_CERT_ROOT:-/etc/campustour/certs}
 TLS_CERT=${CAMPUS_TLS_CERT_PATH:-/etc/campustour/certs/active/fullchain.pem}
 MIN_FREE_GIB=${CAMPUS_MIN_FREE_GIB:-12}
 MIN_AVAILABLE_MIB=${CAMPUS_MIN_AVAILABLE_MIB:-512}
@@ -69,6 +71,11 @@ fi
 
 if [[ -L "$ROOT/current" && -f "$CONFIG/backend.env" ]]; then
   release_dir=$(readlink -f "$ROOT/current")
+  [[ -f "$release_dir/release.env" ]] || fail 'Active release metadata is missing.'
+  release_sha=$(basename "$release_dir")
+  ops_sha=$(awk -F= '$1 == "OPS_SHA" { print substr($0, index($0, "=") + 1); exit }' "$release_dir/release.env")
+  sql_image=$(awk -F= '$1 == "SQLSERVER_IMAGE" { print substr($0, index($0, "=") + 1); exit }' "$release_dir/release.env")
+  echo "Active release: source=$release_sha operations=${ops_sha:-unknown} sql=${sql_image:-unknown}"
   compose=(docker compose --project-name campustour --env-file "$CONFIG/backend.env" \
     --env-file "$release_dir/release.env" -f "$release_dir/docker-compose.yml")
   host=$("${compose[@]}" config --format json | jq -r '.services.api.environment.AllowedHosts' | cut -d';' -f1)
@@ -86,8 +93,14 @@ else
   echo 'No active deployment release is configured.'
 fi
 
-if [[ -f /var/lib/campustour/backup-last-success ]]; then
-  IFS=$'\t' read -r backup_time backup_target backup_size < /var/lib/campustour/backup-last-success
+if [[ -L "$CERT_ROOT/pending/current" ]]; then
+  pending_cert=$(readlink -f "$CERT_ROOT/pending/current" 2>/dev/null || echo unknown)
+  echo "Pending TLS renewal: $pending_cert" >&2
+  fail 'A TLS renewal is queued but has not passed activation and readiness checks.'
+fi
+
+if [[ -f "$STATE/backup-last-success" ]]; then
+  IFS=$'\t' read -r backup_time backup_target backup_size < "$STATE/backup-last-success"
   echo "Last verified backup: ${backup_time:-unknown} ${backup_target:-} (${backup_size:-0} bytes)"
   if [[ ${backup_time:-} =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
     backup_epoch=$(date -u -d "${backup_time:0:8} ${backup_time:9:2}:${backup_time:11:2}:${backup_time:13:2}" +%s)

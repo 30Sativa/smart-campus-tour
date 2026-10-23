@@ -30,9 +30,15 @@ fi
 results_dir=${SMARTCAMPUS_TEST_RESULTS_DIR:-"${TMPDIR:-/tmp}/campustour-test-results-$$"}
 mkdir -p "$results_dir"
 
-bash -n deploy/init-db.sh deploy/deploy-ec2.sh deploy/backup-sqlserver.sh deploy/check-ec2.sh \
-  deploy/stack-start.sh deploy/refresh-certificate.sh scripts/test-deployment scripts/test-deploy-ec2.sh
+bash -n deploy/init-db.sh deploy/deploy-ec2.sh deploy/install-host-tools.sh deploy/backup-sqlserver.sh deploy/check-ec2.sh \
+  deploy/stack-start.sh deploy/refresh-certificate.sh scripts/test-deployment scripts/test-deploy-ec2.sh \
+  scripts/test-backup-upload-failure.sh scripts/test-certificate-reconciliation.sh scripts/test-operation-locks.sh
 scripts/test-deploy-ec2.sh
+scripts/test-backup-upload-failure.sh
+scripts/test-certificate-reconciliation.sh
+scripts/test-operation-locks.sh
+"$PYTHON" scripts/test-deploy-first-retry.py
+"$PYTHON" scripts/test-release-manifest.py
 "$PYTHON" scripts/test-verify-test-results.py
 
 "$DOTNET" restore "$SOLUTION" --locked-mode

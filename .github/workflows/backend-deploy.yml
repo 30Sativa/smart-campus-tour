@@ -27,15 +27,20 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_SHA: ${{ inputs.release_sha }}
+      OPS_SHA: ${{ github.sha }}
 
     steps:
-      - name: Validate release SHA and locate its successful CI run
+      - name: Validate application and operations revisions
         id: release
         shell: bash
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo 'release_sha must be a 40-character lowercase commit SHA.' >&2
+            exit 1
+          }
+          [[ "$OPS_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'The operations commit must be a 40-character lowercase commit SHA.' >&2
             exit 1
           }
           response=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/backend-verify.yml/runs?head_sha=$RELEASE_SHA&status=success&per_page=100")
@@ -45,6 +50,15 @@ jobs:
           ' <<<"$response")
           [[ "$run_id" =~ ^[0-9]+$ ]] || {
             echo 'No successful main Backend Verify run exists for this SHA.' >&2
+            exit 1
+          }
+          ops_response=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/backend-verify.yml/runs?head_sha=$OPS_SHA&status=success&per_page=100")
+          ops_run_id=$(jq -r --arg sha "$OPS_SHA" '
+            [.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .head_sha == $sha and .conclusion == "success")]
+            | sort_by(.run_number) | last | .id // empty
+          ' <<<"$ops_response")
+          [[ "$ops_run_id" =~ ^[0-9]+$ ]] || {
+            echo 'The operations commit has no successful main Backend Verify run.' >&2
             exit 1
           }
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
@@ -65,20 +79,7 @@ jobs:
           set -euo pipefail
           manifest="$RUNNER_TEMP/backend-release/backend-release.json"
           [[ -s "$manifest" ]]
-          jq -e --arg sha "$RELEASE_SHA" '
-            .source_sha == $sha and
-            (.api_image | test("^ghcr[.]io/30sativa/smart-campus-tour/backend@sha256:[0-9a-f]{64}$")) and
-            (.db_init_image | test("^ghcr[.]io/30sativa/smart-campus-tour/backend-db-init@sha256:[0-9a-f]{64}$")) and
-            (.sdk_image | test("^mcr[.]microsoft[.]com/dotnet/sdk@sha256:[0-9a-f]{64}$")) and
-            (.runtime_image | test("^mcr[.]microsoft[.]com/dotnet/aspnet@sha256:[0-9a-f]{64}$")) and
-            (.sqlserver_image | test("^mcr[.]microsoft[.]com/mssql/server@sha256:[0-9a-f]{64}$"))
-          ' "$manifest" >/dev/null || {
-            echo 'Release manifest does not match the selected SHA and approved immutable image repositories.' >&2
-            exit 1
-          }
-          echo "api_image=$(jq -r .api_image "$manifest")" >> "$GITHUB_OUTPUT"
-          echo "db_init_image=$(jq -r .db_init_image "$manifest")" >> "$GITHUB_OUTPUT"
-          echo "sqlserver_image=$(jq -r .sqlserver_image "$manifest")" >> "$GITHUB_OUTPUT"
+          python3 backend/deploy/validate-release-manifest.py "$manifest" "$RELEASE_SHA" "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -100,9 +101,11 @@ jobs:
             echo 'EC2_INSTANCE_ID is missing or malformed.' >&2
             exit 1
           }
-          script_url="https://raw.githubusercontent.com/30Sativa/smart-campus-tour/$RELEASE_SHA/backend/deploy/deploy-ec2.sh"
-          printf -v remote_command 'set -eu; script=$(mktemp); trap '\''rm -f "$script"'\'' 0; curl --fail --location --silent --show-error --max-time 45 %q -o "$script"; chmod 0700 "$script"; bash "$script" %q %q %q %q %q' \
-            "$script_url" "$RELEASE_SHA" "$API_IMAGE" "$DB_INIT_IMAGE" "$SQLSERVER_IMAGE" "$RELEASE_SHA"
+          [[ "$OPS_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Operations commit must be a 40-character SHA.' >&2; exit 1; }
+          installer_url="https://raw.githubusercontent.com/30Sativa/smart-campus-tour/$OPS_SHA/backend/deploy/install-host-tools.sh"
+          script_url="https://raw.githubusercontent.com/30Sativa/smart-campus-tour/$OPS_SHA/backend/deploy/deploy-ec2.sh"
+          printf -v remote_command 'set -eu; installer=$(mktemp); script=$(mktemp); trap '\''rm -f "$installer" "$script"'\'' 0; curl --fail --location --silent --show-error --max-time 45 %q -o "$installer"; chmod 0700 "$installer"; bash "$installer" %q; curl --fail --location --silent --show-error --max-time 45 %q -o "$script"; chmod 0700 "$script"; bash "$script" %q %q %q %q %q' \
+            "$installer_url" "$OPS_SHA" "$script_url" "$RELEASE_SHA" "$API_IMAGE" "$DB_INIT_IMAGE" "$SQLSERVER_IMAGE" "$OPS_SHA"
           jq -n --arg command "$remote_command" '{commands:[$command],executionTimeout:["1800"]}' > "$RUNNER_TEMP/ssm-parameters.json"
           command_id=$(aws ssm send-command \
             --document-name AWS-RunShellScript \

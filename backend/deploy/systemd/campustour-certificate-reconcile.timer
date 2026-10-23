@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry pending Smart Campus Tour TLS certificate activation
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Persistent=true
+Unit=campustour-certificate-reconcile.service
+
+[Install]
+WantedBy=timers.target

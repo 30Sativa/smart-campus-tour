@@ -35,15 +35,34 @@ Ubuntu's live package repository, so a future rebuild from the same source may
 produce a different image digest; the deployed artifact remains pinned and
 traceable.
 
-Deployment is a manual `workflow_dispatch` on `main`, with a 40-character
-successful main commit SHA. Configure the GitHub `production` environment to
-require a human reviewer. The deploy job retrieves the release manifest from
-that exact successful workflow run and sends a command through SSM. The EC2
-script downloads the Compose file and deployment script from the selected
-source commit, pulls images by digest, takes a verified pre-deploy backup when
-an earlier release exists, and checks HTTPS/database readiness before
-promoting the new release. A failed rollout attempts an API-only rollback after
-the previous initializer confirms the current database is still compatible.
+Application deployment is a manual `workflow_dispatch` on `main`, with a
+40-character successful main commit SHA. Configure the GitHub `production`
+environment to require a human reviewer. The deploy job retrieves the release
+manifest from that exact successful workflow run. It runs the deployment code
+and installs the host operations bundle from the current, separately verified
+operations commit; it downloads only the Compose file from the selected
+application commit. The host records both revisions. Selecting an older
+application SHA therefore does not restore older deployment or backup safety
+scripts.
+
+For an existing release, deployment verifies the live SQL container, compares
+the canonical SQL service, volume, and database-network configuration, takes a
+mandatory verified pre-deploy backup, then runs the candidate initializer with
+`--no-deps` and starts a private candidate API container without publishing the
+production port. A rejected schema or readiness gate leaves the current API
+container in place. Promotion recreates only the API with `--no-deps`; Compose
+cannot reconcile SQL or the initializer during that step. A failed promotion
+attempts an API-only rollback after the previous initializer confirms the
+current schema is still compatible.
+
+The ordinary application workflow retains the SQL image digest already stored
+in host state and the active release. A later upstream tag digest does not
+upgrade SQL or block an API release. SQL engine changes run only through the
+separate `Backend SQL Maintenance` workflow, which uses the selected verified
+release digest and requires a verified off-host backup. An engine upgrade can
+alter database files; SQL image downgrade is not an automatic rollback. The
+recovery plan restores the backup to a separate SQL instance/volume and
+requires an operator cutover after validation.
 
 The deploy path does not use SSH, GitHub repository secrets for AWS keys, or
 build tools on EC2. SSM is preferred over SSH because it avoids opening inbound
@@ -74,8 +93,11 @@ Complete these settings outside the repository before dispatching a deploy:
    available. Do not grant the instance profile broad account access.
 5. Use a private S3 bucket with versioning, Block Public Access, and a lifecycle
    retention policy (for example 30 days of daily backups). The backup script
-   requests SSE-S3 (`AES256`) and checks that the uploaded object exists and
-   has the expected size. Retention and restore tests are separate controls.
+   requests SSE-S3 (`AES256`), stores the local SHA-256 as object metadata, checks
+   the uploaded size, downloads the object as a stream, and compares its
+   SHA-256 with the local backup before recording success. This doubles S3
+   transfer bytes for each verified backup but uses no additional staging disk.
+   Retention and restore tests are separate controls.
 6. Use an Ubuntu Server 24.04 x86_64 EC2 instance. Inbound security group rules
    should allow TCP 443 from intended clients; do not allow 1433, 8080, or 8443.
    SSM needs outbound connectivity. Termius SSH access is not needed by the
@@ -135,10 +157,10 @@ openssl rand -hex 32
 For SQL passwords, prefix the random hex with `Aa1!` to satisfy SQL complexity.
 The app password accepts only letters, digits, `!`, `_`, and `-`. Configure
 `API_HOST`, `WEB_ORIGIN`, `TLS_CERT_PATH`, `TLS_KEY_PATH`, `SQL_BACKUP_DIR`,
-and an absolute `API_ENV_FILE=/etc/campustour/api.env`. Set the backend env file
-to `SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04` as
-the initial default; each managed release overrides it with the SQL digest
-recorded in its manifest. Set `TLS_CERT_PATH=/etc/campustour/certs/active/fullchain.pem`
+and an absolute `API_ENV_FILE=/etc/campustour/api.env`. The first verified
+release pins the selected SQL image digest in `/var/lib/campustour/sqlserver-image`;
+ordinary application releases preserve that engine pin. Set
+`TLS_CERT_PATH=/etc/campustour/certs/active/fullchain.pem`
 and `TLS_KEY_PATH=/etc/campustour/certs/active/privkey.pem`; the deploy and
 renewal scripts require these exact managed paths.
 
@@ -173,47 +195,47 @@ this Certbot deploy hook after renewal:
 /usr/local/sbin/campustour-refresh-certificate "$RENEWED_LINEAGE/fullchain.pem" "$RENEWED_LINEAGE/privkey.pem"
 ```
 
-The hook checks hostname, expiry, and key/certificate match, switches an
+The hook stores each renewed pair in a root-only queue before trying the
+operation lock. If deployment or backup holds the lock, the hook exits with the
+pair retained; `campustour-certificate-reconcile.timer` retries every two
+minutes. Activation validates hostname, expiry, and key match, switches an
 atomic versioned certificate pair, recreates only the API, and checks HTTPS
-readiness. On failure it tries to restore the prior pair and API. Keep old
-certificate release directories until a later cleanup review. Do not put
-private keys in Docker images or Git.
+readiness. On failure it restores the prior pair and API, then stops automatic
+activation after three failed attempts for operator review. Keep active and
+previous certificate releases until a later cleanup review. Do not put private
+keys in Docker images or Git.
 
 ## 4. Install host operations and perform the first deploy
 
-Install the deployment support scripts and systemd units from the checked out
-source. Review the files before copying them:
-
-```bash
-sudo install -o root -g root -m 0755 backend/deploy/backup-sqlserver.sh /usr/local/sbin/campustour-backup
-sudo install -o root -g root -m 0755 backend/deploy/check-ec2.sh /usr/local/sbin/campustour-check
-sudo install -o root -g root -m 0755 backend/deploy/stack-start.sh /usr/local/sbin/campustour-stack-start
-sudo install -o root -g root -m 0755 backend/deploy/refresh-certificate.sh /usr/local/sbin/campustour-refresh-certificate
-sudo install -o root -g root -m 0644 backend/deploy/systemd/campustour-stack.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 backend/deploy/systemd/campustour-backup.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 backend/deploy/systemd/campustour-backup.timer /etc/systemd/system/
-sudo install -o root -g root -m 0644 backend/deploy/systemd/campustour-check.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 backend/deploy/systemd/campustour-check.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable campustour-stack.service campustour-backup.timer campustour-check.timer
-```
+The deployment workflow installs an immutable, versioned operations bundle
+from the current verified `main` commit before running a release. The bundle
+contains the backup, health-check, stack-start, certificate-reconciliation
+scripts, and systemd units. Stable host command links point to the selected
+bundle; `/var/lib/campustour/operations-tools-release` records its commit. The
+application release and its Compose file remain separately versioned. The
+workflow enables the stack service and backup, health-check, and certificate
+reconciliation timers. Do not copy operational scripts from an older app
+release over the current bundle.
 
 After GitHub/AWS prerequisites are configured and reviewed, dispatch `Backend
 Deploy` on branch `main` with the SHA shown by a successful `Backend Verify`
-run. The workflow is manual by design. The release must be successful and its
-manifest still retained. The remote script refuses to run on an unsupported
-Ubuntu/architecture, with a host SQL service/1433 listener, fewer than 3500
-MiB visible RAM, less than 512 MiB available memory, less than 12 GiB free disk,
-missing TLS/config/backup paths, or a different SQL digest from the currently
-managed release.
+run. The workflow is manual by design. Both the selected application release
+and current operations commit must have successful verification runs, and the
+release manifest must still be retained. The host rejects an unsupported
+Ubuntu/architecture, a host SQL service/1433 listener, fewer than 3500 MiB
+visible RAM, less than 512 MiB available memory, less than 12 GiB free disk,
+missing TLS/config/backup paths, unknown Docker resources, or SQL service
+configuration drift.
 
-For the first release, the Compose initializer creates the existing v1.1 schema
-only when the database is empty and records its canonical hash. It does not
-migrate, drop, reset, or adopt an unmarked database. If a `campustour` Compose
-container or SQL data volume already exists without the managed
-`/opt/campustour/current` release link, stop and review it manually; the
-deployment refuses to take ownership. This also applies after a failed first
-deployment, until an operator has verified and backed up any existing data.
+For the first release, the deployment writes a persistent random owner marker
+before creating Docker resources. Compose applies that marker to its containers,
+networks, and SQL volume. The initializer creates the reviewed v1.1 schema only
+when the database is empty and records its canonical hash; it does not migrate,
+drop, reset, or adopt an unmarked database. A failed first attempt can be retried
+when every leftover resource carries the saved owner marker; the SQL volume is
+preserved and initialization is safely re-evaluated. Resources without the
+marker remain unowned and require a reviewed adoption procedure. Never remove
+the marker or volume to make retry pass.
 
 After the first release, create the initial Admin through the one-shot seed
 service. Run as a trusted host administrator, read the password without echo,
@@ -239,6 +261,12 @@ and container limit to 2560 MiB; API container to 512 MiB; initializer to 192
 MiB; and optional seed service to 256 MiB. In steady state, SQL + API container
 limits total 3072 MiB. During seed this can reach 3328 MiB; during bootstrap
 SQL + initializer can reach 2752 MiB. These are hard caps, not measured usage.
+During an existing-release rollout, SQL + the serving API + the private API
+candidate can reach 3584 MiB by container limits. The deployment requires at
+least 768 MiB `MemAvailable` before starting that candidate and aborts if the
+host falls below 512 MiB while it starts; these checks reduce risk but cannot
+guarantee the kernel will not OOM-kill a process. Include this overlapping API
+phase in the EC2 acceptance measurements.
 The host nominally has 4096 MiB, but usable memory is lower after kernel,
 Docker, filesystem cache, and host services. SQL Server needs at least 2 GiB to
 start, Express buffer pool is capped at about 1410 MiB, and the rest of SQL
@@ -276,12 +304,23 @@ or an unreviewed cleanup command as routine maintenance.
 
 ## 6. Deployment, health and recovery behavior
 
-Each release uses image digests, not `latest` tags. Deployment is serialized
-with `flock` and GitHub Actions concurrency. Compose waits for SQL health, then
-the database initializer, then API health. The initializer guard accepts only
-the existing reviewed v1.1 snapshot and does not perform EF migrations. A
-future schema change requires a separately reviewed expand/contract migration
-and restore plan before changing that policy.
+Each release uses image digests, not `latest` tags. Application deployment,
+SQL maintenance, backup, and certificate activation coordinate through
+`/run/lock/campustour-operation.lock`; deployment and maintenance take it
+exclusively, while scheduled backups take it shared and serialize with a
+separate backup lock. Pre-deploy backup inherits the deployment lock instead
+of reacquiring it. A scheduled backup never starts or recreates SQL: it fails
+clearly when the existing container is not healthy. `flock` releases locks on
+process exit. GitHub Actions also prevents concurrent production workflows.
+
+Before API promotion, the deployment compares the live and candidate SQL
+service, named-volume, and database-network definitions, checks the current
+SQL container's Compose config hash, runs the candidate initializer with
+`--no-deps`, and waits for a private candidate API to pass Docker and HTTPS
+database readiness. It recreates only the API after these gates pass. The
+initializer accepts only the existing reviewed v1.1 snapshot and does not run
+EF migrations. A future schema change needs a separately reviewed
+expand/contract migration and restore plan.
 
 `GET /health/live` is a process liveness check (204). `GET /health/ready` tests
 SQL connectivity with a three-second timeout (200 when connected, generic 503
@@ -291,20 +330,26 @@ the health state is `unhealthy`. The API Docker healthcheck uses loopback TLS;
 the host deployment probe validates the configured certificate and SQL-ready
 route. Neither endpoint is an end-to-end business workflow test.
 
-On a failed first deployment there is no prior release to restore; the new API
-is stopped and the persistent SQL volume is left alone. On later deployments,
-the script first creates a full checksum backup, verifies it, uploads to S3,
-and confirms the object size. If the new API fails readiness, it runs the
-previous release's initializer guard against the current database. If that
-guard succeeds, the old API digest is restored; if not, automatic rollback is
-refused. Database restore is never automatic. This is application rollback,
-not rollback of data or schema changes.
+On first deployment the host writes its owner marker and SQL digest before
+creating Docker resources. If startup or bootstrap fails, the retry accepts
+only resources carrying that same owner marker; it preserves the SQL volume and
+re-evaluates the initializer without resetting data. A resource without the
+marker remains foreign and blocks deployment. If a later API candidate fails a
+schema or readiness gate, the old API stays in place. A failure after API
+promotion attempts rollback only after the previous initializer confirms the
+current database is compatible. Database restore is never automatic.
+
+Every existing-release deployment must create a local checksummed backup,
+pass `RESTORE VERIFYONLY`, upload to S3, verify object size and SHA-256 by
+streaming the uploaded object back, and only then proceed. The streaming check
+uses no extra disk but doubles transfer bytes. The local staged copy is removed
+only after verification. A failed backup blocks deployment and preserves the
+local backup for diagnosis.
 
 Before each scheduled backup, free disk must be at least the allocated SQL
 database data+log size plus 1 GiB. The daily 02:00 UTC timer records a local
 success marker only after `BACKUP ... WITH CHECKSUM`, `RESTORE VERIFYONLY`, S3
-upload, and size confirmation. It deletes the local staged copy only after S3
-confirmation. Configure S3 lifecycle retention separately. `campustour-check`
+upload, size, and streamed SHA-256 confirmation. Configure S3 lifecycle retention separately. `campustour-check`
 runs every five minutes and fails when the last verified backup is older than
 26 hours; systemd records failure but does not notify anyone by itself. Add a
 CloudWatch/SNS or equivalent alert for failed backup/check services, low disk,
@@ -312,12 +357,18 @@ low memory, OOM, and certificate expiry.
 
 For an emergency API rollback, dispatch the older successful SHA while its
 manifest artifact is still available. The workflow takes a fresh backup before
-replacing an existing release. Do not use SQL image upgrades as part of an API
-release; a changed SQL digest is explicitly blocked and needs a maintenance
-plan. For data recovery, first download a verified backup and restore it to a
-new database name in a separate SQL instance/volume, run `DBCC CHECKDB`, and
-validate application compatibility. Schedule a maintenance window before any
-production cutover; never restore over the live database as a routine rollback.
+replacing an existing release and still uses the current operations bundle.
+An upstream SQL tag changing does not affect normal API deployment: the active
+SQL digest stays pinned in host state. Use `Backend SQL Maintenance` during an
+approved window to apply a different manifest digest. The script backs up,
+checks application/schema readiness against the existing SQL engine, then
+changes the SQL image and rechecks readiness before API promotion. SQL Server
+may upgrade database files when it starts; after this boundary the script
+preserves a pending marker and requires operator review instead of attempting
+an unsafe image downgrade. Restore the backup to a separate SQL instance and
+volume, run `RESTORE VERIFYONLY` and `DBCC CHECKDB`, validate app compatibility,
+then perform a reviewed cutover. Never restore over the live database as a
+routine rollback.
 
 ## 7. Failure diagnosis
 
@@ -357,7 +408,8 @@ Run these checks on the actual EC2 instance before accepting the 4 GiB profile:
    volume, Docker/Compose version, SSM access, no host `mssql-server`, and no
    listener on 1433. Confirm the only reachable application port is 443.
 2. Measure a cold boot and first SQL startup, empty-database bootstrap, first
-   API startup, initial Admin seed, one full backup, and a restore drill. Record
+   API startup, initial Admin seed, an existing-release deployment with both
+   API containers overlapping, one full backup, and a restore drill. Record
    `MemAvailable`, `docker stats`, cgroup usage, CPU utilization/throttling,
    disk use, swap activity, elapsed time, restart counts, and OOM state at each
    phase.

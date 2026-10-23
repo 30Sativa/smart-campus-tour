@@ -62,6 +62,7 @@ trap cleanup EXIT
 admin_password="Aa1!$(openssl rand -hex 32)"
 cat > "$scratch/test.env" <<ENV
 COMPOSE_PROJECT_NAME=$project
+COMPOSE_OWNER=$(openssl rand -hex 16)
 BACKEND_IMAGE=$backend_image
 DB_INIT_IMAGE=$db_init_image
 SQLSERVER_IMAGE=$sqlserver_image
@@ -126,6 +127,70 @@ assert_login() {
   grep -q 'accessToken' "$scratch/response.json"
 }
 assert_login
+
+# A candidate schema rejection must not make Compose stop the current API.
+api_id_before=$("${dc[@]}" ps -q api)
+schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.1.sql | sha256sum | cut -d' ' -f1)
+stored_schema_hash=$(sql_as_sa -h -1 -W -Q "SET NOCOUNT ON; SELECT CONVERT(nvarchar(64), value) FROM SmartCampusTourV11.sys.extended_properties WHERE name=N'CampusTourBootstrapHash';" | tr -d '\r\n ')
+[[ "$stored_schema_hash" == "$schema_hash" ]] || {
+  echo 'Unexpected initial schema hash in the disposable SQL database.' >&2
+  exit 1
+}
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';"
+if "${dc[@]}" run -T --rm --no-deps db-init; then
+  echo 'Candidate initializer accepted an incompatible schema hash.' >&2
+  exit 1
+fi
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'Rejected schema candidate changed the running API container.' >&2
+  exit 1
+}
+assert_login
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$stored_schema_hash';"
+
+# Compose run starts an isolated API candidate without reconciling dependencies or publishing the production port.
+candidate_name="$project-candidate-api"
+candidate_id=$("${dc[@]}" run -d --no-deps --name "$candidate_name" \
+  -e 'ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=MissingCandidateDb;User ID=smartcampus_api;Password=RejectedCandidate;Encrypt=True;TrustServerCertificate=True;Connect Timeout=2' api)
+candidate_ready=000
+for attempt in $(seq 1 30); do
+  candidate_ready=$(docker exec "$candidate_id" curl --silent --insecure --max-time 3 \
+    --write-out '%{http_code}' --output /dev/null https://localhost:8443/health/ready 2>/dev/null || true)
+  [[ "$candidate_ready" == 503 ]] && break
+  sleep 1
+done
+[[ "$candidate_ready" == 503 ]] || {
+  echo "Expected the rejected candidate to fail readiness with HTTP 503; got $candidate_ready." >&2
+  exit 1
+}
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'Failed candidate readiness changed the current API container.' >&2
+  exit 1
+}
+assert_login
+docker rm -f "$candidate_id" >/dev/null
+
+# A SQL service configuration change has a distinct canonical fingerprint and is therefore a deployment gate failure.
+cat > "$scratch/sql-drift.yml" <<'YAML'
+services:
+  sqlserver:
+    mem_limit: 2592m
+YAML
+dc_drift=(docker compose --project-name "$project" --env-file "$scratch/test.env" \
+  -f backend/docker-compose.yml -f "$scratch/sql-drift.yml")
+sql_fingerprint() {
+  jq -cS '{service:(.services.sqlserver | .image = "<pinned-sql-image>"),volume:.volumes["sqlserver-data"],database_network:.networks.database}'
+}
+base_sql_fingerprint=$("${dc[@]}" config --format json | sql_fingerprint)
+drift_sql_fingerprint=$("${dc_drift[@]}" config --format json | sql_fingerprint)
+[[ "$base_sql_fingerprint" != "$drift_sql_fingerprint" ]] || {
+  echo 'SQL configuration drift was not detected by the deployment fingerprint.' >&2
+  exit 1
+}
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'SQL configuration validation changed the current API container.' >&2
+  exit 1
+}
 
 live_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
   --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/live")
@@ -219,4 +284,4 @@ if "${dc[@]}" run -T --rm --no-deps db-init; then
   exit 1
 fi
 sql_as_sa -Q "IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1 THROW 51000, 'Guard changed existing data.', 1;"
-echo 'PASS: immutable images, Compose gating, HTTPS login/cookie, live/readiness, SQL permissions, backup/restore, persistence and existing-database guard.'
+echo 'PASS: immutable images, failed schema/API candidate isolation, SQL configuration drift detection, HTTPS login/cookie, live/readiness, SQL permissions, backup/restore, persistence and existing-database guard.'
