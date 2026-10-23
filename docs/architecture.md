@@ -536,6 +536,20 @@ send/cancel reconciliation, not only a check before the send. Publish business
 notifications after the corresponding state/event commit. Define tour revision
 semantics across backend restart before wiring the frontend revision guard.
 
+**Robot-local head interface (draft, 23/10/2026).** The STM32 firmware and
+`stm32_bridge` expose the PAN/TILT head on the robot's ROS graph: action
+`head/set` (`bus_interfaces/action/SetHead`: absolute angle or HOME against
+the mechanical stop), topics `head/jog`, `head/step` (operator buttons),
+`head/state`, services `head/stop`, `head/off`, `head/zero`, plus
+`contactor/set` / `contactor/state` (separate module, needs only
+`std_msgs`/`std_srvs`, stays up when the head interface is disabled). A goal succeeds only when the firmware
+feedback reports that command's sequence number as accepted **and** the head
+idle; the position is open-loop (step counting, no encoder). Serial contract:
+`robot/docs/PROTOCOL_FB.md`; interface details:
+`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`. This does **not** define the
+backend↔robot head contract, presets, or who may operate the head; Fleet
+Sync v1 still carries no robot commands.
+
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a
 separately established Capstone requirement. A separate patch must define presets,

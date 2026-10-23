@@ -15,6 +15,7 @@ def generate_launch_description():
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
     wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     steps_per_rev = LaunchConfiguration('steps_per_rev')
     microstep = LaunchConfiguration('microstep')
     gear_ratio = LaunchConfiguration('gear_ratio')
@@ -50,8 +51,20 @@ def generate_launch_description():
     reset_odom_on_start = LaunchConfiguration('reset_odom_on_start')
     odom_covariance_diagonal = LaunchConfiguration('odom_covariance_diagonal')
     twist_covariance_diagonal = LaunchConfiguration('twist_covariance_diagonal')
+    enable_head = LaunchConfiguration('enable_head')
+    enable_contactor = LaunchConfiguration('enable_contactor')
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'enable_head', default_value='true',
+            description='PAN/TILT head interface (head/set, head/jog, head/step, '
+                        'head/state, head/stop|off|zero). Needs rebuilt '
+                        'bus_interfaces and firmware with 24-field FB; see '
+                        'HEAD_CONTROL.md.'),
+        DeclareLaunchArgument(
+            'enable_contactor', default_value='true',
+            description='contactor/set and contactor/state (STM32 PA10). '
+                        'Independent of enable_head.'),
         DeclareLaunchArgument(
             'robot_id', default_value='',
             description='ROS namespace for this robot. Empty preserves the '
@@ -74,6 +87,12 @@ def generate_launch_description():
             'wheel_radius',
             default_value='0.09725',
             description='Wheel radius in meters, used for odometry.'),
+        DeclareLaunchArgument(
+            'odom_linear_scale',
+            default_value='1.0',
+            description='Odometry-only translation scale (Localization V2). '
+                        '1.0 = unchanged. Does not affect rotation, commands '
+                        'or joint_states.'),
         DeclareLaunchArgument(
             'steps_per_rev',
             default_value='200.0',
@@ -228,6 +247,7 @@ def generate_launch_description():
                 'baudrate': ParameterValue(baudrate, value_type=int),
                 'wheel_base': ParameterValue(wheel_base, value_type=float),
                 'wheel_radius': ParameterValue(wheel_radius, value_type=float),
+                'odom_linear_scale': ParameterValue(odom_linear_scale, value_type=float),
                 'steps_per_rev': ParameterValue(steps_per_rev, value_type=float),
                 'microstep': ParameterValue(microstep, value_type=float),
                 'gear_ratio': ParameterValue(gear_ratio, value_type=float),
@@ -274,6 +294,9 @@ def generate_launch_description():
                     reset_odom_on_start, value_type=bool),
                 'odom_covariance_diagonal': odom_covariance_diagonal,
                 'twist_covariance_diagonal': twist_covariance_diagonal,
+                'enable_head': ParameterValue(enable_head, value_type=bool),
+                'enable_contactor': ParameterValue(
+                    enable_contactor, value_type=bool),
             }],
         ),
     ])

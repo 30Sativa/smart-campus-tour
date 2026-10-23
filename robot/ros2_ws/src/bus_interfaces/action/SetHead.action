@@ -1,0 +1,19 @@
+# Dua dau quay toi mot goc, hoac lay moc bang vat can (HOME).
+# Ket qua chi thanh cong khi firmware bao head_seq = seq cua lenh nay VA
+# state = IDLE (da phat du xung). Gui lenh thoi khong phai la bang chung.
+
+uint8 MODE_ANGLE=0     # toi goc tuyet doi pan_deg / tilt_deg (tinh tu moc 0)
+uint8 MODE_HOME=1      # tim vat can roi ve 0 (khoang 21 s)
+
+uint8 mode
+float32 pan_deg
+float32 tilt_deg
+---
+bool success
+string message         # "reached", "homed", "rejected:head_limit", "timeout", "canceled", "serial_unavailable", ...
+float32 pan_deg
+float32 tilt_deg
+---
+uint8 state            # HeadState.STATE_*
+float32 pan_deg
+float32 tilt_deg

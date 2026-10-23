@@ -1,6 +1,7 @@
 #include "usb_protocol.h"
 
 #include "contactor/contactor.h"
+#include "head/head_core.h"
 #include "main.h"
 #include "motor/motor.h"
 #include "imu/bno08x.h"
@@ -15,7 +16,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PROTOCOL_TX_BUFFER_SIZE 224U
+_Static_assert(MOTOR_ISR_WATCHDOG_MS > CMD_TIMEOUT_MS,
+               "ISR watchdog is a backstop: it must outlast the main-loop CMD timeout");
+
+#define PROTOCOL_TX_BUFFER_SIZE 256U  /* DIAG worst case ~236 B; truncation would drop "\r\n" */
 #define PROTOCOL_TX_BUFFER_COUNT 2U
 
 typedef enum
@@ -40,12 +44,22 @@ static uint32_t last_feedback_sent_ms = 0U;
 static uint32_t last_feedback_attempt_ms = 0U;
 static uint32_t last_error_attempt_ms = 0U;
 static ProtocolStatus protocol_status = PROTOCOL_STATUS_STOP;
-static uint8_t pending_bad_command = 0U;
+static uint32_t last_head_seq = 0U;
+/* Dong ERR dang cho gui (NULL = khong co). Chi giu loi moi nhat. */
+static const char *pending_error = NULL;
+
+#define ERR_BAD_COMMAND    "ERR,bad_command\r\n"
+#define ERR_HEAD_NOT_ZERO  "ERR,head_not_zeroed\r\n"
+#define ERR_HEAD_LIMIT     "ERR,head_limit\r\n"
+#define ERR_HEAD_BUSY      "ERR,head_busy\r\n"
 
 static void Protocol_CheckRxLine(void);
 static void Protocol_CheckTimeout(uint32_t now_ms);
 static void Protocol_CheckFeedback(uint32_t now_ms);
 static void Protocol_ReportBadCommand(void);
+static void Protocol_QueueError(const char *line);
+static void Protocol_ProcessHead(char *tokens[], uint8_t token_count);
+static uint8_t Protocol_ParseI32(const char *text, int32_t *value);
 static uint8_t Protocol_TrySendPendingError(void);
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms);
 static uint8_t Protocol_TrySendRaw(const char *text);
@@ -73,7 +87,8 @@ void Protocol_Init(void)
 	last_feedback_attempt_ms = now;
 	last_error_attempt_ms = now - FEEDBACK_PERIOD_MS;
 	protocol_status = PROTOCOL_STATUS_STOP;
-	pending_bad_command = 0U;
+	pending_error = NULL;
+	last_head_seq = 0U;
 }
 
 void Protocol_Update(void)
@@ -84,6 +99,10 @@ void Protocol_Update(void)
 	now = HAL_GetTick();
 	Protocol_CheckTimeout(now);
 
+	/* An ERR line only takes this iteration's USB slot when it was actually
+	 * queued. While it waits (rate limit or CDC busy) FB keeps flowing:
+	 * blocking FB here turned a burst of dropped lines into seconds without
+	 * odometry, and the host then entered its feedback-timeout safe stop. */
 	if (Protocol_TrySendPendingError() != 0U)
 	{
 		return;
@@ -169,6 +188,7 @@ void Protocol_ProcessLine(char *line)
 		last_seq = seq;
 		last_valid_rx_ms = HAL_GetTick();
 		protocol_status = PROTOCOL_STATUS_OK;
+		Motor_FeedWatchdog();
 		Motor_SetWheelSpeedMMPS(MOTOR_LEFT, left_mm_s);
 		Motor_SetWheelSpeedMMPS(MOTOR_RIGHT, right_mm_s);
 		return;
@@ -188,11 +208,14 @@ void Protocol_ProcessLine(char *line)
 		last_valid_rx_ms = HAL_GetTick();
 		protocol_status = PROTOCOL_STATUS_STOP;
 		Motor_StopAll();
+		/* KHONG dung dau quay o day: stm32_bridge gui STOP 20 Hz khi robot dung
+		 * yen (giu firmware o trang thai STOP). Dung dau quay = HEAD,<seq>,STOP. */
 		return;
 	}
 
-	/* CONTACTOR,<seq>,<ON|OFF> -> dieu khien rieng PB10.
-	 * Khong refresh watchdog motor: day khong phai lenh chuyen dong. */
+	/* CONTACTOR,<seq>,<ON|OFF> -> MOSFET contactor tren PA10 (truoc 23/10/2026
+	 * la PB10; PB10 nay la TILT_nEN). Khong refresh watchdog motor: day khong
+	 * phai lenh chuyen dong. Trang thai lenh nam o truong cuoi cua FB. */
 	if (Protocol_EqualsIgnoreCase(tokens[0], "CONTACTOR") != 0U)
 	{
 		uint32_t seq;
@@ -215,6 +238,17 @@ void Protocol_ProcessLine(char *line)
 		{
 			Contactor_Off();
 		}
+		return;
+	}
+
+	/* HEAD,<seq>,<pan_cdeg>,<tilt_cdeg> | HEAD,<seq>,HOME | HEAD,<seq>,ZERO |
+	 * HEAD,<seq>,OFF | HEAD,<seq>,STOP | HEAD,<seq>,STEP,<n_pan>,<n_tilt> |
+	 * HEAD,<seq>,JOG,<d_pan>,<d_tilt>
+	 * Dau quay PAN/TILT, xem head/head_core.h va robot/docs/PROTOCOL_FB.md.
+	 * Khong refresh watchdog motor banh xe: day khong phai lenh chuyen dong. */
+	if (Protocol_EqualsIgnoreCase(tokens[0], "HEAD") != 0U)
+	{
+		Protocol_ProcessHead(tokens, token_count);
 		return;
 	}
 
@@ -285,6 +319,7 @@ void Protocol_ProcessLine(char *line)
 		}
 
 		Motor_StopAll();
+		HeadCore_Halt();   /* DIAG chan main loop ~2 s: deadman JOG khong chay duoc */
 		protocol_status = PROTOCOL_STATUS_STOP;
 		last_seq = seq;
 
@@ -330,7 +365,7 @@ void Protocol_ProcessLine(char *line)
 		for (uint32_t retry = 0U; retry < 100U; retry++)
 		{
 			if (Protocol_TrySendFormatted(
-					"DIAG,%lu,%s,%s,%u.%u,%s,SDA=%u,SCL=%u,EXTPU=%u%u,SCAN=%s,PKT=%u/ch%u,RATE=%lu,CLK=%lu,SYS=%luMHz,ACC=%u,WARN=%lu,REC=%lu,DWT=%u\r\n",
+					"DIAG,%lu,%s,%s,%u.%u,%s,SDA=%u,SCL=%u,EXTPU=%u%u,SCAN=%s,PKT=%u/ch%u,RATE=%lu,CLK=%lu,SYS=%luMHz,ACC=%u,WARN=%lu,REC=%lu,DWT=%u,REARM=%lu,RST=%lu\r\n",
 					(unsigned long)seq,
 					(ack != 0U) ? "ACK" : "NOACK",
 					(selftest != 0U) ? "SELFTEST_OK" : "SELFTEST_FAIL",
@@ -345,7 +380,9 @@ void Protocol_ProcessLine(char *line)
 					(unsigned)BNO08x_GetAccuracy(),
 					(unsigned long)BNO08x_GetBusWarnCount(),
 					(unsigned long)BNO08x_GetBusRecoverCount(),
-					(unsigned)BNO08x_IsDwtOk()) != 0U)
+					(unsigned)BNO08x_IsDwtOk(),
+					(unsigned long)BNO08x_GetRearmCount(),
+					(unsigned long)BNO08x_GetResetSeenCount()) != 0U)
 			{
 				break;
 			}
@@ -355,6 +392,97 @@ void Protocol_ProcessLine(char *line)
 	}
 
 	Protocol_ReportBadCommand();
+}
+
+static void Protocol_ProcessHead(char *tokens[], uint8_t token_count)
+{
+	uint32_t seq;
+	HeadResult result;
+
+	if ((token_count < 3U) || (token_count > 5U) ||
+		(Protocol_ParseU32(tokens[1], &seq) == 0U))
+	{
+		Protocol_ReportBadCommand();
+		return;
+	}
+
+	if (token_count == 5U)
+	{
+		int32_t a;
+		int32_t b;
+		uint8_t is_step = Protocol_EqualsIgnoreCase(tokens[2], "STEP");
+		uint8_t is_jog = Protocol_EqualsIgnoreCase(tokens[2], "JOG");
+
+		if (((is_step == 0U) && (is_jog == 0U)) ||
+			(Protocol_ParseI32(tokens[3], &a) == 0U) ||
+			(Protocol_ParseI32(tokens[4], &b) == 0U) ||
+			((is_jog != 0U) && ((a < -1) || (a > 1) || (b < -1) || (b > 1))))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+		result = (is_step != 0U) ? HeadCore_Step(a, b)
+		                         : HeadCore_Jog((int8_t)a, (int8_t)b, HAL_GetTick());
+	}
+	else if (token_count == 3U)
+	{
+		if (Protocol_EqualsIgnoreCase(tokens[2], "HOME") != 0U)
+		{
+			result = HeadCore_Home();
+		}
+		else if (Protocol_EqualsIgnoreCase(tokens[2], "ZERO") != 0U)
+		{
+			result = HeadCore_Zero();
+		}
+		else if (Protocol_EqualsIgnoreCase(tokens[2], "OFF") != 0U)
+		{
+			HeadCore_Off();
+			result = HEAD_OK;
+		}
+		else if (Protocol_EqualsIgnoreCase(tokens[2], "STOP") != 0U)
+		{
+			HeadCore_Halt();   /* giam toc ve 0, giu driver; dang HOME thi huy HOME */
+			result = HEAD_OK;
+		}
+		else
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+	}
+	else
+	{
+		int32_t pan_cdeg;
+		int32_t tilt_cdeg;
+
+		if ((Protocol_ParseI32(tokens[2], &pan_cdeg) == 0U) ||
+			(Protocol_ParseI32(tokens[3], &tilt_cdeg) == 0U))
+		{
+			Protocol_ReportBadCommand();
+			return;
+		}
+		result = HeadCore_Command(pan_cdeg, tilt_cdeg);
+	}
+
+	last_seq = seq;
+	switch (result)
+	{
+	case HEAD_OK:
+		last_head_seq = seq;
+		break;
+	/* Tu choi lenh dau quay KHONG doi <status> cua FB: truong do mo ta banh
+	 * xe (OK/STOP/TIMEOUT/ERR), banh xe van chay binh thuong. */
+	case HEAD_ERR_NOT_ZEROED:
+		Protocol_QueueError(ERR_HEAD_NOT_ZERO);
+		break;
+	case HEAD_ERR_LIMIT:
+		Protocol_QueueError(ERR_HEAD_LIMIT);
+		break;
+	case HEAD_ERR_BUSY:
+	default:
+		Protocol_QueueError(ERR_HEAD_BUSY);
+		break;
+	}
 }
 
 void Protocol_SendFeedback(void)
@@ -453,14 +581,19 @@ static void Protocol_CheckFeedback(uint32_t now_ms)
 static void Protocol_ReportBadCommand(void)
 {
 	protocol_status = PROTOCOL_STATUS_ERR;
-	pending_bad_command = 1U;
+	Protocol_QueueError(ERR_BAD_COMMAND);
+}
+
+static void Protocol_QueueError(const char *line)
+{
+	pending_error = line;
 }
 
 static uint8_t Protocol_TrySendPendingError(void)
 {
 	uint32_t now;
 
-	if (pending_bad_command == 0U)
+	if (pending_error == NULL)
 	{
 		return 0U;
 	}
@@ -468,17 +601,17 @@ static uint8_t Protocol_TrySendPendingError(void)
 	now = HAL_GetTick();
 	if ((uint32_t)(now - last_error_attempt_ms) < FEEDBACK_PERIOD_MS)
 	{
-		return 1U;
+		return 0U;
 	}
 
 	last_error_attempt_ms = now;
-	if (Protocol_TrySendRaw("ERR,bad_command\r\n") != 0U)
+	if (Protocol_TrySendRaw(pending_error) != 0U)
 	{
-		pending_bad_command = 0U;
+		pending_error = NULL;
 		return 1U;
 	}
 
-	return 1U;
+	return 0U;
 }
 
 static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
@@ -492,6 +625,7 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	uint8_t sonar2_valid = 0U;
 	uint8_t sonar3_valid = 0U;
 	uint8_t sonar4_valid = 0U;
+	HeadStatus head;
 
 	/* CONTRACT: robot/docs/PROTOCOL_FB.md la nguon su that duy nhat cua khung
 	 * nay. Chi duoc THEM truong o CUOI, va phai cap nhat doc + test o ca hai
@@ -502,8 +636,15 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	 * Format moi (tuong thich nguoc, them yaw va 4 SR04T):
 	 *   FB,<seq>,<left>,<right>,<dt_ms>,<status>,<yaw_cdeg>,<yaw_valid>,
 	 *      <sonar1_mm>,<sonar1_valid>,<sonar2_mm>,<sonar2_valid>,
-	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>
-	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do. */
+	 *      <sonar3_mm>,<sonar3_valid>,<sonar4_mm>,<sonar4_valid>,<yaw_acc>,
+ *      <imu_rearm>,<imu_reset_seen>,
+	 *      <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>
+	 * yaw_acc 0..3: 0 = tu ke chua hieu chuan, heading co the sai hang chuc do.
+	 * imu_rearm / imu_reset_seen: bo dem tich luy tu luc boot (BNO08x_Service).
+	 * head_*: seq lenh HEAD cuoi duoc chap nhan, vi tri dem xung (centi-do),
+	 * trang thai 0=OFF 1=IDLE 2=MOVING 3=HOMING 4=NO_REF (head/head_core.h).
+	 * contactor: 1 = firmware dang xuat PA10 muc cao (lenh ON), khong phai
+	 * phan hoi tu tiep diem contactor. */
 	uint8_t yaw_valid = 0U;
 	float   yaw_deg   = BNO08x_GetLastYaw(&yaw_valid);
 	long    yaw_cdeg  = (long)(yaw_deg * 100.0f);
@@ -511,9 +652,10 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 	SR04T_GetReading(1U, &sonar2_mm, &sonar2_valid);
 	SR04T_GetReading(2U, &sonar3_mm, &sonar3_valid);
 	SR04T_GetReading(3U, &sonar4_mm, &sonar4_valid);
+	HeadCore_GetStatus(&head);
 
 	return Protocol_TrySendFormatted(
-		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+		"FB,%lu,%ld,%ld,%lu,%s,%ld,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%ld,%ld,%u,%u\r\n",
 		(unsigned long)last_seq,
 		(long)Motor_GetLeftCount(),
 		(long)Motor_GetRightCount(),
@@ -529,7 +671,14 @@ static uint8_t Protocol_TrySendFeedback(uint32_t now_ms)
 		(unsigned)sonar3_valid,
 		(unsigned)sonar4_mm,
 		(unsigned)sonar4_valid,
-		(unsigned)BNO08x_GetAccuracy());
+		(unsigned)BNO08x_GetAccuracy(),
+		(unsigned long)BNO08x_GetRearmCount(),
+		(unsigned long)BNO08x_GetResetSeenCount(),
+		(unsigned long)last_head_seq,
+		(long)head.pan_cdeg,
+		(long)head.tilt_cdeg,
+		(unsigned)head.state,
+		(unsigned)Contactor_IsCommandedOn());
 }
 
 static uint8_t Protocol_TrySendRaw(const char *text)
@@ -657,6 +806,26 @@ static uint8_t Protocol_ParseU32(const char *text, uint32_t *value)
 	}
 
 	*value = (uint32_t)parsed;
+	return 1U;
+}
+
+static uint8_t Protocol_ParseI32(const char *text, int32_t *value)
+{
+	char *end;
+	long parsed;
+
+	if ((text == NULL) || (*text == '\0'))
+	{
+		return 0U;
+	}
+
+	parsed = strtol(text, &end, 10);
+	if ((end == text) || (*end != '\0') || (parsed > 1000000L) || (parsed < -1000000L))
+	{
+		return 0U;
+	}
+
+	*value = (int32_t)parsed;
 	return 1U;
 }
 
