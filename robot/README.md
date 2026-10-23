@@ -32,6 +32,7 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `orbbec_bringup` | Astra Pro depth camera bringup + mount TF + Phase 2 depth diagnostics |
 | `robot_perception` | Phase 4 person perception -> Nav2 speed limit |
 | `gazebo_preview_bridge` | Development-only Gazebo telemetry -> local backend `SimulationPreview` |
+| `fleet_bridge` | R1 telemetry-only TF observation -> Backend Fleet Sync v1 over HTTPS; execution status stays UNKNOWN |
 | `bus_manager` | `go_to_stop` action: drive to named bus stops via Nav2 |
 | `bus_interfaces` | action/msg definitions for the bus system |
 | `simulation` | Gazebo worlds/models for testing without hardware |
@@ -122,6 +123,12 @@ Gazebo simulation; it is not used to start the physical robot. See
 4. Bring up base/odom, LiDAR, localization and LiDAR-only Nav2 in layers.
 5. Add Astra and person perception only after the baseline is stable.
 6. Flash STM32 manually with ST-Link when required.
+
+The R1 `fleet_bridge` package is an additional telemetry-only node; it does
+not start or modify Nav2. Follow [the Fleet Bridge guide](docs/fleet-bridge.md)
+for Backend deployment gates, the Python HTTPS preflight and a later authorized
+stationary test. Do not send EC2 traffic until the proxy and rate-limit gates
+are met.
 
 ## Docker Compose Environments
 

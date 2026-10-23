@@ -39,17 +39,43 @@ connection string. The SQL snapshot and EF model remain unchanged.
 
 ## Run the probe
 
-Use the Python standard library only. The probe loads the shared fixture, fills
-fresh timestamps and sequence, verifies TLS with the system CA store, and reads
-the credential from an environment variable rather than a command-line
-argument:
+Use the Python standard library only. The probe uses the shared v1 fixture
+shape, fills a fresh timestamp and sequence, sends `pose: null` and
+`status: UNKNOWN` (it is not a robot pose source), verifies TLS with the system
+CA store, and reads the token from a private file rather than argv or an
+environment variable. Run it from a checkout on the MiniPC before starting the
+ROS node. Do not run it while another bridge owns the same robot identity: a
+new probe stream takes ownership of the in-memory projection.
 
 ```powershell
 $env:FLEET_SYNC_URL = 'https://localhost/api/fleet/v1/sync'
 $env:FLEET_ROBOT_CODE = 'robot_test_01'
-$env:FLEET_ROBOT_CREDENTIAL = '<provisioned secret>'
+$env:FLEET_ROBOT_MAP_KEY = 'test-campus-map-v1'
+$env:FLEET_ROBOT_FRAME_ID = 'map'
+$env:FLEET_ROBOT_CREDENTIAL_FILE = 'C:\path\to\private\robot.credential'
 python .\scripts\fleet_sync_probe.py
 ```
+
+On the MiniPC, create the credential file from the one-time provisioning
+output using the operator's approved secret-handling process and set its mode
+to `0600`. The URL, RobotCode, mapKey and frameId must match the deployed API
+configuration; the values above are for a local example only. An accepted
+probe validates Python HTTPS/TLS, authentication, map context and rate-limit
+reachability from that host. It does not validate ROS, TF or hardware state.
+
+On Ubuntu MiniPC, load those non-secret settings from its private environment
+file and run from the repository root:
+
+```bash
+cd ~/smart-campus-tour
+set -a
+source "$HOME/.config/campustour/fleet-sync.env"
+set +a
+python3 backend/scripts/fleet_sync_probe.py
+```
+
+The file sets the URL, RobotCode, approved mapKey/frameId and the path of the
+private credential file. Keep the token itself out of this shell environment.
 
 For a local development certificate, install/trust the development CA in the
 OS trust store first; the probe deliberately does not disable TLS validation.

@@ -6,14 +6,14 @@ from __future__ import annotations
 import json
 import os
 import ssl
+import stat
 import sys
-import uuid
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
-
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "docs" / "contracts" / "fleet-sync" / "v1" / "sync-request.json"
@@ -38,12 +38,22 @@ def validate_url(url: str) -> str:
         raise ValueError("FLEET_SYNC_URL must be an absolute URL without embedded credentials.")
     if parts.scheme != "https" and not is_loopback_http:
         raise ValueError("FLEET_SYNC_URL must use HTTPS; HTTP is allowed only for localhost loopback testing.")
+    if parts.query or parts.fragment:
+        raise ValueError("FLEET_SYNC_URL must not contain a query or fragment.")
     return url
 
 
-def build_report(robot_code: str, stream_id: str | None = None, seq: int = 1) -> dict:
+def build_report(
+    robot_code: str,
+    map_key: str,
+    frame_id: str = "map",
+    stream_id: str | None = None,
+    seq: int = 1,
+) -> dict:
     if seq < 1 or seq > 9_007_199_254_740_991:
         raise ValueError("FLEET_ROBOT_SEQ must be a positive browser-safe integer.")
+    if not map_key or len(map_key) > 100 or not frame_id or len(frame_id) > 100:
+        raise ValueError("FLEET_ROBOT_MAP_KEY and FLEET_ROBOT_FRAME_ID must be configured.")
 
     stream = str(uuid.uuid4()) if stream_id is None else str(uuid.UUID(stream_id))
     report = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -52,9 +62,32 @@ def build_report(robot_code: str, stream_id: str | None = None, seq: int = 1) ->
     report["reportedAt"] = now
     report["streamId"] = stream
     report["seq"] = seq
-    if report.get("pose") is not None:
-        report["pose"]["capturedAt"] = now
+    report["mapKey"] = map_key
+    report["frameId"] = frame_id
+    # A connectivity probe does not know a physical pose. Never submit the
+    # fixture's illustrative coordinates as if they came from robot TF.
+    report["pose"] = None
+    report["status"] = "UNKNOWN"
+    report["legId"] = None
+    report["localized"] = None
+    report["motionReady"] = None
     return report
+
+
+def read_credential_file(path: str) -> str:
+    try:
+        credential_path = Path(path)
+        metadata = credential_path.stat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError
+        if os.name != "nt" and stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ValueError
+        credential = credential_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise ValueError("FLEET_ROBOT_CREDENTIAL_FILE must point to a readable private file.") from None
+    if not credential or any(char.isspace() for char in credential):
+        raise ValueError("FLEET_ROBOT_CREDENTIAL_FILE must contain one non-empty token.")
+    return credential
 
 
 def is_accepted_response(status: int, body: object) -> bool:
@@ -67,15 +100,28 @@ def is_accepted_response(status: int, body: object) -> bool:
 def main() -> int:
     url = os.environ.get("FLEET_SYNC_URL", "").strip()
     robot_code = os.environ.get("FLEET_ROBOT_CODE", "").strip()
-    credential = os.environ.get("FLEET_ROBOT_CREDENTIAL", "")
-    if not url or not robot_code or not credential:
-        print("Set FLEET_SYNC_URL, FLEET_ROBOT_CODE and FLEET_ROBOT_CREDENTIAL.", file=sys.stderr)
+    map_key = os.environ.get("FLEET_ROBOT_MAP_KEY", "").strip()
+    frame_id = os.environ.get("FLEET_ROBOT_FRAME_ID", "map").strip()
+    credential_file = os.environ.get("FLEET_ROBOT_CREDENTIAL_FILE", "").strip()
+    if not url or not robot_code or not map_key or not frame_id or not credential_file:
+        print(
+            "Set FLEET_SYNC_URL, FLEET_ROBOT_CODE, FLEET_ROBOT_MAP_KEY, "
+            "FLEET_ROBOT_FRAME_ID and FLEET_ROBOT_CREDENTIAL_FILE.",
+            file=sys.stderr,
+        )
         return 2
 
     try:
         url = validate_url(url)
         seq = int(os.environ.get("FLEET_ROBOT_SEQ", "1"))
-        report = build_report(robot_code, os.environ.get("FLEET_ROBOT_STREAM_ID") or None, seq)
+        credential = read_credential_file(credential_file)
+        report = build_report(
+            robot_code,
+            map_key,
+            frame_id,
+            os.environ.get("FLEET_ROBOT_STREAM_ID") or None,
+            seq,
+        )
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 2
