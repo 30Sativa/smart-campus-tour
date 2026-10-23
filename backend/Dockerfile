@@ -53,8 +53,9 @@ ARG VCS_REF=unknown
 ARG VERSION=unknown
 ARG BUILD_DATE=unknown
 ARG SQLSERVER_IMAGE
-COPY --chmod=0444 deploy/init-db.sh /deployment/init-db.sh
-COPY --chmod=0444 \
+# Set traverse permission on copied directories while keeping files non-writable.
+COPY --chmod=u=rwX,go=rX deploy/init-db.sh /deployment/init-db.sh
+COPY --chmod=u=rwX,go=rX \
     database/smart-campus-tour-schema-v1.1.sql \
     database/smart-campus-tour-bootstrap-check.sql \
     database/smart-campus-tour-permissions.sql \
