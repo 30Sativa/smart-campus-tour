@@ -244,6 +244,7 @@ test "$ready_status" = 200
 "${dc[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init -c \
   'export SQLCMDPASSWORD="$SQL_APP_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U smartcampus_api -C -b -d SmartCampusTourV11' <<'SQL'
 SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
 IF IS_SRVROLEMEMBER('sysadmin') <> 0 OR IS_ROLEMEMBER('db_owner') <> 0
     THROW 51000, 'Runtime user is privileged.', 1;
 IF (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) <> 17
