@@ -162,13 +162,16 @@ candidate_id=$("${dc[@]}" run -d --no-deps --name "$candidate_name" \
   -e 'ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=MissingCandidateDb;User ID=smartcampus_api;Password=RejectedCandidate;Encrypt=True;TrustServerCertificate=True;Connect Timeout=2' api)
 candidate_ready=000
 for attempt in $(seq 1 30); do
-  candidate_ready=$(docker exec "$candidate_id" curl --silent --insecure --max-time 3 \
+  # Readiness cancels its database probe after 3 seconds; leave time for the HTTP 503 to reach curl.
+  candidate_ready=$(docker exec "$candidate_id" curl --silent --insecure --max-time 8 \
     --write-out '%{http_code}' --output /dev/null https://localhost:8443/health/ready 2>/dev/null || true)
   [[ "$candidate_ready" == 503 ]] && break
   sleep 1
 done
 [[ "$candidate_ready" == 503 ]] || {
   echo "Expected the rejected candidate to fail readiness with HTTP 503; got $candidate_ready." >&2
+  docker inspect --format 'candidate state={{.State.Status}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$candidate_id" >&2 || true
+  docker logs --tail 120 "$candidate_id" >&2 || true
   exit 1
 }
 [[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
