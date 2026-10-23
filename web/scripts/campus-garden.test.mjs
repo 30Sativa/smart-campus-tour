@@ -161,17 +161,26 @@ describe('NVH sixth-floor rooftop garden', () => {
     expect(Math.max(...gardenSeats[2].polygon.map(p => p[0]))).toBeLessThan(10)
   })
 
-  it('preserves opaque unmarked walls outside the garden', () => {
+  it('preserves opaque classroom perimeter outside the newly marked 601 opening', () => {
+    const sourceBytes = readFileSync('public/models/simulator-map/NVHSV_Tang6_V3.glb')
+    const sourceSize = sourceBytes.readUInt32LE(12), source = JSON.parse(sourceBytes.toString('utf8', 20, 20 + sourceSize))
+    const region = p => p.x > 35 && p.y > 2 && p.z < -85
+    const original = wallTriangles(source, sourceBytes.subarray(28 + sourceSize), 'Warm ivory walls', region)
+    const preserved = wallTriangles(gltf, bin).map(triangle => ({ triangle, bounds: new Box3().setFromPoints([triangle.a, triangle.b, triangle.c]) }))
+    const door = gltf.asset.extras.doorOpenings.find(d => d.name === '601')
+    const closest = new Vector3()
+    let checked = 0
+    for (const triangle of original) for (const a of [0.2, 0.5, 0.8]) for (const b of [0.1, 0.2]) {
+      if (a + b >= 1) continue
+      const point = triangle.a.clone().multiplyScalar(a).addScaledVector(triangle.b, b).addScaledVector(triangle.c, 1 - a - b)
+      const x = point.x - door.centre[0], z = point.z - door.centre[1]
+      const u = x * door.axis[0] + z * door.axis[1], v = x * door.axis[1] - z * door.axis[0]
+      if (Math.abs(u) < door.width / 2 - 0.025 && Math.abs(v) < 0.5 && point.y > 0.03 && point.y < 3.48) continue
+      expect(preserved.some(({ triangle, bounds }) => bounds.distanceToPoint(point) < 0.001 && triangle.closestPointToPoint(point, closest).distanceTo(point) < 0.001), 'Unmarked perimeter was removed at ' + point.toArray()).toBe(true)
+      checked++
+    }
+    expect(checked).toBeGreaterThan(10)
     const shell = visible.find(n => n.name === 'Original architectural shell')
     const walls = gltf.meshes[shell.mesh].primitives.find(p => gltf.materials[p.material].name === 'Warm ivory walls')
-    const position = gltf.accessors[walls.attributes.POSITION], view = gltf.bufferViews[position.bufferView]
-    let unmarkedVertices = 0
-    for (let i = 0; i < position.count; i++) {
-      const offset = (view.byteOffset ?? 0) + i * 12
-      if (bin.readFloatLE(offset) > 35 && bin.readFloatLE(offset + 4) > 2 && bin.readFloatLE(offset + 8) < -85) unmarkedVertices++
-    }
-    // The untouched far classroom perimeter contributes these 24 triangles.
-    expect(unmarkedVertices).toBe(72)
     expect(gltf.materials[walls.material].alphaMode ?? 'OPAQUE').toBe('OPAQUE')
-  })
-})
+  })})
