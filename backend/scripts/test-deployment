@@ -95,6 +95,11 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=localhost' \
 # This key and database exist only in this unique disposable test project.
 chmod 644 "$scratch/key.pem" "$scratch/cert.pem"
 
+print_initializer_logs() {
+  echo 'Disposable Compose startup failed; database initializer logs follow:' >&2
+  "${dc[@]}" logs --no-color --tail=200 db-init >&2 || true
+}
+
 if [[ ${DEPLOYMENT_TEST_BUILD_IMAGES:-true} == true ]]; then
   docker build --pull --target runtime --tag "$backend_image" --file backend/Dockerfile backend
   docker build --pull --target db-init --tag "$db_init_image" --file backend/Dockerfile backend
@@ -105,7 +110,10 @@ fi
 api_image_id=$(docker image inspect --format '{{.Id}}' "$backend_image")
 db_init_image_id=$(docker image inspect --format '{{.Id}}' "$db_init_image")
 "${dc[@]}" config --quiet
-"${dc[@]}" up -d --wait --wait-timeout 240 api
+if ! "${dc[@]}" up -d --wait --wait-timeout 240 api; then
+  print_initializer_logs
+  exit 1
+fi
 printf 'Tested API image config: %s\nTested initializer image config: %s\n' "$api_image_id" "$db_init_image_id"
 
 seed_admin() { "${dc[@]}" run -T --rm seed-admin; }
