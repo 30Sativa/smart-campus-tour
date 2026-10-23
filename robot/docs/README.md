@@ -24,6 +24,8 @@ permission to execute it.
 
 - [Native runtime](native-runtime.md) — provisioning, build and layered
   operation on the physical MiniPC.
+- [R1 ROS Fleet Bridge](fleet-bridge.md) — telemetry-only TF observation,
+  HTTPS contract mapping, Backend deployment gates and stationary test plan.
 - [Localization V2 (candidate)](localization-v2.md) — odometry distance scale
   and AMCL update thresholds for long low-feature corridors; offline evidence,
   calibration procedure and rollback. Not the default.

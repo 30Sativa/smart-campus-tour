@@ -161,6 +161,20 @@ Costs and limits:
   known. A new robot bridge process uses a new stream at sequence 1. An API
   restart leaves the bridge stream unchanged; its first report may continue at
   N+1 because the API's previous ordering state was process-local.
+  A complete validation rejection may be rebuilt at the same sequence only
+  when no earlier attempt could have been stored. If an uncertain report on
+  an established stream expires or receives a complete validation rejection,
+  the bridge skips that sequence and continues on the same stream because v1
+  allows sequence gaps. An uncertain first report cannot be skipped; after a
+  complete validation rejection or expiry, R1 may rotate to a replacement
+  stream at sequence 1 and preserve a timestamp floor at the possibly accepted
+  report. This also recovers an unacknowledged startup report after long
+  connectivity loss. The rotation is an R1 telemetry-only exception: it can
+  create a visible stream-owner transition and telemetry gap, so the warning
+  log records the cause, old/new stream IDs and sequence. Backend owner-change
+  signals cannot distinguish this recovery from a second bridge process; keep
+  one bridge owner per RobotCode. This decision does not apply to command/result
+  delivery or durable execution in later milestones.
 - Credential rotation requires the separate provisioning permission and a
   secure transfer back to the robot. The credential is not recoverable from
   SQL.

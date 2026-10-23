@@ -70,26 +70,23 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   camera/head hardware. It does not own visitor audio playback, narration, or
   the AI Q&A pipeline; those use the browser/cloud path described in
   `docs/architecture.md`.
-- The **production fleet bridge** for the physical robot lives here (planned:
-  `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
-  is `Backend fleet contract ↔ ROS navigation/state`. It is a translator only —
-  ROS 2 on one side and the telemetry-only HTTPS Fleet Sync v1 contract
-  (`POST /api/fleet/v1/sync`) on the other. See
-  `docs/contracts/fleet-sync/v1/` and ADR-0019. The ROS Fleet Bridge is still
-  planned work; Python HTTPS/TLS compatibility from the ROS Humble image and
-  the deployment proxy remain R1 verification gates. It must not contain
-  booking rules, scheduling, or
-  robot-assignment logic; those are
-  backend concerns (`docs/architecture.md` §3). The robot executes one leg at
-  a time; it never receives a full tour to orchestrate. Bridge commands go
-  directly to Nav2 `NavigateToPose`, never straight onto `/cmd_vel`. Use TF
-  `map -> base_footprint` for fleet pose, checking freshness separately from
-  localization readiness. Production has one navigation-goal owner; local stop
-  navigator and RViz goals must not compete with the fleet bridge.
+- The **production fleet bridge** for the physical robot lives here at
+  `robot/ros2_ws/src/fleet_bridge/`, not in `backend/`. R1 implements its
+  telemetry-only path: TF observation and HTTPS Fleet Sync v1
+  (`POST /api/fleet/v1/sync`). It has no Nav2 command path. See
+  `docs/contracts/fleet-sync/v1/` and ADR-0019. Python HTTPS/TLS compatibility
+  in the native ROS Humble environment and the deployment proxy remain R1
+  verification gates. The bridge must not contain booking rules, scheduling,
+  or robot-assignment logic; those are backend concerns
+  (`docs/architecture.md` §3). Use TF `map -> base_footprint` for fleet pose,
+  checking freshness separately from localization readiness. Any future,
+  separately approved command path must use Nav2 `NavigateToPose`, never write
+  directly to `/cmd_vel`; production must have one navigation-goal owner so
+  local stop navigator and RViz goals do not compete with it.
   The existing `gazebo_preview_bridge` is a separate development-only path:
   Gazebo → local SimulationPreview backend. It is not physical-robot
-  telemetry or the production fleet transport, and the future production
-  package must not depend on Gazebo or simulation.
+  telemetry or the production fleet transport, and `fleet_bridge` must not
+  depend on Gazebo or simulation.
 - Before physical fleet-command operation, implement and hardware-test the
   local connectivity-loss stop/inhibit and no-auto-resume policy in
   `docs/architecture.md` Section 6, including bridge crash and unknown Nav2
