@@ -236,9 +236,18 @@ test "$live_status" = 204
 test "$ready_status" = 503
 "${dc[@]}" start sqlserver >/dev/null
 "${dc[@]}" up -d --wait --wait-timeout 240 api
-ready_status=$(curl --fail --silent --show-error --insecure --max-time 5 --output /dev/null \
-  --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready")
-test "$ready_status" = 200
+ready_status=000
+for attempt in $(seq 1 30); do
+  ready_status=$(curl --silent --insecure --max-time 5 --output /dev/null \
+    --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready" 2>/dev/null || true)
+  [[ "$ready_status" == 200 ]] && break
+  sleep 1
+done
+[[ "$ready_status" == 200 ]] || {
+  echo "API readiness did not recover after SQL Server restart; got HTTP $ready_status." >&2
+  "${dc[@]}" logs --no-color --tail=100 api sqlserver >&2 || true
+  exit 1
+}
 
 # Verify effective permissions with the actual API login, not sa.
 "${dc[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init -c \
