@@ -1,15 +1,27 @@
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
+using Xunit.Abstractions;
+using Xunit.Sdk;
 
 namespace SmartCampus.IntegrationTests;
 
 // Opt-in real SQL Server tests. Each test owns a new database; no existing DB is modified.
-public sealed class SchemaV11FactAttribute : FactAttribute
+[TraitDiscoverer("SmartCampus.IntegrationTests.SqlIntegrationTraitDiscoverer", "SmartCampus.IntegrationTests")]
+public sealed class SchemaV11FactAttribute : FactAttribute, ITraitAttribute
 {
     public SchemaV11FactAttribute()
     {
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
             Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+
+}
+
+public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
+{
+    public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
+    {
+        yield return new KeyValuePair<string, string>("Category", "SqlIntegration");
     }
 }
 

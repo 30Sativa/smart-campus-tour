@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opt-in Linux Docker smoke test. Own project/volume, ephemeral test credentials.
+# Disposable Linux Docker verification. Never targets the production Compose project.
 # From repo root: bash backend/scripts/test-deployment
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -7,20 +7,73 @@ for tool in docker openssl curl; do
   command -v "$tool" >/dev/null || { echo "Required tool: $tool" >&2; exit 1; }
 done
 docker info >/dev/null
+
 scratch=$(mktemp -d)
 project="campustour-test-$(date +%s)-$$"
+[[ "$project" =~ ^campustour-test-[0-9]+-[0-9]+$ ]] || { echo 'Unsafe disposable project name.' >&2; rmdir "$scratch"; exit 1; }
+[[ "$project" != campustour ]] || { echo 'Refusing the production project name.' >&2; rmdir "$scratch"; exit 1; }
+if [[ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$project")" ||
+      -n "$(docker volume ls -q --filter "label=com.docker.compose.project=$project")" ||
+      -n "$(docker network ls -q --filter "label=com.docker.compose.project=$project")" ]]; then
+  echo 'Disposable project name already has Docker resources; refusing cleanup.' >&2
+  rmdir "$scratch"
+  exit 1
+fi
+
+backend_image=${BACKEND_IMAGE:-campustour-backend:deployment-test}
+db_init_image=${DB_INIT_IMAGE:-campustour-db-init:deployment-test}
+sqlserver_image=${SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04}
 dc=(docker compose --project-name "$project" --env-file "$scratch/test.env" -f backend/docker-compose.yml)
 cleanup() {
-  "${dc[@]}" down --volumes --remove-orphans >/dev/null
-  # This directory contains only this test's files. Avoid a recursive delete.
+  local resource label safe=1
+  if [[ ! "$project" =~ ^campustour-test-[0-9]+-[0-9]+$ || "$project" == campustour ]]; then
+    safe=0
+  fi
+  while read -r resource; do
+    [[ -z "$resource" ]] && continue
+    label=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$resource" 2>/dev/null || true)
+    [[ "$label" == "$project" ]] || safe=0
+  done < <(docker ps -aq --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)
+  while read -r resource; do
+    [[ -z "$resource" ]] && continue
+    label=$(docker volume inspect --format '{{index .Labels "com.docker.compose.project"}}' "$resource" 2>/dev/null || true)
+    [[ "$label" == "$project" ]] || safe=0
+  done < <(docker volume ls -q --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)
+  while read -r resource; do
+    [[ -z "$resource" ]] && continue
+    label=$(docker network inspect --format '{{index .Labels "com.docker.compose.project"}}' "$resource" 2>/dev/null || true)
+    [[ "$label" == "$project" ]] || safe=0
+  done < <(docker network ls -q --filter "label=com.docker.compose.project=$project" 2>/dev/null || true)
+  if [[ $safe == 1 ]]; then
+    "${dc[@]}" down --volumes --remove-orphans >/dev/null || true
+  else
+    echo 'Refusing cleanup because disposable Docker ownership could not be established.' >&2
+  fi
   rm -f "$scratch/test.env" "$scratch/api.env" "$scratch/cert.pem" "$scratch/key.pem" \
-    "$scratch/login.json" "$scratch/cookies" "$scratch/response.json"
-  rmdir "$scratch"
+    "$scratch/login.json" "$scratch/cookies" "$scratch/response.json" "$scratch/ready.json" \
+    "$scratch/backups/campustour-smoke.bak"
+  rmdir "$scratch/backups" 2>/dev/null || true
+  rmdir "$scratch" 2>/dev/null || true
 }
+mkdir -p "$scratch/backups"
+chmod 0777 "$scratch/backups"
 trap cleanup EXIT
-password="Aa1!$(openssl rand -hex 32)"
+
+admin_password="Aa1!$(openssl rand -hex 32)"
 cat > "$scratch/test.env" <<ENV
-BACKEND_IMAGE=campustour-backend:deployment-test
+COMPOSE_PROJECT_NAME=$project
+COMPOSE_OWNER=$(openssl rand -hex 16)
+BACKEND_IMAGE=$backend_image
+DB_INIT_IMAGE=$db_init_image
+SQLSERVER_IMAGE=$sqlserver_image
+MSSQL_PID=Express
+MSSQL_MEMORY_LIMIT_MB=2048
+SQLSERVER_MEMORY_LIMIT=2560m
+SQLSERVER_CPUS=1.25
+API_MEMORY_LIMIT=512m
+API_CPUS=0.75
+DB_INIT_MEMORY_LIMIT=192m
+DB_INIT_CPUS=0.25
 SQL_SA_PASSWORD=Aa1!$(openssl rand -hex 32)
 SQL_APP_PASSWORD=Aa1!$(openssl rand -hex 32)
 JWT_SIGNING_KEY=$(openssl rand -hex 32)
@@ -31,28 +84,49 @@ API_BIND_IP=127.0.0.1
 API_ENV_FILE=$scratch/api.env
 TLS_CERT_PATH=$scratch/cert.pem
 TLS_KEY_PATH=$scratch/key.pem
+SQL_BACKUP_DIR=$scratch/backups
 INITIAL_ADMIN_USERNAME=deployment.admin
-INITIAL_ADMIN_PASSWORD=$password
+INITIAL_ADMIN_PASSWORD=$admin_password
 INITIAL_ADMIN_FULL_NAME=Deployment Test Admin
 ENV
 cp backend/deploy/api.env.example "$scratch/api.env"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=localhost' \
   -addext 'subjectAltName=DNS:localhost' -keyout "$scratch/key.pem" -out "$scratch/cert.pem" >/dev/null 2>&1
-# Disposable self-signed test key; permit the container's unprivileged UID.
+# This key and database exist only in this unique disposable test project.
 chmod 644 "$scratch/key.pem" "$scratch/cert.pem"
+
+print_initializer_logs() {
+  echo 'Disposable Compose startup failed; database initializer logs follow:' >&2
+  "${dc[@]}" logs --no-color --tail=200 db-init >&2 || true
+}
+
+if [[ ${DEPLOYMENT_TEST_BUILD_IMAGES:-true} == true ]]; then
+  docker build --pull --target runtime --tag "$backend_image" --file backend/Dockerfile backend
+  docker build --pull --target db-init --tag "$db_init_image" --file backend/Dockerfile backend
+else
+  docker image inspect "$backend_image" >/dev/null
+  docker image inspect "$db_init_image" >/dev/null
+fi
+api_image_id=$(docker image inspect --format '{{.Id}}' "$backend_image")
+db_init_image_id=$(docker image inspect --format '{{.Id}}' "$db_init_image")
 "${dc[@]}" config --quiet
-"${dc[@]}" build api
-"${dc[@]}" up -d --wait --wait-timeout 240 api
-"${dc[@]}" run -T --rm --no-deps seed-admin
-"${dc[@]}" run -T --rm --no-deps seed-admin
+if ! "${dc[@]}" up -d --wait --wait-timeout 240 api; then
+  print_initializer_logs
+  exit 1
+fi
+printf 'Tested API image config: %s\nTested initializer image config: %s\n' "$api_image_id" "$db_init_image_id"
+
+seed_admin() { "${dc[@]}" run -T --rm seed-admin; }
+seed_admin
+seed_admin
 "${dc[@]}" run -T --rm --no-deps db-init
 
-admin_sql() {
+sql_as_sa() {
   "${dc[@]}" exec -T sqlserver /bin/bash -c \
-    'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 10 -d SmartCampusTourV11 "$@"' -- "$@"
+    'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 10 "$@"' -- "$@"
 }
 assert_login() {
-  printf '{"username":"deployment.admin","password":"%s"}' "$password" > "$scratch/login.json"
+  printf '{"username":"deployment.admin","password":"%s"}' "$admin_password" > "$scratch/login.json"
   curl --fail --silent --show-error --insecure \
     "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/api/auth/login" \
     -H 'Content-Type: application/json' --data-binary "@$scratch/login.json" \
@@ -61,17 +135,125 @@ assert_login() {
   grep -q 'accessToken' "$scratch/response.json"
 }
 assert_login
+
+# A candidate schema rejection must not make Compose stop the current API.
+api_id_before=$("${dc[@]}" ps -q api)
+schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.1.sql | sha256sum | cut -d' ' -f1)
+stored_schema_hash=$(sql_as_sa -h -1 -W -Q "SET NOCOUNT ON; SELECT CONVERT(nvarchar(64), value) FROM SmartCampusTourV11.sys.extended_properties WHERE name=N'CampusTourBootstrapHash';" | tr -d '\r\n ')
+[[ "$stored_schema_hash" == "$schema_hash" ]] || {
+  echo 'Unexpected initial schema hash in the disposable SQL database.' >&2
+  exit 1
+}
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';"
+if "${dc[@]}" run -T --rm --no-deps db-init; then
+  echo 'Candidate initializer accepted an incompatible schema hash.' >&2
+  exit 1
+fi
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'Rejected schema candidate changed the running API container.' >&2
+  exit 1
+}
+assert_login
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$stored_schema_hash';"
+
+# Compose run starts an isolated API candidate without reconciling dependencies or publishing the production port.
+candidate_name="$project-candidate-api"
+candidate_id=$("${dc[@]}" run -d --no-deps --name "$candidate_name" \
+  -e 'ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=MissingCandidateDb;User ID=smartcampus_api;Password=RejectedCandidate;Encrypt=True;TrustServerCertificate=True;Connect Timeout=2' api)
+candidate_ready=000
+for attempt in $(seq 1 30); do
+  # Readiness cancels its database probe after 3 seconds; leave time for the HTTP 503 to reach curl.
+  candidate_ready=$(docker exec "$candidate_id" curl --silent --insecure --max-time 8 \
+    --write-out '%{http_code}' --output /dev/null https://localhost:8443/health/ready 2>/dev/null || true)
+  [[ "$candidate_ready" == 503 ]] && break
+  sleep 1
+done
+[[ "$candidate_ready" == 503 ]] || {
+  echo "Expected the rejected candidate to fail readiness with HTTP 503; got $candidate_ready." >&2
+  docker inspect --format 'candidate state={{.State.Status}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$candidate_id" >&2 || true
+  docker logs --tail 120 "$candidate_id" >&2 || true
+  exit 1
+}
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'Failed candidate readiness changed the current API container.' >&2
+  exit 1
+}
+assert_login
+docker rm -f "$candidate_id" >/dev/null
+
+# A SQL service configuration change has a distinct canonical fingerprint and is therefore a deployment gate failure.
+cat > "$scratch/sql-drift.yml" <<'YAML'
+services:
+  sqlserver:
+    mem_limit: 2592m
+YAML
+dc_drift=(docker compose --project-name "$project" --env-file "$scratch/test.env" \
+  -f backend/docker-compose.yml -f "$scratch/sql-drift.yml")
+sql_fingerprint() {
+  jq -cS '{service:(.services.sqlserver | .image = "<pinned-sql-image>"),volume:.volumes["sqlserver-data"],database_network:.networks.database}'
+}
+base_sql_fingerprint=$("${dc[@]}" config --format json | sql_fingerprint)
+drift_sql_fingerprint=$("${dc_drift[@]}" config --format json | sql_fingerprint)
+[[ "$base_sql_fingerprint" != "$drift_sql_fingerprint" ]] || {
+  echo 'SQL configuration drift was not detected by the deployment fingerprint.' >&2
+  exit 1
+}
+[[ $("${dc[@]}" ps -q api) == "$api_id_before" ]] || {
+  echo 'SQL configuration validation changed the current API container.' >&2
+  exit 1
+}
+
+live_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
+  --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/live")
+ready_status=$(curl --silent --show-error --insecure --max-time 5 --output "$scratch/ready.json" \
+  --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready")
+test "$live_status" = 204
+test "$ready_status" = 200
+grep -q '"status":"ready"' "$scratch/ready.json"
 test "$("${dc[@]}" exec -T api id -u | tr -d '\r')" != 0
+"${dc[@]}" exec -T api sh -c 'touch /tmp/deployment-test && rm /tmp/deployment-test'
+if "${dc[@]}" exec -T api sh -c 'touch /app/deployment-test'; then
+  echo 'API root filesystem must be read-only.' >&2
+  exit 1
+fi
 "${dc[@]}" exec -T api test ! -e /app/appsettings.Development.json
-if "${dc[@]}" port sqlserver 1433 >/dev/null 2>&1; then
+if api_port=$("${dc[@]}" port sqlserver 1433 2>/dev/null) && [[ -n "$api_port" ]]; then
   echo 'Database port must not be published.' >&2
   exit 1
 fi
+
+# Exercise an actual checked backup and restore into a disposable database name.
+sql_as_sa -Q "BACKUP DATABASE [SmartCampusTourV11] TO DISK=N'/var/opt/mssql/backup/campustour-smoke.bak' WITH CHECKSUM, INIT; RESTORE VERIFYONLY FROM DISK=N'/var/opt/mssql/backup/campustour-smoke.bak' WITH CHECKSUM;"
+sql_as_sa -Q "DECLARE @data sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=0 ORDER BY file_id); DECLARE @log sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=1 ORDER BY file_id); IF @data IS NULL OR @log IS NULL THROW 51020, 'Expected one data and one log file.', 1; DECLARE @sql nvarchar(max)=N'RESTORE DATABASE [CampustourRestoreDrill] FROM DISK=N''/var/opt/mssql/backup/campustour-smoke.bak'' WITH MOVE N''' + REPLACE(@data,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.mdf'', MOVE N''' + REPLACE(@log,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.ldf'', RECOVERY;'; EXEC sys.sp_executesql @sql; IF (SELECT COUNT(*) FROM CampustourRestoreDrill.sys.tables WHERE is_ms_shipped=0)<>17 THROW 51021, 'Restored schema is incomplete.', 1; DBCC CHECKDB(N'CampustourRestoreDrill') WITH NO_INFOMSGS;"
+
+# Verify the live/readiness distinction during an SQL outage and recover.
+"${dc[@]}" stop --timeout 10 sqlserver >/dev/null
+live_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
+  --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/live")
+ready_status=$(curl --silent --show-error --insecure --max-time 5 --output /dev/null \
+  --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready")
+test "$live_status" = 204
+test "$ready_status" = 503
+"${dc[@]}" start sqlserver >/dev/null
+"${dc[@]}" up -d --wait --wait-timeout 240 api
+ready_status=000
+for attempt in $(seq 1 30); do
+  ready_status=$(curl --silent --insecure --max-time 5 --output /dev/null \
+    --write-out '%{http_code}' "https://localhost:${DEPLOYMENT_TEST_PORT:-18443}/health/ready" 2>/dev/null || true)
+  [[ "$ready_status" == 200 ]] && break
+  sleep 1
+done
+[[ "$ready_status" == 200 ]] || {
+  echo "API readiness did not recover after SQL Server restart; got HTTP $ready_status." >&2
+  "${dc[@]}" logs --no-color --tail=100 api sqlserver >&2 || true
+  exit 1
+}
 
 # Verify effective permissions with the actual API login, not sa.
 "${dc[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init -c \
   'export SQLCMDPASSWORD="$SQL_APP_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U smartcampus_api -C -b -d SmartCampusTourV11' <<'SQL'
 SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
 IF IS_SRVROLEMEMBER('sysadmin') <> 0 OR IS_ROLEMEMBER('db_owner') <> 0
     THROW 51000, 'Runtime user is privileged.', 1;
 IF (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) <> 17
@@ -113,14 +295,14 @@ BEGIN CATCH
 END CATCH;
 SQL
 
-# Recreate containers while retaining the owned volume, then authenticate again.
+# Recreate containers but retain the disposable volume and verify persistent data.
 "${dc[@]}" down
 "${dc[@]}" up -d --wait --wait-timeout 240 api
 assert_login
-admin_sql -Q "EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';"
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';"
 if "${dc[@]}" run -T --rm --no-deps db-init; then
   echo 'Initializer must reject an existing unmarked database.' >&2
   exit 1
 fi
-admin_sql -Q "IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1 THROW 51000, 'Guard changed existing data.', 1;"
-echo 'PASS: HTTPS login/cookie, non-root image, private SQL, bootstrap rerun, permissions, persistence and existing-database guard.'
+sql_as_sa -d SmartCampusTourV11 -Q "IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1 THROW 51000, 'Guard changed existing data.', 1;"
+echo 'PASS: immutable images, failed schema/API candidate isolation, SQL configuration drift detection, HTTPS login/cookie, live/readiness, SQL permissions, backup/restore, persistence and existing-database guard.'

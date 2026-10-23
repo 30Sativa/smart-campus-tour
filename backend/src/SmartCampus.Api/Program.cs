@@ -4,6 +4,7 @@ using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
 using SmartCampus.Infrastructure.Authentication.Jwt;
 using SmartCampus.Infrastructure.Authentication.Seeding;
+using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication;
@@ -238,6 +239,27 @@ if (simulationPreviewEnabled)
         }
         await next();
     });
+}
+
+if (!simulationPreviewEnabled)
+{
+    app.MapGet("/health/live", () => Results.NoContent())
+        .AllowAnonymous();
+    app.MapGet("/health/ready", async (ApplicationDbContext db, CancellationToken cancellationToken) =>
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(3));
+        try
+        {
+            return await db.Database.CanConnectAsync(timeout.Token)
+                ? Results.Ok(new { status = "ready" })
+                : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (Exception)
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+    }).AllowAnonymous();
 }
 
 app.MapControllers();

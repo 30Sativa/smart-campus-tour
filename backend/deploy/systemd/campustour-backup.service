@@ -1,0 +1,15 @@
+[Unit]
+Description=Create and verify an off-host Smart Campus Tour SQL backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=CAMPUS_DEPLOY_ROOT=/opt/campustour
+Environment=CAMPUS_CONFIG_DIR=/etc/campustour
+Environment=CAMPUS_BACKUP_ENV=/etc/campustour/backup.env
+Environment=CAMPUS_BACKUP_STAGE_DIR=/var/lib/campustour/backups
+ExecStart=/usr/local/sbin/campustour-backup
+TimeoutStartSec=90min

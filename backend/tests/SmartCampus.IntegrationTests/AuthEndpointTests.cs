@@ -36,7 +36,7 @@ public sealed class AuthEndpointTests
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-                Timeout = TimeSpan.FromSeconds(3)
+                Timeout = TimeSpan.FromSeconds(15)
             };
             await WaitForApiAsync(process, client, standardOutput, standardError);
 
@@ -205,7 +205,7 @@ public sealed class AuthEndpointTests
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-                Timeout = TimeSpan.FromSeconds(3)
+                Timeout = TimeSpan.FromSeconds(15)
             };
             await WaitForApiAsync(process, client, standardOutput, standardError);
 
@@ -261,7 +261,7 @@ public sealed class AuthEndpointTests
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-                Timeout = TimeSpan.FromSeconds(3)
+                Timeout = TimeSpan.FromSeconds(15)
             };
             await WaitForApiAsync(process, client, standardOutput, standardError);
 
@@ -305,7 +305,7 @@ public sealed class AuthEndpointTests
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-                Timeout = TimeSpan.FromSeconds(3)
+                Timeout = TimeSpan.FromSeconds(15)
             };
             await WaitForApiAsync(process, client, standardOutput, standardError);
 

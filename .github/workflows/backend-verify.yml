@@ -2,25 +2,20 @@ name: Backend Verify
 
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - "docs/architecture.md"
-      - "docs/decisions/**"
-      - ".github/workflows/backend-verify.yml"
   push:
     branches:
       - main
       - develop
-    paths:
-      - "backend/**"
-      - "docs/architecture.md"
-      - "docs/decisions/**"
-      - ".github/workflows/backend-verify.yml"
+
+concurrency:
+  group: backend-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     name: Verify backend
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
@@ -29,24 +24,269 @@ jobs:
         env:
           ACCEPT_EULA: "Y"
           MSSQL_PID: Developer
-          MSSQL_SA_PASSWORD: CI-only-Sql-Password-2026!
+          MSSQL_SA_PASSWORD: "Aa1!CI-${{ github.run_id }}-Run-${{ github.run_attempt }}"
         ports:
           - 1433:1433
-        options: >-
-          --health-cmd='/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "CI-only-Sql-Password-2026!" -C -Q "SELECT 1" -b'
-          --health-interval=10s --health-timeout=5s --health-retries=12 --health-start-period=30s
     env:
       SMARTCAMPUS_REQUIRE_SQL_TESTS: "true"
-      SMARTCAMPUS_SCHEMA_TEST_CONNECTION: "Server=localhost,1433;Database=master;User ID=sa;Password=CI-only-Sql-Password-2026!;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15"
+      SMARTCAMPUS_SCHEMA_TEST_CONNECTION: "Server=localhost,1433;Database=master;User ID=sa;Password=Aa1!CI-${{ github.run_id }}-Run-${{ github.run_attempt }};Encrypt=True;TrustServerCertificate=True;Connect Timeout=15"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Wait for SQL Server readiness
+        env:
+          SQLSERVER_CONTAINER_ID: ${{ job.services.sqlserver.id }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            if docker exec "$SQLSERVER_CONTAINER_ID" /bin/bash -c \
+              'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q "SELECT 1" -o /dev/null'; then
+              echo "SQL Server answered SELECT 1."
+              exit 0
+            fi
+            state=$(docker inspect --format '{{.State.Status}}' "$SQLSERVER_CONTAINER_ID" 2>/dev/null || true)
+            if [[ "$state" != running ]]; then
+              break
+            fi
+            sleep 3
+          done
+          echo "SQL Server failed readiness: expected SELECT 1 within 120 seconds." >&2
+          docker inspect --format 'container={{.State.Status}} exit={{.State.ExitCode}}' "$SQLSERVER_CONTAINER_ID" || true
+          docker logs --tail 120 "$SQLSERVER_CONTAINER_ID" || true
+          exit 1
+
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          global-json-file: backend/global.json
 
       - name: Run backend verification
+        env:
+          SMARTCAMPUS_TEST_RESULTS_DIR: ${{ runner.temp }}/backend-test-results
         run: bash backend/scripts/verify
+
+      - name: Upload backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results-${{ github.run_id }}
+          path: ${{ runner.temp }}/backend-test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+  image-pr:
+    name: Build and smoke-test backend images
+    if: github.event_name == 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve pinned SDK, runtime, and SQL base digests
+        id: bases
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_base() {
+            local name=$1 tag=$2 repository=$3 digest ref inspect_output
+            inspect_output=$(docker buildx imagetools inspect "$tag") || {
+              echo "Could not inspect base image $tag." >&2
+              return 1
+            }
+            digest=$(awk '$1 == "Digest:" && !found { digest=$2; found=1 } END { if (found) print digest }' <<<"$inspect_output")
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              echo "Could not extract an immutable digest for base image $tag." >&2
+              return 1
+            }
+            ref="$repository@$digest"
+            case "$name" in
+              sdk) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/sdk@sha256:[0-9a-f]{64}$ ]] ;;
+              runtime) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/aspnet@sha256:[0-9a-f]{64}$ ]] ;;
+              sql) [[ "$ref" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ;;
+              *) return 1 ;;
+            esac
+            echo "$name=$ref" >> "$GITHUB_OUTPUT"
+          }
+          resolve_base sdk mcr.microsoft.com/dotnet/sdk:10.0.402-noble mcr.microsoft.com/dotnet/sdk
+          resolve_base runtime mcr.microsoft.com/dotnet/aspnet:10.0.13-noble mcr.microsoft.com/dotnet/aspnet
+          resolve_base sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04 mcr.microsoft.com/mssql/server
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          load: true
+          tags: campustour-backend:pr-${{ github.event.pull_request.number }}
+          build-args: |
+            SDK_IMAGE=${{ steps.bases.outputs.sdk }}
+            RUNTIME_IMAGE=${{ steps.bases.outputs.runtime }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.pull_request.updated_at }}
+          cache-from: type=gha,scope=backend-api
+          cache-to: type=gha,mode=max,scope=backend-api
+
+      - name: Build database initializer image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: db-init
+          platforms: linux/amd64
+          load: true
+          tags: campustour-db-init:pr-${{ github.event.pull_request.number }}
+          build-args: |
+            SQLSERVER_IMAGE=${{ steps.bases.outputs.sql }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.pull_request.updated_at }}
+          cache-from: type=gha,scope=backend-db-init
+          cache-to: type=gha,mode=max,scope=backend-db-init
+
+      - name: Smoke-test disposable Compose deployment
+        env:
+          BACKEND_IMAGE: campustour-backend:pr-${{ github.event.pull_request.number }}
+          DB_INIT_IMAGE: campustour-db-init:pr-${{ github.event.pull_request.number }}
+          SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
+          DEPLOYMENT_TEST_BUILD_IMAGES: "false"
+        run: bash backend/scripts/test-deployment
+
+  image-release:
+    name: Publish verified backend images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve pinned SDK, runtime, and SQL base digests
+        id: bases
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve_base() {
+            local name=$1 tag=$2 repository=$3 digest ref
+            digest=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" { print $2; exit }')
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            ref="$repository@$digest"
+            case "$name" in
+              sdk) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/sdk@sha256:[0-9a-f]{64}$ ]] ;;
+              runtime) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/aspnet@sha256:[0-9a-f]{64}$ ]] ;;
+              sql) [[ "$ref" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ;;
+              *) return 1 ;;
+            esac
+            echo "$name=$ref" >> "$GITHUB_OUTPUT"
+          }
+          resolve_base sdk mcr.microsoft.com/dotnet/sdk:10.0.402-noble mcr.microsoft.com/dotnet/sdk
+          resolve_base runtime mcr.microsoft.com/dotnet/aspnet:10.0.13-noble mcr.microsoft.com/dotnet/aspnet
+          resolve_base sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04 mcr.microsoft.com/mssql/server
+
+      - name: Build and publish API image
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/30sativa/smart-campus-tour/backend:${{ github.sha }}
+          build-args: |
+            SDK_IMAGE=${{ steps.bases.outputs.sdk }}
+            RUNTIME_IMAGE=${{ steps.bases.outputs.runtime }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=backend-api
+          cache-to: type=gha,mode=max,scope=backend-api
+          sbom: true
+          provenance: mode=max
+
+      - name: Build and publish database initializer image
+        id: dbinit
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: db-init
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/30sativa/smart-campus-tour/backend-db-init:${{ github.sha }}
+          build-args: |
+            SQLSERVER_IMAGE=${{ steps.bases.outputs.sql }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=backend-db-init
+          cache-to: type=gha,mode=max,scope=backend-db-init
+          sbom: true
+          provenance: mode=max
+
+      - name: Pull and validate the exact release images
+        id: validate
+        env:
+          API_IMAGE: ghcr.io/30sativa/smart-campus-tour/backend@${{ steps.api.outputs.digest }}
+          DB_INIT_IMAGE: ghcr.io/30sativa/smart-campus-tour/backend-db-init@${{ steps.dbinit.outputs.digest }}
+          SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
+          RUNTIME_IMAGE: ${{ steps.bases.outputs.runtime }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$API_IMAGE"
+          docker pull "$DB_INIT_IMAGE"
+          docker pull "$SQLSERVER_IMAGE"
+          api_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$API_IMAGE")
+          init_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$DB_INIT_IMAGE")
+          api_base=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}' "$API_IMAGE")
+          init_sql=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}' "$DB_INIT_IMAGE")
+          [[ "$api_revision" == "$SOURCE_SHA" && "$init_revision" == "$SOURCE_SHA" ]]
+          [[ "$api_base" == "$RUNTIME_IMAGE" && "$init_sql" == "$SQLSERVER_IMAGE" ]]
+          jq -n --arg source_sha "$SOURCE_SHA" --arg api_image "$API_IMAGE" \
+            --arg db_init_image "$DB_INIT_IMAGE" --arg sdk_image "${{ steps.bases.outputs.sdk }}" \
+            --arg runtime_image "$RUNTIME_IMAGE" --arg sqlserver_image "$SQLSERVER_IMAGE" \
+            '{format_version:1,source_sha:$source_sha,api_image:$api_image,db_init_image:$db_init_image,sdk_image:$sdk_image,runtime_image:$runtime_image,sqlserver_image:$sqlserver_image}' \
+            > "$RUNNER_TEMP/backend-release.json"
+
+      - name: Smoke-test the exact published images
+        env:
+          BACKEND_IMAGE: ghcr.io/30sativa/smart-campus-tour/backend@${{ steps.api.outputs.digest }}
+          DB_INIT_IMAGE: ghcr.io/30sativa/smart-campus-tour/backend-db-init@${{ steps.dbinit.outputs.digest }}
+          SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
+          DEPLOYMENT_TEST_BUILD_IMAGES: "false"
+        run: bash backend/scripts/test-deployment
+
+      - name: Save immutable release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-release-${{ github.sha }}
+          path: ${{ runner.temp }}/backend-release.json
+          if-no-files-found: error
+          retention-days: 90
