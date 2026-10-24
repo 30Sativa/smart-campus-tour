@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Real BuildKit regression; Linux Docker required. No registry push or deployment.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+docker info >/dev/null
+
+scratch=$(mktemp -d)
+builder_prefix="campustour-cache-test-$(date +%s)-$$"
+builders=()
+cleanup() {
+  for builder in "${builders[@]}"; do
+    docker buildx rm "$builder" >/dev/null 2>&1 || true
+  done
+  rm -rf -- "$scratch"
+}
+trap cleanup EXIT
+
+# Use tracked working-tree inputs, including local edits, but never ignored
+# credentials or workstation bin/obj. Mutate only this disposable context.
+git ls-files -z -- backend | tar --null --files-from=- -cf - | tar -xf - -C "$scratch"
+context="$scratch/backend"
+args=(--file "$context/Dockerfile" --target build --platform linux/amd64
+      --progress plain --output type=cacheonly)
+if [[ -n ${SDK_IMAGE:-} ]]; then args+=(--build-arg "SDK_IMAGE=$SDK_IMAGE"); fi
+
+create_builder() {
+  builders+=("$1")
+  docker buildx create --name "$1" --driver docker-container >/dev/null
+}
+build() {
+  local builder=$1 log=$2
+  shift 2
+  docker buildx build --builder "$builder" "${args[@]}" "$@" "$context" 2>&1 | tee "$log"
+}
+assert_cached_restore_and_rebuilt_publish() {
+  # Check actual BuildKit events: a successful build with an uncached restore
+  # would not exercise the missing-cache-mount regression.
+  awk '
+    /^#[0-9]+ \[build .*RUN .*dotnet restore / { restore=$1 }
+    /^#[0-9]+ \[build .*RUN .*dotnet publish / { publish=$1; publish_seen=1 }
+    $1 == restore && $2 == "CACHED" { restore_cached=1 }
+    $1 == publish && $2 == "CACHED" { publish_cached=1 }
+    END { exit !(restore_cached && publish_seen && !publish_cached) }
+  ' "$1" || {
+    echo 'FAIL: expected cached restore and an executed publish after a source-only change.' >&2
+    exit 1
+  }
+}
+
+echo 'Cold build on an empty builder; export intermediate layers.'
+create_builder "$builder_prefix-cold"
+build "$builder_prefix-cold" "$scratch/cold.log" \
+  --cache-to "type=local,dest=$scratch/cache,mode=max"
+
+echo 'Warm build: change source without changing project/lock files.'
+printf '\n// Build cache regression: warm builder.\n' >> "$context/src/SmartCampus.Api/Program.cs"
+build "$builder_prefix-cold" "$scratch/warm.log"
+assert_cached_restore_and_rebuilt_publish "$scratch/warm.log"
+
+echo 'Fresh builder: import only external layers, then rebuild changed source.'
+create_builder "$builder_prefix-fresh"
+printf '\n// Build cache regression: fresh builder.\n' >> "$context/src/SmartCampus.Api/Program.cs"
+build "$builder_prefix-fresh" "$scratch/fresh.log" \
+  --cache-from "type=local,src=$scratch/cache"
+assert_cached_restore_and_rebuilt_publish "$scratch/fresh.log"
+
+echo 'PASS: locked restore/publish with cold cache, warm cache and imported layers on a fresh builder.'

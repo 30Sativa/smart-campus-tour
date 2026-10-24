@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build context: backend/. Keep SDK and NuGet caches outside the runtime image.
+# Build context: backend/. Only published output enters the runtime image.
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.402-noble
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0.13-noble
 ARG SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
@@ -15,11 +15,11 @@ COPY src/SmartCampus.Domain/packages.lock.json src/SmartCampus.Domain/
 COPY src/SmartCampus.Application/packages.lock.json src/SmartCampus.Application/
 COPY src/SmartCampus.Infrastructure/packages.lock.json src/SmartCampus.Infrastructure/
 COPY src/SmartCampus.Api/packages.lock.json src/SmartCampus.Api/
-RUN --mount=type=cache,id=smartcampus-nuget,target=/root/.nuget/packages \
-    dotnet restore src/SmartCampus.Api/SmartCampus.Api.csproj --locked-mode
+# Persist packages with obj/project.assets.json in this layer. External layer
+# caches do not carry cache-mount contents to a fresh BuildKit builder.
+RUN dotnet restore src/SmartCampus.Api/SmartCampus.Api.csproj --locked-mode
 COPY src/ ./src/
-RUN --mount=type=cache,id=smartcampus-nuget,target=/root/.nuget/packages \
-    dotnet publish src/SmartCampus.Api/SmartCampus.Api.csproj \
+RUN dotnet publish src/SmartCampus.Api/SmartCampus.Api.csproj \
     --configuration Release --no-restore --output /app/publish \
     -p:UseAppHost=false -p:DebugType=None -p:DebugSymbols=false
 

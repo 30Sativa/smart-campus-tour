@@ -13,6 +13,9 @@ skip superseded main commits; each deployment independently verifies the release
 operations revision. A successful CI run is not proof of healthy EC2 deployment.
 One host has promotion downtime, no failover and no automatic database restore.
 
+For the confirmed NETSDK1064 build failure, cache regression commands and release
+acceptance steps, see `backend/docs/ci-build-cache.md`.
+
 The PR-73 baseline had useful guards but required OIDC/SSM and fetched scripts
 and Compose from unauthenticated GitHub raw URLs despite the private repository.
 Both CD jobs invoked the manifest validator without checking out code. The
