@@ -24,7 +24,8 @@ remote=$(ssh "${ssh_options[@]}" -p "$port" "$target" 'sudo -n /usr/bin/true && 
 retain_stage=0
 cleanup() {
   if (( retain_stage )); then
-    echo "WARN: delivery connection ended ambiguously; retained $remote. Inspect the remote process/locks before cleanup or retry." >&2
+    echo "WARN: delivery connection ended ambiguously; the host deployment may still be running and was not cancelled." >&2
+    echo "WARN: retained $remote. On the host inspect sudo tail -n 100 /var/log/campustour/delivery.log and sudo campustour-check before retrying." >&2
     return
   fi
   # Exact validated path, no globs. A broken connection can leave a non-secret bundle behind.

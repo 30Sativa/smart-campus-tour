@@ -121,13 +121,15 @@ fi
 if [[ -f "$STATE/backup-last-success" ]]; then
   IFS=$'\t' read -r backup_time backup_target backup_size < "$STATE/backup-last-success"
   echo "Last verified backup: ${backup_time:-unknown} ${backup_target:-} (${backup_size:-0} bytes)"
+  [[ ${backup_target:-} != local:* ]] ||
+    echo 'WARN: backups are local-only (BACKUP_MODE=local) and are lost with this EC2 instance or EBS volume.' >&2
   if [[ ${backup_time:-} =~ ^[0-9]{8}T[0-9]{6}Z$ ]]; then
     backup_epoch=$(date -u -d "${backup_time:0:8} ${backup_time:9:2}:${backup_time:11:2}:${backup_time:13:2}" +%s)
     backup_age=$(( $(date -u +%s) - backup_epoch ))
-    (( backup_age <= 93600 )) || fail 'Last verified off-host backup is more than 26 hours old.'
+    (( backup_age <= 93600 )) || fail 'Last verified backup is more than 26 hours old.'
   else
     fail 'Backup success marker has an invalid timestamp.'
   fi
 else
-  fail 'No verified off-host backup has been recorded.'
+  fail 'No verified backup has been recorded.'
 fi

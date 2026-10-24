@@ -572,7 +572,7 @@ candidate_host=$(jq -r '.services.api.environment.AllowedHosts // empty' <<<"$ca
 openssl x509 -in "$TLS_CERT" -checkhost "$candidate_host" -noout >/dev/null ||
   fail 'Configured TLS certificate does not cover API_HOST.'
 [[ $(jq -r '.services.api.image' <<<"$candidate_config") == "$api_image" ]] || fail 'Resolved API image differs from the approved digest.'
-[[ $(jq -r '.services.db-init.image' <<<"$candidate_config") == "$db_init_image" ]] || fail 'Resolved initializer image differs from the approved digest.'
+[[ $(jq -r '.services["db-init"].image' <<<"$candidate_config") == "$db_init_image" ]] || fail 'Resolved initializer image differs from the approved digest.'
 [[ $(jq -r '.services.sqlserver.image' <<<"$candidate_config") == "$current_sql_image" ]] || fail 'Resolved SQL Server image differs from the managed SQL pin.'
 [[ $(jq -r '.services.api.labels["com.smartcampus.deployment.owner"] // empty' <<<"$candidate_config") == "$COMPOSE_OWNER" ]] ||
   fail 'Resolved Compose services do not carry the persistent deployment owner marker.'
@@ -687,7 +687,8 @@ init_sql_image=$(docker image inspect --format '{{index .Config.Labels "org.open
 
 if [[ -n "$previous_sha" ]]; then
   [[ -x "$BACKUP_SCRIPT" ]] || fail 'Pre-deployment backup program is missing; install and verify it before deploying.'
-  [[ -f "$BACKUP_ENV" ]] || fail 'Off-host backup configuration is missing; deployment is blocked.'
+  [[ -f "$BACKUP_ENV" ]] ||
+    fail "Backup configuration $BACKUP_ENV is missing; deployment is blocked. Configure off-host storage, or BACKUP_MODE=local for a demo host (backend/docs/ec2-deployment.md section 4)."
   "$BACKUP_SCRIPT" --pre-deploy --deployment-lock-held
 fi
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify an S3 upload failure blocks success and retains the local backup.
+# Verify S3 upload failures block success and retain the local backup, and the explicit local-only demo mode.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -147,3 +147,39 @@ if bash deploy/backup-sqlserver.sh --pre-deploy >/dev/null 2>&1; then
   echo 'Insecure backup endpoint accepted.' >&2; exit 1
 fi
 echo 'PASS: non-AWS endpoint/profile used for upload, HEAD and download; corrupt bytes retained locally; success cleaned staging; HTTP rejected (mocked object store).'
+
+# Explicit demo mode: verified local copies, bounded retention, no object-store call.
+printf '%s\n' 'BACKUP_MODE=local' 'BACKUP_LOCAL_RETAIN=2' > "$scratch/config/backup.env"
+find "$scratch/backups" -maxdepth 1 -type f -name '*.bak' -delete
+rm -f -- "$CAMPUS_BACKUP_STATE_FILE"
+for stamp in 20200101T000000Z 20200102T000000Z 20200103T000000Z; do
+  printf 'older local backup\n' > "$scratch/backups/SmartCampusTourV11-$stamp.bak"
+done
+printf 'operator file\n' > "$scratch/backups/SmartCampusTourV11-manual-copy.bak"
+printf 'operator notes\n' > "$scratch/backups/notes.txt"
+cat > "$scratch/bin/aws" <<'AWS'
+#!/usr/bin/env bash
+echo "Local backup mode invoked the object store: $*" >&2
+exit 99
+AWS
+bash deploy/backup-sqlserver.sh --pre-deploy 2> "$scratch/local.err"
+IFS=$'\t' read -r _ local_target local_size local_sha < "$CAMPUS_BACKUP_STATE_FILE"
+[[ "$local_target" == "local:$scratch/backups/SmartCampusTourV11-"*Z.bak && -s "${local_target#local:}" ]] ||
+  { echo "Local backup marker does not reference the new backup: $local_target" >&2; exit 1; }
+[[ "$local_size" == $(stat -c '%s' "${local_target#local:}") && "$local_sha" == $(sha256sum "${local_target#local:}" | cut -d' ' -f1) ]] ||
+  { echo 'Local backup marker size or SHA-256 is wrong.' >&2; exit 1; }
+grep -q 'WARN: BACKUP_MODE=local' "$scratch/local.err" || { echo 'Local-only backup did not warn.' >&2; exit 1; }
+mapfile -t kept < <(find "$scratch/backups" -maxdepth 1 -type f -name 'SmartCampusTourV11-*Z.bak' -printf '%f\n' | sort)
+[[ ${#kept[@]} == 2 && ${kept[0]} == SmartCampusTourV11-20200103T000000Z.bak && "$scratch/backups/${kept[1]}" == "${local_target#local:}" ]] ||
+  { echo "Local retention kept the wrong backups: ${kept[*]}" >&2; exit 1; }
+[[ -f "$scratch/backups/SmartCampusTourV11-manual-copy.bak" && -f "$scratch/backups/notes.txt" ]] ||
+  { echo 'Local retention removed a file it does not own.' >&2; exit 1; }
+for invalid in 'BACKUP_MODE=none' 'BACKUP_MODE=local
+BACKUP_LOCAL_RETAIN=0' 'BACKUP_MODE=local
+BACKUP_LOCAL_RETAIN=31'; do
+  printf '%s\n' "$invalid" > "$scratch/config/backup.env"
+  if bash deploy/backup-sqlserver.sh --pre-deploy >/dev/null 2>&1; then
+    echo "Invalid backup settings accepted: $invalid" >&2; exit 1
+  fi
+done
+echo 'PASS: BACKUP_MODE=local verified and recorded a local backup without S3, warned, kept the newest 2 owned files and rejected invalid settings.'

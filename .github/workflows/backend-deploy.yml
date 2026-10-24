@@ -7,6 +7,10 @@ on:
         description: Successful main commit SHA from Backend Verify
         required: true
         type: string
+  workflow_run:
+    workflows: [Backend Verify]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: backend-production-deploy
@@ -14,8 +18,16 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy selected backend release through SSH
-    if: github.ref == 'refs/heads/main'
+    name: Deploy verified main backend release through SSH
+    # A successful push/main verify includes image publication. Never trust a
+    # pull-request or fork workflow_run with production environment credentials.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 55
@@ -25,19 +37,37 @@ jobs:
       packages: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_SHA: ${{ inputs.release_sha }}
-      OPS_SHA: ${{ github.sha }}
+      RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.release_sha }}
+      OPS_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
     steps:
+      - name: Skip superseded automatic releases
+        id: freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            latest_main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+            if [[ "$latest_main" != "$RELEASE_SHA" ]]; then
+              echo "Skipping superseded release $RELEASE_SHA; current main is $latest_main." | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+
       - name: Checkout pinned operations revision
+        if: steps.freshness.outputs.deploy == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.OPS_SHA }}
           persist-credentials: false
 
       - name: Verify both revisions and prepare authenticated source bundle
+        if: steps.freshness.outputs.deploy == 'true'
         run: bash backend/deploy/prepare-release.sh "$RELEASE_SHA" "$OPS_SHA" "$RUNNER_TEMP/backend-bundle"
 
       - name: Deploy verified bundle over pinned SSH
+        if: steps.freshness.outputs.deploy == 'true'
         env:
           DEPLOY_SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
           DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
@@ -57,3 +87,22 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$DEPLOY_SSH_KNOWN_HOSTS_FILE"
           unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
           bash backend/deploy/ssh-deploy.sh "$RUNNER_TEMP/backend-bundle" application
+
+      # The host already passed its loopback HTTPS probe; this one goes through public DNS,
+      # the security group and the real certificate. A failure here does not roll back.
+      - name: Check public HTTPS readiness
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL || 'https://api.fptcampustour.cloud/health/ready' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            if curl --silent --show-error --fail --max-time 10 "$BACKEND_HEALTH_URL" -o /dev/null; then
+              echo "PASS: $BACKEND_HEALTH_URL is ready for release $RELEASE_SHA."
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::Release $RELEASE_SHA passed on-host readiness but $BACKEND_HEALTH_URL is not ready from the internet (DNS, security group or certificate)."
+          exit 1
