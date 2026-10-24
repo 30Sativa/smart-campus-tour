@@ -1,4 +1,5 @@
 using SmartCampus.Api;
+using SmartCampus.Api.ApiDocumentation;
 using SmartCampus.Application;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Infrastructure;
@@ -111,11 +112,11 @@ builder.Services.AddSimulationPreview();
 if (!simulationPreviewEnabled)
     builder.Services.AddFleetSync(builder.Configuration);
 
-// Register HTTP endpoints, error responses, and the development API document.
+// Register HTTP endpoints, error responses, and the opt-in API document.
 builder.Services.AddControllers().UseBaseResponseForInvalidModelState();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
+builder.Services.AddApiDocumentation(simulationPreviewEnabled);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -203,15 +204,12 @@ if (initialAdminSeedCommand.Requested)
     return;
 }
 
-app.UseExceptionHandler();
+// Development serves API documentation by default; elsewhere it is opt-in and
+// requires its own Basic credential (backend/docs/api-documentation.md).
+var apiDocumentation = ApiDocumentationSettings.Load(app.Configuration, app.Environment);
 
-// Expose API documentation only in Development.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.UseSwaggerUI(options =>
-        options.SwaggerEndpoint("/openapi/v1.json", "SmartCampus API v1"));
-}
+app.UseExceptionHandler();
+app.UseApiDocumentation(apiDocumentation);
 
 // The local Gazebo preview uses HTTP; other API runs redirect to HTTPS.
 if (!simulationPreviewEnabled)

@@ -687,7 +687,8 @@ init_sql_image=$(docker image inspect --format '{{index .Config.Labels "org.open
 
 if [[ -n "$previous_sha" ]]; then
   [[ -x "$BACKUP_SCRIPT" ]] || fail 'Pre-deployment backup program is missing; install and verify it before deploying.'
-  [[ -f "$BACKUP_ENV" ]] || fail 'Off-host backup configuration is missing; deployment is blocked.'
+  [[ -f "$BACKUP_ENV" ]] ||
+    fail "Backup configuration $BACKUP_ENV is missing; deployment is blocked. Configure off-host storage, or BACKUP_MODE=local for a demo host (backend/docs/ec2-deployment.md section 4)."
   "$BACKUP_SCRIPT" --pre-deploy --deployment-lock-held
 fi
 

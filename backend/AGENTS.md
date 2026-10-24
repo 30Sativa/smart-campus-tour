@@ -126,6 +126,7 @@ backend/src/SmartCampus.Api/
 │                                     AdminRegistrationsController, InvitationsController,
 │                                     StudentAccessController, SimulationController
 ├── Invitations/                      hosted email worker; scoped MediatR claim/result dispatch
+├── ApiDocumentation/                 opt-in OpenAPI/Swagger UI and its Basic gate
 ├── ExceptionHandling/
 ├── Hubs/                             SimulationHub/Preview helpers; fleet/operations future
 ├── Properties/

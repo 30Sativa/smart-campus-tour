@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full, checksummed SQL backup to encrypted off-host S3 storage.
+# Full, checksummed SQL backup to encrypted off-host S3 storage, or (BACKUP_MODE=local) a verified local copy.
 set -euo pipefail
 
 ROOT=${CAMPUS_DEPLOY_ROOT:-/opt/campustour}
@@ -26,7 +26,6 @@ done
   fail '--deployment-lock-held is valid only with --pre-deploy.'
 [[ $(id -u) == 0 ]] || fail 'Run as root so SQL Server and Docker credentials stay out of command arguments.'
 command -v docker >/dev/null || fail 'Docker is not installed.'
-command -v aws >/dev/null || fail 'AWS CLI is not installed.'
 command -v jq >/dev/null || fail 'jq is required to validate Compose configuration.'
 command -v flock >/dev/null || fail 'flock is required to serialize backups.'
 
@@ -38,37 +37,62 @@ case "$release_dir" in "$ROOT"/releases/*) ;; *) fail 'Active release link is ou
 [[ -f "$BACKUP_ENV" ]] || fail 'Backup settings file is missing.'
 [[ -d "$STAGE_DIR" && -w "$STAGE_DIR" ]] || fail 'Backup staging directory is missing or not writable.'
 
-# Parse a single non-secret bucket setting without evaluating an env file as shell code.
-backup_uri=${BACKUP_S3_URI:-}
-if [[ -z "$backup_uri" ]]; then
-  while IFS='=' read -r name value; do
-    [[ "$name" == BACKUP_S3_URI ]] && { backup_uri=$value; break; }
-  done < "$BACKUP_ENV"
-fi
-[[ "$backup_uri" =~ ^s3://([A-Za-z0-9.-]{3,63})(/([A-Za-z0-9._/-]+))?/?$ ]] ||
-  fail 'BACKUP_S3_URI must be a plain s3://bucket/prefix value.'
-bucket=${BASH_REMATCH[1]}
-prefix=${BASH_REMATCH[3]:-}
-[[ "$prefix" != *'..'* ]] || fail 'Backup prefix may not contain parent-directory segments.'
-
-# Only non-secret settings are parsed. Provider credentials stay in root's AWS profile.
-endpoint='' profile=''
+# BACKUP_MODE=local is an explicit root-owned host decision for demo use: backups are verified
+# but stay on this instance's disk, so they do not survive loss of the EC2 instance or EBS volume.
+backup_mode=s3 local_retain=7
 while IFS='=' read -r name value; do
   case "$name" in
-    BACKUP_S3_ENDPOINT_URL) endpoint=$value ;;
-    BACKUP_S3_PROFILE) profile=$value ;;
+    BACKUP_MODE) backup_mode=$value ;;
+    BACKUP_LOCAL_RETAIN) local_retain=$value ;;
   esac
 done < "$BACKUP_ENV"
-aws_cli=(aws)
-if [[ -n "$endpoint" ]]; then
-  [[ "$endpoint" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]] || fail 'Backup endpoint must be an HTTPS origin without credentials or path.'
-  [[ -n "$profile" ]] || fail 'A dedicated credential profile is required for a non-AWS backup endpoint.'
-  aws_cli+=(--endpoint-url "$endpoint")
+case "$backup_mode" in
+  s3) command -v aws >/dev/null || fail 'AWS CLI is not installed.' ;;
+  local) [[ "$local_retain" =~ ^[1-9][0-9]?$ ]] && (( local_retain <= 30 )) || fail 'BACKUP_LOCAL_RETAIN must be between 1 and 30.' ;;
+  *) fail 'BACKUP_MODE must be s3 (default) or local.' ;;
+esac
+
+if [[ "$backup_mode" == s3 ]]; then
+  # Parse a single non-secret bucket setting without evaluating an env file as shell code.
+  backup_uri=${BACKUP_S3_URI:-}
+  if [[ -z "$backup_uri" ]]; then
+    while IFS='=' read -r name value; do
+      [[ "$name" == BACKUP_S3_URI ]] && { backup_uri=$value; break; }
+    done < "$BACKUP_ENV"
+  fi
+  [[ "$backup_uri" =~ ^s3://([A-Za-z0-9.-]{3,63})(/([A-Za-z0-9._/-]+))?/?$ ]] ||
+    fail 'BACKUP_S3_URI must be a plain s3://bucket/prefix value.'
+  bucket=${BASH_REMATCH[1]}
+  prefix=${BASH_REMATCH[3]:-}
+  [[ "$prefix" != *'..'* ]] || fail 'Backup prefix may not contain parent-directory segments.'
+
+  # Only non-secret settings are parsed. Provider credentials stay in root's AWS profile.
+  endpoint='' profile=''
+  while IFS='=' read -r name value; do
+    case "$name" in
+      BACKUP_S3_ENDPOINT_URL) endpoint=$value ;;
+      BACKUP_S3_PROFILE) profile=$value ;;
+    esac
+  done < "$BACKUP_ENV"
+  aws_cli=(aws)
+  if [[ -n "$endpoint" ]]; then
+    [[ "$endpoint" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]] || fail 'Backup endpoint must be an HTTPS origin without credentials or path.'
+    [[ -n "$profile" ]] || fail 'A dedicated credential profile is required for a non-AWS backup endpoint.'
+    aws_cli+=(--endpoint-url "$endpoint")
+  fi
+  if [[ -n "$profile" ]]; then
+    [[ "$profile" =~ ^[A-Za-z0-9_-]+$ ]] || fail 'Invalid backup profile name.'
+    aws_cli+=(--profile "$profile")
+  fi
 fi
-if [[ -n "$profile" ]]; then
-  [[ "$profile" =~ ^[A-Za-z0-9_-]+$ ]] || fail 'Invalid backup profile name.'
-  aws_cli+=(--profile "$profile")
-fi
+
+record_success() {
+  local state_tmp
+  state_tmp=$(mktemp "$(dirname "$STATE_FILE")/.backup-state.XXXXXX")
+  printf '%s\t%s\t%s\t%s\n' "$timestamp" "$1" "$2" "$3" > "$state_tmp"
+  chmod 0600 "$state_tmp"
+  mv -f "$state_tmp" "$STATE_FILE"
+}
 
 
 mkdir -p "$(dirname "$OPERATION_LOCK")"
@@ -127,8 +151,6 @@ required_kib=$(((size_mib + 1024) * 1024))
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 file_name="${DATABASE}-${timestamp}.bak"
 file_path="$STAGE_DIR/$file_name"
-object_key=${prefix:+$prefix/}$file_name
-target="s3://$bucket/$object_key"
 sql_path="/var/opt/mssql/backup/$file_name"
 [[ ! -e "$file_path" ]] || fail 'Backup filename collision; refusing to overwrite a previous backup.'
 
@@ -138,6 +160,22 @@ sql_path="/var/opt/mssql/backup/$file_name"
 [[ -s "$file_path" ]] || fail "SQL Server completed without creating a non-empty backup at $file_path."
 
 local_sha256=$(sha256sum "$file_path" | cut -d' ' -f1)
+if [[ "$backup_mode" == local ]]; then
+  local_size=$(stat -c '%s' "$file_path")
+  record_success "local:$file_path" "$local_size" "$local_sha256"
+  # Prune only after a newer verified backup exists, and only files with this script's exact naming.
+  mapfile -t local_backups < <(find "$STAGE_DIR" -maxdepth 1 -type f -printf '%f\n' |
+    grep -E "^${DATABASE}-[0-9]{8}T[0-9]{6}Z\.bak$" | sort -r)
+  for old in "${local_backups[@]:local_retain}"; do
+    rm -f -- "${STAGE_DIR:?}/$old"
+  done
+  echo "WARN: BACKUP_MODE=local keeps backups only on this EC2 disk; they are lost with the instance or EBS volume." >&2
+  echo "PASS: Full backup and RESTORE VERIFYONLY completed locally at $file_path ($local_size bytes, newest $local_retain kept)."
+  exit 0
+fi
+
+object_key=${prefix:+$prefix/}$file_name
+target="s3://$bucket/$object_key"
 if ! "${aws_cli[@]}" s3 cp "$file_path" "$target" --sse AES256 --metadata "sha256=$local_sha256" --only-show-errors; then
   fail "S3 upload failed; local backup retained at $file_path."
 fi
@@ -152,10 +190,7 @@ if ! remote_sha256=$("${aws_cli[@]}" s3 cp "$target" - --only-show-errors | sha2
 fi
 [[ "$remote_sha256" == "$local_sha256" ]] || fail "Downloaded S3 backup SHA-256 differs from the local backup. Local copy retained at $file_path."
 
-state_tmp=$(mktemp "$(dirname "$STATE_FILE")/.backup-state.XXXXXX")
-printf '%s\t%s\t%s\t%s\n' "$timestamp" "$target" "$remote_size" "$local_sha256" > "$state_tmp"
-chmod 0600 "$state_tmp"
-mv -f "$state_tmp" "$STATE_FILE"
+record_success "$target" "$remote_size" "$local_sha256"
 if ! rm -f -- "$file_path"; then
   echo "WARN: Remote backup verified; local staging copy remains at $file_path." >&2
 fi

@@ -9,6 +9,8 @@ or silently selects the wrong value on the EC2 host.
 
 from __future__ import annotations
 
+
+import json
 import os
 import re
 import shutil
@@ -24,6 +26,7 @@ JQ_CALL_LOOSE = re.compile(r"(?<![\w/.-])jq\s+['-]")
 ARG_NAME = re.compile(r"--arg\s+(\w+)")
 JQ_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
 HYPHENATED_DOT_KEY = re.compile(r"\.[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)+")
+IMAGE_GATE = re.compile(r'\.services(?:\.\w+|\["[\w-]+"\])\.image')
 JQ_COMPILE_ERROR = 3
 
 
@@ -78,6 +81,24 @@ class JqProgramTests(unittest.TestCase):
                 with self.subTest(location=f"{path.relative_to(REPO).as_posix()}:{line}"):
                     result = compile_with_jq(jq, program, arg_names)
                     self.assertNotEqual(JQ_COMPILE_ERROR, result.returncode, result.stderr)
+
+
+    def test_image_digest_gates_select_each_compose_service(self) -> None:
+        jq = shutil.which("jq")
+        if jq is None:
+            if os.environ.get("CI"):
+                self.fail("jq is required in CI to evaluate deployment digest gates.")
+            self.skipTest("jq is not installed; CI evaluates deployment digest gates.")
+        images = {"api": "api@sha256:1", "db-init": "init@sha256:2", "sqlserver": "sql@sha256:3"}
+        resolved = json.dumps({"services": {name: {"image": image} for name, image in images.items()}})
+        gates = [program for _, program, _ in jq_programs(REPO / "backend" / "deploy" / "deploy-ec2.sh")
+                 if IMAGE_GATE.fullmatch(program)]
+        selected = []
+        for program in gates:
+            result = subprocess.run([jq, "-r", program], input=resolved, text=True, capture_output=True, check=False)
+            self.assertEqual(0, result.returncode, result.stderr)
+            selected.append(result.stdout.strip())
+        self.assertEqual(sorted(images.values()), sorted(selected))
 
 
 if __name__ == "__main__":

@@ -1906,6 +1906,15 @@ the database schema, and no migration is run during deployment. Docker smoke
 testing and real EC2/browser TLS and resource validation remain separate from
 the normal backend verification script.
 
+API documentation is opt-in: `GET /openapi/v1.json` (OpenAPI 3.1) and Swagger
+UI under `/swagger` are mapped when `ApiDocumentation:Enabled` is true, which
+defaults to Development only; otherwise both return 404. Outside Development
+enabling them requires a shared Basic credential
+(`ApiDocumentation:Username`/`Password`) that covers only those two paths and
+grants no API access. Business authentication, authorization, CORS and rate
+limits are unchanged. Configuration and exposure trade-offs are in
+`backend/docs/api-documentation.md`.
+
 
 ### Physical robot deployment
 

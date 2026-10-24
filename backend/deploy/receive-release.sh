@@ -11,6 +11,15 @@ release=${revisions[0]:-} ops=${revisions[1]:-}
 for sha in "$release" "$ops"; do [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail 'Malformed bundle revision.'; done
 for run in "${revisions[2]:-}" "${revisions[3]:-}"; do [[ "$run" =~ ^[0-9]+$ ]] || fail 'Missing verification run identity.'; done
 umask 077
+# A cancelled runner or dropped SSH session closes our stdout. Without this, the next write
+# would SIGPIPE-kill the deployment between steps. tee -p ignores that and keeps a host log.
+# The logger also ignores TERM/HUP/INT so a timeout's group TERM cannot kill it before the
+# credential cleanup and rollback output below are written; it exits at EOF.
+log=${CAMPUS_DELIVERY_LOG:-/var/log/campustour/delivery.log}
+install -d -m 0700 "$(dirname "$log")"
+if [[ -f "$log" ]] && (( $(stat -c '%s' "$log") > 10485760 )); then mv -f -- "$log" "$log.1"; fi
+exec > >(trap '' TERM HUP INT; exec tee -p -a "$log") 2>&1
+echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) delivery mode=$mode release=$release ops=$ops run=${revisions[2]}"
 credentials=$(mktemp -d "${CAMPUS_REGISTRY_TEMP_ROOT:-/run}/campustour-registry.XXXXXXXXXX")
 cleanup() { rm -f -- "$credentials/config.json" "$credentials/images"; rmdir -- "$credentials"; }
 trap cleanup EXIT
