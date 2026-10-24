@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Successful main commit whose SQL image digest will be applied
+        description: Successful main commit SHA from Backend Verify
         required: true
         type: string
 
@@ -18,110 +18,42 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 55
     permissions:
       actions: read
       contents: read
-      id-token: write
       packages: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_SHA: ${{ inputs.release_sha }}
       OPS_SHA: ${{ github.sha }}
-
     steps:
-      - name: Validate revisions and find verified release artifacts
-        id: release
-        shell: bash
-        run: |
-          set -euo pipefail
-          for value in "$RELEASE_SHA" "$OPS_SHA"; do
-            [[ "$value" =~ ^[0-9a-f]{40}$ ]] || { echo 'Both revisions must be 40-character lowercase SHAs.' >&2; exit 1; }
-          done
-          find_run() {
-            local sha=$1 response run_id
-            response=$(gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/backend-verify.yml/runs?head_sha=$sha&status=success&per_page=100")
-            run_id=$(jq -r --arg sha "$sha" '
-              [.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .head_sha == $sha and .conclusion == "success")]
-              | sort_by(.run_number) | last | .id // empty
-            ' <<<"$response")
-            [[ "$run_id" =~ ^[0-9]+$ ]] || return 1
-            printf '%s' "$run_id"
-          }
-          release_run=$(find_run "$RELEASE_SHA") || { echo 'No successful main verification run exists for the selected release.' >&2; exit 1; }
-          find_run "$OPS_SHA" >/dev/null || { echo 'The operations commit has no successful main verification run.' >&2; exit 1; }
-          echo "run_id=$release_run" >> "$GITHUB_OUTPUT"
-
-      - name: Download and validate the selected immutable release manifest
-        id: manifest
-        uses: actions/download-artifact@v4
+      - name: Checkout pinned operations revision
+        uses: actions/checkout@v4
         with:
-          name: backend-release-${{ inputs.release_sha }}
-          run-id: ${{ steps.release.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          path: ${{ runner.temp }}/backend-release
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Validate release image identities
-        id: images
-        shell: bash
-        run: |
-          set -euo pipefail
-          manifest="$RUNNER_TEMP/backend-release/backend-release.json"
-          python3 backend/deploy/validate-release-manifest.py "$manifest" "$RELEASE_SHA" "$GITHUB_OUTPUT"
+      - name: Verify both revisions and prepare authenticated source bundle
+        run: bash backend/deploy/prepare-release.sh "$RELEASE_SHA" "$OPS_SHA" "$RUNNER_TEMP/backend-bundle"
 
-      - name: Configure AWS credentials with GitHub OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Send approved SQL maintenance through SSM
-        id: ssm
+      - name: Deploy verified bundle over pinned SSH
         env:
-          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          API_IMAGE: ${{ steps.images.outputs.api_image }}
-          DB_INIT_IMAGE: ${{ steps.images.outputs.db_init_image }}
-          SQLSERVER_IMAGE: ${{ steps.images.outputs.sqlserver_image }}
+          DEPLOY_SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$EC2_INSTANCE_ID" =~ ^i-[0-9a-f]{8,17}$ ]] || { echo 'EC2_INSTANCE_ID is missing or malformed.' >&2; exit 1; }
-          installer_url="https://raw.githubusercontent.com/30Sativa/smart-campus-tour/$OPS_SHA/backend/deploy/install-host-tools.sh"
-          script_url="https://raw.githubusercontent.com/30Sativa/smart-campus-tour/$OPS_SHA/backend/deploy/deploy-ec2.sh"
-          printf -v remote_command 'set -eu; installer=$(mktemp); script=$(mktemp); trap '\''rm -f "$installer" "$script"'\'' 0; curl --fail --location --silent --show-error --max-time 45 %q -o "$installer"; chmod 0700 "$installer"; bash "$installer" %q; curl --fail --location --silent --show-error --max-time 45 %q -o "$script"; chmod 0700 "$script"; bash "$script" --sql-maintenance %q %q %q %q %q' \
-            "$installer_url" "$OPS_SHA" "$script_url" "$RELEASE_SHA" "$API_IMAGE" "$DB_INIT_IMAGE" "$SQLSERVER_IMAGE" "$OPS_SHA"
-          jq -n --arg command "$remote_command" '{commands:[$command],executionTimeout:["2400"]}' > "$RUNNER_TEMP/ssm-parameters.json"
-          command_id=$(aws ssm send-command --document-name AWS-RunShellScript --instance-ids "$EC2_INSTANCE_ID" \
-            --comment "CampusTour SQL maintenance $RELEASE_SHA" --timeout-seconds 120 \
-            --parameters "file://$RUNNER_TEMP/ssm-parameters.json" --query 'Command.CommandId' --output text)
-          [[ "$command_id" =~ ^[0-9a-f-]{36}$ ]] || { echo 'SSM did not return a command ID.' >&2; exit 1; }
-          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for SSM maintenance and report its result
-        env:
-          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          COMMAND_ID: ${{ steps.ssm.outputs.command_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          status=Pending
-          for attempt in $(seq 1 270); do
-            result=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$EC2_INSTANCE_ID" --output json 2>/dev/null || true)
-            if [[ -n "$result" ]]; then
-              status=$(jq -r '.Status // "Pending"' <<<"$result")
-              case "$status" in
-                Success|Cancelled|TimedOut|Failed|DeliveryTimedOut|ExecutionTimedOut|Undeliverable|Terminated)
-                  jq -r '.StandardOutputContent // empty' <<<"$result"
-                  stderr=$(jq -r '.StandardErrorContent // empty' <<<"$result")
-                  [[ -z "$stderr" ]] || printf 'SSM stderr:\n%s\n' "$stderr" >&2
-                  [[ "$status" == Success ]] || { echo "SQL maintenance ended with status $status." >&2; exit 1; }
-                  echo 'PASS: SQL maintenance SSM command succeeded.'
-                  exit 0
-                  ;;
-              esac
-            fi
-            sleep 10
-          done
-          echo "SQL maintenance did not finish within 45 minutes (last status: $status)." >&2
-          exit 1
+          umask 077
+          export DEPLOY_SSH_KEY_FILE="$RUNNER_TEMP/deploy-key"
+          export DEPLOY_SSH_KNOWN_HOSTS_FILE="$RUNNER_TEMP/deploy-known-hosts"
+          trap 'rm -f -- "$DEPLOY_SSH_KEY_FILE" "$DEPLOY_SSH_KNOWN_HOSTS_FILE"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$DEPLOY_SSH_KEY_FILE"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$DEPLOY_SSH_KNOWN_HOSTS_FILE"
+          unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
+          bash backend/deploy/ssh-deploy.sh "$RUNNER_TEMP/backend-bundle" sql-maintenance

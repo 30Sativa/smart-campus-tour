@@ -1855,6 +1855,16 @@ CI never flashes the STM32 and the miniPC never auto-flashes it; see
 
 ### Backend EC2 deployment
 
+Backend CI smoke-tests and publishes private GHCR digests with a verified release
+manifest. Application and separate SQL maintenance delivery are manual dispatch
+jobs referencing `production`. Authenticated source bundles and pinned OpenSSH
+are shared with the trusted-workstation CLI; AWS OIDC/SSM is not required. EC2
+receives Compose/operations files and temporary registry auth, without retaining
+a GitHub PAT. The deploy identity is root-equivalent; host pins, network access
+and GitHub environment eligibility are operator prerequisites. Verified off-host
+backups support AWS S3 or a dedicated HTTPS S3-compatible endpoint/profile
+independent of AWS IAM. Schema/readiness, ownership and API rollback guards remain.
+
 `backend/docs/ec2-deployment.md` records configuration, TLS, secrets, initial Admin,
 backup and smoke-test commands for the single-instance deployment. Kestrel
 terminates TLS on container port 8443, published as host 443; the API runs as a

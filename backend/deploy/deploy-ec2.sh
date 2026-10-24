@@ -47,7 +47,7 @@ OPERATION_LOCK=${CAMPUS_OPERATION_LOCK:-/run/lock/campustour-operation.lock}
 API_ENV=${CAMPUS_API_ENV_FILE:-/etc/campustour/api.env}
 TLS_CERT=${CAMPUS_TLS_CERT_PATH:-/etc/campustour/certs/active/fullchain.pem}
 TLS_KEY=${CAMPUS_TLS_KEY_PATH:-/etc/campustour/certs/active/privkey.pem}
-RAW_BASE=https://raw.githubusercontent.com/30Sativa/smart-campus-tour
+RELEASE_COMPOSE=${CAMPUS_RELEASE_COMPOSE:-}
 PENDING_FILE=$STATE/deployment.pending
 CURRENT_LINK=$ROOT/current
 candidate_dir=$ROOT/releases/$release_sha
@@ -65,7 +65,7 @@ desired_sql_config_hash=
 candidate_sql_config_hash=
 
 preflight() {
-  [[ $(id -u) == 0 ]] || fail 'SSM Run Command must execute this script as root.'
+  [[ $(id -u) == 0 ]] || fail 'Execute this script as root.'
   source /etc/os-release
   [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]] || fail "Expected Ubuntu 24.04; found ${PRETTY_NAME:-unknown}."
   [[ $(uname -m) == x86_64 ]] || fail "Expected x86_64; found $(uname -m)."
@@ -527,11 +527,10 @@ fi
 validate_sql_image "$current_sql_image"
 
 candidate_tmp=$(mktemp -d "$ROOT/.release-$release_sha.XXXXXX")
-if ! curl --fail --location --silent --show-error --max-time 30 \
-  "$RAW_BASE/$release_sha/backend/docker-compose.yml" -o "$candidate_tmp/docker-compose.yml"; then
+if [[ ! -s "$RELEASE_COMPOSE" ]] || ! cp -- "$RELEASE_COMPOSE" "$candidate_tmp/docker-compose.yml"; then
   rm -f -- "$candidate_tmp/docker-compose.yml"
   rmdir "$candidate_tmp" 2>/dev/null || true
-  fail 'Could not download the Compose file from the application release source commit.'
+  fail 'Could not copy the Compose file from the verified application release bundle.'
 fi
 [[ -s "$candidate_tmp/docker-compose.yml" ]] || {
   rm -f -- "$candidate_tmp/docker-compose.yml"
