@@ -28,6 +28,8 @@ def test_parse_counters_present_and_absent():
     assert parse_fb_counters(FB17.format(v=1) + ',4,1') == (4, 1)
     assert parse_fb_counters(FB17.format(v=1) + ',x,1') == (None, None)
     assert parse_fb_counters('FB,1,2,3') == (None, None)
+    # Firmware co dau quay: 4 truong head_* noi sau, bo dem IMU giu vi tri.
+    assert parse_fb_counters(FB17.format(v=1) + ',4,1,22,9000,-1500,1,1') == (4, 1)
 
 
 def test_healthy_stream_is_quiet_and_ok():

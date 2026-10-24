@@ -429,6 +429,25 @@ def test_parse_feedback_ignores_unknown_trailing_fields():
     assert parsed[7] == (1234, True)      # sonar khong bi xe dich
 
 
+def test_parse_feedback_twenty_three_field_with_head_status():
+    # Firmware co dau quay PAN/TILT + contactor: 19 truong cu + head_seq,
+    # pan_cdeg, tilt_cdeg, head_state, contactor. Odometry, yaw, sonar va
+    # yaw_acc khong doi vi tri.
+    parsed = Stm32BridgeNode._parse_feedback_line(
+        Stm32BridgeNode,
+        'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0,2,4,1,22,9000,-1500,1,1',
+        include_sonar=True,
+    )
+    assert parsed is not None
+    (seq, left, right, dt_ms, status, yaw_rad, yaw_acc,
+     sonar1, sonar2, sonar3, sonar4) = parsed
+    assert (seq, left, right, status) == (9, 100, 110, 'OK')
+    approx(yaw_rad, math.pi / 2, tol=1e-6)
+    assert yaw_acc == 2
+    assert sonar1 == (1234, True)
+    assert sonar4 == (500, False)
+
+
 def test_parse_feedback_accuracy_is_clamped():
     for raw, want in (('-1', 0), ('0', 0), ('3', 3), ('9', 3)):
         parsed = Stm32BridgeNode._parse_feedback_line(
@@ -539,6 +558,8 @@ def test_cached_imu_measurement_is_not_republished():
 
 class _FeedbackHarness:
     def __init__(self):
+        self._head = None   # giao dien dau quay tat trong harness odometry
+        self._contactor = None
         model = OdometryModel()
         self.steps_per_meter = model.steps_per_meter
         self.wheel_base = model.wheel_base
@@ -877,3 +898,41 @@ def _run_all():
 
 if __name__ == '__main__':
     sys.exit(1 if _run_all() else 0)
+
+
+def test_head_hook_errors_never_break_the_wheel_path():
+    """Loi trong head_ros (vd bug, msg sai kieu) chi duoc log, khong lan ra
+    timer/feedback cua banh xe."""
+    logged = []
+
+    class _Boom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('boom')
+
+    harness = SimpleNamespace(
+        _head=_Boom(),
+        get_logger=lambda: SimpleNamespace(error=logged.append),
+    )
+    Stm32BridgeNode._call_hook(harness, harness._head, 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, harness._head, 'on_feedback_line', 'FB,2')   # trong 5 s: khong log lai
+    assert len(logged) == 1 and 'boom' in logged[0]
+
+
+def test_contactor_hook_errors_are_isolated_and_logged_separately():
+    """Loi contactor khong lan ra banh xe va khong bi loi head lap lai che mat."""
+    logged = []
+
+    class HeadBoom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('head')
+
+    class ContactorBoom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('contactor')
+
+    harness = SimpleNamespace(get_logger=lambda: SimpleNamespace(error=logged.append))
+    Stm32BridgeNode._call_hook(harness, HeadBoom(), 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, ContactorBoom(), 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, ContactorBoom(), 'on_feedback_line', 'FB,2')
+    assert len(logged) == 2
+    assert 'HeadBoom' in logged[0] and 'ContactorBoom' in logged[1]

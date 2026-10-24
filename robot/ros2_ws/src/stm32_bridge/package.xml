@@ -10,6 +10,9 @@
 
   <buildtool_depend>ament_python</buildtool_depend>
 
+  <exec_depend>bus_interfaces</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>launch</exec_depend>

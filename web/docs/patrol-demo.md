@@ -205,10 +205,14 @@ facade ends do not reappear as opaque blocks behind the continuous corner glass.
 Partition faces split by prepared doors are grouped before fitting a return.
 At a corner, both wall directions are restored; deduplication distinguishes
 their direction and side instead of dropping a wall with the same join point.
-The 614 doorway moves onto its right long facade and its former aperture is
-filled with the same opaque wall finish. New openings on the 615/616 frontage,
-a second 615 entrance and the 617 entrance fit the original wall faces. The
-other 17 prepared doorways retain their alignment. All 22 receive full glass
+The 601 and 614 doorways move onto their marked right facades and their former
+apertures are filled with the same opaque wall finish. New openings on the
+615/616 frontage,
+a second 615 entrance and two 617 entrances fit the original wall faces. The
+615 and 616 main entrances sit at the opposite ends of their same corridor
+frontage, with their former display openings restored by regenerating from
+the source shell. The other 16 prepared doorways retain their alignment.
+All 23 receive full glass
 double leaves with satin aluminium frames, central stiles and paired handles.
 This layout follows the supplied plan as a visual model, not a new survey.
 The fixtures emit from their undersides, with downward corridor spotlights.

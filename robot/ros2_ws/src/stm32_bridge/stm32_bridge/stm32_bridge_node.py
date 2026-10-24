@@ -1,6 +1,7 @@
 import math
+import threading
 import time
-from typing import Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import TransformStamped, Twist
@@ -10,6 +11,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, Range
 from tf2_ros import TransformBroadcaster
 
+from stm32_bridge.head_link import next_seq
 from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WARN
 
 try:
@@ -159,6 +161,11 @@ class Stm32BridgeNode(Node):
         # FB yaw_valid=0 longer than this -> WARN + /diagnostics WARN (EKF then
         # runs on wheel odometry only). Does not change what is published.
         self.declare_parameter('imu_stale_timeout', 1.0)
+        # Dau quay PAN/TILT + contactor (stm32_bridge/head_ros.py). Tat neu
+        # chay voi firmware cu hoac moi truong chua build bus_interfaces moi.
+        self.declare_parameter('enable_head', True)
+        # Contactor PA10 (stm32_bridge/contactor_ros.py), doc lap voi dau quay.
+        self.declare_parameter('enable_contactor', True)
         # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
         self.declare_parameter(
             'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
@@ -292,9 +299,15 @@ class Stm32BridgeNode(Node):
         self._feedback_warn_period = 1.0 / self.feedback_rate_warn_hz
 
         self._serial = None
+        # Timer (CMD/STOP, doc FB) va callback dau quay (executor nhieu luong)
+        # cung ghi serial va dung chung bo dem seq.
+        self._serial_lock = threading.RLock()
+        self._head = None
+        self._contactor = None
         self._next_reconnect_time = 0.0
         self._reconnect_period = 1.0
-        self._seq = 0
+        # Bat dau tu 1 va bo qua 0 khi tran: FB head_seq=0 = "chua co lenh HEAD".
+        self._seq = 1
         self._left_mm_s = 0
         self._right_mm_s = 0
         self._command_is_stop = True
@@ -377,6 +390,33 @@ class Stm32BridgeNode(Node):
         self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
 
+        if bool(self.get_parameter('enable_head').value):
+            # Import tre: cac goi bus_interfaces/std_srvs chi can khi bat dau quay.
+            # Loi o day (bus_interfaces cu chua build lai, thieu std_srvs...) KHONG
+            # duoc lam chet node: banh xe va odometry van phai chay.
+            try:
+                from stm32_bridge.head_ros import HeadInterface
+                self._head = HeadInterface(self, self.send_seq_command)
+                self.get_logger().info(
+                    'Head interface enabled: head/set, head/jog, head/step, '
+                    'head/state, head/stop, head/off, head/zero')
+            except Exception as exc:  # noqa: BLE001 - bao loi ro, chay tiep
+                self._head = None
+                self.get_logger().error(
+                    f'Head interface disabled: {exc!r}. Rebuild '
+                    'bus_interfaces (colcon build --packages-select bus_interfaces '
+                    'stm32_bridge) or set enable_head:=false.')
+
+        if bool(self.get_parameter('enable_contactor').value):
+            try:
+                from stm32_bridge.contactor_ros import ContactorInterface
+                self._contactor = ContactorInterface(self, self.send_seq_command)
+                self.get_logger().info(
+                    'Contactor interface enabled: contactor/set, contactor/state')
+            except Exception as exc:  # noqa: BLE001
+                self._contactor = None
+                self.get_logger().error(f'Contactor interface disabled: {exc!r}.')
+
     def _cmd_vel_callback(self, msg: Twist):
         if not self._is_finite_twist(msg):
             self.get_logger().error(
@@ -429,6 +469,8 @@ class Stm32BridgeNode(Node):
         # write timeout.
         self._read_feedback()
         self._check_feedback_timeout(now)
+        if self._head is not None:
+            self._call_head('on_timer', now)
 
         if self._last_cmd_time is None:
             # No /cmd_vel received yet. Keep the firmware in STOP state.
@@ -444,23 +486,57 @@ class Stm32BridgeNode(Node):
         else:
             self._send_command(self._left_mm_s, self._right_mm_s)
 
-    def _send_command(self, left_mm_s: int, right_mm_s: int):
-        seq = self._seq
-        command = f'CMD,{seq},{left_mm_s},{right_mm_s}\r\n'
+    def send_seq_command(self, build: Callable[[int], str]) -> Optional[int]:
+        """Cap seq, gui build(seq) + CRLF; tra seq da gui hoac None.
 
-        if self._write_serial(command):
-            self._seq = (self._seq + 1) % UINT32_MODULO
+        Seq dung chung cho moi lenh (CMD/STOP/HEAD/CONTACTOR) nen truong
+        <seq> cua FB cho biet firmware da xu ly toi dau."""
+        with self._serial_lock:
+            seq = self._seq
+            body = build(seq)
+            if not self._write_serial(body + '\r\n'):
+                return None
+            self._seq = next_seq(self._seq)
+        if not body.startswith(('CMD,', 'STOP,')):
+            if ',JOG,' in body and not body.endswith(',JOG,0,0'):
+                self.get_logger().debug(f'TX: {body}')   # keepalive 10 Hz khi giu nut
+            else:
+                self.get_logger().info(f'TX: {body}')
+        return seq
+
+    def _call_head(self, method: str, *args) -> None:
+        self._call_hook(self._head, method, *args)
+
+    def _call_hook(self, target, method: str, *args) -> None:
+        """Goi hook dau quay/contactor tu thread timer; loi chi duoc log (giam
+        tan suat), khong duoc lam mat CMD/STOP hay odometry cua banh xe."""
+        try:
+            getattr(target, method)(*args)
+        except Exception as exc:  # noqa: BLE001
+            # Gioi han log rieng tung giao dien: loi lap cua head khong che
+            # mat loi cua contactor va nguoc lai.
+            name = type(target).__name__
+            last = getattr(self, '_hook_error_log', None)
+            if last is None:
+                last = self._hook_error_log = {}
+            now = time.monotonic()
+            if now - last.get(name, -1e9) >= 5.0:
+                last[name] = now
+                self.get_logger().error(f'{name} error in {method}: {exc!r}')
+
+    def _send_command(self, left_mm_s: int, right_mm_s: int):
+        seq = self.send_seq_command(
+            lambda s: f'CMD,{s},{left_mm_s},{right_mm_s}')
+        if seq is not None:
             self._log_tx(f'CMD,{seq},{left_mm_s},{right_mm_s}',
                          ('CMD', left_mm_s, right_mm_s))
 
     def _send_stop(self):
         # Use the firmware's dedicated STOP command so the controller enters its
-        # STOP state instead of "running at zero speed".
-        seq = self._seq
-        command = f'STOP,{seq}\r\n'
-
-        if self._write_serial(command):
-            self._seq = (self._seq + 1) % UINT32_MODULO
+        # STOP state instead of "running at zero speed". The firmware does not
+        # stop the PAN/TILT head on STOP (it is sent at send_rate_hz while idle).
+        seq = self.send_seq_command(lambda s: f'STOP,{s}')
+        if seq is not None:
             self._log_tx(f'STOP,{seq}', ('STOP', 0, 0))
 
     def _open_serial(self):
@@ -500,6 +576,10 @@ class Stm32BridgeNode(Node):
         self._open_serial()
 
     def _write_serial(self, command: str) -> bool:
+        with self._serial_lock:
+            return self._write_serial_locked(command)
+
+    def _write_serial_locked(self, command: str) -> bool:
         if self._serial is None or not self._serial.is_open:
             return False
 
@@ -558,6 +638,8 @@ class Stm32BridgeNode(Node):
 
         if line.startswith('ERR,'):
             self.get_logger().warn(f'STM32 protocol error: {line}')
+            if self._head is not None:
+                self._call_head('on_error_line', line)
             return
 
         self.get_logger().debug(f'Ignoring non-feedback serial line: {line}')
@@ -566,6 +648,10 @@ class Stm32BridgeNode(Node):
         parsed = self._parse_feedback_line(line, include_sonar=True)
         if parsed is None:
             return
+        if self._head is not None:
+            self._call_head('on_feedback_line', line)
+        if self._contactor is not None:
+            self._call_hook(self._contactor, 'on_feedback_line', line)
 
         (seq, left_count, right_count, dt_ms, status, yaw_rad, yaw_acc,
          sonar1, sonar2, sonar3, sonar4) = parsed
@@ -982,6 +1068,10 @@ class Stm32BridgeNode(Node):
         self._last_count_jump_warn_time = now
 
     def _close_serial(self):
+        with self._serial_lock:
+            self._close_serial_locked()
+
+    def _close_serial_locked(self):
         if self._serial is None:
             return
 
@@ -1132,6 +1222,8 @@ class Stm32BridgeNode(Node):
     def destroy_node(self):
         try:
             self.get_logger().info('Sending stop command before shutdown.')
+            if self._head is not None:
+                self._head.shutdown()
             self._send_stop()
         finally:
             self._close_serial()
@@ -1141,9 +1233,18 @@ class Stm32BridgeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = Stm32BridgeNode()
+    # Nhieu luong: action head/set (HOME ~21 s) va service cho xac nhan tu FB
+    # trong khi timer (callback group mac dinh, tuan tu) van gui CMD/STOP va
+    # doc FB. Ghi serial duoc khoa bang _serial_lock.
+    from rclpy.executors import MultiThreadedExecutor
+    # Action/service cho xac nhan chiem luong; timer (doc FB) can mot luong
+    # rieng con trong, neu khong cac lenh cho se het han. 8 luong du cho mot
+    # goal HOME + vai service + goal moi thay goal cu cung luc.
+    executor = MultiThreadedExecutor(num_threads=8)
+    executor.add_node(node)
 
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

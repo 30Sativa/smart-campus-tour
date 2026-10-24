@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "motor/motor.h"
 #include "sonar/sr04t.h"
+#include "head/head.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -262,6 +263,12 @@ void EXTI15_10_IRQHandler(void)
 void TIM2_IRQHandler(void)
 {
   Motor_HandleTimerInterrupt();
+}
+
+/* TIM6: tick 10 kHz cho dau quay PAN/TILT (head.c). TIM6 khong co trong .ioc. */
+void TIM6_DAC_IRQHandler(void)
+{
+  Head_HandleTimerInterrupt();
 }
 
 /* USER CODE END 1 */

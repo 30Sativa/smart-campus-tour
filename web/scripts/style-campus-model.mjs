@@ -155,14 +155,35 @@ glazingRuns[1][4] = project(glazingRuns[1][4], cornerDoor)
 glazingRuns[1][5] = cornerDoor.centre.map((v, k) => v + cornerOffset * cornerDoor.axis[k])
 // Fit marked openings to geometric wall edges rather than rounded shading
 // normals. Both wall faces must span the entire new opening away from corners.
-const surveyEdges = []
+const rawSurveyEdges = []
 for (let i = 0; i < indices.length; i += 3) {
   const triangle = indices.slice(i, i + 3).map(index => positions[index])
   const top = triangle.filter(point => Math.abs(point[1] - 5) < 0.001)
   if (top.length !== 2) continue
   const [a, b] = top.map(point => [point[0], point[2]]), length = Math.hypot(b[0] - a[0], b[1] - a[1])
-  if (length > 0.9) surveyEdges.push({ a, b, length, axis: [(b[0] - a[0]) / length, (b[1] - a[1]) / length] })
+  if (length > 0.9) rawSurveyEdges.push({ a, b, length, axis: [(b[0] - a[0]) / length, (b[1] - a[1]) / length] })
 }
+// Adjacent triangles may split one straight wall face into several top edges.
+// Merge only touching collinear intervals; keep gaps and separate faces intact.
+const surveyLines = []
+for (const edge of rawSurveyEdges) {
+  const axis = edge.axis[0] < 0 ? edge.axis.map(v => -v) : edge.axis
+  const offset = axis[1] * edge.a[0] - axis[0] * edge.a[1]
+  let line = surveyLines.find(line => Math.abs(line.axis[0] * axis[1] - line.axis[1] * axis[0]) < 1e-6 && Math.abs(line.offset - offset) < 0.0001)
+  if (!line) { line = { axis, offset, intervals: [] }; surveyLines.push(line) }
+  const u = [edge.a, edge.b].map(p => p[0] * line.axis[0] + p[1] * line.axis[1])
+  line.intervals.push([Math.min(...u), Math.max(...u)])
+}
+const surveyEdges = surveyLines.flatMap(({ axis, offset, intervals }) => {
+  const merged = []
+  for (const range of intervals.sort((a, b) => a[0] - b[0])) {
+    const last = merged.at(-1)
+    if (last && range[0] <= last[1] + 0.0001) last[1] = Math.max(last[1], range[1])
+    else merged.push([...range])
+  }
+  const point = u => [u * axis[0] + offset * axis[1], u * axis[1] - offset * axis[0]]
+  return merged.map(([lo, hi]) => ({ a: point(lo), b: point(hi), axis, length: hi - lo }))
+})
 function fittedWallDoor(name, point, roughAxis, width = 1.82) {
   const candidates = surveyEdges.filter(edge => {
     const along = (point[0] - edge.a[0]) * edge.axis[0] + (point[1] - edge.a[1]) * edge.axis[1]
@@ -187,13 +208,18 @@ function fittedWallDoor(name, point, roughAxis, width = 1.82) {
   return fitted
 }
 const previous614 = { ...doors.find(door => door.name === '614') }
+const previous601 = { ...doors.find(door => door.name === '601') }
+Object.assign(doors.find(door => door.name === '601'), fittedWallDoor('601', [35.4, -85.8], [-0.39, 0.921]), { movedFrom: previous601.centre })
 Object.assign(doors.find(door => door.name === '614'), fittedWallDoor('614', [37.25, -13.65], [0.08, 0.997]), { movedFrom: previous614.centre })
+// Move the two main corridor entrances to the opposite ends of the same
+// measured frontage, preserving their distance from the adjacent partitions.
 const innerDoorAxis = [-0.8034784644968402, 0.5953338198773859]
 for (const [name, point, axis, width] of [
-  ['615', [44.1467, -28.26], innerDoorAxis],
-  ['616', [51.9867, -34.3733], innerDoorAxis],
+  ['615', [48.89, -32.43], innerDoorAxis],
+  ['616', [53.24, -35.65], innerDoorAxis],
   ['615 secondary', [42.0933, -22.94], [0.666, 0.746], 1.2],
   ['617', [9.1, -70.2133], [0.991, -0.137]],
+  ['617 secondary', [13.42, -75.65], [0.132, 0.991], 1.2],
 ]) doors.push({ ...fittedWallDoor(name, point, axis, width), added: true })
 // The first four corner segments replace the old bent facade itself. Those
 // old facade ends must not be restored as opaque partition returns behind glass.
@@ -460,8 +486,8 @@ const corridorRuns = [
   { id: 'south-connector', a: [30.894, -23.789], b: [39.392, -19.54] },
 ]
 const lighting = buildLampLayout({ rooms: roomFloors, corridorFloors, walls: lampWalls, atrium, corridorContains, corridorRuns })
-box('614 former doorway infill', [previous614.centre[0], 1.74, previous614.centre[1]],
-  [previous614.width + 0.03, 3.48, previous614.depth + 0.025], -Math.atan2(previous614.axis[1], previous614.axis[0]), wall.material)
+for (const previous of [previous614, previous601]) box(`${previous.name} former doorway infill`, [previous.centre[0], 1.74, previous.centre[1]],
+  [previous.width + 0.03, 3.48, previous.depth + 0.025], -Math.atan2(previous.axis[1], previous.axis[0]), wall.material)
 // The cutaway shell's upper wall plane is the ceiling datum. Mount the
 // housing flush underneath it and retain the diffuser below the housing.
 const ceilingY = positions.reduce((top, point) => Math.max(top, point[1]), -Infinity)
