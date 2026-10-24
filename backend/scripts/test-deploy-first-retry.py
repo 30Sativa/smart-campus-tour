@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Failure-injection test for first deployment retry and foreign-volume safety.
 
-This exercises deploy-ec2.sh with fake Docker and jq CLIs. Docker Engine
+This exercises deploy-ec2.sh with fake Docker, jq and host-capacity probes. Docker Engine
 behavior is covered separately by test-deployment; this test must never be
 called a real container test.
 """
@@ -27,6 +27,22 @@ from pathlib import Path
 
 name = Path(sys.argv[0]).name
 args = sys.argv[1:]
+# Model capacity independently of the CI runner's disk usage and concurrent jobs.
+# Keep production guards executing, including their actual awk expressions.
+if name == "df":
+    if args != ["-B1", "--output=avail", "/"]:
+        raise SystemExit("Unsupported fake df arguments: " + repr(args))
+    print("Avail")
+    print(os.environ["FAKE_DISK_AVAILABLE_BYTES"])
+    sys.exit(0)
+if name == "awk":
+    real_awk = os.environ["FAKE_REAL_AWK"]
+    if args[-1:] == ["/proc/meminfo"]:
+        memory = ("MemTotal: " + os.environ["FAKE_MEM_TOTAL_KIB"] + " kB\n"
+                  "MemAvailable: " + os.environ["FAKE_MEM_AVAILABLE_KIB"] + " kB\n")
+        import subprocess
+        sys.exit(subprocess.run([real_awk, *args[:-1]], input=memory, text=True).returncode)
+    os.execv(real_awk, [real_awk, *args])
 state_path = Path(os.environ["FAKE_DOCKER_STATE"])
 fixture = Path(os.environ["FAKE_COMPOSE_FIXTURE"])
 state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -418,7 +434,10 @@ def run() -> None:
         cli = fake_bin / "fake-cli.py"
         cli.write_text(FAKE_CLI)
         cli.chmod(0o755)
-        for name in ("docker", "curl", "systemctl", "dpkg-query", "ss", "id", "jq"):
+        real_awk = shutil.which("awk")
+        if real_awk is None:
+            raise RuntimeError("awk is required to evaluate the production resource guards")
+        for name in ("docker", "curl", "systemctl", "dpkg-query", "ss", "id", "jq", "df", "awk"):
             (fake_bin / name).symlink_to(cli)
         fixture = root_tmp / "compose.fixture"
         fixture.write_text("services: {}\n")
@@ -474,6 +493,10 @@ def run() -> None:
                 }))
             return {
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "FAKE_REAL_AWK": real_awk,
+                "FAKE_DISK_AVAILABLE_BYTES": str(32 * 1024**3),
+                "FAKE_MEM_TOTAL_KIB": str(4 * 1024**2),
+                "FAKE_MEM_AVAILABLE_KIB": str(2 * 1024**2),
                 "FAKE_DOCKER_STATE": str(state_file),
                 "FAKE_COMPOSE_FIXTURE": str(fixture),
                 "FAKE_RELEASE_SHA": sha,
@@ -540,6 +563,26 @@ def run() -> None:
             lines = [line for line in path.read_text().splitlines() if not line.startswith(key + "=")]
             lines.append(f"{key}={value}")
             path.write_text("\n".join(lines) + "\n")
+
+        # Reproduce the failed main runner (10 GiB), exercise rounding just below
+        # 12 GiB, and retain explicit rejection tests for both RAM guards.
+        for name, capacity, message in (
+            ("disk-10", {"FAKE_DISK_AVAILABLE_BYTES": str(10 * 1024**3)}, "Only 10 GiB disk space remains"),
+            ("disk-below-12", {"FAKE_DISK_AVAILABLE_BYTES": str(12 * 1024**3 - 1)}, "Only 11 GiB disk space remains"),
+            ("ram-total", {"FAKE_MEM_TOTAL_KIB": str(3499 * 1024)}, "at least 3500 MiB is required"),
+            ("ram-available", {"FAKE_MEM_AVAILABLE_KIB": str(511 * 1024)}, "at least 512 MiB headroom"),
+        ):
+            env = setup_host(name)
+            rejected = invoke({**env, **capacity}, fail_candidate=True)
+            if rejected.returncode == 0 or message not in rejected.stderr:
+                raise AssertionError(f"{name} did not fail at the resource guard: {rejected.stderr}")
+            if (Path(env["CAMPUS_STATE_DIR"]) / "deployment-owner").exists() or Path(env["FAKE_DOCKER_STATE"]).exists():
+                raise AssertionError(f"{name} changed managed state before rejecting insufficient capacity")
+        boundary_env = setup_host("disk-exactly-12")
+        boundary = invoke({**boundary_env, "FAKE_DISK_AVAILABLE_BYTES": str(12 * 1024**3)}, fail_candidate=True)
+        if boundary.returncode == 0 or "Candidate API failed its Docker readiness health check." not in boundary.stderr:
+            raise AssertionError(f"Exactly 12 GiB must pass preflight and reach candidate readiness: {boundary.stderr}")
+        print("PASS (mocked capacity): 10 GiB and just below 12 GiB rejected without state changes; exactly 12 GiB reaches candidate readiness; low total/available RAM rejected.")
 
         host_env = setup_host("first-deploy")
         failed = invoke(host_env, fail_candidate=True)

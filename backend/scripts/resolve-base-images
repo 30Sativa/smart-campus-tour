@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Shared by PR builds and main publishing. Never close inspect stdout early:
+# Buildx can fail on SIGPIPE even after a consumer has extracted the digest.
+set -euo pipefail
+[[ $# == 1 ]] || { echo 'usage: resolve-base-images GITHUB_OUTPUT' >&2; exit 1; }
+output=$1
+resolve_base() {
+  local name=$1 tag=$2 repository=$3 digest ref inspect_output
+  inspect_output=$(docker buildx imagetools inspect "$tag") || {
+    echo "Could not inspect base image $tag." >&2
+    return 1
+  }
+  digest=$(awk '$1 == "Digest:" && !found { digest=$2; found=1 } END { if (found) print digest }' <<<"$inspect_output")
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    echo "Could not extract an immutable digest for base image $tag." >&2
+    return 1
+  }
+  ref="$repository@$digest"
+  case "$name" in
+    sdk) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/sdk@sha256:[0-9a-f]{64}$ ]] ;;
+    runtime) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/aspnet@sha256:[0-9a-f]{64}$ ]] ;;
+    sql) [[ "$ref" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ;;
+    *) return 1 ;;
+  esac
+  printf '%s=%s\n' "$name" "$ref" >> "$output"
+}
+resolve_base sdk mcr.microsoft.com/dotnet/sdk:10.0.402-noble mcr.microsoft.com/dotnet/sdk
+resolve_base runtime mcr.microsoft.com/dotnet/aspnet:10.0.13-noble mcr.microsoft.com/dotnet/aspnet
+resolve_base sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04 mcr.microsoft.com/mssql/server

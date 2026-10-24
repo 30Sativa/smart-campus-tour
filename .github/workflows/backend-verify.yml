@@ -94,31 +94,7 @@ jobs:
       - name: Resolve pinned SDK, runtime, and SQL base digests
         id: bases
         shell: bash
-        run: |
-          set -euo pipefail
-          resolve_base() {
-            local name=$1 tag=$2 repository=$3 digest ref inspect_output
-            inspect_output=$(docker buildx imagetools inspect "$tag") || {
-              echo "Could not inspect base image $tag." >&2
-              return 1
-            }
-            digest=$(awk '$1 == "Digest:" && !found { digest=$2; found=1 } END { if (found) print digest }' <<<"$inspect_output")
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-              echo "Could not extract an immutable digest for base image $tag." >&2
-              return 1
-            }
-            ref="$repository@$digest"
-            case "$name" in
-              sdk) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/sdk@sha256:[0-9a-f]{64}$ ]] ;;
-              runtime) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/aspnet@sha256:[0-9a-f]{64}$ ]] ;;
-              sql) [[ "$ref" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ;;
-              *) return 1 ;;
-            esac
-            echo "$name=$ref" >> "$GITHUB_OUTPUT"
-          }
-          resolve_base sdk mcr.microsoft.com/dotnet/sdk:10.0.402-noble mcr.microsoft.com/dotnet/sdk
-          resolve_base runtime mcr.microsoft.com/dotnet/aspnet:10.0.13-noble mcr.microsoft.com/dotnet/aspnet
-          resolve_base sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04 mcr.microsoft.com/mssql/server
+        run: bash backend/scripts/resolve-base-images "$GITHUB_OUTPUT"
 
       - name: Build API image
         uses: docker/build-push-action@v6
@@ -189,24 +165,7 @@ jobs:
       - name: Resolve pinned SDK, runtime, and SQL base digests
         id: bases
         shell: bash
-        run: |
-          set -euo pipefail
-          resolve_base() {
-            local name=$1 tag=$2 repository=$3 digest ref
-            digest=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" { print $2; exit }')
-            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-            ref="$repository@$digest"
-            case "$name" in
-              sdk) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/sdk@sha256:[0-9a-f]{64}$ ]] ;;
-              runtime) [[ "$ref" =~ ^mcr\.microsoft\.com/dotnet/aspnet@sha256:[0-9a-f]{64}$ ]] ;;
-              sql) [[ "$ref" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ;;
-              *) return 1 ;;
-            esac
-            echo "$name=$ref" >> "$GITHUB_OUTPUT"
-          }
-          resolve_base sdk mcr.microsoft.com/dotnet/sdk:10.0.402-noble mcr.microsoft.com/dotnet/sdk
-          resolve_base runtime mcr.microsoft.com/dotnet/aspnet:10.0.13-noble mcr.microsoft.com/dotnet/aspnet
-          resolve_base sql mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04 mcr.microsoft.com/mssql/server
+        run: bash backend/scripts/resolve-base-images "$GITHUB_OUTPUT"
 
       - name: Build and publish API image
         id: api
