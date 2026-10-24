@@ -119,6 +119,9 @@ files. Generate separate SA/app/JWT secrets using openssl rand -hex 32; prefix
 SQL passwords with Aa1! for complexity. App password allows letters/digits/!/_/-.
 Set API_HOST, WEB_ORIGIN, API_ENV_FILE, SQL_BACKUP_DIR and managed TLS paths.
 Do not publish rendered Compose/inspect environments.
+Swagger UI stays off in Production unless api.env enables it with its own
+credential; see `backend/docs/api-documentation.md`. api.env is read only when
+the API container is created.
 
 Install a browser-trusted matching certificate pair valid for >14 days:
 
