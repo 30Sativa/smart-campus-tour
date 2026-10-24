@@ -50,6 +50,7 @@ Configure these outside Git in environment **production**:
 | Variable | `DEPLOY_SSH_HOST` | Reachable EC2 DNS/IPv4, without URL/user/port |
 | Variable | `DEPLOY_SSH_USER` | Dedicated account, e.g. campustour-deploy |
 | Variable | `DEPLOY_SSH_PORT` | Optional; defaults to 22 |
+| Variable | `BACKEND_HEALTH_URL` | Optional; public readiness URL, defaults to https://api.fptcampustour.cloud/health/ready |
 | Secret | `DEPLOY_SSH_PRIVATE_KEY` | Dedicated unencrypted Ed25519 private key |
 | Secret | `DEPLOY_SSH_KNOWN_HOSTS` | Verified complete known_hosts line; use [host]:port for non-default port |
 | Built-in | `GITHUB_TOKEN` | Automatic job token with contents:read, actions:read, packages:read; no PAT secret |
@@ -90,6 +91,10 @@ This change never edits security groups. Choose explicitly:
   key-only auth, no root/password login, restricted deploy key, rotation,
   patched sshd, monitoring/rate limiting and closing access after the window.
   Changing port is not equivalent to an IP restriction.
+- Automatic deploys run unattended, so a per-job temporary /32 rule cannot work:
+  they need the SSH port reachable from hosted runners whenever main changes
+  (the public-22 option above) or a stable-egress runner. Required environment
+  reviewers, where available, make each automatic deploy wait for approval.
 - Allow clients on 443; block 1433/8080/8443. EC2 needs outbound DNS/HTTPS to
   GHCR/MCR and backup storage. No GitHub raw source connectivity is required.
 
@@ -166,12 +171,11 @@ ssh-keyscan alone is not authentication. Unexpected pins must fail until verifie
 never use StrictHostKeyChecking=no or accept-new for delivery.
 
 **Demo/backup limitation:** The initial deployment to an empty EC2 can proceed
-without an off-host backup configuration, but the managed deploy engine requires
-a verified off-host backup for subsequent deployments. Switching to automatic
-triggers does not bypass this guard. Without backup storage, later push/main CI
-may succeed while Backend Deploy fails safely; configure real storage, retention,
-and a recovery test before relying on unattended updates. Do not delete volumes,
-owner markers, or the backup validation as a workaround.
+without backup configuration, but every later deployment runs a verified pre-deploy
+backup and is blocked while `/etc/campustour/backup.env` is missing. Automatic
+triggers do not bypass this guard. Configure off-host storage (Section 4), or for
+a demo host explicitly choose `BACKUP_MODE=local` (Section 4.1) and accept its
+limits. Do not delete volumes, owner markers, or the backup validation as a workaround.
 
 ## 4. Off-host backup independent of AWS IAM
 
@@ -208,6 +212,36 @@ Daily 02:00 UTC backup and five-minute checks are retained; checks fail if the
 verified backup is >26 hours old. Systemd failures do not notify by themselves:
 configure external alerts for backup/check, disk, OOM, TLS and provider retention.
 
+### 4.1 Demo hosts: explicit local-only backup
+
+Without object storage, a root-owned `/etc/campustour/backup.env` (mode 0600) may
+contain only:
+
+```text
+BACKUP_MODE=local
+BACKUP_LOCAL_RETAIN=7
+```
+
+Each pre-deploy and daily backup still runs `BACKUP ... WITH CHECKSUM` and
+`RESTORE VERIFYONLY`, records size/SHA-256 in `backup-last-success` as
+`local:<path>`, keeps the newest `BACKUP_LOCAL_RETAIN` (1–30) files named
+`SmartCampusTourV11-<UTC>.bak` in `/var/lib/campustour/backups` and deletes only
+older files with that exact name. No AWS CLI or credentials are needed. The
+choice lives on the host, not in GitHub, so a workflow or PR cannot downgrade it.
+
+This protects against a bad release, a failed schema guard or an operator mistake
+inside SQL Server. It does **not** survive termination of the instance, loss or
+corruption of the EBS volume, or anyone with root on the host; the backup
+directory is also mounted into the SQL container. Deploy logs and
+`campustour-check` print a WARN while it is active. Copy a backup off the host
+before risky manual work (`scp` from `/var/lib/campustour/backups`), and test a
+restore into a disposable database at least once.
+
+Low-effort upgrade without changing this code: an AWS Data Lifecycle Manager
+policy taking daily EBS snapshots of the instance volume adds crash-consistent,
+off-instance copies. For production, set `BACKUP_MODE=s3` (or remove the line)
+with the Section 4 settings; nothing else changes.
+
 ## 5. Deploy, retry and rollback
 
 After independent review/setup, a successful **push/main** Backend Verify
@@ -219,6 +253,19 @@ verification. Failed CI never deploys; deployment failures remain visible in the
 Backend Deploy workflow and must be addressed before declaring the release live. Missing/expired artifacts, unavailable
 images, bad digests or mismatched image revision labels fail closed. Never
 fabricate a manifest to recover a release whose 90-day artifact has expired.
+
+Automatic deploys share the `backend-production-deploy` concurrency group with
+manual deploys and SQL maintenance, so runs never overlap. GitHub keeps at most
+one pending run per group: a newer queued run replaces an older pending one,
+including a pending manual dispatch. When a deploy starts it skips its release
+unless that SHA is still the head of main, so an older run finishing late can
+never roll the API back. If the newer head then fails CI, nothing newer is
+deployed; dispatch the last good SHA manually if needed. Every push to main runs
+Backend Verify, so a web-only merge also redeploys the backend (brief API
+restart plus a pre-deploy backup); avoid merging during a live tour. After the
+SSH step, the workflow polls `vars.BACKEND_HEALTH_URL` (default
+`https://api.fptcampustour.cloud/health/ready`) from the internet; a failure
+there means DNS, security group or certificate, not a rollback.
 
 The receiver wraps installer+deploy in a delivery lock and a 40-minute timeout
 with 60-second TERM grace, alongside existing host operation locks. Host tools
@@ -289,8 +336,13 @@ settings: pinned image, internal memory 512–2048 MiB, container 1536–2560 Mi
 An engine upgrade can change database files; failure after that boundary preserves
 pending state for operator review instead of unsafe downgrade.
 
-Disconnect is not proof of rollback. Inspect host processes/locks, current link,
-logs and SQL health before retry. TERM attempts cleanup; hard kill/power loss
+Disconnect is not proof of rollback. The receiver writes all output to root-only
+`/var/log/campustour/delivery.log` (rotated once at 10 MiB) and ignores a vanished
+SSH reader, so cancelling the workflow or losing the connection no longer stops
+the host deployment mid-step; it continues to success or its own rollback. A
+retry while it runs fails fast on the delivery lock. Inspect
+`sudo tail -n 100 /var/log/campustour/delivery.log`, `sudo campustour-check`,
+host processes/locks, current link and SQL health before retry. TERM attempts cleanup; hard kill/power loss
 uses existing pending-marker recovery. Application interruption restores the
 previous compatible API before continuing; interrupted SQL engine maintenance
 requires recovery review. Never delete a marker to make deployment pass. Remove
