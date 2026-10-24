@@ -190,7 +190,7 @@ if name == "jq":
             '.volumes["sqlserver-data"].name // empty': ("volumes", "sqlserver-data", "name"),
             ".services.api.environment.AllowedHosts // empty": ("services", "api", "environment", "AllowedHosts"),
             ".services.api.image": ("services", "api", "image"),
-            ".services.db-init.image": ("services", "db-init", "image"),
+            '.services["db-init"].image': ("services", "db-init", "image"),
             ".services.sqlserver.image": ("services", "sqlserver", "image"),
             '.services.api.labels["com.smartcampus.deployment.owner"] // empty': ("services", "api", "labels", "com.smartcampus.deployment.owner"),
         }
