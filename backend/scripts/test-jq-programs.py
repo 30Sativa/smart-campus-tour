@@ -9,6 +9,7 @@ or silently selects the wrong value on the EC2 host.
 
 from __future__ import annotations
 
+
 import json
 import os
 import re
@@ -80,6 +81,7 @@ class JqProgramTests(unittest.TestCase):
                 with self.subTest(location=f"{path.relative_to(REPO).as_posix()}:{line}"):
                     result = compile_with_jq(jq, program, arg_names)
                     self.assertNotEqual(JQ_COMPILE_ERROR, result.returncode, result.stderr)
+
 
     def test_image_digest_gates_select_each_compose_service(self) -> None:
         jq = shutil.which("jq")

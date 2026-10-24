@@ -43,6 +43,7 @@ bash scripts/test-backup-upload-failure.sh
 bash scripts/test-certificate-reconciliation.sh
 bash scripts/test-operation-locks.sh
 "$PYTHON" scripts/test-deploy-first-retry.py
+"$PYTHON" scripts/test-jq-programs.py
 "$PYTHON" scripts/test-release-manifest.py
 "$PYTHON" scripts/test-verify-test-results.py
 
