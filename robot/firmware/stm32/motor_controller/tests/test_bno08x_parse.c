@@ -3,6 +3,7 @@
  * Chay: ./scripts/verify.sh
  */
 #include "imu/bno08x_parse.h"
+#include "imu/bno08x.h"   /* chi lay macro cau hinh, khong phu thuoc HAL */
 
 #include <stdio.h>
 #include <string.h>
@@ -39,6 +40,72 @@ static void make_rv(uint8_t *out, int16_t i, int16_t j, int16_t k, int16_t r)
     out[8] = (uint8_t)(k & 0xFF); out[9]  = (uint8_t)((k >> 8) & 0xFF);
     out[10]= (uint8_t)(r & 0xFF); out[11] = (uint8_t)((r >> 8) & 0xFF);
     out[12]= 0x00; out[13] = 0x00;  /* accuracy est */
+}
+
+/* Dung mot game-rotation-vector report (12 byte, khong co accuracy estimate). */
+static void make_grv(uint8_t *out, int16_t i, int16_t j, int16_t k, int16_t r)
+{
+    uint8_t rv[14];
+    make_rv(rv, i, j, k, r);
+    memcpy(out, rv, 12);
+    out[0] = 0x08;
+}
+
+static void test_report_quat(void)
+{
+    printf("test_report_quat\n");
+    float qi, qj, qk, qr, yaw;
+
+    /* Game RV: quay 90 do quanh Z, giua base timestamp va mot GRV khac. */
+    uint8_t pl[5 + 12 + 12];
+    pl[0] = 0xFB; pl[1] = 0x08; pl[2] = 0x08; pl[3] = 0x08; pl[4] = 0x08;
+    make_grv(pl + 5, 0, 0, 0, 16384);                 /* yaw 0, cu hon */
+    make_grv(pl + 17, 0, 0, Q14_90DEG, Q14_90DEG);    /* yaw 90, moi nhat */
+    const uint8_t *r = bno08x_find_report_last(pl, (int)sizeof(pl), 0x08);
+    CHECK(r == pl + 17, "GRV: lay report cuoi, bo qua byte 0x08 trong timestamp");
+    CHECK(bno08x_report_quat(r, &qi, &qj, &qk, &qr) == 1U, "GRV: doc duoc quaternion");
+    bno08x_quat_to_euler(qi, qj, qk, qr, &yaw, NULL, NULL);
+    CHECK_NEAR(yaw, 90.0, 0.05, "GRV: yaw 90 do");
+    CHECK(bno08x_find_report(pl, (int)sizeof(pl), 0x05) == NULL,
+          "GRV khong bi nham thanh rotation vector");
+
+    /* Gia tri am (quay -90 do) va real am van dung dau. */
+    uint8_t g[12];
+    make_grv(g, 0, 0, (int16_t)-Q14_90DEG, Q14_90DEG);
+    CHECK(bno08x_report_quat(g, &qi, &qj, &qk, &qr) == 1U, "GRV am: doc duoc");
+    CHECK_NEAR(qk, -0.7071, 1e-3, "GRV am: k = -0.7071");
+    bno08x_quat_to_euler(qi, qj, qk, qr, &yaw, NULL, NULL);
+    CHECK_NEAR(yaw, -90.0, 0.05, "GRV am: yaw -90 do");
+
+    /* Rotation Vector dung chung bo cuc byte 4..11. */
+    uint8_t rv[14];
+    make_rv(rv, 0, 0, Q14_90DEG, Q14_90DEG);
+    CHECK(bno08x_report_quat(rv, &qi, &qj, &qk, &qr) == 1U, "RV: doc duoc quaternion");
+    CHECK_NEAR(qr, 0.7071, 1e-3, "RV: real = 0.7071");
+
+    /* Report khac / NULL -> tu choi. */
+    uint8_t acc[10] = {0x01};
+    CHECK(bno08x_report_quat(acc, &qi, &qj, &qk, &qr) == 0U, "accelerometer -> tu choi");
+    CHECK(bno08x_report_quat(NULL, &qi, &qj, &qk, &qr) == 0U, "rep NULL -> 0");
+    CHECK(bno08x_report_quat(g, NULL, &qj, &qk, &qr) == 0U, "out NULL -> 0");
+}
+
+static void test_orientation_report_config(void)
+{
+    printf("test_orientation_report_config\n");
+    CHECK(BNO08X_USE_GAME_ROTATION_VECTOR == 1, "mac dinh dung Game Rotation Vector");
+    CHECK(BNO08X_REPORT_GAME_ROTATION_VECTOR == 0x08, "GRV report id = 0x08");
+    CHECK(BNO08X_REPORT_ROTATION_VECTOR == 0x05, "RV report id = 0x05");
+
+    uint8_t pkt[BNO08X_SET_FEATURE_LEN];
+    memset(pkt, 0xAA, sizeof(pkt));
+    CHECK(bno08x_build_set_feature(pkt, 1, BNO08X_REPORT_GAME_ROTATION_VECTOR,
+                                   BNO08X_RV_INTERVAL_MS * 1000U) == 21,
+          "set feature GRV: 21 byte");
+    CHECK(pkt[2] == 2 && pkt[4] == 0xFD && pkt[5] == 0x08, "set feature GRV: channel 2, 0xFD, 0x08");
+    uint32_t iv = (uint32_t)pkt[9] | ((uint32_t)pkt[10] << 8) |
+                  ((uint32_t)pkt[11] << 16) | ((uint32_t)pkt[12] << 24);
+    CHECK(iv == 50000, "set feature GRV: interval 50 ms");
 }
 
 static void test_find_basic(void)
@@ -306,6 +373,8 @@ int main(void)
     test_quat_to_euler();
     test_wrap180();
     test_tare();
+    test_report_quat();
+    test_orientation_report_config();
 
     if (g_fail == 0) { printf("\nTAT CA TEST PASS\n"); return 0; }
     printf("\n%d TEST FAIL\n", g_fail);

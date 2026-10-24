@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
 import type { RealtimeConnectionState } from '../../api/contracts/staff-realtime'
-import { panelClass } from '../staff/StaffUi'
+import { panelClass } from '../../components/ui/ConsolePrimitives'
 import { useNow } from '../staff/use-now'
 import { mapConfigFor } from './map-config'
 import { acceptObservation, observationView, type RobotObservation, type RobotTelemetrySource } from './robot-telemetry'

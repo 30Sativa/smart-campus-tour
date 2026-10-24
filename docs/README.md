@@ -28,6 +28,19 @@ copying them here.
 
 ## 3. Architecture and Product Decisions
 
+The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)
+replaces seed-only business Route/dwell preparation; earlier ADRs retain their
+original text with explicit supersession notices. Usage:
+`web/docs/route-management.md`.
+
+The [Admin Tour backend slice](decisions/0018-admin-tour-management.md) adds
+SCHEDULED creation/update and pre-Start cancellation without frontend/runtime
+integration. API usage: `backend/docs/admin-tour-management.md`.
+
+The [Fleet Sync v1 backend slice](decisions/0019-https-fleet-sync.md) records
+HTTPS telemetry, per-robot credentials and the Staff operations projection.
+Contract fixtures and a Python probe are in `docs/contracts/fleet-sync/v1/`.
+
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility
 gate; check its status before treating it as realized.
@@ -65,3 +78,9 @@ owning unit; they do not become requirements.
    [architecture.md](architecture.md) and the related decision record.
 5. Then inspect the current code, SQL schema, and tests. If target and current
    state differ, preserve the distinction and report the implementation gap.
+
+## 6. Dated technical reviews
+
+- [Backend/Frontend Technical Lead review, 2026-10-14](reviews/2026-10-14-backend-frontend-technical-review.md)
+  — source findings, focused fixes, verification and remaining debt. This is a
+  dated code review, not a replacement for requirements or public contracts.

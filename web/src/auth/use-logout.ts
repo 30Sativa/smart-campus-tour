@@ -16,11 +16,14 @@ export function useLogout() {
   const clearAuth = useAuthStore((state) => state.logout)
 
   return useCallback(async () => {
+    const revision = useAuthStore.getState().sessionRevision
     try {
       await apiClient('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } catch {
       // Local sign-out must still work when the API is unavailable.
     }
+    // A logout started for an older session cannot clear a later explicit login.
+    if (useAuthStore.getState().sessionRevision !== revision) return
     clearAuth()
     navigate('/')
   }, [clearAuth, navigate])

@@ -1,0 +1,7 @@
+.venv/
+*.egg-info/
+build/
+.ruff_cache/
+.env
+evals/reports/
+evals/recorded/partial-*.json

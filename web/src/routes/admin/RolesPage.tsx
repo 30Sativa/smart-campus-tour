@@ -1,5 +1,6 @@
 import { Check, Layers, Minus, ShieldCheck, Users } from 'lucide-react'
-import { CellIcon, PageHeader, PanelHead, StaffPage, SummaryTile, panelClass } from '../../features/staff/StaffUi'
+import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../components/ui/ConsolePrimitives'
+import { AdminPage } from '../../features/administration/AdminUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
 import { STAFF_NAV } from '../../features/staff/staff-nav'
 import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
@@ -60,7 +61,7 @@ export default function RolesPage() {
   const grants = rows.reduce((total, row) => total + row.areas.filter((area) => area.allowed).length, 0)
 
   return (
-    <StaffPage>
+    <AdminPage>
         <PageHeader
           eyebrow="Tham khảo"
           title="Vai trò & quyền"
@@ -156,7 +157,7 @@ export default function RolesPage() {
             description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
           />
           <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-4 lg:divide-y-0">
-            {AREAS.map((area) => (
+            {AREAS.filter((area) => area.id !== 'visitor').map((area) => (
               <div key={area.id} className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-bold text-[#1e293b]">{area.label}</h3>
@@ -175,6 +176,6 @@ export default function RolesPage() {
             ))}
           </div>
         </section>
-    </StaffPage>
+    </AdminPage>
   )
 }

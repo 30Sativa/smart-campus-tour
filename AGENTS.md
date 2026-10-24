@@ -27,7 +27,7 @@ build, its own verification, and its own `AGENTS.md`.
 
 | Folder | What it is | Deploys to | Read before editing |
 |---|---|---|---|
-| `robot/` | ROS 2 Humble workspace + STM32 motor firmware | robot miniPC (Docker image) | `robot/AGENTS.md` |
+| `robot/` | ROS 2 Humble workspace + STM32 motor firmware | robot miniPC (native Ubuntu 22.04; Docker for CI/sim/debug) | `robot/AGENTS.md` |
 | `digital-twin/` | Fleet Emulator, load experiments and synchronization research tooling (WP4) | simulation workstation/server | `digital-twin/AGENTS.md` |
 | `backend/` | Group registration, scheduling & dispatch API | AWS EC2 | `backend/AGENTS.md` |
 | `ai-assistant/` | Single-project-language STT, dialogue/LLM and TTS service (WP4) | server/cloud, not the robot miniPC | `ai-assistant/AGENTS.md` |
@@ -62,6 +62,12 @@ PENDING or requiring approval. If business scope, current implementation,
 schema, and a technical contract conflict, report the conflict and identify
 which document/status applies; do not silently treat a target as implemented
 or change a public contract to make the documents agree.
+
+The owner-authorized Route Management update is recorded in
+`docs/decisions/0017-admin-route-management.md`: Admin CRUD replaces the
+seed-only Route/dwell preparation portions of ADR-0009/0012. Physical
+commissioning remains technical work; pending Tour runtime/branch authoring
+is not implicitly authorized or implemented by that update.
 
 ---
 

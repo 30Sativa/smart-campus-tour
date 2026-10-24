@@ -7,7 +7,11 @@ One process, two jobs:
   long-lived FFmpeg (left eye, 16:9 crop, 1280x720, 30 fps, H.264 constrained
   baseline, no B-frames) that publishes to MediaMTX over RTSP, and restarts
   the pieces with back-off when the Quest, ADB, FFmpeg or MediaMTX fail;
-* a small HTTP server (stdlib only) with ``/status`` and ``/health``.
+* a device monitor thread that, every few seconds, asks ``adb devices -l``
+  whether the Quest is attached / authorised and reads its battery with
+  ``adb shell dumpsys battery`` (separate short adb calls; the video pipeline
+  is not touched);
+* a small HTTP server (stdlib only) with ``/status``, ``/device`` and ``/health``.
 
 Browsers never talk to this process for video: MediaMTX serves the path over
 WebRTC (WHEP, ``http://<NUC>:8889/quest/whep``). Nothing is written to disk
@@ -111,6 +115,7 @@ class Config:
     stall_timeout: float = 10.0  # no bytes from the Quest for this long = stalled
     poll_min: float = 2.0  # device poll back-off while the Quest is missing
     poll_max: float = 10.0
+    device_poll: float = 5.0  # seconds between headset/battery checks for /device
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -144,6 +149,7 @@ class Config:
             keyframe_interval=_env_float("QUEST_KEYFRAME_INTERVAL", 1.0),
             log_dir=Path(_env("QUEST_LOG_DIR", str(MODULE_DIR / "logs"))),
             stall_timeout=_env_float("QUEST_STALL_TIMEOUT", 10.0),
+            device_poll=_env_float("QUEST_DEVICE_POLL", 5.0),
         )
         cfg.validate()
         return cfg
@@ -162,6 +168,8 @@ class Config:
         parts = urlsplit(self.publish_url)
         if parts.scheme not in ("rtsp", "rtsps") or not parts.hostname or len(parts.path) < 2:
             raise SystemExit("CONFIG_ERROR QUEST_PUBLISH_URL must look like rtsp://127.0.0.1:8554/quest")
+        if not 2 <= self.device_poll <= 60:
+            raise SystemExit("CONFIG_ERROR QUEST_DEVICE_POLL must be between 2 and 60 seconds")
         if not 0.2 <= self.keyframe_interval <= 10:
             raise SystemExit("CONFIG_ERROR QUEST_KEYFRAME_INTERVAL must be between 0.2 and 10 seconds")
 
@@ -427,6 +435,167 @@ class Status:
                 "publish": cfg.publish_url_safe,
                 "whepPath": f"/{cfg.path_name}/whep",
             }
+
+
+# --------------------------------------------------------------------------
+# Device monitor: is the Quest attached, and how is its battery?
+# --------------------------------------------------------------------------
+
+#: ``adb devices`` state -> what /device reports.
+ADB_STATE_TO_CONNECTION = {
+    "device": "connected",
+    "unauthorized": "unauthorized",
+    "offline": "offline",
+}
+
+#: BatteryManager.BATTERY_STATUS_* values.
+BATTERY_STATUS = {1: "unknown", 2: "charging", 3: "discharging", 4: "not_charging", 5: "full"}
+
+
+def parse_battery(output: str) -> Optional[dict]:
+    """``adb shell dumpsys battery`` -> {level, charging, plugged, status}.
+
+    ``level`` is a percentage (scaled by ``scale``); ``plugged`` names the
+    power source (AC, USB, Wireless) or None. Returns None when the output has
+    no level (e.g. the command failed).
+    """
+    values: Dict[str, str] = {}
+    for line in output.splitlines():
+        if ":" not in line:
+            continue
+        key, _, value = line.strip().partition(":")
+        values[key.strip().lower()] = value.strip()
+    try:
+        level = int(values["level"])
+    except (KeyError, ValueError):
+        return None
+    try:
+        scale = int(values.get("scale", "100")) or 100
+    except ValueError:
+        scale = 100
+    try:
+        status_code = int(values.get("status", "1"))
+    except ValueError:
+        status_code = 1
+    plugged = next(
+        (name for key, name in (("ac powered", "AC"), ("usb powered", "USB"), ("wireless powered", "Wireless"))
+         if values.get(key) == "true"),
+        None,
+    )
+    status_name = BATTERY_STATUS.get(status_code, "unknown")
+    return {
+        "level": max(0, min(100, round(level * 100 / scale))),
+        "charging": status_name == "charging",
+        "plugged": plugged,
+        "status": status_name,
+    }
+
+
+def read_battery(cfg: Config, serial: str, timeout: float = 5.0) -> Tuple[Optional[dict], str]:
+    """One ``dumpsys battery`` call. Returns (battery or None, error text)."""
+    try:
+        out = subprocess.run(
+            [cfg.adb, "-s", serial, "shell", "dumpsys", "battery"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None, "dumpsys battery timed out"
+    except OSError as exc:
+        return None, f"cannot run adb: {exc}"
+    if out.returncode != 0:
+        return None, (out.stderr.strip() or "dumpsys battery failed")[:200]
+    battery = parse_battery(out.stdout)
+    return (battery, "") if battery else (None, "no battery level in dumpsys output")
+
+
+@dataclass
+class DeviceStatus:
+    """What /device reports about the headset itself (not the video)."""
+
+    connection: str = "unknown"  # connected | unauthorized | offline | not_found | adb_error | unknown
+    reason: str = ""
+    serial: str = ""
+    model: str = ""
+    battery: Optional[dict] = None
+    battery_error: str = ""
+    checked_at: float = 0.0
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def update(self, **values) -> None:
+        with self.lock:
+            for key, value in values.items():
+                setattr(self, key, value)
+            self.checked_at = time.time()
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return {
+                "connection": self.connection,
+                "reason": self.reason,
+                "serial": self.serial,
+                "model": self.model,
+                "battery": dict(self.battery) if self.battery else None,
+                "batteryError": self.battery_error or None,
+                "checkedAt": round(self.checked_at, 3) if self.checked_at else None,
+            }
+
+
+def stream_summary(state: str) -> str:
+    """The video pipeline's state in the dashboard's three words."""
+    if state == "live":
+        return "live"
+    if state in ("starting", "connecting"):
+        return "connecting"
+    return "lost"
+
+
+class DeviceMonitor(threading.Thread):
+    """Polls ``adb devices -l`` and ``dumpsys battery``. Read-only: it never
+    restarts adb or touches the screenrecord/FFmpeg pipeline."""
+
+    def __init__(self, cfg: Config, device: DeviceStatus):
+        super().__init__(name="device-monitor", daemon=True)
+        self.cfg = cfg
+        self.device = device
+        self.stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+
+    def poll_once(self) -> None:
+        try:
+            devices = list_devices(self.cfg)
+        except AdbUnavailable as exc:
+            self.device.update(connection="adb_error", reason=str(exc), battery=None, battery_error="")
+            return
+        if self.cfg.serial:
+            devices = [d for d in devices if d[0] == self.cfg.serial]
+        if not devices:
+            self.device.update(connection="not_found", reason="no ADB device attached",
+                               serial="", model="", battery=None, battery_error="")
+            return
+        ready = [d for d in devices if d[1] == "device"]
+        quests = [d for d in ready if "quest" in d[2].get("model", "").lower()]
+        serial, state, props = (quests or ready or devices)[0]
+        connection = ADB_STATE_TO_CONNECTION.get(state, "offline")
+        model = props.get("model", "").replace("_", " ")
+        if connection != "connected":
+            hint = {"unauthorized": "accept 'Allow USB debugging' in the headset"}.get(state, f"adb state '{state}'")
+            self.device.update(connection=connection, reason=hint, serial=serial, model=model,
+                               battery=None, battery_error="")
+            return
+        battery, error = read_battery(self.cfg, serial)
+        self.device.update(connection="connected", reason="", serial=serial, model=model,
+                           battery=battery, battery_error=error)
+
+    def run(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                self.poll_once()
+            except Exception as exc:  # never let the monitor die
+                log.warning("DEVICE_MONITOR_ERROR %s", exc)
+                self.device.update(connection="unknown", reason=f"monitor error: {exc}")
+            self.stop_event.wait(self.cfg.device_poll)
 
 
 # --------------------------------------------------------------------------
@@ -747,7 +916,7 @@ class Supervisor(threading.Thread):
 # --------------------------------------------------------------------------
 
 
-def make_handler(cfg: Config, status: Status):
+def make_handler(cfg: Config, status: Status, device: Optional[DeviceStatus] = None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "QuestStream/2.0"
 
@@ -786,10 +955,24 @@ def make_handler(cfg: Config, status: Status):
                 return self._json(200, {"ok": True})
             if path == "/status":
                 return self._json(200, status.snapshot(cfg))
+            if path == "/device":
+                # The headset (adb + battery) and the video, kept apart: a
+                # connected headset can still have no live picture.
+                stream = status.snapshot(cfg)
+                body = device.snapshot() if device else DeviceStatus().snapshot()
+                body.update({
+                    "stream": stream_summary(stream["state"]),
+                    "streamState": stream["state"],
+                    "streamReason": stream["reason"],
+                    "pollSeconds": cfg.device_poll,
+                    "now": round(time.time(), 3),
+                })
+                return self._json(200, body)
             if path in ("/", ""):
                 return self._json(200, {
                     "service": "quest-stream",
                     "status": "/status",
+                    "device": "/device",
                     "publish": cfg.publish_url_safe,
                     "webrtc": f"http://<NUC_IP>:8889/{cfg.path_name}/whep",
                 })
@@ -827,9 +1010,11 @@ def main() -> int:
 
     status = Status()
     supervisor = Supervisor(cfg, status)
+    device = DeviceStatus()
+    monitor = DeviceMonitor(cfg, device)
 
     try:
-        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status))
+        httpd = ThreadingHTTPServer((cfg.host, cfg.port), make_handler(cfg, status, device))
     except OSError as exc:
         log.error("HTTP_ERROR cannot listen on %s:%s: %s", cfg.host, cfg.port, exc)
         return 3
@@ -838,6 +1023,7 @@ def main() -> int:
     def shutdown(signum, _frame):
         log.info("Signal %s received, stopping", signum)
         supervisor.stop()
+        monitor.stop()
         threading.Thread(target=httpd.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, shutdown)
@@ -850,10 +1036,12 @@ def main() -> int:
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.bitrate,
     )
     supervisor.start()
+    monitor.start()
     try:
         httpd.serve_forever(poll_interval=0.5)
     finally:
         supervisor.stop()
+        monitor.stop()
         supervisor.join(timeout=10)
         httpd.server_close()
     return 0

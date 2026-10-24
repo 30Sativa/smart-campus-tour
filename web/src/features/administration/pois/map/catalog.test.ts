@@ -11,6 +11,7 @@ describe('occupancy map deployment URL', () => {
     expect(occupancyMapFor('map2-v2', 'odom')).toBeNull()
   })
 
+
   it.each(['/', '/campus/'])('uses Vite base %s for the shared display and sampling URL', async (base) => {
     vi.stubEnv('BASE_URL', base)
     vi.resetModules()

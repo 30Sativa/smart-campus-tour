@@ -1,26 +1,30 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Auth;
-using SmartCampus.Application.Features.Auth.Login;
-using SmartCampus.Application.Features.Auth.Logout;
-using SmartCampus.Application.Features.Auth.Refresh;
+using SmartCampus.Application.Features.Auth.Commands.Login;
+using SmartCampus.Application.Features.Auth.Commands.Logout;
+using SmartCampus.Application.Features.Auth.Queries.Refresh;
 
 namespace SmartCampus.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(ISender sender) : ControllerBase
+public sealed class AuthController(ISender sender, IConfiguration configuration) : ControllerBase
 {
     private const string RefreshCookieName = "campustour.refresh";
 
     [AllowAnonymous]
     [HttpPost("login")]
+    [EnableRateLimiting("AccountLogin")]
     public async Task<ActionResult<AuthResponse>> Login(
         LoginRequest request,
         CancellationToken cancellationToken)
     {
+        CookieRequestOrigin.EnsureAllowed(Request, configuration);
         var session = await sender.Send(
             new LoginCommand(request.Username, request.Password),
             cancellationToken);
@@ -33,6 +37,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [HttpPost("refresh")]
     public async Task<ActionResult<AuthResponse>> Refresh(CancellationToken cancellationToken)
     {
+        CookieRequestOrigin.EnsureAllowed(Request, configuration);
         try
         {
             var session = await sender.Send(
@@ -58,6 +63,7 @@ public sealed class AuthController(ISender sender) : ControllerBase
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
+        CookieRequestOrigin.EnsureAllowed(Request, configuration);
         try
         {
             await sender.Send(

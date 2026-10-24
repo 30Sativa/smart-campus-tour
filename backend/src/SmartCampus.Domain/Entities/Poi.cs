@@ -35,6 +35,8 @@ public partial class Poi
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    public byte[] RowVersion { get; set; } = null!;
+
     public virtual ICollection<RouteStop> RouteStops { get; set; } = new List<RouteStop>();
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();

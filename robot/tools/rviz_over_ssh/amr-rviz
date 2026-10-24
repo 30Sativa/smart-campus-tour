@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Stable operator command. Legacy remains the default until R3 hardware gates pass.
+# Install this as a symlink; preserve the previous script as amr-rviz.legacy.
+set -eo pipefail
+HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+case ${1:-} in
+  --r3) shift ;;
+  -h|--help)
+    echo 'amr-rviz [--legacy]              existing direct-DDS viewer (default)'
+    echo 'amr-rviz --r3 [options] [user@robot]   SSH viewer; default sativa@10.86.7.244'
+    echo 'AMR_ROS_WS_SETUP: laptop workspace setup.bash; AMR_RVIZ_TARGET: SSH target'
+    exit 0 ;;
+  *)
+    [[ ${1:-} != --legacy ]] || shift
+    legacy="${AMR_RVIZ_LEGACY:-$HOME/.local/bin/amr-rviz.legacy}"
+    [[ -x $legacy ]] || { echo "Legacy viewer not found: $legacy" >&2; exit 2; }
+    exec "$legacy" "$@" ;;
+esac
+if [[ -n ${ROS_DISTRO:-} && $ROS_DISTRO != humble ]]; then
+  echo 'Open a clean shell: this viewer requires ROS Humble.' >&2
+  exit 2
+fi
+ws="${AMR_ROS_WS_SETUP:-$HOME/Desktop/smart-campus-tour/robot/ros2_ws/install/setup.bash}"
+[[ -r $ws ]] || { echo "Laptop workspace missing: $ws (set AMR_ROS_WS_SETUP)" >&2; exit 2; }
+source /opt/ros/humble/setup.bash
+source "$ws"
+# The launcher sanitizes DDS after both setup files have run.
+args=("$@")
+has_target=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -n|-p|-r|-c|-e|-f) [[ $# -ge 2 ]] || break; shift 2 ;;
+    --no-rviz|-h|--help) shift ;;
+    -*) break ;;
+    *) has_target=1; break ;;
+  esac
+done
+set -- "${args[@]}"
+[[ $has_target -eq 1 ]] || set -- "$@" "${AMR_RVIZ_TARGET:-sativa@10.86.7.244}"
+exec "$HERE/rviz-over-ssh" "$@"

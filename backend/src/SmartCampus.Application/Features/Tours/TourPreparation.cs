@@ -1,0 +1,40 @@
+using FluentValidation;
+using FluentValidation.Results;
+using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Routes;
+using SmartCampus.Domain.Entities;
+
+namespace SmartCampus.Application.Features.Tours;
+
+internal static class TourPreparation
+{
+    public static TourInput Normalize(TourInput input) => input with
+    {
+        Name = input.Name.Trim(), Description = Optional(input.Description),
+        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime()
+    };
+
+    private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public static void RequireFuture(DateTimeOffset schedule, DateTimeOffset now)
+    {
+        if (schedule <= now)
+            throw new ValidationException([new ValidationFailure("Configuration.ScheduledStartAt", "Lịch Tour mới phải ở tương lai.")]);
+    }
+
+    public static TourPermissions Permissions(Tour tour, TourUsage usage)
+    {
+        var noOperationalUse = !usage.HasOperationalHistory && !usage.HasRobotOwnership;
+        var edit = tour.CanEditPreparation && noOperationalUse;
+        return new(edit, edit && !usage.LocksScheduleAndRoute, tour.CanCancelBeforeStart && noOperationalUse);
+    }
+
+    public static async Task SelectRouteAsync(IRouteManagementRepository routes, Guid id, string expectedVersion, CancellationToken ct)
+    {
+        var route = await routes.FindForTourSelectionAsync(id, ct) ?? throw new NotFoundException("Không tìm thấy Route.");
+        RouteRevision.EnsureCurrent(route, expectedVersion);
+        if (!route.IsActive) throw new ConflictException("Route không còn khả dụng cho Tour mới.", "ROUTE_UNAVAILABLE");
+        RouteConfiguration.EnsureValid(route, true);
+    }
+}

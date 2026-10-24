@@ -1,4 +1,4 @@
-/**/scan_filter_chain:
+/**/scan_range_filter:
   ros__parameters:
     filter1:
       name: range_filter
@@ -38,9 +38,10 @@
         # Nếu sau này map ở không gian nhỏ (phòng < 10 m) mà thấy nhiễu xa thì
         # hạ lại, nhưng ĐỪNG hạ dưới ~1.5x đường chéo của không gian đang map.
         upper_threshold: 25.0
-        # Điểm bị lọc -> đặt thành inf (vô cực), KHÔNG phải 0.
-        # inf = "không có vật ở hướng này", để costmap raytrace/clear đúng.
-        # 0 hoặc NaN sẽ bị hiểu nhầm là vật cản sát robot.
+        # Too-close rejects are invalid measurements, not clear-space rays.
+        # Nav2 ignores NaN; using +Inf here with inf_is_valid=true would
+        # falsely clear behind a close object. Genuine no-return +Inf and
+        # far-range rejects remain available for bounded costmap raytracing.
         use_message_range_limits: false
-        lower_replacement_value: .inf
+        lower_replacement_value: .nan
         upper_replacement_value: .inf

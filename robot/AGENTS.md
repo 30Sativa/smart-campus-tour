@@ -14,18 +14,32 @@ robot/
 ├── firmware/stm32/       STM32G431 motor controller firmware (STM32CubeIDE)
 ├── docker/               container entrypoint
 ├── tools/                PowerShell motor bring-up / debug scripts
-├── docs/                 phase docs (phase1..phase4)
+├── docs/                 current status, operating guides and dated history
 ├── scripts/verify        this folder's verification gate
 ├── scripts/source-minipc `source` it on the miniPC HOST for native ROS procs
 ├── Dockerfile            builds the ROS 2 image (build context = robot/)
 └── docker-compose.yml    what the miniPC runs
 ```
 
+New contributors and AI agents should read **`robot/docs/README.md`** and
+**`robot/docs/project-status.md`** after this guide. The status page separates
+source implementation, offline evidence, hardware evidence, readiness and
+deployment; dated machine snapshots must be rechecked before use.
+
 Architecture, package roles, sensor dataflow and run commands: **`robot/README.md`**.
 Serial contract between the STM32 firmware and `stm32_bridge`:
 **`robot/docs/PROTOCOL_FB.md`** — single source of truth, read it before
 touching either side of the wire.
 Per-phase design, close-out criteria and error tables: **`robot/docs/phase*.md`**.
+Current Nav2 development baseline: **`robot/docs/nav2-baseline-v2.md`** (V2, opt-in,
+not yet fully hardware validated); V1 stays frozen for comparison/rollback in
+**`robot/docs/nav2-baseline-v1.md`**. Latest robot status:
+**`robot/docs/robot-status-2026-10-22.md`**. Nav2 motion metrics, offline sim and
+hardware A/B tools: **`robot/tools/nav2_bench/`** (measure V3+ with the same tools). Current R3 design,
+deployment status and rollback: **`robot/docs/dds-isolation.md`** and
+**`robot/docs/r3-dds-readiness-2026-10-17.md`**. A command written in a runbook
+does not authorize hardware operation; verify the current task and machine
+state first.
 
 ---
 
@@ -56,25 +70,23 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   camera/head hardware. It does not own visitor audio playback, narration, or
   the AI Q&A pipeline; those use the browser/cloud path described in
   `docs/architecture.md`.
-- The **production fleet bridge** for the physical robot lives here (planned:
-  `robot/ros2_ws/src/fleet_bridge/`), not in `backend/`. Its responsibility
-  is `Backend fleet contract ↔ ROS navigation/state`. It is a translator
-  only — ROS 2 on one side, SignalR JSON Hub Protocol over TLS on the other
-  (`/hubs/fleet`, ADR-0008). Python compatibility with ASP.NET Core/.NET 10
-  is unproven and must pass the checkpoint in
-  `docs/decisions/0008-production-fleet-transport.md` before production bridge
-  implementation. It must not contain booking rules, scheduling, or
-  robot-assignment logic; those are
-  backend concerns (`docs/architecture.md` §3). The robot executes one leg at
-  a time; it never receives a full tour to orchestrate. Bridge commands go
-  directly to Nav2 `NavigateToPose`, never straight onto `/cmd_vel`. Use TF
-  `map -> base_footprint` for fleet pose, checking freshness separately from
-  localization readiness. Production has one navigation-goal owner; local stop
-  navigator and RViz goals must not compete with the fleet bridge.
+- The **production fleet bridge** for the physical robot lives here at
+  `robot/ros2_ws/src/fleet_bridge/`, not in `backend/`. R1 implements its
+  telemetry-only path: TF observation and HTTPS Fleet Sync v1
+  (`POST /api/fleet/v1/sync`). It has no Nav2 command path. See
+  `docs/contracts/fleet-sync/v1/` and ADR-0019. Python HTTPS/TLS compatibility
+  in the native ROS Humble environment and the deployment proxy remain R1
+  verification gates. The bridge must not contain booking rules, scheduling,
+  or robot-assignment logic; those are backend concerns
+  (`docs/architecture.md` §3). Use TF `map -> base_footprint` for fleet pose,
+  checking freshness separately from localization readiness. Any future,
+  separately approved command path must use Nav2 `NavigateToPose`, never write
+  directly to `/cmd_vel`; production must have one navigation-goal owner so
+  local stop navigator and RViz goals do not compete with it.
   The existing `gazebo_preview_bridge` is a separate development-only path:
   Gazebo → local SimulationPreview backend. It is not physical-robot
-  telemetry or the production fleet transport, and the future production
-  package must not depend on Gazebo or simulation.
+  telemetry or the production fleet transport, and `fleet_bridge` must not
+  depend on Gazebo or simulation.
 - Before physical fleet-command operation, implement and hardware-test the
   local connectivity-loss stop/inhibit and no-auto-resume policy in
   `docs/architecture.md` Section 6, including bridge crash and unknown Nav2
@@ -97,6 +109,14 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
   `ros2 node info`) temporarily incomplete even while topics carry data. Follow
   the troubleshooting note in `docs/network-ros-discovery.md` before declaring
   a node or endpoint unavailable.
+- For runtime logs and rosbag captures, read `robot/docs/logging.md` first.
+  Use the machine-local `$HOME/amr_logs/runs/` root, one new directory per
+  test session. Set `ROS_LOG_DIR` before launch; keep launch output, goal output,
+  bags and the session notes together. Do not create new captures in the old
+  `$HOME/amr_bags/` root, overwrite a prior session, or delete active captures.
+  Store compressed historical captures in `$HOME/amr_logs/archive/`; never
+  commit logs or bags. A recorder is not proof that every required topic was
+  received: check its actual topic list and timestamps before diagnosing.
 
 <!-- TODO(Duy): thêm rule kiến trúc mới ở đây mỗi khi agent làm sai một lần. Đây là chỗ harness "học". -->
 
@@ -174,18 +194,15 @@ These exist because getting them wrong destroys hardware or wastes a lab day.
   compose file depend on them.
 - The Docker build context is `robot/`. Paths inside `Dockerfile` are relative
   to `robot/`, not to the repo root.
-- The drivetrain, navigation, and main ROS runtime deploy as a Docker image:
-  build in CI, push to DockerHub, pull on the miniPC. There is no normal path
-  to build the full ROS stack on the naked miniPC host. The Astra Pro's native
-  host bring-up is a hardware exception for the camera package only; it does
-  not authorize duplicate STM32, Nav2, or robot-control nodes outside the
-  container.
-  See `docs/decisions/0003-deploy-robot-via-docker-image.md`.
-- **Exception, TEST phase only:** the `hardware` service currently bind-mounts
-  `./ros2_ws/src:/ros2_ws/src` so a fix can be built in the container without a
-  CI round trip. This is temporary and marked as such in `docker-compose.yml`.
-  Remove the mount before production so what runs matches the image. This
-  container overlay exception is separate from the native Astra Pro camera
-  bring-up described in ADR-0003.
+- The physical drivetrain, navigation, and main ROS runtime build and run natively
+  on Ubuntu 22.04 + ROS 2 Humble on the single miniPC. Use
+  `scripts/install-native`, `scripts/build-native`, and `scripts/source-minipc`;
+  do not start duplicate host/container nodes. Docker remains for CI image
+  builds, laptop debug, and simulation. See `docs/native-runtime.md`.
+- The physical miniPC has no Docker hardware service. A deployed native
+  overlay may sit above the checked-in workspace; inspect
+  `robot/docs/project-status.md` and the live process environment before
+  assuming which checkout supplies a running node. Debug/sim Docker profiles
+  remain available for development and CI/reference images.
 
 <!-- TODO(Duy): thêm constraint phần cứng khác nếu có (giới hạn dòng motor, tốc độ tối đa, vùng cấm...). -->

@@ -1,4 +1,5 @@
 import { resolveWhepUrl } from './whep'
+import { resolveDeviceUrl } from './quest-device'
 
 /**
  * WebRTC (WHEP) endpoint of the Quest 3 live stream: MediaMTX on the robot
@@ -26,3 +27,14 @@ export const QUEST_ICE_SERVERS: RTCIceServer[] = (import.meta.env.VITE_QUEST_ICE
   .map((url) => url.trim())
   .filter(Boolean)
   .map((urls) => ({ urls }))
+
+/**
+ * Headset status (adb connection, battery, charging) served by quest-stream on
+ * the miniPC: `http://<NUC_IP>:8080/device` (`http://<NUC_IP>:8080` works too).
+ * Unset = the Staff dashboard says the headset monitor is not configured.
+ */
+export const QUEST_STATUS_URL: string | null = resolveDeviceUrl(import.meta.env.VITE_QUEST_STATUS_URL)
+
+if (import.meta.env.VITE_QUEST_STATUS_URL?.trim() && !QUEST_STATUS_URL) {
+  console.warn('[quest-stream] VITE_QUEST_STATUS_URL is not a URL like http://<NUC_IP>:8080/device')
+}

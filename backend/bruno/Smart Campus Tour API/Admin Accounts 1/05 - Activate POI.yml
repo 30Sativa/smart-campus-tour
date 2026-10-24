@@ -1,0 +1,24 @@
+info:
+  name: 05 - Activate POI
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/admin/pois/{{poiId}}/activate"
+  body:
+    type: json
+    data: |-
+      {
+        "expectedRowVersion": "AAAAAAAAJxI="
+      }
+  auth:
+    type: bearer
+    token: "{{accessToken}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

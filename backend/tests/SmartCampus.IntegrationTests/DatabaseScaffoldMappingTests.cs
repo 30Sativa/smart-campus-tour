@@ -56,7 +56,7 @@ public sealed class DatabaseScaffoldMappingTests
                  {
                      typeof(Robot), typeof(Tour), typeof(GroupRegistration),
                      typeof(RosterRow), typeof(Invitation), typeof(BranchRequest),
-                     typeof(TourAllowedBranch)
+                     typeof(TourAllowedBranch), typeof(Poi)
                  })
         {
             var rowVersion = context.Model.FindEntityType(entityType)!

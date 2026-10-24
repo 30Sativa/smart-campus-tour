@@ -17,7 +17,7 @@ STM32
         -> FB feedback
         -> stm32_bridge_node
         +-> /wheel/odom (STEP-count wheel odometry)
-        +-> /imu/data   (BNO085 Rotation Vector yaw)
+        +-> /imu/data   (BNO085 Game Rotation Vector yaw)
                 -> robot_localization EKF
                 -> /odom + TF odom -> base_footprint
 ```
@@ -134,8 +134,9 @@ The real `robot_control/manual_mode.launch.py` always passes
 only `odom -> base_footprint` TF owner. Repeated cached IMU measurements with
 the same `(yaw, yaw_acc)` are not republished. A wheel sample without a valid
 delta or time interval is dropped instead of publishing a fake zero twist.
-`imu0_relative: true` makes the first BNO085 yaw the relative odom reference,
-so startup does not snap to magnetic north. SLAM or AMCL remains responsible
+`imu0_relative: true` makes the first BNO085 yaw the relative odom reference.
+The default firmware streams Game Rotation Vector (no magnetometer), so yaw is
+relative and never jumps when a magnetometer calibrates. SLAM or AMCL remains responsible
 for `map -> odom`.
 
 Default drivetrain values match the current firmware notes:
@@ -214,6 +215,18 @@ passes the command through before the `250 mm/s` pair-scaling limit. The `1600`
 value in firmware is the HBS57H driver resolution in pulses per motor
 revolution, not a wheel speed.
 
+The supervised Nav2 trial requests `0.24 m/s` forward and `0.45 rad/s` for
+in-place turns. At the real calibrated `wheel_base=0.4714 m`, these separately
+need `240/240 mm/s` and opposite `106.065 mm/s` wheels, so the unchanged cap
+passes them (commands are rounded to integer mm/s). Combined maxima need an
+outer wheel of `346.065 mm/s`; pair scaling still produces `97/250 mm/s` or
+the reverse. Before rounding, the effective twist is approximately
+`0.1734 m/s, 0.3251 rad/s`, preserving curvature. Do not raise the wheel cap
+or alter calibration just to remove this expected warning. Installed motor
+inversion changes signs afterward. See `robot/docs/nav2-turn-test.md` for
+runtime checks, hardware acceptance and rollback; no bridge/firmware code is
+changed by this trial.
+
 ## Run Teleop
 
 In another terminal:
@@ -272,6 +285,9 @@ ros2 run tf2_tools view_frames
 | `publish_imu` | `true` | Publish valid BNO085 orientation samples |
 | `imu_topic` | `imu/data` | Relative IMU topic name |
 | `imu_frame` | `imu_link` | IMU message frame |
+| `imu_orientation_report` | `game_rotation_vector` | Must match firmware `BNO08X_USE_GAME_ROTATION_VECTOR`. `game_rotation_vector`: fixed yaw variance 0.01 (no magnetometer, `yaw_acc` ignored). `rotation_vector`: variance from `yaw_acc` |
+| `imu_stale_timeout` | `1.0` | Seconds without FB `yaw_valid=1` before the bridge warns that the IMU is missing (checked at 1 Hz, so the warning arrives 1-2 s after the last sample) (EKF then uses wheel odometry only) and reports WARN on `/diagnostics` (`<node>: imu`). Recovery is logged with the outage length. Publishing is unchanged |
+| `odom_linear_scale` | `1.0` | Localization V2: multiplies only the **translation** integrated from STEP counts (pose and `twist.linear.x`). Rotation, commands sent to the STM32, `joint_states` and `wheel_radius` are unchanged. Values outside [0.8, 1.2] fall back to 1.0. Set it from a measured straight run (`robot/tools/odom_calibration`); see `robot/docs/localization-v2.md` |
 | `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |

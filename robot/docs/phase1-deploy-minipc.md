@@ -1,5 +1,13 @@
 # Phase 1 → miniPC deploy checklist
 
+> **Historical checklist.** The old `fleet-management-system` clone path and
+> camera-only build steps below predate the native MiniPC deployment. Do not
+> use them to provision or update the current robot. Follow
+> [native-runtime.md](native-runtime.md) and
+> [robot/README.md](../README.md) for current host setup and layered bring-up.
+> The Phase 1 observations and measurements are retained as historical
+> evidence.
+
 Camera đã chứng minh chạy đúng trên VMware (RGB+Depth+PointCloud+TF vào RViz2).
 Việc còn lại là chạy trên miniPC — nơi RGB sẽ đạt tốc độ thật và ổn định.
 Tài liệu này ghi lại chính xác những gì đã học được để miniPC không vấp lại.
@@ -81,9 +89,9 @@ thật từ `base_link` (tâm robot) tới thân camera, đơn vị mét, ROS co
 
 Calibrate RGB intrinsics → align depth↔color (`depth_image_proc`) →
 depth→laserscan for Nav2. The Astra Pro host exception remains camera-only;
-drivetrain and navigation continue to use the Docker runtime.
+drivetrain and navigation run natively from the same workspace; Docker remains only for development/simulation.
 
-This native host procedure is only for Astra Pro and `orbbec_bringup`. The
-drivetrain, navigation, and main ROS runtime still deploy from the prebuilt
-Docker image. Do not build the full workspace on the miniPC host or run
-duplicate STM32, Nav2, or `robot_control` nodes there; see ADR-0003.
+The Astra setup is one step in the native miniPC workflow. Build the complete
+workspace with `robot/scripts/build-native` and run the layered baseline in
+`robot/docs/native-runtime.md`. Do not run duplicate STM32, Nav2, or
+`robot_control` nodes in containers.

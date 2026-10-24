@@ -1,4 +1,4 @@
-import { ConfirmationDialog } from '../../../staff/components/ConfirmationDialog'
+import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
 import { useDeactivateAccount, useReactivateAccount } from '../hooks'
 import { accountRequestError } from '../errors'
 import type { AccountLifecycleAction } from './AccountTable'

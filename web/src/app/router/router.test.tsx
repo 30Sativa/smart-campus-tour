@@ -48,11 +48,23 @@ const settled = (router: ReturnType<typeof createMemoryRouter>, path: string) =>
   waitFor(() => expect(router.state.location.pathname).toBe(path))
 
 describe('route table', () => {
+
+
+
+
   // Compile both dashboards before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
     await import('../../routes/admin/AdminDashboardPage')
     await import('../../routes/staff/OverviewPage')
   }, 30_000)
+
+
+
+
+  // Compile the dashboard's chart chunk before timing session/guard behavior.
+  beforeAll(async () => { await import('../../routes/admin/AdminDashboardPage') }, 30_000)
+
+
   beforeEach(() => useAuthStore.getState().setAuthReady())
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -70,7 +82,8 @@ describe('route table', () => {
           role: 'Admin',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
-      return new Response(JSON.stringify({ success: true, data: [] }), {
+      return new Response(JSON.stringify({ success: true, data: [],
+        pagination: { page: 1, pageSize: 1, totalItems: 0, totalPages: 0 } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -79,8 +92,10 @@ describe('route table', () => {
     const router = renderWithBootstrapAt('/admin')
 
     await settled(router, '/admin')
-    // AdminDashboardPage passes this current title to PageHeader; the old title is absent.
-    expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
+
+    expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).not.toBeInTheDocument()
+
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
       method: 'POST',
@@ -132,18 +147,24 @@ describe('route table', () => {
       await settled(router, '/staff')
     })
 
+    it.each(['/admin/routes', '/admin/routes/new', '/admin/routes/sql-id', '/admin/routes/sql-id/edit'])('guards Route management at %s', async path => {
+      signIn('Staff')
+      const router = renderAt(path)
+      await settled(router, '/staff')
+    })
+
     it('lets an operator into /staff', async () => {
       signIn('Staff')
       const router = renderAt('/staff')
       await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tình hình điều hành/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
     it('lets an administrator into /staff as well', async () => {
       signIn('Admin')
       const router = renderAt('/staff')
       await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tình hình điều hành/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
     it('still accepts a token minted before the operations roles were merged', async () => {
@@ -158,8 +179,8 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt('/admin')
       await settled(router, '/admin')
-      expect(await screen.findByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: /Tình hình điều hành/i })).toBeNull()
+      expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /Tổng quan vận hành/i })).toBeNull()
     })
 
     it('keeps /admin/roles as a real route rather than a legacy redirect', async () => {
@@ -192,15 +213,12 @@ describe('route table', () => {
 
     it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
       signIn('Admin')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
       const router = renderAt('/admin/tours/tour-03')
       await settled(router, '/admin/tours/tour-03')
-
-      // AdminTourDetailPage renders the tour name in h2 and its code in h1.
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
-
-      expect(await screen.findByRole('heading', { name: /Tour T-03/i, level: 1 })).toBeInTheDocument()
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
-
+      // The live detail page asks the Tour API; an unknown id stays on the admin page.
+      expect(await screen.findByText(/Không tìm thấy Tour/)).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/admin/tours/tour-03')
     })
 
     it('keeps a mistyped admin path inside administration', async () => {

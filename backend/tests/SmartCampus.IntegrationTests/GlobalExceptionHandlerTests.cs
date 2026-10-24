@@ -63,6 +63,54 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_RepresentativeConflict_ReturnsCodeAndFields()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+        var fields = new Dictionary<string, string[]> { ["Roster[0].Email"] = ["Email đã được đăng ký trong Tour này."] };
+
+        await handler.TryHandleAsync(context,
+            new ConflictException("Có email đã được đăng ký trong Tour này.", "EMAIL_RESERVED", fields),
+            CancellationToken.None);
+
+        using var response = await ReadResponseAsync(context);
+        var errors = response.RootElement.GetProperty("errors");
+        Assert.Equal("EMAIL_RESERVED", errors.GetProperty("code").GetString());
+        Assert.Equal("Email đã được đăng ký trong Tour này.",
+            errors.GetProperty("fields").GetProperty("Roster[0].Email")[0].GetString());
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_AssistantErrors_ReturnTheirCodes()
+    {
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+        foreach (var (exception, code) in new (Exception, string)[]
+        {
+            (new TooManyRequestsException("Slow down."), "RATE_LIMITED"),
+            (new ServiceUnavailableException("Assistant down.", "AI_UNAVAILABLE"), "AI_UNAVAILABLE"),
+            (new GatewayTimeoutException("Assistant slow.", "AI_TIMEOUT"), "AI_TIMEOUT")
+        })
+        {
+            var context = CreateHttpContext();
+            await handler.TryHandleAsync(context, exception, CancellationToken.None);
+            using var response = await ReadResponseAsync(context);
+            Assert.Equal(code, response.RootElement.GetProperty("errors").GetProperty("code").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_GenericConflict_PreservesNullErrors()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, new ConflictException("Robot is already assigned."), CancellationToken.None);
+
+        using var response = await ReadResponseAsync(context);
+        Assert.Equal(JsonValueKind.Null, response.RootElement.GetProperty("errors").ValueKind);
+    }
+
+    [Fact]
     public async Task TryHandleAsync_UnexpectedException_DoesNotExposeDetails()
     {
         var context = CreateHttpContext();
@@ -83,12 +131,32 @@ public sealed class GlobalExceptionHandlerTests
         Assert.DoesNotContain("Sensitive database detail.", json);
     }
 
+    [Fact]
+    public async Task UnexpectedLogs_KeepCorrelationWithoutExceptionMessagesOrPrivateData()
+    {
+        var context = CreateHttpContext();
+        context.TraceIdentifier = "synthetic-trace-id";
+        var logger = new RecordingLogger<GlobalExceptionHandler>();
+        await new GlobalExceptionHandler(logger).TryHandleAsync(context,
+            new InvalidOperationException("private question; viewer@example.test; secret-token"), default);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains(nameof(InvalidOperationException), entry);
+        Assert.DoesNotContain("private question", entry);
+        Assert.DoesNotContain("viewer@example.test", entry);
+        Assert.DoesNotContain("secret-token", entry);
+        Assert.Contains("SQL error", entry);
+    }
+
     public static TheoryData<Exception, HttpStatusCode> ExpectedErrorMappings => new()
     {
         { new ValidationException([]), HttpStatusCode.BadRequest },
         { new DomainException("Domain rule failed."), HttpStatusCode.BadRequest },
+        { new UnauthorizedException("A valid account identity is required."), HttpStatusCode.Unauthorized },
         { new NotFoundException("Robot was not found."), HttpStatusCode.NotFound },
         { new ConflictException("Robot is already assigned."), HttpStatusCode.Conflict },
+        { new TooManyRequestsException("Slow down."), HttpStatusCode.TooManyRequests },
+        { new ServiceUnavailableException("Assistant down.", "AI_UNAVAILABLE"), HttpStatusCode.ServiceUnavailable },
+        { new GatewayTimeoutException("Assistant slow.", "AI_TIMEOUT"), HttpStatusCode.GatewayTimeout },
         { new Exception("Unexpected."), HttpStatusCode.InternalServerError }
     };
 

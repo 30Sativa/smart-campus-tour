@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { DigitalTwinCanvas } from '../../three/DigitalTwinCanvas'
-import { panelClass } from '../staff/StaffUi'
+import { DigitalTwinCanvas } from './DigitalTwinCanvas'
+import { panelClass } from '../../components/ui/ConsolePrimitives'
 import { DEMO_DURATION, DEMO_SPEED, demoPose } from './demo-motion'
 
 const buttonClass = 'rounded-lg border border-[#dce9fb] bg-white px-3 py-2 text-sm font-semibold text-[#40546f] hover:bg-[#eaf4ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4f8df7]'

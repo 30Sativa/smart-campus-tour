@@ -1,92 +1,43 @@
-import { useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { Plus } from 'lucide-react'
-import type { TourState } from '../../api/contracts/admin'
-import { FilterChips, PageHeader, Pagination, SearchField, panelClass } from '../../features/staff/StaffUi'
-import { usePagination } from '../../features/staff/use-pagination'
-import { buttonClass } from '../../features/staff/ui-classes'
-import { AdminErrorPanel, AdminPage, DateRangeFilter, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
-import { useAdminTours } from '../../features/administration/admin-hooks'
-import { rangeFor, type DateRangeKey } from '../../features/administration/admin-format'
-import { TOUR_STATE, TOUR_STATES } from '../../features/administration/admin-status'
-import { AdminTourTable } from '../../features/administration/components/TourParts'
+import { PageHeader, Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass, inputClass } from '../../components/ui/ui-classes'
+import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../features/administration/AdminUi'
+import { formatSlot } from '../../features/administration/admin-format'
+import { useDebouncedValue } from '../../features/administration/use-debounced-value'
+import { useTours } from '../../features/administration/tours/hooks'
+import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
+import type { TourState } from '../../features/administration/tours/types'
 
-const DATE_OPTIONS: Array<{ value: DateRangeKey; label: string }> = [
-  { value: 'all', label: 'Mọi ngày' },
-  { value: 'today', label: 'Hôm nay' },
-  { value: 'week', label: 'Tuần này' },
-  { value: 'custom', label: 'Khoảng ngày' },
-]
+const PAGE_SIZE = 20
 
-/**
- * "Quản lý Tour": every Tour, any state, filterable by name, state and date.
- * Filters live in the URL so the dashboard can link straight into a view.
- */
 export default function AdminTourListPage() {
-  const [params, setParams] = useSearchParams()
-  const q = params.get('q') ?? ''
-  const state = (params.get('state') as TourState | null) ?? null
-  const date = (params.get('date') as DateRangeKey | null) ?? 'all'
-  const custom = { from: params.get('from') ?? '', to: params.get('to') ?? '' }
-  const range = rangeFor(date, new Date(), custom)
-  const filters = useMemo(() => ({ q: q.trim() || undefined, from: range.from, to: range.to }), [q, range.from, range.to])
-  const tours = useAdminTours(filters)
-
-  const update = (changes: Record<string, string | null>) =>
-    setParams((current) => {
-      const next = new URLSearchParams(current)
-      for (const [key, value] of Object.entries(changes)) {
-        if (value) next.set(key, value)
-        else next.delete(key)
-      }
-      return next
-    }, { replace: true })
-
-  const rows = (tours.data ?? []).filter((tour) => !state || tour.state === state)
-  const count = (value: TourState) => (tours.data ?? []).filter((tour) => tour.state === value).length
-  const filtered = Boolean(q || state || date !== 'all')
-  const paged = usePagination(rows, 10, `${q}|${state}|${date}|${custom.from}|${custom.to}`)
-
-  return (
-    <AdminPage>
-      <PageHeader
-        eyebrow="Quản lý Tour"
-        title="Quản lý Tour"
-        description="Tạo Tour, theo dõi đăng ký của từng Tour và chốt Tour khi đủ điều kiện. Tour đang diễn ra và đã kết thúc chỉ xem."
-        action={<Link to="/admin/tours/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo Tour mới</Link>}
-      />
-
-      <section className={panelClass} aria-label="Danh sách Tour">
-        <div className="space-y-3 border-b border-[#f1f5f9] p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-            <SearchField value={q} onChange={(value) => update({ q: value || null })} label="Tìm theo tên Tour" placeholder="Tìm theo tên Tour..." className="w-full lg:max-w-sm" />
-            <DateRangeFilter label="Lọc theo ngày" value={date} from={custom.from} to={custom.to} options={DATE_OPTIONS} onChange={(next) => update({ date: next.date === 'all' ? null : next.date, from: next.from || null, to: next.to || null })} />
-          </div>
-          <FilterChips<TourState | 'all'>
-            label="Lọc theo trạng thái"
-            value={state ?? 'all'}
-            onChange={(value) => update({ state: value === 'all' ? null : value })}
-            options={[{ value: 'all', label: 'Tất cả', count: tours.data?.length }, ...TOUR_STATES.map((value) => ({ value, label: TOUR_STATE[value].label, count: tours.data ? count(value) : undefined }))]}
-          />
-        </div>
-
-        {tours.isError ? (
-          <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách Tour." onRetry={() => void tours.refetch()} /></div>
-        ) : tours.isLoading ? (
-          <SkeletonRows rows={6} label="Đang tải danh sách Tour" />
-        ) : rows.length === 0 ? (
-          filtered ? (
-            <EmptyState title="Không có Tour nào khớp bộ lọc" action={<button type="button" onClick={() => setParams({}, { replace: true })} className={buttonClass('secondary', 'sm')}>Xóa bộ lọc</button>} />
-          ) : (
-            <EmptyState title="Chưa có Tour nào" description="Tạo Tour, chọn tuyến đã chuẩn bị, rồi đại diện trường có thể đăng ký." action={<Link to="/admin/tours/new" className={buttonClass('primary', 'sm')}>Tạo Tour đầu tiên</Link>} />
-          )
-        ) : (
-          <>
-            <AdminTourTable tours={paged.rows} label="Danh sách Tour" />
-            <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang danh sách Tour" />
-          </>
-        )}
-      </section>
-    </AdminPage>
-  )
+  const [search, setSearch] = useState('')
+  const [state, setState] = useState<TourState | ''>('SCHEDULED')
+  const [page, setPage] = useState(1)
+  const term = useDebouncedValue(search, 300)
+  const tours = useTours({ search: term, state: state || undefined, page, size: PAGE_SIZE })
+  return <AdminPage>
+    <PageHeader eyebrow="Tour" title="Quản lý Tour" description="Tạo Tour từ tuyến khả dụng để đại diện trường đăng ký đoàn. Tour đang diễn ra và đã kết thúc chỉ xem."
+      action={<Link to="/admin/tours/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo Tour mới</Link>} />
+    <section className={panelClass} aria-label="Danh sách Tour">
+      <div className="flex flex-wrap gap-3 border-b border-[#e2e8f0] p-4">
+        <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" />
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={state} onChange={e => { setState(e.target.value as TourState | ''); setPage(1) }}>
+          <option value="">Tất cả</option>
+          {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_LABEL[s]}</option>)}
+        </select></label>
+      </div>
+      {tours.isError ? <AdminErrorPanel title={tourError(tours.error)} onRetry={() => void tours.refetch()} /> : tours.isPending ? <SkeletonRows rows={4} label="Đang tải danh sách Tour" /> : tours.data.data.length === 0 ?
+        <EmptyState title="Chưa có Tour phù hợp" description="Tạo Tour mới từ một tuyến khả dụng hoặc đổi bộ lọc." /> :
+        <ul className="divide-y divide-[#e2e8f0]">{tours.data.data.map(tour => <li key={tour.id}>
+          <Link to={`/admin/tours/${tour.id}`} className="flex flex-wrap items-center justify-between gap-3 p-5 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
+            <div><p className="text-[15px] font-semibold text-[#173b59]">{tour.name}</p><p className="mt-1 text-sm text-[#64748b]">{formatSlot(tour.scheduledStartAt)} · {tour.routeName} · {tour.registrationCount} đoàn đăng ký</p></div>
+            <span className="rounded-full border border-[#d9e9f5] px-3 py-1 text-xs">{TOUR_STATE_LABEL[tour.state]}</span>
+          </Link>
+        </li>)}</ul>}
+      {tours.data && <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Tour" />}
+    </section>
+  </AdminPage>
 }

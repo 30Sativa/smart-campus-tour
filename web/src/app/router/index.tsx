@@ -30,6 +30,8 @@ import { homePathForRole } from '../../auth/roles'
  * chunk an operator opening `/staff` downloaded all of it before seeing a tour.
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
+const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
+const QuestIntercomPage = lazy(() => import('../../routes/staff/QuestIntercomPage'))
 
 const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
 const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
@@ -45,7 +47,7 @@ const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsP
 const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
 const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
-// Students join a remote tour with the group code, no account (flow review 21/09/2026 §5).
+// SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
 const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'))
 
 // School representative (flow review 21/09/2026 §4).
@@ -56,6 +58,7 @@ const RepTourDetailPage = lazy(() => import('../../routes/representative/RepTour
 const RepRegisterPage = lazy(() => import('../../routes/representative/RepRegisterPage'))
 const RepRegistrationsPage = lazy(() => import('../../routes/representative/RepRegistrationsPage'))
 const RepRegistrationDetailPage = lazy(() => import('../../routes/representative/RepRegistrationDetailPage'))
+const RepProfilePage = lazy(() => import('../../routes/representative/RepProfilePage'))
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
@@ -67,6 +70,7 @@ const LiveOperationsPage = lazy(() => import('../../routes/staff/LiveOperationsP
 const RobotPage = lazy(() => import('../../routes/staff/RobotPage'))
 const TourHistoryPage = lazy(() => import('../../routes/staff/TourHistoryPage'))
 const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
+const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
 const AdminDashboardPage = lazy(() => import('../../routes/admin/AdminDashboardPage'))
@@ -76,8 +80,12 @@ const AdminTourDetailPage = lazy(() => import('../../routes/admin/AdminTourDetai
 const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPage'))
 const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
 const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
+const AdminRouteDetailsPage = lazy(() => import('../../routes/admin/AdminRouteDetailsPage'))
+const AdminRouteFormPage = lazy(() => import('../../routes/admin/AdminRouteFormPage'))
 const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
+const AdminPoisPage = lazy(() => import('../../routes/admin/AdminPoisPage'))
+const AdminPoiFormPage = lazy(() => import('../../routes/admin/AdminPoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 function ShellFallback({ background }: { background: string }) {
@@ -162,6 +170,7 @@ function AdminArea() {
  * clicking through a running app is behaviour that quietly regresses.
  */
 export const routes = [
+  { path: '/quest/intercom', element: <Suspense fallback={<ShellFallback background="#f5f7f8" />}><QuestAudioPage /></Suspense> },
   {
     path: '/',
     element: (
@@ -205,6 +214,7 @@ export const routes = [
       { path: 'dang-ky', element: <RepRegistrationsPage /> },
       { path: 'dang-ky/:registrationId', element: <RepRegistrationDetailPage /> },
       { path: 'dang-ky/:registrationId/sua', element: <RepRegisterPage /> },
+      { path: 'ho-so', element: <RepProfilePage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/dai-dien" replace /> },
     ],
@@ -237,6 +247,7 @@ export const routes = [
     element: <StaffArea />,
     children: [
       { index: true, element: <OverviewPage /> },
+      { path: 'intercom', element: <QuestIntercomPage /> },
       // Sessions (remote-tour scope): today's list, any day, detail & log,
       // and the pre-start check for a Ready one.
       { path: 'tours', element: <ToursTodayPage /> },
@@ -249,6 +260,7 @@ export const routes = [
       { path: 'robot', element: <RobotPage /> },
       { path: 'digital-twin', element: <DigitalTwinPage /> },
       { path: 'history', element: <TourHistoryPage /> },
+      { path: 'profile', element: <StaffProfilePage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.
       { path: 'amr', element: <Navigate to="/staff/robot" replace /> },
@@ -271,8 +283,14 @@ export const routes = [
       { path: 'registrations', element: <AdminRegistrationsPage mode="all" /> },
       { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
       { path: 'routes', element: <AdminRouteCatalogPage /> },
+      { path: 'routes/new', element: <AdminRouteFormPage /> },
+      { path: 'routes/:routeId', element: <AdminRouteDetailsPage /> },
+      { path: 'routes/:routeId/edit', element: <AdminRouteFormPage /> },
       { path: 'history', element: <AdminTourHistoryPage /> },
       { path: 'accounts', element: <AdminAccountsPage /> },
+      { path: 'pois', element: <AdminPoisPage /> },
+      { path: 'pois/new', element: <AdminPoiFormPage /> },
+      { path: 'pois/:poiId', element: <AdminPoiFormPage /> },
       { path: 'roles', element: <RolesPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },

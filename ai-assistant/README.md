@@ -31,9 +31,17 @@ not own visitor audio playback, narration or AI dialogue.
 
 ## Status
 
-**Not started.** The runtime stack and robot/backend integration contract are
-not decided. Define the transport, schemas, authentication, timeouts and
-offline fallback in `docs/architecture.md` before implementing either side.
+**Text Q&A implemented end to end.** `POST /v1/answer` and `GET /health`
+follow `docs/architecture.md` §7.1 (stack: ADR-0016, Python + Starlette, Gemini
+through a provider adapter). The backend exposes
+`POST /api/student/tours/{tourId}/questions` and the invited Student page shows
+the chat while the Tour is RUNNING. Three campus content files are approved;
+the last live evaluation passed 63 of 64 gradable questions.
+
+Not done yet: nothing writes Tour progress, so the POI snapshot stays `null`; POI
+and school content files are still drafts, STT/TTS are undecided, and there is
+no load test or container image. Local end-to-end run:
+`backend/docs/student-ai-local.md`.
 
 ## Verification
 
@@ -41,5 +49,6 @@ offline fallback in `docs/architecture.md` before implementing either side.
 ai-assistant/scripts/verify
 ```
 
-The script currently returns `SKIPPED` until source and a real verification
-pipeline are added.
+Runs the content checks, ruff (when installed), the unit tests and an offline
+replay of `evals/recorded/latest.json`. One-time setup and the live evaluation
+command are in `AGENTS.md` §4.

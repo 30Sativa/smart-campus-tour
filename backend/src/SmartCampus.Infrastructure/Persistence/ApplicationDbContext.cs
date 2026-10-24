@@ -229,6 +229,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.MapFrame).HasMaxLength(100);
             entity.Property(e => e.MapKey).HasMaxLength(100);
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
             entity.Property(e => e.X).HasColumnType("decimal(10, 4)");
             entity.Property(e => e.Y).HasColumnType("decimal(10, 4)");

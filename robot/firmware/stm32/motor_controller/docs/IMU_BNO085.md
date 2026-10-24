@@ -62,6 +62,9 @@ Ghi chú: `CLK` chưa đạt 90 kHz như tính toán vì ở SYSCLK 16 MHz thì
 
 ## Ngân sách thời gian của main loop
 
+Ngắt STEP 50 kHz từng chiếm 49–93 % CPU ở build Debug; xem
+`MOTOR_ISR_BUDGET.md` (đã sửa).
+
 `App_Loop()` là vòng lặp co-operative duy nhất: `Motor_Update()`,
 `Protocol_Update()` (feedback + watchdog lệnh 300 ms) và
 `BNO08x_ReadRotationVector()` dùng chung nó.
@@ -156,7 +159,61 @@ chuẩn) rồi thử lại một lần. Đếm vào `REC`.
 `WARN` và `REC` phải đứng yên ở 0 khi bus khoẻ. Tăng dần trong lúc chạy là dấu
 hiệu phần cứng có vấn đề.
 
+## Tự phục hồi khi BNO085 ngừng phát report
+
+**Sự cố đã đo (19/10/2026).** Giữa hai lượt chạy, IMU câm: FB có
+`yaw_valid=0` liên tục, EKF chạy chỉ với wheel odometry, không có cảnh báo
+nào. `DIAG` (đo trước khi reset chip): `ACK`, `SCAN=4A`, `EXTPU=11`, bus rảnh,
+`RV_NONE`, `PKT=0`, `REC=2`, `WARN=1`. Chip sống, đúng địa chỉ, nhưng không có
+feature nào bật. Theo SH-2, sau mỗi lần chip reset mọi feature đều tắt. Firmware
+cũ chỉ gửi Set Feature một lần lúc boot và bỏ qua gói "reset complete", nên IMU
+câm tới khi STM32 reset. `DIAG` bật lại feature thì mẫu trở lại 100 %. STM32
+không re-enumerate USB trong thời gian đó.
+
+**Chưa biết** vì sao chip reset hay bus bị giữ (`REC=2`). Nguồn, nhiễu và cắm
+rút USB mới là giả thuyết. Hai bộ đếm FB mới (`imu_rearm`, `imu_reset_seen`) có
+mục đích gắn thời điểm cho sự kiện lần sau.
+
+**Cơ chế** (`imu/bno08x_rearm.[ch]`, gọi qua `BNO08x_Service()` mỗi vòng
+`App_Loop()`):
+
+- Không có mẫu > `BNO08X_REARM_STALE_MS` (500 ms) thì gửi lại Set Feature.
+  Tối đa một lần mỗi `BNO08X_REARM_MIN_INTERVAL_MS` (2 s), tính cả lần gửi lúc
+  boot và lần của `DIAG`.
+- Gói channel 1 `0x01` (reset complete) chỉ được **đếm** (`imu_reset_seen`; lúc
+  boot có thể là 0 hoặc 1 tuỳ gói sau cấp nguồn đến trước hay sau init),
+  không dùng để kích hoạt. Gói này cũng đến sau mỗi lần cấp nguồn; nếu dùng nó
+  để kích hoạt thì boot khoẻ mạnh cũng ra `imu_rearm=1`. Sau reset thật, chip im
+  lặng, nên điều kiện 500 ms đã đủ.
+- **Chỉ** gửi lại Set Feature: 22 byte I2C = 198 clock, khoảng **6.7 ms** ở bus
+  đo được 29.5 kHz (`DIAG CLK=29500`, 19/10). Mức này ít hơn một lần đọc report
+  bình thường (khoảng 9 ms). Khi chip im lặng, mỗi vòng chỉ đọc header 4 byte
+  (khoảng 1.7 ms), nên **lúc IMU mất main loop còn nhẹ hơn lúc khoẻ**, kể cả
+  thêm 6.7 ms mỗi 2 s. Không reset chip (hàng trăm ms) và không chờ trả lời. Xung
+  STEP chạy trong ISR TIM2; FB 50 Hz chỉ lệch tối đa khoảng 7 ms một lần mỗi 2 s.
+- Bus bị giữ: giao dịch thất bại sau một lần timeout stretch 25 ms. Giới hạn
+  chung của driver bit-bang, có sẵn trước thay đổi này và áp dụng cho cả lệnh
+  đọc: slave kéo dài clock ở mọi bit nhưng luôn dưới 25 ms có thể làm một giao
+  dịch kéo dài vài giây. Khi đó watchdog ISR 500 ms (`MOTOR_ISR_WATCHDOG_MS`)
+  vẫn dừng xung động cơ, và bridge thấy FB mất rồi vào safe stop.
+- Chip chết hẳn: thử lại mỗi 2 s, mỗi lần NACK rất nhanh. `imu_rearm` tăng dần,
+  bridge giữ WARN.
+
+**Phía ROS:** bridge cảnh báo khi `yaw_valid=0` quá `imu_stale_timeout`,
+báo khi IMU trở lại (kèm thời gian mất), và publish `/diagnostics`
+(`<node>: imu`, OK/WARN, kèm `last_valid_age_s`, `outages` và hai bộ đếm). Bridge
+không tự sửa dữ liệu, cũng không chặn EKF.
+
+**Kiểm chứng trên phần cứng:** xem PR. Cách gây sự cố có kiểm soát: gửi
+`DIAG` (self-test reset chip rồi bật lại), hoặc ngắt nguồn riêng BNO trong
+khoảng 1 s khi robot đứng yên. Kỳ vọng: `imu_reset_seen` và/hoặc `imu_rearm`
+tăng, `yaw_valid` trở lại trong khoảng 0.5–2.5 s, FB không gián đoạn.
+
 ## Accuracy
+
+**Mặc định firmware stream Game Rotation Vector (0x08)**, xem mục
+"Game Rotation Vector" bên dưới. Phần còn lại của mục này mô tả Rotation Vector
+(0x05, `BNO08X_USE_GAME_ROTATION_VECTOR 0`).
 
 Report rotation vector mang mức tin cậy 0–3 ở byte status. Khi từ kế chưa hiệu
 chuẩn, BNO085 vẫn trả heading nhưng báo accuracy 0 — số nhìn hợp lý mà sai hàng
@@ -168,6 +225,27 @@ nên dùng `ACC` để hạ trọng số IMU thay vì tin tuyệt đối.
 
 Hiệu chuẩn từ kế: cầm xe vẽ hình số 8 trong không khí khoảng 10 lần, `ACC` sẽ
 leo lên 3.
+
+## Game Rotation Vector (mặc định)
+
+`BNO08X_USE_GAME_ROTATION_VECTOR` (`Core/Inc/imu/bno08x.h`, mặc định `1`) chọn
+report 0x08 thay cho 0x05. Game Rotation Vector chỉ dùng gyro + accel, **không
+dùng từ kế**:
+
+- Yaw tương đối, trôi chậm theo thời gian; AMCL bù qua `map -> odom`.
+- Không bao giờ nhảy khi từ kế hiệu chuẩn. Trên xe thật (2026-10-13) xe chỉ
+  quay trên mặt phẳng nên từ kế kẹt ở accuracy 0, và khi nó tự hiệu chuẩn giữa
+  lúc chạy heading đã nhảy khoảng +45°.
+- ROS chỉ dùng yaw tương đối (`ekf.yaml`: `imu0_relative: true`) nên không mất gì.
+
+Bố cục byte 0..11 của 0x08 (12 byte) giống 0x05 (14 byte, thêm accuracy
+estimate ở cuối): `bno08x_report_quat()` đọc chung cho cả hai. Byte status vẫn
+được gửi ở trường `yaw_acc` của `FB`, nhưng với 0x08 nó không mô tả sai số
+heading; bridge (`imu_orientation_report:=game_rotation_vector`, mặc định) dùng
+variance cố định.
+
+Đổi về Rotation Vector: đặt macro `0`, build + nạp lại, và đặt tham số bridge
+`imu_orientation_report:=rotation_vector`.
 
 ## Tare (đặt góc)
 
@@ -264,7 +342,8 @@ wrap180, và toán tare (kể cả các trường hợp vắt qua ±180).
 
 ## Còn thiếu
 
-- Chỉ bật Rotation Vector. Chưa có accel/gyro raw, linear accel, game rotation vector.
+- Chỉ bật một report hướng (Game Rotation Vector mặc định, hoặc Rotation Vector).
+  Chưa có accel/gyro raw, linear accel.
 - Chưa lưu/nạp calibration (DCD) của BNO085 → mỗi lần cấp nguồn phải để nó tự ổn định.
 - Chân RST/INT đang tắt bằng macro (`BNO08X_USE_HW_RST` / `BNO08X_USE_INT_PIN` = 0),
   chạy thuần polling.

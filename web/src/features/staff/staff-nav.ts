@@ -1,8 +1,6 @@
-import { Bot, CalendarDays, History, LayoutDashboard, ListChecks, MonitorPlay, ShieldCheck } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-
-export type NavItem = { label: string; path: string; icon: LucideIcon }
-export type NavSection = { label: string | null; items: NavItem[] }
+import { Bot, CalendarDays, History, LayoutDashboard, ListChecks, MonitorPlay, ShieldCheck, Headset } from 'lucide-react'
+import type { NavItem, NavSection } from '../../components/ui/nav-types'
+import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
  * Staff navigation: only what an operator does around a remote tour - the
@@ -28,6 +26,7 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
+      { label: 'Đàm thoại Quest', path: '/staff/intercom', icon: Headset },
     ],
   },
   {
@@ -35,6 +34,9 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     items: [{ label: 'Lịch sử phiên', path: '/staff/history', icon: History }],
   },
 ]
+
+/** The sidebar's entries: "Buổi tham quan" and "Điều hành" fold; single pages are links. */
+export const STAFF_NAV_ENTRIES: GroupedNavEntry[] = groupNavSections(STAFF_NAV_SECTIONS, { 'Buổi tham quan': ListChecks, 'Điều hành': MonitorPlay })
 
 /** Every page, flat: the shell's page search and the access matrix read this. */
 export const STAFF_NAV: NavItem[] = STAFF_NAV_SECTIONS.flatMap((section) => section.items)

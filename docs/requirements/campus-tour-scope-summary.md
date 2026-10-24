@@ -1,5 +1,13 @@
 # CampusTour DT-AMR — Scope tóm tắt sau Review 1
 
+**Cập nhật 19/10/2026, ADR-0017:** Admin Route CRUD quản lý tuyến, thứ tự POI,
+Start/End, dwell và góc nhìn qua SQL thật. Seed giữ cho bootstrap/test/demo;
+import kỹ thuật giữ cho manifest map/waypoint. Cấu hình có bất kỳ Tour/variant/
+history tham chiếu bị khóa, đổi bằng sao chép tuyến mới. READY/RUNNING còn khóa
+nội dung/trạng thái. Khả dụng không chứng nhận kiểm chứng robot; đội kỹ thuật
+vẫn khảo sát và thử hành trình. Tour Management/runtime và variant authoring
+là task riêng. Chi tiết hiện hành ở scope §6 và ADR-0017.
+
 **Nhóm chốt nghiệp vụ 30/09/2026 • GVHD giao nhóm tự quyết và sẽ xem lại ở Review 2 • Chưa xác nhận GVHD duyệt từng thay đổi hoặc chức năng đã triển khai.** ADR: `docs/decisions/0009-review-1-tour-business-scope.md`, cập nhật truy cập `docs/decisions/0010-personal-access-code-entry.md` và giới hạn dữ liệu tại `docs/decisions/0011-student-data-use-for-tour.md`; chi tiết/backlog tại đặc tả Review 1.
 
 **Vấn đề.** Học sinh cần khám phá campus từ xa; hệ thống phải thể hiện giá trị của robot live qua khả năng điều chỉnh hành trình có kiểm soát, bên cạnh nội dung giới thiệu và hỏi đáp.
@@ -20,7 +28,7 @@
 
 **Sự cố.** Khi RUNNING mà live lỗi, dùng video ghi rõ “ghi sẵn”; map dùng telemetry thật hoặc báo cũ. Sau kết thúc, chỉ Tour đã Start rồi End Early (CANCELLED) được xem tiếp video tới hạn lời mời chưa bị thu hồi; không áp dụng COMPLETED/hủy trước Start, không mở live/AI. Không tự resume sau restart. Staff kiểm tra và xác nhận robot sẵn sàng; backend chỉ release khi nhiệm vụ cũ đã kết thúc, robot dừng và đủ readiness. Tour mới vẫn phải qua điều kiện Start; ADR-0009 §6.
 
-**Quản trị.** Theo ADR-0012, kỹ thuật seed tọa độ/đường nối/nhánh và dwell cố định đã thử; Admin không chỉnh dwell theo từng Tour. Audio phải phù hợp dwell; đổi dwell cần kỹ thuật kiểm chứng lại. Form P1 cho Admin sửa tên hiển thị, mô tả/upload audio POI; khóa khi có Tour READY/RUNNING dùng, gồm nhánh. Hiện thời lượng/cảnh báo audio dài hơn dwell; xử lý chênh lệch trước READY, backend kiểm tra. Thống kê P1: Tour hoàn thành/hủy, kết quả dịch vụ gửi email theo lần gửi, lời mời vào phòng thành công tính một lần cho cùng dòng (reload/cấp lại không tăng), phân biệt điểm xem chung, không attendance. Audit append-only từ P0: quyết định gửi, đã gửi, robot phản hồi ghi riêng khi có bằng chứng; lỗi/chưa rõ không tạo thành công giả. Không ghi email đã nhận/đã đọc.
+**Quản trị.** Theo ADR-0012, kỹ thuật chuẩn bị và kiểm chứng Route geometry/đường nối/nhánh cùng dwell cố định; Admin không chỉnh dwell theo từng Tour. Admin POI Management theo ADR-0014 tạo POI inactive, sửa nội dung và kích hoạt/vô hiệu hóa; chỉ POI chưa có RouteStop/lịch sử mới cho Admin chỉnh MapKey/MapFrame/x/y/yaw. Pose được cảnh báo chưa xác minh bằng robot thật; không có map picker trước khi calibrate transform. Không hard delete; mọi thay đổi bị khóa khi Tour READY/RUNNING sử dụng POI. Audio upload, dwell warning và snapshot lịch sử vẫn là P1 riêng. Thống kê P1: Tour hoàn thành/hủy, kết quả dịch vụ gửi email theo lần gửi, lời mời vào phòng thành công tính một lần cho cùng dòng (reload/cấp lại không tăng), phân biệt điểm xem chung, không attendance. Audit append-only từ P0: quyết định gửi, đã gửi, robot phản hồi ghi riêng khi có bằng chứng; lỗi/chưa rõ không tạo thành công giả. Không ghi email đã nhận/đã đọc.
 
 **Multi-tour.** Demo phần mềm: Tour A ↔ Emulator A và Tour B ↔ Emulator B chạy đồng thời; gây lỗi A, chứng minh B tiếp tục và command/progress/Q&A không lẫn. Media mẫu phải ghi nhãn. Bài này không chứng minh fleet vật lý tránh va chạm hoặc thay nghiên cứu chính thức.
 

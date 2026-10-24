@@ -1,5 +1,6 @@
-import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, Route, UsersRound } from 'lucide-react'
-import type { NavItem, NavSection } from '../staff/staff-nav'
+import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, Route, UsersRound } from 'lucide-react'
+import type { NavItem, NavSection } from '../../components/ui/nav-types'
+import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
  * Administration navigation: what Admin does before a Tour starts, and the
@@ -24,11 +25,15 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     ],
   },
   { label: 'Tuyến', items: [{ label: 'Danh mục tuyến', path: '/admin/routes', icon: Route }] },
+  { label: 'Địa điểm', items: [{ label: 'Quản lý POI', path: '/admin/pois', icon: MapPinned }] },
   { label: 'Quản lý tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
   { label: 'Lịch sử', items: [{ label: 'Lịch sử Tour', path: '/admin/history', icon: History }] },
 ]
 
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_SECTIONS.flatMap((section) => section.items)
+
+/** The same entries as the sidebar draws them: Quản lý Tour and Đăng ký đoàn fold; single pages are links. */
+export const ADMIN_NAV_ENTRIES: GroupedNavEntry[] = groupNavSections(ADMIN_NAV_SECTIONS, { 'Quản lý Tour': ListChecks, 'Đăng ký đoàn': ClipboardCheck })
 
 /**
  * The nav item a path belongs to. Exact match wins; otherwise the longest
@@ -39,6 +44,7 @@ export function adminActivePath(pathname: string): string | null {
   const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
   if (ADMIN_NAV.some((item) => item.path === path)) return path
   if (path.startsWith('/admin/tours/')) return '/admin/tours'
+  if (path.startsWith('/admin/pois/')) return '/admin/pois'
   let best: string | null = null
   for (const item of ADMIN_NAV) {
     if (item.path !== '/admin' && path.startsWith(`${item.path}/`) && (!best || item.path.length > best.length)) best = item.path

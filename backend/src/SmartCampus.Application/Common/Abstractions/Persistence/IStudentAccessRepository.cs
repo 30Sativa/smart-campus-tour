@@ -1,0 +1,30 @@
+using SmartCampus.Domain.Entities;
+namespace SmartCampus.Application.Common.Abstractions.Persistence;
+
+/// <summary>
+/// Student admission persistence. Lookups do not authorize access: after locking the parent Tour,
+/// the handler rechecks invitation hash/version, approval, revocation, expiry and session ownership.
+/// Mutations use the registration transaction and its scoped UnitOfWork context.
+/// </summary>
+public interface IStudentAccessRepository
+{
+    Task<Guid?> FindInvitationIdAsync(Guid tourId, byte[] codeHash, CancellationToken ct);
+    Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct);
+    /// <summary>Loads the tracked invitation/access context with open sessions only, after the caller locks its Tour.</summary>
+    Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct);
+    /// <summary>
+    /// Closes idle sessions before inserting a replacement, satisfying the open-session unique index.
+    /// Executes inside the caller's transaction before loading tracked sessions; it is not a commit.
+    /// </summary>
+    Task CloseExpiredAsync(Guid invitationId, DateTimeOffset now, CancellationToken ct);
+    void Add(BrowserSession session);
+    Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct);
+    void AddAudit(AuditLog audit);
+    /// <summary>
+    /// Read-only check for Student Q&amp;A: an open, unexpired session of an unrevoked, unexpired invitation on an
+    /// active row of an APPROVED registration of this Tour. Null when any condition fails.
+    /// </summary>
+    Task<StudentQuestionAccess?> FindQuestionAccessAsync(Guid tourId, byte[] tokenHash, DateTimeOffset now, CancellationToken ct);
+}
+
+public sealed record StudentQuestionAccess(Guid SessionId, string TourState, string RowType);

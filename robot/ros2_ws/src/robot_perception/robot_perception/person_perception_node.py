@@ -1,15 +1,17 @@
 """Timestamped RGB-D person perception with an optional Nav2 speed policy.
 
-Inference runs on one daemon worker. ROS callbacks retain only the newest
-immutable synchronized snapshot, while executor timers remain free to publish
-health and enforce stale-data policy. No output is a protective stop.
+Inference and RGB-D fusion run on one daemon worker. ROS callbacks retain only
+the newest immutable synchronized snapshot, while executor timers publish
+results and enforce stale-data policy. No output is a protective stop.
 """
 
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 import math
 import threading
 import time
+import weakref
 
 import numpy as np
 import rclpy
@@ -17,6 +19,7 @@ from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Pose, PoseArray
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 from nav2_msgs.msg import SpeedLimit
+from rclpy.callback_groups import CallbackGroup
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2, PointField
@@ -24,10 +27,44 @@ from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
 PERSON_CLASS_ID = 0
+FUSION_PHASES = ('cloud_decode', 'transform', 'projection', 'roi')
 
 
 class PerceptionError(ValueError):
     """An observation cannot be interpreted safely."""
+
+
+class SampledInputGroup(CallbackGroup):
+    """Permit one take per subscription per sample tick, before deserialization."""
+
+    def __init__(self):
+        super().__init__()
+        self._lock = threading.Lock()
+        self._allowed = set()
+        self._active = None
+
+    def release(self):
+        with self._lock:
+            # Replace permits; missed ticks never accumulate a catch-up burst.
+            self._allowed = self.entities.copy()
+
+    def can_execute(self, entity):
+        with self._lock:
+            return self._active is None and weakref.ref(entity) in self._allowed
+
+    def beginning_execution(self, entity):
+        with self._lock:
+            ref = weakref.ref(entity)
+            if self._active is not None or ref not in self._allowed:
+                return False
+            self._allowed.remove(ref)
+            self._active = entity
+            return True
+
+    def ending_execution(self, entity):
+        with self._lock:
+            assert self._active is entity
+            self._active = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +84,8 @@ class InferenceResult:
     scores: np.ndarray
     latency_s: float
     error: str = ''
+    people: list | None = None
+    fusion_error: str = ''
 
 
 def stamp_seconds(stamp):
@@ -176,13 +215,31 @@ def range_core(u, v, z, box, shrink=0.5, band=0.4, min_roi=20, min_core=10):
 
 
 def project_points(points, k, distortion):
-    """Project camera-frame XYZ using raw-image intrinsics and plumb_bob D."""
-    import cv2
-    points=np.asarray(points,dtype=np.float64).reshape(-1,1,3)
+    """Project camera-frame XYZ like cv2.projectPoints(rvec=0, tvec=0, K, D).
+
+    plumb_bob D with 0, 4 or 5 coefficients is evaluated in float64 with
+    OpenCV's formula and operation order (fx, fy, cx, cy; skew ignored, as
+    OpenCV does). The Python cv2.projectPoints binding always returns a
+    2N x 15 float64 Jacobian, which dominated full-cloud projection time.
+    Any other D length is delegated to OpenCV unchanged.
+    """
+    points=np.asarray(points,dtype=np.float64).reshape(-1,3)
     intrinsic=np.asarray(k,dtype=np.float64).reshape(3,3)
-    distortion=np.asarray(distortion,dtype=np.float64)
-    uv,_=cv2.projectPoints(points,np.zeros(3),np.zeros(3),intrinsic,distortion)
-    return uv.reshape(-1,2)
+    distortion=np.asarray(distortion,dtype=np.float64).reshape(-1)
+    if distortion.size not in (0,4,5):
+        import cv2
+        uv,_=cv2.projectPoints(points.reshape(-1,1,3),np.zeros(3),np.zeros(3),intrinsic,distortion)
+        return uv.reshape(-1,2)
+    k1,k2,p1,p2,k3=np.concatenate((distortion,np.zeros(5-distortion.size)))
+    z=points[:,2]
+    with np.errstate(divide='ignore'):
+        inv_z=np.where(z!=0,1.0/z,1.0)  # OpenCV: z = z ? 1/z : 1
+    x=points[:,0]*inv_z; y=points[:,1]*inv_z
+    r2=x*x+y*y; r4=r2*r2
+    cdist=1+k1*r2+k2*r4+k3*(r4*r2)
+    xd=x*cdist+p1*(2*x*y)+p2*(r2+2*x*x)
+    yd=y*cdist+p1*(r2+2*y*y)+p2*(2*x*y)
+    return np.stack((xd*intrinsic[0,0]+intrinsic[0,2],yd*intrinsic[1,1]+intrinsic[1,2]),axis=1)
 
 
 class SlowdownPolicy:
@@ -235,19 +292,29 @@ class PersonPerceptionNode(Node):
         self.tf_buffer=Buffer(); self.tf_listener=TransformListener(self.tf_buffer,self)
         self._lock=threading.Lock(); self._wake=threading.Condition(self._lock)
         self._pending=None; self._result=None; self._worker_busy=False; self._stopping=False
-        self._last_image_stamp=None; self._last_pair_stamp=None; self._last_valid_mono=None
+        self._last_image_stamp=None; self._last_cloud_stamp=None; self._last_pair_stamp=None; self._last_valid_mono=None
         self._last_obs_ros=None; self._status_reason='STARTUP'; self._last_people=[]
         self._pending_policy=None; self._last_sync_delta=float('nan')
         self._last_source=('unknown','unknown')
         self._calibration_signature=None
         self._counts={'dropped':0,'duplicate':0,'errors':0}; self._latencies=deque(maxlen=100)
         self._e2e_latencies=deque(maxlen=100); self._observation_times=deque(maxlen=100)
+        self._fusion_latencies=deque(maxlen=100)
+        self._fusion_phase_latencies={phase:deque(maxlen=100) for phase in FUSION_PHASES}
         self._bbox_count=0; self._valid_fusion_count=0
+        self._input_counts={'rgb_received':0,'cloud_received':0,'pairs_accepted':0}
+        self._input_group=None
         qos=QoSProfile(depth=5,history=HistoryPolicy.KEEP_LAST,reliability=ReliabilityPolicy.BEST_EFFORT)
         if not self.bbox_only:
-            self.image_sub=Subscriber(self,Image,f'{self.cam}/color/image_raw',qos_profile=qos)
-            self.cloud_sub=Subscriber(self,PointCloud2,f'{self.cam}/depth/points',qos_profile=qos)
-            self.sync=ApproximateTimeSynchronizer([self.image_sub,self.cloud_sub],5,0.05,allow_headerless=False)
+            self._input_group=SampledInputGroup()
+            input_qos=QoSProfile(depth=1,history=HistoryPolicy.KEEP_LAST,reliability=ReliabilityPolicy.BEST_EFFORT)
+            self.image_sub=Subscriber(self,Image,f'{self.cam}/color/image_raw',
+                                      qos_profile=input_qos,callback_group=self._input_group)
+            self.cloud_sub=Subscriber(self,PointCloud2,f'{self.cam}/depth/points',
+                                      qos_profile=input_qos,callback_group=self._input_group)
+            self.image_sub.registerCallback(self._count_input,'rgb_received')
+            self.cloud_sub.registerCallback(self._count_input,'cloud_received')
+            self.sync=ApproximateTimeSynchronizer([self.image_sub,self.cloud_sub],1,0.05,allow_headerless=False)
             self.sync.registerCallback(self._on_pair)
             self.create_subscription(CameraInfo,f'{self.cam}/color/camera_info',self._on_info,qos)
         else:
@@ -264,8 +331,9 @@ class PersonPerceptionNode(Node):
         self.net=self._load_model() if self.config_error is None else None
         if self.config_error: self.get_logger().error(self.config_error)
         if self.net is None and not self.config_error: self._status_reason='MODEL_ERROR'
-        self._worker=threading.Thread(target=self._worker_loop,name='person-inference',daemon=True); self._worker.start()
         rate=max(1.0,float(safe['rate_hz']))
+        self._inference_period=1.0/rate
+        self._worker=threading.Thread(target=self._worker_loop,name='person-inference',daemon=True); self._worker.start()
         self.create_timer(1.0/rate,self._health_tick)
         self.create_timer(0.2,self._policy_tick)
         self.create_timer(float(safe['report_period']),self._report)
@@ -337,7 +405,11 @@ class PersonPerceptionNode(Node):
     def _on_pair(self,image,cloud):
         self._enqueue(image,cloud,self.info)
 
+    def _count_input(self,_msg,key):
+        with self._wake: self._input_counts[key]+=1
+
     def _on_bbox_image(self,image):
+        self._count_input(image,'rgb_received')
         self._enqueue(image,None,None)
 
     def _enqueue(self,image,cloud,info):
@@ -351,7 +423,14 @@ class PersonPerceptionNode(Node):
                     self._counts['duplicate']+=1
                     self._set_unknown('duplicate/out-of-order image timestamp')
                     return
+                if cts is not None and self._last_cloud_stamp is not None and cts<=self._last_cloud_stamp:
+                    self._counts['duplicate']+=1
+                    self._set_unknown('duplicate/out-of-order cloud timestamp')
+                    return
                 self._last_image_stamp=ts
+                if cts is not None:
+                    self._last_cloud_stamp=cts
+                    self._input_counts['pairs_accepted']+=1
                 snap=Snapshot(image,cloud,info,ts,cts,time.monotonic())
                 if self._pending is not None: self._counts['dropped']+=1
                 self._pending=snap; self._wake.notify()
@@ -359,11 +438,21 @@ class PersonPerceptionNode(Node):
             self._set_unknown(str(exc))
 
     def _worker_loop(self):
+        next_start=0.0
         while True:
             with self._wake:
-                self._wake.wait_for(lambda:self._stopping or (self._pending is not None and self._result is None))
+                while not self._stopping:
+                    if self._pending is None:
+                        self._wake.wait()
+                        continue
+                    delay=next_start-time.monotonic()
+                    if delay>0:
+                        self._wake.wait(timeout=delay)
+                        continue
+                    snap=self._pending; self._pending=None; self._worker_busy=True
+                    next_start=time.monotonic()+self._inference_period
+                    break
                 if self._stopping:return
-                snap=self._pending; self._pending=None; self._worker_busy=True
             t=time.perf_counter()
             try:
                 if self.net is None: raise PerceptionError('MODEL_ERROR: model unavailable')
@@ -379,8 +468,31 @@ class PersonPerceptionNode(Node):
                 result=InferenceResult(snap,boxes,scores,time.perf_counter()-t)
             except Exception as exc:
                 result=InferenceResult(snap,np.empty((0,4),np.float32),np.empty(0,np.float32),time.perf_counter()-t,str(exc))
+
+            fusion_duration=None
+            if not result.error and not self.bbox_only:
+                try:
+                    if snap.info is None: raise PerceptionError('missing CameraInfo')
+                    fusion_start=time.perf_counter() if len(result.boxes) else None
+                    try:
+                        people=self._locate(snap,result.boxes)
+                    finally:
+                        if fusion_start is not None:
+                            fusion_duration=time.perf_counter()-fusion_start
+                    result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
+                                           people=people)
+                except Exception as exc:
+                    result=InferenceResult(snap,result.boxes,result.scores,result.latency_s,
+                                           fusion_error=str(exc))
             with self._wake:
+                # Profile all nonempty _locate attempts, even failed/stale/replaced results.
+                if fusion_duration is not None: self._fusion_latencies.append(fusion_duration)
                 self._worker_busy=False
+                # A result still waiting for the executor is replaced by this newer one.
+                if self._result is not None:
+                    self._counts['dropped']+=1
+                    if self._result.error or self._result.fusion_error:
+                        self._counts['errors']+=1
                 self._result=result
                 self._wake.notify_all()
 
@@ -393,12 +505,16 @@ class PersonPerceptionNode(Node):
         if self._last_obs_ros is not None and now_ros < self._last_obs_ros:
             with self._wake:
                 self._last_image_stamp=None
+                self._last_cloud_stamp=None
                 self._last_pair_stamp=None
             if not self._status_reason.startswith('MODEL_ERROR'):
                 self._set_unknown('ROS clock moved backwards')
         if self._last_valid_mono is None or time.monotonic()-self._last_valid_mono > self.stale:
             if not self._status_reason.startswith('MODEL_ERROR'):
                 self._set_unknown('STALE: no fresh valid observation')
+        # This existing timer runs at rate_hz. rclpy checks the group before
+        # taking a message; DDS KEEP_LAST(1) retains only the latest input.
+        if self._input_group is not None: self._input_group.release()
 
     def _consume(self,result):
         snap=result.snapshot
@@ -408,12 +524,12 @@ class PersonPerceptionNode(Node):
         age=max(image_age,cloud_age)
         tolerance=float(self.cfg['future_stamp_tolerance_s'])
         if min(image_age,cloud_age) < -tolerance or age>self.stale:
-            self._counts['errors']+=1; self._set_unknown('STALE/INVALID RGB or cloud source timestamp'); return
+            self._record_error(); self._set_unknown('STALE/INVALID RGB or cloud source timestamp'); return
         if self._last_pair_stamp is not None and snap.image_stamp<=self._last_pair_stamp:
             self._counts['duplicate']+=1; self._set_unknown('out-of-order inference result'); return
         self._last_pair_stamp=snap.image_stamp
         if result.error:
-            self._counts['errors']+=1
+            self._record_error()
             reason=result.error if result.error.startswith('MODEL_ERROR') else f'MODEL_ERROR: {result.error}'
             self._set_unknown(reason); return
         self._latencies.append(result.latency_s)
@@ -424,27 +540,39 @@ class PersonPerceptionNode(Node):
             self._publish_debug(snap.image,result.boxes,result.scores)
             self._status_reason='BBOX_ONLY_VALID'; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
             return
-        try:
-            if snap.info is None: raise PerceptionError('missing CameraInfo')
-            people=self._locate(snap,result.boxes)
-            self._valid_fusion_count=len(people)
-            # Any detected person without reliable depth makes the entire policy UNKNOWN.
-            self._publish_people(people,snap.cloud.header.stamp)
-            self._last_people=people; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
-            self._status_reason='VALID'
-            self._last_sync_delta=abs(snap.image_stamp-snap.cloud_stamp)
-            self._last_source=(snap.image_stamp,snap.cloud_stamp)
-            self._pending_policy=(people,snap.cloud_stamp)
-        except Exception as exc:
-            self._counts['errors']+=1; self._set_unknown(str(exc))
+        if result.fusion_error:
+            self._record_error(); self._set_unknown(result.fusion_error); return
+        if result.people is None:
+            self._record_error(); self._set_unknown('missing RGB-D fusion result'); return
+        people=result.people
+        self._valid_fusion_count=len(people)
+        # Any detected person without reliable depth makes the entire policy UNKNOWN.
+        self._publish_people(people,snap.cloud.header.stamp)
+        self._last_people=people; self._last_valid_mono=time.monotonic(); self._last_obs_ros=now_ros
+        self._status_reason='VALID'
+        self._last_sync_delta=abs(snap.image_stamp-snap.cloud_stamp)
+        self._last_source=(snap.image_stamp,snap.cloud_stamp)
+        self._pending_policy=(people,snap.cloud_stamp)
 
-    def _tf(self,target,source,stamp):
+    def _record_error(self):
+        with self._wake: self._counts['errors']+=1
+
+    def _tf(self,target,source):
         if not target or not source: raise PerceptionError('missing TF frame id')
-        t=self.tf_buffer.lookup_transform(target,source,rclpy.time.Time(seconds=int(stamp),nanoseconds=int((stamp%1)*1e9)))
+        t=self.tf_buffer.lookup_transform(target,source,rclpy.time.Time())
         q=t.transform.rotation; tr=t.transform.translation
         translation=np.array([tr.x,tr.y,tr.z],dtype=np.float64)
         if not np.isfinite(translation).all(): raise PerceptionError('non-finite TF translation')
         return quat_to_matrix(q.x,q.y,q.z,q.w),translation
+
+    @contextmanager
+    def _profile_phase(self,phase):
+        started=time.perf_counter()
+        try:
+            yield
+        finally:
+            duration=time.perf_counter()-started
+            with self._wake: self._fusion_phase_latencies[phase].append(duration)
 
     def _locate(self,snap,boxes):
         cloud,info=snap.cloud,snap.info
@@ -461,28 +589,36 @@ class PersonPerceptionNode(Node):
         signature=(info.header.frame_id,info.width,info.height,tuple(info.k),tuple(info.d),info.distortion_model)
         if self._calibration_signature is not None and signature!=self._calibration_signature:
             self._calibration_signature=signature
-            self.policy.unknown()
             raise PerceptionError('CameraInfo calibration changed; waiting for a new observation')
         self._calibration_signature=signature
-        pts=cloud_xyz(cloud)
+        if len(boxes) == 0:
+            return []
+        with self._profile_phase('cloud_decode'):
+            pts=cloud_xyz(cloud)
         if not len(pts):
             if len(boxes): raise PerceptionError('no valid cloud points')
             return []
-        Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id,snap.cloud_stamp)
-        Rb,Tb=self._tf(self.base_frame,info.header.frame_id,snap.cloud_stamp)
-        cam=pts@Rc.T+Tc; valid=cam[:,2]>0.05; cam=cam[valid]
+        with self._profile_phase('transform'):
+            Rc,Tc=self._tf(info.header.frame_id,cloud.header.frame_id)
+            Rb,Tb=self._tf(self.base_frame,info.header.frame_id)
+            cam=pts@Rc.T+Tc; valid=cam[:,2]>0.05; cam=cam[valid]
         if not len(cam):
             if len(boxes): raise PerceptionError('no cloud points in front of camera')
             return []
-        k=np.asarray(info.k,dtype=np.float64).reshape(3,3)
-        uv=project_points(cam,k,d)
-        in_img=(uv[:,0]>=0)&(uv[:,0]<info.width)&(uv[:,1]>=0)&(uv[:,1]<info.height)
-        out=[]
-        for box in boxes:
-            rng,mask,core=range_core(uv[in_img,0],uv[in_img,1],cam[in_img,2],box)
-            selected=cam[in_img][mask][core]
-            p_color=np.median(selected,axis=0)
-            out.append(Rb@p_color+Tb)
+        with self._profile_phase('projection'):
+            k=np.asarray(info.k,dtype=np.float64).reshape(3,3)
+            uv=project_points(cam,k,d)
+            in_img=(uv[:,0]>=0)&(uv[:,0]<info.width)&(uv[:,1]>=0)&(uv[:,1]<info.height)
+        with self._profile_phase('roi'):
+            # Select in-image points once, not once per box; same rows and order.
+            idx=np.flatnonzero(in_img)
+            u,v,z=uv[idx,0],uv[idx,1],cam[idx,2]
+            out=[]
+            for box in boxes:
+                rng,mask,core=range_core(u,v,z,box)
+                selected=cam[idx[mask][core]]
+                p_color=np.median(selected,axis=0)
+                out.append(Rb@p_color+Tb)
         return out
 
     def _publish_people(self,people,stamp):
@@ -543,6 +679,10 @@ class PersonPerceptionNode(Node):
         infer_p95=float(np.percentile(np.asarray(self._latencies),95)) if self._latencies else float('nan')
         e2e_p50=float(np.percentile(np.asarray(self._e2e_latencies),50)) if self._e2e_latencies else float('nan')
         e2e_p95=float(np.percentile(np.asarray(self._e2e_latencies),95)) if self._e2e_latencies else float('nan')
+        with self._wake:
+            fusion=tuple(self._fusion_latencies)
+            phase_samples={phase:tuple(samples) for phase,samples in self._fusion_phase_latencies.items()}
+        fusion_p50,fusion_p95=np.percentile(fusion,[50,95]) if fusion else (float('nan'),float('nan'))
         unique_hz=((len(self._observation_times)-1)/(self._observation_times[-1]-self._observation_times[0])
                    if len(self._observation_times)>1 and self._observation_times[-1]>self._observation_times[0]
                    else float('nan'))
@@ -551,6 +691,8 @@ class PersonPerceptionNode(Node):
                  'errors':str(self._counts['errors']),
                  'inference_p50_ms':f'{infer_p50*1000:.2f}' if math.isfinite(infer_p50) else 'unknown',
                  'inference_p95_ms':f'{infer_p95*1000:.2f}' if math.isfinite(infer_p95) else 'unknown',
+                 'fusion_p50_ms':f'{fusion_p50*1000:.2f}' if math.isfinite(fusion_p50) else 'unknown',
+                 'fusion_p95_ms':f'{fusion_p95*1000:.2f}' if math.isfinite(fusion_p95) else 'unknown',
                 'bbox_count':str(self._bbox_count),'valid_fusion_count':str(self._valid_fusion_count),
                  'e2e_p50_ms':f'{e2e_p50*1000:.2f}' if math.isfinite(e2e_p50) else 'unknown',
                  'e2e_p95_ms':f'{e2e_p95*1000:.2f}' if math.isfinite(e2e_p95) else 'unknown',
@@ -559,6 +701,11 @@ class PersonPerceptionNode(Node):
                 'image_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[0]),
                 'cloud_stamp_s':str(getattr(self,'_last_source',('unknown','unknown'))[1]),
                 'policy_state':'SLOW' if self.policy.slowing else 'CLEAR','speed_limit_percent':str(percent if percent is not None else (self.policy.slow if self.policy.slowing else 100.0))}
+        for phase,samples in phase_samples.items():
+            p50,p95=np.percentile(samples,[50,95]) if samples else (float('nan'),float('nan'))
+            values[f'{phase}_p50_ms']=f'{p50*1000:.2f}' if math.isfinite(p50) else 'unknown'
+            values[f'{phase}_p95_ms']=f'{p95*1000:.2f}' if math.isfinite(p95) else 'unknown'
+        with self._wake: values.update(self._input_counts)
         s.values=[KeyValue(key=k,value=str(v)) for k,v in values.items()]; d.status=[s]; self.diag_pub.publish(d)
 
     def _report(self):

@@ -1,45 +1,29 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { PageHeader } from '../../features/staff/StaffUi'
-import { AdminErrorPanel, AdminPage, SkeletonRows } from '../../features/administration/AdminUi'
-import { useAdminRoutes, useCreateTour } from '../../features/administration/admin-hooks'
-import { readAdminError } from '../../features/administration/admin-status'
-import { TourForm } from '../../features/administration/components/TourForm'
-
-function newRequestId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+import { useRef } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { PageHeader } from '../../components/ui/ConsolePrimitives'
+import { AdminPage } from '../../features/administration/AdminUi'
+import { newRequestId, useCreateTour } from '../../features/administration/tours/hooks'
+import { tourError } from '../../features/administration/tours/tour-messages'
+import { TourForm } from '../../features/administration/tours/TourForm'
+import type { TourInput } from '../../features/administration/tours/types'
 
 /**
- * "Tạo Tour mới" (UC-01). The result is a Scheduled Tour with no robot and
- * no leg; Admin lands on its detail page to check it. One request id per
- * form, so a repeated submit returns the same Tour instead of a second one.
+ * "Tạo Tour mới" against the live API. A retried identical submit reuses its
+ * request id, so a lost response cannot create a second Tour; changed content
+ * gets a new id instead of an IDEMPOTENCY_CONFLICT.
  */
 export default function AdminTourCreatePage() {
   const navigate = useNavigate()
-  const routes = useAdminRoutes()
   const create = useCreateTour()
-  const [requestId] = useState(newRequestId)
-  const error = create.isError ? readAdminError(create.error, 'Không tạo được Tour. Kiểm tra kết nối rồi thử lại.') : null
-
-  return (
-    <AdminPage>
-      <PageHeader eyebrow="Quản lý Tour" title="Tạo Tour mới" description="Tour mới ở trạng thái Đang chuẩn bị: chưa gán robot và không tự chạy khi tới giờ. Sau khi tạo, đại diện trường có thể đăng ký." />
-      {routes.isError ? (
-        <AdminErrorPanel title="Không tải được danh mục tuyến." onRetry={() => void routes.refetch()} />
-      ) : routes.isLoading ? (
-        <SkeletonRows rows={5} label="Đang tải biểu mẫu" />
-      ) : (
-        <TourForm
-          routes={routes.data ?? []}
-          submitLabel="Tạo Tour"
-          busy={create.isPending}
-          serverErrors={error?.fieldErrors}
-          serverMessage={error && !Object.keys(error.fieldErrors).length ? error.message : error ? 'Vui lòng kiểm tra lại các trường được đánh dấu.' : null}
-          cancelTo="/admin/tours"
-          onSubmit={(input) => create.mutate({ input, requestId }, { onSuccess: (tour) => navigate(`/admin/tours/${tour.id}`, { replace: true }) })}
-        />
-      )}
-    </AdminPage>
-  )
+  const attempt = useRef<{ key: string; id: string } | null>(null)
+  const submit = (input: TourInput, routeVersion: string) => {
+    const key = JSON.stringify([input, routeVersion])
+    if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
+    create.mutate({ requestId: attempt.current.id, routeVersion, input }, { onSuccess: id => navigate(`/admin/tours/${id}`, { replace: true }) })
+  }
+  return <AdminPage>
+    <Link to="/admin/tours" className="mb-4 inline-block text-sm text-[#2d719e]">← Danh sách Tour</Link>
+    <PageHeader eyebrow="Quản lý Tour" title="Tạo Tour mới" description="Tour mới ở trạng thái Đang nhận đăng ký: chưa gán robot và không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn." />
+    <TourForm submitLabel="Tạo Tour" busy={create.isPending} error={create.isError ? tourError(create.error) : null} cancelTo="/admin/tours" onSubmit={submit} />
+  </AdminPage>
 }

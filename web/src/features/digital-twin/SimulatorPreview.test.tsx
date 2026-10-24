@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SimulatorPreview } from './SimulatorPreview'
 
-vi.mock('../../three/DigitalTwinCanvas', () => ({ DigitalTwinCanvas: () => <div>3D scene</div> }))
+vi.mock('./DigitalTwinCanvas', () => ({ DigitalTwinCanvas: () => <div>3D scene</div> }))
 
 describe('simulator playback', () => {
   afterEach(() => vi.useRealTimers())

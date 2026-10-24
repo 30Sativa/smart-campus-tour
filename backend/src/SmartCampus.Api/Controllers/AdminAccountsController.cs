@@ -1,13 +1,12 @@
-using System.Security.Claims;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
-using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 using SmartCampus.Application.Features.Accounts.Commands.DeactivateAccount;
@@ -63,7 +62,7 @@ public sealed class AdminAccountsController(
         CancellationToken cancellationToken)
     {
         var response = await sender.Send(
-            new CreateAccountCommand(GetActorUserId(), request),
+            new CreateAccountCommand(User.GetRequiredUserId(), request),
             cancellationToken);
 
         return Ok(new BaseResponse<CreateAccountResponse>
@@ -79,7 +78,7 @@ public sealed class AdminAccountsController(
         Guid id,
         CancellationToken cancellationToken)
     {
-        await sender.Send(new DeactivateAccountCommand(id, GetActorUserId()), cancellationToken);
+        await sender.Send(new DeactivateAccountCommand(id, User.GetRequiredUserId()), cancellationToken);
         return Ok(new BaseResponse<object?>
         {
             Success = true,
@@ -93,20 +92,12 @@ public sealed class AdminAccountsController(
         Guid id,
         CancellationToken cancellationToken)
     {
-        await sender.Send(new ReactivateAccountCommand(id, GetActorUserId()), cancellationToken);
+        await sender.Send(new ReactivateAccountCommand(id, User.GetRequiredUserId()), cancellationToken);
         return Ok(new BaseResponse<object?>
         {
             Success = true,
             Message = "Account reactivated.",
             Data = null
         });
-    }
-
-    private Guid GetActorUserId()
-    {
-        var subject = User.FindFirstValue("sub");
-        if (!Guid.TryParse(subject, out var actorUserId))
-            throw new UnauthorizedException("A valid account identity is required.");
-        return actorUserId;
     }
 }

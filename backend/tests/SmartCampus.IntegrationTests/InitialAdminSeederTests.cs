@@ -15,9 +15,20 @@ namespace SmartCampus.IntegrationTests;
 public sealed class InitialAdminSeederTests
 {
     private const string Username = "system.admin";
-    private const string Password = "integration-test-password";
+    internal const string Password = "integration-test-password";
     private const string FullName = "System Administrator";
     internal const string TestJwtSigningKey = "integration-test-jwt-signing-key-32-bytes-minimum";
+
+    [SchemaV11Fact]
+    public async Task SeedPasswordPolicy_RejectsNewWeakCredentials_WithoutChangingExistingAdminOnRerun()
+    {
+        await using var database = await EmptySchemaDatabase.CreateAsync();
+        await Assert.ThrowsAsync<ArgumentException>(() => database.SeedAsync(Username, "short", FullName));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.Users"));
+        Assert.Equal(InitialAdminSeedResult.Created, await database.SeedAsync(Username, Password, FullName));
+        Assert.Equal(InitialAdminSeedResult.Skipped, await database.SeedAsync(Username, "short", FullName));
+        Assert.True(new IdentityPasswordHasher().Verify(Password, (await database.GetOnlyUserAsync()).PasswordHash));
+    }
 
     [Theory]
     [InlineData(" system.admin")]
@@ -306,7 +317,8 @@ public sealed class InitialAdminSeederTests
         string[] arguments,
         int? port = null,
         string? jwtSigningKey = TestJwtSigningKey,
-        string environment = "Development")
+        string environment = "Development",
+        IReadOnlyDictionary<string, string>? additionalSettings = null)
     {
         var apiAssembly = Path.Combine(AppContext.BaseDirectory, "SmartCampus.Api.dll");
         Assert.True(File.Exists(apiAssembly), $"API assembly not found at {apiAssembly}.");
@@ -334,6 +346,9 @@ public sealed class InitialAdminSeederTests
         if (jwtSigningKey is not null)
             startInfo.Environment["Authentication__Jwt__SigningKey"] = jwtSigningKey;
         startInfo.Environment["Cors__AllowedOrigins__0"] = "http://localhost:5173";
+        startInfo.Environment["Invitations__Enabled"] = "false";
+        if (additionalSettings is not null)
+            foreach (var setting in additionalSettings) startInfo.Environment[setting.Key] = setting.Value;
 
         return Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start API process for integration test.");
@@ -382,7 +397,12 @@ public sealed class InitialAdminSeederTests
 
     internal sealed class EmptySchemaDatabase : IAsyncDisposable
     {
-        private readonly string name = "CampusTourInitialAdminSeedTest_" + Guid.NewGuid().ToString("N");
+        private readonly string name;
+
+        private EmptySchemaDatabase(bool demo)
+        {
+            name = (demo ? "SmartCampusTourPoiDemo_" : "CampusTourInitialAdminSeedTest_") + Guid.NewGuid().ToString("N");
+        }
         private readonly SqlConnectionStringBuilder settings = new(
             Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")!)
         {
@@ -393,9 +413,9 @@ public sealed class InitialAdminSeederTests
 
         public string ConnectionString => settings.ConnectionString;
 
-        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql")
+        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot.sql", bool demo = false)
         {
-            var database = new EmptySchemaDatabase();
+            var database = new EmptySchemaDatabase(demo);
             try
             {
                 await using (var master = new SqlConnection(database.settings.ConnectionString))

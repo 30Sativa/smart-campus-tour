@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertCircle, ArrowUpRight, KeyRound, School, User } from 'lucide-react'
-import type { RosterMatchRequest } from '../student-types'
+import type { PoiDetail, RosterMatchRequest } from '../student-types'
 
 interface StudentJoinFormProps {
   tourId: string
@@ -10,6 +10,8 @@ interface StudentJoinFormProps {
   isSubmitting?: boolean
   errorMessage?: string | null
   onSubmit: (req: RosterMatchRequest) => void
+  /** The Tour's stops, for the photo fan beside the form (optional). */
+  pois?: PoiDetail[]
 }
 
 export function StudentJoinForm({
@@ -20,6 +22,7 @@ export function StudentJoinForm({
   isSubmitting = false,
   errorMessage,
   onSubmit,
+  pois = [],
 }: StudentJoinFormProps) {
   const [groupCode, setGroupCode] = useState(initialGroupCode)
   const [hoTen, setHoTen] = useState('')
@@ -50,31 +53,34 @@ export function StudentJoinForm({
 
   const activeError = localError || errorMessage
 
+  const fan = [...pois].sort((a, b) => a.order - b.order).slice(0, 3)
+
   return (
-    <div className="st-join">
-      {/* A campus view made for the student journey. */}
-      <div className="st-join__visual">
-        <img src="/images/student-campus.png" alt="" aria-hidden="true" />
-        <div>
-          <div className="st-kicker">Tham quan qua robot tự hành</div>
-          <h2 className="st-join__title">{tourName}</h2>
-          <p className="st-join__school">
-            <School size={16} />
-            <span>Dành cho học sinh: {schoolName}</span>
-          </p>
-        </div>
-        <div className="st-join__steps">
-          <div><b>01</b>Nhập mã đoàn, họ tên và lớp</div>
-          <div><b>02</b>Chờ trong phòng chờ</div>
-          <div><b>03</b>Xem live, nghe thuyết minh, hỏi AI</div>
+    <div className="st-ctn st-x-join">
+      <div className="st-x-join__intro">
+        <div className="st-kicker">Tham quan qua robot tự hành</div>
+        <h2 className="st-x-display">Sẵn sàng <em>khám phá</em> campus từ xa?</h2>
+        <p className="st-x-lead">
+          {tourName}. Một robot thật đưa cả lớp đi qua {pois.length || 'các'} điểm dừng: bạn xem trực tiếp, nghe thuyết minh và hỏi trợ lý AI bất cứ lúc nào.
+        </p>
+        <p className="st-x-meta"><School size={16} /><span>Dành cho học sinh: {schoolName}</span></p>
+        <div className="st-x-fan" aria-hidden="true">
+          {fan.length > 0 ? fan.map((poi) => (
+            <figure key={poi.id}>
+              {poi.imageUrl ? <img src={poi.imageUrl} alt="" /> : <span className="st-x-fan__n">{poi.order}</span>}
+              <figcaption>{String(poi.order).padStart(2, '0')} · {poi.title.split(' & ')[0]}</figcaption>
+            </figure>
+          )) : (
+            <figure><img src="/images/student-campus.png" alt="" /><figcaption>Khuôn viên</figcaption></figure>
+          )}
         </div>
       </div>
 
-      <div className="st-join__panel">
-        <form onSubmit={handleSubmit} className="st-form">
+      <div className="st-x-join__panel">
+        <form onSubmit={handleSubmit} className="st-form st-x-card">
           <div className="st-form__head">
             <div className="st-kicker">Vào phiên tham quan</div>
-            <h3>Sẵn sàng khám phá campus?</h3>
+            <h3>Vào buổi tham quan</h3>
             <p>Không cần tài khoản. Thông tin được đối chiếu với danh sách trường đã gửi.</p>
           </div>
 

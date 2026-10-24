@@ -1,33 +1,69 @@
 #!/usr/bin/env bash
-
-# Resolve the clone this script actually lives in. Hard-coding a path under
-# $HOME silently sources a stale install/ if the miniPC still has an older
-# clone under a different directory name.
-ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-if [ ! -f "$ROBOT_ROOT/.env" ]; then
-    echo "ERROR: $ROBOT_ROOT/.env not found"
+# Source in every native runtime/inspection terminal. No ROS exports in bashrc.
+# A reviewed helper may live in a different checkout from the native install.
+# Explicit opt-in; never select a worktree install just because it exists.
+if ! ROBOT_ROOT="$(cd "${ROBOT_RUNTIME_ROOT:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"; then
     return 1 2>/dev/null || exit 1
 fi
-
+if [[ ! -f "$ROBOT_ROOT/.env" || ! -f /opt/ros/humble/setup.bash ||
+      ! -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]]; then
+    echo 'Missing robot/.env, ROS Humble, or native install space. See robot/docs/native-runtime.md.' >&2
+    return 1 2>/dev/null || exit 1
+fi
+# Remove inherited transport overrides before loading explicit machine settings.
+# ROS_SUPER_CLIENT belongs only to the CLI daemon.
+unset ROS_DISCOVERY_SERVER ROS_SUPER_CLIENT FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
 set -a
 source "$ROBOT_ROOT/.env"
 set +a
-
-source /opt/ros/humble/setup.bash
-
-if [ -f "$ROBOT_ROOT/ros2_ws/install/setup.bash" ]; then
-    source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
-else
-    echo "WARNING: $ROBOT_ROOT/ros2_ws/install/setup.bash not found."
-    echo "         Native Astra camera packages are NOT on the path. If setting up"
-    echo "         the camera host exception, build only its overlay with:"
-    echo "         cd $ROBOT_ROOT/ros2_ws && colcon build --symlink-install --packages-up-to orbbec_bringup"
-    echo "         Do not build or launch duplicate drivetrain/Nav2 nodes on the host."
+if [[ "${RMW_IMPLEMENTATION:-}" != rmw_fastrtps_cpp ||
+      -z "${ROS_DOMAIN_ID:-}" || -z "${ROS_DISCOVERY_SERVER:-}" ]]; then
+    echo 'Set RMW_IMPLEMENTATION=rmw_fastrtps_cpp, ROS_DOMAIN_ID and ROS_DISCOVERY_SERVER in robot/.env.' >&2
+    return 1 2>/dev/null || exit 1
 fi
-
-echo "ROS environment loaded:"
-echo "  WS=$ROBOT_ROOT/ros2_ws"
-echo "  DOMAIN=$ROS_DOMAIN_ID"
-echo "  DISCOVERY=$ROS_DISCOVERY_SERVER"
-echo "  RMW=$RMW_IMPLEMENTATION"
+# Localhost-only nodes cannot reach a discovery server on a LAN address: the
+# whole robot graph would silently stop discovering (robot/docs/dds-isolation.md).
+_robot_server_cmds="$(pgrep -a fast-discovery 2>/dev/null || true)"
+if [[ "${ROS_LOCALHOST_ONLY:-0}" == 1 ]]; then
+    IFS=';' read -ra _robot_servers <<< "$ROS_DISCOVERY_SERVER"
+    for _robot_server in "${_robot_servers[@]}"; do
+        case "${_robot_server%:*}" in
+            127.0.0.1|localhost|'') ;;
+            *) echo "ROS_LOCALHOST_ONLY=1 needs ROS_DISCOVERY_SERVER on 127.0.0.1, got $ROS_DISCOVERY_SERVER." >&2
+               unset _robot_servers _robot_server
+               return 1 2>/dev/null || exit 1 ;;
+        esac
+    done
+    unset _robot_servers _robot_server
+    # The original server advertises LAN locators even when .env points at
+    # 127.0.0.1. S1 must precede S2 (E1b); an IP-only check is insufficient.
+    while IFS= read -r _robot_server_cmd; do
+        [[ -z "$_robot_server_cmd" ]] && continue
+        if [[ ! "$_robot_server_cmd" =~ [[:space:]](-l|--udp-address)[[:space:]]+127\.0\.0\.1([[:space:]]|$) &&
+              ! "$_robot_server_cmd" =~ [[:space:]](-x|--xml-file)[[:space:]] ]]; then
+            echo 'ROS_LOCALHOST_ONLY=1 needs discovery-server-stage s1 before S2 (E1b).' >&2
+            unset _robot_server_cmds _robot_server_cmd
+            return 1 2>/dev/null || exit 1
+        fi
+    done <<< "$_robot_server_cmds"
+    unset _robot_server_cmd
+elif grep -Eq -- ' (-x|--xml-file) ' <<< "$_robot_server_cmds"; then
+    # Loopback-only server (dds-isolation.md S3): nodes must be localhost-only too.
+    echo 'The discovery server is loopback-only (S3): set ROS_LOCALHOST_ONLY=1 in robot/.env,' \
+         'or roll back with robot/scripts/discovery-server-stage s1.' >&2
+    return 1 2>/dev/null || exit 1
+fi
+unset _robot_server_cmds
+# Humble setup scripts are not nounset-safe; preserve the caller setting.
+_robot_nounset=false
+[[ $- == *u* ]] && _robot_nounset=true
+set +u
+source /opt/ros/humble/setup.bash
+source "$ROBOT_ROOT/ros2_ws/install/setup.bash"
+if [[ "$_robot_nounset" == true ]]; then
+    set -u
+fi
+unset _robot_nounset
+export ROBOT_MAP_DIR="${ROBOT_MAP_DIR:-$ROBOT_ROOT/robot_maps}"
+export PERSON_MODEL_DIR="${PERSON_MODEL_DIR:-$ROBOT_ROOT/models}"
+echo "Native ROS: WS=$ROBOT_ROOT/ros2_ws DOMAIN=$ROS_DOMAIN_ID DISCOVERY=$ROS_DISCOVERY_SERVER RMW=$RMW_IMPLEMENTATION"

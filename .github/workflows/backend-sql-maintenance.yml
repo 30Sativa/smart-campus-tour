@@ -1,0 +1,59 @@
+name: Backend SQL Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Successful main commit SHA from Backend Verify
+        required: true
+        type: string
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  maintenance:
+    name: Upgrade SQL Server during an approved maintenance window
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 55
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      OPS_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout pinned operations revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify both revisions and prepare authenticated source bundle
+        run: bash backend/deploy/prepare-release.sh "$RELEASE_SHA" "$OPS_SHA" "$RUNNER_TEMP/backend-bundle"
+
+      - name: Deploy verified bundle over pinned SSH
+        env:
+          DEPLOY_SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export DEPLOY_SSH_KEY_FILE="$RUNNER_TEMP/deploy-key"
+          export DEPLOY_SSH_KNOWN_HOSTS_FILE="$RUNNER_TEMP/deploy-known-hosts"
+          trap 'rm -f -- "$DEPLOY_SSH_KEY_FILE" "$DEPLOY_SSH_KNOWN_HOSTS_FILE"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$DEPLOY_SSH_KEY_FILE"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$DEPLOY_SSH_KNOWN_HOSTS_FILE"
+          unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
+          bash backend/deploy/ssh-deploy.sh "$RUNNER_TEMP/backend-bundle" sql-maintenance

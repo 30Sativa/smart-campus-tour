@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { IDENTITY, applyAffine, fitAffine, mapToGridPixel, mapToScenePose, mapToStudentPose, type MapConfig } from './map-config'
+import { IDENTITY, applyAffine, fitAffine, mapConfigFor, mapToScenePose, mapToStudentPose, type MapConfig } from './map-config'
+import { occupancyMapFor } from '../administration/pois/map/catalog'
 
 const config = (student: MapConfig['student2d']): MapConfig => ({
   mapKey: 'test',
-  grid: { resolution: 0.05, originX: -7.64, originY: -65.8, widthPx: 400, heightPx: 1600 },
   scene: { transform: IDENTITY, calibrated: true },
   student2d: student,
 })
 
 describe('map-config', () => {
+  it.each(['map2-v1', 'map2-v2'])('retains raster geometry without claiming calibration for %s', mapKey => {
+    const map = occupancyMapFor(mapKey, 'map')!
+    const presentation = mapConfigFor(mapKey)!
+    expect(presentation.grid).toEqual({ resolution: map.resolution, originX: map.origin[0],
+      originY: map.origin[1], widthPx: map.width, heightPx: map.height })
+    expect(presentation.scene.calibrated).toBe(false)
+    expect(presentation.student2d.calibrated).toBe(false)
+  })
+
   it('keeps the old map-to-scene convention with the identity transform', () => {
     const scene = mapToScenePose({ x: 3, y: 4, yaw: 0.5 })
     expect(scene.position).toEqual([3, 0, -4])
@@ -21,14 +30,6 @@ describe('map-config', () => {
     expect(scene.position[0]).toBeCloseTo(10)
     expect(scene.position[2]).toBeCloseTo(-1)
     expect(scene.rotation).toBeCloseTo(Math.PI / 2)
-  })
-
-  it('converts metres to occupancy-grid pixels, row 0 at the top', () => {
-    const cfg = config({ transform: IDENTITY, calibrated: false })
-    expect(mapToGridPixel(cfg, -7.64, -65.8)).toEqual({ px: 0, py: 1600 })
-    const p = mapToGridPixel(cfg, -6.64, -64.8)
-    expect(p.px).toBeCloseTo(20)
-    expect(p.py).toBeCloseTo(1580)
   })
 
   it('does not place a robot on an uncalibrated drawing', () => {

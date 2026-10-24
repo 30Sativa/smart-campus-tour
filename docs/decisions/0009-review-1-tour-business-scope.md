@@ -10,6 +10,12 @@
 
 ## Context
 
+> **Điều chỉnh 19/10/2026, ADR-0017:** quyền chuẩn bị Route bằng seed-only và
+> giới hạn Admin chỉ chọn tuyến ở §3 được thay bằng Admin Route CRUD. Dwell
+> vẫn thuộc RouteStop, không chỉnh riêng theo Tour. Các đoạn quyết định gốc
+> bên dưới được giữ để truy vết; chính sách hiện hành xem
+> [ADR-0017](0017-admin-route-management.md). Đây không phải xác nhận GVHD duyệt.
+
 Review 1 yêu cầu làm rõ cách vào Tour, giá trị tương tác với robot, quyền vận hành và xử lý sự cố. Ban đầu nhóm chọn link bí mật gửi trực tiếp qua email sau duyệt, dùng lại trong hạn; không account Student, mã phòng hoặc OTP. Một lời mời giữ tối đa một phiên browser hoạt động, giữ phiên trước và từ chối phiên khác đến sau. Reload/reconnect nhận lại phiên theo chính sách giữ kết nối hữu hạn. Link vẫn có thể bị chuyển tiếp; đây không phải xác minh danh tính hay điểm danh.
 
 Mục tiêu là phục vụ cả người xem riêng và cả lớp xem qua máy chiếu mà không thu danh sách cá nhân không cần thiết. Các quyết định dưới đây thay quy tắc cũ bắt thay cả roster khi sai một email, đăng ký riêng cho hình thức trình chiếu và cấu hình nội dung hoàn toàn bằng seed. Nghiên cứu, benchmark và telemetry contract không thay đổi trong ADR này.

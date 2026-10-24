@@ -4,13 +4,36 @@ Aligned on 2026-09-21 with **"CampusTour DT-AMR: Đặc tả phạm vi, nghiệp
 tích hợp tham quan từ xa" (19/09/2026)**, §2, §3, §5.2, §5.5, §11.1. The scope is
 the source of truth; this file maps it onto the web area.
 
+## Current implementation boundary
+
+`/admin/routes` now provides live SQL Route CRUD, separate from the Tour demo
+route selector. See `web/docs/route-management.md` and ADR-0017.
+
+`/admin/tours`, `/admin/tours/new`, `/admin/tours/:id` and `/admin/tours/:id/edit`
+now use the live `/api/admin/tours` API (ADR-0018) through
+`src/features/administration/tours/`: list/search/state filter, create from an
+active Route (route revision + idempotency key), metadata/schedule/Route edit
+within server permissions, and Cancel with a reason. READY (Chốt / Mở lại) has
+no backend endpoint yet and is not offered. The dashboard and `/admin/history`
+remain labelled simulation consumers.
+
+`/admin/registrations` and `/admin/registrations/pending` now use the real SQL
+review API; see `web/docs/admin-registration-review.md`. Their row counts
+represent invitation rows, including shared viewing, rather than attendance.
+The dashboard/READY/invitation screens described below remain labelled
+simulation consumers. Their review drawer still reviews only demo records.
+Live review does not issue access codes or send email, and never falls back to
+that simulation. Admin account and POI screens also use their existing APIs.
+
 ## What Admin does (and does not)
 
 | Admin does | Not Admin's |
 |---|---|
 | Create a Tour (name, time, description, prepared route) → **Scheduled** | Start / Hold / Next / End Early / recovery: Staff (`/staff/*`) |
 | Edit it while Scheduled | Robot, camera or head control, choosing or swapping a robot |
-| Review groups: **Approve**, or **Reject** with a reason | Route / POI / angle / narration editing (the technical team's config) |
+| Review groups: **Approve**, or **Reject** with a reason | Robot control, arbitrary drawn navigation geometry |
+| Manage Route/ordered POIs/Start/End/dwell/head steps via `/admin/routes` (ADR-0017) | Editing referenced itineraries, certifying physical safety, variant authoring |
+| Manage POI catalog, content and unused map/pose values at `/admin/pois` (ADR-0014) | Changing geometry after a route/history reference; claiming a stored pose was verified on hardware |
 | Send / re-send the participation e-mail (representative only) | Fleet, scenario editor, what-if, maintenance, analytics, marketing |
 | **Chốt Tour** Scheduled → Ready, **Mở lại** Ready → Scheduled (before Start) | Student accounts, attendance, self-booking, capacity, schedule optimisation |
 | **Hủy Tour** Scheduled/Ready → Cancelled, with a reason | Cancelling a Running Tour (that is Staff's End Early) |
@@ -18,6 +41,14 @@ the source of truth; this file maps it onto the web area.
 
 READY means "content and groups locked". It never means "robot ready": the
 robot, head and stream are checked by Staff at Start.
+
+POI `IsActive` means selectable for a newly prepared Route. It is not a
+verification state or proof the point is ready to navigate. The web form marks
+pose unverified and provides an occupancy-map position/heading picker with
+numeric x/y/yaw fine-tuning. The map package is derived from ROS YAML/PGM, not
+the Student drawing or Twin model. Updates keep the same POI ID. There is no
+hard-delete action. See `web/docs/poi-map-picker.md` for the workflow and map
+release checks.
 
 ## Screens
 
@@ -30,7 +61,13 @@ robot, head and stream are checked by Staff at Start.
 | `/admin/tours/:id/edit` | Sửa Tour (Scheduled only; otherwise says why) |
 | `/admin/registrations/pending` | Review queue (Submitted), drawer via `?review=<id>` |
 | `/admin/registrations` | All registrations, state filter |
-| `/admin/routes` | Danh mục tuyến (read-only) |
+| `/admin/routes` | Live Route catalog, search/status/paging and create |
+| `/admin/routes/new` | Create inactive Route through the four-step form, optionally copy an existing Route |
+| `/admin/routes/:routeId` | Detail, reference locks, activate/deactivate and delete unused Route |
+| `/admin/routes/:routeId/edit` | Edit metadata and unreferenced itinerary configuration |
+| `/admin/pois` | POI catalog, search/status filter/paging; create inactive; content and eligible pose edits; usage lock details |
+| `/admin/pois/new` | Create inactive POI; select pose on the ROS occupancy map or fine-tune numerically; optional narration/media metadata |
+| `/admin/pois/:id` | Edit POI, inspect route/history/READY-RUNNING use, activate/deactivate with confirmation |
 | `/admin/history` | Lịch sử Tour: startedAt, endedAt, endReason |
 | `/admin/roles` | Role/area matrix (read-only reference, sidebar footer) |
 

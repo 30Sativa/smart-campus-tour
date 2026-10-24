@@ -14,6 +14,9 @@
 
 type ZipEntry = { name: string; method: number; compressedSize: number; offset: number }
 
+// Bound XML expansion independently of the compressed upload's 2 MB limit.
+const MAX_XML_BYTES = 8 * 1024 * 1024
+
 export class XlsxError extends Error {}
 
 function u16(v: DataView, at: number) {
@@ -42,6 +45,7 @@ function listEntries(buf: Uint8Array): ZipEntry[] {
     if (u32(v, at) !== 0x02014b50) throw new XlsxError('Không đọc được file: cấu trúc .xlsx bị hỏng.')
     const method = u16(v, at + 10)
     const compressedSize = u32(v, at + 20)
+    if (u32(v, at + 24) > MAX_XML_BYTES) throw new XlsxError('Nội dung Excel sau giải nén quá lớn.')
     const nameLen = u16(v, at + 28)
     const extraLen = u16(v, at + 30)
     const commentLen = u16(v, at + 32)
@@ -56,7 +60,25 @@ function listEntries(buf: Uint8Array): ZipEntry[] {
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') throw new XlsxError('Trình duyệt không hỗ trợ đọc .xlsx. Hãy lưu file dạng .csv rồi tải lên.')
   const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  try {
+    while (true) {
+      const part = await reader.read()
+      if (part.done) break
+      size += part.value.byteLength
+      if (size > MAX_XML_BYTES) {
+        await reader.cancel()
+        throw new XlsxError('Nội dung Excel sau giải nén quá lớn.')
+      }
+      chunks.push(part.value)
+    }
+  } finally { reader.releaseLock() }
+  const output = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.byteLength }
+  return output
 }
 
 async function readEntry(buf: Uint8Array, entry: ZipEntry): Promise<string> {
@@ -64,6 +86,7 @@ async function readEntry(buf: Uint8Array, entry: ZipEntry): Promise<string> {
   if (u32(v, entry.offset) !== 0x04034b50) throw new XlsxError('Không đọc được file: cấu trúc .xlsx bị hỏng.')
   const start = entry.offset + 30 + u16(v, entry.offset + 26) + u16(v, entry.offset + 28)
   const raw = buf.subarray(start, start + entry.compressedSize)
+  if (raw.byteLength > MAX_XML_BYTES || start + entry.compressedSize > buf.length) throw new XlsxError('Nội dung Excel không hợp lệ.')
   let bytes: Uint8Array
   if (entry.method === 0) bytes = raw
   else if (entry.method === 8) bytes = await inflateRaw(raw)
@@ -150,6 +173,7 @@ export async function readFirstSheet(bytes: ArrayBuffer | Uint8Array): Promise<S
       const head = c[1] ?? ''
       const ref = attr(head, 'r')
       const col = ref ? columnIndex(ref) : implicitCol
+      if (col > 255) throw new XlsxError('Worksheet có quá nhiều cột để xem trước.')
       implicitCol = col + 1
       const type = attr(head, 't')
       const body = c[2] ?? ''
@@ -161,6 +185,7 @@ export async function readFirstSheet(bytes: ArrayBuffer | Uint8Array): Promise<S
       cells[col] = out
     }
     rows.push({ rowNumber: implicitRow, cells: Array.from(cells, (cell) => cell ?? '') })
+    if (rows.length > 10002) throw new XlsxError('Worksheet có quá nhiều dòng để xem trước.')
   }
   return rows
 }

@@ -1,0 +1,41 @@
+name: AI Assistant Verify
+
+on:
+  pull_request:
+    paths:
+      - "ai-assistant/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/ai-assistant-verify.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ai-assistant/**"
+      - "docs/architecture.md"
+      - "docs/decisions/**"
+      - ".github/workflows/ai-assistant-verify.yml"
+
+jobs:
+  verify:
+    name: Verify ai-assistant
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ai-assistant with dev tools
+        run: python -m pip install -e "ai-assistant[dev]"
+
+      - name: Run ai-assistant verification
+        env:
+          REQUIRE_LINT: "1"
+        run: bash ai-assistant/scripts/verify

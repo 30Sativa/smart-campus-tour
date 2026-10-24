@@ -9,6 +9,10 @@ is a text file (``FAKE_ADB_STATE_FILE``, default /tmp/fake-adb-state):
     unauthorized  -> attached, USB debugging not accepted
     none          -> unplugged (also: file missing)
 
+``shell dumpsys battery`` answers like Android, from ``FAKE_ADB_BATTERY``
+(level, default 76) and ``FAKE_ADB_CHARGING`` (``1`` = on USB power and
+charging).
+
 ``exec-out screenrecord`` emits a real side-by-side stereo H.264 stream: the
 left eye is a moving test pattern, the right eye solid red, each surrounded by
 a black "lens" border. It stops at --time-limit (like Android) or as soon as
@@ -70,6 +74,19 @@ def main(argv):
 
     if cmd == "shell" and args[1:3] == ["getprop", "ro.product.model"]:
         print("Quest 3")
+        return 0
+    if cmd == "shell" and args[1:3] == ["dumpsys", "battery"]:
+        charging = os.environ.get("FAKE_ADB_CHARGING") == "1"
+        print("Current Battery Service state:")
+        print("  AC powered: false")
+        print(f"  USB powered: {'true' if charging else 'false'}")
+        print("  Wireless powered: false")
+        print(f"  status: {2 if charging else 3}")
+        print("  health: 2")
+        print("  present: true")
+        print(f"  level: {os.environ.get('FAKE_ADB_BATTERY', '76')}")
+        print("  scale: 100")
+        print("  temperature: 310")
         return 0
     if cmd == "shell":
         return 0

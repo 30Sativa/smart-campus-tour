@@ -1,0 +1,4 @@
+# Same inference runtime as the reference Docker image; no export toolchain.
+numpy==1.26.4
+openvino==2024.6.0
+openvino-telemetry==2024.1.0

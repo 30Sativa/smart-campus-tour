@@ -13,6 +13,9 @@ function getInitialSession(): StudentSession | null {
   }
 }
 
+/** Tab of the live-tour panel (desktop and phone share it). */
+export type StudentLiveTab = 'stream' | 'map' | 'ai' | 'route'
+
 interface StudentStoreState {
   session: StudentSession | null
   setSession: (session: StudentSession | null) => void
@@ -24,9 +27,9 @@ interface StudentStoreState {
   isAiSpeaking: boolean
   setIsAiSpeaking: (speaking: boolean) => void
 
-  // Mobile layout active tab
-  activeTab: 'stream' | 'map' | 'ai'
-  setActiveTab: (tab: 'stream' | 'map' | 'ai') => void
+  // Live-tour panel tab
+  activeTab: StudentLiveTab
+  setActiveTab: (tab: StudentLiveTab) => void
 }
 
 export const useStudentStore = create<StudentStoreState>((set) => ({

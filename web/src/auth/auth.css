@@ -1,20 +1,24 @@
 /* ============================================================================
-   CampusTour DT-AMR - authentication design layer
+   CampusTour DT-AMR - authentication design layer ("Aurora Glass")
    ----------------------------------------------------------------------------
-   Sign-in and sign-up share one split screen: a quiet white form column on the
-   left and one full-bleed campus photograph on the right. The form is the
-   only thing that asks for attention; the photograph sets the place.
+   The sign-in screen is one frosted-glass card floating over a campus
+   photograph (SmartBus by day; the lit tour path at dusk in dark mode), tinted
+   by three slowly drifting colour fields. On wide screens a short caption
+   sits in the lower-left corner.
 
-   Both pages carry `.lp` on their root, which supplies the palette
-   (--lp-bg / --lp-ink / --lp-accent), the font, the light/dark switch and the
-   form-control tokens (--auth-field-bg / --auth-field-line / --auth-r). Auth
-   does not get a second design system.
+   The root carries `.lp`, which supplies the font and the light/dark switch;
+   the login palette (--lp-* and --auth-*) is set at the bottom of this file
+   under `.auth[data-page='login']`. Auth does not get a second design system.
 
    Rules for this surface:
-   - One accent (--lp-accent) for the primary button, links and focus rings.
-   - One radius for inputs and the button, so the form reads as one family.
-   - Motion is a single short fade when the screen first appears, and the
-     browser's own crossfade between the two routes. Nothing bounces.
+   - One accent (--lp-accent) for links and focus rings; the submit button is
+     the one solid block on the card.
+   - Pointer effects (rim glow, a lean of a few degrees, the button drifting
+     toward the pointer) are driven by custom properties from
+     `useAuroraPointer` in AuthLayout.tsx, and are skipped on touch screens
+     and for reduced motion.
+   - Ambient motion (the aurora, a slow drift of the photograph) stops
+     entirely for reduced motion.
    - `.auth-input`, `.auth-submit` and `.auth-spinner` are also used by the
      visitor app, so their base rules below stay global; sizes specific to this
      screen are scoped under `.auth`.
@@ -29,70 +33,218 @@
 /* ── Frame ───────────────────────────────────────────────────────────────── */
 
 .auth {
-  --auth-col: 400px;
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  background: var(--auth-panel-bg);
+  place-items: center;
+  padding: 40px 16px;
+  overflow: hidden;
+  background: var(--auth-bg);
 }
 
-@media (min-width: 1024px) {
-  .auth {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
+/* ── Aurora backdrop ─────────────────────────────────────────────────────── */
+
+.auth-aurora {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-/* ── Form column ─────────────────────────────────────────────────────────── */
-
-.auth-panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  padding: 40px 24px 48px;
-  background: var(--auth-panel-bg);
+/* The campus photograph. A background image rather than an <img>, so only
+   the picture for the current theme is downloaded. The scrim darkens the
+   left and the bottom, where the caption sits, and leaves the scene clear. */
+.auth-aurora__photo {
+  position: absolute;
+  inset: 0;
+  background: var(--auth-photo) center / cover no-repeat;
+  transform: scale(1.04);
 }
 
-@media (min-width: 640px) {
-  .auth-panel {
-    padding: 56px 48px;
-  }
+.auth-aurora__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(6, 26, 29, 0.55) 0%, rgba(6, 26, 29, 0.12) 38%, rgba(6, 26, 29, 0) 60%),
+    linear-gradient(0deg, rgba(6, 26, 29, 0.55) 0%, rgba(6, 26, 29, 0) 45%),
+    rgba(6, 26, 29, var(--auth-photo-dim));
 }
 
-.auth-col {
-  width: 100%;
-  max-width: var(--auth-col);
-  display: flex;
-  flex-direction: column;
+/* Over a photograph the colour fields tint the light instead of covering it. */
+.auth-aurora__blob {
+  position: absolute;
+  mix-blend-mode: soft-light;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: var(--auth-blob-opacity);
+}
+
+.auth-aurora__blob--1 {
+  width: max(46vw, 420px);
+  left: -10%;
+  top: -18%;
+  background: var(--auth-blob-1);
+}
+
+.auth-aurora__blob--2 {
+  width: max(40vw, 380px);
+  right: -8%;
+  top: 6%;
+  background: var(--auth-blob-2);
+}
+
+.auth-aurora__blob--3 {
+  width: max(38vw, 360px);
+  left: 26%;
+  bottom: -26%;
+  background: var(--auth-blob-3);
+  opacity: calc(var(--auth-blob-opacity) * 0.75);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .auth-col {
-    animation: auth-rise 420ms var(--auth-ease) both;
+  .auth-aurora__blob--1 { animation: auth-drift-1 16s ease-in-out infinite alternate; }
+  .auth-aurora__blob--2 { animation: auth-drift-2 19s ease-in-out infinite alternate; }
+  .auth-aurora__blob--3 { animation: auth-drift-3 22s ease-in-out infinite alternate; }
+  .auth-aurora__photo { animation: auth-photo-drift 40s ease-in-out infinite alternate; }
+}
+
+@keyframes auth-drift-1 { to { transform: translate(30%, 25%) scale(1.15); } }
+@keyframes auth-drift-2 { to { transform: translate(-35%, 30%) scale(0.9); } }
+@keyframes auth-drift-3 { to { transform: translate(-25%, -30%) scale(1.2); } }
+@keyframes auth-photo-drift { to { transform: scale(1.1) translate(-1.5%, -1%); } }
+
+/* ── Caption (wide screens only) ─────────────────────────────────────────── */
+
+.auth-caption {
+  display: none;
+}
+
+@media (min-width: 1180px) {
+  .auth-caption {
+    position: absolute;
+    left: clamp(32px, 4vw, 64px);
+    bottom: clamp(32px, 5vh, 56px);
+    display: block;
+    max-width: 30ch;
+    color: #fff;
   }
 }
 
-@keyframes auth-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+.auth-caption__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: #d6f18d;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.auth-caption__eyebrow span {
+  width: 24px;
+  height: 1px;
+  background: currentColor;
+}
+
+.auth-caption__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+}
+
+.auth-caption__lead {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* ── Glass card ──────────────────────────────────────────────────────────── */
+
+.auth-stage {
+  width: min(100%, 456px);
+  perspective: 1200px;
+}
+
+/* The 1px padding is the rim: a fixed radial light from the top edge. */
+.auth-card {
+  border-radius: 28px;
+  padding: 1px;
+  background: radial-gradient(
+    460px circle at 50% 0%,
+    var(--auth-rim-1),
+    var(--auth-rim-2) 28%,
+    var(--auth-rim-rest) 62%
+  );
+  box-shadow: 0 40px 90px -45px var(--auth-shadow);
+  /* The blur lives here, not on the inner panel: inside the rim it would only
+     blur the rim's own gradient, and the tour line would show through sharp. */
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+  transform: rotateX(var(--auth-rx, 0deg)) rotateY(var(--auth-ry, 0deg));
+  transition: transform 450ms var(--auth-ease);
+}
+
+.auth-col {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 34px 36px 26px;
+  border-radius: 27px;
+  background: var(--auth-card-bg);
+}
+
+.auth-col > * {
+  position: relative;
+}
+
+/* A wrong password nudges the card sideways once, as the alert appears. */
+@media (prefers-reduced-motion: no-preference) {
+  .auth-col:has(.auth-alert--login) {
+    animation: auth-shake 460ms var(--auth-ease);
   }
 }
+
+@keyframes auth-shake {
+  20% { translate: -8px 0; }
+  40% { translate: 7px 0; }
+  60% { translate: -4px 0; }
+  80% { translate: 2px 0; }
+}
+
+@media (max-width: 520px) {
+  .auth {
+    padding: 24px 12px;
+  }
+
+  .auth-col {
+    padding: 28px 22px 22px;
+  }
+}
+
+/* ── Brand and heading ───────────────────────────────────────────────────── */
 
 .auth-brand {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   align-self: flex-start;
-  margin-bottom: 56px;
+  margin-bottom: 34px;
   color: var(--lp-ink);
   font-size: 1rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   text-decoration: none;
   border-radius: 10px;
 }
@@ -103,94 +255,65 @@
 }
 
 .auth-brand__mark {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
+  transition: transform 500ms var(--auth-ease);
+}
+
+.auth-brand:hover .auth-brand__mark {
+  transform: rotate(-9deg) scale(1.06);
+}
+
+html.dark .auth-brand__mark {
+  filter: brightness(0) invert(1);
 }
 
 .auth-brand__sub {
   padding-left: 10px;
   border-left: 1px solid var(--lp-line);
   color: var(--lp-ink-3);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+}
+
+.auth-form-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--lp-accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.auth-form-eyebrow span {
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .auth .auth-title {
   margin: 0;
   color: var(--lp-ink);
-  font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.125rem);
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.025em;
+  font-size: clamp(2rem, 1.55rem + 1.5vw, 2.5rem);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.045em;
 }
 
-.auth .auth-lead {
-  margin: 10px 0 0;
-  color: var(--lp-ink-2);
-  font-size: 0.9375rem;
-  line-height: 1.55;
-}
-
-/* ── Photograph ──────────────────────────────────────────────────────────── */
-
-/* Decorative, so it is dropped below `lg` rather than stacked above the form:
-   on a phone it would only push the fields down. */
-.auth-visual {
-  display: none;
-}
-
-@media (min-width: 1024px) {
-  .auth-visual {
-    position: sticky;
-    top: 0;
-    display: block;
-    height: 100dvh;
-    overflow: hidden;
-    background: var(--lp-bg-sunk, #e8eef0);
-  }
-}
-
-.auth-visual__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.auth .auth-title span {
   display: block;
 }
 
-/* Only as dark as the caption needs, and only at the bottom. */
-.auth-visual__scrim {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 42%;
-  background: linear-gradient(to top, rgba(6, 13, 17, 0.62), rgba(6, 13, 17, 0));
-  pointer-events: none;
-}
-
-.auth-visual__inner {
-  position: absolute;
-  left: clamp(32px, 4vw, 56px);
-  right: clamp(32px, 4vw, 56px);
-  bottom: clamp(32px, 4vw, 48px);
-  color: #fff;
-}
-
-.auth-visual__title {
-  margin: 0;
-  max-width: 22ch;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.auth .auth-visual__lead {
-  margin: 8px 0 0;
-  max-width: 44ch;
-  color: rgba(255, 255, 255, 0.84);
+.auth .auth-lead {
+  margin: 12px 0 0;
+  color: var(--lp-ink-2);
   font-size: 0.9375rem;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* ── Form ────────────────────────────────────────────────────────────────── */
@@ -664,20 +787,19 @@
 /* ── Sign-in exit ────────────────────────────────────────────────────────────
 
    After a successful sign-in, `split-exit.ts` sets data-auth-exit="split" on
-   <html> and navigates inside a view transition. Only then do the two halves
-   get transition names: the form column leaves to the left, the photograph
-   to the right, and the destination page (the new root) is shown at once
-   underneath them, as if the screen opened like a door. */
+   <html> and navigates inside a view transition. Only then do the card and the
+   aurora get transition names: the card lifts away and dissolves, the aurora
+   fades, and the destination page (the new root) is already underneath. */
 
-html[data-auth-exit='split'] .auth-panel {
-  view-transition-name: auth-split-left;
+html[data-auth-exit='split'] .auth-stage {
+  view-transition-name: auth-exit-card;
 }
 
-html[data-auth-exit='split'] .auth-visual {
-  view-transition-name: auth-split-right;
+html[data-auth-exit='split'] .auth-aurora {
+  view-transition-name: auth-exit-aurora;
 }
 
-/* The destination is simply there; only the two halves move. */
+/* The destination is simply there; only the card and the aurora move. */
 html[data-auth-exit='split']::view-transition-old(root) {
   animation: none;
   opacity: 0;
@@ -687,46 +809,78 @@ html[data-auth-exit='split']::view-transition-new(root) {
   animation: none;
 }
 
-html[data-auth-exit='split']::view-transition-old(auth-split-left) {
-  animation: auth-split-left 720ms cubic-bezier(0.65, 0, 0.35, 1) both;
+html[data-auth-exit='split']::view-transition-old(auth-exit-card) {
+  animation: auth-exit-card 560ms cubic-bezier(0.65, 0, 0.35, 1) both;
 }
 
-html[data-auth-exit='split']::view-transition-old(auth-split-right) {
-  animation: auth-split-right 720ms cubic-bezier(0.65, 0, 0.35, 1) both;
+html[data-auth-exit='split']::view-transition-old(auth-exit-aurora) {
+  animation: auth-exit-aurora 760ms cubic-bezier(0.65, 0, 0.35, 1) both;
 }
 
-@keyframes auth-split-left {
+@keyframes auth-exit-card {
   to {
-    transform: translateX(-100%);
+    opacity: 0;
+    transform: translateY(-32px) scale(0.94);
+    filter: blur(6px);
   }
 }
 
-@keyframes auth-split-right {
+@keyframes auth-exit-aurora {
   to {
-    transform: translateX(100%);
+    opacity: 0;
+    transform: scale(1.08);
   }
 }
 
-/* Login: an editorial gateway paired with the SmartBus campus image. */
+/* ── Login palette ───────────────────────────────────────────────────────── */
+
 .auth[data-page='login'] {
-  --auth-panel-bg: #f6f8f3;
-  --auth-field-bg: #ffffff;
+  --auth-bg: #eef5ef;
+  --auth-card-bg: rgba(255, 255, 255, 0.66);
+  --auth-field-bg: rgba(255, 255, 255, 0.82);
   --auth-field-line: rgba(27, 61, 54, 0.18);
-  --lp-ink: #14332f;
-  --lp-ink-2: #526964;
-  --lp-ink-3: #6a807a;
+  --auth-r: 14px;
+  --auth-blob-1: #d6f18d;
+  --auth-blob-2: #7cc3a6;
+  --auth-blob-3: #a9d8ee;
+  --auth-blob-opacity: 0.32;
+  --auth-photo: url('/images/login-fpt-campus.png');
+  --auth-photo-dim: 0.08;
+  --auth-rim-1: rgba(39, 100, 81, 0.9);
+  --auth-rim-2: rgba(214, 241, 141, 0.75);
+  --auth-rim-rest: rgba(16, 45, 49, 0.12);
+  --auth-shadow: rgba(16, 45, 49, 0.45);
+  --auth-submit-bg: #102d31;
+  --auth-submit-ink: #d6f18d;
+  --auth-submit-glow: rgba(16, 45, 49, 0.5);
+  --lp-ink: #102d31;
+  --lp-ink-2: #4e6568;
+  --lp-ink-3: #607779;
   --lp-accent: #276451;
-  --lp-accent-soft: rgba(39, 100, 81, 0.12);
+  --lp-accent-soft: rgba(39, 100, 81, 0.14);
   --lp-accent-shadow: rgba(39, 100, 81, 0.22);
-  --lp-line: rgba(27, 61, 54, 0.16);
-  --lp-line-strong: rgba(27, 61, 54, 0.3);
-  background: var(--auth-panel-bg);
+  --lp-line: rgba(16, 45, 49, 0.14);
+  --lp-line-strong: rgba(16, 45, 49, 0.3);
 }
 
 html.dark .auth[data-page='login'] {
-  --auth-panel-bg: #0e1c1c;
-  --auth-field-bg: #172929;
+  --auth-bg: #061a1d;
+  --auth-card-bg: rgba(11, 34, 36, 0.6);
+  --auth-field-bg: rgba(6, 26, 29, 0.6);
   --auth-field-line: rgba(219, 241, 222, 0.2);
+  --auth-blob-1: #d6f18d;
+  --auth-blob-2: #1f6b55;
+  --auth-blob-3: #1c4f66;
+  --auth-blob-opacity: 0.3;
+  --auth-photo: url('/images/login-fpt-campus.png');
+  --auth-photo-dim: 0.12;
+  --auth-rim-1: rgba(214, 241, 141, 0.85);
+  --auth-rim-2: rgba(39, 100, 81, 0.9);
+  --auth-rim-rest: rgba(219, 241, 222, 0.12);
+  --auth-shadow: rgba(0, 0, 0, 0.75);
+  --auth-submit-bg: #d6f18d;
+  --auth-submit-ink: #102d31;
+  --auth-submit-glow: rgba(214, 241, 141, 0.45);
   --lp-ink: #f0f6ed;
   --lp-ink-2: #b5c8bd;
   --lp-ink-3: #9aafa4;
@@ -737,84 +891,14 @@ html.dark .auth[data-page='login'] {
   --lp-line-strong: rgba(219, 241, 222, 0.3);
 }
 
-.auth[data-page='login'] .auth-panel {
-  align-items: stretch;
-  padding: 32px clamp(24px, 5vw, 76px) 26px;
-}
-
-.auth[data-page='login'] .auth-col {
-  max-width: none;
-  min-height: calc(100dvh - 58px);
-}
-
-.auth[data-page='login'] .auth-brand {
-  margin-bottom: 0;
-  font-size: 1.08rem;
-  letter-spacing: -0.035em;
-}
-
-.auth[data-page='login'] .auth-brand__mark {
-  width: 39px;
-  height: 39px;
-  transition: transform 500ms var(--auth-ease);
-}
-
-.auth[data-page='login'] .auth-brand:hover .auth-brand__mark {
-  transform: rotate(-9deg) scale(1.06);
-}
-
-html.dark .auth[data-page='login'] .auth-brand__mark {
-  filter: brightness(0) invert(1);
-}
-
-.auth[data-page='login'] .auth-body {
-  width: min(100%, 438px);
-  margin: auto;
-  padding: 44px 0;
-}
-
-.auth-form-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 24px;
-  color: var(--lp-accent);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-}
-
-.auth-form-eyebrow span {
-  width: 27px;
-  height: 1px;
-  background: currentColor;
-}
-
-.auth[data-page='login'] .auth-title {
-  max-width: none;
-  font-size: clamp(2.5rem, 3.3vw, 3.6rem);
-  font-weight: 750;
-  line-height: 1.08;
-  letter-spacing: -0.055em;
-}
-
-.auth[data-page='login'] .auth-title span {
-  display: block;
-}
-
-.auth[data-page='login'] .auth-lead {
-  max-width: 37ch;
-  margin-top: 18px;
-  font-size: 0.98rem;
-  line-height: 1.7;
-}
+/* ── Login form on glass ─────────────────────────────────────────────────── */
 
 .auth[data-page='login'] .auth-form {
-  margin-top: 42px;
+  margin-top: 30px;
 }
 
 .auth[data-page='login'] .auth-label {
-  margin-bottom: 9px;
+  margin-bottom: 8px;
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -828,48 +912,90 @@ html.dark .auth[data-page='login'] .auth-brand__mark {
 }
 
 .auth[data-page='login'] .auth-input {
-  height: 54px;
-  border-radius: 14px;
-  box-shadow: 0 7px 20px -18px rgba(17, 51, 43, 0.55);
+  height: 52px;
+  border-radius: var(--auth-r);
+  transition: border-color var(--auth-fast) var(--auth-ease),
+    box-shadow 250ms var(--auth-ease),
+    background-color var(--auth-fast) var(--auth-ease);
 }
 
-.auth[data-page='login'] .auth-error-slot {
-  min-height: 30px;
+.auth[data-page='login'] .auth-input:focus {
+  box-shadow: 0 0 0 4px var(--lp-accent-soft), 0 12px 26px -18px var(--auth-shadow);
 }
 
 .auth[data-page='login'] .auth-reveal {
-  right: 6px;
+  right: 5px;
   width: 42px;
   height: 42px;
 }
 
+.auth[data-page='login'] .auth-alert {
+  margin-top: 24px;
+}
+
+/* The one solid block on the card. It drifts toward the pointer by
+   --auth-bx/--auth-by (the `translate` property, so it composes with the
+   shared hover lift), a light sweeps across on hover, and a press ripples out
+   from --auth-px/--auth-py. */
 .auth[data-page='login'] .auth-submit {
   position: relative;
   overflow: hidden;
-  height: 56px;
-  margin-top: 16px;
-  justify-content: space-between;
-  border-radius: 999px;
-  background: #d5f08f;
-  color: #183626;
+  height: 54px;
+  margin-top: 12px;
+  border-radius: var(--auth-r);
+  background: var(--auth-submit-bg);
+  color: var(--auth-submit-ink);
   font-size: 0.98rem;
-  font-weight: 800;
-  box-shadow: 0 18px 34px -18px rgba(104, 145, 37, 0.55);
+  font-weight: 700;
+  box-shadow: 0 14px 30px -14px var(--auth-submit-glow);
+  translate: var(--auth-bx, 0px) var(--auth-by, 0px);
+  transition: filter var(--auth-fast) var(--auth-ease),
+    transform var(--auth-fast) var(--auth-ease),
+    box-shadow 300ms var(--auth-ease),
+    translate 220ms var(--auth-ease);
+}
+
+.auth[data-page='login'] .auth-submit:hover:not(:disabled) {
+  box-shadow: 0 18px 38px -12px var(--auth-submit-glow);
 }
 
 .auth[data-page='login'] .auth-submit::before {
   content: '';
   position: absolute;
-  inset: 0 auto 0 -40%;
-  width: 32%;
-  transform: skewX(-24deg);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
-  transition: left 580ms var(--auth-ease);
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.32) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 800ms var(--auth-ease);
   pointer-events: none;
 }
 
 .auth[data-page='login'] .auth-submit:hover:not(:disabled)::before {
-  left: 115%;
+  transform: translateX(120%);
+}
+
+.auth[data-page='login'] .auth-submit::after {
+  content: '';
+  position: absolute;
+  left: var(--auth-px, 50%);
+  top: var(--auth-py, 50%);
+  width: 240px;
+  height: 240px;
+  margin: -120px 0 0 -120px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth[data-page='login'] .auth-submit[data-ripple]::after {
+    animation: auth-ripple 600ms ease-out;
+  }
+}
+
+@keyframes auth-ripple {
+  from { transform: scale(0); opacity: 0.28; }
+  to { transform: scale(1.6); opacity: 0; }
 }
 
 .auth[data-page='login'] .auth-submit svg {
@@ -878,112 +1004,90 @@ html.dark .auth[data-page='login'] .auth-brand__mark {
 }
 
 .auth[data-page='login'] .auth-submit:hover:not(:disabled) svg {
-  transform: translateX(5px);
+  transform: translateX(4px);
 }
 
-.auth[data-page='login'] .auth-switch {
-  margin-top: 27px;
-  text-align: left;
+/* Way home and copyright share one quiet line under the form. */
+.auth-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--lp-line);
 }
 
 .auth[data-page='login'] .auth-back {
-  align-self: flex-start;
-  margin-top: 0;
+  margin: 0;
   color: var(--lp-ink-2);
 }
 
 .auth[data-page='login'] .auth-footer {
-  margin-top: 16px;
-  text-align: left;
-}
-
-@media (min-width: 1024px) {
-  .auth[data-page='login'] {
-    grid-template-columns: minmax(440px, 0.91fr) minmax(0, 1.09fr);
-  }
-
-  .auth[data-page='login'] .auth-visual {
-    height: calc(100dvh - 28px);
-    margin: 14px 14px 14px 0;
-    border-radius: 22px;
-    box-shadow: 0 24px 60px -30px rgba(10, 38, 33, 0.45);
-  }
-}
-
-.auth[data-page='login'] .auth-visual__img {
-  object-position: 55% 50%;
-  transform: scale(1.01);
-  transition: transform 1100ms var(--auth-ease);
-}
-
-.auth[data-page='login'] .auth-visual:hover .auth-visual__img {
-  transform: scale(1.045);
-}
-
-.auth[data-page='login'] .auth-visual__scrim {
-  inset: 0;
-  height: auto;
-  background: linear-gradient(180deg, rgba(5, 29, 27, 0.68) 0%, rgba(5, 29, 27, 0.25) 42%, transparent 70%),
-    linear-gradient(90deg, rgba(5, 29, 27, 0.25), transparent 72%);
-}
-
-.auth[data-page='login'] .auth-visual__inner {
-  top: clamp(42px, 6vh, 88px);
-  bottom: auto;
-  left: clamp(32px, 4.5vw, 76px);
-  right: clamp(32px, 4vw, 70px);
-}
-
-.auth-visual__eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 24px;
-  color: #d9f3a0;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-}
-
-.auth-visual__eyebrow span {
-  width: 24px;
-  height: 1px;
-  background: currentColor;
-}
-
-.auth[data-page='login'] .auth-visual__title {
-  max-width: 11ch;
-  font-size: clamp(2.35rem, 4vw, 4.5rem);
-  font-weight: 750;
-  line-height: 1.08;
-  letter-spacing: -0.055em;
-  text-shadow: 0 3px 22px rgba(4, 23, 20, 0.3);
-}
-
-.auth[data-page='login'] .auth-visual__lead {
-  max-width: 36ch;
-  margin-top: 20px;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 1rem;
-  line-height: 1.65;
-  text-shadow: 0 2px 12px rgba(4, 23, 20, 0.35);
-}
-
-.auth-visual__note {
-  position: absolute;
-  bottom: 30px;
-  left: clamp(32px, 4.5vw, 76px);
   margin: 0;
-  padding: 11px 15px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  border-radius: 999px;
-  background: rgba(7, 36, 31, 0.24);
-  backdrop-filter: blur(12px);
-  color: #fff;
-  font-size: 0.69rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  color: var(--lp-ink-3);
+  font-size: 0.75rem;
 }
+
+/* ── Entrance ────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* `backwards`, not `both`: an opacity animation that stays applied after it
+     ends makes the stage a backdrop root, and the glass would stop blurring
+     the aurora behind it. */
+  .auth-aurora {
+    animation: auth-fade 1.2s ease backwards;
+  }
+
+  .auth-stage {
+    animation: auth-card-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .auth-brand,
+  .auth-form-eyebrow,
+  .auth .auth-title,
+  .auth .auth-lead,
+  .auth .auth-form,
+  .auth-meta,
+  .auth-caption {
+    animation: auth-login-enter 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .auth-form-eyebrow { animation-delay: 120ms; }
+  .auth .auth-title { animation-delay: 170ms; }
+  .auth .auth-lead { animation-delay: 230ms; }
+  .auth .auth-form { animation-delay: 300ms; }
+  .auth-meta { animation-delay: 380ms; }
+  .auth-caption { animation-delay: 450ms; }
+}
+
+@keyframes auth-fade {
+  from { opacity: 0; }
+}
+
+@keyframes auth-card-enter {
+  from { opacity: 0; transform: translateY(28px) scale(0.97); }
+}
+
+@keyframes auth-login-enter {
+  from { opacity: 0; translate: 0 16px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card,
+  .auth-brand__mark,
+  .auth[data-page='login'] .auth-input-wrap,
+  .auth[data-page='login'] .auth-submit,
+  .auth[data-page='login'] .auth-submit::before,
+  .auth[data-page='login'] .auth-submit svg {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ── Development badge (login) ───────────────────────────────────────────── */
 
 .auth .auth-devbadge {
   padding: 0;
@@ -1021,118 +1125,4 @@ html.dark .auth[data-page='login'] .auth-brand__mark {
   margin: 0;
   padding: 0 13px 12px;
   line-height: 1.45;
-}
-
-@media (max-width: 1023px) {
-  .auth[data-page='login'] {
-    grid-template-rows: 168px 1fr;
-  }
-
-  .auth[data-page='login'] .auth-panel {
-    grid-row: 2;
-    padding-top: 26px;
-  }
-
-  .auth[data-page='login'] .auth-col {
-    min-height: 0;
-  }
-
-  .auth[data-page='login'] .auth-body {
-    margin: 0 auto;
-  }
-
-  .auth[data-page='login'] .auth-visual {
-    position: relative;
-    display: block;
-    grid-row: 1;
-    height: 168px;
-    overflow: hidden;
-  }
-
-  .auth[data-page='login'] .auth-visual__img {
-    object-position: 65% 78%;
-  }
-
-  .auth[data-page='login'] .auth-visual__inner,
-  .auth[data-page='login'] .auth-visual__note {
-    display: none;
-  }
-}
-
-@media (max-width: 639px) {
-  .auth[data-page='login'] {
-    grid-template-rows: 144px 1fr;
-  }
-
-  .auth[data-page='login'] .auth-panel {
-    padding: 24px 24px 30px;
-  }
-
-  .auth[data-page='login'] .auth-visual {
-    height: 144px;
-  }
-
-  .auth[data-page='login'] .auth-body {
-    padding: 48px 0 38px;
-  }
-
-  .auth[data-page='login'] .auth-title {
-    font-size: clamp(2.3rem, 9vw, 3rem);
-  }
-
-  .auth[data-page='login'] .auth-form {
-    margin-top: 32px;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .auth[data-page='login'] .auth-col {
-    animation: none;
-  }
-
-  .auth[data-page='login'] .auth-brand,
-  .auth[data-page='login'] .auth-form-eyebrow,
-  .auth[data-page='login'] .auth-title,
-  .auth[data-page='login'] .auth-lead,
-  .auth[data-page='login'] .auth-form,
-  .auth[data-page='login'] .auth-switch,
-  .auth[data-page='login'] .auth-back,
-  .auth[data-page='login'] .auth-footer {
-    animation: auth-login-enter 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  .auth[data-page='login'] .auth-title { animation-delay: 80ms; }
-  .auth[data-page='login'] .auth-lead { animation-delay: 145ms; }
-  .auth[data-page='login'] .auth-form { animation-delay: 220ms; }
-  .auth[data-page='login'] .auth-switch { animation-delay: 300ms; }
-  .auth[data-page='login'] .auth-back,
-  .auth[data-page='login'] .auth-footer { animation-delay: 360ms; }
-  .auth[data-page='login'] .auth-visual__img {
-    animation: auth-image-enter 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .auth[data-page='login'] .auth-visual__inner,
-  .auth[data-page='login'] .auth-visual__note {
-    animation: auth-login-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) 270ms both;
-  }
-}
-
-@keyframes auth-login-enter {
-  from { opacity: 0; translate: 0 22px; }
-  to { opacity: 1; translate: 0 0; }
-}
-
-@keyframes auth-image-enter {
-  from { opacity: 0.6; transform: scale(1.08); }
-  to { opacity: 1; transform: scale(1.01); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth[data-page='login'] .auth-brand__mark,
-  .auth[data-page='login'] .auth-input-wrap,
-  .auth[data-page='login'] .auth-submit::before,
-  .auth[data-page='login'] .auth-submit svg,
-  .auth[data-page='login'] .auth-visual__img {
-    animation: none;
-    transition: none;
-  }
 }

@@ -8,7 +8,8 @@ export function AuthBootstrap({ children }: PropsWithChildren) {
     let mounted = true
 
     void restoreAuthSession()
-      .catch(() => useAuthStore.getState().logout())
+      // Refresh owns revision-aware rejection. An old failure cannot clear a newer login.
+      .catch(() => {})
       .finally(() => {
         if (mounted) useAuthStore.getState().setAuthReady()
       })

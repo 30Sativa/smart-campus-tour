@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Plus, RotateCcw } from 'lucide-react'
-import { PageHeader, Pagination, PanelHead, SearchField, panelClass } from '../../features/staff/StaffUi'
-import { buttonClass } from '../../features/staff/ui-classes'
+import { PageHeader, Pagination, PanelHead, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass } from '../../components/ui/ui-classes'
 import { AdminPage, EmptyState, Notice, SkeletonRows } from '../../features/administration/AdminUi'
 import { AccountStatusAction } from '../../features/administration/accounts/components/AccountStatusAction'
 import { AccountTable, type AccountLifecycleAction } from '../../features/administration/accounts/components/AccountTable'
 import { CreateAccountDialog } from '../../features/administration/accounts/components/CreateAccountDialog'
 import { accountRequestError } from '../../features/administration/accounts/errors'
 import { useAccounts } from '../../features/administration/accounts/hooks'
-import { useDebouncedValue } from '../../features/administration/accounts/use-debounced-value'
+import { useDebouncedValue } from '../../features/administration/use-debounced-value'
 import type { AccountListItem, AccountSort, AccountSortField } from '../../features/administration/accounts/types'
 
 const PAGE_SIZE = 20

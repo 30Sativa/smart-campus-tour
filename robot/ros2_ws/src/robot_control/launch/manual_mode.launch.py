@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -13,6 +13,7 @@ def generate_launch_description():
     baudrate = LaunchConfiguration('baudrate')
     wheel_base = LaunchConfiguration('wheel_base')
     wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     max_wheel_speed_mm_s = LaunchConfiguration('max_wheel_speed_mm_s')
     speed_scale = LaunchConfiguration('speed_scale')
     invert_left = LaunchConfiguration('invert_left')
@@ -23,8 +24,10 @@ def generate_launch_description():
     odom_frame = LaunchConfiguration('odom_frame')
     initial_mode = LaunchConfiguration('initial_mode')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    lidar_yaw = LaunchConfiguration('lidar_yaw')
+    ekf_params_file = LaunchConfiguration('ekf_params_file')
 
-    ekf_config = PathJoinSubstitution([
+    default_ekf_params = PathJoinSubstitution([
         FindPackageShare('robot_control'),
         'config',
         'ekf.yaml',
@@ -42,7 +45,8 @@ def generate_launch_description():
     # la min: chay ros2_control_node mot cai la gianh cong LiDAR.
     robot_description = ParameterValue(
         Command(['xacro ', robot_xacro,
-                 ' use_sim:=false use_ros2_control:=false']),
+                 ' use_sim:=false use_ros2_control:=false',
+                 ' lidar_yaw:=', lidar_yaw]),
         value_type=str,
     )
 
@@ -72,6 +76,9 @@ def generate_launch_description():
                                           'physical/CAD separation is 0.4325 m.'),
         DeclareLaunchArgument('wheel_radius', default_value='0.09725',
                               description='Real wheel radius for odometry.'),
+        DeclareLaunchArgument('odom_linear_scale', default_value='1.0',
+                              description='Odometry-only translation scale '
+                                          '(Localization V2); 1.0 = unchanged.'),
         DeclareLaunchArgument('max_wheel_speed_mm_s', default_value='250.0',
                               description='Peak wheel speed safety limit.'),
         DeclareLaunchArgument(
@@ -97,6 +104,21 @@ def generate_launch_description():
                               description='manual or explore.'),
         DeclareLaunchArgument('use_sim_time', default_value='false',
                               description='Use simulation clock.'),
+        # Measured 2026-10-15: in the straight corridor the walls appear
+        # rotated 12.5-13.3 deg in the scan while wheel odometry and the
+        # LiDAR wall distances show the robot driving parallel to them (4
+        # passes, 2 days, both directions, scan handedness checked). Offline
+        # AMCL replays: lateral error -0.09..-0.20 m at 0 rad, 0.02-0.04 m at
+        # this value. Pass lidar_yaw:=0.0 to roll back without rebuilding.
+        DeclareLaunchArgument(
+            'lidar_yaw', default_value='-0.2225',
+            description='Real-robot base_link->lidar_link yaw calibration '
+                        '(rad). 0.0 = nominal CAD mount.'),
+        DeclareLaunchArgument(
+            'ekf_params_file', default_value=default_ekf_params,
+            description='robot_localization EKF parameter file. Default '
+                        'ekf.yaml fuses wheel twist + BNO085 yaw; '
+                        'ekf_wheel_only.yaml is a heading experiment.'),
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -110,29 +132,35 @@ def generate_launch_description():
             }],
         ),
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(stm32_bridge_launch),
-            launch_arguments={
-                'robot_id': robot_id,
-                'port': port,
-                'baudrate': baudrate,
-                'wheel_base': wheel_base,
-                'wheel_radius': wheel_radius,
-                'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
-                'speed_scale': speed_scale,
-                'invert_left': invert_left,
-                'invert_right': invert_right,
-                'odom_invert_left': odom_invert_left,
-                'odom_invert_right': odom_invert_right,
-                'odom_frame': odom_frame,
-                'base_frame': base_frame,
-                'publish_odom': 'true',
-                'publish_tf': 'false',
-            }.items(),
-        ),
+        # Include arguments share the launch context unless explicitly scoped.
+        # Keep STM32 publish_tf=false local so it cannot disable camera TF.
+        GroupAction(scoped=True, actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(stm32_bridge_launch),
+                launch_arguments={
+                    'robot_id': robot_id,
+                    'port': port,
+                    'baudrate': baudrate,
+                    'wheel_base': wheel_base,
+                    'wheel_radius': wheel_radius,
+                    'odom_linear_scale': odom_linear_scale,
+                    'max_wheel_speed_mm_s': max_wheel_speed_mm_s,
+                    'speed_scale': speed_scale,
+                    'invert_left': invert_left,
+                    'invert_right': invert_right,
+                    'odom_invert_left': odom_invert_left,
+                    'odom_invert_right': odom_invert_right,
+                    'odom_frame': odom_frame,
+                    'base_frame': base_frame,
+                    'publish_odom': 'true',
+                    'publish_tf': 'false',
+                }.items(),
+            ),
+        ]),
 
         # The EKF is the only odom -> base_footprint TF owner on real hardware.
-        # Input: wheel/odom (vx + vyaw) and imu/data (relative yaw).
+        # Input (default ekf.yaml): wheel/odom (vx + vyaw) and imu/data
+        # (relative yaw). ekf_wheel_only.yaml drops imu/data for experiments.
         # Output: odom, remapped from robot_localization's default name.
         Node(
             package='robot_localization',
@@ -141,7 +169,7 @@ def generate_launch_description():
             namespace=robot_id,
             output='screen',
             parameters=[
-                ekf_config,
+                ekf_params_file,
                 {
                     'use_sim_time': ParameterValue(
                         use_sim_time, value_type=bool),

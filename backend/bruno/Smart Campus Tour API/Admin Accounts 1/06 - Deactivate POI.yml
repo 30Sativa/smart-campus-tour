@@ -1,0 +1,24 @@
+info:
+  name: 06 - Deactivate POI
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/admin/pois/{{poiId}}/deactivate"
+  body:
+    type: json
+    data: |-
+      {
+        "expectedRowVersion": "AAAAAAAAJxM="
+      }
+  auth:
+    type: bearer
+    token: "{{accessToken}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

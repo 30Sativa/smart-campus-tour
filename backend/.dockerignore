@@ -1,0 +1,27 @@
+# Only the four runtime projects belong in the build context.
+**
+!src/
+!src/**
+!Dockerfile
+!Dockerfile.preview
+!database/
+!database/smart-campus-tour-schema-v1.1.sql
+!database/smart-campus-tour-bootstrap-check.sql
+!database/smart-campus-tour-permissions.sql
+!database/smart-campus-tour-runtime-permissions.sql
+!deploy/
+!deploy/init-db.sh
+!Directory.Build.props
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.pdb
+**/*.env
+**/.env*
+**/appsettings.Development.json
+**/appsettings.*.local.json
+**/*.pfx
+**/*.pem
+**/*.key
+**/secrets.json

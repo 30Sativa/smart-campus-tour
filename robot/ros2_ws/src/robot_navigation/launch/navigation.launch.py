@@ -12,7 +12,7 @@
 #   RPLiDAR   -> /scan                  -> local + global costmap
 #   Astra Pro -> /camera/depth/points   -> local costmap ONLY
 #   The camera covers what a single LiDAR plane misses: low boxes, pallet
-#   edges, overhangs. enable_camera:=false falls back to LiDAR-only.
+#   edges, overhangs. LiDAR-only is the default; enable_camera:=true opts in.
 #   camera_* args MUST be the values Phase 2 calibrated - see
 #   docs/phase2-perception.md section 3. Wrong pitch turns the floor into a wall.
 #
@@ -82,6 +82,11 @@ def generate_launch_description():
     map_yaml = LaunchConfiguration('map')
     localization_params_file = LaunchConfiguration('localization_params_file')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
+    ekf_params_file = LaunchConfiguration('ekf_params_file')
+    lidar_yaw = LaunchConfiguration('lidar_yaw')
+    wheel_base = LaunchConfiguration('wheel_base')
+    wheel_radius = LaunchConfiguration('wheel_radius')
+    odom_linear_scale = LaunchConfiguration('odom_linear_scale')
     enable_camera = LaunchConfiguration('enable_camera')
     rviz = LaunchConfiguration('rviz')
 
@@ -119,6 +124,11 @@ def generate_launch_description():
         FindPackageShare('robot_control'),
         'config',
         'nav2_params.yaml',
+    ])
+    default_ekf_params = PathJoinSubstitution([
+        FindPackageShare('robot_control'),
+        'config',
+        'ekf.yaml',
     ])
     scan_filter_params = PathJoinSubstitution([
         FindPackageShare('robot_control'),
@@ -163,9 +173,30 @@ def generate_launch_description():
         DeclareLaunchArgument('nav2_params_file',
                               default_value=default_nav2_params,
                               description='Nav2 parameter file.'),
-        DeclareLaunchArgument('enable_camera', default_value='true',
+        DeclareLaunchArgument('lidar_yaw', default_value='-0.2225',
+                              description='LiDAR yaw calibration (rad) passed to '
+                                          'manual_mode.launch.py; 0.0 = nominal mount.'),
+        # Odometry geometry, forwarded to manual_mode.launch.py -> stm32_bridge.
+        # Defaults must equal manual_mode.launch.py (locked by
+        # robot_navigation/test/test_odometry_args.py). Localization V2 sets
+        # odom_linear_scale from a measured straight run.
+        DeclareLaunchArgument('wheel_base', default_value='0.4714',
+                              description='Calibrated effective wheel base (m), '
+                                          'forwarded to manual_mode.launch.py.'),
+        DeclareLaunchArgument('wheel_radius', default_value='0.09725',
+                              description='Wheel radius (m) for odometry, '
+                                          'forwarded to manual_mode.launch.py.'),
+        DeclareLaunchArgument('odom_linear_scale', default_value='1.0',
+                              description='Odometry-only translation scale '
+                                          '(Localization V2); 1.0 = V1.'),
+        DeclareLaunchArgument('ekf_params_file',
+                              default_value=default_ekf_params,
+                              description='EKF parameter file passed to '
+                                          'manual_mode.launch.py.'),
+        DeclareLaunchArgument('enable_camera', default_value='false',
                               description='Feed the Astra point cloud into the '
-                                          'local costmap.'),
+                                          'local costmap. Enable only after the '
+                                          'camera mount has been calibrated.'),
         DeclareLaunchArgument(
             'rviz', default_value='false',
             description='Open RViz with the navigation layout. Default false: '
@@ -211,6 +242,11 @@ def generate_launch_description():
                 'initial_mode': 'explore',
                 'use_sim_time': use_sim_time,
                 'enable_teleop': enable_teleop,
+                'ekf_params_file': ekf_params_file,
+                'lidar_yaw': lidar_yaw,
+                'wheel_base': wheel_base,
+                'wheel_radius': wheel_radius,
+                'odom_linear_scale': odom_linear_scale,
             }.items(),
         ),
 
@@ -256,29 +292,33 @@ def generate_launch_description():
         # 2b) Astra Pro -> /camera/depth/points, plus base_link -> camera_link.
         #     RGB stays off: the costmap only reads geometry, and dropping the
         #     colour stream is what keeps depth stable over one USB bus.
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(camera_launch),
-            condition=IfCondition(enable_camera),
-            launch_arguments={
-                'robot_id': robot_id,
-                'enable_color': LaunchConfiguration('camera_enable_color'),
-                'color_info_url': LaunchConfiguration('camera_color_info_url'),
-                'enable_ir': 'false',
-                'enable_point_cloud': 'true',
-                'depth_width': LaunchConfiguration('camera_depth_width'),
-                'depth_height': LaunchConfiguration('camera_depth_height'),
-                'depth_fps': LaunchConfiguration('camera_depth_fps'),
-                'parent_frame': 'base_link',
-                'child_frame': 'camera_link',
-                'x': LaunchConfiguration('camera_x'),
-                'y': LaunchConfiguration('camera_y'),
-                'z': LaunchConfiguration('camera_z'),
-                'roll': LaunchConfiguration('camera_roll'),
-                'pitch': LaunchConfiguration('camera_pitch'),
-                'yaw': LaunchConfiguration('camera_yaw'),
-                'rviz': 'false',
-            }.items(),
-        ),
+        # Scope generic driver/mount arguments (publish_tf, rviz, x, ...)
+        # to this camera include; do not overwrite sibling launch settings.
+        GroupAction(scoped=True, condition=IfCondition(enable_camera), actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(camera_launch),
+                launch_arguments={
+                    'robot_id': robot_id,
+                    'enable_color': LaunchConfiguration('camera_enable_color'),
+                    'color_info_url': LaunchConfiguration('camera_color_info_url'),
+                    'enable_ir': 'false',
+                    'enable_point_cloud': 'true',
+                    'publish_tf': 'true',
+                    'depth_width': LaunchConfiguration('camera_depth_width'),
+                    'depth_height': LaunchConfiguration('camera_depth_height'),
+                    'depth_fps': LaunchConfiguration('camera_depth_fps'),
+                    'parent_frame': 'base_link',
+                    'child_frame': 'camera_link',
+                    'x': LaunchConfiguration('camera_x'),
+                    'y': LaunchConfiguration('camera_y'),
+                    'z': LaunchConfiguration('camera_z'),
+                    'roll': LaunchConfiguration('camera_roll'),
+                    'pitch': LaunchConfiguration('camera_pitch'),
+                    'yaw': LaunchConfiguration('camera_yaw'),
+                    'rviz': 'false',
+                }.items(),
+            ),
+        ]),
 
         # 3) Localization on the saved map (replaces slam_toolbox).
         IncludeLaunchDescription(
@@ -387,6 +427,8 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
+            # navigation.rviz uses relative topics; they resolve here.
+            namespace=robot_id,
             arguments=['-d', rviz_config],
             output='screen',
             condition=IfCondition(rviz),

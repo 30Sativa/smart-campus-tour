@@ -1,3 +1,13 @@
+/* CPU BUDGET: TIM2 ticks this file's ISR at MOTOR_BASE_TIMER_HZ (50 kHz) on
+ * a 16 MHz core, i.e. ~320 cycles per tick for EVERYTHING.  Built at the
+ * Debug configuration's -O0, the old tick cost 156-275 cycles (49-86 % CPU,
+ * measured by emulating the linked ISR) and starved the main loop: USB RX
+ * queue overflow (ERR,bad_command), FB dropping from 40 Hz to 2-4 Hz while
+ * driving.  Compile this file optimized whatever the project level is; the
+ * ISR/main-loop shared state is volatile and changed under __disable_irq,
+ * so optimization does not change its semantics. */
+#pragma GCC optimize ("O2")
+
 #include "motor/motor_core.h"
 #include <stddef.h>
 
@@ -18,6 +28,11 @@ typedef struct
 } MotorCoreState;
 
 static MotorCoreState motors[MOTOR_CORE_COUNT];
+
+/* Base-timer ticks left before the ISR stops stepping (see FeedWatchdog).
+ * One aligned 32-bit word: the main-loop store and the ISR read-decrement
+ * cannot interleave on this single-core MCU. */
+static volatile uint32_t watchdog_ticks_left = 0U;
 
 static MotorCoreState *MotorCore_Get(uint8_t index)
 {
@@ -69,7 +84,7 @@ static uint32_t MotorCore_FrequencyToPhaseIncrement(float freq_hz)
 	return (uint32_t)(increment + 0.5);
 }
 
-static void MotorCore_Tick(MotorCoreState *motor)
+static inline __attribute__((always_inline)) void MotorCore_Tick(MotorCoreState *motor)
 {
 	uint32_t previous_phase;
 
@@ -78,7 +93,7 @@ static void MotorCore_Tick(MotorCoreState *motor)
 		motor->pulse_ticks_remaining--;
 		if (motor->pulse_ticks_remaining == 0U)
 		{
-			MotorHal_WriteStepLow(&motor->pins);
+			MOTOR_HAL_STEP_LOW(&motor->pins);
 		}
 	}
 
@@ -92,7 +107,7 @@ static void MotorCore_Tick(MotorCoreState *motor)
 
 	if (motor->phase_accumulator < previous_phase)
 	{
-		MotorHal_WriteStepHigh(&motor->pins);
+		MOTOR_HAL_STEP_HIGH(&motor->pins);
 		motor->pulse_ticks_remaining = MOTOR_STEP_PULSE_TICKS;
 		motor->count += motor->direction;
 	}
@@ -232,12 +247,45 @@ void MotorCore_SetDirIfIdle(uint8_t index, int8_t direction)
 	MotorHal_WriteDir(&motor->pins, direction);
 }
 
+void MotorCore_FeedWatchdog(uint32_t timeout_ms)
+{
+	uint64_t ticks = ((uint64_t)timeout_ms * MotorHal_GetBaseTimerHz()) / 1000U;
+
+	if (ticks == 0U)
+	{
+		ticks = 1U;
+	}
+	else if (ticks > 0xFFFFFFFFU)
+	{
+		ticks = 0xFFFFFFFFU;
+	}
+	watchdog_ticks_left = (uint32_t)ticks;
+}
+
 void MotorCore_HandleTimerInterrupt(void)
 {
 	if (((htim2.Instance->SR & TIM_FLAG_UPDATE) != 0U) &&
 		((htim2.Instance->DIER & TIM_IT_UPDATE) != 0U))
 	{
-		htim2.Instance->SR &= (uint32_t)~TIM_FLAG_UPDATE;
+		/* SR flags are rc_w0: write the mask (as __HAL_TIM_CLEAR_FLAG does)
+		 * instead of read-modify-write, which can also clear a flag raised
+		 * between the read and the write. */
+		htim2.Instance->SR = (uint32_t)~TIM_FLAG_UPDATE;
+
+		uint32_t left = watchdog_ticks_left;
+		if (left != 0U)
+		{
+			watchdog_ticks_left = left - 1U;
+		}
+		else
+		{
+			/* Main loop has not fed us: stop stepping here. A pulse already
+			 * high still ends next tick (Tick lowers it before the running
+			 * check); the next CMD restarts via MotorCore_SetStepFrequencyHz. */
+			motors[0].running = 0U;
+			motors[1].running = 0U;
+		}
+
 		MotorCore_Tick(&motors[0]);
 		MotorCore_Tick(&motors[1]);
 	}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROBOT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+out="$ROBOT_ROOT/.native-state/versions.txt"
+mkdir -p "$(dirname "$out")"
+{
+ date -u +%FT%TZ
+ grep -E '^(NAME|VERSION_ID)=' /etc/os-release
+ printf 'ROS_DISTRO=%s\n' "${ROS_DISTRO:-unset}"
+ printf 'RMW_IMPLEMENTATION=%s\n' "${RMW_IMPLEMENTATION:-unset}"
+ apt-cache policy ros-humble-tf2 ros-humble-tf2-ros ros-humble-rmw-fastrtps-cpp fastdds-tools 2>/dev/null || true
+ dpkg-query -W -f='${Package}=${Version}\n' 'ros-humble-*' 2>/dev/null | sort || true
+ git -C "$ROBOT_ROOT" rev-parse HEAD
+} > "$out"
+echo "$out"

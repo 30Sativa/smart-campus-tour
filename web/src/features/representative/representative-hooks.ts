@@ -1,88 +1,51 @@
-/**
- * Server state for the representative area: TanStack Query owns the cache.
- *
- * `/api/representative/*` does not exist yet, so the service is bound to its
- * labelled mock here and nowhere else. When the endpoints land, replace
- * `mockRepresentativeService` with `representativeService` from
- * `api/contracts/representative.ts`.
- *
- * Every change also invalidates the admin and operations caches: a group sent
- * here is what Admin reviews next.
- */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { RegistrationInput } from '../../api/contracts/representative'
-import { mockRepresentativeService } from '../../mocks/representative-mock'
+import { useAuthStore } from '../../stores/auth-store'
+import { representativeApi as api } from './api/representative-api'
+import type { ListParameters, RegistrationInput } from './api/types'
 
-const service = mockRepresentativeService
-
-/** Admin's decision arrives from elsewhere; this is how quickly the screen notices it. */
-const REFETCH_MS = 15_000
-
-export const repQueryKeys = {
-  all: ['representative'] as const,
-  tours: ['representative', 'tours'] as const,
-  tour: (id: string) => ['representative', 'tour', id] as const,
-  registrations: ['representative', 'registrations'] as const,
-  registration: (id: string) => ['representative', 'registration', id] as const,
+export const repQueryKeys = { all: ['representative'] as const, owner: (id: string) => ['representative', id] as const }
+export function useRepTours(parameters: ListParameters = {}) {
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'tours', parameters],
+    queryFn: ({ signal }) => api.tours(parameters, signal), enabled: Boolean(owner), refetchInterval: 15000 })
 }
-
-export function useRepTours() {
-  return useQuery({ queryKey: repQueryKeys.tours, queryFn: () => service.listTours(), refetchInterval: REFETCH_MS })
-}
-
 export function useRepTour(id: string) {
-  return useQuery({ queryKey: repQueryKeys.tour(id), queryFn: () => service.getTour(id), enabled: Boolean(id), retry: false })
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'tour', id],
+    queryFn: ({ signal }) => api.tour(id, signal), enabled: Boolean(owner && id), retry: false })
 }
-
-export function useRepRegistrations() {
-  return useQuery({ queryKey: repQueryKeys.registrations, queryFn: () => service.listRegistrations(), refetchInterval: REFETCH_MS })
+export function useRepRegistrations(parameters: ListParameters = {}) {
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'registrations', parameters],
+    queryFn: ({ signal }) => api.registrations(parameters, signal), enabled: Boolean(owner), refetchInterval: 15000 })
 }
-
 export function useRepRegistration(id: string | undefined) {
-  return useQuery({
-    queryKey: repQueryKeys.registration(id ?? ''),
-    queryFn: () => service.getRegistration(id as string),
-    enabled: Boolean(id),
-    retry: false,
-    refetchInterval: REFETCH_MS,
-  })
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'registration', id],
+    queryFn: ({ signal }) => api.registration(id!, signal), enabled: Boolean(owner && id), retry: false, refetchInterval: 15000 })
 }
-
-function useInvalidateAll() {
-  const queryClient = useQueryClient()
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: repQueryKeys.all }),
-      queryClient.invalidateQueries({ queryKey: ['admin'] }),
-      queryClient.invalidateQueries({ queryKey: ['staff'] }),
-    ])
+function useInvalidate() {
+  const client = useQueryClient()
+  const owner = useAuthStore(s => s.user?.userId)
+  return () => client.invalidateQueries({ queryKey: repQueryKeys.owner(owner ?? '') })
 }
-
-/** Refresh after a refusal too: the reason is usually that the data moved (flow review §10.1). */
-function mutationOptions(invalidate: () => Promise<unknown>) {
-  return { onSuccess: invalidate, onError: invalidate }
-}
-
 export function useSubmitRegistration() {
-  const invalidate = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ tourId, input, requestId }: { tourId: string; input: RegistrationInput; requestId: string }) => service.submit(tourId, input, requestId),
-    ...mutationOptions(invalidate),
-  })
+  const invalidate = useInvalidate()
+  return useMutation({ mutationFn: ({ tourId, input, requestId }: { tourId: string; input: RegistrationInput; requestId: string }) =>
+    api.submit(tourId, input, requestId), onSuccess: invalidate })
 }
-
 export function useUpdateRegistration() {
-  const invalidate = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ id, input, version }: { id: string; input: RegistrationInput; version: number }) => service.update(id, input, version),
-    ...mutationOptions(invalidate),
-  })
+  const invalidate = useInvalidate()
+  return useMutation({ mutationFn: ({ id, input, version }: { id: string; input: RegistrationInput; version: string }) =>
+    api.update(id, input, version), onSuccess: invalidate })
 }
-
+export function useResubmitRegistration() {
+  const invalidate = useInvalidate()
+  return useMutation({ mutationFn: ({ id, input, version }: { id: string; input: RegistrationInput; version: string }) =>
+    api.resubmit(id, input, version), onSuccess: invalidate })
+}
 export function useCancelRegistration() {
-  const invalidate = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ id, version }: { id: string; version: number }) => service.cancel(id, version),
-    ...mutationOptions(invalidate),
-  })
+  const invalidate = useInvalidate()
+  return useMutation({ mutationFn: ({ id, version, tourVersion }: { id: string; version: string; tourVersion: string }) =>
+    api.cancel(id, version, tourVersion), onSuccess: invalidate })
 }

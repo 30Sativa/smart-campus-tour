@@ -4,9 +4,9 @@ import type { LucideIcon } from 'lucide-react'
 import { ApiError } from '../../../api/client'
 import type { TourCommand, TourOperation } from '../../../api/contracts/staff'
 import { useTourCommand } from '../staff-hooks'
-import { buttonClass } from '../ui-classes'
+import { buttonClass } from '../../../components/ui/ui-classes'
 import { REASON_GUIDE, REASON_SHORT } from '../reason'
-import { ConfirmationDialog } from './ConfirmationDialog'
+import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 
 type Recovery = Extract<TourCommand, 'retryLeg' | 'rerunPoi' | 'retryFront' | 'confirmComplete'>
 
