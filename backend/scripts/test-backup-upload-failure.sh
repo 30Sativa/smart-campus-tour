@@ -7,7 +7,7 @@ for tool in bash python3 flock; do command -v "$tool" >/dev/null || { echo "Requ
 scratch=$(mktemp -d)
 case "$scratch" in /tmp/*|/var/tmp/*) ;; *) echo 'Unexpected backup-test directory; refusing cleanup.' >&2; exit 1 ;; esac
 trap 'rm -rf -- "$scratch"' EXIT
-mkdir -p "$scratch/bin" "$scratch/deploy/releases" "$scratch/config" "$scratch/backups" "$scratch/run"
+mkdir -p "$scratch/bin" "$scratch/deploy/releases" "$scratch/config" "$scratch/backups" "$scratch/run" "$scratch/state"
 
 release_sha=$(printf 'a%.0s' {1..40})
 release_dir=$scratch/deploy/releases/$release_sha
@@ -66,9 +66,29 @@ DOCKER
 cat > "$scratch/bin/aws" <<'AWS'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${TEST_PROVIDER:-0} == 1 ]]; then
+  [[ "$1" == --endpoint-url && "$2" == https://s3.example.test && "$3" == --profile && "$4" == campustour-backup ]] || exit 89
+  shift 4
+fi
 if [[ "$1" == s3 && "$2" == cp ]]; then
-  echo 'injected S3 upload failure' >&2
-  exit 42
+  if [[ ${TEST_BACKUP_RESULT:-failure} == failure ]]; then
+    echo 'injected S3 upload failure' >&2
+    exit 42
+  fi
+  if [[ "$4" == - ]]; then
+    if [[ ${TEST_BACKUP_RESULT:-} == corrupt ]]; then printf 'corrupted bytes'; else cat "$TEST_REMOTE_OBJECT"; fi
+  else
+    cp "$3" "$TEST_REMOTE_OBJECT"
+  fi
+  exit 0
+fi
+if [[ "$1" == s3api && "$2" == head-object ]]; then
+  if [[ "$*" == *ContentLength* ]]; then
+    stat -c '%s' "$TEST_REMOTE_OBJECT"
+  else
+    sha256sum "$TEST_REMOTE_OBJECT" | cut -d' ' -f1
+  fi
+  exit 0
 fi
 echo "Unexpected fake AWS command: $*" >&2
 exit 2
@@ -99,3 +119,31 @@ compgen -G "$scratch/backups/*.bak" >/dev/null || {
   exit 1
 }
 echo 'PASS: S3 upload failure propagated, retained the local SQL backup, and did not write the success marker.'
+
+# Same backup flow using an independent S3-compatible endpoint/profile.
+printf '%s\n' 'BACKUP_S3_URI=s3://campustour-test/backups' \
+  'BACKUP_S3_ENDPOINT_URL=https://s3.example.test' 'BACKUP_S3_PROFILE=campustour-backup' > "$scratch/config/backup.env"
+export PATH="$scratch/bin:$PATH" CAMPUS_DEPLOY_ROOT="$scratch/deploy" CAMPUS_CONFIG_DIR="$scratch/config"
+export CAMPUS_BACKUP_ENV="$scratch/config/backup.env" CAMPUS_BACKUP_STAGE_DIR="$scratch/backups"
+export CAMPUS_BACKUP_STATE_FILE="$scratch/state/backup-last-success" CAMPUS_OPERATION_LOCK="$scratch/run/operation.lock"
+export CAMPUS_BACKUP_LOCK_FILE="$scratch/run/backup.lock" TEST_BACKUP_DIR="$scratch/backups"
+export TEST_PROVIDER=1 TEST_REMOTE_OBJECT="$scratch/object"
+for result in corrupt success; do
+  # Remove only disposable fixtures from this test; production never does this on failure.
+  find "$scratch/backups" -maxdepth 1 -type f -name '*.bak' -delete
+  export TEST_BACKUP_RESULT=$result
+  if bash deploy/backup-sqlserver.sh --pre-deploy; then
+    [[ "$result" == success ]] || { echo 'Corrupt remote bytes were accepted.' >&2; exit 1; }
+    [[ -s "$CAMPUS_BACKUP_STATE_FILE" ]] || exit 1
+    ! compgen -G "$scratch/backups/*.bak" >/dev/null || exit 1
+  else
+    [[ "$result" == corrupt ]] || exit 1
+    compgen -G "$scratch/backups/*.bak" >/dev/null || exit 1
+    [[ ! -e "$CAMPUS_BACKUP_STATE_FILE" ]] || exit 1
+  fi
+done
+printf 'BACKUP_S3_ENDPOINT_URL=http://s3.example.test\n' >> "$scratch/config/backup.env"
+if bash deploy/backup-sqlserver.sh --pre-deploy >/dev/null 2>&1; then
+  echo 'Insecure backup endpoint accepted.' >&2; exit 1
+fi
+echo 'PASS: non-AWS endpoint/profile used for upload, HEAD and download; corrupt bytes retained locally; success cleaned staging; HTTP rejected (mocked object store).'

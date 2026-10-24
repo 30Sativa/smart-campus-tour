@@ -51,6 +51,26 @@ bucket=${BASH_REMATCH[1]}
 prefix=${BASH_REMATCH[3]:-}
 [[ "$prefix" != *'..'* ]] || fail 'Backup prefix may not contain parent-directory segments.'
 
+# Only non-secret settings are parsed. Provider credentials stay in root's AWS profile.
+endpoint='' profile=''
+while IFS='=' read -r name value; do
+  case "$name" in
+    BACKUP_S3_ENDPOINT_URL) endpoint=$value ;;
+    BACKUP_S3_PROFILE) profile=$value ;;
+  esac
+done < "$BACKUP_ENV"
+aws_cli=(aws)
+if [[ -n "$endpoint" ]]; then
+  [[ "$endpoint" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]] || fail 'Backup endpoint must be an HTTPS origin without credentials or path.'
+  [[ -n "$profile" ]] || fail 'A dedicated credential profile is required for a non-AWS backup endpoint.'
+  aws_cli+=(--endpoint-url "$endpoint")
+fi
+if [[ -n "$profile" ]]; then
+  [[ "$profile" =~ ^[A-Za-z0-9_-]+$ ]] || fail 'Invalid backup profile name.'
+  aws_cli+=(--profile "$profile")
+fi
+
+
 mkdir -p "$(dirname "$OPERATION_LOCK")"
 if (( deployment_lock_held )); then
   inherited_lock=$(readlink "/proc/$PPID/fd/9" 2>/dev/null || true)
@@ -118,21 +138,21 @@ sql_path="/var/opt/mssql/backup/$file_name"
 [[ -s "$file_path" ]] || fail "SQL Server completed without creating a non-empty backup at $file_path."
 
 local_sha256=$(sha256sum "$file_path" | cut -d' ' -f1)
-if ! aws s3 cp "$file_path" "$target" --sse AES256 --metadata "sha256=$local_sha256" --only-show-errors; then
+if ! "${aws_cli[@]}" s3 cp "$file_path" "$target" --sse AES256 --metadata "sha256=$local_sha256" --only-show-errors; then
   fail "S3 upload failed; local backup retained at $file_path."
 fi
-remote_size=$(aws s3api head-object --bucket "$bucket" --key "$object_key" --query ContentLength --output text)
+remote_size=$("${aws_cli[@]}" s3api head-object --bucket "$bucket" --key "$object_key" --query ContentLength --output text)
 [[ "$remote_size" =~ ^[0-9]+$ && "$remote_size" -gt 0 ]] || fail "S3 did not confirm a non-empty backup at $target. Local copy retained."
 local_size=$(stat -c '%s' "$file_path")
 [[ "$remote_size" == "$local_size" ]] || fail "S3 object size does not match the local backup. Local copy retained at $file_path."
-remote_metadata_sha=$(aws s3api head-object --bucket "$bucket" --key "$object_key" --query 'Metadata.sha256' --output text)
+remote_metadata_sha=$("${aws_cli[@]}" s3api head-object --bucket "$bucket" --key "$object_key" --query 'Metadata.sha256' --output text)
 [[ "$remote_metadata_sha" == "$local_sha256" ]] || fail "S3 object metadata does not match the local SHA-256. Local copy retained at $file_path."
-if ! remote_sha256=$(aws s3 cp "$target" - --only-show-errors | sha256sum | cut -d' ' -f1); then
+if ! remote_sha256=$("${aws_cli[@]}" s3 cp "$target" - --only-show-errors | sha256sum | cut -d' ' -f1); then
   fail "Could not download the uploaded S3 backup for end-to-end SHA-256 verification. Local copy retained at $file_path."
 fi
 [[ "$remote_sha256" == "$local_sha256" ]] || fail "Downloaded S3 backup SHA-256 differs from the local backup. Local copy retained at $file_path."
 
-state_tmp=$(mktemp /var/lib/campustour/.backup-state.XXXXXX)
+state_tmp=$(mktemp "$(dirname "$STATE_FILE")/.backup-state.XXXXXX")
 printf '%s\t%s\t%s\t%s\n' "$timestamp" "$target" "$remote_size" "$local_sha256" > "$state_tmp"
 chmod 0600 "$state_tmp"
 mv -f "$state_tmp" "$STATE_FILE"

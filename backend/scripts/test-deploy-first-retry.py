@@ -195,15 +195,6 @@ if name in ("systemctl", "dpkg-query"):
 if name == "ss":
     sys.exit(0)
 if name == "curl":
-    if "-o" in args:
-        dest = Path(args[args.index("-o") + 1])
-        if str(dest) != "/dev/null":
-            if os.environ.get("FAKE_SQL_DRIFT") == "1":
-                dest.write_text("TEST_SQL_DRIFT\n")
-            elif os.environ.get("FAKE_UNAUTHORIZED_SQL_DRIFT") == "1":
-                dest.write_text("TEST_UNAUTHORIZED_SQL_DRIFT\n")
-            else:
-                shutil.copyfile(fixture, dest)
     sys.exit(0)
 if name != "docker":
     sys.exit(2)
@@ -323,6 +314,9 @@ if compose_command == "config":
         print(json.dumps(resolved))
     sys.exit(0)
 if compose_command == "pull":
+    if os.environ.get("FAKE_PULL_FAIL") == "1":
+        print("injected GHCR image unavailable", file=sys.stderr)
+        sys.exit(71)
     sys.exit(0)
 if compose_command == "stop":
     sys.exit(0)
@@ -518,7 +512,7 @@ def run() -> None:
             fail_init: bool = False, fail_backup: bool = False, fail_promotion: bool = False,
             sql_drift: bool = False, manifest_sql_image: str = host_sql_image,
             sql_maintenance: bool = False, unauthorized_sql_change: bool = False,
-            fail_sql_update: bool = False,
+            fail_sql_update: bool = False, fail_pull: bool = False,
         ) -> subprocess.CompletedProcess[str]:
             child_env = os.environ.copy()
             child_env.update(env)
@@ -532,6 +526,9 @@ def run() -> None:
             child_env["FAKE_SQL_DRIFT"] = "1" if sql_drift else "0"
             child_env["FAKE_UNAUTHORIZED_SQL_DRIFT"] = "1" if unauthorized_sql_change else "0"
             child_env["FAKE_FAIL_SQL_UPDATE"] = "1" if fail_sql_update else "0"
+            child_env["FAKE_PULL_FAIL"] = "1" if fail_pull else "0"
+            fixture.write_text("TEST_SQL_DRIFT\n" if sql_drift else "TEST_UNAUTHORIZED_SQL_DRIFT\n" if unauthorized_sql_change else "services: {}\n")
+            child_env["CAMPUS_RELEASE_COMPOSE"] = str(fixture)
             cmd = ["bash", str(DEPLOY_SCRIPT)]
             if sql_maintenance:
                 cmd.append("--sql-maintenance")
@@ -575,6 +572,12 @@ def run() -> None:
 
         old_api_id = state["containers"]["campustour-api-1"]["id"]
         next_sha = "c" * 40
+        pull_rejected = invoke(host_env, next_sha, fail_pull=True)
+        if pull_rejected.returncode == 0 or "injected GHCR image unavailable" not in pull_rejected.stderr:
+            raise AssertionError("unavailable image was not rejected")
+        pull_state = json.loads(state_path.read_text())
+        if pull_state["containers"]["campustour-api-1"]["id"] != old_api_id or current.resolve().name != sha:
+            raise AssertionError("image pull failure changed the live API")
         schema_rejected = invoke(host_env, next_sha, fail_init=True)
         if schema_rejected.returncode == 0 or "injected candidate schema mismatch" not in schema_rejected.stderr:
             raise AssertionError(f"candidate schema failure was not reported\nstdout={schema_rejected.stdout}\nstderr={schema_rejected.stderr}")
