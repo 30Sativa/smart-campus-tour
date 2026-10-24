@@ -74,7 +74,7 @@ jobs:
           DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
-          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
