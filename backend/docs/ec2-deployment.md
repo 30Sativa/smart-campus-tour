@@ -6,8 +6,11 @@ No AWS resources, GitHub secrets or production deployment were changed.
 ## 1. Architecture and review findings
 
 PR → Backend Verify → merge main → private GHCR digests + release manifest →
-manual Backend Deploy → pinned OpenSSH → EC2 Docker Compose. SQL maintenance
+automatic Backend Deploy on successful push/main Backend Verify → pinned OpenSSH → EC2 Docker Compose. SQL maintenance
 remains a separate manual workflow. Both use `production` and shared concurrency.
+Backend Deploy also supports manual selection for recovery and rollback. Automatic runs
+skip superseded main commits; each deployment independently verifies the release and
+operations revision. A successful CI run is not proof of healthy EC2 deployment.
 One host has promotion downtime, no failover and no automatic database restore.
 
 The PR-73 baseline had useful guards but required OIDC/SSM and fetched scripts
@@ -162,6 +165,14 @@ Construct known_hosts with the exact configured host and verified key.
 ssh-keyscan alone is not authentication. Unexpected pins must fail until verified;
 never use StrictHostKeyChecking=no or accept-new for delivery.
 
+**Demo/backup limitation:** The initial deployment to an empty EC2 can proceed
+without an off-host backup configuration, but the managed deploy engine requires
+a verified off-host backup for subsequent deployments. Switching to automatic
+triggers does not bypass this guard. Without backup storage, later push/main CI
+may succeed while Backend Deploy fails safely; configure real storage, retention,
+and a recovery test before relying on unattended updates. Do not delete volumes,
+owner markers, or the backup validation as a workaround.
+
 ## 4. Off-host backup independent of AWS IAM
 
 Use root-owned 0600 `/etc/campustour/backup.env`. Existing AWS S3 with an already
@@ -199,9 +210,13 @@ configure external alerts for backup/check, disk, OOM, TLS and provider retentio
 
 ## 5. Deploy, retry and rollback
 
-After independent review/setup, dispatch Backend Deploy on main with a full SHA
-from a successful main Backend Verify run. No push deploys. Current operations
-must also have successful main verification. Missing/expired artifacts, unavailable
+After independent review/setup, a successful **push/main** Backend Verify
+(including image publication) automatically triggers Backend Deploy for that exact
+revision. Superseded main revisions are skipped. For manual recovery/rollback,
+dispatch Backend Deploy on main with a full SHA from a successful main Backend
+Verify run. Both release and operations revisions must have successful main
+verification. Failed CI never deploys; deployment failures remain visible in the
+Backend Deploy workflow and must be addressed before declaring the release live. Missing/expired artifacts, unavailable
 images, bad digests or mismatched image revision labels fail closed. Never
 fabricate a manifest to recover a release whose 90-day artifact has expired.
 
