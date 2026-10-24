@@ -34,7 +34,7 @@ bash -n deploy/init-db.sh deploy/deploy-ec2.sh deploy/install-host-tools.sh depl
   deploy/stack-start.sh deploy/refresh-certificate.sh scripts/test-deployment scripts/test-deploy-ec2.sh \
   scripts/test-backup-upload-failure.sh scripts/test-certificate-reconciliation.sh scripts/test-operation-locks.sh
 bash -n deploy/prepare-release.sh deploy/ssh-deploy.sh deploy/receive-release.sh
-bash -n scripts/resolve-base-images
+bash -n scripts/resolve-base-images scripts/test-docker-build-cache
 "$PYTHON" scripts/test-base-image-resolution.py
 "$PYTHON" scripts/test-ssh-deployment.py
 "$PYTHON" scripts/test-jq-programs.py

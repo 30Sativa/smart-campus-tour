@@ -96,6 +96,11 @@ jobs:
         shell: bash
         run: bash backend/scripts/resolve-base-images "$GITHUB_OUTPUT"
 
+      - name: Verify Docker cache portability
+        env:
+          SDK_IMAGE: ${{ steps.bases.outputs.sdk }}
+        run: bash backend/scripts/test-docker-build-cache
+
       - name: Build API image
         uses: docker/build-push-action@v6
         with:
@@ -166,6 +171,11 @@ jobs:
         id: bases
         shell: bash
         run: bash backend/scripts/resolve-base-images "$GITHUB_OUTPUT"
+
+      - name: Verify Docker cache portability
+        env:
+          SDK_IMAGE: ${{ steps.bases.outputs.sdk }}
+        run: bash backend/scripts/test-docker-build-cache
 
       - name: Build and publish API image
         id: api
