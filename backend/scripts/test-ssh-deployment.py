@@ -135,9 +135,13 @@ def main():
             '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_COMPOSE" ]] || exit 81\n'
             'printf "%s\\n" "$@" > "$DEPLOY_ARGS"\n'
             'if [[ ${FAIL_MODE:-} == interrupted ]]; then touch "$INTERRUPT_READY"; sleep 30; fi\n'
+            'if [[ ${FAIL_MODE:-} == reader-gone ]]; then\n'
+            '  for step in 1 2 3 4 5; do echo "deploy step $step"; sleep 0.2; done; touch "$DEPLOY_COMPLETED"\n'
+            'fi\n'
             '[[ ${FAIL_MODE:-} != deploy-failure ]]\n')
+        delivery_log = root / "log/delivery.log"
         env.update(CAMPUS_REGISTRY_TEMP_ROOT=str(root), CAMPUS_DELIVERY_LOCK=str(root / "delivery.lock"),
-                   DEPLOY_ARGS=str(root / "deploy-args"))
+                   CAMPUS_DELIVERY_LOG=str(delivery_log), DEPLOY_ARGS=str(root / "deploy-args"))
         for mode in ("login-failure", "deploy-failure", "success"):
             env["FAIL_MODE"] = mode
             result = subprocess.run(["bash", str(bundle / "ops/receive-release.sh"), "sql-maintenance", "actor"],
@@ -147,6 +151,33 @@ def main():
             assert "receiver-disposable-secret" not in result.stdout + result.stderr
         args = (root / "deploy-args").read_text().splitlines()
         assert args == ["--sql-maintenance", SHA, MANIFEST["api_image"], MANIFEST["db_init_image"], MANIFEST["sqlserver_image"], OPS]
+        log_text = delivery_log.read_text()
+        assert log_text.count(f"delivery mode=sql-maintenance release={SHA} ops={OPS} run=71") == 3, log_text
+        assert "receiver-disposable-secret" not in log_text
+        assert oct(delivery_log.parent.stat().st_mode & 0o777) == "0o700"
+
+        # A vanished SSH reader (cancelled runner, dropped connection) must not kill the deployment mid-step.
+        env.update(FAIL_MODE="reader-gone", DEPLOY_COMPLETED=str(root / "deploy-completed"))
+        process = subprocess.Popen(["bash", str(bundle / "ops/receive-release.sh"), "application", "actor"],
+                                   env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   start_new_session=True)
+        try:
+            process.stdin.write(b"receiver-disposable-secret\n")
+            process.stdin.close()
+            process.stdout.readline()
+            process.stdout.close()
+            assert process.wait(timeout=20) == 0, "Receiver failed after its reader disappeared"
+            for _ in range(100):
+                if "deploy step 5" in delivery_log.read_text():
+                    break
+                time.sleep(0.05)
+            assert (root / "deploy-completed").exists(), "Deployment was killed when the SSH reader disappeared"
+            assert "deploy step 5" in delivery_log.read_text(), "Host delivery log lost output after the reader disappeared"
+            assert not list(root.glob("campustour-registry.*"))
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
         env.update(FAIL_MODE="interrupted", INTERRUPT_READY=str(root / "ready"))
         process = subprocess.Popen(["bash", str(bundle / "ops/receive-release.sh"), "application", "actor"],
                                    env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
