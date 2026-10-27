@@ -116,16 +116,35 @@ public static class ApiDocumentationExtensions
             {
                 var metadata = context.Description.ActionDescriptor.EndpointMetadata;
                 var authorize = metadata.OfType<IAuthorizeData>().ToArray();
-                if (authorize.Length == 0 || metadata.OfType<IAllowAnonymous>().Any() ||
-                    authorize.Any(data => !string.IsNullOrEmpty(data.AuthenticationSchemes) &&
+                if (authorize.Length > 0 && !metadata.OfType<IAllowAnonymous>().Any() &&
+                    !authorize.Any(data => !string.IsNullOrEmpty(data.AuthenticationSchemes) &&
                         data.AuthenticationSchemes != JwtBearerDefaults.AuthenticationScheme))
-                    return Task.CompletedTask;
-
-                operation.Security ??= [];
-                operation.Security.Add(new OpenApiSecurityRequirement
                 {
-                    [new OpenApiSecuritySchemeReference(BearerSchemeName, context.Document)] = []
-                });
+                    operation.Security ??= [];
+                    operation.Security.Add(new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference(BearerSchemeName, context.Document)] = []
+                    });
+                }
+
+                if (ApiOperationDocumentation.TryGet(context.Description.ActionDescriptor, context.Description.RelativePath, out var details))
+                {
+                    operation.Summary = details.Summary;
+                    operation.Description = details.Description;
+                    operation.Tags = new HashSet<OpenApiTagReference>
+                    {
+                        new(details.Tag, context.Document)
+                    };
+                }
+                else if (ApiOperationDocumentation.TryGetInfrastructureEndpoint(context.Description.RelativePath, out details))
+                {
+                    operation.Summary = details.Summary;
+                    operation.Description = details.Description;
+                    operation.Tags = new HashSet<OpenApiTagReference>
+                    {
+                        new(details.Tag, context.Document)
+                    };
+                }
                 return Task.CompletedTask;
             });
         });
