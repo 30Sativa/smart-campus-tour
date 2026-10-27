@@ -23,7 +23,7 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
         context.BrowserSessions.AsNoTracking()
             .Where(s => s.SessionTokenHash == tokenHash && s.EndedAt == null && s.ExpiresAt > now &&
                 s.Invitation.RevokedAt == null && s.Invitation.ExpiresAt > now && s.Invitation.RosterRow.IsActive &&
-                s.Invitation.RosterRow.Registration.State == "APPROVED" && s.Invitation.RosterRow.Registration.TourId == tourId)
+                s.Invitation.RosterRow.ParticipationState == "ACCEPTED" && s.Invitation.RosterRow.Registration.TourId == tourId)
             .Select(s => new StudentQuestionAccess(s.Id, s.Invitation.RosterRow.Registration.Tour.State, s.Invitation.RosterRow.RowType))
             .SingleOrDefaultAsync(ct);
     // Close before INSERT to respect the filtered UNIQUE index in the same Tour transaction.

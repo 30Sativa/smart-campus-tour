@@ -24,9 +24,18 @@ public sealed class InvitationEndpointTests
         var submit = await f.SendAsync(HttpMethod.Post, $"/tours/{f.TourId}/registrations", Input(tour, "Group", "viewer@example.test", mixed: true), Guid.NewGuid());
         var id = submit.Data.GetProperty("id").GetGuid();
         var detail = (await f.SendAsync(HttpMethod.Get, $"/api/staff/manage/registrations/{id}", token: admin)).Data;
-        var result = await f.SendAsync(HttpMethod.Post, $"/api/staff/manage/registrations/{id}/approve", new {
-            expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: admin);
-        Assert.Equal(HttpStatusCode.OK, result.Status);
+        foreach (var row in detail.GetProperty("roster").EnumerateArray().ToArray())
+        {
+            detail = (await f.SendAsync(HttpMethod.Get, $"/api/staff/manage/registrations/{id}", token: admin)).Data;
+            var current = detail.GetProperty("roster").EnumerateArray()
+                .Single(item => item.GetProperty("id").GetGuid() == row.GetProperty("id").GetGuid());
+            var result = await f.SendAsync(HttpMethod.Post,
+                $"/api/staff/manage/registrations/{id}/rows/{current.GetProperty("id").GetGuid()}/accept", new {
+                    requestId = Guid.NewGuid(), expectedRegistrationRowVersion = Version(detail),
+                    expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString(),
+                    expectedRowVersion = Version(current) }, token: admin);
+            Assert.Equal(HttpStatusCode.OK, result.Status);
+        }
         return id;
     }
     private static object Write(JsonElement item, Guid request) => new { requestId = request, expectedRowVersion = Version(item) };
@@ -41,8 +50,11 @@ public sealed class InvitationEndpointTests
         var body = await response.Content.ReadAsStringAsync();
         using var json = JsonDocument.Parse(body);
         return (response.StatusCode, json.RootElement.Clone(), response.Headers.TryGetValues("Set-Cookie", out var cookies)
-            ? cookies.First() : null);
+            ? string.Join("\n", cookies) : null);
     }
+
+    private static string CookieHeader(string setCookie) => string.Join("; ", setCookie.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        .Select(cookie => cookie.Split(';')[0]));
     private static async Task<string> CodeAsync(Fixture f, Guid invitationId)
     {
         await using var db = f.Context();
@@ -76,12 +88,13 @@ public sealed class InvitationEndpointTests
         Assert.Equal(origin, join.Headers.GetValues("Access-Control-Allow-Origin").Single());
         Assert.Equal("true", join.Headers.GetValues("Access-Control-Allow-Credentials").Single());
         Assert.True(join.Headers.CacheControl!.NoStore);
-        var setCookie = join.Headers.GetValues("Set-Cookie").Single();
-        Assert.Contains($"path=/api/student/tours/{f.TourId:D}", setCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("httponly", setCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("secure", setCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("samesite=none", setCookie, StringComparison.OrdinalIgnoreCase);
-        var cookie = setCookie.Split(';')[0];
+        var setCookies = join.Headers.GetValues("Set-Cookie").ToArray();
+        Assert.Equal(2, setCookies.Length);
+        Assert.Contains(setCookies, value => value.Contains($"path=/api/student/tours/{f.TourId:D}", StringComparison.OrdinalIgnoreCase));
+        Assert.All(setCookies, value => Assert.Contains("httponly", value, StringComparison.OrdinalIgnoreCase));
+        Assert.All(setCookies, value => Assert.Contains("secure", value, StringComparison.OrdinalIgnoreCase));
+        Assert.All(setCookies, value => Assert.Contains("samesite=none", value, StringComparison.OrdinalIgnoreCase));
+        var cookie = string.Join("; ", setCookies.Select(value => value.Split(';')[0]));
         using var forbidden = await Request("leave", "https://untrusted.example.test", cookie);
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
         Assert.False(forbidden.Headers.Contains("Set-Cookie"));
@@ -111,7 +124,7 @@ public sealed class InvitationEndpointTests
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
-        var cookie = join.Cookie!.Split(';')[0];
+        var cookie = CookieHeader(join.Cookie!);
         await f.Database.ExecuteAsync("CREATE TRIGGER dbo.FailSessionClose ON dbo.BrowserSessions AFTER UPDATE AS BEGIN THROW 51012, 'Test-only session failure.', 1; END;");
         var leave = await AccessAsync(host.Client, f.TourId, "leave", cookie: cookie);
         Assert.Equal(HttpStatusCode.InternalServerError, leave.Status);
@@ -197,7 +210,7 @@ public sealed class InvitationEndpointTests
         Assert.Contains("httponly", join.Cookie!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", join.Cookie!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=none", join.Cookie!, StringComparison.OrdinalIgnoreCase);
-        var cookie = join.Cookie!.Split(';')[0];
+        var cookie = CookieHeader(join.Cookie!);
         Assert.DoesNotContain(code, join.Body.GetRawText());
         Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: cookie)).Status);
         Assert.Equal(HttpStatusCode.Conflict, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
@@ -359,7 +372,7 @@ public sealed class InvitationEndpointTests
         var invitation = item.GetProperty("id").GetGuid();
         var joined = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='RUNNING',StartedAt=SYSDATETIMEOFFSET();");
-        var answering = AskAsync(host.Client, f.TourId, joined.Cookie!.Split(';')[0], "Synthetic question?");
+        var answering = AskAsync(host.Client, f.TourId, CookieHeader(joined.Cookie!), "Synthetic question?");
         try
         {
             await assistant.Received.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -395,7 +408,7 @@ public sealed class InvitationEndpointTests
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitationId = item.GetProperty("id").GetGuid();
         var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId));
-        var cookie = join.Cookie!.Split(';')[0];
+        var cookie = CookieHeader(join.Cookie!);
         var sessionToken = cookie.Split('=')[1];
 
         var early = await AskAsync(host.Client, f.TourId, cookie, "Robot dùng cảm biến gì?");

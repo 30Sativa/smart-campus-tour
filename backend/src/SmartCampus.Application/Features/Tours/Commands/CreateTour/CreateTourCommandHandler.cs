@@ -17,6 +17,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         await TourPreparation.SelectRouteAsync(routes, input.RouteId, command.Request.ExpectedRouteVersion, ct);
         var now = clock.GetUtcNow();
         TourPreparation.RequireFuture(input.ScheduledStartAt, now);
+        TourPreparation.RequireConfiguredDuration();
         var tour = new Tour
         {
             Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, RouteId = input.RouteId,

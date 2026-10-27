@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
         services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
         services.AddScoped<IRegistrationReviewRepository, EfRegistrationReviewRepository>();
+        services.AddScoped<IRosterEmailChangeRepository, EfRosterEmailChangeRepository>();
         services.AddScoped<IRegistrationTransaction, EfRegistrationTransaction>();
         var invitationConfiguration = new InvitationConfiguration(configuration);
         services.AddSingleton(invitationConfiguration);

@@ -106,12 +106,34 @@ checks, rather than adding a second route model. See
 `web/docs/route-management.md`. Route SQL tests use disposable databases and
 exercise reorder, concurrency, reference locks and audit rollback.
 
-The Representative submission API now enforces Tour-first locks, owned mutations,
-rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
-The schema is unchanged. See `web/docs/representative-registration.md` for the
-live slice, isolated Route/Tour fixture and verification. Admin approval/rejection now shares these locks and reservations; see
-`web/docs/admin-registration-review.md`. Approved roster replacement and
-invitation/session revocation remain future implementation.
+Wave C adds the v1.4 Database First row-registration slice. Representative roster
+updates use stable row IDs; new rows await Staff review, accepted rows retain
+their own access, and removed rows revoke only their own invitation/session.
+Email changes are requested by the owning Representative and reviewed by Staff;
+the old direct Admin correction URL fails closed. Invitation/access checks use
+row participation state. Same-browser reconnect uses a tour-scoped device token
+and a two-minute window. See
+`backend/docs/representative-registration.md` and
+`backend/docs/registration-review.md` for API details and boundaries.
+
+## v1.4 row-level registration and email change (ADR-0025)
+
+`smart-campus-tour-schema-v1.4.sql` is the snapshot for an empty database and
+retains v1.3 tables. Existing v1.3 schemas require
+`patches/upgrade-v1.3-to-v1.4-row-registration.sql` through a reviewed
+Database First change, with backup and explicit database approval. The patch
+validates known bootstrap markers, backfills row participation from the existing
+registration decision, and adds row review metadata, email-change request
+history, and a browser device-token hash. Do not run this patch on a shared or
+production database from this branch. Integration tests use disposable SQL
+databases; the developer's local v1.1 database is intentionally untouched.
+
+Apply `smart-campus-tour-runtime-permissions.sql` after the existing runtime
+role setup to grant the email-request table access required by the API. The
+patch does not create a global seat-capacity setting, institutional calendar,
+or versioned scheduling/READY writer. Staff review ageing is observable from
+submission/request timestamps; an automatic business-day due date/escalation
+requires a separately approved working-day calendar.
 
 ## Remaining application invariants
 

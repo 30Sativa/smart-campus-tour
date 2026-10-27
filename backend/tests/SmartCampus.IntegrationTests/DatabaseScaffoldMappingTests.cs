@@ -28,7 +28,7 @@ public sealed class DatabaseScaffoldMappingTests
                 "AuditLogs", "BranchRequests", "BrowserSessions", "GroupRegistrations",
                 "Invitations", "MapAreas", "MapDeploymentChecks", "MapVersions", "PoiProposalRevisions",
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
-                "Robots", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
+                "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
                 "TourEvents", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),

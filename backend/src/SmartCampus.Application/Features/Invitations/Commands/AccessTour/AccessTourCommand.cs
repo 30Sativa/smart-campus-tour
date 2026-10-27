@@ -11,8 +11,9 @@ namespace SmartCampus.Application.Features.Invitations.Commands.AccessTour;
 
 public sealed record StudentTourInfo(Guid TourId, string TourName, string TourState, DateTimeOffset ScheduledStartAt,
     DateTimeOffset InvitationExpiresAt, string RowType, string? FallbackVideoUrl);
-public sealed record StudentAccessResult(StudentTourInfo? Info, string? Token);
-public sealed record AccessTourCommand(Guid TourId, string Operation, string? AccessCode, string? SessionToken)
+public sealed record StudentAccessResult(StudentTourInfo? Info, string? Token, string? DeviceToken);
+public sealed record AccessTourCommand(Guid TourId, string Operation, string? AccessCode, string? SessionToken,
+    string? DeviceToken)
     : IRegistrationMutationCommand<StudentAccessResult>;
 public sealed class AccessTourCommandValidator : AbstractValidator<AccessTourCommand>
 {
@@ -34,7 +35,7 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
             ? await repository.FindInvitationIdAsync(command.TourId, codes.Hash(command.AccessCode!), ct)
             : tokenHash is null ? null : await repository.FindSessionInvitationIdAsync(command.TourId, tokenHash, ct);
         if (id is null) {
-            if (command.Operation == "leave") return new(null, null);
+            if (command.Operation == "leave") return new(null, null, null);
             throw Invalid();
         }
         var tour = await registrations.LockTourAsync(command.TourId, ct) ?? throw Invalid();
@@ -46,7 +47,7 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         if (command.Operation == "leave")
         {
             if (current?.EndedAt is null && current is not null) { current.EndedAt = now; current.EndReason = "LOGOUT"; }
-            return new(null, null);
+            return new(null, null, null);
         }
         // Re-check the hash after taking the shared lock: reissue may have won the race.
         if (command.Operation == "join" && !CryptographicOperations.FixedTimeEquals(invitation.AccessCodeHash, codes.Hash(command.AccessCode!)))
@@ -56,17 +57,33 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         if (!allowed) throw Invalid();
         var active = invitation.BrowserSessions.SingleOrDefault(s => s.EndedAt is null);
         string? token = command.SessionToken;
+        string? deviceToken = command.DeviceToken;
         if (active is not null)
         {
-            if (current?.Id != active.Id)
+            var sameSession = current?.Id == active.Id;
+            var sameDevice = deviceToken is not null && active.DeviceTokenHash is not null &&
+                CryptographicOperations.FixedTimeEquals(active.DeviceTokenHash, codes.Hash("browser-device:" + deviceToken));
+            var withinReconnectGrace = active.LastSeenAt is not null && active.LastSeenAt >= now.AddMinutes(-2);
+            if (!sameSession && !(command.Operation == "join" && sameDevice && withinReconnectGrace))
                 throw new ConflictException("Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi/cấp mã mới.", "INVITATION_IN_USE");
+            if (sameSession && active.DeviceTokenHash is not null && !sameDevice)
+                throw new ConflictException("Phiên không khớp browser đã liên kết với lời mời.", "INVITATION_IN_USE");
+            if (deviceToken is null) deviceToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            active.DeviceTokenHash ??= codes.Hash("browser-device:" + deviceToken);
+            if (!sameSession)
+            {
+                token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                active.SessionTokenHash = codes.Hash("browser-session:" + token);
+            }
         }
         else
         {
             if (command.Operation != "join") throw Invalid();
             token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            deviceToken ??= Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             active = new BrowserSession { Id = Guid.NewGuid(), InvitationId = invitation.Id,
-                SessionTokenHash = codes.Hash("browser-session:" + token), CreatedAt = now, ExpiresAt = now };
+                SessionTokenHash = codes.Hash("browser-session:" + token), DeviceTokenHash = codes.Hash("browser-device:" + deviceToken),
+                CreatedAt = now, ExpiresAt = now };
             repository.Add(active);
             if (!await repository.HasEnteredAsync(invitation.Id, ct))
                 repository.AddAudit(InvitationAudit.Create(tour.Id, null, "INVITATION_ENTERED", invitation.Id.ToString("D"),
@@ -76,6 +93,6 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         active.ExpiresAt = now.AddMinutes(settings.SessionIdleMinutes) < invitation.ExpiresAt
             ? now.AddMinutes(settings.SessionIdleMinutes) : invitation.ExpiresAt;
         return new(new(tour.Id, tour.Name, tour.State, tour.ScheduledStartAt, invitation.ExpiresAt, invitation.RosterRow.RowType,
-            tour.State == "CANCELLED" && tour.StartedAt is not null ? tour.FallbackVideoUrl : null), token);
+            tour.State == "CANCELLED" && tour.StartedAt is not null ? tour.FallbackVideoUrl : null), token, deviceToken);
     }
 }

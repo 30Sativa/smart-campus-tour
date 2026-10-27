@@ -63,6 +63,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0023](0023-versioned-routes-and-manual-route-verification.md) | Immutable fixed-route revisions and append-only manual whole-route test evidence | owner-authorized backend slice; physical execution, frontend and remaining lifecycle are out of scope |
 | [0024](0024-versioned-tour-scheduling-blockers.md) | Fail-closed boundary for versioned Tour scheduling until duration and readiness evidence sources exist | owner-authorized implementation boundary; no scheduling/reservation/READY endpoint is claimed |
 | [0025](0025-web-staff-preparation-routes.md) | Web routes: Tour preparation at `/staff/manage/*`, Admin keeps Accounts/Roles, Technical Staff at `/technical/*`; old `/admin` URLs redirect | implemented in web; backend authorization migration (W1) pending |
+| [0026](0025-row-level-registration-and-email-change.md) | Stable per-row participation, review, email change and invitation/session access | owner-authorized Wave C backend slice; global capacity, workday calendar, READY integration and UI remain pending |
 
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:

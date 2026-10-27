@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Routes.Commands.CreateRoute;
 using SmartCampus.Application.Features.Routes.Commands.UpdateRoute;
@@ -110,11 +111,9 @@ public sealed class DeploymentDatabaseTests
         await Send(new SetRouteAvailabilityCommand(routeId, actor.Id, route.Version, true));
         route = await Send(new GetRouteQuery(routeId));
         var schedule = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds());
-        var tour = await Send(new CreateTourCommand(actor.Id, new CreateTourRequest(Guid.NewGuid(), route.Version,
-            new TourInput("Runtime Tour", null, routeId, schedule, null))));
-        var detail = await Send(new GetTourQuery(tour.Id));
-        await Send(new CancelTourCommand(tour.Id, actor.Id, new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Test cancel")));
-        Assert.Equal("CANCELLED", (await Send(new GetTourQuery(tour.Id))).Tour.State);
+        var blocker = await Assert.ThrowsAsync<ConflictException>(() => Send(new CreateTourCommand(actor.Id,
+            new CreateTourRequest(Guid.NewGuid(), route.Version, new TourInput("Runtime Tour", null, routeId, schedule, null)))));
+        Assert.Equal("TOUR_DURATION_UNAVAILABLE", blocker.Code);
         var unused = (await Send(new CreateRouteCommand(actor.Id, input))).Id;
         await Send(new DeleteRouteCommand(unused, actor.Id, (await Send(new GetRouteQuery(unused))).Version));
         foreach (var statement in new[] { "DELETE dbo.Tours WHERE 1=0", "UPDATE dbo.AuditLogs SET ResultCode='FAIL' WHERE 1=0", "DELETE dbo.TourEvents WHERE 1=0" })

@@ -11,6 +11,8 @@ public partial class BrowserSession
 
     public byte[] SessionTokenHash { get; set; } = null!;
 
+    public byte[]? DeviceTokenHash { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? LastSeenAt { get; set; }

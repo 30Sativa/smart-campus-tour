@@ -5,4 +5,4 @@ namespace SmartCampus.Application.Features.Representative.Queries.GetRepresentat
 
 public sealed record RegistrationReadModel(RegistrationListItem Summary, string ContactName, string ContactEmail,
     byte[] RowVersion, byte[] TourRowVersion, string? RejectionReason, DateTimeOffset? ReviewedAt,
-    IReadOnlyList<RosterInput> Roster, bool HasInvitations);
+    IReadOnlyList<RosterRowView> Roster, bool HasInvitations);

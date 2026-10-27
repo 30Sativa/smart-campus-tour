@@ -32,7 +32,7 @@ public sealed class GetStudentTourViewQueryHandler(IStudentAccessRepository acce
     {
         if (!settings.Enabled || string.IsNullOrEmpty(query.SessionToken)) throw Invalid();
         var tokenHash = codes.Hash("browser-session:" + query.SessionToken);
-        // Same session rules as Q&A (open, unexpired, unrevoked, active APPROVED row), in any Tour state.
+        // Same session rules as Q&A (open, unexpired, unrevoked, active ACCEPTED row), in any Tour state.
         _ = await access.FindQuestionAccessAsync(query.TourId, tokenHash, clock.GetUtcNow(), ct) ?? throw Invalid();
         var data = await reader.LoadAsync(query.TourId, ct) ?? throw Invalid();
         var stops = data.Stops
