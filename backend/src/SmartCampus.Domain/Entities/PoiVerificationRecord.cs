@@ -44,4 +44,6 @@ public partial class PoiVerificationRecord
     public virtual PoiProposalRevision ProposalRevision { get; set; } = null!;
 
     public virtual Robot Robot { get; set; } = null!;
+
+    public virtual ICollection<RouteRevisionStop> RouteRevisionStops { get; set; } = new List<RouteRevisionStop>();
 }

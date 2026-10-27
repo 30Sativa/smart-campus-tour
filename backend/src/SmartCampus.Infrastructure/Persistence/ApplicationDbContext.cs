@@ -46,7 +46,15 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Route> Routes { get; set; }
 
+    public virtual DbSet<RouteRevision> RouteRevisions { get; set; }
+
+    public virtual DbSet<RouteRevisionStop> RouteRevisionStops { get; set; }
+
+    public virtual DbSet<RouteRevisionSubmission> RouteRevisionSubmissions { get; set; }
+
     public virtual DbSet<RouteStop> RouteStops { get; set; }
+
+    public virtual DbSet<RouteTestRun> RouteTestRuns { get; set; }
 
     public virtual DbSet<RouteVariant> RouteVariants { get; set; }
 
@@ -253,6 +261,10 @@ public partial class ApplicationDbContext : DbContext
 
             entity.HasIndex(e => new { e.CheckedByUserId, e.RequestId }, "UQ_MapDeploymentChecks_ActorRequest").IsUnique();
 
+            entity.HasIndex(e => new { e.Id, e.MapVersionId }, "UQ_MapDeploymentChecks_ExactMap").IsUnique();
+
+            entity.HasIndex(e => new { e.Id, e.MapVersionId, e.PackageSha256 }, "UQ_MapDeploymentChecks_ExactMapChecksum").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
@@ -284,6 +296,8 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => new { e.AreaKey, e.UploadedAt, e.Id }, "IX_MapVersions_AreaUploaded").IsDescending(false, true, false);
 
             entity.HasIndex(e => new { e.AreaKey, e.VersionNumber }, "UQ_MapVersions_AreaVersion").IsUnique();
+
+            entity.HasIndex(e => new { e.Id, e.PackageSha256 }, "UQ_MapVersions_ExactPackage").IsUnique();
 
             entity.HasIndex(e => e.MapKey, "UQ_MapVersions_MapKey").IsUnique();
 
@@ -366,6 +380,8 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.HasIndex(e => new { e.MapVersionId, e.CreatedAt, e.Id }, "IX_PoiProposalRevisions_MapVersion");
 
+            entity.HasIndex(e => new { e.Id, e.MapVersionId, e.NavigationFingerprint }, "UQ_PoiProposalRevisions_ExactMapFingerprint").IsUnique();
+
             entity.HasIndex(e => new { e.ProposalId, e.RevisionNumber }, "UQ_PoiProposalRevisions_Number").IsUnique();
 
             entity.HasIndex(e => new { e.ProposalId, e.RequestId }, "UQ_PoiProposalRevisions_Request").IsUnique();
@@ -432,6 +448,8 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => new { e.MapVersionId, e.NavigationFingerprint, e.CheckedAt, e.Id }, "IX_PoiVerificationRecords_FingerprintTime").IsDescending(false, false, true, false);
 
             entity.HasIndex(e => new { e.CheckedByUserId, e.RequestId }, "UQ_PoiVerificationRecords_ActorRequest").IsUnique();
+
+            entity.HasIndex(e => new { e.Id, e.MapVersionId, e.NavigationFingerprint }, "UQ_PoiVerificationRecords_ExactEvidence").IsUnique();
 
             entity.HasIndex(e => e.ProposalRevisionId, "UQ_PoiVerificationRecords_Revision").IsUnique();
 
@@ -539,6 +557,10 @@ public partial class ApplicationDbContext : DbContext
         modelBuilder.Entity<Route>(entity =>
         {
             entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.AuthoringMode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("LEGACY", "DF_Routes_AuthoringMode");
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.Description).HasMaxLength(1000);
             entity.Property(e => e.EndMode)
@@ -556,6 +578,124 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
         });
 
+        modelBuilder.Entity<RouteRevision>(entity =>
+        {
+            entity.HasIndex(e => new { e.MapVersionId, e.CreatedAt, e.Id }, "IX_RouteRevisions_Map");
+
+            entity.HasIndex(e => new { e.Id, e.MapVersionId }, "UQ_RouteRevisions_IdMap").IsUnique();
+
+            entity.HasIndex(e => new { e.Id, e.MapVersionId, e.MapPackageSha256, e.NavigationFingerprint }, "UQ_RouteRevisions_MapChecksumFingerprint").IsUnique();
+
+            entity.HasIndex(e => new { e.Id, e.MapVersionId, e.NavigationFingerprint }, "UQ_RouteRevisions_MapFingerprint").IsUnique();
+
+            entity.HasIndex(e => new { e.RouteId, e.RevisionNumber }, "UQ_RouteRevisions_Number").IsUnique();
+
+            entity.HasIndex(e => new { e.CreatedByUserId, e.RequestId }, "UQ_RouteRevisions_Request").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.EndMode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.EndX).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.EndY).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.EndYaw).HasColumnType("decimal(9, 6)");
+            entity.Property(e => e.MapPackageSha256)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.NavigationFingerprint)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.StartX).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.StartY).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.StartYaw).HasColumnType("decimal(9, 6)");
+
+            entity.HasOne(d => d.CreatedByUser).WithMany(p => p.RouteRevisions)
+                .HasForeignKey(d => d.CreatedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisions_CreatedBy");
+
+            entity.HasOne(d => d.MapVersion).WithMany(p => p.RouteRevisionMapVersions)
+                .HasForeignKey(d => d.MapVersionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisions_Map");
+
+            entity.HasOne(d => d.Route).WithMany(p => p.RouteRevisions)
+                .HasForeignKey(d => d.RouteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisions_Route");
+
+            entity.HasOne(d => d.MapVersionNavigation).WithMany(p => p.RouteRevisionMapVersionNavigations)
+                .HasPrincipalKey(p => new { p.Id, p.PackageSha256 })
+                .HasForeignKey(d => new { d.MapVersionId, d.MapPackageSha256 })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisions_MapChecksum");
+        });
+
+        modelBuilder.Entity<RouteRevisionStop>(entity =>
+        {
+            entity.HasIndex(e => new { e.RouteRevisionId, e.StopOrder }, "UQ_RouteRevisionStops_Order").IsUnique();
+
+            entity.HasIndex(e => new { e.RouteRevisionId, e.PoiProposalRevisionId }, "UQ_RouteRevisionStops_Poi").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CameraPreset).HasMaxLength(80);
+            entity.Property(e => e.HeadStepsJson).HasMaxLength(4000);
+            entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.PoiNavigationFingerprint)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.X).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.Y).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.Yaw).HasColumnType("decimal(9, 6)");
+
+            entity.HasOne(d => d.RouteRevision).WithMany(p => p.RouteRevisionStops)
+                .HasPrincipalKey(p => new { p.Id, p.MapVersionId })
+                .HasForeignKey(d => new { d.RouteRevisionId, d.MapVersionId })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisionStops_RevisionMap");
+
+            entity.HasOne(d => d.PoiProposalRevision).WithMany(p => p.RouteRevisionStops)
+                .HasPrincipalKey(p => new { p.Id, p.MapVersionId, p.NavigationFingerprint })
+                .HasForeignKey(d => new { d.PoiProposalRevisionId, d.MapVersionId, d.PoiNavigationFingerprint })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisionStops_PoiMapFingerprint");
+
+            entity.HasOne(d => d.PoiVerificationRecord).WithMany(p => p.RouteRevisionStops)
+                .HasPrincipalKey(p => new { p.Id, p.MapVersionId, p.NavigationFingerprint })
+                .HasForeignKey(d => new { d.SourcePoiVerificationRecordId, d.MapVersionId, d.PoiNavigationFingerprint })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisionStops_SourceEvidence");
+        });
+
+        modelBuilder.Entity<RouteRevisionSubmission>(entity =>
+        {
+            entity.HasIndex(e => new { e.SubmittedByUserId, e.RequestId }, "UQ_RouteRevisionSubmissions_Request").IsUnique();
+
+            entity.HasIndex(e => e.RouteRevisionId, "UQ_RouteRevisionSubmissions_Revision").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.SubmittedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.RouteRevision).WithOne(p => p.RouteRevisionSubmission)
+                .HasForeignKey<RouteRevisionSubmission>(d => d.RouteRevisionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisionSubmissions_Revision");
+
+            entity.HasOne(d => d.SubmittedByUser).WithMany(p => p.RouteRevisionSubmissions)
+                .HasForeignKey(d => d.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteRevisionSubmissions_User");
+        });
+
         modelBuilder.Entity<RouteStop>(entity =>
         {
             entity.HasIndex(e => new { e.RouteId, e.StopOrder }, "UQ_RouteStops_Order").IsUnique();
@@ -571,6 +711,57 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.RouteId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RouteStops_RouteId");
+        });
+
+        modelBuilder.Entity<RouteTestRun>(entity =>
+        {
+            entity.HasIndex(e => new { e.RouteRevisionId, e.NavigationFingerprint, e.CheckedAt, e.Id }, "IX_RouteTestRuns_Effective").IsDescending(false, false, true, false);
+
+            entity.HasIndex(e => new { e.CheckedByUserId, e.RequestId }, "UQ_RouteTestRuns_Request").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CheckedAt).HasPrecision(3);
+            entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
+            entity.Property(e => e.FailureReason).HasMaxLength(1000);
+            entity.Property(e => e.MapPackageSha256)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.NavigationFingerprint)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.ResultCode)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.CheckedByUser).WithMany(p => p.RouteTestRunCheckedByUsers)
+                .HasForeignKey(d => d.CheckedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteTestRuns_Checker");
+
+            entity.HasOne(d => d.ParticipatingStaffUser).WithMany(p => p.RouteTestRunParticipatingStaffUsers)
+                .HasForeignKey(d => d.ParticipatingStaffUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteTestRuns_Staff");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.RouteTestRuns)
+                .HasForeignKey(d => d.RobotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteTestRuns_Robot");
+
+            entity.HasOne(d => d.MapDeploymentCheck).WithMany(p => p.RouteTestRuns)
+                .HasPrincipalKey(p => new { p.Id, p.MapVersionId, p.PackageSha256 })
+                .HasForeignKey(d => new { d.MapDeploymentCheckId, d.MapVersionId, d.MapPackageSha256 })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteTestRuns_Deployment");
+
+            entity.HasOne(d => d.RouteRevision).WithMany(p => p.RouteTestRuns)
+                .HasPrincipalKey(p => new { p.Id, p.MapVersionId, p.NavigationFingerprint })
+                .HasForeignKey(d => new { d.RouteRevisionId, d.MapVersionId, d.NavigationFingerprint })
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RouteTestRuns_ExactRevision");
         });
 
         modelBuilder.Entity<RouteVariant>(entity =>

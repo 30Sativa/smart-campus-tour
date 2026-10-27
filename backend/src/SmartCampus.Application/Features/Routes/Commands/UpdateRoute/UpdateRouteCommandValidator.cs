@@ -11,7 +11,7 @@ public sealed class UpdateRouteCommandValidator : AbstractValidator<UpdateRouteC
         RuleFor(c => c.Input).NotNull();
         When(c => c.Input is not null, () =>
         {
-            RuleFor(c => c.Input.ExpectedVersion).Must(RouteRevision.IsValid);
+            RuleFor(c => c.Input.ExpectedVersion).Must(LegacyRouteRevision.IsValid);
             RuleFor(c => c.Input.Configuration).NotNull().SetValidator(new RouteInputValidator());
         });
     }

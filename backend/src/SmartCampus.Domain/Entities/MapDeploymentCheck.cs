@@ -32,4 +32,6 @@ public partial class MapDeploymentCheck
     public virtual MapVersion MapVersion { get; set; } = null!;
 
     public virtual Robot Robot { get; set; } = null!;
+
+    public virtual ICollection<RouteTestRun> RouteTestRuns { get; set; } = new List<RouteTestRun>();
 }

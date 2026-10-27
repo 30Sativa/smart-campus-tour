@@ -59,5 +59,9 @@ public partial class MapVersion
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
 
+    public virtual ICollection<RouteRevision> RouteRevisionMapVersionNavigations { get; set; } = new List<RouteRevision>();
+
+    public virtual ICollection<RouteRevision> RouteRevisionMapVersions { get; set; } = new List<RouteRevision>();
+
     public virtual User UploadedByUser { get; set; } = null!;
 }

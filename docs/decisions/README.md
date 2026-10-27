@@ -60,6 +60,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0020](0020-srs-v02-business-baseline-and-technical-staff.md) | SRS v0.2 target adoption, scoped business succession and TechnicalStaff account foundation | owner-authorized; limited account slice implemented; other gaps/pending decisions retained |
 | [0021](0021-map-package-and-poi-verification.md) | ROS map package versions, manual deployment records and per-POI Technical Staff verification | owner-authorized backend slice implemented; physical acceptance, route tests and frontend remain pending |
 | [0022](0022-staff-owns-tour-preparation-history.md) | Historical group decision assigning Tour preparation to Staff; superseded as target by ADR-0020 | historical; original advisor review remains pending |
+| [0023](0023-versioned-routes-and-manual-route-verification.md) | Immutable fixed-route revisions and append-only manual whole-route test evidence | owner-authorized backend slice; physical execution, frontend and remaining lifecycle are out of scope |
 
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
