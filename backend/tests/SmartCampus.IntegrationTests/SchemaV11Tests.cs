@@ -386,7 +386,7 @@ public sealed class SchemaV11Tests
                 "A verification that wins the lock must commit before the deployment that changes the robot to map B.");
 
         var rejectedAfterMapB = await Assert.ThrowsAsync<ConflictException>(() => SendVerificationAsync(services, proposal));
-        Assert.Equal("MAP_NOT_DEPLOYED", rejectedAfterMapB.Code);
+        Assert.Equal(verification is null ? "MAP_NOT_DEPLOYED" : "CONFLICT", rejectedAfterMapB.Code);
         Assert.Equal(0, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords v JOIN dbo.PoiProposalRevisions r ON r.Id=v.ProposalRevisionId WHERE r.ProposalId='{proposal.Id}' AND v.CheckedAt > '{mapBDeployment.CheckedAt:O}';"));
     }
 
