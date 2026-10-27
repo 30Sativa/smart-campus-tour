@@ -22,7 +22,7 @@ const mapId = (mapKey: string, mapFrame: string) => JSON.stringify([mapKey, mapF
 const coordOk = (v: number | null) => v != null && Number.isFinite(v) && Math.abs(v) <= 999999.9999
 const yawOk = (v: number | null) => v != null && Number.isFinite(v) && Math.abs(v) <= 3.141593
 
-export default function AdminRouteFormPage() {
+export default function StaffManageRouteFormPage() {
   const { routeId } = useParams()
   const [params] = useSearchParams()
   const copyFrom = routeId ? undefined : params.get('copyFrom') ?? undefined

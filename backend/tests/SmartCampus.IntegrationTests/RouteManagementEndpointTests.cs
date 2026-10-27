@@ -51,9 +51,8 @@ public sealed class RouteManagementEndpointTests
         using var anonymous = new HttpClient { BaseAddress = fixture.Client.BaseAddress };
         using var denied = await anonymous.GetAsync("/api/admin/routes");
         Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
-        await fixture.Database.InsertUserAsync(isActive: true, username: "route.staff", roles: ["STAFF"]);
-        var staffToken = await Fixture.Token(anonymous, "route.staff");
-        anonymous.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", staffToken);
+        var adminToken = await Fixture.Token(anonymous, "route.systemadmin");
+        anonymous.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
         foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete })
         {
             using var request = new HttpRequestMessage(method, method == HttpMethod.Post || method == HttpMethod.Get ? "/api/admin/routes" : $"/api/admin/routes/{Guid.NewGuid()}")
@@ -261,7 +260,8 @@ public sealed class RouteManagementEndpointTests
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
             try
             {
-                var admin = await database.InsertUserAsync(isActive: true, username: "route.admin", roles: ["ADMIN"]);
+                var admin = await database.InsertUserAsync(isActive: true, username: "route.admin", roles: ["STAFF"]);
+                await database.InsertUserAsync(isActive: true, username: "route.systemadmin", roles: ["ADMIN"]);
                 var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
                 var fixture = new Fixture(database, host, admin.Id, [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()]);
                 host.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await Token(host.Client, "route.admin"));

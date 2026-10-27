@@ -158,10 +158,10 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Where(revision => revision.ProposalId == proposalId)
             .OrderBy(revision => revision.RevisionNumber).ToArrayAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<PoiVerificationRecord>> ListVerificationRecordsAsync(Guid proposalId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<PoiVerificationRecord>> ListVerificationRecordsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
         await dbContext.PoiVerificationRecords.AsNoTracking().Include(verification => verification.ProposalRevision)
             .ThenInclude(revision => revision.MapVersion).Include(verification => verification.Robot)
-            .Where(verification => verification.ProposalRevision.ProposalId == proposalId)
+            .Where(verification => proposalIds.Contains(verification.ProposalRevision.ProposalId))
             .OrderBy(verification => verification.CheckedAt).ThenBy(verification => verification.Id).ToArrayAsync(cancellationToken);
 
     public async Task<IReadOnlyList<PoiProposal>> ListProposalsAsync(Guid? mapVersionId, CancellationToken cancellationToken)
@@ -175,11 +175,21 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .ThenBy(proposal => proposal.Id).Take(100).ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PoiProposalRevision>> ListCurrentRevisionsAsync(
+        IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
+        await dbContext.PoiProposalRevisions.AsNoTracking()
+            .Include(revision => revision.MapVersion).ThenInclude(map => map.AreaKeyNavigation)
+            .Include(revision => revision.PoiProposalSubmission)
+            .Where(revision => proposalIds.Contains(revision.ProposalId) &&
+                revision.RevisionNumber == revision.Proposal.CurrentRevision)
+            .ToArrayAsync(cancellationToken);
+
     public async Task<IReadOnlyList<PoiProposalRevision>> ListSubmittedVerificationQueueAsync(Guid? mapVersionId, CancellationToken cancellationToken)
     {
         var query = dbContext.PoiProposalRevisions.AsNoTracking()
             .Include(revision => revision.Proposal)
             .Include(revision => revision.MapVersion).ThenInclude(map => map.AreaKeyNavigation)
+            .Include(revision => revision.PoiProposalSubmission)
             .Where(revision => revision.RevisionNumber == revision.Proposal.CurrentRevision &&
                                dbContext.PoiProposalSubmissions.Any(submission => submission.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords.Any(verification => verification.ProposalRevisionId == revision.Id) &&

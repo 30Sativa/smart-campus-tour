@@ -14,25 +14,24 @@ public sealed class PoiManagementEndpointTests
     private const string Password = "integration-test-password";
 
     [SchemaV11Fact]
-    public async Task PoiEndpoints_RequireAdminCreateInactiveAndReturnRelevantStatuses()
+    public async Task PoiEndpoints_RequireStaffCreateInactiveAndReturnRelevantStatuses()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
-        var admin = await database.InsertUserAsync(isActive: true, username: "poi.admin", roles: ["ADMIN"]);
-        await database.InsertUserAsync(isActive: true, username: "poi.staff", roles: ["STAFF"]);
+        var admin = await database.InsertUserAsync(isActive: true, username: "poi.admin", roles: ["STAFF"]);
+        await database.InsertUserAsync(isActive: true, username: "poi.systemadmin", roles: ["ADMIN"]);
         await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
 
         using var anonymous = await host.Client.GetAsync("/api/admin/pois");
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
 
-        var staffToken = await GetAccessTokenAsync(host.Client, "poi.staff");
-        using var staffRequest = CreateRequest(HttpMethod.Get, "/api/admin/pois", staffToken);
-        using var staffResponse = await host.Client.SendAsync(staffRequest);
-        Assert.Equal(HttpStatusCode.Forbidden, staffResponse.StatusCode);
-
         var adminToken = await GetAccessTokenAsync(host.Client, "poi.admin");
-        using var listRequest = CreateRequest(HttpMethod.Get, "/api/admin/pois", adminToken);
+        using var listRequest = CreateRequest(HttpMethod.Get, "/api/staff/manage/pois", adminToken);
         using var listResponse = await host.Client.SendAsync(listRequest);
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var systemAdmin = await GetAccessTokenAsync(host.Client, "poi.systemadmin");
+        using var adminRequest = CreateRequest(HttpMethod.Get, "/api/staff/manage/pois", systemAdmin);
+        using var adminResponse = await host.Client.SendAsync(adminRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, adminResponse.StatusCode);
 
         using var missingRequest = CreateRequest(HttpMethod.Get, $"/api/admin/pois/{Guid.NewGuid():D}", adminToken);
         using var missingResponse = await host.Client.SendAsync(missingRequest);
@@ -66,7 +65,7 @@ public sealed class PoiManagementEndpointTests
     public async Task PoiUpdates_RejectStaleVersionsAndNoOpDoesNotAddAudit_ConcurrentSameVersionHasOneConflict()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
-        await database.InsertUserAsync(isActive: true, username: "poi.concurrent.admin", roles: ["ADMIN"]);
+        await database.InsertUserAsync(isActive: true, username: "poi.concurrent.admin", roles: ["STAFF"]);
         await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
         var token = await GetAccessTokenAsync(host.Client, "poi.concurrent.admin");
         var poiId = await CreatePoiAsync(host.Client, token);
@@ -114,7 +113,7 @@ public sealed class PoiManagementEndpointTests
     public async Task PoiUsageLocksPoseAfterRouteReferenceAndAllChangesWhileTourIsReady()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
-        var admin = await database.InsertUserAsync(isActive: true, username: "poi.lock.admin", roles: ["ADMIN"]);
+        var admin = await database.InsertUserAsync(isActive: true, username: "poi.lock.admin", roles: ["STAFF"]);
         await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
         var token = await GetAccessTokenAsync(host.Client, "poi.lock.admin");
         var poiId = await CreatePoiAsync(host.Client, token);
@@ -148,7 +147,7 @@ public sealed class PoiManagementEndpointTests
     public async Task PoiMapPickerPose_RoundTripsMapContextAndDecimalPrecision()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
-        await database.InsertUserAsync(isActive: true, username: "poi.map.admin", roles: ["ADMIN"]);
+        await database.InsertUserAsync(isActive: true, username: "poi.map.admin", roles: ["STAFF"]);
         await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
         var token = await GetAccessTokenAsync(host.Client, "poi.map.admin");
 

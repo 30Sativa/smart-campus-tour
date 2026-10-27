@@ -30,7 +30,7 @@ function perDay<T>(items: T[], at: (item: T) => string, from: number, weight: (i
  * "Tổng quan": the state of preparation at a glance. Figures and charts only;
  * the work waiting for Admin lives in the bell and the sidebar badge.
  */
-export default function AdminDashboardPage() {
+export default function StaffManageDashboardPage() {
   const tours = useAdminTours()
   const regs = useAdminRegistrations(ALL)
   const { reviewId, close } = useReviewParam()

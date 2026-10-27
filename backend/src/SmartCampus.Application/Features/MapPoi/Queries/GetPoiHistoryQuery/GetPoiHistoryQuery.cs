@@ -12,14 +12,13 @@ public sealed class GetPoiHistoryQueryHandler(IPoiProposalRepository proposalRep
     {
         if (await proposalRepository.FindProposalAsync(query.Id, ct) is null) throw new NotFoundException("POI proposal", query.Id);
         var revisions = await proposalRepository.ListRevisionsAsync(query.Id, ct);
-        var revisionViews = new List<PoiRevisionView>(revisions.Count);
-        foreach (var revision in revisions)
-        {
-            var submission = await proposalRepository.FindSubmissionAsync(revision.Id, ct);
-            var verification = await verificationRepository.FindVerificationAsync(revision.Id, ct);
-            revisionViews.Add(PoiProposalReadModelLoader.ToRevisionView(revision, submission, verification));
-        }
-        var checks = (await verificationRepository.ListVerificationRecordsAsync(query.Id, ct)).Select(MapPoiReadModelMapper.ToVerificationView).ToArray();
-        return new(query.Id, revisionViews, checks);
+        // History needs one bulk check read; revisions are projected in memory to keep query count bounded.
+        var checks = await verificationRepository.ListVerificationRecordsAsync([query.Id], ct);
+        var latestByRevision = checks.GroupBy(check => check.ProposalRevisionId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id).First());
+        var revisionViews = revisions.Select(revision =>
+            PoiProposalReadModelLoader.ToRevisionView(revision, revision.PoiProposalSubmission,
+                latestByRevision.GetValueOrDefault(revision.Id))).ToArray();
+        return new(query.Id, revisionViews, checks.Select(MapPoiReadModelMapper.ToVerificationView).ToArray());
     }
 }

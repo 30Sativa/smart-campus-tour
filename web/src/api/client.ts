@@ -27,6 +27,8 @@ export function apiUrl(path: string): string {
 
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   json?: unknown
+  /** Multipart form data; the browser supplies the boundary header. */
+  formData?: FormData
   auth?: boolean
 }
 
@@ -100,7 +102,7 @@ export async function restoreAuthSession(): Promise<void> {
  */
 export async function apiClient<T>(
   path: string,
-  { json, headers, auth = true, ...options }: ApiRequestOptions = {},
+  { json, formData, headers, auth = true, ...options }: ApiRequestOptions = {},
 ): Promise<T> {
   const revision = useAuthStore.getState().sessionRevision
   const ensureCurrentSession = () => {
@@ -114,7 +116,7 @@ export async function apiClient<T>(
     return fetch(apiUrl(path), {
       ...options,
       headers: requestHeaders,
-      body: json === undefined ? undefined : JSON.stringify(json),
+      body: formData ?? (json === undefined ? undefined : JSON.stringify(json)),
     })
   }
 

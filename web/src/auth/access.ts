@@ -36,7 +36,7 @@ export const AREAS: Area[] = [
     id: 'staff',
     label: 'Vận hành tour',
     path: '/staff',
-    purpose: 'Chuẩn bị Tour (tạo Tour, duyệt đăng ký, tuyến, POI) và vận hành: bắt đầu, giữ / đi tiếp tại POI, xử lý sự cố, kết thúc sớm. Quản trị viên chỉ xem.',
+    purpose: 'Chuẩn bị Tour (tạo Tour, duyệt đăng ký, tuyến, POI) và vận hành: bắt đầu, giữ / đi tiếp tại POI, xử lý sự cố, kết thúc sớm.',
     allows: isStaffRole,
   },
   {

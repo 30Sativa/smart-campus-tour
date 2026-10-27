@@ -12,7 +12,7 @@ import type { TourState } from '../../../features/administration/tours/types'
 
 const PAGE_SIZE = 20
 
-export default function AdminTourListPage() {
+export default function StaffManageTourListPage() {
   const [search, setSearch] = useState('')
   const [state, setState] = useState<TourState | ''>('SCHEDULED')
   const [page, setPage] = useState(1)

@@ -50,9 +50,9 @@ backend/
     └── SignalRCompatibilityHarness/
 ```
 
-Current API controllers cover Auth, Admin account management, Admin POI and Route
-management, Admin Tour preparation/cancellation (ADR-0018), Representative submission/pre-approval registration, Admin
-registration review, owner/Admin invitation support, anonymous Student cookie
+Current API controllers cover Auth, Admin account management, Staff POI and Route
+management, Staff Tour preparation/cancellation (legacy Admin URL aliases), Representative submission/pre-approval registration, Staff
+registration review, Representative/Staff invitation support, anonymous Student cookie
 entry/session/leave, development SimulationPreview, and authenticated Fleet
 Sync v1 telemetry.
 Student view and private text Q&A are implemented under architecture §7.1;

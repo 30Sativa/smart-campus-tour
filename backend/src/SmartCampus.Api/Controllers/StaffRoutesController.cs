@@ -18,9 +18,10 @@ using SmartCampus.Application.Features.Routes.Queries.GetRoutes;
 namespace SmartCampus.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = ApplicationRoles.Admin)]
+[Authorize(Roles = ApplicationRoles.Staff)]
+[Route("api/staff/manage/routes")]
 [Route("api/admin/routes")]
-public sealed class AdminRoutesController(ISender sender) : ControllerBase
+public sealed class StaffRoutesController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters, [FromQuery] bool? isActive,

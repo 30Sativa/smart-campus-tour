@@ -1,71 +1,96 @@
-import { useState } from 'react'
-import { FileUp } from 'lucide-react'
-import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
-import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
-import { OCCUPANCY_MAPS } from '../../features/administration/pois/map/catalog'
-import { importPoiYamlFile, type ImportedPoiPose } from '../../features/administration/pois/poi-yaml-import'
-import { TechnicalPage } from '../../features/technical/TechnicalUi'
+import { useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
+import { PageHeader, PanelHead, LoadingPanel, panelClass } from '../../components/ui/ConsolePrimitives'
+import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
+import { TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { errorText, stamp } from '../../features/technical/technical-format'
+import { usePoiProposals, useVerifyPoi } from '../../features/technical/technical-hooks'
 
-const fileName = (path: string) => path.replaceAll('\\', '/').split('/').at(-1) ?? path
-
-/**
- * POI import from the project YAML template, bound to a map version (SRS v1.9
- * §3.2.b). The check runs in the browser with the same validator as the POI
- * form; saving needs the Technical API (proposal B7), so this page is a dry run.
- * Importing a POI is not technical validation.
- */
 export default function TechnicalPoiImportPage() {
-  const [mapKey, setMapKey] = useState(OCCUPANCY_MAPS[0].mapKey)
-  const [result, setResult] = useState<{ file: string; pose: ImportedPoiPose } | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const map = OCCUPANCY_MAPS.find((item) => item.mapKey === mapKey) ?? OCCUPANCY_MAPS[0]
+  const proposals = usePoiProposals()
+  const verify = useVerifyPoi()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [robotCode, setRobotCode] = useState('')
+  const [evidence, setEvidence] = useState('')
+  const [reason, setReason] = useState('')
+  const [resultCode, setResultCode] = useState<'PASS' | 'FAIL'>('PASS')
+  const [reached, setReached] = useState(true)
+  const [stopped, setStopped] = useState(true)
+  const [localized, setLocalized] = useState(true)
+  const [cameraConfirmed, setCameraConfirmed] = useState(true)
 
-  const read = async (file: File | undefined) => {
-    setResult(null)
-    setError(null)
-    if (!file) return
-    try {
-      setResult({ file: file.name, pose: await importPoiYamlFile(file, map) })
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Không đọc được file YAML.')
-    }
+  const queue = useMemo(() => (proposals.data ?? []).filter(item => item.revision.isSubmitted && item.revision.navigationStatus !== 'PASS'), [proposals.data])
+  const selected = queue.find(item => item.id === selectedId)
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!selected) return
+    verify.mutate({
+      proposalId: selected.id,
+      revisionNumber: selected.revision.revisionNumber,
+      expectedRowVersion: selected.rowVersion,
+      robotCode,
+      resultCode,
+      reached,
+      stopped,
+      localizationPassed: localized,
+      cameraPresetConfirmed: cameraConfirmed,
+      reason: resultCode === 'FAIL' ? reason : undefined,
+      evidenceNote: evidence,
+    }, { onSuccess: () => { setSelectedId(null); setEvidence(''); setReason(''); verify.reset() } })
   }
-
-  const template = `map_yaml: ${fileName(map.sourceYaml)}\nmap_key: ${map.mapKey}\nframe_id: ${map.frameId}\npose:\n  x: 1.25\n  y: -3.40\n  yaw: 1.5708   # radian`
 
   return (
     <TechnicalPage>
-      <PageHeader eyebrow="Kỹ thuật" title="Import POI (YAML)" description="Kiểm tra file POI theo template của dự án, gắn với đúng version map. Import POI không phải là xác nhận kỹ thuật: POI vẫn cần kiểm tra thực tế." />
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <section className={panelClass} aria-label="Kiểm tra file POI">
-          <PanelHead title="Chọn version map và file" />
-          <div className="space-y-4 p-5">
-            <div>
-              <label htmlFor="poi-import-map" className={labelClass}>Version map</label>
-              <select id="poi-import-map" className={`${inputClass} mt-1.5`} value={mapKey} onChange={(event) => { setMapKey(event.target.value); setResult(null); setError(null) }}>
-                {OCCUPANCY_MAPS.map((item) => <option key={item.mapKey} value={item.mapKey}>{item.mapKey} · {fileName(item.sourceYaml)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="poi-import-file" className={labelClass}>File POI (.yaml, tối đa 64 KB)</label>
-              <input id="poi-import-file" type="file" accept=".yaml,.yml" className={`${inputClass} mt-1.5`} onChange={(event) => void read(event.target.files?.[0])} />
-            </div>
-            {error && <p role="alert" className="rounded-xl bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{error}</p>}
-            {result && (
-              <div role="status" className="rounded-xl border border-[#cde9dc] bg-[#effbf5] p-4 text-[13px] text-[#1f7a55]">
-                <p className="font-bold">{result.file}: hợp lệ với {map.mapKey}</p>
-                <p className="mt-1 tabular-nums">x = {result.pose.x} m · y = {result.pose.y} m · yaw = {result.pose.yaw} rad ({(result.pose.yaw * 180 / Math.PI).toFixed(1)}°)</p>
-              </div>
-            )}
-            <button type="button" className={buttonClass('primary')} disabled aria-describedby="poi-import-save-note"><FileUp size={16} aria-hidden="true" />Lưu POI</button>
-            <p id="poi-import-save-note" className="text-xs leading-5 text-[#64748b]">Lưu POI cần API kỹ thuật (đề xuất B7). Trong lúc chờ, POI vẫn được tạo ở form POI của Staff.</p>
+      <PageHeader eyebrow="Kỹ thuật" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra cho POI đã được Staff gửi, gắn với đúng revision và map version. Bản ghi là bằng chứng nhập từ người dùng, không xác nhận robot đã tự gửi dữ liệu." />
+      <section className={panelClass} aria-label="Hàng đợi kiểm chứng POI">
+        <PanelHead title="POI đã gửi kiểm chứng" description="Nạp trực tiếp từ backend. Import POI bằng project YAML vẫn pending vì template/frame mapping chưa được chốt." />
+        {proposals.isPending ? <LoadingPanel /> : proposals.error ? <p role="alert" className="p-5 text-sm text-red-700">{errorText(proposals.error)}</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead><tr className="border-b border-[#f1f5f9]"><th className={thClass}>POI</th><th className={thClass}>Map</th><th className={thClass}>Tọa độ</th><th className={thClass}>Trạng thái</th><th className={thClass}>Đã gửi</th><th className={thClass}>Thao tác</th></tr></thead>
+              <tbody className="divide-y divide-[#f1f5f9]">
+                {queue.map(item => <tr key={item.id} className={rowClass}>
+                  <td className={tdClass}><span className="font-semibold">{item.revision.name}</span><p className="text-xs text-[#64748b]">{item.revision.purpose}</p></td>
+                  <td className={`${tdClass} font-mono`}>{item.revision.mapKey} · r{item.revision.revisionNumber}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{item.revision.x}, {item.revision.y}, {item.revision.yaw}</td>
+                  <td className={tdClass}><ToneBadge tone={item.revision.navigationStatus === 'FAIL' ? 'danger' : 'warn'}>{item.revision.navigationStatus === 'FAIL' ? 'Cần kiểm tra lại' : 'Chờ kiểm chứng'}</ToneBadge></td>
+                  <td className={`${tdClass} text-xs text-[#64748b]`}>{stamp(item.revision.submittedAt)}</td>
+                  <td className={tdClass}><button className={buttonClass('primary', 'sm')} type="button" onClick={() => { setSelectedId(item.id); setVerifyDefaults() }}>Ghi kết quả</button></td>
+                </tr>)}
+                {!queue.length && <tr><td className={tdClass} colSpan={6}>Không có POI đang chờ kiểm chứng.</td></tr>}
+              </tbody>
+            </table>
           </div>
-        </section>
-        <section className={panelClass} aria-label="Template YAML">
-          <PanelHead title="Template" description="Một POI mỗi file; map_yaml, map_key và frame_id phải khớp version đã chọn." />
-          <pre className="overflow-x-auto p-5 font-mono text-[12.5px] leading-6 text-[#334155]">{template}</pre>
-        </section>
-      </div>
+        )}
+      </section>
+
+      {selected && <section className={`${panelClass} mt-5`} aria-label="Ghi kết quả kiểm chứng">
+        <PanelHead title={`Kiểm tra ${selected.revision.name}`} description={`${selected.revision.mapKey}, revision ${selected.revision.revisionNumber}. PASS yêu cầu đủ bốn kiểm tra đạt.`} />
+        <form className="grid gap-4 p-5 md:grid-cols-2" onSubmit={submit}>
+          <div><label className={labelClass} htmlFor="verify-robot">Robot vật lý</label><input id="verify-robot" className={`${inputClass} mt-1.5`} required maxLength={100} value={robotCode} onChange={event => setRobotCode(event.target.value)} /></div>
+          <div><label className={labelClass} htmlFor="verify-result">Kết quả</label><select id="verify-result" className={`${inputClass} mt-1.5`} value={resultCode} onChange={event => setResultCode(event.target.value as 'PASS' | 'FAIL')}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
+          <div className="space-y-2 md:col-span-2">
+            {[['reached', 'Robot tới đúng POI', reached, setReached], ['stopped', 'Robot dừng đúng vị trí', stopped, setStopped], ['localized', 'Localization đạt', localized, setLocalized], ['camera', 'Camera preset được xác nhận', cameraConfirmed, setCameraConfirmed]].map(([id, text, checked, setChecked]) => <label key={String(id)} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={checked as boolean} onChange={event => (setChecked as (value: boolean) => void)(event.target.checked)} />{text as string}</label>)}
+          </div>
+          {resultCode === 'FAIL' && <div className="md:col-span-2"><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><input id="verify-reason" className={`${inputClass} mt-1.5`} required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></div>}
+          <div className="md:col-span-2"><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" className={`${inputClass} mt-1.5`} required maxLength={2000} value={evidence} onChange={event => setEvidence(event.target.value)} /></div>
+          {verify.error && <p role="alert" className="md:col-span-2 text-sm text-red-700">{errorText(verify.error)}</p>}
+          <div className="flex gap-2 md:col-span-2"><button type="submit" className={buttonClass('primary')} disabled={verify.isPending}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button><button type="button" className={buttonClass('secondary')} onClick={() => setSelectedId(null)}>Đóng</button></div>
+        </form>
+      </section>}
     </TechnicalPage>
   )
+
+  function setVerifyDefaults() {
+    setRobotCode('')
+    setEvidence('')
+    setReason('')
+    setResultCode('PASS')
+    setReached(true)
+    setStopped(true)
+    setLocalized(true)
+    setCameraConfirmed(true)
+    verify.reset()
+  }
 }

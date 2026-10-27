@@ -59,18 +59,18 @@ const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
 const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
-const AdminDashboardPage = lazy(() => import('../../routes/staff/manage/AdminDashboardPage'))
-const AdminTourListPage = lazy(() => import('../../routes/staff/manage/AdminTourListPage'))
-const AdminTourCreatePage = lazy(() => import('../../routes/staff/manage/AdminTourCreatePage'))
-const AdminTourDetailPage = lazy(() => import('../../routes/staff/manage/AdminTourDetailPage'))
-const AdminTourEditPage = lazy(() => import('../../routes/staff/manage/AdminTourEditPage'))
-const AdminRegistrationsPage = lazy(() => import('../../routes/staff/manage/AdminRegistrationsPage'))
-const AdminRouteCatalogPage = lazy(() => import('../../routes/staff/manage/AdminRouteCatalogPage'))
-const AdminRouteDetailsPage = lazy(() => import('../../routes/staff/manage/AdminRouteDetailsPage'))
-const AdminRouteFormPage = lazy(() => import('../../routes/staff/manage/AdminRouteFormPage'))
+const StaffManageDashboardPage = lazy(() => import('../../routes/staff/manage/StaffManageDashboardPage'))
+const StaffManageTourListPage = lazy(() => import('../../routes/staff/manage/StaffManageTourListPage'))
+const StaffManageTourCreatePage = lazy(() => import('../../routes/staff/manage/StaffManageTourCreatePage'))
+const StaffManageTourDetailPage = lazy(() => import('../../routes/staff/manage/StaffManageTourDetailPage'))
+const StaffManageTourEditPage = lazy(() => import('../../routes/staff/manage/StaffManageTourEditPage'))
+const StaffManageRegistrationsPage = lazy(() => import('../../routes/staff/manage/StaffManageRegistrationsPage'))
+const StaffManageRouteCatalogPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteCatalogPage'))
+const StaffManageRouteDetailsPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteDetailsPage'))
+const StaffManageRouteFormPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteFormPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
-const AdminPoisPage = lazy(() => import('../../routes/staff/manage/AdminPoisPage'))
-const AdminPoiFormPage = lazy(() => import('../../routes/staff/manage/AdminPoiFormPage'))
+const StaffManagePoisPage = lazy(() => import('../../routes/staff/manage/StaffManagePoisPage'))
+const StaffManagePoiFormPage = lazy(() => import('../../routes/staff/manage/StaffManagePoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
@@ -233,20 +233,20 @@ export const routes = [
       { path: 'profile', element: <StaffProfilePage /> },
       // Tour preparation, moved from `/admin/*` (SRS v1.9 §3.2.c: Staff owns
       // content, registrations, Routes and scheduling).
-      { path: 'manage', element: <AdminDashboardPage /> },
-      { path: 'manage/tours', element: <AdminTourListPage /> },
-      { path: 'manage/tours/new', element: <AdminTourCreatePage /> },
-      { path: 'manage/tours/:tourId', element: <AdminTourDetailPage /> },
-      { path: 'manage/tours/:tourId/edit', element: <AdminTourEditPage /> },
-      { path: 'manage/registrations', element: <AdminRegistrationsPage mode="all" /> },
-      { path: 'manage/registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
-      { path: 'manage/routes', element: <AdminRouteCatalogPage /> },
-      { path: 'manage/routes/new', element: <AdminRouteFormPage /> },
-      { path: 'manage/routes/:routeId', element: <AdminRouteDetailsPage /> },
-      { path: 'manage/routes/:routeId/edit', element: <AdminRouteFormPage /> },
-      { path: 'manage/pois', element: <AdminPoisPage /> },
-      { path: 'manage/pois/new', element: <AdminPoiFormPage /> },
-      { path: 'manage/pois/:poiId', element: <AdminPoiFormPage /> },
+      { path: 'manage', element: <StaffManageDashboardPage /> },
+      { path: 'manage/tours', element: <StaffManageTourListPage /> },
+      { path: 'manage/tours/new', element: <StaffManageTourCreatePage /> },
+      { path: 'manage/tours/:tourId', element: <StaffManageTourDetailPage /> },
+      { path: 'manage/tours/:tourId/edit', element: <StaffManageTourEditPage /> },
+      { path: 'manage/registrations', element: <StaffManageRegistrationsPage mode="all" /> },
+      { path: 'manage/registrations/pending', element: <StaffManageRegistrationsPage mode="pending" /> },
+      { path: 'manage/routes', element: <StaffManageRouteCatalogPage /> },
+      { path: 'manage/routes/new', element: <StaffManageRouteFormPage /> },
+      { path: 'manage/routes/:routeId', element: <StaffManageRouteDetailsPage /> },
+      { path: 'manage/routes/:routeId/edit', element: <StaffManageRouteFormPage /> },
+      { path: 'manage/pois', element: <StaffManagePoisPage /> },
+      { path: 'manage/pois/new', element: <StaffManagePoiFormPage /> },
+      { path: 'manage/pois/:poiId', element: <StaffManagePoiFormPage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.
       { path: 'amr', element: <Navigate to="/staff/robot" replace /> },

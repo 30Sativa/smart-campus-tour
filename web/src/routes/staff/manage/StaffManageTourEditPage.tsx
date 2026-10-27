@@ -9,7 +9,7 @@ import { TourForm } from '../../../features/administration/tours/TourForm'
 import type { TourInput } from '../../../features/administration/tours/types'
 
 /** Edit a SCHEDULED Tour. Schedule and Route lock once it has registrations or history (ADR-0018). */
-export default function AdminTourEditPage() {
+export default function StaffManageTourEditPage() {
   const { tourId = '' } = useParams()
   const navigate = useNavigate()
   const detail = useTour(tourId)

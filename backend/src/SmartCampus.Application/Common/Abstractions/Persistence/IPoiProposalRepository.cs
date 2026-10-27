@@ -14,6 +14,7 @@ public interface IPoiProposalRepository
     Task<PoiProposalSubmission?> FindSubmissionRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<PoiProposalSubmission?> FindSubmissionAsync(Guid revisionId, CancellationToken cancellationToken);
     Task<IReadOnlyList<PoiProposalRevision>> ListRevisionsAsync(Guid proposalId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<PoiProposalRevision>> ListCurrentRevisionsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken);
     Task<IReadOnlyList<PoiProposal>> ListProposalsAsync(Guid? mapVersionId, CancellationToken cancellationToken);
     void Add(PoiProposal proposal);
     void Add(PoiProposalRevision revision);

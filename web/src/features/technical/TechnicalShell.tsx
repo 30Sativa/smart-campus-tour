@@ -5,7 +5,7 @@ import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { TECHNICAL_NAV, TECHNICAL_NAV_ENTRIES, technicalActivePath } from './technical-nav'
 
@@ -43,7 +43,6 @@ export default function TechnicalShell() {
             <p className="shrink-0 text-right text-xs"><span className="block font-semibold text-[#334155]">{user?.username}</span><span className="text-[#94a3b8]">{roleLabel(user?.role)}</span></p>
           </div>
         </header>
-        {!location.pathname.startsWith('/technical/poi-import') && <DevDataBadge>dữ liệu mẫu · chưa có API kỹ thuật</DevDataBadge>}
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>
     </div>

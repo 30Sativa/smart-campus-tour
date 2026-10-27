@@ -76,7 +76,7 @@ public sealed class TourManagementEndpointTests
     public async Task AdminAuthorizationAndPayloadValidation_DoNotCreateOrDeleteTours()
     {
         await using var f = await Fixture.Create();
-        foreach (var token in new string?[] { null, f.Staff, f.Representative })
+        foreach (var token in new string?[] { null, f.SystemAdmin, f.Representative })
         {
             var expected = token is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
             foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post, HttpMethod.Put })
@@ -406,6 +406,7 @@ public sealed class TourManagementEndpointTests
         public Guid AdminId => adminId;
         public string Admin { get; private set; } = "";
         public string OtherAdmin { get; private set; } = "";
+        public string SystemAdmin { get; private set; } = "";
         public string Representative { get; private set; } = "";
         public string Staff { get; private set; } = "";
         public Guid[] PoiIds { get; } = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
@@ -420,8 +421,9 @@ public sealed class TourManagementEndpointTests
             PoiManagementEndpointTests.ApiHost? host = null;
             try
             {
-                var admin = await database.InsertUserAsync(true, username: "tour.admin", roles: ["ADMIN"]);
-                await database.InsertUserAsync(true, username: "tour.other", roles: ["ADMIN"]);
+                var admin = await database.InsertUserAsync(true, username: "tour.admin", roles: ["STAFF"]);
+                await database.InsertUserAsync(true, username: "tour.other", roles: ["STAFF"]);
+                await database.InsertUserAsync(true, username: "tour.systemadmin", roles: ["ADMIN"]);
                 await database.InsertUserAsync(true, username: "tour.rep", roles: ["SCHOOL_REPRESENTATIVE"]);
                 await database.InsertUserAsync(true, username: "tour.staff", roles: ["STAFF"]);
                 var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(p => p.Key.Replace(":", "__"), p => p.Value);
@@ -429,6 +431,7 @@ public sealed class TourManagementEndpointTests
                 var f = new Fixture(database, host, admin.Id);
                 f.Admin = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.admin");
                 f.OtherAdmin = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.other");
+                f.SystemAdmin = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.systemadmin");
                 f.Representative = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.rep");
                 f.Staff = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.staff");
                 await using (var db = f.Context())

@@ -12,7 +12,7 @@ import { buttonClass, rowClass, tdClass, thClass } from '../../../components/ui/
 const PAGE_SIZE = 20
 type ActiveFilter = 'all' | 'active' | 'inactive'
 
-export default function AdminPoisPage() {
+export default function StaffManagePoisPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const navigationState = location.state as { createdPoiName?: unknown } | null

@@ -13,7 +13,7 @@ import { cardClass } from '../../../features/administration/admin-visual'
 
 const STATE_COLOR: Record<RegistrationState | 'all', string> = { all: '#64748b', SUBMITTED: '#d97706', APPROVED: '#16a34a', REJECTED: '#dc2626', CANCELLED: '#64748b' }
 
-export default function AdminRegistrationsPage({ mode }: { mode: 'pending' | 'all' }) {
+export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending' | 'all' }) {
   const [params, setParams] = useSearchParams()
   const { reviewId, open, close } = useReviewParam()
   const search = params.get('q') ?? ''

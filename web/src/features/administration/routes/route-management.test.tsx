@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminRouteCatalogPage from '../../../routes/staff/manage/AdminRouteCatalogPage'
-import AdminRouteDetailsPage from '../../../routes/staff/manage/AdminRouteDetailsPage'
-import AdminRouteFormPage from '../../../routes/staff/manage/AdminRouteFormPage'
+import StaffManageRouteCatalogPage from '../../../routes/staff/manage/StaffManageRouteCatalogPage'
+import StaffManageRouteDetailsPage from '../../../routes/staff/manage/StaffManageRouteDetailsPage'
+import StaffManageRouteFormPage from '../../../routes/staff/manage/StaffManageRouteFormPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import type { RouteDetails } from './types'
 
@@ -27,7 +27,7 @@ function detail(data = route()) { return response({ success: true, data }) }
 function api(handler: (path: string, init?: RequestInit) => Response | Promise<Response>) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(input), 'http://localhost').pathname
-    if (path === '/api/admin/pois') return Promise.resolve(response({ data: POIS, pagination: { page: 1, pageSize: 10, totalItems: 2, totalPages: 1 } }))
+    if (path === '/api/staff/manage/pois') return Promise.resolve(response({ data: POIS, pagination: { page: 1, pageSize: 10, totalItems: 2, totalPages: 1 } }))
     return Promise.resolve(handler(path, init))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -36,10 +36,10 @@ function api(handler: (path: string, init?: RequestInit) => Response | Promise<R
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/staff/manage/routes" element={<AdminRouteCatalogPage />} />
-    <Route path="/staff/manage/routes/new" element={<AdminRouteFormPage />} />
-    <Route path="/staff/manage/routes/:routeId" element={<AdminRouteDetailsPage />} />
-    <Route path="/staff/manage/routes/:routeId/edit" element={<AdminRouteFormPage />} />
+    <Route path="/staff/manage/routes" element={<StaffManageRouteCatalogPage />} />
+    <Route path="/staff/manage/routes/new" element={<StaffManageRouteFormPage />} />
+    <Route path="/staff/manage/routes/:routeId" element={<StaffManageRouteDetailsPage />} />
+    <Route path="/staff/manage/routes/:routeId/edit" element={<StaffManageRouteFormPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
@@ -148,7 +148,7 @@ describe('live Route management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }))
     await screen.findByText('Đã cho phép chọn tuyến cho Tour mới.')
     const write = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
-    expect(String(write[0])).toContain('/api/admin/routes/route-1/activate')
+    expect(String(write[0])).toContain('/api/staff/manage/routes/route-1/activate')
     expect(JSON.parse(String(write[1]?.body))).toEqual({ expectedVersion: VERSION })
   })
 })

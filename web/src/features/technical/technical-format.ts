@@ -1,12 +1,4 @@
 import { ApiError } from '../../api/client'
-import type { StatusTone } from '../../components/ui/status-tone'
-import type { ConfirmationState } from './types'
-
-export const CONFIRMATION_STATE: Record<ConfirmationState, { label: string; tone: StatusTone }> = {
-  CONFIRMED: { label: 'Đã xác nhận', tone: 'ok' },
-  UNCONFIRMED: { label: 'Chưa xác nhận', tone: 'muted' },
-  NEEDS_RECONFIRM: { label: 'Cần xác nhận lại', tone: 'warn' },
-}
 
 export function errorText(error: unknown) {
   if (error instanceof ApiError && error.body) return error.body

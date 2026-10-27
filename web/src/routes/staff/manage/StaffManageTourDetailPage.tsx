@@ -14,7 +14,7 @@ const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
  * A live Tour: what it is, its Route snapshot, and the actions the server
  * permits (edit, cancel). READY (Chốt/Mở lại) has no API yet, so it is not offered.
  */
-export default function AdminTourDetailPage() {
+export default function StaffManageTourDetailPage() {
   const { tourId = '' } = useParams()
   const detail = useTour(tourId)
   const cancel = useCancelTour()

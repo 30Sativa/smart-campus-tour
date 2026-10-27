@@ -23,8 +23,8 @@ public sealed class InvitationEndpointTests
         var tour = await f.DataAsync($"/tours/{f.TourId}");
         var submit = await f.SendAsync(HttpMethod.Post, $"/tours/{f.TourId}/registrations", Input(tour, "Group", "viewer@example.test", mixed: true), Guid.NewGuid());
         var id = submit.Data.GetProperty("id").GetGuid();
-        var detail = (await f.SendAsync(HttpMethod.Get, $"/api/admin/registrations/{id}", token: admin)).Data;
-        var result = await f.SendAsync(HttpMethod.Post, $"/api/admin/registrations/{id}/approve", new {
+        var detail = (await f.SendAsync(HttpMethod.Get, $"/api/staff/manage/registrations/{id}", token: admin)).Data;
+        var result = await f.SendAsync(HttpMethod.Post, $"/api/staff/manage/registrations/{id}/approve", new {
             expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: admin);
         Assert.Equal(HttpStatusCode.OK, result.Status);
         return id;
@@ -59,7 +59,7 @@ public sealed class InvitationEndpointTests
         settings["Cors__AllowedOrigins__0"] = origin;
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         var code = await CodeAsync(f, invitation);
@@ -107,7 +107,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
@@ -132,7 +132,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var previousHost = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(previousHost.Client, await LoginAsync(previousHost.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(previousHost.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(previousHost.Client, "review.staff"));
         Assert.Equal(0, await f.Database.CountRowsAsync("dbo.Invitations"));
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
@@ -158,7 +158,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitationId = item.GetProperty("id").GetGuid();
         var code = await CodeAsync(f, invitationId);
@@ -184,7 +184,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var admin = await LoginAsync(host.Client, "rep.admin");
+        var admin = await LoginAsync(host.Client, "review.staff");
         var id = await ApproveAsync(f, admin);
         var list = (await f.SendAsync(HttpMethod.Get, Path(id))).Data;
         Assert.True(list.GetProperty("enabled").GetBoolean());
@@ -244,7 +244,7 @@ public sealed class InvitationEndpointTests
         await f.Database.InsertUserAsync(true, username: "invite.staff", roles: ["STAFF"]);
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Get, Path(id), token: await LoginAsync(host.Client, "rep.two"))).Status);
@@ -275,7 +275,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         await using var db = f.Context();
         var attempts = await db.AuditLogs.Where(a => a.Action == "EMAIL_SEND_REQUESTED").OrderBy(a => a.Id).ToArrayAsync();
         var values = InvitationPrimitiveTests.ConfigurationValues().Select(p => new KeyValuePair<string, string?>(p.Key, p.Value))
@@ -309,7 +309,7 @@ public sealed class InvitationEndpointTests
         await using var f = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         Guid invitation;
         await using (var seed = f.Context())
         {
@@ -351,7 +351,7 @@ public sealed class InvitationEndpointTests
         settings["AiAssistant__ServiceKey"] = "integration-test-service-key";
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         var joined = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitation));
@@ -388,7 +388,7 @@ public sealed class InvitationEndpointTests
         settings["AiAssistant__ServiceKey"] = "integration-test-service-key";
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
-        var id = await ApproveAsync(f, await LoginAsync(host.Client, "rep.admin"));
+        var id = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
         var item = (await f.SendAsync(HttpMethod.Get, Path(id))).Data.GetProperty("items")[0];
         var invitationId = item.GetProperty("id").GetGuid();
         var join = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId));

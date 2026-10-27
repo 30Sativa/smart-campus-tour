@@ -4,7 +4,7 @@
 
 ## Roles and contract
 
-Tour Staff is the product label for the existing persisted `STAFF` / application and JWT `Staff` role. `Tour Operator` is an assigned Staff duty, not a role implemented by this slice. `TechnicalStaff` maps from persisted `TECHNICAL_STAFF`. The new endpoints below grant no Admin authority. Existing `/api/admin/pois` remains a legacy implementation gap and is not silently changed here. Viewer uses invitation/session and has no account.
+Tour Staff is the product label for the existing persisted `STAFF` / application and JWT `Staff` role. `Tour Operator` is an assigned Staff duty, not a role implemented by this slice. `TechnicalStaff` maps from persisted `TECHNICAL_STAFF`. The versioned endpoints below grant no Admin authority. The legacy `/api/admin/pois` path now aliases the Staff-only catalog controller; it does not preserve Admin access. Viewer uses invitation/session and has no account.
 
 ROS upload is a ZIP with exactly two root files: one `.yaml`/`.yml` and its referenced `.pgm`. Supported ROS map-server metadata is `image`, `mode: trinary`, `resolution`, `origin: [x,y,0]`, `negate`, `occupied_thresh` and `free_thresh`. PGM supports 8-bit P2/P5. ZIP and package entries are bounded at 32 MiB; raster dimensions are at most 8192×8192 and 32 million cells. Path traversal, directories, extra entries, unsupported keys/modes, non-zero origin yaw, invalid ranges and mismatched raster size are rejected. The package SHA-256 is computed by the server and immutable bytes/metadata are stored with the version.
 
@@ -41,10 +41,10 @@ All mutations require caller-generated stable `requestId`; identical retry retur
 
 ## Frontend handoff
 
-- Add a Technical Staff map-upload view and map-version browser; upload a ZIP assembled from the robot's ROS YAML + PGM, never an image alone. Show upload validation separately from manual robot deployment/localization/display evidence.
+- The Technical Staff map-upload view and map-version browser now call the versioned API. The UI shows package validation separately from manual robot deployment/localization/display evidence.
 - Add a Staff map picker using returned resolution/origin/dimensions and the documented cell-center conversion; post world coordinates and camera preset. Editing creates a new revision with returned `rowVersion` and current revision number.
 - Add submission and status/history display. Navigation status may inherit the latest technical result for the exact navigation fingerprint on a content-only revision; the response identifies the source revision and creates no new check. A newer FAIL supersedes an older PASS; changed navigation data requires a new result.
-- Add a Technical queue that displays map key/version/checksum and physical robot, and records reach/stop/localization/camera observations, evidence, or failure reason.
-- Never expose upload/verification actions to Admin in these new screens. Existing Admin POI UI/endpoints are legacy and require a separately scoped migration.
+- The Technical UI now lists submitted POI revisions and records reach/stop/localization/camera observations, evidence, or failure reason through the versioned API.
+- Never expose upload/verification actions to Admin in these screens. The legacy Staff POI catalog still edits persisted content; versioned proposals remain a separate workflow.
 - No project YAML import, pixel-to-world transform for nonzero origin yaw, route testing, scheduling/READY, whole-route certification, robot deployment control, or actual hardware evidence is included. No frontend was changed by this backend slice.
-- The Technical `Version map` and `Xác nhận kỹ thuật` screens use in-memory mock data; `Import POI (YAML)` only validates/previews in the browser. None calls the versioned map/POI API paths above. The Staff `Quản lý POI` catalog calls the legacy `/api/admin/pois` CRUD API. Versioned map upload, deployment evidence, Staff proposal/revision/submission, Technical verification/history and the backend verification queue are not yet wired into the web UI.
+- Route-level certification remains pending and the Technical route screen is informational only; it has no mock confirmation action. Project POI YAML import remains pending because the project template/frame mapping is not settled. The Technical browser is connected to map version listing/upload, deployment evidence, submitted POI listing and per-revision verification. Staff proposal/revision/submission and POI history are not yet wired into the web UI.

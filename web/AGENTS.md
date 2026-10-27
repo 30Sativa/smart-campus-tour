@@ -31,8 +31,7 @@ shared rules; this file only covers what is specific to `web/`.
     Registration submission/pre-approval management is API-backed; see
     `web/docs/representative-registration.md`. APPROVED is read-only in this
     roster; invitation support uses the real owner-scoped API (ADR-0015).
-  - `/staff/*`: tour operations, for `Staff` and `Admin` (Admin read-only: every
-    run action needs the `Staff` role, scope §2.1). What an operator does
+  - `/staff/*`: tour operations, for `Staff` only. What an operator does
     around a remote tour: today's sessions and their groups, the pre-start
     check and Start, live operations on the operational twin (Hold / Next /
     End Early / recovery), the robot, the session log. Scope: the remote-tour
@@ -48,17 +47,17 @@ shared rules; this file only covers what is specific to `web/`.
     / Mở lại / Hủy before Start. POIs at `/staff/manage/pois` are API-backed:
     content edits, map/pose only before route/history use (ADR-0014). Route CRUD
     at `/staff/manage/routes[...]` is API/SQL-backed under ADR-0017; reuse
-    `features/administration/routes/`. Referenced itineraries are immutable;
+    `features/administration/routes/` (legacy feature folder pending ownership migration). Referenced itineraries are immutable;
     copy to create a new route. Availability never certifies physical safety.
-    Page components still live in `routes/staff/manage/Admin*Page.tsx` and
-    `features/administration/*`; they call `/api/admin/*` until the backend
-    moves authorization to Staff. Screen map: `web/docs/admin-tours.md`.
-  - `/technical/*`: Technical Staff (`TechnicalStaff` role) only: map versions
-    (deploy and localization records), POI YAML check bound to a map version,
-    and version-bound technical confirmation (SRS v1.9 §3.2.b, demo 6). Staff
-    and Admin are kept out. Data is the labelled `mocks/technical-mock.ts` until
-    `/api/technical/*` exists (docs/contracts/web-backend-api-proposal.md B7);
-    the POI import page is a dry run (no save).
+    Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy
+    feature modules remain under `features/administration/*` pending a focused
+    module move. They call `/api/staff/manage/*`; former `/api/admin/*` paths
+    are Staff-only compatibility aliases. Screen map: `web/docs/admin-tours.md`.
+  - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
+    listing/upload, deployment evidence and submitted POI verification use the
+    existing `/api/technical/*` and `/api/maps/*` contracts. Project POI YAML
+    import and route-level certification remain pending; no mock success state
+    is shown for either.
   - `/admin/*`: administration, `Admin` only: Accounts and Roles. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.
@@ -73,9 +72,8 @@ shared rules; this file only covers what is specific to `web/`.
     redirect to `/staff/manage/...` and `/admin/history` to `/staff/history`
     (2026-10-27, ADR-0020). `/admin` itself is NOT redirected to `/staff`. Those redirects are migration scaffolding — delete them once the
     old links are gone.
-  - The **frontend route namespace and the backend API namespace are
-    independent**. Operations screens at `/staff/*` call `/api/staff/*`, and
-    that is fine. Do not rename an API because a route moved.
+  - The frontend route namespace and backend API namespace remain separate;
+    endpoints still follow the owning role and capability.
 - Local run: `cd web && npm install && npm run dev` (Vite, port 5173).
 - Backend base URL: **`VITE_API_BASE_URL`** (declared empty in `web/.env`; set in
   ignored `web/.env.local` or the deployment build environment, e.g.
@@ -91,7 +89,7 @@ shared rules; this file only covers what is specific to `web/`.
   continue to use labelled fixtures (see “Business fixtures” below).
   - Access token: short-lived JWT, sent in the `Authorization: Bearer` header
     on authenticated API requests. Carries one supported account role
-    (`Admin`, `Staff`, or `Representative`) as a claim. Student invitation
+    (`Admin`, `Staff`, `Representative`, or `TechnicalStaff`) as a claim. Student invitation
     access is a separate browser-session target, not another account role.
   - Refresh token: long-lived, stored in an **HttpOnly, Secure** cookie (not
     readable by JS, mitigates XSS token theft). Used to silently obtain a new
@@ -260,7 +258,7 @@ Tests live next to the code they cover (`*.test.ts(x)`).
 
 Authentication uses the real `/api/auth/*` endpoints. Login, refresh-cookie
 session restore and logout are wired to the backend. Auth responses accept one
-supported role: `Admin`, `Staff` or `Representative`; there is no Visitor
+supported role: `Admin`, `Staff`, `Representative` or `TechnicalStaff`; there is no Visitor
 role (an unknown role normalises to `null` and lands on `/`). Student invitation access is a separate browser-session target.
 
 Business features without a live backend binding continue to use labelled
