@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
 
-public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) : IVersionedMapPoiRepository
+public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) :
+    IMapPoiRequestLock, IMapVersionRepository, IPoiProposalRepository, IPoiVerificationRepository
 {
-    public Task FlushAsync(CancellationToken cancellationToken) => dbContext.SaveChangesAsync(cancellationToken);
-
     public async Task LockRequestAsync(Guid actorUserId, Guid requestId, string operation, CancellationToken cancellationToken)
     {
         var resource = $"map-poi:{operation}:{actorUserId:D}:{requestId:D}";

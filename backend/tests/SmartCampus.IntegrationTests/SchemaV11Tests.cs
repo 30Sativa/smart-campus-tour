@@ -368,7 +368,11 @@ public sealed class SchemaV11Tests
             services.AddApplication();
             services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(settings.ConnectionString));
             services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
-            services.AddScoped<IVersionedMapPoiRepository, EfVersionedMapPoiRepository>();
+            services.AddScoped<EfVersionedMapPoiRepository>();
+            services.AddScoped<IMapPoiRequestLock>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IMapVersionRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
             services.AddSingleton(TimeProvider.System);
             return services.BuildServiceProvider(validateScopes: true);

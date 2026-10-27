@@ -46,7 +46,11 @@ public static class DependencyInjection
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
         services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
-        services.AddScoped<IVersionedMapPoiRepository, EfVersionedMapPoiRepository>();
+        services.AddScoped<EfVersionedMapPoiRepository>();
+        services.AddScoped<IMapPoiRequestLock>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+        services.AddScoped<IMapVersionRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+        services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+        services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
         services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
