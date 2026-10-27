@@ -56,7 +56,12 @@ public sealed class CreatePoiRevisionCommandHandler(
         var submission = await proposalRepository.FindSubmissionAsync(previous.Id, cancellationToken);
         var priorResult = await verificationRepository.FindVerificationAsync(previous.Id, cancellationToken);
         if (submission is not null && priorResult is null)
-            throw new ConflictException("A submitted POI revision must receive a technical result before it can be edited.");
+        {
+            var effectiveResult = await verificationRepository.FindLatestVerificationByFingerprintAsync(
+                proposal.Id, previous.NavigationFingerprint, cancellationToken);
+            if (effectiveResult?.ResultCode != "PASS")
+                throw new ConflictException("A submitted POI revision must have a current passing result for its exact navigation fingerprint before it can be edited.");
+        }
 
         var map = await mapRepository.FindMapVersionAsync(draft.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", draft.MapVersionId);

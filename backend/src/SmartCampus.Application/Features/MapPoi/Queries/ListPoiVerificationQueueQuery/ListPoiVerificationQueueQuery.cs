@@ -13,9 +13,13 @@ public sealed class ListPoiVerificationQueueQueryHandler(IPoiProposalRepository 
         var revisions = await verificationRepository.ListSubmittedVerificationQueueAsync(query.MapVersionId, ct);
         var result = new List<PoiRevisionView>(revisions.Count);
         foreach (var revision in revisions)
+        {
+            var effectiveResult = await verificationRepository.FindLatestVerificationByFingerprintAsync(
+                revision.ProposalId, revision.NavigationFingerprint, ct);
+            if (effectiveResult?.ResultCode == "PASS") continue;
             result.Add(PoiProposalReadModelLoader.ToRevisionView(revision,
-                await proposalRepository.FindSubmissionAsync(revision.Id, ct),
-                await verificationRepository.FindVerificationAsync(revision.Id, ct)));
+                await proposalRepository.FindSubmissionAsync(revision.Id, ct), effectiveResult));
+        }
         return result;
     }
 }

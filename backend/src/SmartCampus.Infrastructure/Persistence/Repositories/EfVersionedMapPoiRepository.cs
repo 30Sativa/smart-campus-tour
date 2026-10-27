@@ -70,6 +70,23 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
     public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken) =>
         dbContext.Robots.SingleOrDefaultAsync(robot => robot.RobotCode == robotCode && robot.SourceType == "PHYSICAL", cancellationToken);
 
+    public Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken)
+    {
+        var resource = $"map-poi:robot-deployment:{robotId:D}";
+        return dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            DECLARE @lockResult int;
+            EXEC @lockResult = sys.sp_getapplock @Resource = {resource}, @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51022, 'Could not acquire robot deployment state lock.', 1;
+            """, cancellationToken);
+    }
+
+    public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>
+        dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
+            .Where(check => check.RobotId == robotId)
+            .OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken)
     {
         var query = dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
@@ -131,7 +148,8 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         dbContext.PoiVerificationRecords.AsNoTracking()
             .Where(verification => verification.ProposalRevision.ProposalId == proposalId &&
                                    verification.NavigationFingerprint == fingerprint)
-            .OrderByDescending(verification => verification.CheckedAt).ThenByDescending(verification => verification.Id)
+            .OrderByDescending(verification => verification.ProposalRevision.RevisionNumber)
+            .ThenByDescending(verification => verification.CheckedAt).ThenByDescending(verification => verification.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<IReadOnlyList<PoiProposalRevision>> ListRevisionsAsync(Guid proposalId, CancellationToken cancellationToken) =>
@@ -165,10 +183,13 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Where(revision => revision.RevisionNumber == revision.Proposal.CurrentRevision &&
                                dbContext.PoiProposalSubmissions.Any(submission => submission.ProposalRevisionId == revision.Id) &&
                                !dbContext.PoiVerificationRecords.Any(verification => verification.ProposalRevisionId == revision.Id) &&
-                               !dbContext.PoiVerificationRecords.Any(verification =>
-                                   verification.ProposalRevision.ProposalId == revision.ProposalId &&
-                                   verification.NavigationFingerprint == revision.NavigationFingerprint &&
-                                   verification.ResultCode == "PASS"));
+                               !dbContext.PoiVerificationRecords
+                                   .Where(verification => verification.ProposalRevision.ProposalId == revision.ProposalId &&
+                                                          verification.NavigationFingerprint == revision.NavigationFingerprint)
+                                   .OrderByDescending(verification => verification.ProposalRevision.RevisionNumber)
+                                   .Select(verification => verification.ResultCode)
+                                   .Take(1)
+                                   .Contains("PASS"));
         if (mapVersionId.HasValue) query = query.Where(revision => revision.MapVersionId == mapVersionId.Value);
         return await query.OrderBy(revision => revision.CreatedAt).ThenBy(revision => revision.ProposalId)
             .Take(100).ToArrayAsync(cancellationToken);

@@ -13,6 +13,8 @@ public interface IMapVersionRepository
     Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken);
+    Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken);
+    Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksAsync(Guid mapVersionId, CancellationToken cancellationToken);
     void Add(MapArea area);

@@ -2,7 +2,7 @@
 
 Read live on **2026-10-27**; owner authorizes SRS adoption and the scoped
 Technical Staff map/POI implementation. Google Docs are updated separately
-under revision guard. Code baseline for this branch: `origin/main 78a23ca`.
+under revision guard. Code baseline for this follow-up branch: `origin/main c4f78d8` (PR #85 merged).
 This register distinguishes implemented API/schema from pending hardware,
 frontend, route and broader authorization work.
 
