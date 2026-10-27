@@ -6,9 +6,13 @@ it.
 
 ## 1. Business / Requirements
 
+The owner-authorized current target is Report 3 SRS v0.2 aligned to Phiếu v1.9,
+read on 2026-10-27. [ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md)
+records scoped succession; [the source/gap register](requirements/srs-v02-backend-gap-register.md)
+links SRS requirements to code/schema, dependencies and acceptance.
+
 - [Detailed CampusTour scope](requirements/campus-tour-scope.md) — current
-  business baseline after Review 1, including which decisions the group has
-  made, which evaluation items remain optional, and what remains to survey.
+  SRS v0.2 target, with explicit current/pending distinctions and preserved history.
   Follow the status written beside each item; it is not an implementation
   report or proof of advisor approval.
 - [Scope summary](requirements/campus-tour-scope-summary.md) — short version for
@@ -27,6 +31,10 @@ It is not a business SRS. Link business rules to requirements instead of
 copying them here.
 
 ## 3. Architecture and Product Decisions
+
+ADR-0020 supersedes only the listed business parts of earlier ADRs; old Admin
+Route/Tour APIs below remain implementation contracts pending deliberate migration.
+The new TechnicalStaff account foundation does not implement Technical workspaces.
 
 The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)
 replaces seed-only business Route/dwell preparation; earlier ADRs retain their
@@ -80,6 +88,9 @@ owning unit; they do not become requirements.
    state differ, preserve the distinction and report the implementation gap.
 
 ## 6. Dated technical reviews
+
+- [SRS v0.2 and Technical Staff account verification, 2026-10-27](reviews/2026-10-27-srs-v02-technical-staff-backend.md)
+  — limited account slice, full backend verify result, SQL/Docker skips and remaining gaps.
 
 - [Backend/Frontend Technical Lead review, 2026-10-14](reviews/2026-10-14-backend-frontend-technical-review.md)
   — source findings, focused fixes, verification and remaining debt. This is a

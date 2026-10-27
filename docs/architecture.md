@@ -1,5 +1,17 @@
 # System Architecture
 
+## SRS v0.2 adoption and implementation boundary (2026-10-27)
+
+The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
+[ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
+The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
+implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
+Current Admin business endpoints and schema below remain implementation facts,
+not the new ownership/revision/row-access target. Only TechnicalStaff account
+support is implemented in this slice. F-14, conflicting branch cutoff,
+project YAML/frame mapping and M2 command transport remain pending.
+Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
+
 ## Admin Tour Management API (ADR-0018, backend implemented)
 
 This is the pre-execution SQL slice in
@@ -153,11 +165,12 @@ active browser session per invitation. A valid existing session avoids repeated
 code entry; the URL alone grants no access. Resending sends the same valid code
 without terminating the session; revoke/reissue invalidates the old code and
 session and sends a new code to the approved email, retaining invitation identity
-and expiry. Representative support is limited to owned groups; Admin supports
-all groups; Staff-only has no recovery privilege. These are planned backend/web
-integration semantics, not implemented API or persistence guarantees. The current
-schema and mock name/class entry still need a dedicated implementation with
-documented contracts, storage, concurrency and revocation tests.
+and expiry. The SRS target limits Representative support to owned rows and permits Staff
+support for managed tours. Email changes use Representative request + Staff review;
+unchanged accepted rows keep credentials while new rows await review. Current
+Admin-authorized support/correction endpoints are documented in Sections 3.2.3/4
+and remain implementation gaps, not target authority. Their migration must include
+row review, stable identities, all access guards, delivery jobs and Tour transactions.
 
 [ADR-0011](decisions/0011-student-data-use-for-tour.md) limits student data to
 registration, invitations and aggregate Tour operational statistics. V1 excludes
@@ -415,15 +428,30 @@ runtime changes, rollback and hardware acceptance gates.
 
 ### 3.0 User account authentication API (implemented)
 
-The backend implements login and refresh-session endpoints for the three
-account roles `ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`. Each V1 account
+The backend implements login and refresh-session endpoints for four persisted
+account roles `ADMIN`, `STAFF`, `TECHNICAL_STAFF`, and `SCHOOL_REPRESENTATIVE`. Each account
 must have exactly one supported role. An account with no role, more than one
 role, or an unsupported role is denied with HTTP 403; a human who needs more
 than one application role uses separate accounts. This is an application
 authentication rule; the existing `(UserId, Role)` database primary key is
 unchanged. [ADR-0013](decisions/0013-single-application-role-per-account.md)
-records the reason for this single-role V1 contract. Student invitation access
-uses browser sessions, not an account role.
+records the single-role invariant; ADR-0020 extends only its supported-role set.
+Viewer invitation access uses browser sessions, not an account role. Tour Operator
+is assigned Staff; the safety attendant has no separate account/workspace.
+
+| Persisted code | JSON role / JWT role claim | Meaning |
+|---|---|---|
+| ADMIN | Admin | Administrative account/configuration/audit |
+| STAFF | Staff | Business preparation and assigned operation target |
+| TECHNICAL_STAFF | TechnicalStaff | Technical Staff account foundation |
+| SCHOOL_REPRESENTATIVE | Representative | Own registration and row support |
+
+TechnicalStaff is the exact public value (display label: Technical Staff), with
+one role claim and no inherited Admin/Staff/Representative policy. Its login does
+not implement map/POI workspaces, technical confirmation or broader AC-08 coverage.
+UserRoles.Role VARCHAR(32) has no role-value CHECK; no DDL/re-scaffold is needed.
+Integration instructions and separate frontend tasks:
+`backend/docs/technical-staff-accounts.md`.
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
@@ -479,7 +507,7 @@ issuing a new access token. Logout revokes a matching stored token. The cookie
 is named `campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
 `Path=/api/auth`. Access tokens are 15-minute HS256 JWTs with configured issuer
 and audience (defaults `SmartCampus.Api` and `SmartCampus.Web`); their user
-identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, or
+identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, `TechnicalStaff`, or
 `Representative`), alongside registered issuer/audience/time claims. They
 contain no username, full name, email, or other personal data.
 
@@ -496,7 +524,12 @@ configured explicitly, with no wildcard.
 
 ### 3.0.1 Admin account management (V1)
 
-The following endpoints require the `Admin` role:
+The following endpoints require the `Admin` role. Create accepts exactly one
+application role string: `Staff`, `TechnicalStaff` or `Representative`
+(case-insensitive input, canonical output). List/deactivate/reactivate support
+TechnicalStaff through the existing flow; role reassignment is not an existing
+endpoint and is not introduced here. Persisted codes are not create-request values.
+
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
@@ -843,6 +876,16 @@ shared transport does not erase source or validation boundaries.
 
 #### Remote Tour operational rules (planned Application behavior)
 
+SRS v0.2/ADR-0020 governs target authorization, incidents and End Early. Only the
+assigned Operator may operate. Movement requires telemetry age <=2s, no incident,
+no unresolved command, console connection and an attendant. End Early revokes
+live/fallback/Q&A including copied URLs, preserves Result, expires branch requests,
+requests active mission cancellation, prevents later Tour motion, and notifies
+accepted groups with audit (FR-48/BR-21/AC-11). No state or ACK proves physical stop.
+Historical FRONT/head sequencing below is supporting M2 design, not selected
+command transport; FR-49/50 require a checked POI camera preset and approved
+narration delivery/receipt and guide cue. No new command transport is enabled here.
+
 These rules make explicit the existing remote-tour intent in
 `backend/database/smart-campus-tour-schema-v1.1.sql`,
 `web/docs/staff-operations.md`, `web/src/api/contracts/staff.ts`, and
@@ -912,7 +955,10 @@ The SQL file is the Database First source: it was scaffolded into Domain
 entities and Infrastructure `ApplicationDbContext`. There is no normal EF
 migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 
-#### v1.1 snapshot and accepted implementation target (ADR-0012)
+#### v1.1 snapshot and historical operation target (ADR-0012)
+
+ADR-0020 supersedes the business-role/row-access portions for the SRS v0.2 target.
+The schema and existing APIs below describe current persistence and implementation.
 
 `backend/database/smart-campus-tour-schema-v1.1.sql` is the current empty-DB
 snapshot for invitation/session/branch storage. It is applied to the local
@@ -929,10 +975,11 @@ dispatch, and production fleet/operations Hubs remain unimplemented.
 Under ADR-0012 as amended by `docs/decisions/0017-admin-route-management.md`,
 dwell is fixed in RouteStops and Admin can edit unreferenced Route configuration
 through CRUD. Technical staff still verify physical execution; there is no
-per-Tour dwell editor. Every active STAFF account may operate every
-Tour. There is no operator assignment field or takeover screen; all state,
-readiness, time and robot-claim checks still apply. Admin-only cannot operate and
-Staff-only cannot recover invitation codes. RowVersion must be checked on writes;
+per-Tour dwell editor. The old all-Staff/all-Tours rule is superseded: target
+operation requires an explicitly assigned Staff Operator. Current schema has no
+assignment field; CreatedByUserId is attribution only. Staff target invitation
+support is separate from current Admin/Representative endpoints. All state,
+readiness, time and robot-claim checks still apply. RowVersion must be checked on writes;
 only a committed winning decision may lead to robot dispatch.
 
 In v1.1, CurrentRouteStopId replaces CurrentStopOrder and must belong to the
@@ -1689,9 +1736,14 @@ paths; their final media transports remain undecided.
 ### 7.1 Student private Q&A contract (implemented; integration verification pending)
 
 Decision record: [ADR-0016](decisions/0016-student-qa-assistant-stack.md).
-Business rules: `docs/requirements/campus-tour-scope.md` (P0-07, R1-06,
-R1-12, R1-14) and UI flow §5.5. This section is the text-Q&A contract; STT/TTS
-(P1-01) will extend it in a later change.
+ADR-0020 supersedes runtime provider/general-answer generation as a target:
+Viewer answers must come from the approved bank; providers assist Staff drafting.
+Current code below remains the provider-backed implementation contract and is a
+gap. StudentQuestionGate is per-session and does not implement the instance-wide
+8 executing/20 total admission queue; target latency includes queue waiting.
+Target business rules: `docs/requirements/campus-tour-scope.md`, SRS FR-30–34,
+BR-18/19, NFR-PERF-04 and NFR-AI-01. The gap register records how the current
+text-Q&A contract below differs. Voice/transcript/TTS integration remains later work.
 
 ```text
 browser --(session cookie)--> backend --(service key)--> ai-assistant --> LLM provider
@@ -1815,7 +1867,8 @@ route).
 | Per session | 6 questions/minute, 1 in flight |
 | Assistant concurrent LLM calls | configurable, default 8 |
 
-Values are initial settings to validate in the R1-14 load test, not measured
+Values are current implementation settings to evaluate against SRS NFR-PERF-04
+and NFR-CAP-01, not measured
 capacity.
 
 #### Answer rules (enforced in `ai-assistant`)

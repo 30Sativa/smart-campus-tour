@@ -31,6 +31,10 @@ adding a test, bumping a patch version.
 
 ## Index
 
+Business target succession is scoped by ADR-0020. Original decisions/dates below
+are retained; their superseded business portions are historical, while current
+API/SQL facts and retained technical decisions remain explicit in each notice.
+
 | ADR | Decision | Status |
 |---|---|---|
 | [0001](0001-lidar-primary-astra-supplementary.md) | LiDAR is the navigation backbone; the Astra Pro is supplementary | accepted |
@@ -52,6 +56,7 @@ adding a test, bumping a patch version.
 | [0017](0017-admin-route-management.md) | Admin Route CRUD; frozen referenced itineraries; CRUD, bootstrap seed and technical import boundaries | owner-authorized implementation scope; supersedes seed-only Route/dwell portions of 0009/0012 |
 | [0018](0018-admin-tour-management.md) | Backend SCHEDULED Tour CRUD, durable retries and pre-Start cancellation with access revocation | owner-authorized implementation scope; no runtime or frontend integration |
 | [0019](0019-https-fleet-sync.md) | HTTPS Fleet Sync v1 telemetry with per-robot credentials and Staff operations projection | selected for M0/B1 implementation; group confirmation and physical readiness remain pending |
+| [0020](0020-srs-v02-business-baseline-and-technical-staff.md) | SRS v0.2 target adoption, scoped business succession and TechnicalStaff account foundation | owner-authorized; limited account slice implemented; other gaps/pending decisions retained |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

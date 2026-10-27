@@ -1,5 +1,8 @@
 # ADR-0015: Invitation issuance and Resend delivery
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Whole-registration approval, old support ownership, 10-minute idle policy as target and post-End-Early entitlement are superseded by SRS row-level eligibility, Staff review, 2-minute reconnect and terminal revocation. Existing delivery/cryptography contracts remain current code until migrated. No new advisor approval is recorded.
+
+
 - Date: 2026-10-08.
 - Status: implementation decision for the user-requested invitation/email slice.
 - Business baseline: ADR-0010/0011/0012; advisor approval is not implied.
