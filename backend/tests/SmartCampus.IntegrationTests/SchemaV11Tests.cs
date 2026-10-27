@@ -1,5 +1,15 @@
 using System.Text.RegularExpressions;
+using System.IO.Compression;
+using System.Text;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using MediatR;
 using Microsoft.Data.SqlClient;
+using SmartCampus.Application;
+using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Infrastructure.Persistence;
+using SmartCampus.Infrastructure.Persistence.Repositories;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -17,6 +27,15 @@ public sealed class SchemaV11FactAttribute : FactAttribute, ITraitAttribute
 
 }
 
+public sealed class SchemaV12FactAttribute : FactAttribute, ITraitAttribute
+{
+    public SchemaV12FactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 {
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
@@ -28,6 +47,142 @@ public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 public sealed class SchemaV11Tests
 {
     private static string Id(int value) => $"00000000-0000-0000-0000-{value:D12}";
+
+    [SchemaV12Fact]
+    public async Task V12Snapshot_CreatesVersionedMapPoiTablesAndEnforcesVersionUniqueness()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        Assert.Equal(24, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0;"));
+        Assert.Equal(7, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('MapAreas','MapVersions','MapDeploymentChecks','PoiProposals','PoiProposalRevisions','PoiProposalSubmissions','PoiVerificationRecords');"));
+        await db.ExecuteAsync($"INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'pilot',N'Pilot Area','{Id(1)}',SYSDATETIMEOFFSET());");
+        var mapId = Guid.NewGuid();
+        await db.ExecuteAsync($"""
+            INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,
+                ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,
+                FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            VALUES('{mapId}',N'pilot',1,N'pilot-v1',N'pilot-v1.zip',CONVERT(binary(32),1),CONVERT(binary(32),2),0x01,
+                N'pilot.pgm',1,1,0.05,0,0,0,0,0.65,0.196,N'map','VALID','{Id(1)}','{Id(3)}',SYSDATETIMEOFFSET());
+            """);
+        await db.ExpectErrorAsync(2627, $"""
+            INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,
+                ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,
+                FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            SELECT NEWID(),AreaKey,VersionNumber,N'other-v1',N'other-v1.zip',PackageSha256,RequestHash,PackageBytes,
+                ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,
+                FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,NEWID(),SYSDATETIMEOFFSET()
+            FROM dbo.MapVersions WHERE Id='{mapId}';
+            """);
+        Assert.Equal("pilot-v1", await db.ScalarAsync<string>($"SELECT MapKey FROM dbo.MapVersions WHERE Id='{mapId}';"));
+    }
+
+    [SchemaV12Fact]
+    public async Task V12RuntimeGrants_AreAppendOnlyForMapAndPoiVerificationRecords()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await db.ApplyFileAsync("permissions.sql");
+        await db.ApplyFileAsync("map-poi-permissions.sql");
+        await db.ExecuteAsync("CREATE USER map_poi_permission_test WITHOUT LOGIN; ALTER ROLE campus_tour_app ADD MEMBER map_poi_permission_test;");
+        await using var connection = await db.OpenAsync();
+        await ExecuteAsync(connection, "EXECUTE AS USER='map_poi_permission_test';");
+        try
+        {
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','SELECT');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','INSERT');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','UPDATE');"));
+            await ExecuteAsync(connection, $"UPDATE dbo.PoiProposals SET CurrentRevision=CurrentRevision WHERE Id='{Id(999)}';");
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiVerificationRecords','OBJECT','UPDATE');"));
+            await ExpectErrorAsync(connection, 229, "UPDATE dbo.MapVersions SET ValidationStatus='INVALID';");
+            await ExpectErrorAsync(connection, 230, $"UPDATE dbo.PoiProposals SET CreatedAt=CreatedAt WHERE Id='{Id(999)}';");
+            await ExpectErrorAsync(connection, 229, "DELETE FROM dbo.PoiVerificationRecords;");
+        }
+        finally { await ExecuteAsync(connection, "REVERT;"); }
+    }
+
+    [SchemaV12Fact]
+    public async Task V11ToV12Upgrade_IsAdditiveAndRerunnableForRecognizedV12Marker()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';");
+        await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
+        await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
+        Assert.Equal(24, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0;"));
+        Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
+            await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("USER1", await db.ScalarAsync<string>($"SELECT NormalizedUsername FROM dbo.Users WHERE Id='{Id(1)}';"));
+    }
+
+    [SchemaV12Fact]
+    public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var services = db.BuildFeatureServiceProvider();
+        await using var scope = services.CreateAsyncScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        var package = CreateMapPackage();
+        var map = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
+            new("pilot", "Pilot Area", Guid.NewGuid(), package)));
+        Assert.Equal("VALID", map.ValidationStatus);
+        Assert.Null(await db.ScalarAsync<string>($"SELECT TOP(1) N'present' FROM dbo.MapDeploymentChecks WHERE MapVersionId='{map.Id}';"));
+
+        var deployment = await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+            new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
+        Assert.True(deployment.Passed);
+        var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
+            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion)));
+        Assert.True(proposal.Revision.IsSubmitted);
+        Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
+
+        var failed = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
+            new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "FAIL", false, false, true, true,
+                "Could not reach target.", "Observed failed approach on robot.")));
+        Assert.Equal("FAIL", failed.ResultCode);
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion,
+                new(map.Id, "Library", "Entrance", "Moved to clear aisle", 1.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 2, proposal.RowVersion)));
+        Assert.Single(await sender.Send(new ListPoiVerificationQueueQuery(map.Id)));
+        var passed = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 2,
+            new(Guid.NewGuid(), 2, proposal.RowVersion, "physical_1", "PASS", true, true, true, true,
+                null, "Observed reach, stop, localization and camera preset on robot.")));
+        Assert.Equal("PASS", passed.ResultCode);
+
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 2, proposal.RowVersion,
+                new(map.Id, "Library entrance", "Entrance", "Content-only correction", 1.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal("PASS", proposal.Revision.NavigationStatus);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 3, proposal.RowVersion)));
+        Assert.Empty(await sender.Send(new ListPoiVerificationQueueQuery(map.Id)));
+        var history = await sender.Send(new GetPoiHistoryQuery(proposal.Id));
+        Assert.Equal(3, history.Revisions.Count);
+        Assert.Equal(new[] { "FAIL", "PASS" }, history.VerificationRecords.Select(item => item.ResultCode).ToArray());
+    }
+
+    [SchemaV12Fact]
+    public async Task ConcurrentMapUploads_SerializeAreaVersioningAndIdempotentRetries()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await using var services = db.BuildFeatureServiceProvider();
+        var package = CreateMapPackage();
+        var sameRequest = Guid.NewGuid();
+        var first = await Task.WhenAll(
+            SendMapUploadAsync(services, Guid.Parse(Id(1)), sameRequest, package),
+            SendMapUploadAsync(services, Guid.Parse(Id(1)), sameRequest, package));
+        Assert.Equal(first[0].Id, first[1].Id);
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions;"));
+
+        var parallel = await Task.WhenAll(
+            SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package),
+            SendMapUploadAsync(services, Guid.Parse(Id(2)), Guid.NewGuid(), package));
+        Assert.Equal(new[] { 2, 3 }, parallel.Select(item => item.VersionNumber).Order().ToArray());
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions WHERE AreaKey=N'pilot';"));
+    }
 
     [SchemaV11Fact]
     public async Task BusinessKeys_RejectDuplicates_AllowDifferentRegistrationsAndRoutes()
@@ -167,6 +322,12 @@ public sealed class SchemaV11Tests
         await command.ExecuteNonQueryAsync();
     }
 
+    private static async Task<T> ScalarAsync<T>(SqlConnection connection, string sql)
+    {
+        using var command = new SqlCommand(sql, connection);
+        return (T)(await command.ExecuteScalarAsync())!;
+    }
+
     private static async Task ExpectErrorAsync(SqlConnection connection, int number, string sql)
     {
         var exception = await Assert.ThrowsAsync<SqlException>(() => ExecuteAsync(connection, sql));
@@ -181,7 +342,7 @@ public sealed class SchemaV11Tests
             { InitialCatalog = "master", Pooling = false };
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync()
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot.sql")
         {
             var db = new TestDatabase();
             try
@@ -193,11 +354,28 @@ public sealed class SchemaV11Tests
                     db.created = true;
                 }
                 db.settings.InitialCatalog = db.name;
-                await db.ApplyFileAsync("snapshot.sql");
+                await db.ApplyFileAsync(snapshot);
                 await db.SeedAsync();
                 return db;
             }
             catch { await db.DisposeAsync(); throw; }
+        }
+
+        public ServiceProvider BuildFeatureServiceProvider()
+        {
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddApplication();
+            services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(settings.ConnectionString));
+            services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
+            services.AddScoped<EfVersionedMapPoiRepository>();
+            services.AddScoped<IMapPoiRequestLock>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IMapVersionRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
+            services.AddSingleton(TimeProvider.System);
+            return services.BuildServiceProvider(validateScopes: true);
         }
 
         public async Task<SqlConnection> OpenAsync()
@@ -296,5 +474,28 @@ public sealed class SchemaV11Tests
             await SchemaV11Tests.ExecuteAsync(master, $"ALTER DATABASE [{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{name}];");
             created = false;
         }
+    }
+
+    private static byte[] CreateMapPackage()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var yaml = archive.CreateEntry("pilot.yaml");
+            using (var yamlStream = yaml.Open())
+                yamlStream.Write(Encoding.UTF8.GetBytes("image: pilot.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n"));
+            var pgm = archive.CreateEntry("pilot.pgm");
+            using var output = pgm.Open();
+            output.Write(Encoding.ASCII.GetBytes("P2\n2 2\n255\n255 255 255 255\n"));
+        }
+        return stream.ToArray();
+    }
+
+    private static async Task<MapVersionView> SendMapUploadAsync(IServiceProvider services, Guid actor,
+        Guid requestId, byte[] package)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new CreateMapVersionCommand(actor,
+            new("pilot", "Pilot Area", requestId, package)));
     }
 }

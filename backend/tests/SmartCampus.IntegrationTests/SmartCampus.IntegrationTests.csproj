@@ -26,6 +26,9 @@
 
   <ItemGroup>
     <None Include="..\..\database\smart-campus-tour-schema-v1.1.sql" Link="Schema\snapshot.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.2.sql" Link="Schema\snapshot-v1.2.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.1-to-v1.2-map-poi.sql" Link="Schema\upgrade-v1.1-to-v1.2-map-poi.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-map-poi-permissions.sql" Link="Schema\map-poi-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\fixtures\representative-registration-demo.sql" Link="Schema\representative-demo.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.0.sql" Link="Schema\snapshot-v1.0.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-permissions.sql" Link="Schema\permissions.sql" CopyToOutputDirectory="PreserveNewest" />

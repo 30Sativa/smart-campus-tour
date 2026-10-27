@@ -9,7 +9,11 @@ public sealed class EfPoiManagementTransaction(ApplicationDbContext dbContext) :
 {
     public async Task<IPoiManagementTransactionScope> BeginAsync(CancellationToken cancellationToken = default)
     {
-        var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        // Map versions are serialized with transaction-owned application locks; proposal mutations
+        // use explicit UPDLOCK/HOLDLOCK row reads and unique constraints. Keeping the whole unit
+        // at SERIALIZABLE creates unrelated key-range locks before those application locks and can
+        // deadlock concurrent uploads for different request IDs in the same area.
+        var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         return new Scope(transaction);
     }
 

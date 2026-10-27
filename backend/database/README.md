@@ -1,5 +1,24 @@
 # CampusTour database snapshots
 
+## v1.2 versioned map/POI slice (ADR-0021)
+
+`smart-campus-tour-schema-v1.2.sql` is the full snapshot for a newly created
+database. `patches/upgrade-v1.1-to-v1.2-map-poi.sql` is an additive patch for
+an explicitly recognized v1.1 database and preserves existing rows; take and
+verify a full backup before the normal reviewed deployment process. The patch
+is idempotent for the v1.2 schema marker and rejects unknown/unmarked schemas.
+Neither file should be run against a shared or production database outside its
+approved change window. v1.1 and its recognized hashes remain unchanged.
+
+After v1.2 schema installation and the existing `campus_tour_app` role setup,
+apply `smart-campus-tour-map-poi-permissions.sql`. It grants read/insert for
+immutable map, deployment, revision, submission and verification records, plus
+only the current revision pointer fields on `PoiProposals`; it grants no
+update/delete on immutable result tables. Re-scaffold from a disposable v1.2
+database with `backend/scripts/scaffold-db`, then review generated output and
+the documented one-to-many corrections. Integration tests use a disposable
+SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
+
 ## Status
 
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.

@@ -7,9 +7,10 @@ The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
 The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
 implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
 Current Admin business endpoints and schema below remain implementation facts,
-not the new ownership/revision/row-access target. Only TechnicalStaff account
-support is implemented in this slice. F-14, conflicting branch cutoff,
-project YAML/frame mapping and M2 command transport remain pending.
+not the new ownership/revision/row-access target. TechnicalStaff accounts and
+the scoped versioned map/POI API are implemented in this backend slice; the
+legacy Admin POI API remains an implementation gap. F-14, conflicting branch
+cutoff, project YAML/frame mapping and M2 command transport remain pending.
 Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
 
 ## Admin Tour Management API (ADR-0018, backend implemented)
@@ -645,6 +646,33 @@ Do not infer occupancy from the source image's appearance or alter robot
 thresholds as part of the picker. Deployment-map binding, current robot pose,
 navigation testing, and fleet integration remain separate work. A later
 threshold change requires a new key and source-parity check target.
+
+### 3.0.3 Versioned map package and per-POI technical verification (ADR-0021)
+
+The additive v1.2 schema and new `/api/technical/map-versions` and
+`/api/staff/poi-proposals` contracts implement map package versioning, manual
+deployment evidence, Staff proposals/revisions/submission, and TechnicalStaff
+per-revision checks. The complete endpoint/request/role/error/audit contract is
+in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md).
+The new endpoints do not grant Admin access. Existing `AdminPoisController`
+remains a legacy authorization gap and its rows are not migrated by this slice.
+
+The supported upload is a bounded ZIP of root ROS trinary YAML and referenced
+8-bit PGM. Upload is not robot deployment; TechnicalStaff records exact package
+checksum plus localization/display observations after manual robot work. POI
+coordinates are ROS `map` frame meters/radians; current robot map examples have
+zero origin yaw, and the API rejects non-zero yaw. Staff submits world poses;
+the API validates map bounds/free occupancy. Technical verification records
+reach/stop/localization/camera observations against that exact version and
+physical robot. These operator-entered records do not prove backend-executed
+hardware tests. POI verification does not test or certify a complete route.
+
+Project POI YAML/frame mapping, route revision/test tuple, scheduling/READY,
+robot deployment control, frontend workspaces and physical acceptance remain
+pending/not implemented. v1.1 remains immutable; v1.2 has an additive upgrade
+patch and empty-database snapshot. The runtime grants for these tables are
+separate and least privilege in `backend/database/smart-campus-tour-map-poi-permissions.sql`.
+Do not run the patch on a shared or production database as part of this feature.
 
 ### 3.1 Fleet contract
 

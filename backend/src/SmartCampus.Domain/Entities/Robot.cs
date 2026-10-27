@@ -33,6 +33,10 @@ public partial class Robot
 
     public virtual Tour? CurrentTour { get; set; }
 
+    public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
+
+    public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
+
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
 
     public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();

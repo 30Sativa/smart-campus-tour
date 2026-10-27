@@ -5,9 +5,10 @@ using System.Text;
 namespace SmartCampus.Application.Common.Abstractions.Persistence
 {
     /// <summary>
-    /// Commit-only boundary backed by the same scoped context as feature repositories.
-    /// The UnitOfWork pipeline saves successful commands once; queries never resolve this boundary.
-    /// Feature transaction behaviors own transaction commit/rollback around that save.
+    /// Unit-of-work boundary backed by the same scoped context as feature repositories.
+    /// Handlers may flush within an active transaction to read database-generated values;
+    /// the pipeline performs the final save and feature behaviors own transaction commit.
+    /// Queries never resolve this boundary.
     /// </summary>
     public interface IApplicationDbContext
     {
