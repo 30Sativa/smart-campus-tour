@@ -244,13 +244,13 @@ function queryString(values: Record<string, string | undefined>) {
   return text ? `?${text}` : ''
 }
 
-const tourPath = (id: string) => `/api/admin/tours/${id}`
-const registrationPath = (id: string) => `/api/admin/registrations/${id}`
+const tourPath = (id: string) => `/api/staff/manage/tours/${id}`
+const registrationPath = (id: string) => `/api/staff/manage/registrations/${id}`
 
 export const adminTourService: AdminTourService = {
-  list: (filters = {}) => apiClient(`/api/admin/tours${queryString(filters)}`),
+  list: (filters = {}) => apiClient(`/api/staff/manage/tours${queryString(filters)}`),
   get: (id) => apiClient(tourPath(id)),
-  create: (input, requestId) => apiClient('/api/admin/tours', { method: 'POST', json: input, headers: { 'Idempotency-Key': requestId } }),
+  create: (input, requestId) => apiClient('/api/staff/manage/tours', { method: 'POST', json: input, headers: { 'Idempotency-Key': requestId } }),
   update: (id, input, version) => apiClient(tourPath(id), { method: 'PUT', json: { ...input, version } }),
   finalize: (id, version) => apiClient(`${tourPath(id)}/finalize`, { method: 'POST', json: { version } }),
   reopen: (id, version) => apiClient(`${tourPath(id)}/reopen`, { method: 'POST', json: { version } }),
@@ -258,7 +258,7 @@ export const adminTourService: AdminTourService = {
 }
 
 export const adminRegistrationService: AdminRegistrationService = {
-  list: (filters = {}) => apiClient(`/api/admin/registrations${queryString(filters)}`),
+  list: (filters = {}) => apiClient(`/api/staff/manage/registrations${queryString(filters)}`),
   get: (id) => apiClient(registrationPath(id)),
   approve: (id, version) => apiClient(`${registrationPath(id)}/approve`, { method: 'POST', json: { version } }),
   reject: (id, reason, version) => apiClient(`${registrationPath(id)}/reject`, { method: 'POST', json: { reason, version } }),
@@ -270,5 +270,5 @@ export const adminInvitationService: AdminInvitationService = {
 }
 
 export const adminRouteService: AdminRouteService = {
-  list: () => apiClient('/api/admin/routes'),
+  list: () => apiClient('/api/staff/manage/routes'),
 }

@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminPoiFormPage from '../../../routes/staff/manage/AdminPoiFormPage'
-import AdminPoisPage from '../../../routes/staff/manage/AdminPoisPage'
+import StaffManagePoiFormPage from '../../../routes/staff/manage/StaffManagePoiFormPage'
+import StaffManagePoisPage from '../../../routes/staff/manage/StaffManagePoisPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import { poiQueryKeys } from './hooks'
 import type { PoiDetails } from './types'
@@ -55,9 +55,9 @@ function renderAt(path: string, showCatalog = false) {
       <MemoryRouter initialEntries={showCatalog ? ['/staff/manage/pois', path] : [path]}>
         {showCatalog && <HistoryControls />}
         <Routes>
-          <Route path="/staff/manage/pois" element={showCatalog ? <AdminPoisPage /> : <div>Danh sách POI</div>} />
-          <Route path="/staff/manage/pois/new" element={<AdminPoiFormPage />} />
-          <Route path="/staff/manage/pois/:poiId" element={<AdminPoiFormPage />} />
+          <Route path="/staff/manage/pois" element={showCatalog ? <StaffManagePoisPage /> : <div>Danh sách POI</div>} />
+          <Route path="/staff/manage/pois/new" element={<StaffManagePoiFormPage />} />
+          <Route path="/staff/manage/pois/:poiId" element={<StaffManagePoiFormPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -100,11 +100,11 @@ describe('Admin POI form', () => {
   it('creates with yaw zero and uses the persisted decimal range in browser constraints', async () => {
     let createPayload: Record<string, unknown> | null = null
     const fetchMock = stubApi((url, init) => {
-      if (url.pathname === '/api/admin/pois' && init?.method === 'POST') {
+      if (url.pathname === '/api/staff/manage/pois' && init?.method === 'POST') {
         createPayload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: true, message: 'POI created inactive.', data: { id: 'poi-created' }, errors: null })
       }
-      if (url.pathname === '/api/admin/pois/poi-created') {
+      if (url.pathname === '/api/staff/manage/pois/poi-created') {
         return jsonResponse({ success: true, message: 'POI retrieved.', data: poiDetails({ id: 'poi-created' }), errors: null })
       }
       return jsonResponse({ success: true, data: [poiDetails({ id: 'poi-created', name: 'New library' })], pagination: { page: 1, pageSize: 20, totalPages: 1, totalItems: 1 } })
@@ -138,7 +138,7 @@ describe('Admin POI form', () => {
     expect(screen.getByRole('status').parentElement).toHaveFocus()
     expect(await screen.findByRole('link', { name: 'New library' })).toHaveAttribute('href', '/staff/manage/pois/poi-created')
     expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/admin/pois/poi-created'))).toBe(false)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/staff/manage/pois/poi-created'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Đóng thông báo' }))
     expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'New library' })).toBeInTheDocument()
@@ -169,7 +169,7 @@ describe('Admin POI form', () => {
       stubApi(() => jsonResponse({ success: false, message: 'Catalog unavailable.', data: null }, 500))
       render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter initialEntries={[{ pathname: '/staff/manage/pois', state: { createdPoiName: 'Saved POI' } }]}>
-          <Routes><Route path="/staff/manage/pois" element={<AdminPoisPage />} /></Routes>
+          <Routes><Route path="/staff/manage/pois" element={<StaffManagePoisPage />} /></Routes>
         </MemoryRouter>
       </QueryClientProvider>)
       expect(await screen.findByText('Không thể tải danh sách POI.')).toBeVisible()
@@ -195,11 +195,11 @@ describe('Admin POI form', () => {
     let detailCalls = 0
     let updatePayload: Record<string, unknown> | null = null
     stubApi((url, init) => {
-      if (url.pathname === '/api/admin/pois/poi-1' && init?.method === 'PUT') {
+      if (url.pathname === '/api/staff/manage/pois/poi-1' && init?.method === 'PUT') {
         updatePayload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: false, message: 'This POI changed since it was loaded. Reload it and try again.', data: null, errors: null }, 409)
       }
-      if (url.pathname === '/api/admin/pois/poi-1') {
+      if (url.pathname === '/api/staff/manage/pois/poi-1') {
         detailCalls += 1
         const data = detailCalls === 1 ? original : remote
         return jsonResponse({ success: true, message: 'POI retrieved.', data, errors: null })
@@ -236,11 +236,11 @@ describe('Admin POI form', () => {
     })
     let updatePayload: Record<string, unknown> | null = null
     stubApi((url, init) => {
-      if (url.pathname === '/api/admin/pois/poi-1' && init?.method === 'PUT') {
+      if (url.pathname === '/api/staff/manage/pois/poi-1' && init?.method === 'PUT') {
         updatePayload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: true, message: 'POI updated.', data: null, errors: null })
       }
-      if (url.pathname === '/api/admin/pois/poi-1') {
+      if (url.pathname === '/api/staff/manage/pois/poi-1') {
         return jsonResponse({ success: true, message: 'POI retrieved.', data: locked, errors: null })
       }
       return jsonResponse({ success: true, message: 'POIs retrieved.', data: [], pagination: {}, errors: null })
@@ -259,7 +259,7 @@ describe('Admin POI form', () => {
   it('creates from map position and heading, saving the quantized ROS pose', async () => {
     let payload: Record<string, unknown> | null = null
     stubApi((url, init) => {
-      if (url.pathname === '/api/admin/pois' && init?.method === 'POST') {
+      if (url.pathname === '/api/staff/manage/pois' && init?.method === 'POST') {
         payload = JSON.parse(String(init.body)) as Record<string, unknown>
         return jsonResponse({ success: true, data: { id: 'created' } })
       }

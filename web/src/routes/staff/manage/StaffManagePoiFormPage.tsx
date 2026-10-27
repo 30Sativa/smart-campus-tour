@@ -77,7 +77,7 @@ function numberValue(value: string): number | null {
   return Number.isFinite(number) ? number : null
 }
 
-export default function AdminPoiFormPage() {
+export default function StaffManagePoiFormPage() {
   const { poiId } = useParams()
   const isCreate = !poiId
   const poi = usePoi(poiId)

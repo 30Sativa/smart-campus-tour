@@ -11,11 +11,12 @@ using SmartCampus.Application.Features.Invitations.Queries.GetInvitations;
 namespace SmartCampus.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = ApplicationRoles.Admin + "," + ApplicationRoles.Representative)]
+[Authorize(Roles = ApplicationRoles.Staff + "," + ApplicationRoles.Representative)]
+[Route("api/staff/manage/registrations/{registrationId:guid}/invitations")]
 [Route("api/registrations/{registrationId:guid}/invitations")]
 public sealed class InvitationsController(ISender sender) : ControllerBase
 {
-    private Guid? Owner => User.IsInRole(ApplicationRoles.Admin) ? null : User.GetRequiredUserId();
+    private Guid? Owner => User.IsInRole(ApplicationRoles.Staff) ? null : User.GetRequiredUserId();
     [HttpGet]
     public async Task<ActionResult<BaseResponse<InvitationDetails>>> Get(Guid registrationId, CancellationToken ct) =>
         Ok(new BaseResponse<InvitationDetails> { Success = true, Message = "OK",

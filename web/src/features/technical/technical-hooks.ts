@@ -1,24 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { mockTechnicalService as api } from '../../mocks/technical-mock'
+import { technicalApi } from './api/technical'
 
-/** Labelled sample data until `/api/technical/*` exists (proposal B7); swap the binding above. */
-const keys = { all: ['technical'] as const, maps: ['technical', 'maps'] as const, confirmations: ['technical', 'confirmations'] as const }
+const keys = {
+  maps: ['technical', 'maps'] as const,
+  poiProposals: ['technical', 'poi-proposals'] as const,
+}
 
 export function useMapVersions() {
-  return useQuery({ queryKey: keys.maps, queryFn: () => api.maps() })
+  return useQuery({ queryKey: keys.maps, queryFn: technicalApi.listMaps })
 }
 
-export function useRouteConfirmations() {
-  return useQuery({ queryKey: keys.confirmations, queryFn: () => api.confirmations() })
+export function usePoiProposals() {
+  return useQuery({ queryKey: keys.poiProposals, queryFn: technicalApi.listPoiProposals })
 }
 
-function useTechnicalMutation<T>(run: (input: T) => Promise<unknown>) {
+function useTechnicalMutation<T>(run: (input: T) => Promise<unknown>, invalidate: readonly unknown[]) {
   const client = useQueryClient()
-  return useMutation({ mutationFn: async (input: T) => run(input), onSuccess: () => client.invalidateQueries({ queryKey: keys.all }) })
+  return useMutation({ mutationFn: run, onSuccess: () => client.invalidateQueries({ queryKey: invalidate }) })
 }
 
-export const useRecordDeployment = () => useTechnicalMutation((mapKey: string) => api.recordDeployment(mapKey))
-export const useRecordLocalization = () =>
-  useTechnicalMutation(({ mapKey, passed, note }: { mapKey: string; passed: boolean; note: string }) => api.recordLocalization(mapKey, passed, note))
-export const useConfirmRoute = () => useTechnicalMutation(({ id, note }: { id: string; note: string }) => api.confirm(id, note))
-export const useRevokeConfirmation = () => useTechnicalMutation(({ id, reason }: { id: string; reason: string }) => api.revoke(id, reason))
+export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, keys.maps)
+export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps)
+export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals)

@@ -66,8 +66,8 @@ describe('PublicHomePage', () => {
 
     renderPage()
 
-    expect(screen.getAllByRole('link', { name: /^Quản trị$/ })[0]).toHaveAttribute('href', '/admin')
     expect(screen.getByRole('link', { name: /Vào trang quản trị/i })).toHaveAttribute('href', '/admin')
+    expect(screen.queryByRole('link', { name: /^Điều hành$/ })).toBeNull()
   })
 
   it('keeps the section anchors the navigation points at', () => {

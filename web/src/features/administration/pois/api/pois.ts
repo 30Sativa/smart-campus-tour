@@ -9,16 +9,16 @@ function listPath(query: PoiListQuery): string {
   if (query.isActive != null) params.set('isActive', String(query.isActive))
   params.set('page', String(query.page))
   params.set('size', String(query.size))
-  return `/api/admin/pois?${params.toString()}`
+  return `/api/staff/manage/pois?${params.toString()}`
 }
 
 export const poisApi = {
   list: (query: PoiListQuery) => apiClient<PagedApiResponse<PoiListItem>>(listPath(query)),
-  get: (id: string) => apiClient<ApiResponse<PoiDetails>>(`/api/admin/pois/${id}`),
-  create: (input: CreatePoiInput) => apiClient<ApiResponse<{ id: string }>>('/api/admin/pois', { method: 'POST', json: input }),
-  update: (id: string, input: UpdatePoiInput) => apiClient<ApiResponse<null>>(`/api/admin/pois/${id}`, { method: 'PUT', json: input }),
+  get: (id: string) => apiClient<ApiResponse<PoiDetails>>(`/api/staff/manage/pois/${id}`),
+  create: (input: CreatePoiInput) => apiClient<ApiResponse<{ id: string }>>('/api/staff/manage/pois', { method: 'POST', json: input }),
+  update: (id: string, input: UpdatePoiInput) => apiClient<ApiResponse<null>>(`/api/staff/manage/pois/${id}`, { method: 'PUT', json: input }),
   setActive: (id: string, expectedRowVersion: string, isActive: boolean) => apiClient<ApiResponse<null>>(
-    `/api/admin/pois/${id}/${isActive ? 'activate' : 'deactivate'}`,
+    `/api/staff/manage/pois/${id}/${isActive ? 'activate' : 'deactivate'}`,
     { method: 'POST', json: { expectedRowVersion } },
   ),
 }

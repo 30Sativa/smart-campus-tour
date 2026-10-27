@@ -8,7 +8,7 @@ import { useDebouncedValue } from '../../../features/administration/use-debounce
 import { useRoutes } from '../../../features/administration/routes/hooks'
 import { routeError } from '../../../features/administration/routes/route-messages'
 
-export default function AdminRouteCatalogPage() {
+export default function StaffManageRouteCatalogPage() {
   const [search, setSearch] = useState('')
   const [active, setActive] = useState('all')
   const [page, setPage] = useState(1)

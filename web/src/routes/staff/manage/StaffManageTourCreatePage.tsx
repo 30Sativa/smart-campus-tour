@@ -12,7 +12,7 @@ import type { TourInput } from '../../../features/administration/tours/types'
  * request id, so a lost response cannot create a second Tour; changed content
  * gets a new id instead of an IDEMPOTENCY_CONFLICT.
  */
-export default function AdminTourCreatePage() {
+export default function StaffManageTourCreatePage() {
   const navigate = useNavigate()
   const create = useCreateTour()
   const attempt = useRef<{ key: string; id: string } | null>(null)

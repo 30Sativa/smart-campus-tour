@@ -1,8 +1,10 @@
-# ADR-0020: Staff owns Tour preparation; Admin keeps accounts, roles and audit
+# ADR-0022: Historical group decision — Staff owns Tour preparation
 
-Date: 2026-10-27. Status: accepted by the group (capstone register v1.6–v1.9,
-§3.2.c); advisor review pending. Supersedes the "Admin" owner in ADR-0014,
-ADR-0017 and ADR-0018. Their business rules are unchanged.
+Original date: 2026-10-27. Original status: accepted by the group (capstone
+register v1.6–v1.9, §3.2.c); advisor review pending. Historical record only.
+Its SRS-v0.1 framing and implementation plan are superseded by ADR-0020, which
+is the current owner-authorized target baseline. This renumbering preserves the
+original group decision and does not upgrade its approval status.
 
 ## Context
 
@@ -13,7 +15,7 @@ composition and scheduling to Staff, and limit Admin to accounts, role
 permissions, configuration and administrative audit (plus the pending End
 Early exception, F-14).
 
-## Decision
+## Historical decision
 
 - Tour preparation belongs to the `Staff` role. In the web it lives at
   `/staff/manage/*`: overview, Tours (list/create/detail/edit), registrations

@@ -17,9 +17,10 @@ using SmartCampus.Application.Features.Tours.Queries.GetTours;
 namespace SmartCampus.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = ApplicationRoles.Admin)]
+[Authorize(Roles = ApplicationRoles.Staff)]
+[Route("api/staff/manage/tours")]
 [Route("api/admin/tours")]
-public sealed class AdminToursController(ISender sender) : ControllerBase
+public sealed class StaffToursController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters,

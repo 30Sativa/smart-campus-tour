@@ -54,7 +54,7 @@ describe('route table', () => {
 
   // Compile both dashboards before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
-    await import('../../routes/staff/manage/AdminDashboardPage')
+    await import('../../routes/staff/manage/StaffManageDashboardPage')
     await import('../../routes/staff/OverviewPage')
   }, 30_000)
 
@@ -62,7 +62,7 @@ describe('route table', () => {
 
 
   // Compile the dashboard's chart chunk before timing session/guard behavior.
-  beforeAll(async () => { await import('../../routes/staff/manage/AdminDashboardPage') }, 30_000)
+  beforeAll(async () => { await import('../../routes/staff/manage/StaffManageDashboardPage') }, 30_000)
 
 
   beforeEach(() => useAuthStore.getState().setAuthReady())
@@ -179,11 +179,10 @@ describe('route table', () => {
       expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
-    it('lets an administrator into /staff as well', async () => {
+    it('keeps Admin out of the Staff workspace', async () => {
       signIn('Admin')
       const router = renderAt('/staff')
-      await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
+      await settled(router, '/admin/accounts')
     })
 
     it('still accepts a token minted before the operations roles were merged', async () => {
@@ -212,7 +211,7 @@ describe('route table', () => {
   describe('tour preparation (Staff)', () => {
     beforeAll(async () => {
       // Cold Windows transforms can exceed the UI query timeout before React renders.
-      await import('../../routes/staff/manage/AdminRegistrationsPage')
+      await import('../../routes/staff/manage/StaffManageRegistrationsPage')
     }, 30_000)
 
     it.each([
@@ -281,7 +280,7 @@ describe('route table', () => {
       ['/staff/alerts', '/staff'],
       ['/staff/reports', '/staff/history'],
     ])('redirects %s to %s', async (from, to) => {
-      signIn('Admin')
+      signIn('Staff')
       const router = renderAt(from)
       await settled(router, to)
     })

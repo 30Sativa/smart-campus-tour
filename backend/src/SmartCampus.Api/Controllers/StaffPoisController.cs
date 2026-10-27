@@ -17,9 +17,10 @@ using SmartCampus.Application.Features.Pois.Queries.GetPois;
 namespace SmartCampus.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = ApplicationRoles.Admin)]
+[Authorize(Roles = ApplicationRoles.Staff)]
+[Route("api/staff/manage/pois")]
 [Route("api/admin/pois")]
-public sealed class AdminPoisController(ISender sender) : ControllerBase
+public sealed class StaffPoisController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResponse<PoiListItemResponse>>> List(

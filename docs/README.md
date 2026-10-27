@@ -32,8 +32,9 @@ copying them here.
 
 ## 3. Architecture and Product Decisions
 
-ADR-0020 supersedes only the listed business parts of earlier ADRs; old Admin
-Route/Tour APIs below remain implementation contracts pending deliberate migration.
+ADR-0020 supersedes only the listed business parts of earlier ADRs. Admin-era
+Route/Tour API contracts are retained as compatibility aliases where migrated;
+consult each endpoint's current role boundary below.
 The new TechnicalStaff account foundation does not implement Technical workspaces.
 
 The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)

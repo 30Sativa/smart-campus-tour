@@ -5,7 +5,7 @@ import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grou
 /** Technical Staff work only (SRS v1.9 §3.2.c): no Tour preparation, no robot driving. */
 export const TECHNICAL_NAV_SECTIONS: NavSection[] = [
   { label: null, items: [{ label: 'Version map', path: '/technical/maps', icon: Map }] },
-  { label: null, items: [{ label: 'Import POI (YAML)', path: '/technical/poi-import', icon: FileUp }] },
+  { label: null, items: [{ label: 'Kiểm chứng POI', path: '/technical/poi-import', icon: FileUp }] },
   { label: null, items: [{ label: 'Xác nhận kỹ thuật', path: '/technical/confirmations', icon: CheckCheck }] },
 ]
 

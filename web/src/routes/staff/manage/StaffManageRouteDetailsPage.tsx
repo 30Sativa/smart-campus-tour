@@ -8,7 +8,7 @@ import { useRoute, useRouteAction } from '../../../features/administration/route
 import { routeError, routeIssue } from '../../../features/administration/routes/route-messages'
 
 const HEAD_LABEL = { FRONT: 'Nhìn trước', LEFT: 'Nhìn trái', RIGHT: 'Nhìn phải' }
-export default function AdminRouteDetailsPage() {
+export default function StaffManageRouteDetailsPage() {
   const { routeId } = useParams()
   const navigate = useNavigate()
   const detail = useRoute(routeId)

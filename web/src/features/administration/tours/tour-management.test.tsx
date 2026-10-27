@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminTourCreatePage from '../../../routes/staff/manage/AdminTourCreatePage'
-import AdminTourDetailPage from '../../../routes/staff/manage/AdminTourDetailPage'
-import AdminTourEditPage from '../../../routes/staff/manage/AdminTourEditPage'
+import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
+import StaffManageTourDetailPage from '../../../routes/staff/manage/StaffManageTourDetailPage'
+import StaffManageTourEditPage from '../../../routes/staff/manage/StaffManageTourEditPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import type { RouteDetails } from '../routes/types'
 import type { TourDetails } from './types'
@@ -41,9 +41,9 @@ function api(detail: TourDetails = tour()) {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
       return Promise.resolve(json({ success: true, data: { id: 'tour-1' } }))
     }
-    if (path === '/api/admin/routes') return Promise.resolve(json({ data: [ROUTE], pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
-    if (path === '/api/admin/routes/route-1') return Promise.resolve(json({ success: true, data: ROUTE }))
-    if (path === '/api/admin/tours/tour-1') return Promise.resolve(json({ success: true, data: detail }))
+    if (path === '/api/staff/manage/routes') return Promise.resolve(json({ data: [ROUTE], pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
+    if (path === '/api/staff/manage/routes/route-1') return Promise.resolve(json({ success: true, data: ROUTE }))
+    if (path === '/api/staff/manage/tours/tour-1') return Promise.resolve(json({ success: true, data: detail }))
     return Promise.resolve(json({ success: false }, 404))
   }))
   return writes
@@ -51,9 +51,9 @@ function api(detail: TourDetails = tour()) {
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/staff/manage/tours/new" element={<AdminTourCreatePage />} />
-    <Route path="/staff/manage/tours/:tourId" element={<AdminTourDetailPage />} />
-    <Route path="/staff/manage/tours/:tourId/edit" element={<AdminTourEditPage />} />
+    <Route path="/staff/manage/tours/new" element={<StaffManageTourCreatePage />} />
+    <Route path="/staff/manage/tours/:tourId" element={<StaffManageTourDetailPage />} />
+    <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
@@ -71,7 +71,7 @@ describe('live Tour management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await screen.findByRole('heading', { name: 'Tour sáng thứ Bảy' })
     expect(writes).toHaveLength(1)
-    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/admin/tours', body: {
+    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours', body: {
       expectedRouteVersion: ROUTE_VERSION,
       configuration: { name: 'Tour sáng thứ Bảy', description: null, routeId: 'route-1', scheduledStartAt: new Date('2099-01-03T09:00').toISOString(), fallbackVideoUrl: null },
     } })
@@ -101,7 +101,7 @@ describe('live Tour management', () => {
     await screen.findByText('1. POI 1')
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0]).toMatchObject({ method: 'PUT', path: '/api/admin/tours/tour-1', body: {
+    expect(writes[0]).toMatchObject({ method: 'PUT', path: '/api/staff/manage/tours/tour-1', body: {
       expectedRowVersion: ROW_VERSION, expectedRouteVersion: null,
       configuration: { name: 'Tên mới', routeId: 'route-1', scheduledStartAt: '2020-01-01T02:00:00.000Z' },
     } })
@@ -117,7 +117,7 @@ describe('live Tour management', () => {
     fireEvent.change(within(dialog).getByLabelText(/Lý do hủy/), { target: { value: 'Trường đổi lịch' } })
     fireEvent.click(confirm)
     expect(await screen.findByText(/Đã hủy Tour/)).toBeInTheDocument()
-    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/admin/tours/tour-1/cancel', body: { expectedRowVersion: ROW_VERSION, reason: 'Trường đổi lịch' } })
+    expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours/tour-1/cancel', body: { expectedRowVersion: ROW_VERSION, reason: 'Trường đổi lịch' } })
   })
 
   it('does not offer READY transitions that the live API does not provide', async () => {

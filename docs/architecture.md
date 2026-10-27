@@ -6,28 +6,43 @@ The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
 [ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
 The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
 implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
-Current Admin business endpoints and schema below remain implementation facts,
-not the new ownership/revision/row-access target. TechnicalStaff accounts and
-the scoped versioned map/POI API are implemented in this backend slice; the
-legacy Admin POI API remains an implementation gap. F-14, conflicting branch
-cutoff, project YAML/frame mapping and M2 command transport remain pending.
+TechnicalStaff accounts and the scoped versioned map/POI API are implemented.
+Tour, Route, legacy POI catalog, and registration review are Staff-authorized
+under `/api/staff/manage/*`; old `/api/admin/{tours,routes,pois,registrations}`
+paths remain Staff-only compatibility aliases. The legacy direct email-correction
+command remains Admin-only and does not satisfy the target request/review workflow.
+F-14, conflicting branch cutoff, project YAML/frame mapping and M2 command transport remain pending.
 Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
 
-## Admin Tour Management API (ADR-0018, backend implemented)
+## Staff management API authorization migration (2026-10-27)
+
+`Staff` is the only role allowed to access Tour, Route, legacy POI catalog and
+registration-review management endpoints. Each controller exposes the current
+`/api/staff/manage/...` path and retains its former `/api/admin/...` URL as a
+path-compatibility alias; the legacy prefix does not retain Admin authority.
+`Admin` is limited to account/role administration. Invitation endpoints accept
+Staff for organization-wide support or Representative scoped to their own
+registration. TechnicalStaff remains limited to the versioned map upload and
+POI verification endpoints. The existing direct roster-email correction stays
+Admin-only pending the target row-level request/review workflow; it is not part
+of the new Staff contract.
+
+## Tour Management API (legacy pre-execution slice)
 
 This is the pre-execution SQL slice in
-`docs/decisions/0018-admin-tour-management.md`. All endpoints require Admin;
-CreatedByUserId records attribution and does not restrict other Admin accounts.
-Frontend Tour/demo bindings remain unchanged. No READY/Finalize/Reopen, robot
-assignment, Staff operation or branch-request endpoint is implemented here.
+`docs/decisions/0018-admin-tour-management.md`; Staff now owns the existing
+pre-execution API. All endpoints require Staff, and CreatedByUserId is attribution
+only. `/api/staff/manage/tours` is canonical; `/api/admin/tours` is a Staff-only
+compatibility alias. No READY/Finalize/Reopen, robot assignment, Staff operation
+or branch-request endpoint is implemented here.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/admin/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
-| GET | `/api/admin/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
-| POST | `/api/admin/tours` | `{requestId, expectedRouteVersion, configuration}`; creates SCHEDULED, no robot/execution state. |
-| PUT | `/api/admin/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; SCHEDULED before execution only. |
-| POST | `/api/admin/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
+| GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
+| POST | `/api/staff/manage/tours` | `{requestId, expectedRouteVersion, configuration}`; creates SCHEDULED, no robot/execution state. |
+| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; SCHEDULED before execution only. |
+| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
@@ -64,7 +79,7 @@ created. Existing pending email claims recheck access and cannot grant new
 rights; an already claimed external send may finish with a now-invalid code.
 Cancellation notification email is not implemented in this slice.
 
-Mutation requestIds are durable and scoped to (Admin, requestId) across these
+Mutation requestIds are durable and scoped to (Staff, requestId) across these
 Tour actions. A transaction-owned SQL application lock serializes a key; an
 AuditLog receipt contains action, Tour ID and canonical payload SHA-256, never
 raw descriptions, cancellation reason or invitation secrets. Committed matching
@@ -86,33 +101,34 @@ TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
 TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
 commissioning or readiness for robot operation.
 
-## Admin Route Management contract (ADR-0017, 2026-10-19)
+## Staff Route Management API (original CRUD slice ADR-0017, current owner ADR-0020)
 
-The live Admin catalog at `/admin/routes` uses SQL-backed endpoints below;
-Tour authoring/operations fixtures retain their separate mock Route contract.
-See `docs/decisions/0017-admin-route-management.md` for the authorized change
-from seed-only preparation, preservation policy and commissioning boundary.
+The live Staff catalog at `/staff/manage/routes` uses SQL-backed endpoints below;
+Tour operations fixtures retain their separate mock Route contract. ADR-0017
+records the original CRUD decision; ADR-0020 supersedes its Admin ownership with
+Staff ownership while preserving the technical persistence and commissioning
+boundary.
 
-- Admin-only `GET /api/admin/routes?search=&page=1&size=20&isActive=` returns
+- Staff-only `GET /api/staff/manage/routes?search=&page=1&size=20&isActive=` returns
   `PagedResponse` with id, name, description, mapKey, mapFrame, isActive,
   stopCount, createdAt and updatedAt. Supports `sort=name,-name,createdAt,-createdAt`
   (one field per request, default name), then id; size 1–100. Expansion is rejected.
-- `GET /api/admin/routes/{id}` returns `BaseResponse` detail: the same Route
+- `GET /api/staff/manage/routes/{id}` returns `BaseResponse` detail: the same Route
   fields, startX/startY/startYaw, endMode/endX/endY/endYaw, ordered `stops`
   (id, poiId, poiName, stopOrder, dwellSeconds, headSteps), opaque `version`,
   `usage` (hasReferences, hasReadyOrRunningTours, canEditConfiguration,
   canEditMetadataAndAvailability, canDelete), `configurationIssues` and
   `availabilityIssues`. Issue entries are stable codes; they are not physical
   verification or a Tour READY verdict.
-- `POST /api/admin/routes` takes name, description, mapKey, mapFrame,
+- `POST /api/staff/manage/routes` takes name, description, mapKey, mapFrame,
   startX/startY/startYaw, endMode (`LAST_POI` or `POSE`), nullable End pose,
   and ordered stops `{poiId,dwellSeconds,headSteps:[{preset,holdSeconds}]}`.
   Order is derived from array position. It creates an inactive Route and
   returns `{id}`. Copying uses the same endpoint with a new identity.
-- `PUT /api/admin/routes/{id}` takes `{expectedVersion, configuration}`, where
+- `PUT /api/staff/manage/routes/{id}` takes `{expectedVersion, configuration}`, where
   `configuration` has the POST fields above.
-  `POST /api/admin/routes/{id}/activate` and `/deactivate`, and
-  `DELETE /api/admin/routes/{id}` take `{expectedVersion}`. Successful writes
+  `POST /api/staff/manage/routes/{id}/activate` and `/deactivate`, and
+  `DELETE /api/staff/manage/routes/{id}` take `{expectedVersion}`. Successful writes
   use `BaseResponse`; reload detail for the current version. Delete is only
   allowed without any configuration/history reference. Deactivation retains
   existing Tour/variant references. No operation sends robot commands.
@@ -565,19 +581,21 @@ JWT may remain usable until its natural expiry (about 15 minutes plus validation
 clock skew). This is the accepted V1 limitation; no token version or blacklist
 is used.
 
-### 3.0.2 Admin POI management (V1)
+### 3.0.2 Legacy POI catalog management (Staff API)
 
-The POI endpoints require the `Admin` role. They implement the Admin POI slice
-selected in [ADR-0014](decisions/0014-admin-poi-management.md):
+The POI catalog endpoints require the `Staff` role. They implement legacy
+catalog behavior selected in [ADR-0014](decisions/0014-admin-poi-management.md).
+`/api/staff/manage/pois` is canonical; the former `/api/admin/pois` routes are
+Staff-only compatibility aliases:
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
-| `GET /api/admin/pois` | Optional `search`, `sort`, `page`, `size`, and `isActive`; HTTP 200 with POI summaries and pagination. | Invalid page/size/sort or non-empty `expand`: 400. Anonymous: 401. Non-Admin: 403. |
-| `GET /api/admin/pois/{id}` | HTTP 200 with POI details, base64 `rowVersion`, and current usage/editability flags. | Missing POI: 404. Anonymous: 401. Non-Admin: 403. |
-| `POST /api/admin/pois` | JSON fields: `name`, `description`, `mapKey`, `mapFrame`, `x`, `y`, `yaw`, `narrationText`, `audioUrl`, `narrationSeconds`, `fallbackVideoUrl`; HTTP 200 with the new ID. New rows are inactive. | Invalid input: 400. Anonymous: 401. Non-Admin: 403. |
-| `PUT /api/admin/pois/{id}` | Same content/map/pose fields plus current base64 `expectedRowVersion`; HTTP 200. | Invalid input: 400. Missing POI: 404. Stale version, a live Tour lock, or editing referenced geometry: 409. |
-| `POST /api/admin/pois/{id}/activate` | JSON `{ "expectedRowVersion": "..." }`; HTTP 200. | Missing POI: 404. Stale version or a live Tour lock: 409. |
-| `POST /api/admin/pois/{id}/deactivate` | Same body as activate; HTTP 200. Existing route/history references remain intact. | Missing POI: 404. Stale version or a live Tour lock: 409. |
+| `GET /api/staff/manage/pois` | Optional `search`, `sort`, `page`, `size`, and `isActive`; HTTP 200 with POI summaries and pagination. | Invalid page/size/sort or non-empty `expand`: 400. Anonymous: 401. Non-Staff: 403. |
+| `GET /api/staff/manage/pois/{id}` | HTTP 200 with POI details, base64 `rowVersion`, and current usage/editability flags. | Missing POI: 404. Anonymous: 401. Non-Staff: 403. |
+| `POST /api/staff/manage/pois` | JSON fields: `name`, `description`, `mapKey`, `mapFrame`, `x`, `y`, `yaw`, `narrationText`, `audioUrl`, `narrationSeconds`, `fallbackVideoUrl`; HTTP 200 with the new ID. New rows are inactive. | Invalid input: 400. Anonymous: 401. Non-Staff: 403. |
+| `PUT /api/staff/manage/pois/{id}` | Same content/map/pose fields plus current base64 `expectedRowVersion`; HTTP 200. | Invalid input: 400. Missing POI: 404. Stale version, a live Tour lock, or editing referenced geometry: 409. |
+| `POST /api/staff/manage/pois/{id}/activate` | JSON `{ "expectedRowVersion": "..." }`; HTTP 200. | Missing POI: 404. Stale version or a live Tour lock: 409. |
+| `POST /api/staff/manage/pois/{id}/deactivate` | Same body as activate; HTTP 200. Existing route/history references remain intact. | Missing POI: 404. Stale version or a live Tour lock: 409. |
 
 List search covers name/description. Sort accepts `name`, `isActive`,
 `createdAt`, or `updatedAt`, with `-` for descending; `page` defaults to 1,
@@ -994,19 +1012,19 @@ SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to D
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
 backend also implements Representative submission/pre-approval registration,
-Admin registration review, Auth V1, Admin account management, Admin POI
-management, and development-only SimulationPreview; the relevant HTTP contracts
+Staff registration review, Auth V1, Admin account management, Staff legacy POI
+catalog management, and development-only SimulationPreview; the relevant HTTP contracts
 are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestration,
 invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
-Under ADR-0012 as amended by `docs/decisions/0017-admin-route-management.md`,
-dwell is fixed in RouteStops and Admin can edit unreferenced Route configuration
-through CRUD. Technical staff still verify physical execution; there is no
+Under ADR-0012 and the original CRUD slice in `docs/decisions/0017-admin-route-management.md`,
+dwell is fixed in RouteStops and Staff can edit unreferenced Route configuration
+through CRUD under current ADR-0020 ownership. Technical staff still verify physical execution; there is no
 per-Tour dwell editor. The old all-Staff/all-Tours rule is superseded: target
 operation requires an explicitly assigned Staff Operator. Current schema has no
 assignment field; CreatedByUserId is attribution only. Staff target invitation
-support is separate from current Admin/Representative endpoints. All state,
+support is separate from current Staff/Representative endpoints. All state,
 readiness, time and robot-claim checks still apply. RowVersion must be checked on writes;
 only a committed winning decision may lead to robot dispatch.
 
@@ -1096,7 +1114,7 @@ through the existing UnitOfWork. Active roster rows reserve normalized
 the same Tour. REJECTED/CANCELLED release that reservation; resubmit rechecks.
 No alias canonicalization or name matching is applied. Conflicts do not expose
 another group's data. Replaced rows become inactive; no invitation is created.
-Future Admin review and Tour-state writers must follow the same Tour-first lock
+Staff review and Tour-state writers must follow the same Tour-first lock
 order and recheck effective emails before APPROVED.
 
 Create idempotency is durable: AuditLogs.CorrelationId is scoped by actor,
@@ -1105,20 +1123,23 @@ same lock/transaction. Replaying a committed key returns its original ID,
 even after a state change; it never edits the original registration. A fresh
 key creates another group. Audit contains identifiers/actions only, no roster
 PII. Invitation/email/session, branch runtime and voting are
-outside this slice. Admin review is implemented separately below; Admin/Staff
+outside this slice. Staff review is implemented separately below; Admin/Staff
 Tour preview mocks continue to use their own simulation records.
 
-#### 3.2.2 Admin registration review HTTP boundary (implemented)
+#### 3.2.2 Staff registration review HTTP boundary (legacy aggregate workflow)
 
 This integrates `backend/` and `web/` against the existing v1.1 schema; no
-schema change is required. All endpoints require the Admin JWT role.
+schema change is required. Review list/detail/approve/reject require the Staff
+JWT role under `/api/staff/manage/registrations`; `/api/admin/registrations`
+is a Staff-only compatibility alias. The direct email-correction command in
+§3.2.4 remains Admin-only pending the target request/review workflow.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | /api/admin/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
-| GET | /api/admin/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
-| POST | /api/admin/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
-| POST | /api/admin/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
+| GET | /api/staff/manage/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
+| GET | /api/staff/manage/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
+| POST | /api/staff/manage/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
+| POST | /api/staff/manage/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
 
 Collections use BaseResponse/PagedResponse and page/size/search/sort; expand is
 unsupported. Search covers school, group, Representative full name and Tour name.
@@ -1126,7 +1147,7 @@ Sort supports submittedAt (default, oldest first), updatedAt and groupName, with
 optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
 from/to are offset-qualified instants filtering Tour scheduled time, inclusive
 lower/exclusive upper bound; the web converts calendar dates using UTC+7.
-Unknown IDs return 404. Anonymous/non-Admin requests return 401/403.
+Unknown IDs return 404. Anonymous/non-Staff requests return 401/403.
 
 Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
 versions must be 8-byte base64 SQL rowversions, reason is required for rejection
@@ -1173,7 +1194,7 @@ separate from demo caches. Existing Admin Tour/dashboard review drawers,
 invitation demos, Staff/Student simulations and legacy contracts remain mock;
 their links use the mock Tour review consumer rather than sending fixture IDs
 to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
-The Admin sidebar "Chờ duyệt" badge links to the live queue, so it reads
+The Staff sidebar "Chờ duyệt" badge links to the live queue, so it reads
 `pagination.totalItems` of the same SUBMITTED query; the dashboard and bell stay
 simulated. Representative lists/details refetch from SQL and show committed review state.
 
@@ -1199,10 +1220,10 @@ backend/docs/invitations-resend.md. This integrates backend and web without a
 schema change. Enabled approval atomically issues/queues one private invitation
 per active approved row; failed mail never reverses approval or changes Tour state.
 
-Admin or owner Representative GET /api/registrations/{registrationId}/invitations
+Staff or owner Representative GET /api/registrations/{registrationId}/invitations
 returns enabled/canIssue and items with approved row identity, version, expiry,
 revocation, latest email status and action gates. Codes/hashes/ciphertext/session
-credentials are never returned. Staff-only gets 403, another owner's group 404.
+credentials are never returned. Staff has organization-wide support; a Representative can access only their own group's invitations; Admin is denied.
 POST the same path + /issue with requestId (UUID), expectedRowVersion
 (registration), expectedTourRowVersion to fill missing invitations of previously
 approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
@@ -1254,7 +1275,7 @@ allowed; no session/invitation/Tour → generic 401. No roster, invitation or
 account data. Implementation: `Features/StudentTour/GetStudentTourViewQuery.cs`,
 `EfStudentTourViewReader`, `Api/Controllers/StudentTourController.cs`.
 
-Live Admin review and owner Representative detail share real invitation support.
+Live Staff review and owner Representative detail share real invitation support.
 SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state, then
 show the same waiting-room, live and end screens as the demo, filled only from
 join/session and /view (polled every 5 s while RUNNING, 30 s otherwise). The page
@@ -1270,19 +1291,21 @@ HTTPS and browser cookie/local-network permissions still apply to local BE use.
 
 #### 3.2.4 Admin roster email correction (implemented)
 
-This integrates backend and the live Admin registration drawer without a schema
-change. Business authority is scope Section 5.2; it is a single-row correction,
+This preserves the legacy backend Admin-only correction endpoint; it is not
+integrated into the live Staff registration drawer or target request/review flow.
+Business authority is the historical scope in Section 5.2; it is a single-row correction,
 not approval reversal or roster replacement.
 
 POST /api/admin/registrations/{id}/roster/{rowId}/email requires the Admin JWT
-role. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
+role. This legacy operation is not exposed by the Staff UI; the target
+row-level request/review workflow is pending. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
 expectedRosterRowVersion, expectedInvitationRowVersion?}. UUID requestId and
 8-byte base64 version tokens are required; the invitation token is null only
 when the selected row has no invitation. Unknown JSON properties are rejected;
 actor comes from JWT sub. BaseResponse returns null on committed success;
 clients refetch detail and invitation support.
 
-Admin GET detail now adds correctEmail {allowed, reason}; each active roster row
+Staff GET detail includes correctEmail {allowed, reason}; each active roster row
 adds id, rowVersion and nullable invitationRowVersion. These tokens and the
 roster are read under the existing Tour snapshot lock. Representative input and
 detail contracts are unchanged. Row ID, never row number/name, selects the write.
@@ -1294,12 +1317,12 @@ active rows in the same registration and the existing SUBMITTED/APPROVED
 Tour-wide reservations. Normalization/format/length match registration input;
 no alias canonicalization. The selected active row retains ID, name, type and
 class; only Email/UpdatedAt change. Registration UpdatedAt/version advances so
-opened Representative replacements and Admin decisions become stale. Review
+opened Representative replacements and Staff decisions become stale. Review
 metadata and registration state are preserved.
 
 SUBMITTED and REJECTED may be corrected without sending or granting access;
 REJECTED retains its reason/reviewer and still needs Representative resubmit and
-Admin approval. CANCELLED/unknown states are refused. Any invitation history on
+Staff approval. CANCELLED/unknown states are refused. Any invitation history on
 a non-approved registration blocks correction, consistent with existing review
 and Representative boundaries. READY requires reopening; RUNNING and terminal
 Tours are refused. The real Tour reopen endpoint is still separate implementation
@@ -1380,11 +1403,11 @@ constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
 The backend implements development SimulationPreview, user JWT login/session
-authentication, Representative owned registration management, Admin account,
-POI, Route and Tour preparation management, Admin registration review,
+authentication, Representative-owned registration management, Admin account management,
+Staff POI, Route and Tour preparation management and registration review,
 invitation support, Student access, authenticated Fleet Sync v1, and the
 Staff-authorized Operations Hub projection. Admin role authorization is
-enforced for Admin APIs; invitation support applies owner/Admin rules and
+enforced for Admin APIs; invitation support grants Staff-wide support and owner-Representative access.
 Student access applies invitation/session rules. Runtime branch-request,
 command/result, dispatch, and Tour runtime APIs remain unimplemented. Latest
 fleet state is single-process memory; multiple instances need shared-state and
