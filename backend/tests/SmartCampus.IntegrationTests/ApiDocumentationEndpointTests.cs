@@ -73,9 +73,47 @@ public sealed class ApiDocumentationEndpointTests
         var root = json.RootElement;
         Assert.StartsWith("3.", root.GetProperty("openapi").GetString());
         var paths = root.GetProperty("paths");
+        Assert.Equal("[Admin] Liệt kê và tìm tài khoản", paths.GetProperty("/api/admin/accounts").GetProperty("get").GetProperty("summary").GetString());
         foreach (var path in new[] { "/api/auth/login", "/api/admin/accounts", "/api/representative/tours", "/health/ready" })
             Assert.True(paths.TryGetProperty(path, out _), $"OpenAPI document is missing {path}.");
         Assert.False(paths.TryGetProperty("/api/simulation/pose", out _));
+
+        foreach (var path in paths.EnumerateObject())
+        foreach (var method in path.Value.EnumerateObject().Where(property =>
+                     property.Name is "get" or "post" or "put" or "patch" or "delete" or "head" or "options" or "trace"))
+        {
+            var operation = method.Value;
+            Assert.True(operation.TryGetProperty("summary", out var summary), $"Missing summary: {method.Name} {path.Name}");
+            Assert.False(string.IsNullOrWhiteSpace(summary.GetString()), $"Empty summary: {method.Name} {path.Name}");
+            Assert.True(operation.TryGetProperty("description", out var description), $"Missing description: {method.Name} {path.Name}");
+            Assert.False(string.IsNullOrWhiteSpace(description.GetString()), $"Empty description: {method.Name} {path.Name}");
+            Assert.NotEmpty(operation.GetProperty("tags").EnumerateArray());
+        }
+
+        var upload = paths.GetProperty("/api/technical/map-versions").GetProperty("post");
+        Assert.Equal("[Technical Staff] Upload gói ROS map và tạo phiên bản", upload.GetProperty("summary").GetString());
+        Assert.Contains("does not deploy", upload.GetProperty("description").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Technical Staff — Maps", upload.GetProperty("tags")[0].GetString());
+        Assert.True(upload.GetProperty("security")[0].TryGetProperty("Bearer", out _));
+
+        var proposal = paths.GetProperty("/api/staff/poi-proposals/{id}/submit").GetProperty("post");
+        Assert.Equal("Tour Staff — POI Proposals", proposal.GetProperty("tags")[0].GetString());
+        Assert.Contains("does not mean the POI has passed", proposal.GetProperty("description").GetString(), StringComparison.Ordinal);
+
+        var verification = paths.GetProperty("/api/technical/poi-proposals/{id}/revisions/{revisionNumber}/verification").GetProperty("post");
+        Assert.Equal("Technical Staff — POI Verification", verification.GetProperty("tags")[0].GetString());
+        Assert.Contains("navigation fingerprint", verification.GetProperty("description").GetString(), StringComparison.Ordinal);
+
+        var legacyPoi = paths.GetProperty("/api/admin/pois").GetProperty("post");
+        Assert.StartsWith("[LEGACY", legacyPoi.GetProperty("summary").GetString(), StringComparison.Ordinal);
+        Assert.Equal("LEGACY — Admin POI URL (Staff-only alias)", legacyPoi.GetProperty("tags")[0].GetString());
+        Assert.Contains("Current backend permission is Staff", legacyPoi.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("/api/staff/poi-proposals", legacyPoi.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.True(legacyPoi.GetProperty("security")[0].TryGetProperty("Bearer", out _));
+
+        var legacyEmailCorrection = paths.GetProperty("/api/admin/registrations/{id}/roster/{rowId}/email").GetProperty("post");
+        Assert.Contains("currently requires Admin", legacyEmailCorrection.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.True(legacyEmailCorrection.GetProperty("security")[0].TryGetProperty("Bearer", out _));
 
         var bearer = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
         Assert.Equal("http", bearer.GetProperty("type").GetString());
