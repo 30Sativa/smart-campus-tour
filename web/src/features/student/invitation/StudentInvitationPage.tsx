@@ -7,6 +7,7 @@ import { StudentWaitingRoom } from '../components/StudentWaitingRoom'
 import { StudentLiveView } from '../components/StudentLiveView'
 import { StudentEndScreen } from '../components/StudentEndScreen'
 import { LiveStudentAiAssistant } from '../components/LiveStudentAiAssistant'
+import { FALLBACK_BADGE } from '../components/StudentVideoPlayer'
 import { buildLiveSnapshot, getStudentTourView, isVideoFile, type StudentTourInfo } from './student-tour-view'
 import '../../landing/landing.css'
 import '../student.css'
@@ -29,6 +30,7 @@ function accessError(error: unknown) {
   }
   return 'Không kết nối được hệ thống. Vui lòng thử lại.'
 }
+export const SESSION_CHECK_RUNNING_MS = 5000
 const date = (stamp: string) => new Date(stamp).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 
 /** The drifting light behind every student screen (decorative). */
@@ -39,7 +41,7 @@ function Backdrop() {
 function FallbackVideoLink({ url }: { url: string | null }) {
   if (!url) return null
   return <p className="st-invitation-fallback">
-    <a href={url} target="_blank" rel="noreferrer">Xem video dự phòng</a>
+    <a href={url} target="_blank" rel="noreferrer">Xem video dự phòng (chế độ suy giảm)</a>
   </p>
 }
 
@@ -61,7 +63,10 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
     onSuccess: () => { setLeft(true); client.setQueryData(key, null); join.reset() } })
   // A heartbeat begun before join/leave must not overwrite the mutation's committed state.
   const session = useQuery({ queryKey: key, queryFn: ({ signal }) => access(tourId, 'session', undefined, signal),
-    retry: false, enabled: !left && !join.isPending && !leave.isPending, refetchInterval: 30000, refetchIntervalInBackground: true })
+    retry: false, enabled: !left && !join.isPending && !leave.isPending, refetchIntervalInBackground: true,
+    // SRS v1.9: a revoked or reissued invitation must stop playback within 10 s,
+    // so a running Tour re-checks the session every 5 s.
+    refetchInterval: query => query.state.data?.tourState === 'RUNNING' ? SESSION_CHECK_RUNNING_MS : 30000 })
   const accessDenied = session.isError && session.error instanceof ApiError && [401, 403, 409].includes(session.error.status)
   const info = left || accessDenied ? null : session.data
   // Route and progress; a failure only hides the stops, the session above stays the access authority.
@@ -106,7 +111,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
           ? 'Thuyết minh sẽ hiện khi robot tới từng điểm dừng. Trong lúc chờ, bạn xem thẻ Lộ trình hoặc hỏi Trợ lý AI nhé.'
           : undefined}
         video={{
-          badge: snapshot.videoStreamUrl ? 'Video dự phòng' : undefined,
+          badge: snapshot.videoStreamUrl ? FALLBACK_BADGE : undefined,
           emptyMessage: 'Livestream chưa được kết nối cho buổi này. Bạn vẫn có thể theo dõi lộ trình và hỏi Trợ lý AI.',
         }}
         notice={!isVideoFile(fallback) && <FallbackVideoLink url={fallback} />}

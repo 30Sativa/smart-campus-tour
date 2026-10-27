@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminRouteCatalogPage from '../../../routes/admin/AdminRouteCatalogPage'
-import AdminRouteDetailsPage from '../../../routes/admin/AdminRouteDetailsPage'
-import AdminRouteFormPage from '../../../routes/admin/AdminRouteFormPage'
+import AdminRouteCatalogPage from '../../../routes/staff/manage/AdminRouteCatalogPage'
+import AdminRouteDetailsPage from '../../../routes/staff/manage/AdminRouteDetailsPage'
+import AdminRouteFormPage from '../../../routes/staff/manage/AdminRouteFormPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import type { RouteDetails } from './types'
 
@@ -36,10 +36,10 @@ function api(handler: (path: string, init?: RequestInit) => Response | Promise<R
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/admin/routes" element={<AdminRouteCatalogPage />} />
-    <Route path="/admin/routes/new" element={<AdminRouteFormPage />} />
-    <Route path="/admin/routes/:routeId" element={<AdminRouteDetailsPage />} />
-    <Route path="/admin/routes/:routeId/edit" element={<AdminRouteFormPage />} />
+    <Route path="/staff/manage/routes" element={<AdminRouteCatalogPage />} />
+    <Route path="/staff/manage/routes/new" element={<AdminRouteFormPage />} />
+    <Route path="/staff/manage/routes/:routeId" element={<AdminRouteDetailsPage />} />
+    <Route path="/staff/manage/routes/:routeId/edit" element={<AdminRouteFormPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
@@ -48,7 +48,7 @@ afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 describe('live Route management', () => {
   it('opens the create Route form from the catalog without loading the removed preview', async () => {
     api(() => response({ data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }))
-    renderAt('/admin/routes')
+    renderAt('/staff/manage/routes')
     expect(await screen.findByText('Chưa có tuyến phù hợp')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: 'Tạo tuyến' }))
     expect(await screen.findByRole('heading', { name: 'Tạo tuyến' })).toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('live Route management', () => {
       if (init?.method === 'POST') { posted = JSON.parse(String(init.body)) as typeof posted; return response({ data: { id: 'route-1' } }) }
       return detail()
     })
-    renderAt('/admin/routes/new')
+    renderAt('/staff/manage/routes/new')
     fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Tuyến đầu tiên' } })
     await screen.findByRole('option', { name: 'map2-v1 / map · 2 POI' })
     fireEvent.change(screen.getByLabelText('Map'), { target: { value: JSON.stringify(['map2-v1', 'map']) } })
@@ -91,7 +91,7 @@ describe('live Route management', () => {
   it('retains a draft after a stale SQL revision conflict and never automatically retries the write', async () => {
     const fetchMock = api((_, init) => init?.method === 'PUT'
       ? response({ success: false, errors: { code: 'STALE_ROUTE' } }, 409) : detail())
-    renderAt('/admin/routes/route-1/edit')
+    renderAt('/staff/manage/routes/route-1/edit')
     const name = await screen.findByLabelText('Tên tuyến')
     fireEvent.change(name, { target: { value: 'Nội dung chưa lưu' } })
     fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
@@ -106,7 +106,7 @@ describe('live Route management', () => {
 
   it('freezes a referenced itinerary and deletion while allowing metadata correction', async () => {
     api(() => detail(route({ usage: { hasReferences: true, hasReadyOrRunningTours: false, canEditConfiguration: false, canEditMetadataAndAvailability: true, canDelete: false } })))
-    renderAt('/admin/routes/route-1/edit')
+    renderAt('/staff/manage/routes/route-1/edit')
     expect(await screen.findByLabelText('Tên tuyến')).toBeEnabled()
     expect(await screen.findByLabelText('Map')).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
@@ -119,7 +119,7 @@ describe('live Route management', () => {
       if (init?.method === 'POST') { posted = JSON.parse(String(init.body)) as typeof posted; return response({ data: { id: 'route-2' } }) }
       return detail(route({ isActive: true, usage: { hasReferences: true, hasReadyOrRunningTours: true, canEditConfiguration: false, canEditMetadataAndAvailability: false, canDelete: false } }))
     })
-    renderAt('/admin/routes/new?copyFrom=route-1')
+    renderAt('/staff/manage/routes/new?copyFrom=route-1')
     expect(await screen.findByLabelText('Tên tuyến')).toHaveValue('Tuyến thử (bản sao)')
     expect(await screen.findByLabelText('Map')).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
@@ -133,7 +133,7 @@ describe('live Route management', () => {
 
   it('shows API failure with retry and never serves prepared-route demo data', async () => {
     const fetchMock = api(() => response({ success: false }, 500))
-    renderAt('/admin/routes')
+    renderAt('/staff/manage/routes')
     expect(await screen.findByText('Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.')).toBeInTheDocument()
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
@@ -142,7 +142,7 @@ describe('live Route management', () => {
 
   it('confirms availability changes and sends the latest detail revision', async () => {
     const fetchMock = api((_, init) => init?.method === 'POST' ? response({ success: true }) : detail())
-    renderAt('/admin/routes/route-1')
+    renderAt('/staff/manage/routes/route-1')
     fireEvent.click(await screen.findByRole('button', { name: 'Cho phép sử dụng' }))
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }))

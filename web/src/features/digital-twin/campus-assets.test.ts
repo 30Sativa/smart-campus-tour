@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'

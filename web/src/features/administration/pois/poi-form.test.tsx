@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminPoiFormPage from '../../../routes/admin/AdminPoiFormPage'
-import AdminPoisPage from '../../../routes/admin/AdminPoisPage'
+import AdminPoiFormPage from '../../../routes/staff/manage/AdminPoiFormPage'
+import AdminPoisPage from '../../../routes/staff/manage/AdminPoisPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import { poiQueryKeys } from './hooks'
 import type { PoiDetails } from './types'
@@ -52,12 +52,12 @@ function renderAt(path: string, showCatalog = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={showCatalog ? ['/admin/pois', path] : [path]}>
+      <MemoryRouter initialEntries={showCatalog ? ['/staff/manage/pois', path] : [path]}>
         {showCatalog && <HistoryControls />}
         <Routes>
-          <Route path="/admin/pois" element={showCatalog ? <AdminPoisPage /> : <div>Danh sách POI</div>} />
-          <Route path="/admin/pois/new" element={<AdminPoiFormPage />} />
-          <Route path="/admin/pois/:poiId" element={<AdminPoiFormPage />} />
+          <Route path="/staff/manage/pois" element={showCatalog ? <AdminPoisPage /> : <div>Danh sách POI</div>} />
+          <Route path="/staff/manage/pois/new" element={<AdminPoiFormPage />} />
+          <Route path="/staff/manage/pois/:poiId" element={<AdminPoiFormPage />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -109,7 +109,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: [poiDetails({ id: 'poi-created', name: 'New library' })], pagination: { page: 1, pageSize: 20, totalPages: 1, totalItems: 1 } })
     })
-    const { client } = renderAt('/admin/pois/new', true)
+    const { client } = renderAt('/staff/manage/pois/new', true)
     client.setQueryDefaults(poiQueryKeys.all, { staleTime: Infinity })
     client.setQueryData(poiQueryKeys.list({ sort: 'name', page: 1, size: 20 }), {
       data: [], pagination: { page: 1, pageSize: 20, totalPages: 1, totalItems: 0 },
@@ -133,29 +133,29 @@ describe('Admin POI form', () => {
     await waitFor(() => expect(createPayload).not.toBeNull())
     expect(createPayload).toMatchObject({ name: 'New library', mapKey: 'map2-v2', mapFrame: 'map', yaw: 0 })
     expect(await screen.findByRole('heading', { name: 'Quản lý POI' })).toBeVisible()
-    expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois')
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/staff/manage/pois')
     expect(screen.getByRole('status')).toHaveTextContent('Đã tạo POI “New library” thành công.')
     expect(screen.getByRole('status').parentElement).toHaveFocus()
-    expect(await screen.findByRole('link', { name: 'New library' })).toHaveAttribute('href', '/admin/pois/poi-created')
+    expect(await screen.findByRole('link', { name: 'New library' })).toHaveAttribute('href', '/staff/manage/pois/poi-created')
     expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/admin/pois/poi-created'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Đóng thông báo' }))
     expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'New library' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Browser Back' }))
-    await waitFor(() => expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois'))
+    await waitFor(() => expect(screen.getByLabelText('Current path')).toHaveTextContent('/staff/manage/pois'))
     expect(screen.queryByLabelText('Tên POI')).not.toBeInTheDocument()
   })
 
   it('keeps the create draft and displays an error without a success notice when the API rejects it', async () => {
     stubApi(() => jsonResponse({ success: false, message: 'POI creation failed.', data: null, errors: null }, 400))
-    renderAt('/admin/pois/new', true)
+    renderAt('/staff/manage/pois/new', true)
     fillCreateForm()
     fireEvent.change(screen.getByLabelText('Yaw (rad)'), { target: { value: '0' } })
     reviewCreate()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo POI không khả dụng' }))
     expect(await screen.findByText('POI creation failed.')).toBeVisible()
-    expect(screen.getByLabelText('Current path')).toHaveTextContent('/admin/pois/new')
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/staff/manage/pois/new')
     expect(screen.getByLabelText('Tên POI')).toHaveValue('New library')
     expect(screen.getByLabelText('X (m)')).toHaveValue(0)
     expect(screen.queryByText(/Đã tạo POI/)).not.toBeInTheDocument()
@@ -168,8 +168,8 @@ describe('Admin POI form', () => {
     try {
       stubApi(() => jsonResponse({ success: false, message: 'Catalog unavailable.', data: null }, 500))
       render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter initialEntries={[{ pathname: '/admin/pois', state: { createdPoiName: 'Saved POI' } }]}>
-          <Routes><Route path="/admin/pois" element={<AdminPoisPage />} /></Routes>
+        <MemoryRouter initialEntries={[{ pathname: '/staff/manage/pois', state: { createdPoiName: 'Saved POI' } }]}>
+          <Routes><Route path="/staff/manage/pois" element={<AdminPoisPage />} /></Routes>
         </MemoryRouter>
       </QueryClientProvider>)
       expect(await screen.findByText('Không thể tải danh sách POI.')).toBeVisible()
@@ -206,7 +206,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, message: 'POIs retrieved.', data: [], pagination: {}, errors: null })
     })
-    const { client } = renderAt('/admin/pois/poi-1')
+    const { client } = renderAt('/staff/manage/pois/poi-1')
 
     const name = await screen.findByLabelText('Tên POI')
     await waitFor(() => expect(name).toHaveValue('Library'))
@@ -245,7 +245,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, message: 'POIs retrieved.', data: [], pagination: {}, errors: null })
     })
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
 
     const yaw = await screen.findByLabelText('Yaw (rad)')
     expect(yaw).toBeDisabled()
@@ -265,7 +265,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: poiDetails({ id: 'created', mapKey: 'map2-v2', x: 5.025, y: -5.025, yaw: 1.570796 }) })
     })
-    renderAt('/admin/pois/new')
+    renderAt('/staff/manage/pois/new')
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Map-picked POI' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }))
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
@@ -285,7 +285,7 @@ describe('Admin POI form', () => {
 
   it.each(['new', 'poi-1'])('preserves exact manual coordinates when switching methods for %s', async (id) => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
-    renderAt(`/admin/pois/${id}`)
+    renderAt(`/staff/manage/pois/${id}`)
     const name = await screen.findByLabelText('Tên POI')
     if (id === 'new') fireEvent.change(name, { target: { value: 'Tour Start' } })
     openPoseStep()
@@ -319,7 +319,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: poiDetails({ id: 'created' }) })
     })
-    renderAt('/admin/pois/new')
+    renderAt('/staff/manage/pois/new')
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Mixed entry' } })
     openPoseStep()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
@@ -334,7 +334,7 @@ describe('Admin POI form', () => {
 
   it('keeps manual entry selected after changing maps and requires a new pose', async () => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByLabelText('Tên POI')
     openPoseStep()
     fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
@@ -358,7 +358,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) })
     })
-    renderAt(`/admin/pois/${id}`)
+    renderAt(`/staff/manage/pois/${id}`)
     const name = await screen.findByLabelText('Tên POI')
     if (id === 'new') fireEvent.change(name, { target: { value: 'My POI' } })
     const originalName = (name as HTMLInputElement).value
@@ -386,7 +386,7 @@ describe('Admin POI form', () => {
 
   it('keeps the draft untouched on YAML errors and permits retrying the same file', async () => {
     stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v2' }) }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByLabelText('Tên POI')
     openPoseStep()
     fireEvent.click(screen.getByRole('radio', { name: 'Nhập tọa độ thủ công' }))
@@ -404,7 +404,7 @@ describe('Admin POI form', () => {
 
   it.each(['Escape', 'pan'] as const)('shows validation after %s cancels heading with an empty yaw in map entry', async (cancel) => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1' }) }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByLabelText('Tên POI')
     openPoseStep()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
@@ -424,7 +424,7 @@ describe('Admin POI form', () => {
 
   it('shows validation when a map rebind leaves the pose empty in map entry', async () => {
     const fetchMock = stubApi(() => jsonResponse({ success: true, data: poiDetails() }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
     openPoseStep()
     fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map2-v1' } })
@@ -446,7 +446,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: original })
     })
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
     expect(screen.queryByRole('group', { name: 'Bản đồ occupancy ROS' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Content correction' } })
@@ -463,7 +463,7 @@ describe('Admin POI form', () => {
 
   it('does not draw a map2 pose in the wrong frame', async () => {
     stubApi(() => jsonResponse({ success: true, data: poiDetails({ mapKey: 'map2-v1', mapFrame: 'odom' }) }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByText(/Chưa có ảnh cho đúng map\/frame này/)
     expect(screen.queryByRole('group', { name: 'Bản đồ occupancy ROS' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('MapFrame')).toHaveValue('odom')
@@ -474,7 +474,7 @@ describe('Admin POI form', () => {
       mapKey: 'map2-v1',
       usage: { hasRouteStopReferences: true, hasHistoricalTourReferences: false, hasReadyOrRunningTours: true, canEditPose: false, canEditContentAndAvailability: false },
     }) }))
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByLabelText('Tên POI')
     openPoseStep()
     await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
@@ -497,7 +497,7 @@ describe('Admin POI form', () => {
       }
       return jsonResponse({ success: true, data: stored })
     })
-    renderAt('/admin/pois/poi-1')
+    renderAt('/staff/manage/pois/poi-1')
     await screen.findByLabelText('Mô tả')
     fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Copy only' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }))

@@ -29,7 +29,7 @@ export default function RepDashboardPage() {
       <div className="rep-stats" style={{ marginTop: 'clamp(40px, 5vw, 64px)' }}>
         <div className="rep-stat"><b className="rep-stat-value num">{tours.data?.pagination.totalItems}</b><span className="rep-stat-label">Buổi nhận đăng ký<small>Các buổi đang nhận đăng ký đoàn</small></span></div>
         <div className="rep-stat"><b className="rep-stat-value num">{registrations.data?.pagination.totalItems}</b><span className="rep-stat-label">Đăng ký của tôi<small>Mọi đoàn bạn đã gửi</small></span></div>
-        <div className="rep-stat"><b className="rep-stat-value num">{pending.data?.pagination.totalItems}</b><span className="rep-stat-label">Chờ duyệt<small>Đang đợi Admin xem danh sách</small></span></div>
+        <div className="rep-stat"><b className="rep-stat-value num">{pending.data?.pagination.totalItems}</b><span className="rep-stat-label">Chờ duyệt<small>Đang đợi nhà trường xem danh sách</small></span></div>
       </div>
       <RepSection kicker="01 / Buổi tham quan" title="Buổi đang nhận đăng ký" action={<Link to="/dai-dien/buoi" className="rep-text-link">Xem tất cả buổi<ArrowRight size={16} aria-hidden="true" /></Link>}>
         {tours.data?.data.length ? <div className="rep-tour-grid">{tours.data.data.map((tour, index) => <TourCard key={tour.id} tour={tour} compact visualIndex={index} />)}</div>

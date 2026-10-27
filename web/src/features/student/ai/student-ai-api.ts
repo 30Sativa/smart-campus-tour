@@ -55,6 +55,8 @@ export function describeAskError(error: unknown): { text: string; retryable: boo
     if (error.status === 409 && code === 'TOUR_NOT_RUNNING') return { text: 'Trợ lý AI chỉ dùng được khi buổi tham quan đang diễn ra.', retryable: false }
     if (error.status === 409 && code === 'QUESTION_ID_REUSED') return { text: 'Câu hỏi này bị trùng mã với câu khác. Hãy gửi lại thành câu hỏi mới.', retryable: false }
     if (error.status === 429) return { text: 'Bạn hỏi hơi nhanh. Đợi một chút rồi hỏi tiếp nhé.', retryable: true }
+    // SRS v1.9: over the instance limit (8 executing, 20 queued) the backend answers busy. Busy is not an answer.
+    if (error.status === 503 && code === 'ASSISTANT_BUSY') return { text: 'Trợ lý AI đang nhận nhiều câu hỏi cùng lúc nên chưa trả lời câu này. Bạn thử lại sau vài giây nhé.', retryable: true }
     if (error.status === 503) return { text: 'Trợ lý AI đang bận hoặc tạm thời không dùng được. Bạn thử lại sau ít phút nhé.', retryable: true }
     if (error.status === 504) return { text: 'Trợ lý AI trả lời quá lâu. Bạn thử lại nhé.', retryable: true }
   }

@@ -191,7 +191,7 @@ describe('LoginPage', () => {
     expect(useAuthStore.getState().user?.role).toBe(role)
   })
 
-  it('rejects roles outside the three Auth V1 roles', async () => {
+  it('rejects roles outside the supported application roles', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(authResponse('Visitor')))
     renderPage()
     fillCredentials()

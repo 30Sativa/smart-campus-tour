@@ -102,7 +102,7 @@ export function RepAttention({ registration: r }: { registration: RegistrationSu
       <span className="rep-attention-icon" aria-hidden="true"><CircleAlert size={20} /></span>
       <div className="rep-attention-copy">
         <b>{group} cần bạn xử lý</b>
-        <p>Admin đã từ chối đăng ký cho {r.tourName}. Sửa và gửi lại khi buổi còn nhận đăng ký.</p>
+        <p>Nhà trường đã từ chối đăng ký cho {r.tourName}. Sửa và gửi lại khi buổi còn nhận đăng ký.</p>
       </div>
       <Link to={`/dai-dien/dang-ky/${r.id}`} className={repButton('dark', 'sm')}>Xem lý do và sửa<ArrowRight size={15} className="rep-arrow" aria-hidden="true" /></Link>
     </div>

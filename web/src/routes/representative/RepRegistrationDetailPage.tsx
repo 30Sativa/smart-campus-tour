@@ -30,10 +30,10 @@ export default function RepRegistrationDetailPage() {
   const edit = r.allowedActions.edit.allowed ? r.allowedActions.edit : r.allowedActions.resubmit
   const events = [
     { title: 'Bạn gửi đăng ký', text: `${summary.rowCount} dòng lời mời`, at: summary.submittedAt, color: '#87b661' },
-    ...(summary.state === 'REJECTED' ? [{ title: 'Admin từ chối', text: r.rejectionReason || 'Không có lý do được lưu.', at: r.reviewedAt ?? summary.updatedAt, color: 'var(--rep-bad)' }]
-      : summary.state === 'APPROVED' ? [{ title: 'Admin duyệt đăng ký', text: 'Xem trạng thái email và hỗ trợ mã ở mục Lời mời và email.', at: r.reviewedAt ?? summary.updatedAt, color: '#2c9a5f' }]
+    ...(summary.state === 'REJECTED' ? [{ title: 'Nhà trường từ chối', text: r.rejectionReason || 'Không có lý do được lưu.', at: r.reviewedAt ?? summary.updatedAt, color: 'var(--rep-bad)' }]
+      : summary.state === 'APPROVED' ? [{ title: 'Nhà trường duyệt đăng ký', text: 'Xem trạng thái email và hỗ trợ mã ở mục Lời mời và email.', at: r.reviewedAt ?? summary.updatedAt, color: '#2c9a5f' }]
       : summary.state === 'CANCELLED' ? [{ title: 'Đăng ký đã hủy', text: 'Đoàn không còn chờ duyệt.', at: summary.updatedAt, color: 'var(--rep-ink-3)' }]
-      : [{ title: 'Đang chờ Admin duyệt', text: 'Bạn vẫn có thể sửa danh sách trong lúc chờ.', at: summary.updatedAt, color: '#d39a2c' }]),
+      : [{ title: 'Đang chờ nhà trường duyệt', text: 'Bạn vẫn có thể sửa danh sách trong lúc chờ.', at: summary.updatedAt, color: '#d39a2c' }]),
   ]
   const group = groupLabel(summary)
   return <RepPage>
@@ -44,7 +44,7 @@ export default function RepRegistrationDetailPage() {
       <span className="rep-stamp" aria-hidden="true">ĐÃ GỬI</span>
       <small>ĐÃ GỬI ĐĂNG KÝ</small>
       <h2>{group ? `${group}, ${summary.schoolName}` : summary.schoolName}</h2>
-      <p>Admin sẽ duyệt danh sách {summary.rowCount} dòng lời mời. Kết quả hiện ở đây và trong Đăng ký của tôi; hỗ trợ gửi lời mời riêng sẽ được cung cấp trong bước tiếp theo.</p>
+      <p>Nhà trường sẽ duyệt danh sách {summary.rowCount} dòng lời mời. Kết quả hiện ở đây và trong Đăng ký của tôi; hỗ trợ gửi lời mời riêng sẽ được cung cấp trong bước tiếp theo.</p>
     </div>}
     {message && <div style={{ marginBottom: 20 }}><Callout title={message} role="status" /></div>}
     {summary.state === 'APPROVED' && <div style={{ marginBottom: 20 }}><InvitationPanel registrationId={summary.id} rowVersion={r.rowVersion} tourRowVersion={r.tourRowVersion} /></div>}
@@ -58,7 +58,7 @@ export default function RepRegistrationDetailPage() {
         { label: 'Giờ dự kiến', value: formatDateTime(summary.tourScheduledStartAt) },
         { label: 'Gửi đăng ký', value: formatDateTime(summary.submittedAt) },
         { label: 'Cập nhật', value: formatDateTime(summary.updatedAt) },
-        { label: 'Admin duyệt', value: r.reviewedAt ? formatDateTime(r.reviewedAt) : '-' },
+        { label: 'Nhà trường duyệt', value: r.reviewedAt ? formatDateTime(r.reviewedAt) : '-' },
       ]} /></Panel>
       <Panel title={`Danh sách ${summary.rowCount} lời mời`}><RosterPreview rows={r.roster} variant="representative" /></Panel>
     </div><aside className="rep-aside" aria-label="Thao tác và lịch sử">

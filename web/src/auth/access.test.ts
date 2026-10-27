@@ -8,15 +8,28 @@ import { homePathForRole, isAdminRole, isStaffRole, normalizeRole } from './role
  * through a screen.
  */
 describe('area access', () => {
-  it('has exactly four roles', () => {
-    expect([...ALL_ROLES]).toEqual(['Visitor', 'Staff', 'Admin', 'Representative'])
+  it('has exactly four sign-in roles and no visitor area', () => {
+    expect([...ALL_ROLES]).toEqual(['Staff', 'Admin', 'Representative', 'TechnicalStaff'])
+    expect(AREAS.map((area) => area.id)).toEqual(['public', 'staff', 'admin', 'representative', 'technical'])
+  })
+
+  // SRS v1.9 demo acceptance 6: only Technical Staff records technical confirmation.
+  it('keeps the technical area to Technical Staff only', () => {
+    expect(areaById('technical').allows('TechnicalStaff')).toBe(true)
+    expect(areaById('technical').allows('technical_staff')).toBe(true)
+    for (const role of ['Staff', 'Admin', 'Representative', undefined]) expect(areaById('technical').allows(role)).toBe(false)
+    expect(areaById('staff').allows('TechnicalStaff')).toBe(false)
+    expect(areaById('admin').allows('TechnicalStaff')).toBe(false)
+    expect(homePathForRole('TechnicalStaff')).toBe('/technical')
+    expect(landingPathAfterLogin('TechnicalStaff', '/technical/confirmations')).toBe('/technical/confirmations')
+    expect(landingPathAfterLogin('TechnicalStaff', '/staff')).toBe('/technical')
   })
 
   // Representative added with the registration area (flow review 21/09/2026 §4).
   it('keeps the representative area to representatives only', () => {
     expect(areaById('representative').allows('Representative')).toBe(true)
     expect(areaById('representative').allows('daidien')).toBe(true)
-    for (const role of ['Visitor', 'Staff', 'Admin', undefined]) expect(areaById('representative').allows(role)).toBe(false)
+    for (const role of ['Staff', 'Admin', undefined]) expect(areaById('representative').allows(role)).toBe(false)
     expect(areaById('admin').allows('Representative')).toBe(false)
     expect(areaById('staff').allows('Representative')).toBe(false)
     expect(homePathForRole('Representative')).toBe('/dai-dien')
@@ -24,9 +37,8 @@ describe('area access', () => {
     expect(landingPathAfterLogin('Representative', '/admin')).toBe('/dai-dien')
   })
 
-  it('keeps a visitor out of operations and administration', () => {
-    expect(areaById('staff').allows('Visitor')).toBe(false)
-    expect(areaById('admin').allows('Visitor')).toBe(false)
+  it('keeps an unknown role out of every signed-in area', () => {
+    for (const area of ['staff', 'admin', 'representative', 'technical'] as const) expect(areaById(area).allows('Visitor')).toBe(false)
     expect(areaById('staff').allows(undefined)).toBe(false)
     expect(areaById('admin').allows(null)).toBe(false)
     expect(areaById('public').allows(undefined)).toBe(true)
@@ -35,11 +47,6 @@ describe('area access', () => {
   it('keeps staff out of administration', () => {
     expect(areaById('staff').allows('Staff')).toBe(true)
     expect(areaById('admin').allows('Staff')).toBe(false)
-  })
-
-  it('allows signed-in roles to browse the visitor area', () => {
-    for (const role of ALL_ROLES) expect(areaById('visitor').allows(role)).toBe(true)
-    expect(landingPathAfterLogin('Visitor', '/visit/map?destination=library')).toBe('/visit/map?destination=library')
   })
 
   it('lets an admin into both, which is the policy this app has always had', () => {
@@ -55,8 +62,9 @@ describe('area access', () => {
     }
     expect(normalizeRole('administrator')).toBe('Admin')
     expect(isAdminRole('admin')).toBe(true)
-    // Anything unrecognised is a visitor, never an accidental staff member.
-    expect(normalizeRole('superuser')).toBe('Visitor')
+    // Anything unrecognised has no role, never an accidental staff member.
+    expect(normalizeRole('superuser')).toBeNull()
+    expect(normalizeRole('Visitor')).toBeNull()
     expect(isStaffRole('superuser')).toBe(false)
   })
 
@@ -64,8 +72,8 @@ describe('area access', () => {
     expect(homePathForRole('Admin')).toBe('/admin')
     expect(homePathForRole('Staff')).toBe('/staff')
     expect(homePathForRole('CampusStaff')).toBe('/staff')
-    expect(homePathForRole('Visitor')).toBe('/visit')
-    expect(homePathForRole(undefined)).toBe('/visit')
+    expect(homePathForRole('Visitor')).toBe('/')
+    expect(homePathForRole(undefined)).toBe('/')
   })
 
   describe('landing after sign-in', () => {
@@ -87,7 +95,7 @@ describe('area access', () => {
 
     it('ignores a destination the role does not belong in', () => {
       expect(landingPathAfterLogin('Staff', '/admin')).toBe('/staff')
-      expect(landingPathAfterLogin('Visitor', '/staff')).toBe('/visit')
+      expect(landingPathAfterLogin('Visitor', '/staff')).toBe('/')
     })
 
     it('falls back to the role home when there is nothing remembered', () => {

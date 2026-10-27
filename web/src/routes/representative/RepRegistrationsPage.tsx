@@ -12,7 +12,7 @@ import type { RegistrationSummary } from '../../features/representative/api/type
 /** Active registrations shown in two blocks: still waiting on Admin (or on a fix), then approved. */
 function activeSections(items: RegistrationSummary[]) {
   return [
-    { key: 'pending', title: 'Đang chờ duyệt', hint: 'Admin đang xem hoặc cần bạn sửa', items: items.filter(r => r.state !== 'APPROVED') },
+    { key: 'pending', title: 'Đang chờ duyệt', hint: 'Nhà trường đang xem hoặc cần bạn sửa', items: items.filter(r => r.state !== 'APPROVED') },
     { key: 'approved', title: 'Đã duyệt', hint: 'Học sinh đã được gửi email mời', items: items.filter(r => r.state === 'APPROVED') },
   ].filter(section => section.items.length)
 }

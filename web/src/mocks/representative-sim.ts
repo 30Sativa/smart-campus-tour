@@ -57,7 +57,7 @@ const STATE_WORDS: Record<TourState, string> = {
 
 const LOCKED_WHY: Record<TourState, string> = {
   Scheduled: '',
-  Ready: 'Buổi tham quan đã được chốt nên đăng ký không thể chỉnh sửa. Liên hệ Admin nếu cần mở lại.',
+  Ready: 'Buổi tham quan đã được chốt nên đăng ký không thể chỉnh sửa. Liên hệ nhà trường nếu cần mở lại.',
   Running: 'Buổi đang diễn ra; đăng ký chỉ còn để xem.',
   Completed: 'Buổi đã kết thúc; đăng ký chỉ còn để xem.',
   Cancelled: 'Buổi đã bị hủy; đăng ký chỉ còn để xem.',
@@ -287,7 +287,7 @@ function registrationView(t: SimTour, reg: SimRegistration): RepresentativeRegis
 function historyOf(reg: SimRegistration) {
   const list = [...(ownLog.get(reg.id) ?? [])]
   if (reg.reviewedAt && (reg.state === 'Approved' || reg.state === 'Rejected')) {
-    list.push({ at: reg.reviewedAt, text: reg.state === 'Approved' ? 'Admin duyệt đăng ký.' : 'Admin từ chối đăng ký. Xem lý do bên trên.' })
+    list.push({ at: reg.reviewedAt, text: reg.state === 'Approved' ? 'Nhà trường duyệt đăng ký.' : 'Nhà trường từ chối đăng ký. Xem lý do bên trên.' })
   }
   if (reg.invitationSentAt) list.push({ at: reg.invitationSentAt, text: 'Admin gửi email thông tin tham gia tới địa chỉ liên hệ.' })
   return list.sort((a, b) => a.at.localeCompare(b.at))

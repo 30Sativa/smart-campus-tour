@@ -29,7 +29,7 @@ export function buildAdminTasks(tours: AdminTour[], pending: AdminRegistration[]
       tone: 'warn',
       title: reg.resubmittedAfterApproval ? `${reg.schoolName} cập nhật danh sách, cần duyệt lại` : `${reg.schoolName} chờ duyệt`,
       detail: `${reg.tourCode} · ${reg.tourName}, ${reg.studentCount} học sinh`,
-      to: `/admin/tours/${reg.tourId}?tab=registrations&review=${reg.id}`,
+      to: `/staff/manage/tours/${reg.tourId}?tab=registrations&review=${reg.id}`,
       actionLabel: 'Duyệt ngay',
       rank: 1,
       at: reg.submittedAt,
@@ -39,15 +39,15 @@ export function buildAdminTasks(tours: AdminTour[], pending: AdminRegistration[]
   for (const tour of tours) {
     const soon = new Date(tour.scheduledAt).getTime() - now < SOON_MS
     if (tour.state === 'Scheduled' && tour.allowedActions.finalize.allowed) {
-      tasks.push({ id: `final:${tour.id}`, tone: 'ok', title: `${tour.code} đủ điều kiện chốt`, detail: `${tour.name}, ${untilText(tour.scheduledAt, now)}, ${tour.counts.approved} đoàn đã duyệt`, to: `/admin/tours/${tour.id}`, actionLabel: 'Mở Tour', rank: 2, at: tour.scheduledAt })
+      tasks.push({ id: `final:${tour.id}`, tone: 'ok', title: `${tour.code} đủ điều kiện chốt`, detail: `${tour.name}, ${untilText(tour.scheduledAt, now)}, ${tour.counts.approved} đoàn đã duyệt`, to: `/staff/manage/tours/${tour.id}`, actionLabel: 'Mở Tour', rank: 2, at: tour.scheduledAt })
     } else if (tour.state === 'Scheduled' && soon) {
       const others = tour.readyBlockers.filter((line) => !line.includes('chờ duyệt'))
       if (others.length || tour.counts.submitted === 0) {
-        tasks.push({ id: `prep:${tour.id}`, tone: 'warn', title: `${tour.code} bắt đầu ${untilText(tour.scheduledAt, now)} nhưng chưa sẵn sàng`, detail: tour.readyBlockers.join(' · '), to: `/admin/tours/${tour.id}`, actionLabel: 'Xem', rank: 3, at: tour.scheduledAt })
+        tasks.push({ id: `prep:${tour.id}`, tone: 'warn', title: `${tour.code} bắt đầu ${untilText(tour.scheduledAt, now)} nhưng chưa sẵn sàng`, detail: tour.readyBlockers.join(' · '), to: `/staff/manage/tours/${tour.id}`, actionLabel: 'Xem', rank: 3, at: tour.scheduledAt })
       }
     }
     if ((tour.state === 'Scheduled' || tour.state === 'Ready') && tour.invitationsPending > 0) {
-      tasks.push({ id: `mail:${tour.id}`, tone: 'info', title: `${tour.code}: ${tour.invitationsPending} đoàn chưa được gửi thông tin tham gia`, detail: tour.name, to: `/admin/tours/${tour.id}?tab=registrations`, actionLabel: 'Mở Tour', rank: 4, at: tour.scheduledAt })
+      tasks.push({ id: `mail:${tour.id}`, tone: 'info', title: `${tour.code}: ${tour.invitationsPending} đoàn chưa được gửi thông tin tham gia`, detail: tour.name, to: `/staff/manage/tours/${tour.id}?tab=registrations`, actionLabel: 'Mở Tour', rank: 4, at: tour.scheduledAt })
     }
   }
 

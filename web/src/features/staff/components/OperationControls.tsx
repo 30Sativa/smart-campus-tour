@@ -32,6 +32,17 @@ function errorText(error: unknown) {
 }
 
 /**
+ * SRS v1.9 §3.2.c incident order: safety stop, fallback, one state-appropriate
+ * recovery attempt, then End Early if still unsafe or unrecoverable.
+ */
+const INCIDENT_STEPS = [
+  { title: 'Dừng an toàn', text: 'Robot đã đứng yên: tự dừng khi mất heartbeat, hoặc người phụ trách an toàn bấm dừng khẩn cấp.' },
+  { title: 'Chuyển fallback', text: 'Người xem được chuyển sang video dự phòng có nhãn. Đây là chế độ suy giảm.' },
+  { title: 'Thử phục hồi một lần', text: 'Chỉ một thao tác phù hợp trạng thái hiện tại, sau khi đã kiểm tra thực tế.' },
+  { title: 'Kết thúc sớm nếu chưa an toàn', text: 'Nếu vẫn không an toàn hoặc không khắc phục được, kết thúc sớm và ghi lý do.' },
+] as const
+
+/**
  * Tour Controls (scope §4.2, §11.5, §12.2).
  *
  * Normal flow: Hold at a POI and Next - frequent, so no confirmation. When the
@@ -46,6 +57,12 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const actions = tour.allowedActions
   const assist = tour.operationalStatus === 'NeedsAssistance'
+  // One recovery attempt per incident (an incident = this Tour needing assistance
+  // for this reason). Kept in the page; the server should enforce the same rule.
+  const incident = assist ? `${tour.id}:${tour.reason ?? ''}` : null
+  const [attempted, setAttempted] = useState<string | null>(null)
+  if (attempted && attempted !== incident) setAttempted(null)
+  const recoveryUsed = incident !== null && attempted === incident
 
   const send = (cmd: TourCommand, reason?: string) => {
     setMessage(null)
@@ -55,6 +72,7 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
         onSuccess: () => {
           setMessage({ tone: 'ok', text: DONE[cmd] })
           setPending(null)
+          if (cmd in RECOVERY && cmd !== 'confirmComplete') setAttempted(incident)
         },
         onError: (error) => setMessage({ tone: 'error', text: errorText(error) }),
       },
@@ -74,16 +92,30 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
           <p className="text-sm font-extrabold text-[#b23e31]">Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}</p>
           {tour.reasonDetail && <p className="mt-1 text-[13px] leading-5 text-[#40546f]">{tour.reasonDetail}</p>}
           {tour.reason && REASON_GUIDE[tour.reason] && <p className="mt-2 text-xs leading-5 text-[#71819a]">{REASON_GUIDE[tour.reason]}</p>}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {recoveries.map((key) => {
-              const { label, icon: Icon } = RECOVERY[key]
-              return <button key={key} type="button" onClick={() => setPending(key)} className={`${buttonClass('primary', 'sm')} w-full`}><Icon size={15} aria-hidden="true" />{label}</button>
-            })}
-          </div>
-          {recoveries.length === 0 && (
-            <p className="mt-2 text-xs font-semibold text-[#8a5a06]">
-              Chưa có thao tác phục hồi hợp lệ: {actions.rerunPoi.reason ?? actions.retryLeg.reason ?? 'chờ trạng thái robot rõ ràng'}.
-            </p>
+          <ol className="mt-3 space-y-2" aria-label="Trình tự xử lý sự cố">
+            {INCIDENT_STEPS.map((step, index) => (
+              <li key={step.title} className="flex gap-2.5 text-[12.5px] leading-5 text-[#40546f]">
+                <span aria-hidden="true" className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-extrabold ${index === 2 && recoveryUsed ? 'bg-[#e2e8f0] text-[#64748b]' : index === 3 && recoveryUsed ? 'bg-[#b23e31] text-white' : 'bg-[#fff2d9] text-[#8a5a06]'}`}>{index + 1}</span>
+                <span><b className="text-[#173b59]">{step.title}.</b> {step.text}</span>
+              </li>
+            ))}
+          </ol>
+          {recoveryUsed ? (
+            <p className="mt-3 text-xs font-semibold text-[#b23e31]">Đã thử phục hồi một lần cho sự cố này. Nếu vẫn chưa an toàn hoặc chưa khắc phục được, hãy Kết thúc sớm.</p>
+          ) : (
+            <>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recoveries.map((key) => {
+                  const { label, icon: Icon } = RECOVERY[key]
+                  return <button key={key} type="button" onClick={() => setPending(key)} className={`${buttonClass('primary', 'sm')} w-full`}><Icon size={15} aria-hidden="true" />{label}</button>
+                })}
+              </div>
+              {recoveries.length === 0 && (
+                <p className="mt-2 text-xs font-semibold text-[#8a5a06]">
+                  Chưa có thao tác phục hồi hợp lệ: {actions.rerunPoi.reason ?? actions.retryLeg.reason ?? 'chờ trạng thái robot rõ ràng'}.
+                </p>
+              )}
+            </>
           )}
         </div>
       ) : (

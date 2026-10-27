@@ -157,6 +157,9 @@ it('keeps only the last three answered turns and skips failed questions', () => 
 it('maps backend errors to student-facing messages', () => {
   expect(describeAskError(new ApiError(429, '{"errors":{"code":"RATE_LIMITED"}}')).retryable).toBe(true)
   expect(describeAskError(new ApiError(504, '')).text).toMatch(/quá lâu/)
+  // Busy is not an answer: it reads as busy and can be retried.
+  const busy = describeAskError(new ApiError(503, '{"errors":{"code":"ASSISTANT_BUSY"}}'))
+  expect(busy).toEqual({ text: expect.stringContaining('nhiều câu hỏi cùng lúc'), retryable: true })
   expect(describeAskError(new ApiError(400, '')).retryable).toBe(false)
   expect(describeAskError(new ApiError(409, '{"errors":{"code":"QUESTION_ID_REUSED"}}')).retryable).toBe(false)
   expect(describeAskError(new TypeError('Failed to fetch')).text).toMatch(/Kiểm tra mạng/)

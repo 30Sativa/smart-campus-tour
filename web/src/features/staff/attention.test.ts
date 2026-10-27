@@ -53,7 +53,9 @@ describe('tourAction', () => {
 describe('robotIssues', () => {
   it('separates a live heartbeat from a stale pose, and holds a robot awaiting a check', () => {
     expect(robotIssues(robot({}))).toEqual([])
-    expect(robotIssues(robot({ poseAgeSeconds: 12 }))).toEqual(['Vị trí cũ'])
+    expect(robotIssues(robot({ poseAgeSeconds: 2 }))).toEqual([])
+    expect(robotIssues(robot({ poseAgeSeconds: 3 }))).toEqual(['Vị trí cũ'])
+    expect(robotIssues(robot({ poseAgeSeconds: 6 }))).toEqual(['Mất kết nối'])
     expect(robotIssues(robot({ connectionState: 'Disconnected', poseAgeSeconds: 40 }))).toEqual(['Mất kết nối'])
     expect(robotIssues(robot({ needsCheck: true, headFault: true }))).toEqual(['Lỗi đầu xoay', 'Chờ xác nhận kiểm tra'])
   })

@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminRegistrationsPage from '../../../routes/admin/AdminRegistrationsPage'
-import AdminShell from '../AdminShell'
+import AdminRegistrationsPage from '../../../routes/staff/manage/AdminRegistrationsPage'
+import StaffShell from '../../staff/StaffShell'
 import { useAuthStore } from '../../../stores/auth-store'
 import { dateBoundary } from './presentation'
 import type { EmailCorrectionInput, ReviewDetails, ReviewInput } from './types'
@@ -26,12 +26,12 @@ let clients: QueryClient[]
 function response(data: unknown, status = 200, extra: object = {}) {
   return new Response(JSON.stringify({ success: status === 200, message: 'OK', data, ...extra }), { status })
 }
-function renderAt(path = '/admin/registrations/pending?review=registration', mode: 'pending' | 'all' = 'pending') {
+function renderAt(path = '/staff/manage/registrations/pending?review=registration', mode: 'pending' | 'all' = 'pending') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } })
   clients.push(client)
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/admin/registrations" element={<AdminRegistrationsPage mode={mode} />} />
-    <Route path="/admin/registrations/pending" element={<AdminRegistrationsPage mode={mode} />} />
+    <Route path="/staff/manage/registrations" element={<AdminRegistrationsPage mode={mode} />} />
+    <Route path="/staff/manage/registrations/pending" element={<AdminRegistrationsPage mode={mode} />} />
   </Routes></MemoryRouter></QueryClientProvider>)
   return client
 }
@@ -83,7 +83,7 @@ afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logou
 describe('Admin registration SQL HTTP boundary', () => {
   it('corrects one identified shared row with opened versions, confirmation and committed reload', async () => {
     registration.roster.push({ ...registration.roster[0], id: 'other-row', rowNumber: 7, displayName: 'Người khác', email: 'other@example.com' })
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
     const dialog = screen.getByRole('dialog', { name: 'Sửa email dòng 4?' })
     expect(within(dialog).getByText(/chưa cấp mã hoặc gửi lời mời/i)).toBeInTheDocument()
@@ -102,7 +102,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   it('shows approved revocation consequences and keeps APPROVED after correction', async () => {
     registration.summary.state = 'APPROVED'; registration.review.allowed = false
     registration.roster[0].invitationRowVersion = secondVersion
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
     const dialog = screen.getByRole('dialog', { name: 'Sửa email dòng 4?' })
     expect(within(dialog).getByText(/gửi thư lỗi không khôi phục mã cũ/i)).toBeInTheDocument()
@@ -116,7 +116,7 @@ describe('Admin registration SQL HTTP boundary', () => {
 
   it('keeps rejection metadata and waits for review without issuing access', async () => {
     registration.summary.state = 'REJECTED'; registration.review.allowed = false; registration.rejectionReason = 'Cần sửa email'
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
     fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
@@ -160,7 +160,7 @@ describe('Admin registration SQL HTTP boundary', () => {
     fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
     await screen.findByText(/Dữ liệu đã thay đổi hoặc Tour đã khóa/)
-    if (mode === 'forbidden') expect(screen.getByText(/Chỉ quản trị viên được sửa email/)).toBeInTheDocument()
+    if (mode === 'forbidden') expect(screen.getByText(/Chỉ Staff được sửa email/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sửa email dòng 4' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Duyệt đăng ký' })).not.toBeInTheDocument()
     failure = 'reload'; fireEvent.click(screen.getByRole('button', { name: 'Tải lại' }))
@@ -184,7 +184,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   })
 
   it('filters the redesigned tabs on the server and resets pagination', async () => {
-    renderAt('/admin/registrations?page=3', 'all')
+    renderAt('/staff/manage/registrations?page=3', 'all')
     await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
     expect(requests[0].searchParams.get('page')).toBe('3')
     fireEvent.click(screen.getByRole('button', { name: 'Đã duyệt' }))
@@ -208,7 +208,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   })
 
   it('approves the opened SQL versions with confirmation and truthful access boundary', async () => {
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
     const dialog = await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })
     expect(within(dialog).getByText(/gửi email lỗi vẫn giữ đăng ký đã duyệt/i)).toBeInTheDocument()
@@ -221,7 +221,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   })
 
   it('requires a rejection reason and displays the saved reason', async () => {
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     const sheet = await screen.findByRole('dialog', { name: 'Đoàn A' })
     fireEvent.click(await within(sheet).findByRole('button', { name: 'Từ chối' }))
     const dialog = await screen.findByRole('dialog', { name: 'Từ chối Đoàn A?' })
@@ -262,7 +262,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   })
 
   it('shows load failure with retry and never fills the queue from mock data', async () => {
-    failure = 'list'; renderAt('/admin/registrations/pending')
+    failure = 'list'; renderAt('/staff/manage/registrations/pending')
     expect(await screen.findByText('Không thể tải danh sách đăng ký.')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     failure = null
@@ -280,7 +280,7 @@ describe('Admin registration SQL HTTP boundary', () => {
   })
 
   it('explains an inverted Tour date range instead of sending a request that can only fail', async () => {
-    renderAt('/admin/registrations?from=2026-10-10&to=2026-10-09', 'all')
+    renderAt('/staff/manage/registrations?from=2026-10-10&to=2026-10-09', 'all')
     expect(await screen.findByText('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.')).toBeInTheDocument()
     expect(requests.some(u => u.pathname === '/api/admin/registrations')).toBe(false)
     expect(screen.queryByText('Không thể tải danh sách đăng ký.')).not.toBeInTheDocument()
@@ -291,8 +291,8 @@ describe('Admin registration SQL HTTP boundary', () => {
   it('counts the sidebar queue badge from the live SQL total, never from simulated registrations', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
     clients.push(client)
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
-      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/manage/registrations/pending']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/registrations/pending" element={<p>Hàng chờ</p>} /></Route>
     </Routes></MemoryRouter></QueryClientProvider>)
     expect(await screen.findByLabelText('25 đoàn chờ duyệt')).toBeInTheDocument()
     const count = requests.find(u => u.pathname === '/api/admin/registrations' && u.searchParams.get('size') === '1')
@@ -302,14 +302,14 @@ describe('Admin registration SQL HTTP boundary', () => {
   it('hides the sidebar count when its SQL refresh fails instead of retaining a stale or simulated count', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
     clients.push(client)
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
-      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/manage/registrations/pending']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/registrations/pending" element={<p>Hàng chờ</p>} /></Route>
     </Routes></MemoryRouter></QueryClientProvider>)
     await screen.findByLabelText('25 đoàn chờ duyệt')
     failure = 'list'
     await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-admin', 'list'] }) })
     await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
-    expect(screen.getByRole('link', { name: 'Chờ duyệt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Đăng ký chờ duyệt' })).toBeInTheDocument()
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

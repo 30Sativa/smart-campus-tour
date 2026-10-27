@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
 import { readFileSync } from 'node:fs'

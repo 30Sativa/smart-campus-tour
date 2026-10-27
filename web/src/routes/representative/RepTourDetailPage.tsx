@@ -6,6 +6,7 @@ import { RegistrationCard } from '../../features/representative/components/Regis
 import { RouteMap } from '../../features/representative/components/RouteMap'
 import { dayMonth, formatDateTime, formatTime, readRepError } from '../../features/representative/rep-format'
 import { TOUR_IMAGES } from '../../features/representative/rep-classes'
+import { registrationClosesAt } from '../../features/representative/registration-deadline'
 
 export default function RepTourDetailPage() {
   const { tourId = '' } = useParams()
@@ -37,9 +38,9 @@ export default function RepTourDetailPage() {
       </div>
       <aside className="rep-aside" aria-label="Đăng ký đoàn">
         <h2>Đăng ký đoàn</h2>
-        <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) }, { label: 'Tuyến tham quan', value: `${tour.routeName} · ${tour.stops.length} điểm` }]} />
+        <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) }, { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString()) }, { label: 'Tuyến tham quan', value: `${tour.routeName} · ${tour.stops.length} điểm` }]} />
         <GatedAction gate={tour.register} label="Đăng ký đoàn" kind="primary" to={`/dai-dien/buoi/${tour.id}/dang-ky`} />
-        <p className="rep-hint">Mỗi đoàn có tên và danh sách lời mời riêng. Cá nhân dùng email của mình; điểm xem chung dùng email người phụ trách.</p>
+        <p className="rep-hint">Mỗi đoàn có tên và danh sách lời mời riêng. Cá nhân dùng email của mình; điểm xem chung dùng email người phụ trách. Tối đa 10 điểm xem mỗi đăng ký.</p>
       </aside>
     </div>
     <div className="rep-section">

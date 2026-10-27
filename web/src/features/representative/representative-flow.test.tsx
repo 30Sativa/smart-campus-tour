@@ -14,7 +14,7 @@ import type { RegistrationInput, RegistrationSummary, RepresentativeRegistration
 import { rosterTemplateBytes } from './roster-import'
 
 const version = 'AAAAAAAAAAE='
-const tour: RepresentativeTour = { id: 'tour', name: 'Tour thật', description: 'Tuyến chuẩn bị', scheduledStartAt: '2026-10-20T02:00:00Z', state: 'SCHEDULED',
+const tour: RepresentativeTour = { id: 'tour', name: 'Tour thật', description: 'Tuyến chuẩn bị', scheduledStartAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString(), state: 'SCHEDULED',
   rowVersion: version, routeName: 'Tuyến A', stops: [{ order: 1, name: 'POI A', description: null }], register: { allowed: true, reason: null } }
 const initial: RepresentativeRegistration = {
   summary: { id: 'registration', tourId: 'tour', tourName: tour.name, tourScheduledStartAt: tour.scheduledStartAt, tourState: 'SCHEDULED',

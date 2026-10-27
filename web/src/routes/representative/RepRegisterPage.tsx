@@ -115,8 +115,8 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         {step === 2 && <div className="rep-pane rep-stack" key="review"><Panel title="Kiểm tra trước khi gửi">
           <InfoList items={fields.map(f => ({ label: f.label, value: values[f.key] }))} />
           <p className="rep-lead" style={{ marginTop: 18, fontSize: 14 }}><b className="num">{rows.filter(r => r.rowType === 'INDIVIDUAL').length}</b> lời mời cá nhân, <b className="num">{rows.filter(r => r.rowType === 'SHARED_VIEWING').length}</b> điểm xem chung.</p>
-        </Panel><Panel title="Danh sách gửi Admin"><RosterPreview rows={rows} variant="representative" /></Panel>
-          <Callout title="Gửi để Admin duyệt">Chưa cấp mã truy cập khi gửi đăng ký. Học sinh không cần tài khoản ứng dụng; lời mời cá nhân và điểm xem chung sẽ được xử lý sau duyệt.</Callout>
+        </Panel><Panel title="Danh sách gửi nhà trường"><RosterPreview rows={rows} variant="representative" /></Panel>
+          <Callout title="Gửi để nhà trường duyệt">Chưa cấp mã truy cập khi gửi đăng ký. Học sinh không cần tài khoản ứng dụng; lời mời cá nhân và điểm xem chung sẽ được xử lý sau duyệt.</Callout>
           <Panel title="Mục đích dữ liệu">
             <p className="rep-lead" style={{ fontSize: 14 }}>Thông tin trường, người liên hệ và danh sách lời mời chỉ dùng để tổ chức đăng ký, gửi lời mời và thống kê vận hành buổi tham quan. Không dùng để liên hệ tuyển sinh sau buổi.</p>
             <label className="rep-consent">
@@ -140,7 +140,7 @@ function RegistrationForm({ tour, registration, onReload }: { tour: Representati
         <div><dt>Thời gian dự kiến</dt><dd>{formatDateTime(base.tour.scheduledStartAt)}</dd></div>
         <div><dt>Tuyến tham quan</dt><dd>{base.tour.routeName} · {base.tour.stops.length} điểm</dd></div>
       </dl>
-      <p className="rep-hint">Ba bước: thông tin đoàn, file Excel danh sách, kiểm tra và gửi. Admin duyệt xong, lời mời mới được gửi tới học sinh.</p>
+      <p className="rep-hint">Ba bước: thông tin đoàn, file Excel danh sách, kiểm tra và gửi. Nhà trường duyệt xong, lời mời mới được gửi tới học sinh.</p>
     </aside>
     </div>
   </RepPage>

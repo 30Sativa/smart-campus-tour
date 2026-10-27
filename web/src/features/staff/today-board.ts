@@ -15,7 +15,7 @@ export type TodayFilter = TourState | 'all'
 
 /** The day as a flow, and each state's colour on the board. */
 export const TODAY_STAGES: Array<{ key: TourState; label: string; color: string }> = [
-  { key: 'Scheduled', label: 'Chờ Admin chốt', color: '#94a3b8' },
+  { key: 'Scheduled', label: 'Chờ chốt', color: '#94a3b8' },
   { key: 'Ready', label: 'Sẵn sàng', color: '#4d93bd' },
   { key: 'Running', label: 'Đang chạy', color: '#2563eb' },
   { key: 'Completed', label: 'Hoàn thành', color: '#16a34a' },
@@ -107,7 +107,7 @@ export function tourNote(tour: TourOperation): TourNote {
     case 'Scheduled':
       return tour.readyBlockers.length
         ? { tone: 'warn', text: tour.readyBlockers.join(' · ') }
-        : { tone: 'muted', text: 'Chờ Admin chốt buổi' }
+        : { tone: 'muted', text: 'Chờ chốt buổi' }
     case 'Completed': {
       const progress = routeProgress(tour)
       return { tone: 'ok', text: `Xong lúc ${formatTime(tour.endedAt)} · ${formatDuration(tour.startedAt, tour.endedAt)} · ${progress.done}/${progress.total} POI` }

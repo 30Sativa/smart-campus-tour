@@ -4,7 +4,7 @@ export function emailCorrectionError(error: unknown): { message: string; reload:
   const uncertain = { message: 'Chưa xác nhận được kết quả. Thử lại cùng yêu cầu để tránh cấp mã hai lần.', reload: false, uncertain: true }
   if (!(error instanceof ApiError) || error.status >= 500) return uncertain
   if (error.status === 401 || error.status === 403)
-    return { message: 'Chỉ quản trị viên được sửa email. Vui lòng đăng nhập bằng tài khoản Admin.', reload: true, uncertain: false }
+    return { message: 'Chỉ Staff được sửa email. Vui lòng đăng nhập bằng tài khoản Staff.', reload: true, uncertain: false }
   if (error.status === 404) return { message: 'Dòng đăng ký không còn tồn tại. Tải lại danh sách.', reload: true, uncertain: false }
   try {
     const body = JSON.parse(error.body) as { message?: string; errors?: { code?: string } }

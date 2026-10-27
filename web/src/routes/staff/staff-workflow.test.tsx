@@ -98,10 +98,23 @@ describe('staff session workflow', () => {
     expect(screen.getByText(/Chưa thể bắt đầu: Đang phục vụ T-01/)).toBeInTheDocument()
   })
 
+  it('keeps Start closed until the published time, even with every check ticked', async () => {
+    command('tour-01', 'endEarly', 'Diễn tập')
+    tick(3)
+    confirmRobotReady('robot_01')
+    renderAt('/staff/tours/tour-02/start', <StartCheckPage />, '/staff/tours/:tourId/start')
+    const start = await screen.findByRole('button', { name: /Bắt đầu buổi/ })
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box)
+    expect(start).toBeDisabled()
+    expect(screen.getByText(/Chỉ bắt đầu từ .*giờ đã công bố \(còn 40 phút\)/)).toBeInTheDocument()
+  })
+
   it('starts a Ready session only after on-site confirmations and a dialog', async () => {
     command('tour-01', 'endEarly', 'Diễn tập')
     tick(3)
     confirmRobotReady('robot_01')
+    // T-02 is published 40 minutes after the fixture clock.
+    vi.setSystemTime(new Date(2026, 9, 1, 12, 41))
     renderAt('/staff/tours/tour-02/start', <StartCheckPage />, '/staff/tours/:tourId/start')
     const start = await screen.findByRole('button', { name: /Bắt đầu buổi/ })
     expect(start).toBeDisabled()

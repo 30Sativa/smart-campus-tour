@@ -6,11 +6,10 @@ import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { ADMIN_NAV, adminActivePath } from './admin-nav'
 import { AdminHeaderActions } from './AdminHeaderActions'
 import { AdminSidebar } from './AdminSidebar'
-import { usePendingReviewCount } from './registrations/hooks'
 
 /**
  * The administration shell: preparing Tours before they run.
@@ -26,14 +25,10 @@ export default function AdminShell() {
   const handleLogout = useLogout()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const navRef = useMobileNav(menuOpen, closeMenu)
-  // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
-  const pendingCount = usePendingReviewCount() ?? 0
 
   const current = adminActivePath(location.pathname)
   const onRoles = location.pathname.startsWith('/admin/roles')
-  const onAccounts = location.pathname.startsWith('/admin/accounts')
-  const onPois = location.pathname.startsWith('/admin/pois')
-  const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị Tour'
+  const title = onRoles ? 'Vai trò & quyền' : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị hệ thống'
 
   return (
     <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
@@ -42,7 +37,6 @@ export default function AdminShell() {
       <AdminSidebar
         id="admin-navigation"
         currentPath={current}
-        pendingCount={pendingCount}
         // Reference links, not tasks: both are read-only for an Admin-only account.
         secondary={[
           { to: '/admin/roles', label: 'Vai trò & quyền', icon: KeyRound, current: onRoles },
@@ -61,8 +55,6 @@ export default function AdminShell() {
             <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
           </div>
         </header>
-
-        {!onAccounts && !onPois && !location.pathname.startsWith('/admin/routes') && !location.pathname.startsWith('/admin/registrations') && <DevDataBadge>dữ liệu mẫu · máy chủ quản trị mô phỏng</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
       </div>

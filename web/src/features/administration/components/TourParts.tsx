@@ -173,7 +173,7 @@ function rowAction(tour: AdminTour): { label: string; kind: 'primary' | 'seconda
   return { label: 'Xem', kind: 'secondary' }
 }
 
-const detailPath = (tour: AdminTour) => `/admin/tours/${tour.id}${tour.state === 'Scheduled' && tour.counts.submitted > 0 ? '?tab=registrations' : ''}`
+const detailPath = (tour: AdminTour) => `/staff/manage/tours/${tour.id}${tour.state === 'Scheduled' && tour.counts.submitted > 0 ? '?tab=registrations' : ''}`
 
 /**
  * Tours as a table on desktop/tablet (scrolls sideways on tablet) and as cards
@@ -201,7 +201,7 @@ export function AdminTourTable({ tours, label, showCounts = true }: { tours: Adm
             return (
               <tr key={tour.id} className={rowClass}>
                 <td className={`${tdClass} min-w-60`}>
-                  <Link to={`/admin/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2563eb] hover:underline">{tour.name}</Link>
+                  <Link to={`/staff/manage/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2563eb] hover:underline">{tour.name}</Link>
                   <p className="text-xs text-[#94a3b8]">{tour.code}</p>
                 </td>
                 <td className={`${tdClass} text-[13px] whitespace-nowrap text-[#334155] tabular-nums`}>{formatSlot(tour.scheduledAt)}</td>

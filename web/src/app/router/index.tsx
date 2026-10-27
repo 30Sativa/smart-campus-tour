@@ -8,18 +8,17 @@ import { areaById, type AreaId } from '../../auth/access'
 import { homePathForRole } from '../../auth/roles'
 
 /**
- * Four areas, four audiences:
+ * Areas and audiences:
  *
  *   `/`        public   marketing pages, no account
- *   `/visit/*` visitor  the visitor app: explore, book a robot, walk a tour
- *   `/staff/*` staff    tour operations, for Staff and Admin
- *   `/admin/*` admin    Tour administration (create, review groups, e-mail, Chốt/Mở lại/Hủy), Admin only
+ *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
+ *   `/admin/*` admin    accounts and roles, Admin only
+ *   `/technical/*`      Technical Staff: map versions, POI import, technical confirmation
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
- * All three signed-in areas are lazy, shell included, so a visitor loading `/`
- * downloads none of them, a visitor never downloads operations, and an operator
- * never downloads administration.
+ * All signed-in areas are lazy, shell included, so a visitor loading `/`
+ * downloads none of them, and an operator never downloads administration.
  *
  * `/staff/*` used to live at `/admin/*` while the product had only one
  * signed-in area. It does not any more: `/admin/*` is administration now, and
@@ -33,19 +32,6 @@ const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
 const QuestIntercomPage = lazy(() => import('../../routes/staff/QuestIntercomPage'))
 
-const VisitorShell = lazy(() => import('../../features/visitor/VisitorShell'))
-const VisitorHomePage = lazy(() => import('../../routes/visitor/VisitorHomePage'))
-const ExplorePage = lazy(() => import('../../routes/visitor/ExplorePage'))
-const LocationDetailPage = lazy(() => import('../../routes/visitor/LocationDetailPage'))
-const CampusMapPage = lazy(() => import('../../routes/visitor/CampusMapPage'))
-const BookRobotPage = lazy(() => import('../../routes/visitor/BookRobotPage'))
-const MyBookingsPage = lazy(() => import('../../routes/visitor/MyBookingsPage'))
-const MyToursPage = lazy(() => import('../../routes/visitor/MyToursPage'))
-const ActiveTourPage = lazy(() => import('../../routes/visitor/ActiveTourPage'))
-const AskRobotPage = lazy(() => import('../../routes/visitor/AskRobotPage'))
-const NotificationsPage = lazy(() => import('../../routes/visitor/NotificationsPage'))
-const ProfilePage = lazy(() => import('../../routes/visitor/ProfilePage'))
-const HelpPage = lazy(() => import('../../routes/visitor/HelpPage'))
 
 // SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
 const StudentTourPage = lazy(() => import('../../routes/student/StudentTourPage'))
@@ -73,20 +59,24 @@ const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
 const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
-const AdminDashboardPage = lazy(() => import('../../routes/admin/AdminDashboardPage'))
-const AdminTourListPage = lazy(() => import('../../routes/admin/AdminTourListPage'))
-const AdminTourCreatePage = lazy(() => import('../../routes/admin/AdminTourCreatePage'))
-const AdminTourDetailPage = lazy(() => import('../../routes/admin/AdminTourDetailPage'))
-const AdminTourEditPage = lazy(() => import('../../routes/admin/AdminTourEditPage'))
-const AdminRegistrationsPage = lazy(() => import('../../routes/admin/AdminRegistrationsPage'))
-const AdminRouteCatalogPage = lazy(() => import('../../routes/admin/AdminRouteCatalogPage'))
-const AdminRouteDetailsPage = lazy(() => import('../../routes/admin/AdminRouteDetailsPage'))
-const AdminRouteFormPage = lazy(() => import('../../routes/admin/AdminRouteFormPage'))
-const AdminTourHistoryPage = lazy(() => import('../../routes/admin/AdminTourHistoryPage'))
+const AdminDashboardPage = lazy(() => import('../../routes/staff/manage/AdminDashboardPage'))
+const AdminTourListPage = lazy(() => import('../../routes/staff/manage/AdminTourListPage'))
+const AdminTourCreatePage = lazy(() => import('../../routes/staff/manage/AdminTourCreatePage'))
+const AdminTourDetailPage = lazy(() => import('../../routes/staff/manage/AdminTourDetailPage'))
+const AdminTourEditPage = lazy(() => import('../../routes/staff/manage/AdminTourEditPage'))
+const AdminRegistrationsPage = lazy(() => import('../../routes/staff/manage/AdminRegistrationsPage'))
+const AdminRouteCatalogPage = lazy(() => import('../../routes/staff/manage/AdminRouteCatalogPage'))
+const AdminRouteDetailsPage = lazy(() => import('../../routes/staff/manage/AdminRouteDetailsPage'))
+const AdminRouteFormPage = lazy(() => import('../../routes/staff/manage/AdminRouteFormPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
-const AdminPoisPage = lazy(() => import('../../routes/admin/AdminPoisPage'))
-const AdminPoiFormPage = lazy(() => import('../../routes/admin/AdminPoiFormPage'))
+const AdminPoisPage = lazy(() => import('../../routes/staff/manage/AdminPoisPage'))
+const AdminPoiFormPage = lazy(() => import('../../routes/staff/manage/AdminPoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
+
+const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
+const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
+const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
+const TechnicalConfirmationsPage = lazy(() => import('../../routes/technical/TechnicalConfirmationsPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -120,19 +110,6 @@ function RequireArea({ area, children }: { area: AreaId; children: ReactNode }) 
   return <>{children}</>
 }
 
-function VisitorArea() {
-  return (
-    <RequireArea area="visitor">
-      {/* The fallback ground is the landing page's light token value, so the
-          first paint of the shell is already the right colour rather than white
-          for a frame. */}
-      <Suspense fallback={<ShellFallback background="#f5f7f8" />}>
-        <VisitorShell />
-      </Suspense>
-    </RequireArea>
-  )
-}
-
 function RepresentativeArea() {
   return (
     <RequireArea area="representative">
@@ -153,6 +130,16 @@ function StaffArea() {
   )
 }
 
+function TechnicalArea() {
+  return (
+    <RequireArea area="technical">
+      <Suspense fallback={<ShellFallback background="#f6f7f9" />}>
+        <TechnicalShell />
+      </Suspense>
+    </RequireArea>
+  )
+}
+
 function AdminArea() {
   return (
     <RequireArea area="admin">
@@ -161,6 +148,12 @@ function AdminArea() {
       </Suspense>
     </RequireArea>
   )
+}
+
+/** `/admin/<x>/...` → `/staff/manage/<x>/...`, keeping ids and the query string. */
+function MovedToStaff() {
+  const location = useLocation()
+  return <Navigate to={`${location.pathname.replace(/^\/admin/, '/staff/manage')}${location.search}`} replace />
 }
 
 /**
@@ -220,29 +213,6 @@ export const routes = [
     ],
   },
   {
-    path: '/visit',
-    element: <VisitorArea />,
-    children: [
-      { index: true, element: <VisitorHomePage /> },
-      { path: 'explore', element: <ExplorePage /> },
-      { path: 'explore/:locationId', element: <LocationDetailPage /> },
-      { path: 'map', element: <CampusMapPage /> },
-      { path: 'book', element: <BookRobotPage /> },
-      { path: 'bookings', element: <MyBookingsPage /> },
-      { path: 'tours', element: <MyToursPage /> },
-      // The active tour is one session at a time, so it needs no id in the URL:
-      // the API answers "the tour this account is on right now", and a link from
-      // a notification cannot go stale.
-      { path: 'tour', element: <ActiveTourPage /> },
-      { path: 'assistant', element: <AskRobotPage /> },
-      { path: 'notifications', element: <NotificationsPage /> },
-      { path: 'profile', element: <ProfilePage /> },
-      { path: 'help', element: <HelpPage /> },
-      // A mistyped path inside the area stays inside the area.
-      { path: '*', element: <Navigate to="/visit" replace /> },
-    ],
-  },
-  {
     path: '/staff',
     element: <StaffArea />,
     children: [
@@ -261,6 +231,22 @@ export const routes = [
       { path: 'digital-twin', element: <DigitalTwinPage /> },
       { path: 'history', element: <TourHistoryPage /> },
       { path: 'profile', element: <StaffProfilePage /> },
+      // Tour preparation, moved from `/admin/*` (SRS v1.9 §3.2.c: Staff owns
+      // content, registrations, Routes and scheduling).
+      { path: 'manage', element: <AdminDashboardPage /> },
+      { path: 'manage/tours', element: <AdminTourListPage /> },
+      { path: 'manage/tours/new', element: <AdminTourCreatePage /> },
+      { path: 'manage/tours/:tourId', element: <AdminTourDetailPage /> },
+      { path: 'manage/tours/:tourId/edit', element: <AdminTourEditPage /> },
+      { path: 'manage/registrations', element: <AdminRegistrationsPage mode="all" /> },
+      { path: 'manage/registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
+      { path: 'manage/routes', element: <AdminRouteCatalogPage /> },
+      { path: 'manage/routes/new', element: <AdminRouteFormPage /> },
+      { path: 'manage/routes/:routeId', element: <AdminRouteDetailsPage /> },
+      { path: 'manage/routes/:routeId/edit', element: <AdminRouteFormPage /> },
+      { path: 'manage/pois', element: <AdminPoisPage /> },
+      { path: 'manage/pois/new', element: <AdminPoiFormPage /> },
+      { path: 'manage/pois/:poiId', element: <AdminPoiFormPage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.
       { path: 'amr', element: <Navigate to="/staff/robot" replace /> },
@@ -274,28 +260,32 @@ export const routes = [
     path: '/admin',
     element: <AdminArea />,
     children: [
-      // Preparing Tours before they run (remote-tour scope §2, §3, §11.1).
-      { index: true, element: <AdminDashboardPage /> },
-      { path: 'tours', element: <AdminTourListPage /> },
-      { path: 'tours/new', element: <AdminTourCreatePage /> },
-      { path: 'tours/:tourId', element: <AdminTourDetailPage /> },
-      { path: 'tours/:tourId/edit', element: <AdminTourEditPage /> },
-      { path: 'registrations', element: <AdminRegistrationsPage mode="all" /> },
-      { path: 'registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
-      { path: 'routes', element: <AdminRouteCatalogPage /> },
-      { path: 'routes/new', element: <AdminRouteFormPage /> },
-      { path: 'routes/:routeId', element: <AdminRouteDetailsPage /> },
-      { path: 'routes/:routeId/edit', element: <AdminRouteFormPage /> },
-      { path: 'history', element: <AdminTourHistoryPage /> },
+      // Administration only: accounts and roles. Tour preparation moved to `/staff/manage/*`.
+      { index: true, element: <Navigate to="/admin/accounts" replace /> },
       { path: 'accounts', element: <AdminAccountsPage /> },
-      { path: 'pois', element: <AdminPoisPage /> },
-      { path: 'pois/new', element: <AdminPoiFormPage /> },
-      { path: 'pois/:poiId', element: <AdminPoiFormPage /> },
       { path: 'roles', element: <RolesPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },
     ],
   },
+  {
+    path: '/technical',
+    element: <TechnicalArea />,
+    children: [
+      // Technical Staff: map versions, POI YAML import, version-bound confirmation (SRS v1.9 §3.2.c).
+      { index: true, element: <Navigate to="/technical/maps" replace /> },
+      { path: 'maps', element: <TechnicalMapsPage /> },
+      { path: 'poi-import', element: <TechnicalPoiImportPage /> },
+      { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
+      { path: '*', element: <Navigate to="/technical" replace /> },
+    ],
+  },
+  // Migration only: Tour preparation pages that used to sit under `/admin`.
+  { path: '/admin/tours/*', element: <MovedToStaff /> },
+  { path: '/admin/registrations/*', element: <MovedToStaff /> },
+  { path: '/admin/routes/*', element: <MovedToStaff /> },
+  { path: '/admin/pois/*', element: <MovedToStaff /> },
+  { path: '/admin/history', element: <Navigate to="/staff/history" replace /> },
   // Migration only: the operations pages that used to sit under `/admin`.
   // `/admin` itself is NOT redirected — it is the administration overview now,
   // and an Admin route always wins over a legacy path. Drop these once the old
