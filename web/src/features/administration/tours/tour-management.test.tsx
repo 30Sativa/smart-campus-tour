@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminTourCreatePage from '../../../routes/admin/AdminTourCreatePage'
-import AdminTourDetailPage from '../../../routes/admin/AdminTourDetailPage'
-import AdminTourEditPage from '../../../routes/admin/AdminTourEditPage'
+import AdminTourCreatePage from '../../../routes/staff/manage/AdminTourCreatePage'
+import AdminTourDetailPage from '../../../routes/staff/manage/AdminTourDetailPage'
+import AdminTourEditPage from '../../../routes/staff/manage/AdminTourEditPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import type { RouteDetails } from '../routes/types'
 import type { TourDetails } from './types'
@@ -51,9 +51,9 @@ function api(detail: TourDetails = tour()) {
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/admin/tours/new" element={<AdminTourCreatePage />} />
-    <Route path="/admin/tours/:tourId" element={<AdminTourDetailPage />} />
-    <Route path="/admin/tours/:tourId/edit" element={<AdminTourEditPage />} />
+    <Route path="/staff/manage/tours/new" element={<AdminTourCreatePage />} />
+    <Route path="/staff/manage/tours/:tourId" element={<AdminTourDetailPage />} />
+    <Route path="/staff/manage/tours/:tourId/edit" element={<AdminTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
@@ -62,7 +62,7 @@ afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 describe('live Tour management', () => {
   it('creates a SCHEDULED Tour from an active Route with its revision and an idempotency key', async () => {
     const writes = api()
-    renderAt('/admin/tours/new')
+    renderAt('/staff/manage/tours/new')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour sáng thứ Bảy' } })
     fireEvent.change(screen.getByLabelText(/Thời gian dự kiến/), { target: { value: '2099-01-03T09:00' } })
     await screen.findByRole('option', { name: 'Tuyến thử · 1 điểm dừng' })
@@ -80,7 +80,7 @@ describe('live Tour management', () => {
 
   it('refuses a past schedule before calling the API', async () => {
     const writes = api()
-    renderAt('/admin/tours/new')
+    renderAt('/staff/manage/tours/new')
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour cũ' } })
     fireEvent.change(screen.getByLabelText(/Thời gian dự kiến/), { target: { value: '2020-01-01T09:00' } })
     await screen.findByRole('option', { name: 'Tuyến thử · 1 điểm dừng' })
@@ -93,7 +93,7 @@ describe('live Tour management', () => {
 
   it('edits only metadata when schedule and Route are locked, keeping the unchanged past schedule', async () => {
     const writes = api(tour({ permissions: { canEditMetadata: true, canChangeScheduleAndRoute: false, canCancel: true } }))
-    renderAt('/admin/tours/tour-1/edit')
+    renderAt('/staff/manage/tours/tour-1/edit')
     const name = await screen.findByLabelText('Tên Tour')
     expect(screen.getByLabelText(/Thời gian dự kiến/)).toBeDisabled()
     expect(screen.getByLabelText('Tuyến')).toBeDisabled()
@@ -109,7 +109,7 @@ describe('live Tour management', () => {
 
   it('cancels with a required reason and the opened row version', async () => {
     const writes = api()
-    renderAt('/admin/tours/tour-1')
+    renderAt('/staff/manage/tours/tour-1')
     fireEvent.click(await screen.findByRole('button', { name: 'Hủy Tour' }))
     const dialog = await screen.findByRole('dialog', { name: 'Hủy Tour?' })
     const confirm = within(dialog).getByRole('button', { name: 'Hủy Tour' })
@@ -122,7 +122,7 @@ describe('live Tour management', () => {
 
   it('does not offer READY transitions that the live API does not provide', async () => {
     api()
-    renderAt('/admin/tours/tour-1')
+    renderAt('/staff/manage/tours/tour-1')
     await screen.findByRole('heading', { name: 'Tour sáng thứ Bảy' })
     expect(screen.queryByRole('button', { name: /Chốt/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Mở lại/ })).toBeNull()

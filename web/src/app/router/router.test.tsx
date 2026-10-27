@@ -54,7 +54,7 @@ describe('route table', () => {
 
   // Compile both dashboards before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
-    await import('../../routes/admin/AdminDashboardPage')
+    await import('../../routes/staff/manage/AdminDashboardPage')
     await import('../../routes/staff/OverviewPage')
   }, 30_000)
 
@@ -62,7 +62,7 @@ describe('route table', () => {
 
 
   // Compile the dashboard's chart chunk before timing session/guard behavior.
-  beforeAll(async () => { await import('../../routes/admin/AdminDashboardPage') }, 30_000)
+  beforeAll(async () => { await import('../../routes/staff/manage/AdminDashboardPage') }, 30_000)
 
 
   beforeEach(() => useAuthStore.getState().setAuthReady())
@@ -91,10 +91,9 @@ describe('route table', () => {
     vi.stubGlobal('fetch', fetchMock)
     const router = renderWithBootstrapAt('/admin')
 
-    await settled(router, '/admin')
+    await settled(router, '/admin/accounts')
 
-    expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Quản lý tài khoản/i, level: 1 })).toBeInTheDocument()
 
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
@@ -135,6 +134,26 @@ describe('route table', () => {
       await settled(router, '/login')
     })
 
+    it('sends Technical Staff to /technical and keeps Staff out of it', async () => {
+      signIn('TechnicalStaff')
+      const router = renderAt('/technical')
+      await settled(router, '/technical/maps')
+      expect(await screen.findByRole('heading', { name: 'Version map', level: 1 })).toBeInTheDocument()
+    })
+
+    it('keeps Staff out of the technical area', async () => {
+      signIn('Staff')
+      const router = renderAt('/technical/confirmations')
+      await settled(router, '/staff')
+    })
+
+    // SRS LI-09–14: viewers have no accounts, so the old visitor app is gone.
+    it('no longer serves the removed /visit area', async () => {
+      signIn('Staff')
+      const router = renderAt('/visit/book')
+      await settled(router, '/')
+    })
+
     it('sends an operator who types /admin back to their own console', async () => {
       signIn('Staff')
       const router = renderAt('/admin')
@@ -147,10 +166,10 @@ describe('route table', () => {
       await settled(router, '/staff')
     })
 
-    it.each(['/admin/routes', '/admin/routes/new', '/admin/routes/sql-id', '/admin/routes/sql-id/edit'])('guards Route management at %s', async path => {
-      signIn('Staff')
+    it.each(['/staff/manage/routes', '/staff/manage/tours', '/staff/manage/registrations'])('keeps Tour preparation away from a representative at %s', async path => {
+      signIn('Representative')
       const router = renderAt(path)
-      await settled(router, '/staff')
+      await settled(router, '/dai-dien')
     })
 
     it('lets an operator into /staff', async () => {
@@ -175,11 +194,10 @@ describe('route table', () => {
   })
 
   describe('administration', () => {
-    it('renders the administration overview at /admin, not the operations console', async () => {
+    it('opens /admin on Accounts, not the operations console', async () => {
       signIn('Admin')
       const router = renderAt('/admin')
-      await settled(router, '/admin')
-      expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+      await settled(router, '/admin/accounts')
       expect(screen.queryByRole('heading', { name: /Tổng quan vận hành/i })).toBeNull()
     })
 
@@ -191,40 +209,64 @@ describe('route table', () => {
     })
   })
 
-  describe('tour administration', () => {
+  describe('tour preparation (Staff)', () => {
     beforeAll(async () => {
       // Cold Windows transforms can exceed the UI query timeout before React renders.
-      await import('../../routes/admin/AdminRegistrationsPage')
+      await import('../../routes/staff/manage/AdminRegistrationsPage')
     }, 30_000)
 
     it.each([
-      ['/admin/tours', /Quản lý Tour/],
-      ['/admin/tours/new', /Tạo Tour mới/],
-      ['/admin/registrations/pending', /Đăng ký chờ duyệt/],
-      ['/admin/registrations', /Tất cả đăng ký/],
-      ['/admin/routes', /Danh mục tuyến/],
-      ['/admin/history', /Lịch sử Tour/],
-    ])('serves %s as a real admin page', async (path, heading) => {
-      signIn('Admin')
+      ['/staff/manage/tours', /Quản lý Tour/],
+      ['/staff/manage/tours/new', /Tạo Tour mới/],
+      ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
+      ['/staff/manage/registrations', /Tất cả đăng ký/],
+      ['/staff/manage/routes', /Danh mục tuyến/],
+      ['/staff/manage', /Tổng quan chuẩn bị/],
+    ])('serves %s to Staff', async (path, heading) => {
+      signIn('Staff')
       const router = renderAt(path)
       await settled(router, path)
       expect(await screen.findByRole('heading', { name: heading, level: 1 }, { timeout: 10_000 })).toBeInTheDocument()
     })
 
-    it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
-      signIn('Admin')
+    it('opens a Tour at /staff/manage/tours/:id instead of redirecting it to operations', async () => {
+      signIn('Staff')
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
-      const router = renderAt('/admin/tours/tour-03')
-      await settled(router, '/admin/tours/tour-03')
+      const router = renderAt('/staff/manage/tours/tour-03')
+      await settled(router, '/staff/manage/tours/tour-03')
       // The live detail page asks the Tour API; an unknown id stays on the admin page.
       expect(await screen.findByText(/Không tìm thấy Tour/)).toBeInTheDocument()
-      expect(router.state.location.pathname).toBe('/admin/tours/tour-03')
+      expect(router.state.location.pathname).toBe('/staff/manage/tours/tour-03')
     })
 
     it('keeps a mistyped admin path inside administration', async () => {
       signIn('Admin')
       const router = renderAt('/admin/khong-co')
-      await settled(router, '/admin')
+      await settled(router, '/admin/accounts')
+    })
+  })
+
+  describe('Tour preparation URLs moved from /admin', () => {
+    it.each([
+      ['/admin/tours', '/staff/manage/tours'],
+      ['/admin/tours/new', '/staff/manage/tours/new'],
+      ['/admin/tours/tour-03/edit', '/staff/manage/tours/tour-03/edit'],
+      ['/admin/registrations/pending', '/staff/manage/registrations/pending'],
+      ['/admin/routes/sql-id', '/staff/manage/routes/sql-id'],
+      ['/admin/pois/new', '/staff/manage/pois/new'],
+      ['/admin/history', '/staff/history'],
+    ])('redirects %s to %s', async (from, to) => {
+      signIn('Staff')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
+      const router = renderAt(from)
+      await settled(router, to)
+    })
+
+    it('keeps the query string', async () => {
+      signIn('Staff')
+      const router = renderAt('/admin/registrations?review=abc')
+      await settled(router, '/staff/manage/registrations')
+      expect(router.state.location.search).toBe('?review=abc')
     })
   })
 

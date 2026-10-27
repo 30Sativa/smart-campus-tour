@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { isAdminRole, roleLabel } from '../../auth/roles'
+import { usePendingReviewCount } from '../administration/registrations/hooks'
 import { LiveDot } from './StaffUi'
 import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
@@ -47,6 +48,10 @@ export default function StaffShell() {
   const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
 
   const currentPath = activeNavPath(location.pathname)
+  // Registrations, Routes and POIs already read the live SQL backend; everything else here is labelled sample data.
+  const onLiveSqlPage = ['/staff/manage/registrations', '/staff/manage/routes', '/staff/manage/pois'].some((path) => location.pathname.startsWith(path))
+  // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
+  const pendingCount = usePendingReviewCount() ?? 0
   const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
   useEffect(() => {
     if (!menuOpen) return
@@ -73,7 +78,10 @@ export default function StaffShell() {
         subtitle="DT-AMR · Vận hành"
         entries={STAFF_NAV_ENTRIES}
         currentPath={currentPath}
-        badges={{ '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ`, tone: 'danger' } }}
+        badges={{
+          '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ`, tone: 'danger' },
+          '/staff/manage/registrations/pending': { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
+        }}
         // Only an Admin sees a way across, and only because that account
         // genuinely has the other area. An operator is not shown a door it cannot open.
         secondary={showAdminLink ? [{ to: '/admin', label: 'Khu vực quản trị', icon: ADMIN_LINK_ICON }] : undefined}
@@ -106,7 +114,7 @@ export default function StaffShell() {
           </div>
         </header>
 
-        <DevDataBadge>dữ liệu mẫu · mô phỏng thời gian thực</DevDataBadge>
+        {!onLiveSqlPage && <DevDataBadge>dữ liệu mẫu · mô phỏng thời gian thực</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
           <Suspense fallback={<PageSkeleton />}>

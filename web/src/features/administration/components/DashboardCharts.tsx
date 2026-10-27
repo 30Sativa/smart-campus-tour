@@ -87,8 +87,8 @@ export function StudentsByTour({ tours, registrations, now }: { tours: AdminTour
               <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} interval={0} />
               <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
               <Tooltip cursor={{ fill: '#f6f7f9' }} content={<BarTip />} />
-              <Bar dataKey="sent" name="Đã gửi" fill={SENT} radius={[3, 3, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} className="cursor-pointer" onClick={(d) => navigate(`/admin/tours/${(d as unknown as TourRow).id}`)} />
-              <Bar dataKey="approved" name="Đã duyệt" fill={APPROVED} radius={[3, 3, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} className="cursor-pointer" onClick={(d) => navigate(`/admin/tours/${(d as unknown as TourRow).id}`)} />
+              <Bar dataKey="sent" name="Đã gửi" fill={SENT} radius={[3, 3, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} className="cursor-pointer" onClick={(d) => navigate(`/staff/manage/tours/${(d as unknown as TourRow).id}`)} />
+              <Bar dataKey="approved" name="Đã duyệt" fill={APPROVED} radius={[3, 3, 0, 0]} maxBarSize={16} isAnimationActive={!reducedMotion()} className="cursor-pointer" onClick={(d) => navigate(`/staff/manage/tours/${(d as unknown as TourRow).id}`)} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -142,7 +142,7 @@ export function StudentsPerDay({ tours, registrations }: { tours: AdminTour[]; r
     <section className={cardClass} aria-labelledby="dash-line">
       <CardHead id="dash-line" title="Học sinh tham gia mỗi ngày">
         {running && (
-          <Link to={`/admin/tours/${running.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#2563eb] hover:underline">
+          <Link to={`/staff/manage/tours/${running.id}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#2563eb] hover:underline">
             <span aria-hidden="true" className="size-[7px] animate-pulse rounded-full bg-current motion-reduce:animate-none" />{running.code} đang diễn ra · {runningStudents} HS
           </Link>
         )}
@@ -187,7 +187,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
           <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <PieChart>
               <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}
-                onClick={(_, index) => { const picked = data[index]; if (picked) navigate(`/admin/tours?state=${picked.state}`) }} className="cursor-pointer outline-none">
+                onClick={(_, index) => { const picked = data[index]; if (picked) navigate(`/staff/manage/tours?state=${picked.state}`) }} className="cursor-pointer outline-none">
                 {data.map((d) => <Cell key={d.state} fill={TOUR_COLOR[d.state]} />)}
               </Pie>
             </PieChart>
@@ -200,7 +200,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
         <ul className="flex flex-wrap justify-center gap-x-1 gap-y-1" aria-label="Mở Tour theo trạng thái">
           {data.map((d) => (
             <li key={d.state}>
-              <Link to={`/admin/tours?state=${d.state}`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[#4b5563] hover:bg-[#f3f4f6] hover:text-[#111827]">
+              <Link to={`/staff/manage/tours?state=${d.state}`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[#4b5563] hover:bg-[#f3f4f6] hover:text-[#111827]">
                 <span aria-hidden="true" className="size-[9px] rounded-full" style={{ background: TOUR_COLOR[d.state] }} />{d.label} <b className="text-[#111827] tabular-nums">{d.value}</b>
               </Link>
             </li>
@@ -228,7 +228,7 @@ export function RegistrationFunnel({ registrations }: { registrations: AdminRegi
   const width = (n: number) => (sent ? Math.max(4, (n / sent) * 100) : 0)
   const rows: Array<{ label: string; value: number; color: string; exits: ReactNode }> = [
     { label: 'Đã gửi đăng ký', value: sent, color: SENT, exits: cancelled ? <Exit tone="mute">{cancelled} đã hủy</Exit> : null },
-    { label: 'Đã duyệt', value: approved, color: APPROVED, exits: <>{waiting > 0 && <Link to="/admin/registrations/pending" className="rounded-md bg-[#fffbeb] px-2 py-0.5 text-[11.5px] font-semibold text-[#b45309] hover:underline">{waiting} chờ duyệt ›</Link>}{rejected > 0 && <Exit tone="bad">{rejected} từ chối</Exit>}</> },
+    { label: 'Đã duyệt', value: approved, color: APPROVED, exits: <>{waiting > 0 && <Link to="/staff/manage/registrations/pending" className="rounded-md bg-[#fffbeb] px-2 py-0.5 text-[11.5px] font-semibold text-[#b45309] hover:underline">{waiting} chờ duyệt ›</Link>}{rejected > 0 && <Exit tone="bad">{rejected} từ chối</Exit>}</> },
     { label: 'Đã gửi thông tin', value: mailed, color: '#173b59', exits: approved - mailed > 0 ? <Exit tone="warn">{approved - mailed} chưa gửi</Exit> : <Exit tone="ok">Đã gửi đủ</Exit> },
   ]
   return (

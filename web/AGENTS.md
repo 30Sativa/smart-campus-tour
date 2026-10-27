@@ -1,6 +1,6 @@
 # AGENTS.md — `web/`
 
-Public site, legacy visitor app, student remote-Tour page, school Representative
+Public site, student remote-Tour page, school Representative
 area, tour operations console and administration for CampusTour DT-AMR (Work
 Package 4). Read the repo-root `AGENTS.md` first for the
 shared rules; this file only covers what is specific to `web/`.
@@ -17,8 +17,8 @@ shared rules; this file only covers what is specific to `web/`.
   **Zustand**. Do not put server data (bookings, robot status, ...) in
   Zustand — that belongs to TanStack Query's cache.
 - Package manager: **npm** (no workspaces needed — see below).
-- Codebase shape: **one app, one deploy, several route areas**. Public, legacy
-  visitor, Student remote Tour, Representative, operations and administration
+- Codebase shape: **one app, one deploy, several route areas**. Public,
+  Student remote Tour, Representative, operations and administration
   live in the same React app and Vercel project. They are split by route and
   role, not by separate apps:
   - `/` and public routes: visitor-facing, no login required.
@@ -42,20 +42,26 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/admin/*`: Tour administration, `Admin` only: create/edit a Tour while
-    Scheduled, pick a prepared route, review groups (approve / reject with a
-     reason), send participation e-mails, Chốt (→ Ready) / Mở lại / Hủy before
-     Start, and read finished Tours. Admin never starts, holds, advances or ends
-    a run and never controls a robot. Review 1 target adds a limited P1
-    completion/email/invitation-entry summary and POI-content form. The Admin
-    POI catalog at `/admin/pois` is API-backed: it edits content and only edits
-    map/pose before route/history use (ADR-0014). P1 audio upload/dwell warning
-    remains separate. Screen map: `web/docs/admin-tours.md`.
-    Route CRUD at `/admin/routes`, `/admin/routes/new`, `/admin/routes/:routeId`
-    and `/admin/routes/:routeId/edit` is API/SQL-backed under ADR-0017. Reuse
-    `features/administration/routes/`; its cache/contracts are separate from
-    the retained Tour demo Route service. Referenced itineraries are immutable;
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020): overview,
+    create/edit a Tour while Scheduled, pick a prepared route, review groups
+    (approve / reject with a reason), send participation e-mails, Chốt (→ Ready)
+    / Mở lại / Hủy before Start. POIs at `/staff/manage/pois` are API-backed:
+    content edits, map/pose only before route/history use (ADR-0014). Route CRUD
+    at `/staff/manage/routes[...]` is API/SQL-backed under ADR-0017; reuse
+    `features/administration/routes/`. Referenced itineraries are immutable;
     copy to create a new route. Availability never certifies physical safety.
+    Page components still live in `routes/staff/manage/Admin*Page.tsx` and
+    `features/administration/*`; they call `/api/admin/*` until the backend
+    moves authorization to Staff. Screen map: `web/docs/admin-tours.md`.
+  - `/technical/*`: Technical Staff (`TechnicalStaff` role) only: map versions
+    (deploy and localization records), POI YAML check bound to a map version,
+    and version-bound technical confirmation (SRS v1.9 §3.2.b, demo 6). Staff
+    and Admin are kept out. Data is the labelled `mocks/technical-mock.ts` until
+    `/api/technical/*` exists (docs/contracts/web-backend-api-proposal.md B7);
+    the POI import page is a dry run (no save).
+  - `/admin/*`: administration, `Admin` only: Accounts and Roles. `/admin`
+    opens Accounts. Admin never prepares, starts, holds, advances or ends a
+    Tour and never controls a robot.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
     splitting), shell included, so a visitor loading `/` downloads neither and
     an operator never downloads administration.
@@ -63,8 +69,9 @@ shared rules; this file only covers what is specific to `web/`.
     there was only one signed-in area. The old operations URLs
     (`/admin/schedule`, `/admin/amr`, `/admin/alerts`, `/admin/digital-twin`,
     `/admin/reports`) now redirect to their `/staff/*` equivalent;
-    `/admin/tours/:id` is an admin page again (2026-09-21). `/admin` itself is NOT redirected: it is the administration
-    overview. Those redirects are migration scaffolding — delete them once the
+    the Tour preparation URLs (`/admin/{tours,registrations,routes,pois}/...`)
+    redirect to `/staff/manage/...` and `/admin/history` to `/staff/history`
+    (2026-10-27, ADR-0020). `/admin` itself is NOT redirected to `/staff`. Those redirects are migration scaffolding — delete them once the
     old links are gone.
   - The **frontend route namespace and the backend API namespace are
     independent**. Operations screens at `/staff/*` call `/api/staff/*`, and
@@ -132,11 +139,12 @@ web/
     │                     asserts guards, legacy redirects and /admin precedence
     ├── routes/
     │   ├── public/       PublicHomePage.tsx  ("/")
-    │   ├── visitor/      legacy visitor pages ("/visit/*"), lazy-loaded
     │   ├── student/      StudentTourPage.tsx ("/tour", "/tour/:tourId")
     │   ├── representative/  Representative pages ("/dai-dien/*")
     │   ├── staff/        thin ops pages ("/staff/*"), all lazy-loaded
-    │   └── admin/        admin pages ("/admin/*"), all lazy-loaded
+    │   │   └── manage/   Tour preparation pages ("/staff/manage/*")
+    │   ├── technical/    Technical Staff pages ("/technical/*")
+    │   └── admin/        Accounts and Roles ("/admin/*"), all lazy-loaded
     ├── features/
     │   ├── administration/ AdminShell, AdminUi, admin-nav/status/hooks,
     │   │                   accounts/ and POI administration subfeatures,
@@ -151,14 +159,13 @@ web/
     │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
     │   │                  reason, attention, query/realtime hooks and
     │   │                  operation, route, robot and twin components
-    │   ├── student/       legacy fixture flow/status plus invitation/ SQL Tour
-    │   │                  cookie entry, session recovery and leave
-    │   └── visitor/       legacy visitor flow, content, format and map UI
+    │   └── student/       legacy fixture flow/status plus invitation/ SQL Tour
+    │                      cookie entry, session recovery and leave
     ├── components/ui/    multi-feature neutral primitives and shared console
     │                     chrome; tests remain next to their owner
     ├── api/              client.ts, signalr.ts, shared transport envelopes;
     │                     existing contracts/{admin,staff,representative,
-    │                     visitor,...}.ts remain during migration
+    │                     ...}.ts remain during migration
     ├── auth/             AuthBootstrap, AuthLayout + LoginPage/AuthFields,
     │                     access.ts (the areas), roles.ts, use-logout.ts
     ├── mocks/            labelled mock backend — see below
@@ -196,7 +203,7 @@ web/
 - `api/` owns shared HTTP/SignalR transport and cross-feature wire primitives.
   New feature-specific endpoint calls and contracts live under their owning
   feature's `api/`. Existing `api/contracts/{admin,staff,representative,
-  visitor,...}.ts` files are a transition-era layout with current consumers;
+  ...}.ts` files are a transition-era layout with current consumers;
   keep them intact unless a later change can move all consumers mechanically.
 - `auth/` owns app-wide login, session, roles, and access. `stores/` owns only
   app-global client/UI state; TanStack Query remains the owner of server data.
@@ -206,10 +213,10 @@ web/
   tests stay beside the code they cover.
 
 Current route entry points include `/` (public), `/tour` and `/tour/:tourId`
-(Student), `/dai-dien/*` (Representative), `/visit/*` (legacy visitor),
-`/staff/*` (operations), and `/admin/*` (administration). Only the signed-in
-areas use role guards; the Student route has no account guard. The `/visit/*`
-booking flow is legacy implementation, not the current Student product target.
+(Student), `/dai-dien/*` (Representative), `/staff/*` (operations), and
+`/admin/*` (administration). Only the signed-in areas use role guards; the
+Student route has no account guard. The legacy `/visit/*` visitor app was
+removed: SRS v1.9 excludes viewer accounts and self-registration (LI-09–14).
 
 **Who may enter what is written in exactly one place: `src/auth/access.ts`.**
 The router's `RequireArea` guard asks `AREAS[...].allows(role)`, and the
@@ -218,8 +225,7 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `src/auth/roles.ts` holds role normalisation, the Vietnamese role names and
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
-The current frontend contains a legacy visitor registration/tour flow at
-`/visit/*`, plus a mock Student page at `/tour` and live Representative submission pages at
+The current frontend contains a mock Student page at `/tour` and live Representative submission pages at
 `/dai-dien/*`. Student fixture Tours match a group code/name/class; SQL GUID
 Tour links use real code/cookie entry. Representative registration and
 invitation support use SQL and the contract in docs/architecture.md Section 3.2.3.
@@ -254,9 +260,8 @@ Tests live next to the code they cover (`*.test.ts(x)`).
 
 Authentication uses the real `/api/auth/*` endpoints. Login, refresh-cookie
 session restore and logout are wired to the backend. Auth responses accept one
-supported role: `Admin`, `Staff` or `Representative`; the legacy Visitor area
-remains in the frontend route model, but real Auth does not issue a Visitor
-account. Student invitation access is a separate browser-session target.
+supported role: `Admin`, `Staff` or `Representative`; there is no Visitor
+role (an unknown role normalises to `null` and lands on `/`). Student invitation access is a separate browser-session target.
 
 Business features without a live backend binding continue to use labelled
 fixtures in `src/mocks/`. There is no toggle: `VITE_USE_MOCK_API` and every
@@ -283,7 +288,7 @@ deliberately unwired until the corresponding backend features are ready.
 Feature-specific account and POI API bindings already live under
 `features/administration/{accounts,pois}/api/`. New feature endpoint calls and
 contracts follow that placement. Existing top-level `contracts/admin.ts`,
-`staff.ts`, `representative.ts`, `visitor.ts` and related files are retained
+`staff.ts`, `representative.ts` and related files are retained
 while current mock/API consumers share them; do not duplicate their types or
 move them piecemeal. Keep business fixtures until each feature has a real
 backend binding; never use them as fallback after a failed HTTP request.
@@ -299,8 +304,9 @@ backend binding; never use them as fallback after a failed HTTP request.
   will guess the URL", and never rely on simply not rendering a nav link.
 - **No dead navigation.** A nav item must open a page that does something with
   real data. Administration's entries are exactly the scope's Admin work
-  (`features/administration/admin-nav.ts`); do not add robot, fleet, free-route
-  editor or scenario controls there. The Review 1 target includes a bounded P1
+  (`features/administration/admin-nav.ts`: accounts, roles, later audit); do
+  not add Tour preparation, robot, fleet, free-route editor or scenario
+  controls there. The Review 1 target includes a bounded P1
   summary (Tour completion/cancellation, email send results, invitation entry);
   current mock dashboard values do not satisfy it.
 - **No backend enum reaches a screen.** The API speaks `InProgress`, `Live`,
@@ -322,15 +328,10 @@ backend binding; never use them as fallback after a failed HTTP request.
     than one surface reuses `.auth-input` and `.auth-submit` and those values
     must be declared once.
   - `auth/auth.css` styles the form controls. Its root carries `.lp`.
-  - `features/visitor/visitor.css` is the same system at application density: the
-    app shell, and the handful of patterns the landing page has no equivalent for
-    (badge, filter pill, tab row, stepper, chat column, map plane). Its root
-    carries `.lp` as well as `.vs`, and **every colour, radius and shadow in it
-    resolves to a `--lp-*` token** — it picks no palette of its own.
   - The rule this exception exists under: a *visitor-facing* surface may extend
     this layer; anything else may not. **Admin and staff screens stay on Tailwind
     utilities — do not grow a CSS file for them.**
-  - When adding to the visitor area, reuse before you extend and extend before
+  - When adding to a public-facing surface, reuse before you extend and extend before
     you create: `.lp-btn`, `.lp-navlink`, `.lp-brand`, `.lp-h3`, `.lp-meta`,
     `.auth-input`, `.auth-submit` and `AuthField` are all already there.
 - **Operations and administration share one palette and one component set.**
@@ -377,14 +378,6 @@ backend binding; never use them as fallback after a failed HTTP request.
     on that same screen. That is presentation. Anything genuinely derived still
     comes from the backend
     ([backend/AGENTS.md Section 3](../backend/AGENTS.md#3-current-model-and-fleet-boundary)).
-- **The visitor area is an English surface.** The public, staff and admin areas
-  are Vietnamese. Its strings live in `features/visitor/visitor-content.ts` and
-  its status vocabulary in `features/visitor/visitor-status.ts`, which is the
-  same tone scale as `features/staff/status.ts` with English labels and
-  tone *tokens* rather than Tailwind classes, so the badge can follow the
-  light/dark switch. The `Intl` locale is `en-GB` in
-  `features/visitor/visitor-format.ts`. Same hard rule as everywhere else: no
-  backend enum reaches a screen.
 
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for

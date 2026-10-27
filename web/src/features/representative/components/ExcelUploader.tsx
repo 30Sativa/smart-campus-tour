@@ -53,7 +53,7 @@ export function ExcelUploader({ accepted, onAccept, inUse, error }: {
       <div className="rep-upload-spec">
         <div style={{ minWidth: 0, flex: 1 }}>
           <p><b>Yêu cầu file danh sách</b></p>
-          <p style={{ marginTop: 4 }}>Các cột <b>LoaiDong, HoTen, Email</b> bắt buộc, cột <b>Lop</b> không bắt buộc. LoaiDong: CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. File .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} dòng lời mời.</p>
+          <p style={{ marginTop: 4 }}>Các cột <b>LoaiDong, HoTen, Email</b> bắt buộc, cột <b>Lop</b> không bắt buộc. LoaiDong: CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. File .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} điểm xem (dòng lời mời).</p>
         </div>
         <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes(TEMPLATE_FILE_NAME, rosterTemplateBytes())}>
           <Download size={16} aria-hidden="true" />Tải file Excel mẫu

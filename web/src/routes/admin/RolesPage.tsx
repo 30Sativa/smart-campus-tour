@@ -3,17 +3,16 @@ import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../
 import { AdminPage } from '../../features/administration/AdminUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
 import { STAFF_NAV } from '../../features/staff/staff-nav'
-import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
+import { REP_NAV } from '../../features/representative/rep-nav'
+import { TECHNICAL_NAV } from '../../features/technical/technical-nav'
 import { ADMIN_NAV } from '../../features/administration/admin-nav'
 
 const AREA_PAGES: Record<string, string[]> = {
-  public: ['Trang giới thiệu', 'Đăng nhập', 'Đăng ký'],
-  // The visitor app is an English surface, so its own nav labels are English.
-  // They are listed as the area ships them rather than translated here, which
-  // would put a second name on every page.
-  visitor: [...VISITOR_NAV, ...VISITOR_SECONDARY_NAV].map((item) => item.label),
+  public: ['Trang giới thiệu', 'Đăng nhập', 'Trang xem tour (link mời)'],
   staff: STAFF_NAV.map((item) => item.label),
   admin: ADMIN_NAV.map((item) => item.label),
+  representative: REP_NAV.map((item) => item.label),
+  technical: TECHNICAL_NAV.map((item) => item.label),
 }
 
 /**
@@ -156,8 +155,8 @@ export default function RolesPage() {
             title="Mỗi khu vực gồm những gì"
             description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
           />
-          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-4 lg:divide-y-0">
-            {AREAS.filter((area) => area.id !== 'visitor').map((area) => (
+          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-3 lg:divide-y-0">
+            {AREAS.map((area) => (
               <div key={area.id} className="p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-bold text-[#1e293b]">{area.label}</h3>

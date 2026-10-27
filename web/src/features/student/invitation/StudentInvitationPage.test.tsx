@@ -243,3 +243,23 @@ it.each([['CANCELLED', 'Buổi tham quan đã kết thúc sớm'], ['COMPLETED',
     expect(await screen.findByRole('heading', { name: title })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Thoát phiên' })).toBeEnabled()
   })
+
+it('stops live playback within 10 s after the invitation is revoked or reissued', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    let revoked = false
+    const running = { ...info, tourState: 'RUNNING', fallbackVideoUrl: '/videos/home.mp4' }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) =>
+      url.endsWith('/view') ? response(view) : revoked ? response(null, 401) : response(running)))
+    const { container } = mount()
+    await screen.findByText('Video dự phòng · chế độ suy giảm')
+    expect(container.querySelector('video')).not.toBeNull()
+
+    revoked = true
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+    expect(await screen.findByLabelText('Mã truy cập')).toBeVisible()
+    expect(container.querySelector('video')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})

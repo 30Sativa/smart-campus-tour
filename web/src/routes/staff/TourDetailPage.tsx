@@ -51,7 +51,7 @@ export default function TourDetailPage() {
       {tour.state === 'Scheduled' && tour.readyBlockers.length > 0 && (
         <div className="mb-5 rounded-2xl border border-[#fde68a] bg-[#fffbeb] p-4 text-xs font-medium text-[#b45309] flex items-center gap-2 shadow-xs">
           <strong className="font-bold">Chưa sẵn sàng:</strong>
-          <span>{tour.readyBlockers.join(' · ')}. Admin chốt buổi khi đủ điều kiện.</span>
+          <span>{tour.readyBlockers.join(' · ')}. Chốt buổi ở mục Chuẩn bị Tour khi đủ điều kiện.</span>
         </div>
       )}
 
@@ -125,7 +125,7 @@ export default function TourDetailPage() {
             </div>
           </section>
           <section className={panelClass} aria-label="Đoàn đăng ký">
-            <PanelHead title="Đoàn đăng ký" description="Admin duyệt và gửi thông tin tham gia; Staff theo dõi." />
+            <PanelHead title="Đoàn đăng ký" description="Duyệt và gửi thông tin tham gia ở mục Chuẩn bị Tour." />
             <div className="p-5">
               <RegistrationList registrations={tour.registrations} />
             </div>

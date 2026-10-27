@@ -8,7 +8,7 @@ import type { RegistrationState, TourState } from '../api/types'
 export function RegistrationTrack({ state, tourState }: { state: RegistrationState; tourState: TourState }) {
   const finished = state === 'APPROVED' && tourState === 'COMPLETED'
   const reached = state === 'CANCELLED' ? 0 : state === 'SUBMITTED' || state === 'REJECTED' ? 1 : finished ? 3 : 2
-  const labels = ['Đã gửi', state === 'REJECTED' ? 'Bị từ chối' : state === 'CANCELLED' ? 'Đã hủy' : 'Admin duyệt', 'Đã duyệt', finished ? 'Đã tham quan' : 'Ngày tham quan']
+  const labels = ['Đã gửi', state === 'REJECTED' ? 'Bị từ chối' : state === 'CANCELLED' ? 'Đã hủy' : 'Nhà trường duyệt', 'Đã duyệt', finished ? 'Đã tham quan' : 'Ngày tham quan']
   const offset = 100 - (reached / 3) * 100
   return (
     <div className={`rep-track${state === 'REJECTED' || state === 'CANCELLED' ? ' is-bad' : ''}`} style={{ '--rep-track-off': offset } as React.CSSProperties} aria-hidden="true">

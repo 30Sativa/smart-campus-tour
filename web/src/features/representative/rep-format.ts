@@ -87,5 +87,5 @@ export function closedNote(r: RegistrationSummary): ClosedNote {
   if (r.tourState === 'CANCELLED')
     return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: 'Buổi tham quan đã bị hủy.', at: `Cập nhật ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
   const at = r.reviewedAt ?? r.updatedAt
-  return { badge: 'Bị từ chối', tone: 'danger', by: 'Admin', reason: r.rejectionReason?.trim() || 'Admin không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
+  return { badge: 'Bị từ chối', tone: 'danger', by: 'Nhà trường', reason: r.rejectionReason?.trim() || 'Nhà trường không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
 }

@@ -138,7 +138,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
         ) : tab === 'groups' ? (
           <>
             <RegistrationList registrations={tour.registrations} />
-            <p className="mt-4 text-[11.5px] text-[#94a3b8]">Admin duyệt và gửi thông tin tham gia; Staff chỉ theo dõi.</p>
+            <p className="mt-4 text-[11.5px] text-[#94a3b8]">Duyệt và gửi thông tin tham gia ở mục Chuẩn bị Tour.</p>
           </>
         ) : tab === 'route' ? (
           <TourTimeline tour={tour} />
@@ -159,7 +159,7 @@ function Notice({ tour }: { tour: TourOperation }) {
     body = <><b>Cần hỗ trợ{tour.reason ? ` · ${REASON_SHORT[tour.reason] ?? tour.reason}` : ''}.</b> {tour.reasonDetail ?? 'Mở điều hành để xử lý.'}</>
   } else if (tour.state === 'Scheduled' && tour.readyBlockers.length > 0) {
     tone = 'warn'
-    body = <><b>Chưa sẵn sàng.</b> {tour.readyBlockers.join(' · ')}. Admin chốt buổi khi đủ điều kiện; Staff chưa cần làm gì.</>
+    body = <><b>Chưa sẵn sàng.</b> {tour.readyBlockers.join(' · ')}. Chốt buổi ở mục Chuẩn bị Tour khi đủ điều kiện.</>
   } else if (tour.state === 'Ready' && !tour.allowedActions.start.allowed) {
     tone = 'warn'
     body = <><b>Chưa bắt đầu được.</b> {tour.allowedActions.start.reason ?? 'Chưa đủ điều kiện kiểm tra.'}</>

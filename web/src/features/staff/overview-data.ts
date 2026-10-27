@@ -80,7 +80,7 @@ export const STATE_TONE: Array<{ state: TourState; label: string; color: string 
   { state: 'Completed', label: 'Hoàn thành', color: '#173b59' },
   { state: 'Running', label: 'Đang chạy', color: '#2d719e' },
   { state: 'Ready', label: 'Sẵn sàng', color: '#8cc6ea' },
-  { state: 'Scheduled', label: 'Chờ Admin chốt', color: '#cfe3f1' },
+  { state: 'Scheduled', label: 'Chờ chốt', color: '#cfe3f1' },
   { state: 'Cancelled', label: 'Đã hủy', color: '#e5e7eb' },
 ]
 

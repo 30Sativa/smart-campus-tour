@@ -56,7 +56,11 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0017](0017-admin-route-management.md) | Admin Route CRUD; frozen referenced itineraries; CRUD, bootstrap seed and technical import boundaries | owner-authorized implementation scope; supersedes seed-only Route/dwell portions of 0009/0012 |
 | [0018](0018-admin-tour-management.md) | Backend SCHEDULED Tour CRUD, durable retries and pre-Start cancellation with access revocation | owner-authorized implementation scope; no runtime or frontend integration |
 | [0019](0019-https-fleet-sync.md) | HTTPS Fleet Sync v1 telemetry with per-robot credentials and Staff operations projection | selected for M0/B1 implementation; group confirmation and physical readiness remain pending |
+
+| [0020](0020-staff-owns-tour-preparation.md) | Staff owns Tour preparation (`/staff/manage/*`); Admin keeps accounts, roles and audit | accepted by group; advisor review pending; backend authorization change pending |
+
 | [0020](0020-srs-v02-business-baseline-and-technical-staff.md) | SRS v0.2 target adoption, scoped business succession and TechnicalStaff account foundation | owner-authorized; limited account slice implemented; other gaps/pending decisions retained |
+
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

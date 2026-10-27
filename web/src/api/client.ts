@@ -85,7 +85,7 @@ function isAuthResponse(value: unknown): value is AuthResponse {
     && response.userId.length > 0
     && typeof response.username === 'string'
     && response.username.length > 0
-    && ['Admin', 'Staff', 'Representative'].includes(response.role ?? '')
+    && ['Admin', 'Staff', 'Representative', 'TechnicalStaff'].includes(response.role ?? '')
 }
 /** Restore the current session from its HttpOnly cookie; stale responses reject with AbortError. */
 export async function restoreAuthSession(): Promise<void> {
@@ -146,7 +146,7 @@ export async function apiClient<T>(
   return body.trim() ? (JSON.parse(body) as T) : (undefined as T)
 }
 
-/** Authenticate an account and accept only the three roles supported by Auth V1. */
+/** Authenticate an account and accept only the supported application roles. */
 export async function login(username: string, password: string): Promise<AuthResponse> {
   const response = await apiClient<unknown>('/api/auth/login', {
     method: 'POST',

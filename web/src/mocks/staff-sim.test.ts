@@ -20,7 +20,7 @@ describe('remote-tour simulation', () => {
   beforeEach(() => world.resetSim())
 
   it('never starts a Scheduled session, and starts a Ready one only when the robot is free', () => {
-    expect(() => world.startTour('tour-03', confirmed)).toThrow(/Admin/)
+    expect(() => world.startTour('tour-03', confirmed)).toThrow(/Chờ chốt buổi/)
     expect(view('tour-02').allowedActions.start).toMatchObject({ allowed: false, reason: 'Đang phục vụ T-01' })
     expect(() => world.startTour('tour-02', confirmed)).toThrow(world.SimRejection)
   })

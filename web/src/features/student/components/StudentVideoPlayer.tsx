@@ -26,6 +26,8 @@ interface StudentVideoPlayerProps {
   emptyMessage?: string
 }
 
+export const FALLBACK_BADGE = 'Video dự phòng · chế độ suy giảm'
+
 const QUEST_WAITING: Record<'idle' | 'connecting' | 'offline' | 'error', string> = {
   idle: 'Đang chờ nguồn hình…',
   connecting: 'Đang kết nối hình ảnh trực tiếp từ robot…',
@@ -56,7 +58,10 @@ export function StudentVideoPlayer({
   const questUrl = QUEST_WHEP_URL
   const sampleVideo = !questUrl && streamUrl?.startsWith('/videos/')
   const { status: questStatus, retry: retryQuest } = useWhepStream(videoRef, questUrl, active)
-  const questWaiting = questUrl && questStatus !== 'live' ? questStatus : null
+  // SRS v1.9: when the live stream is lost, viewers get the Tour's fallback
+  // video, labelled as a degraded mode, while the live stream keeps reconnecting.
+  const degraded = Boolean(questUrl && streamUrl && (questStatus === 'offline' || questStatus === 'error'))
+  const questWaiting = questUrl && questStatus !== 'live' && !degraded ? questStatus : null
   const noSource = !questUrl && !streamUrl
 
   useEffect(() => {
@@ -126,10 +131,23 @@ export function StudentVideoPlayer({
         autoPlay
         muted={audioMuted}
       />
+      {degraded && (
+        <video
+          src={streamUrl}
+          aria-label="Video dự phòng"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          loop
+          playsInline
+          autoPlay
+          muted={audioMuted}
+        />
+      )}
 
       <div className="st-video__top">
         <div className="st-video__badges">
-          {questWaiting ? (
+          {degraded ? (
+            <span className="st-badge st-badge--sample">{FALLBACK_BADGE}</span>
+          ) : questWaiting ? (
             <span className="st-badge st-badge--dark">{questWaiting === 'connecting' ? 'Đang kết nối' : 'Mất tín hiệu'}</span>
           ) : noSource ? (
             <span className="st-badge st-badge--dark">Chưa có hình</span>

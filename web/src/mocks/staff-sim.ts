@@ -385,8 +385,8 @@ function seed(): SimState {
   })
   const started = now() - minutes(4)
   running.startedAt = iso(started)
-  log(running, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', started - minutes(60 * 24 * 3))
-  log(running, 'ReadyConfirmed', 'Admin chốt buổi: 3 đoàn đã duyệt, không còn đăng ký chờ.', 'Admin', started - minutes(60 * 20))
+  log(running, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', started - minutes(60 * 24 * 3))
+  log(running, 'ReadyConfirmed', 'Staff chốt buổi: 3 đoàn đã duyệt, không còn đăng ký chờ.', 'Admin', started - minutes(60 * 20))
   log(running, 'TourStarted', 'Bắt đầu phiên với robot_01. Đã xác nhận robot tại điểm xuất phát, khu vực an toàn, đã xem preview.', OPERATOR, started)
   const first = running.stops[0]
   first.status = 'Completed'
@@ -419,8 +419,8 @@ function seed(): SimState {
       registration('reg-05', 'Trường Quốc tế Á Châu', 'Cô Bùi Ngọc Vy', 22, 'Approved', 5),
     ],
   })
-  log(ready, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24 * 2))
-  log(ready, 'ReadyConfirmed', 'Admin chốt buổi: 2 đoàn đã duyệt.', 'Admin', now() - minutes(90))
+  log(ready, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24 * 2))
+  log(ready, 'ReadyConfirmed', 'Staff chốt buổi: 2 đoàn đã duyệt.', 'Admin', now() - minutes(90))
 
   // Admin scenario A: Scheduled, 2 approved + 1 waiting (a roster replaced after
   // approval), so it cannot be finalized yet.
@@ -434,7 +434,7 @@ function seed(): SimState {
     ],
   })
   scheduled.version = 6
-  log(scheduled, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24))
+  log(scheduled, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 24))
   log(scheduled, 'RegistrationApproved', 'Duyệt đăng ký THPT Nguyễn Du (30 học sinh).', 'admin', now() - minutes(60 * 22))
   log(scheduled, 'RegistrationApproved', 'Duyệt đăng ký THPT Bùi Thị Xuân (24 học sinh).', 'admin', now() - minutes(60 * 21))
   log(scheduled, 'InvitationSent', 'Gửi thông tin tham gia tới đại diện THPT Bùi Thị Xuân.', 'admin', now() - minutes(60 * 20))
@@ -455,11 +455,11 @@ function seed(): SimState {
     ],
   })
   finalizable.version = 4
-  log(finalizable, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 30))
+  log(finalizable, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 30))
 
   // A Scheduled Tour nobody has registered for yet.
   const empty = tour({ id: 'tour-06', code: 'T-06', name: 'Tham quan từ xa · Chiều thứ Năm', state: 'Scheduled', route: 'main', at: (tomorrow.getTime() - now()) / 60_000 + 60 * 24 * 2 + 5 * 60 })
-  log(empty, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 3))
+  log(empty, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 3))
 
   // On a route whose config became invalid, with one fresh submission and one
   // group that cancelled itself.
@@ -471,13 +471,13 @@ function seed(): SimState {
     ],
   })
   labs.version = 3
-  log(labs, 'TourCreated', 'Admin tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 26))
+  log(labs, 'TourCreated', 'Staff tạo buổi trên tuyến đã chuẩn bị.', 'Admin', now() - minutes(60 * 26))
 
   const completed = tour({ id: 'tour-00', code: 'T-00', name: 'Tham quan từ xa · Buổi thử', state: 'Completed', route: 'main', at: -150, registrations: [registration('reg-00', 'THPT Phú Nhuận', 'Cô Đặng Thu Trâm', 24, 'Approved', 8)] })
   finishSeed(completed, now() - minutes(150), 27, null)
 
   const cancelled = tour({ id: 'tour-04', code: 'T-04', name: 'Tham quan từ xa · Buổi tối', state: 'Cancelled', route: 'heritage', at: 300, registrations: [registration('reg-08', 'THCS Lê Quý Đôn', 'Thầy Phạm Hoàng Phúc', 18, 'Approved', 9)] })
-  cancelled.endReason = 'Admin hủy trước giờ chạy: trường báo trùng lịch kiểm tra.'
+  cancelled.endReason = 'Staff hủy trước giờ chạy: trường báo trùng lịch kiểm tra.'
   cancelled.endedAt = iso(now() - minutes(70))
   log(cancelled, 'TourCancelled', cancelled.endReason, 'Admin', now() - minutes(70))
 
@@ -890,12 +890,12 @@ function actions(t: SimTour): StaffActions {
   const failed = checks.find((check) => !check.passed)
   const atPoi = t.step === 'Observing' && t.visitOpen
   const busyReason = t.pending ? `Đang chờ kết quả: ${t.pending.label}` : STEP_WORDS[t.step as TourStep] ?? 'Không ở POI'
-  const notRunning = t.state === 'Scheduled' ? 'Buổi chưa được Admin chốt' : t.state === 'Ready' ? 'Buổi chưa bắt đầu' : 'Buổi đã kết thúc'
+  const notRunning = t.state === 'Scheduled' ? 'Buổi chưa được chốt' : t.state === 'Ready' ? 'Buổi chưa bắt đầu' : 'Buổi đã kết thúc'
   const assistReason = `Đang cần hỗ trợ: ${t.reasonDetail ?? ''}`.trim()
   const robotOk = Boolean(r && r.connection === 'Live')
 
   return {
-    start: gate(t.state === 'Ready' && !failed, t.state === 'Scheduled' ? `Chờ Admin chốt buổi${readyBlockers(t).length ? `: ${readyBlockers(t).join('; ')}` : ''}` : t.state !== 'Ready' ? notRunning : failed?.detail),
+    start: gate(t.state === 'Ready' && !failed, t.state === 'Scheduled' ? `Chờ chốt buổi${readyBlockers(t).length ? `: ${readyBlockers(t).join('; ')}` : ''}` : t.state !== 'Ready' ? notRunning : failed?.detail),
     hold: gate(normal && atPoi && !t.hold, !running ? notRunning : assist ? assistReason : t.hold ? 'Đang giữ tại POI' : !atPoi ? `Chỉ giữ khi robot đã dừng quan sát tại POI (${busyReason.toLowerCase()})` : null),
     next: gate(normal && atPoi && !t.pending, !running ? notRunning : assist ? assistReason : !atPoi ? busyReason : null),
     endEarly: gate(running, notRunning),

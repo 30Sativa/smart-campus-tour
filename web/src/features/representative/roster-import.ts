@@ -3,7 +3,8 @@ import { XlsxError, buildWorkbook, readFirstSheet } from './xlsx-lite'
 import type { SheetRow } from './xlsx-lite'
 
 export const ROSTER_MAX_BYTES = 2 * 1024 * 1024
-export const ROSTER_MAX_ROWS = 1000
+/** SRS v1.9 §3.2.b: at most 10 viewing points (individual or shared-screen rows) per registration. */
+export const ROSTER_MAX_ROWS = 10
 export const NAME_MAX = 150
 export const CLASS_MAX = 100
 
@@ -110,7 +111,7 @@ export function rowsToRoster(fileName: string, rows: SheetRow[]): ImportResult {
     roster.push({ rowNumber: row.rowNumber, rowType: type === 'CA_NHAN' ? 'INDIVIDUAL' : 'SHARED_VIEWING', displayName, email, className: className || null })
   }
   if (!roster.length) return fail(fileName, { row: null, column: null, message: 'Danh sách cần ít nhất một dòng lời mời.' })
-  if (roster.length > ROSTER_MAX_ROWS) return fail(fileName, { row: null, column: null, message: `Vượt giới hạn ${ROSTER_MAX_ROWS} dòng.` })
+  if (roster.length > ROSTER_MAX_ROWS) return fail(fileName, { row: null, column: null, message: `Mỗi đăng ký tối đa ${ROSTER_MAX_ROWS} điểm xem (dòng lời mời).` })
   if (issues.length) return fail(fileName, ...issues)
   return { ok: true, fileName, rows: roster, withClass: roster.filter(row => row.className).length, skippedBlank }
 }

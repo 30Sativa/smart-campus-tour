@@ -25,6 +25,6 @@ describe('Đăng ký của tôi groups', () => {
     expect(closedNote({ ...base, state: 'CANCELLED' }).by).toBe('Đại diện')
     expect(closedNote({ ...base, state: 'APPROVED', tourState: 'CANCELLED' }).reason).toBe('Buổi tham quan đã bị hủy.')
     expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY', rejectionReason: ' Thiếu lớp ' }).reason).toBe('Thiếu lớp')
-    expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY' }).reason).toBe('Admin không ghi lý do.')
+    expect(closedNote({ ...base, state: 'REJECTED', tourState: 'READY' }).reason).toBe('Nhà trường không ghi lý do.')
   })
 })

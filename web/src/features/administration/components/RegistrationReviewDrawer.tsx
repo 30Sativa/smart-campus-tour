@@ -98,7 +98,7 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
               <RegistrationStateBadge state={reg.state} />
               <span className="text-xs text-[#94a3b8]">Tour:</span>
               <TourStateBadge state={reg.tourState} />
-              <Link to={`/admin/tours/${reg.tourId}?tab=registrations`} onClick={close} className="text-xs font-bold text-[#2563eb] hover:underline">Mở Tour</Link>
+              <Link to={`/staff/manage/tours/${reg.tourId}?tab=registrations`} onClick={close} className="text-xs font-bold text-[#2563eb] hover:underline">Mở Tour</Link>
             </div>
 
             {stale && (

@@ -86,7 +86,7 @@ export function AttentionCard({ tours, readyRobots, robotCount }: { tours: TourO
       ) : (
         <p className="flex flex-col gap-1 rounded-[10px] bg-[#f6f7f9] p-3"><span className="text-[30px] leading-none font-bold text-[#111827]">0</span><span className="text-[13px] text-[#4b5563]">Không có buổi nào cần hỗ trợ</span></p>
       )}
-      <p className="text-xs text-[#6b7280]">{waiting} buổi chờ Admin chốt · robot rảnh {readyRobots}/{robotCount}</p>
+      <p className="text-xs text-[#6b7280]">{waiting} buổi chờ chốt · robot rảnh {readyRobots}/{robotCount}</p>
     </section>
   )
 }

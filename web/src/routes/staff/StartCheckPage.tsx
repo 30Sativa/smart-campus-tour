@@ -17,11 +17,12 @@ import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
 import { RegistrationList, StartChecklist, TourStateBadges } from '../../features/staff/components/TourParts'
 import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
 import { useNow } from '../../features/staff/use-now'
+import { startTimeGate } from '../../features/staff/start-time'
 
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
-  { key: 'robotPlaced', label: 'Robot đặt đúng điểm xuất phát, đã định vị', hint: 'Kiểm tra tại chỗ: vị trí trên Twin khớp thực tế.' },
-  { key: 'areaClear', label: 'Khu vực chạy an toàn, có người hỗ trợ tại chỗ', hint: 'Tuyến thông thoáng, người hỗ trợ biết cách dừng robot.' },
-  { key: 'previewChecked', label: 'Đã xem preview: hình rõ, đúng góc FRONT', hint: 'Xem khung preview bên phải trước khi bắt đầu.' },
+  { key: 'robotPlaced', label: 'Robot và điều hướng: đặt đúng điểm xuất phát, đã định vị', hint: 'Kiểm tra tại chỗ: vị trí trên Twin khớp thực tế, tuyến thông thoáng.' },
+  { key: 'areaClear', label: 'Người phụ trách an toàn đã đứng cạnh nút dừng khẩn cấp', hint: 'Đi kèm robot suốt buổi; người vận hành và người phụ trách an toàn đều bắt buộc.' },
+  { key: 'previewChecked', label: 'Camera và livestream: hình rõ, đúng góc FRONT', hint: 'Xem khung preview bên phải trước khi bắt đầu.' },
 ]
 
 const errorText = (error: unknown) => (error instanceof ApiError && error.body ? error.body : 'Không bắt đầu được buổi. Kiểm tra kết nối rồi thử lại.')
@@ -56,7 +57,7 @@ export default function StartCheckPage() {
     const running = data.state === 'Running'
     return (
       <StaffPage>
-        <PageHeader eyebrow={`Kiểm tra trước khi bắt đầu · ${data.code}`} title={data.name} description={data.state === 'Scheduled' ? `Buổi chưa được Admin chốt: ${data.readyBlockers.join('; ')}. Staff chỉ bắt đầu buổi đã ở trạng thái Sẵn sàng.` : `Buổi đang ở trạng thái ${statusLabel(data.state).toLowerCase()}.`} />
+        <PageHeader eyebrow={`Kiểm tra trước khi bắt đầu · ${data.code}`} title={data.name} description={data.state === 'Scheduled' ? `Buổi chưa được chốt: ${data.readyBlockers.join('; ')}. Staff chỉ bắt đầu buổi đã ở trạng thái Sẵn sàng.` : `Buổi đang ở trạng thái ${statusLabel(data.state).toLowerCase()}.`} />
         <div className={`${panelClass} flex flex-wrap items-center justify-between gap-3 p-5`}>
           <TourStateBadges tour={data} size="md" />
           <Link to={running ? `/staff/live/${data.id}` : `/staff/tours/${data.id}`} className={buttonClass('primary')}>{running ? 'Mở điều hành trực tiếp' : 'Xem chi tiết buổi'}</Link>
@@ -66,8 +67,9 @@ export default function StartCheckPage() {
   }
 
   const gate = data.allowedActions.start
+  const timeGate = startTimeGate(data.scheduledAt, now)
   const confirmed = CONFIRMATIONS.every(({ key }) => confirmation[key])
-  const canStart = gate.allowed && confirmed
+  const canStart = gate.allowed && timeGate.allowed && confirmed
   const groups = groupSummary(data)
   const passed = data.startChecks.filter((check) => check.passed).length
 
@@ -109,7 +111,7 @@ export default function StartCheckPage() {
               <Play size={18} aria-hidden="true" />Bắt đầu buổi
             </button>
             <p id={`start-reason-${data.id}`} className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#1f7a55]' : 'text-[#8a5a06]'}`}>
-              {canStart ? `Đủ điều kiện. Khi bắt đầu, backend nhận ${robot?.name ?? 'robot'} và gửi chặng đầu.` : !gate.allowed ? `Chưa thể bắt đầu: ${gate.reason}` : 'Đánh dấu đủ 3 xác nhận tại chỗ để bắt đầu.'}
+              {canStart ? `Đủ điều kiện. Khi bắt đầu, backend nhận ${robot?.name ?? 'robot'} và gửi chặng đầu.` : !gate.allowed ? `Chưa thể bắt đầu: ${gate.reason}` : !timeGate.allowed ? timeGate.reason : 'Đánh dấu đủ 3 xác nhận tại chỗ để bắt đầu.'}
             </p>
           </div>
         </section>
@@ -128,7 +130,7 @@ export default function StartCheckPage() {
             <div className="p-5">{robot ? <><RobotHeader robot={robot} /><div className="mt-3"><RobotTelemetry robot={robot} now={now} /></div></> : <p className="text-sm text-[#859bad]">Chưa có dữ liệu robot.</p>}</div>
           </section>
           <section className={panelClass} aria-label="Đoàn đăng ký">
-            <PanelHead title="Đoàn đã đăng ký" description="Admin đã chốt; Staff chỉ xem." />
+            <PanelHead title="Đoàn đã đăng ký" description="Danh sách đã chốt ở bước chuẩn bị Tour." />
             <div className="p-5"><RegistrationList registrations={data.registrations} /></div>
           </section>
         </aside>

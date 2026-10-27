@@ -32,7 +32,7 @@ export function RegistrationCard({ registration: r }: { registration: Registrati
         <h3><Link to={to}>{r.tourName}</Link></h3>
         <p className="rep-reg-sub">{group ? `${group}, ${r.schoolName}` : r.schoolName} · <span className="num">{formatTime(r.tourScheduledStartAt)}, {formatDate(r.tourScheduledStartAt)}</span></p>
         <p className="rep-reg-meta"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Users size={14} aria-hidden="true" /><span className="num">{r.rowCount}</span> dòng lời mời</span><span>Cập nhật {formatRelative(r.updatedAt)}</span>{note && <span>{note}</span>}</p>
-        {needsFix && r.rejectionReason && <p className="rep-reg-fix"><b>Admin yêu cầu sửa:</b> {r.rejectionReason}</p>}
+        {needsFix && r.rejectionReason && <p className="rep-reg-fix"><b>Nhà trường yêu cầu sửa:</b> {r.rejectionReason}</p>}
       </div>
       <RegistrationTrack state={r.state} tourState={r.tourState} />
       <div className="rep-reg-side">

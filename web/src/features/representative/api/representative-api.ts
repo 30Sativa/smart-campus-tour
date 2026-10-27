@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../api/contracts/shared'
 import type { ListParameters, RegistrationInput, RegistrationSummary, RepresentativeRegistration, RepresentativeTour } from './types'
+import { withRegistrationDeadline, withTourDeadline } from '../registration-deadline'
 
 const root = '/api/representative'
 function query(parameters: ListParameters) {
@@ -14,10 +15,13 @@ async function detail<T>(path: string, signal?: AbortSignal) {
   return response.data
 }
 export const representativeApi = {
-  tours: (parameters: ListParameters, signal?: AbortSignal) => apiClient<PagedApiResponse<RepresentativeTour>>(root + '/tours' + query(parameters), { signal }),
-  tour: (id: string, signal?: AbortSignal) => detail<RepresentativeTour>(`/tours/${id}`, signal),
+  tours: async (parameters: ListParameters, signal?: AbortSignal) => {
+    const response = await apiClient<PagedApiResponse<RepresentativeTour>>(root + '/tours' + query(parameters), { signal })
+    return { ...response, data: response.data.map((tour) => withTourDeadline(tour)) }
+  },
+  tour: async (id: string, signal?: AbortSignal) => withTourDeadline(await detail<RepresentativeTour>(`/tours/${id}`, signal)),
   registrations: (parameters: ListParameters, signal?: AbortSignal) => apiClient<PagedApiResponse<RegistrationSummary>>(root + '/registrations' + query(parameters), { signal }),
-  registration: (id: string, signal?: AbortSignal) => detail<RepresentativeRegistration>(`/registrations/${id}`, signal),
+  registration: async (id: string, signal?: AbortSignal) => withRegistrationDeadline(await detail<RepresentativeRegistration>(`/registrations/${id}`, signal)),
   submit: async (tourId: string, input: RegistrationInput, requestId: string) => {
     const response = await apiClient<ApiResponse<{ id: string }>>(`${root}/tours/${tourId}/registrations`, {
       method: 'POST', headers: { 'Idempotency-Key': requestId }, json: input,

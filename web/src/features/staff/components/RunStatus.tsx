@@ -3,7 +3,7 @@ import type { AmrStatus, TourOperation } from '../../../api/contracts/staff'
 import { Field } from '../../../components/ui/ConsolePrimitives'
 import { stepLabel } from '../status'
 import { formatStopwatch, formatTime } from '../formatters'
-import { POSE_STALE_SECONDS, routeProgress } from '../attention'
+import { POSE_DISCONNECTED_SECONDS, POSE_STALE_SECONDS, routeProgress } from '../attention'
 import { TourStateBadges } from './TourParts'
 
 /**
@@ -36,7 +36,7 @@ export function RunStatus({ tour, robot, now, compact = false }: { tour: TourOpe
       <ul className={`mt-4 space-y-1.5 ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
         <li className={`flex items-center gap-2 ${stale ? 'font-bold text-[#8a5a06]' : 'text-[#647793]'}`}>
           <Radio size={14} aria-hidden="true" />
-          {robot ? (robot.connectionState !== 'Live' ? 'Robot mất kết nối, vị trí là mẫu cuối cùng' : `Vị trí cập nhật ${poseAge ?? '-'}s trước${stale ? ' (cũ)' : ''}`) : 'Chưa có dữ liệu robot'}
+          {robot ? (robot.connectionState !== 'Live' || (poseAge ?? 0) > POSE_DISCONNECTED_SECONDS ? 'Robot mất kết nối, vị trí là mẫu cuối cùng' : `Vị trí cập nhật ${poseAge ?? '-'}s trước${stale ? ' (cũ)' : ''}`) : 'Chưa có dữ liệu robot'}
         </li>
         <li className="flex items-center gap-2 text-[#647793]">
           <Send size={14} aria-hidden="true" />

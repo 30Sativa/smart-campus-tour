@@ -139,7 +139,7 @@ const EVENT_TYPES: Record<string, string> = {
   backendrestarted: 'Backend khởi động lại',
   // Tour log (scope §4.4, §12)
   tourcreated: 'Tạo buổi',
-  readyconfirmed: 'Admin chốt buổi',
+  readyconfirmed: 'Staff chốt buổi',
   tourcancelled: 'Hủy buổi',
   tourstarted: 'Bắt đầu phiên',
   legsent: 'Gửi chặng',

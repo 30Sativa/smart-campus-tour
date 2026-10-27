@@ -38,8 +38,6 @@ the business authority.
 - [Frontend structure cleanup plan](frontend-structure-cleanup-plan.md) — dated
   cleanup snapshot. Use `web/AGENTS.md` and the current source tree for present
   structure.
-- [Visitor redesign](visitor-redesign.md) — legacy `/visit/*` visitor booking
-  flow. It does not define the Review 1 Student remote-Tour invitation flow.
 
 All web screen guides describe UI structure or current code evidence; none can
 override the cross-system requirements or prove backend integration.
