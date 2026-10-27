@@ -1,5 +1,8 @@
 # ADR-0011: Chỉ dùng dữ liệu học sinh cho đăng ký và thống kê Tour
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). SRS BR-20/NFR-PRIV-01 supplies the target 30-day post-Tour deletion and consent gate. No-CRM/data-minimization decisions remain; implementation is not asserted. No new advisor approval is recorded.
+
+
 - Ngày: 30/09/2026.
 - Trạng thái: **nhóm chấp nhận**; GVHD xem lại ở Review 2; chưa triển khai.
 - Phạm vi: dữ liệu trong Excel phục vụ đăng ký, gửi/quản lý lời mời và thống kê vận hành Tour. V1 không dùng để liên hệ tuyển sinh sau Tour, không xây CRM hoặc quy trình quản lý đồng ý tuyển sinh.

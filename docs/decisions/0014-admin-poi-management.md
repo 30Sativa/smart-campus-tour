@@ -1,5 +1,8 @@
 # ADR-0014: Admin management of unused POIs
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Admin POI ownership remains a current implemented API, but target proposal/content belongs to Staff and map/import/physical confirmation to Technical Staff. Existing lock/history protections remain; new workflows are not implemented here. No new advisor approval is recorded.
+
+
 ## Context
 
 The current POI baseline has stable identities and required map/pose fields, but

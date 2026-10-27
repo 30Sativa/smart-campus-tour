@@ -25,7 +25,7 @@ public sealed class CreateAccountCommandValidator : AbstractValidator<CreateAcco
                 .OverridePropertyName(nameof(CreateAccountRequest.FullName));
             RuleFor(command => command.Request.Role)
                 .Must(AccountRoles.IsCreatable)
-                .WithMessage("Role must be Staff or Representative.")
+                .WithMessage("Role must be Staff, TechnicalStaff or Representative.")
                 .OverridePropertyName(nameof(CreateAccountRequest.Role));
             RuleFor(command => command.Request.InitialPassword)
                 .Must(AccountPasswordPolicy.IsValid)

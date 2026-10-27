@@ -1,5 +1,8 @@
 # ADR-0018: Backend Admin Tour management before execution
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Admin Tour management remains current implementation. Target scheduling/READY belongs to Staff with explicit assignment and buffered reservation. CreatedByUserId remains attribution. Durable retries and current transaction evidence are retained. No new advisor approval is recorded.
+
+
 Date: 2026-10-19. Status: owner-authorized implementation scope, not advisor
 approval. Extends ADR-0017; no schema change or runtime implementation.
 
