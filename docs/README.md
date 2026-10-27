@@ -53,8 +53,12 @@ Contract fixtures and a Python probe are in `docs/contracts/fleet-sync/v1/`.
 The owner-authorized [versioned map/POI slice](decisions/0021-map-package-and-poi-verification.md)
 adds backend APIs and additive v1.2 persistence for ROS map packages, manual
 deployment evidence and per-POI Technical Staff verification. Its contract and
-frontend handoff are in `backend/docs/map-poi-versioning.md`; route certification,
-project POI YAML import and physical acceptance remain pending.
+frontend handoff are in `backend/docs/map-poi-versioning.md`. Route revision and
+manual whole-route test evidence follow the scoped succession in
+[ADR-0023](decisions/0023-versioned-routes-and-manual-route-verification.md);
+their API sequence is in `backend/docs/route-revisions.md`. This is human
+evidence only, not physical acceptance or Tour readiness. Project POI YAML
+import, branch runtime, scheduling and command transport remain pending.
 
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility

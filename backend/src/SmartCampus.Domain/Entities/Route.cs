@@ -35,6 +35,10 @@ public partial class Route
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    public string AuthoringMode { get; set; } = null!;
+
+    public virtual ICollection<RouteRevision> RouteRevisions { get; set; } = new List<RouteRevision>();
+
     public virtual ICollection<RouteStop> RouteStops { get; set; } = new List<RouteStop>();
 
     public virtual ICollection<RouteVariant> RouteVariantBaseRoutes { get; set; } = new List<RouteVariant>();

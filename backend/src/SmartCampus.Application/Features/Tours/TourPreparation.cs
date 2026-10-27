@@ -33,7 +33,7 @@ internal static class TourPreparation
     public static async Task SelectRouteAsync(IRouteManagementRepository routes, Guid id, string expectedVersion, CancellationToken ct)
     {
         var route = await routes.FindForTourSelectionAsync(id, ct) ?? throw new NotFoundException("Không tìm thấy Route.");
-        RouteRevision.EnsureCurrent(route, expectedVersion);
+        LegacyRouteRevision.EnsureCurrent(route, expectedVersion);
         if (!route.IsActive) throw new ConflictException("Route không còn khả dụng cho Tour mới.", "ROUTE_UNAVAILABLE");
         RouteConfiguration.EnsureValid(route, true);
     }

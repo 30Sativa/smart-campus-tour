@@ -8,6 +8,7 @@ using Microsoft.Data.SqlClient;
 using SmartCampus.Application;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
@@ -37,6 +38,15 @@ public sealed class SchemaV12FactAttribute : FactAttribute, ITraitAttribute
     }
 }
 
+public sealed class SchemaV13FactAttribute : FactAttribute, ITraitAttribute
+{
+    public SchemaV13FactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 {
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
@@ -48,6 +58,113 @@ public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 public sealed class SchemaV11Tests
 {
     private static string Id(int value) => $"00000000-0000-0000-0000-{value:D12}";
+
+    [SchemaV13Fact]
+    public async Task V13Snapshot_PreservesLegacyRoutesAndCreatesAppendOnlyRevisionSchema()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.3.sql");
+        Assert.Equal(4, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('RouteRevisions','RouteRevisionStops','RouteRevisionSubmissions','RouteTestRuns');"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Routes WHERE AuthoringMode='LEGACY';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions;"));
+        await db.ExecuteAsync($"INSERT dbo.Routes(Id,Name,MapKey,MapFrame,StartX,StartY,StartYaw,EndMode,IsActive,CreatedAt) VALUES('{Id(99)}',N'Legacy',N'm',N'map',0,0,0,'LAST_POI',0,SYSDATETIMEOFFSET());");
+        Assert.Equal("LEGACY", await db.ScalarAsync<string>($"SELECT AuthoringMode FROM dbo.Routes WHERE Id='{Id(99)}';"));
+        Assert.Equal(4, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.foreign_keys WHERE name IN ('FK_RouteRevisionStops_PoiMapFingerprint','FK_RouteRevisionStops_SourceEvidence','FK_RouteTestRuns_ExactRevision','FK_RouteTestRuns_Deployment');"));
+    }
+
+    [SchemaV13Fact]
+    public async Task V12ToV13Patch_IsAdditiveAndIdempotent()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';");
+        await db.ApplyFileAsync("upgrade-v1.2-to-v1.3-route-revisions.sql");
+        await db.ApplyFileAsync("upgrade-v1.2-to-v1.3-route-revisions.sql");
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Routes WHERE AuthoringMode='LEGACY';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions;"));
+        Assert.Equal(4, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('RouteRevisions','RouteRevisionStops','RouteRevisionSubmissions','RouteTestRuns');"));
+    }
+
+    [SchemaV13Fact]
+    public async Task FixedRouteLifecycle_FailThenNewRevisionPass_KeepsEveryVersionAndRun()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.3.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(1)}',N'TechnicalStaff'),('{Id(2)}',N'Staff');");
+        await using var services = db.BuildFeatureServiceProvider();
+        await using var scope = services.CreateAsyncScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        var map = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
+            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage())));
+        await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+            new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual localization and display check.")));
+        var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
+            new(Guid.NewGuid(), new(map.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion)));
+        await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
+            new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual POI PASS.")));
+        var verifiedPoiNavigationFingerprint = proposal.Revision.NavigationFingerprint;
+
+        var draft1 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, 0.5m, 0.5m, 0m, "LAST_POI", null, null, null,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+        Assert.Equal("NOT_TESTED", draft1.VerificationStatus);
+        Assert.Equal(map.PackageSha256, draft1.MapPackageSha256);
+        await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId, draft1.RevisionId,
+            new(Guid.NewGuid(), 1)));
+
+        // A later deployment of map B must block a route test for map A until A is deployed again.
+        var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
+            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage())));
+        await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), mapB.Id,
+            new(Guid.NewGuid(), "physical_1", mapB.PackageSha256, true, true, "Manual check after deploying map B.")));
+        var mapMismatch = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(Guid.Parse(Id(1)), draft1.RouteId, draft1.RevisionId,
+            new(Guid.NewGuid(), "physical_1", Guid.Parse(Id(2)), "FAIL", false, true, true, 240,
+                "Map A was not deployed.", "Expected rejection while map B is current."))));
+        Assert.Equal("MAP_NOT_CURRENTLY_DEPLOYED", mapMismatch.Code);
+        await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+            new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manual check after restoring map A.")));
+
+        var failed = await sender.Send(new RecordRouteTestRunCommand(Guid.Parse(Id(1)), draft1.RouteId, draft1.RevisionId,
+            new(Guid.NewGuid(), "physical_1", Guid.Parse(Id(2)), "FAIL", false, true, true, 240,
+                "Did not arrive at the stop.", "Human-observed failed whole-route run.")));
+        Assert.Equal("FAIL", failed.VerificationStatus);
+
+        var draft2 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
+            new(Guid.NewGuid(), 1, "Pilot", "Corrected start pose", map.Id, 1m, 0.5m, 0m, "LAST_POI", null, null, null,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+        Assert.Equal(2, draft2.RevisionNumber);
+        Assert.Equal("NOT_TESTED", draft2.VerificationStatus);
+        await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft2.RouteId, draft2.RevisionId,
+            new(Guid.NewGuid(), 2)));
+        var passed = await sender.Send(new RecordRouteTestRunCommand(Guid.Parse(Id(1)), draft2.RouteId, draft2.RevisionId,
+            new(Guid.NewGuid(), "physical_1", Guid.Parse(Id(2)), "PASS", true, true, true, 260,
+                null, "Human-observed successful whole-route run.")));
+        Assert.Equal("PASS", passed.VerificationStatus);
+        Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", passed.DurationStatus);
+        Assert.Equal(30, passed.DwellDurationSeconds);
+
+        // Content-only POI revisions keep the navigation fingerprint and may reuse the route PASS.
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion,
+                new(map.Id, "Library entrance", "Entrance", "Narration wording corrected", 0.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal(verifiedPoiNavigationFingerprint, proposal.Revision.NavigationFingerprint);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 2, proposal.RowVersion)));
+        var contentOnlyDraft = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
+            new(Guid.NewGuid(), 2, "Pilot", "Content wording update", map.Id, 1m, 0.5m, 0m, "LAST_POI", null, null, null,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+        Assert.Equal(3, contentOnlyDraft.RevisionNumber);
+        Assert.Equal("PASS", contentOnlyDraft.VerificationStatus);
+        Assert.Equal(passed.EffectiveTestRunId, contentOnlyDraft.EffectiveTestRunId);
+        await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), contentOnlyDraft.RouteId, contentOnlyDraft.RevisionId,
+            new(Guid.NewGuid(), 3)));
+
+        var history = await sender.Send(new GetRouteRevisionQuery(contentOnlyDraft.RouteId, null, true));
+        Assert.Equal(3, history.RevisionHistory.Count);
+        Assert.Equal(2, history.TestRuns.Count);
+        Assert.Equal("FAIL", history.TestRuns[0].ResultCode);
+        Assert.Equal("PASS", history.TestRuns[1].ResultCode);
+        Assert.Equal("FAIL", (await sender.Send(new GetRouteRevisionQuery(draft1.RouteId, draft1.RevisionId, false))).VerificationStatus);
+    }
 
     [SchemaV12Fact]
     public async Task V12Snapshot_CreatesVersionedMapPoiTablesAndEnforcesVersionUniqueness()
@@ -269,7 +386,7 @@ public sealed class SchemaV11Tests
                 "A verification that wins the lock must commit before the deployment that changes the robot to map B.");
 
         var rejectedAfterMapB = await Assert.ThrowsAsync<ConflictException>(() => SendVerificationAsync(services, proposal));
-        Assert.Equal("MAP_NOT_DEPLOYED", rejectedAfterMapB.Code);
+        Assert.Equal(verification is null ? "MAP_NOT_DEPLOYED" : "CONFLICT", rejectedAfterMapB.Code);
         Assert.Equal(0, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords v JOIN dbo.PoiProposalRevisions r ON r.Id=v.ProposalRevisionId WHERE r.ProposalId='{proposal.Id}' AND v.CheckedAt > '{mapBDeployment.CheckedAt:O}';"));
     }
 
@@ -483,6 +600,8 @@ public sealed class SchemaV11Tests
             services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
+            services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
+            services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
             services.AddSingleton(TimeProvider.System);
             return services.BuildServiceProvider(validateScopes: true);
         }

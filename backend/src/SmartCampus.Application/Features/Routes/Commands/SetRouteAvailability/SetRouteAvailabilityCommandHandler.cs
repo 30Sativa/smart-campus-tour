@@ -10,7 +10,7 @@ public sealed class SetRouteAvailabilityCommandHandler(IRouteManagementRepositor
     public async Task<Unit> Handle(SetRouteAvailabilityCommand command, CancellationToken ct)
     {
         var route = await repository.FindAsync(command.Id, true, ct) ?? throw new NotFoundException("Route was not found.");
-        RouteRevision.EnsureCurrent(route, command.ExpectedVersion);
+        LegacyRouteRevision.EnsureCurrent(route, command.ExpectedVersion);
         if (!(await repository.GetUsageAsync(route.Id, ct)).CanEditMetadataAndAvailability)
             throw new ConflictException("A READY or RUNNING Tour uses this Route.", "ROUTE_IN_USE");
         if (command.IsActive)

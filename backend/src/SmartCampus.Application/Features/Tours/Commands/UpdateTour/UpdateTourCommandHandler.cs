@@ -29,7 +29,7 @@ public sealed class UpdateTourCommandHandler(ITourManagementRepository repositor
         var changed = new List<string>();
         if (routeChanged)
         {
-            if (!RouteRevision.IsValid(command.Request.ExpectedRouteVersion))
+            if (!LegacyRouteRevision.IsValid(command.Request.ExpectedRouteVersion))
                 throw new ConflictException("Cần phiên bản Route đích trước khi đổi tuyến.", "ROUTE_VERSION_REQUIRED");
             await TourPreparation.SelectRouteAsync(routes, input.RouteId, command.Request.ExpectedRouteVersion!, ct);
             now = clock.GetUtcNow();

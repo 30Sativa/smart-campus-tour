@@ -12,7 +12,7 @@ public sealed class CreateTourCommandValidator : AbstractValidator<CreateTourCom
         When(c => c.Request is not null, () =>
         {
             RuleFor(c => c.Request.RequestId).NotEmpty();
-            RuleFor(c => c.Request.ExpectedRouteVersion).Must(RouteRevision.IsValid);
+            RuleFor(c => c.Request.ExpectedRouteVersion).Must(LegacyRouteRevision.IsValid);
             RuleFor(c => c.Request.Configuration).NotNull().SetValidator(new TourInputValidator());
         });
     }

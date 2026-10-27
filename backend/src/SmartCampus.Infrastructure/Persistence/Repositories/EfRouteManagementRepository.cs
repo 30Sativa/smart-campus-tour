@@ -10,7 +10,7 @@ public sealed class EfRouteManagementRepository(ApplicationDbContext db) : IRout
 {
     public async Task<PagedResult<RouteListItem>> ListAsync(string? search, string sort, bool? isActive, int page, int size, CancellationToken ct)
     {
-        var routes = db.Routes.AsNoTracking();
+        var routes = db.Routes.AsNoTracking().Where(r => r.AuthoringMode == "LEGACY");
         if (search is not null) routes = routes.Where(r => r.Name.Contains(search) || (r.Description != null && r.Description.Contains(search)));
         if (isActive.HasValue) routes = routes.Where(r => r.IsActive == isActive.Value);
         var count = await routes.LongCountAsync(ct);
@@ -37,7 +37,7 @@ public sealed class EfRouteManagementRepository(ApplicationDbContext db) : IRout
         var query = forUpdate
             ? db.Routes.FromSqlInterpolated($"SELECT * FROM dbo.Routes WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}")
             : db.Routes.AsNoTracking();
-        var route = await query.SingleOrDefaultAsync(r => r.Id == id, ct);
+        var route = await query.SingleOrDefaultAsync(r => r.Id == id && r.AuthoringMode == "LEGACY", ct);
         if (route is null) return null;
         if (lockSelectionPois)
         {

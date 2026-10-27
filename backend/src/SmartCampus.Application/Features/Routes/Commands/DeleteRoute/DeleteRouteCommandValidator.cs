@@ -8,6 +8,6 @@ public sealed class DeleteRouteCommandValidator : AbstractValidator<DeleteRouteC
     {
         RuleFor(c => c.Id).NotEmpty();
         RuleFor(c => c.ActorUserId).NotEmpty();
-        RuleFor(c => c.ExpectedVersion).Must(RouteRevision.IsValid);
+        RuleFor(c => c.ExpectedVersion).Must(LegacyRouteRevision.IsValid);
     }
 }

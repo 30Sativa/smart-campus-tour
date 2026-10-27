@@ -54,5 +54,5 @@ public static class RouteConfiguration
         r.StartX, r.StartY, r.StartYaw, r.EndMode, r.EndX, r.EndY, r.EndYaw,
         r.RouteStops.OrderBy(s => s.StopOrder).Select(s => new RouteStopDetails(s.Id, s.PoiId,
             s.Poi?.Name ?? "", s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson).Where(h => h is not null).ToArray())).ToArray(),
-        RouteRevision.For(r), usage, r.ConfigurationIssues(), AvailabilityIssues(r));
+        LegacyRouteRevision.For(r), usage, r.ConfigurationIssues(), AvailabilityIssues(r));
 }

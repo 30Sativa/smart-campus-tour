@@ -47,6 +47,14 @@ public partial class User
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
+    public virtual ICollection<RouteRevisionSubmission> RouteRevisionSubmissions { get; set; } = new List<RouteRevisionSubmission>();
+
+    public virtual ICollection<RouteRevision> RouteRevisions { get; set; } = new List<RouteRevision>();
+
+    public virtual ICollection<RouteTestRun> RouteTestRunCheckedByUsers { get; set; } = new List<RouteTestRun>();
+
+    public virtual ICollection<RouteTestRun> RouteTestRunParticipatingStaffUsers { get; set; } = new List<RouteTestRun>();
+
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
 
     public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();

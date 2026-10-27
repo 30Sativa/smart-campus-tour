@@ -2039,3 +2039,31 @@ package uses DDS to reach the robot: the backend and the Twin use `fleet_bridge`
 over HTTPS Fleet Sync (Section 3.1), which runs on the robot and is unaffected. Once this
 boundary is applied, laptop access by `ROS_DISCOVERY_SERVER`/`remote_rviz` stops
 working.
+
+### Route revision and manual verification API (backend)
+
+As of schema v1.3, `Routes` remains the shared identity table and uses
+`AuthoringMode` to isolate existing `LEGACY` Route/RouteStops CRUD from new
+`VERSIONED` route preparation. Legacy APIs list and load only legacy rows; the
+new endpoints are documented in
+[`backend/docs/route-revisions.md`](../backend/docs/route-revisions.md).
+Staff writes immutable `RouteRevisions` and ordered stops linked to exact map
+and POI revisions plus source POI PASS evidence. Submission receipts are
+separate from draft creation. Technical Staff appends manual whole-route test
+runs with an explicit distinct active Staff participant. The technical test
+path uses the same transaction-owned robot deployment application lock as map
+deployment/POI checks and confirms the robot's latest cross-map deployment
+record matches the selected map ID and SHA-256.
+
+Route navigation fingerprint comprises exact map ID/checksum, start/end pose,
+ordered POI navigation fingerprints and dwell. It excludes content-only POI
+revision IDs/evidence IDs; histories still retain those references. The newest
+whole-route result for an identical route fingerprint is effective, while
+unrelated older configuration results remain preserved. Evidence is human
+entered, not automatic physical proof; manual PASS is not tour scheduling,
+reservation, READY, or movement authorization. Approved narration/audio
+duration is not yet linked to versioned POI content, so API duration is
+explicitly incomplete and reports the dwell subtotal only. Branch authoring,
+branch requests/cutoff, project POI YAML/frame mapping, Tour runtime and command
+transport remain staged or pending. See ADR-0023. ERD, preparation sequence and
+verification-state diagrams require member redraw/review and remain pending.

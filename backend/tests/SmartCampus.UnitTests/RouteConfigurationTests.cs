@@ -66,15 +66,15 @@ public sealed class RouteConfigurationTests
     public void Revision_CoversStopsAndAvailability_ButNotMutablePoiContent()
     {
         var route = Sample();
-        var version = RouteRevision.For(route);
-        Assert.True(RouteRevision.IsValid(version));
+        var version = LegacyRouteRevision.For(route);
+        Assert.True(LegacyRouteRevision.IsValid(version));
         route.RouteStops.Single().Poi.Name = "Changed content";
-        Assert.Equal(version, RouteRevision.For(route));
+        Assert.Equal(version, LegacyRouteRevision.For(route));
         route.RouteStops.Single().DwellSeconds++;
-        Assert.NotEqual(version, RouteRevision.For(route));
+        Assert.NotEqual(version, LegacyRouteRevision.For(route));
         route.RouteStops.Single().DwellSeconds--;
         route.IsActive = true;
-        Assert.NotEqual(version, RouteRevision.For(route));
+        Assert.NotEqual(version, LegacyRouteRevision.For(route));
     }
 
     [Fact]
