@@ -1,6 +1,10 @@
 # AGENTS.md — `backend/`
 
-Read the repo-root `AGENTS.md` first. This file is the authoritative guide for
+Read the repo-root `AGENTS.md` first. The owner-authorized SRS v0.2 target and
+scoped succession are in `docs/decisions/0020-srs-v02-business-baseline-and-technical-staff.md`;
+use `docs/requirements/srs-v02-backend-gap-register.md` for source, current gaps,
+dependencies and acceptance. Historical business targets below do not override it.
+This file is the authoritative guide for
 placing backend code. The SQL schema, generated EF model, and
 `docs/decisions/0006-demo-first-tour-schema.md` define the current persisted
 business model. `docs/decisions/0005-backend-authoritative-poi-per-leg-orchestration.md`
@@ -190,8 +194,11 @@ Decisions and operating notes are in
 `docs/decisions/0012-v1-1-schema-and-operation-scope.md` and
 `backend/database/README.md`. This did not migrate v1.0 data. Do not manually
 edit generated entities to stand in for a SQL schema change.
-V1 target: fixed RouteStop dwell managed by Admin Route CRUD (ADR-0017), every active STAFF account can operate every Tour,
-no per-Tour dwell editor or operator assignment. Production branch use cases,
+Current implementation: fixed RouteStop dwell managed by Admin Route CRUD
+(ADR-0017); no per-Tour dwell editor or operator assignment field. Target SRS v0.2
+requires assigned Staff operation and exact map/POI/route revisions; CreatedByUserId
+is attribution only. Admin CRUD ownership is current API behavior, not target.
+Production branch use cases,
 Tour readiness/state writers and retention cleanup remain implementation work;
 pre-approval roster mutations already enforce the Tour write window and locks.
 
@@ -254,40 +261,29 @@ verified Capstone requirement; head/pan presets remain a V1 requirement.
 Research implementation/benchmark execution are deferred and do not gate this
 production flow; the Capstone methodology remains in force.
 
-### Review 1 target and current implementation gap
+### SRS v0.2 target and current implementation gap
 
-The accepted group target in `docs/decisions/0009-review-1-tour-business-scope.md`
-and its access update in `docs/decisions/0010-personal-access-code-entry.md`
-require email containing an ordinary Tour page URL and a personal access code,
-code validation before creating a session, a single “Điểm xem chung” invitation row
-for a shared projector room, one active browser session per invitation,
-revocation/reissue, Admin correction of one email while SCHEDULED, and
-representative branch requests accepted by Staff at a verified POI. Staff Start
-is allowed from the published time only. Admin POI-content editing and summary
-statistics are P1; Admin Route CRUD now owns business itineraries while technical staff verify physical feasibility (ADR-0017). Command
-audit records decision-to-send, sent, and robot-response stages separately.
-These are target behaviors to implement and verify, not invariants in the
-current database.
+Use `docs/requirements/campus-tour-scope.md` and the gap register under ADR-0020.
+Target business ownership: Admin account/configuration/admin audit; Technical
+Staff map/revision/import/physical confirmation; Staff content, route, row review,
+invitations, scheduling and assigned operation; Representative own rows; Viewer
+invitation/session. TechnicalStaff account mapping is now implemented; no Technical
+workspace or confirmation endpoint follows from role support.
 
-The URL alone grants no access. Resend keeps the same valid code and session;
-revoke/reissue invalidates the old code/session and sends a new code to the
-approved email, retaining invitation identity and expiry. Representative support
-is own-group only; Admin supports all groups; Staff-only has no recovery right.
-Shared-viewing data identifies its responsible person, not every student in the
-room; individual data requires individual rows. Code storage for safe resend,
-Secure code storage, API binding, atomic admission, Resend delivery and revocation
-are implemented under ADR-0015 with opt-in backend configuration.
+Current Admin POI/Route/Tour/review/email APIs and whole-registration access
+remain implementation gaps. Do not merely change attributes or open the
+post-approval policy: stable-row writer, row approval, invitation/session/media
+readers and Tour transactions must be reconciled together for BR-11. Target is
+10 viewing rows, 48-hour registration closure, Staff review within 2 working days,
+request/review email change, same-device reconnect 2min, and an instance-wide Q&A
+queue (8 executing/20 total). Existing 1000-row validation and StudentQuestionGate
+per-session limits do not satisfy these targets.
 
-The current v1.1 schema persists invitation/session records, shared-viewing
-classification and branch requests; email attempts remain append-only audit
-records, and their delivery/revocation workflows remain application logic. The
-backend currently implements Auth V1, Admin account management, Admin POI
-management, and its development Simulation controller/Hub. Representative Tour reads and pre-approval registration are now implemented
-under Section 3.2.1 of `docs/architecture.md`. Admin review is implemented under Section 3.2.2; invitation/session support under Section 3.2.3. Dispatch
-and production fleet endpoints remain planned. Do not infer that a group code/name match is equivalent to an approved
-personal invitation. A future feature change must reconcile its public
-contracts in `docs/architecture.md` and include the appropriate schema and
-tests.
+Operator assignment is explicit and cannot be derived from CreatedByUserId.
+End Early revokes live/fallback/Q&A for all sessions and copied URLs, preserving
+Result only; cancellation/ACK does not establish physical stop. Do not implement
+pending F-14, branch cutoff, YAML/frame mapping or M2 command transport.
+HTTPS Fleet Sync ADR-0019 remains telemetry-only with no commands.
 
 ## 4. Request, persistence, and response flow
 

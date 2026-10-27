@@ -8,15 +8,18 @@ internal static class AccountRoles
 {
     internal static bool IsCreatable(string? role) =>
         string.Equals(role, ApplicationRoles.Staff, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(role, ApplicationRoles.TechnicalStaff, StringComparison.OrdinalIgnoreCase)
         || string.Equals(role, ApplicationRoles.Representative, StringComparison.OrdinalIgnoreCase);
 
     internal static string ToStoredCreatableRole(string role)
     {
         if (string.Equals(role, ApplicationRoles.Staff, StringComparison.OrdinalIgnoreCase))
             return ApplicationRoles.StaffCode;
+        if (string.Equals(role, ApplicationRoles.TechnicalStaff, StringComparison.OrdinalIgnoreCase))
+            return ApplicationRoles.TechnicalStaffCode;
         if (string.Equals(role, ApplicationRoles.Representative, StringComparison.OrdinalIgnoreCase))
             return ApplicationRoles.RepresentativeCode;
-        throw new ForbiddenException("Only Staff and Representative accounts can be managed.");
+        throw new ForbiddenException("Only Staff, TechnicalStaff and Representative accounts can be managed.");
     }
 
     internal static void EnsureManaged(IEnumerable<string> assignedRoles)

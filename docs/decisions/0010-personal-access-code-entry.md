@@ -1,5 +1,8 @@
 # ADR-0010: Link trang Tour, mã truy cập riêng và session browser
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Target support ownership, direct email correction and post-End-Early viewing are superseded. Ordinary URL/code entry, one session and distinct resend/reissue/revoke remain. Staff manages target support; Representative remains own-row only. No new advisor approval is recorded.
+
+
 - Ngày: 30/09/2026.
 - Trạng thái: **nhóm chấp nhận**; GVHD sẽ xem lại ở Review 2; chưa triển khai.
 - Thay thế: lựa chọn link bí mật vào trực tiếp trong ADR-0009. Giữ các quyết định khác của ADR-0009.

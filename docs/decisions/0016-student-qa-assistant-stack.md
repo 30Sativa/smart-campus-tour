@@ -1,5 +1,8 @@
 # ADR-0016: Student Q&A assistant stack and backend-mediated access
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Viewer runtime provider/general-answer generation is superseded as target by approved-bank answers only; provider assists Staff drafting. Backend privacy/robot-control boundaries remain. Per-session limits are not the target global 8/20 queue. No new advisor approval is recorded.
+
+
 - Date: 2026-10-13.
 - Status: accepted by team for implementation planning; not implemented.
 - Business baseline: ADR-0009/0010/0011, scope P0-07 and P1-01; advisor
