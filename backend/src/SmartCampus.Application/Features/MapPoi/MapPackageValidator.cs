@@ -252,7 +252,11 @@ public static class MapPackageValidator
 
         public void SkipCrLfAfterHeader()
         {
-            if (_position < bytes.Length && bytes[_position] == '\n') _position++;
+            // TryReadToken consumes one delimiter. Consume only the LF paired with a consumed CR;
+            // the first raster byte may itself be whitespace or a line-ending byte.
+            if (_position < bytes.Length && _position > 0 &&
+                bytes[_position - 1] == '\r' && bytes[_position] == '\n')
+                _position++;
         }
 
         public ReadOnlySpan<byte> ReadRemaining() => bytes.AsSpan(_position);

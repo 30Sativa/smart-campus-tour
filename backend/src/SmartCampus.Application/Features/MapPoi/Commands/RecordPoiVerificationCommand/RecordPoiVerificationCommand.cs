@@ -71,10 +71,12 @@ public sealed class RecordPoiVerificationCommandHandler(
 
         var robot = await mapRepository.FindPhysicalRobotAsync(request.RobotCode.Trim(), cancellationToken)
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());
-        var latestDeployment = await mapRepository.GetLatestDeploymentCheckAsync(revision.MapVersionId, robot.Id, cancellationToken);
+        await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
+        var latestDeployment = await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", revision.MapVersionId);
-        if (latestDeployment is null || !latestDeployment.LocalizationPassed || !latestDeployment.DisplayPassed ||
+        if (latestDeployment is null || latestDeployment.MapVersionId != revision.MapVersionId ||
+            !latestDeployment.LocalizationPassed || !latestDeployment.DisplayPassed ||
             !CryptographicOperations.FixedTimeEquals(latestDeployment.PackageSha256, map.PackageSha256))
             throw new ConflictException("The exact map version must have a current successful localization/display deployment check on this robot.", "MAP_NOT_DEPLOYED");
 

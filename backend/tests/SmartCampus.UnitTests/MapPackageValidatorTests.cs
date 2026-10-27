@@ -24,6 +24,27 @@ public sealed class MapPackageValidatorTests
         MapPackageValidator.EnsureFreePosition(validated, -0.975m, -1.975m, 0m);
     }
 
+    [Theory]
+    [InlineData(false, 0x0A)]
+    [InlineData(false, 0x0D)]
+    [InlineData(false, 0x20)]
+    [InlineData(false, 0x23)]
+    [InlineData(true, 0x0A)]
+    [InlineData(true, 0x0D)]
+    [InlineData(true, 0x20)]
+    [InlineData(true, 0x23)]
+    public void Binary_p5_preserves_first_raster_byte_after_lf_or_crlf_header(bool crlf, int firstPixel)
+    {
+        var newline = crlf ? "\r\n" : "\n";
+        var header = Encoding.ASCII.GetBytes($"P5{newline}1 1{newline}255{newline}");
+        var pgm = header.Concat(new[] { (byte)firstPixel }).ToArray();
+        var bytes = Package("image: campus.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n", pgm);
+
+        var validated = MapPackageValidator.Validate(bytes);
+
+        Assert.Equal(new[] { (byte)firstPixel }, validated.Pixels);
+    }
+
     [Fact]
     public void Rejects_nonzero_origin_yaw()
     {

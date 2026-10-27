@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MediatR;
 using Microsoft.Data.SqlClient;
 using SmartCampus.Application;
+using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Infrastructure.Persistence;
@@ -156,12 +157,120 @@ public sealed class SchemaV11Tests
             new(Guid.NewGuid(), 2, proposal.RowVersion,
                 new(map.Id, "Library entrance", "Entrance", "Content-only correction", 1.5m, 0.5m, 0m, "FRONT"))));
         Assert.Equal("PASS", proposal.Revision.NavigationStatus);
+        Assert.Equal(passed.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 3, proposal.RowVersion)));
         Assert.Empty(await sender.Send(new ListPoiVerificationQueueQuery(map.Id)));
+
+        // A content-only submitted revision inherits the exact prior navigation result and remains editable.
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 3, proposal.RowVersion,
+                new(map.Id, "Library entry", "Entrance", "Second content correction", 1.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal("PASS", proposal.Revision.NavigationStatus);
+        Assert.Equal(passed.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 4, proposal.RowVersion)));
+        Assert.Empty(await sender.Send(new ListPoiVerificationQueueQuery(map.Id)));
+        Assert.Equal(2, (await sender.Send(new GetPoiHistoryQuery(proposal.Id))).VerificationRecords.Count);
+
+        // A newer failure for this same fingerprint supersedes the inherited pass.
+        var newerFailure = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 4,
+            new(Guid.NewGuid(), 4, proposal.RowVersion, "physical_1", "FAIL", false, true, true, true,
+                "A later approach did not reach the POI.", "Repeat check observed a failed approach.")));
+        Assert.Equal("FAIL", newerFailure.ResultCode);
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 4, proposal.RowVersion,
+                new(map.Id, "Library entrance", "Entrance", "Third content correction", 1.5m, 0.5m, 0m, "FRONT"))));
+        Assert.Equal("FAIL", proposal.Revision.NavigationStatus);
+        Assert.Equal(newerFailure.ProposalRevisionId, proposal.Revision.VerificationSourceRevisionId);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 5, proposal.RowVersion)));
+        var queueAfterFailure = await sender.Send(new ListPoiVerificationQueueQuery(map.Id));
+        Assert.Single(queueAfterFailure);
+        Assert.Equal("FAIL", queueAfterFailure[0].NavigationStatus);
+        Assert.Equal(newerFailure.ProposalRevisionId, queueAfterFailure[0].VerificationSourceRevisionId);
+
+        var queuedFailure = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 5,
+            new(Guid.NewGuid(), 5, proposal.RowVersion, "physical_1", "FAIL", false, true, true, true,
+                "The repeated approach still failed.", "Second failed result for the current navigation fingerprint.")));
+        Assert.Equal("FAIL", queuedFailure.ResultCode);
+
+        // Changing the navigation tuple requires a new result and appears in the technical queue.
+        proposal = await sender.Send(new CreatePoiRevisionCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 5, proposal.RowVersion,
+                new(map.Id, "Library entrance", "Entrance", "Move to another free cell", 0.5m, 1.5m, 0m, "FRONT"))));
+        Assert.Equal("NOT_CHECKED", proposal.Revision.NavigationStatus);
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 6, proposal.RowVersion)));
+        var queueAfterMovement = await sender.Send(new ListPoiVerificationQueueQuery(map.Id));
+        Assert.Single(queueAfterMovement);
+        Assert.Equal("NOT_CHECKED", queueAfterMovement[0].NavigationStatus);
+
         var history = await sender.Send(new GetPoiHistoryQuery(proposal.Id));
-        Assert.Equal(3, history.Revisions.Count);
-        Assert.Equal(new[] { "FAIL", "PASS" }, history.VerificationRecords.Select(item => item.ResultCode).ToArray());
+        Assert.Equal(6, history.Revisions.Count);
+        Assert.Equal(new[] { "FAIL", "PASS", "FAIL", "FAIL" }, history.VerificationRecords.Select(item => item.ResultCode).ToArray());
+    }
+
+    [SchemaV12Fact]
+    public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var services = db.BuildFeatureServiceProvider();
+        await using var scope = services.CreateAsyncScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        var package = CreateMapPackage();
+        var mapA = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
+            new("pilot", "Pilot Area", Guid.NewGuid(), package)));
+        var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
+            new("pilot", "Pilot Area", Guid.NewGuid(), package)));
+        await RecordDeploymentAsync(sender, mapA);
+
+        var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
+            new(Guid.NewGuid(), new(mapA.Id, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
+        proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion)));
+        await RecordDeploymentAsync(sender, mapB);
+
+        var rejected = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
+            new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual check."))));
+        Assert.Equal("MAP_NOT_DEPLOYED", rejected.Code);
+        Assert.Equal(0, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords WHERE ProposalRevisionId=(SELECT Id FROM dbo.PoiProposalRevisions WHERE ProposalId='{proposal.Id}' AND RevisionNumber=1);"));
+
+        await RecordDeploymentAsync(sender, mapA);
+        var verified = await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
+            new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual check after redeploying map A.")));
+        Assert.Equal("PASS", verified.ResultCode);
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapDeploymentChecks;"));
+        Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords WHERE ProposalRevisionId=(SELECT Id FROM dbo.PoiProposalRevisions WHERE ProposalId='{proposal.Id}' AND RevisionNumber=1);"));
+        var latestDeploymentMap = await db.ScalarAsync<Guid>($"SELECT TOP(1) MapVersionId FROM dbo.MapDeploymentChecks WHERE RobotId='{Id(83)}' ORDER BY CheckedAt DESC, Id DESC;");
+        Assert.Equal(mapA.Id, latestDeploymentMap);
+    }
+
+    [SchemaV12Fact]
+    public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var services = db.BuildFeatureServiceProvider();
+        var package = CreateMapPackage();
+        var mapA = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package);
+        var mapB = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package);
+        await SendDeploymentAsync(services, mapA);
+        var proposal = await SendCreateAndSubmitProposalAsync(services, mapA.Id);
+
+        var verifyTask = SendVerificationOrConflictAsync(services, proposal);
+        var deploymentTask = SendDeploymentAsync(services, mapB);
+        await Task.WhenAll(verifyTask, deploymentTask);
+        var verification = await verifyTask;
+        var mapBDeployment = await deploymentTask;
+        if (verification is not null)
+            Assert.True(verification.CheckedAt < mapBDeployment.CheckedAt,
+                "A verification that wins the lock must commit before the deployment that changes the robot to map B.");
+
+        var rejectedAfterMapB = await Assert.ThrowsAsync<ConflictException>(() => SendVerificationAsync(services, proposal));
+        Assert.Equal("MAP_NOT_DEPLOYED", rejectedAfterMapB.Code);
+        Assert.Equal(0, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.PoiVerificationRecords v JOIN dbo.PoiProposalRevisions r ON r.Id=v.ProposalRevisionId WHERE r.ProposalId='{proposal.Id}' AND v.CheckedAt > '{mapBDeployment.CheckedAt:O}';"));
     }
 
     [SchemaV12Fact]
@@ -497,5 +606,44 @@ public sealed class SchemaV11Tests
         await using var scope = services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new CreateMapVersionCommand(actor,
             new("pilot", "Pilot Area", requestId, package)));
+    }
+
+    private static async Task<MapDeploymentCheckView> SendDeploymentAsync(IServiceProvider services, MapVersionView map)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+            new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manually recorded localization and display check.")));
+    }
+
+    private static Task<MapDeploymentCheckView> RecordDeploymentAsync(ISender sender, MapVersionView map) =>
+        sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), map.Id,
+            new(Guid.NewGuid(), "physical_1", map.PackageSha256, true, true, "Manually recorded localization and display check.")));
+
+    private static async Task<PoiProposalView> SendCreateAndSubmitProposalAsync(IServiceProvider services, Guid mapVersionId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+        var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
+            new(Guid.NewGuid(), new(mapVersionId, "Library", "Entrance", null, 0.5m, 0.5m, 0m, "FRONT"))));
+        return await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
+            new(Guid.NewGuid(), proposal.CurrentRevision, proposal.RowVersion)));
+    }
+
+    private static async Task<PoiVerificationView> SendVerificationAsync(IServiceProvider services, PoiProposalView proposal)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id,
+            proposal.CurrentRevision, new(Guid.NewGuid(), proposal.CurrentRevision, proposal.RowVersion,
+                "physical_1", "PASS", true, true, true, true, null, "Manual verification evidence.")));
+    }
+
+    private static async Task<PoiVerificationView?> SendVerificationOrConflictAsync(IServiceProvider services, PoiProposalView proposal)
+    {
+        try { return await SendVerificationAsync(services, proposal); }
+        catch (ConflictException exception)
+        {
+            Assert.Equal("MAP_NOT_DEPLOYED", exception.Code);
+            return null;
+        }
     }
 }
