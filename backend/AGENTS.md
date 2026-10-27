@@ -32,7 +32,7 @@ describe features already present in this backend.
 backend/
 ├── AGENTS.md
 ├── SmartCampus.slnx
-├── database/smart-campus-tour-schema-v1.1.sql
+├── database/smart-campus-tour-schema-v1.2.sql (empty DB), patches/ (additive upgrades)
 ├── scripts/
 │   ├── verify
 │   └── scaffold-db
@@ -72,6 +72,15 @@ in-memory Infrastructure store, a Staff-only operations projection, and a
 one-shot credential provisioner. No `/hubs/fleet`, navigation command, tour
 runtime, SQL telemetry writer, or ROS Fleet Bridge is implemented. An absent
 extension folder on GitHub is not missing setup.
+
+The owner-authorized ADR-0021 slice adds versioned ROS map-package and manual
+deployment-check APIs plus Tour Staff POI revisions and TechnicalStaff
+verification. See `backend/docs/map-poi-versioning.md`. It does not retire the
+legacy Admin POI API, implement project POI YAML import, route certification,
+scheduling/READY, frontend, or physical robot execution. Keep v1.1 snapshot
+immutable; v1.2 changes are Database First and require its additive patch or
+fresh snapshot followed by reviewed scaffolding. Never apply on shared/prod
+without the normal backup and database approval process.
 
 Compile-time dependencies: `Domain` has no project references; `Application`
 references `Domain`; `Infrastructure` references `Application` and `Domain`;

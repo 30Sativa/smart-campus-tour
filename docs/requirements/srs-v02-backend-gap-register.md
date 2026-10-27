@@ -1,8 +1,10 @@
 # SRS v0.2 backend source ledger and staged gaps
 
-Read live on **2026-10-27**; owner authorizes adoption and this limited account
-slice. No Google Docs were edited. Code baseline: `origin/main e70fb52`.
-The new role implementation is separate from the remaining target below.
+Read live on **2026-10-27**; owner authorizes SRS adoption and the scoped
+Technical Staff map/POI implementation. Google Docs are updated separately
+under revision guard. Code baseline for this branch: `origin/main 78a23ca`.
+This register distinguishes implemented API/schema from pending hardware,
+frontend, route and broader authorization work.
 
 ## Sources and status
 
@@ -34,8 +36,8 @@ Dependencies are staged by wave W1–W6 below; AC references are targets only.
 | FR-02/41; ACC-04/05 | Admin account endpoints exist; no matching settings/audit query workflow for new goals | Add bounded settings/audit contracts; defaults for invalid-code limits pending | W1, explicit configuration decision | AC-08; no invented separate acceptance for unlisted settings |
 | FR-03/05, BR-08; POI-02/CFG-03 | AdminPoisController owns current POI API; no technical-confirmation endpoint/table | Technical-only mutation with role/state/tuple audit; Staff denied | W1+W2 | AC-06/08 |
 | FR-04/05, BR-16; OPS/MON | Existing business controllers Admin-only; operations hub Staff-role only; Tour.CreatedByUserId is attribution and no OperatorUserId | Explicit Operator/managed-tour relation and per-action authorization; migrate business endpoints deliberately | W1 schema/API design | AC-08; AC-01/10 for operations |
-| FR-06/07; MAP-01 | Route.MapKey/MapFrame and existing map asset picker; no immutable MapVersion/deployment evidence | Versioned package/checksum/source + manual deployment/localization evidence; upload distinct from deployment | W2 Database First ADR | AC-06; physical evidence in AC-01 |
-| FR-08/09; CFG-02, POI-01/02 | Poi coordinates mutable before references; no proposal/import/verification records | Unverified revision workflow; tester/role/time/result/evidence; frame/YAML schema pending | W2 + template-owner decision | AC-06/08 |
+| FR-06/07; MAP-01 | Current v1.1 Route.MapKey/map picker did not retain immutable package or deployment evidence | **Implemented in ADR-0021 slice:** validated ROS YAML+PGM ZIP, map version/checksum, manual exact-checksum robot localization/display record; no robot deploy endpoint | v1.2 additive schema; physical evidence still required | AC-06 API scope; AC-01 hardware proof not run |
+| FR-08/09; CFG-02, POI-01/02 | Mutable legacy Pois plus Admin endpoints remain in place; separate immutable revisions now exist for the new Staff flow | **Implemented in ADR-0021 slice:** Staff draft/revise/submit; TechnicalStaff per-revision PASS/FAIL, evidence/history and free-cell/map-version checks. Project POI YAML import/frame conversion remains pending | W2 partial; project template decision pending | API/unit/schema tests; AC-06/08 target not claimed as physical pass |
 | FR-10/11/13, BR-07..10; CFG-01/03 | Routes/RouteStops aggregate hash and reference freezing; no RouteRevision or tested tuple | Immutable linked revisions, exact test records, content-only duration recalculation; keep old retained tested tuple eligible | W2 schema + technical evidence | AC-06 |
 | FR-12/14/16; TOUR-01..08 | Admin Tour create/update/pre-start cancel only; no READY/reopen/state writers | Staff schedule/READY guard exact pass, locks route/content/list, no pending row/email decisions | W1/W2/W3/W4 | AC-06/08 |
 | FR-15, BR-06 | Tours has ScheduledStartAt but no reservation/buffer/longest-tested-duration model | Atomic no-overlap reservation: 15min + longest allowed route +15min | W2/W3 schema | NFR-REL-02; AC-06 context; dedicated reservation cases to define in implementation |
@@ -98,6 +100,8 @@ about unrecoverable tokens must be reconciled with NFR-SEC-01 recoverably protec
 invitation resend before changing credential storage; this account slice does
 not alter invitation cryptography.
 
-This PR changes no robot, web, ai-assistant, Google Doc or diagram. TechnicalStaff
-login is not AC-06 or full AC-08. SQL tests create disposable databases only when
+This slice changes no robot, web or ai-assistant. Scoped Google Docs text updates
+are performed separately; diagrams stay pending and are not redrawn. TechnicalStaff
+login and human-entered check records are not physical AC-01/06 evidence or full AC-08.
+SQL tests create disposable databases only when
 `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is supplied; SKIPPED is not DB verification.

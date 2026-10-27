@@ -1,6 +1,6 @@
 namespace SmartCampus.Application.Common.Abstractions.Messaging;
 
-/// <summary>Marks POI changes that must check usage and commit under one SQL transaction.</summary>
+/// <summary>Marks versioned map/POI mutations that require one SQL transaction.</summary>
 public interface IPoiMutationCommand<out TResponse> : ICommand<TResponse>
 {
 }

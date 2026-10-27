@@ -15,6 +15,7 @@ using SmartCampus.Infrastructure.Persistence.Seeding;
 using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
+using SmartCampus.Application.Features.MapPoi;
 
 namespace SmartCampus.Infrastructure;
 
@@ -45,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<IPoiManagementRepository, EfPoiManagementRepository>();
         services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
+        services.AddScoped<IVersionedMapPoiRepository, EfVersionedMapPoiRepository>();
         services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();

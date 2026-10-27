@@ -60,6 +60,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0020](0020-staff-owns-tour-preparation.md) | Staff owns Tour preparation (`/staff/manage/*`); Admin keeps accounts, roles and audit | accepted by group; advisor review pending; backend authorization change pending |
 
 | [0020](0020-srs-v02-business-baseline-and-technical-staff.md) | SRS v0.2 target adoption, scoped business succession and TechnicalStaff account foundation | owner-authorized; limited account slice implemented; other gaps/pending decisions retained |
+| [0021](0021-map-package-and-poi-verification.md) | ROS map package versions, manual deployment records and per-POI Technical Staff verification | owner-authorized backend slice implemented; physical acceptance, route tests and frontend remain pending |
 
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
