@@ -4,6 +4,7 @@ using FluentValidation;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Entities;
@@ -55,7 +56,9 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
             throw new ConflictException("Only a submitted route revision can be tested.", "ROUTE_NOT_SUBMITTED");
         await SubmitRouteRevisionHandler.EnsurePoisStillPass(repo, revision.Id, ct);
         var staff = await repo.FindUserAsync(q.ParticipatingStaffUserId, ct);
-        if (staff is null || !staff.IsActive || !staff.UserRoles.Any(r => r.Role == "Staff"))
+        if (staff is null || !staff.IsActive ||
+            !ApplicationRoles.TryResolve(staff.UserRoles.Select(r => r.Role), out var participantRole) ||
+            participantRole != ApplicationRoles.Staff)
             throw new ConflictException("The participating operator must be an active Staff account, recorded explicitly.", "STAFF_PARTICIPANT_REQUIRED");
         if (q.ParticipatingStaffUserId == c.ActorUserId) throw new ConflictException("Technical checker and participating Staff must be distinct accounts.", "SEPARATE_TEST_ROLES_REQUIRED");
         var robot = await repo.FindPhysicalRobotAsync(q.RobotCode.Trim(), ct) ?? throw new NotFoundException("Physical robot", q.RobotCode.Trim());
@@ -68,8 +71,13 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
             !CryptographicOperations.FixedTimeEquals(map.PackageSha256, revision.MapPackageSha256))
             throw new ConflictException("The robot's latest deployment check must match the exact map version and checksum in this revision.", "MAP_NOT_CURRENTLY_DEPLOYED");
         var now = clock.GetUtcNow();
-        var precedingRuns = await repo.GetTestRunsForConfigurationAsync(route.Id, revision.NavigationFingerprint, ct);
-        var latestForConfiguration = precedingRuns.LastOrDefault();
+        var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
+        var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision,
+            await repo.GetStopsAsync(revision.Id, ct));
+        var latestForConfiguration = routeRuns.Where(run => run.RouteRevision is not null &&
+            RouteNavigationConfigurationFactory.SameNavigation(
+                RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), targetNavigation))
+            .OrderBy(run => run.CheckedAt).ThenBy(run => run.Id).LastOrDefault();
         if (latestForConfiguration is not null && latestForConfiguration.CheckedAt >= now)
             now = latestForConfiguration.CheckedAt.AddMilliseconds(1);
         var run = new RouteTestRun { Id = Guid.NewGuid(), RouteRevisionId = revision.Id, NavigationFingerprint = revision.NavigationFingerprint,

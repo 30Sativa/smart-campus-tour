@@ -1,9 +1,20 @@
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Common.Authentication;
 
 namespace SmartCampus.UnitTests;
 
 public sealed class RouteRevisionWorkflowTests
 {
+    [Fact]
+    public void Participating_role_resolution_accepts_only_a_single_supported_staff_role()
+    {
+        Assert.True(ApplicationRoles.TryResolve(["STAFF"], out var staffRole));
+        Assert.Equal(ApplicationRoles.Staff, staffRole);
+        Assert.False(ApplicationRoles.TryResolve([], out _));
+        Assert.False(ApplicationRoles.TryResolve(["VISITOR"], out _));
+        Assert.False(ApplicationRoles.TryResolve(["STAFF", "SCHOOL_REPRESENTATIVE"], out _));
+    }
+
     private static SaveRouteRevisionCommand Valid() => new(Guid.NewGuid(), null,
         new(Guid.NewGuid(), 0, "Pilot route", null, Guid.NewGuid(), 0.5m, 0.5m, 0m,
             "LAST_POI", null, null, null, [new(Guid.NewGuid(), 30, [new("FRONT", 30)])]));
@@ -63,4 +74,5 @@ public sealed class RouteRevisionWorkflowTests
             Request = request with { FailureReason = "Localization drift", LocalizationPassed = false }
         }).IsValid);
     }
+
 }

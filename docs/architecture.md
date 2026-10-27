@@ -2048,22 +2048,28 @@ As of schema v1.3, `Routes` remains the shared identity table and uses
 new endpoints are documented in
 [`backend/docs/route-revisions.md`](../backend/docs/route-revisions.md).
 Staff writes immutable `RouteRevisions` and ordered stops linked to exact map
-and POI revisions plus source POI PASS evidence. Submission receipts are
-separate from draft creation. Technical Staff appends manual whole-route test
-runs with an explicit distinct active Staff participant. The technical test
-path uses the same transaction-owned robot deployment application lock as map
-deployment/POI checks and confirms the robot's latest cross-map deployment
+and POI revisions plus source POI PASS evidence. `GET /api/routes` lists only
+current VERSIONED revisions, including drafts, with search, sort, paging and
+optional exact map-version filtering; the legacy catalog remains separate.
+Submission receipts are separate from draft creation. Technical Staff appends
+manual whole-route test runs with an explicit distinct active Staff participant
+whose single persisted role resolves through `ApplicationRoles`. The technical
+test path uses the same transaction-owned robot deployment application lock as
+map deployment/POI checks and confirms the robot's latest cross-map deployment
 record matches the selected map ID and SHA-256.
 
-Route navigation fingerprint comprises exact map ID/checksum, start/end pose,
-ordered POI navigation fingerprints and dwell. It excludes content-only POI
-revision IDs/evidence IDs; histories still retain those references. The newest
-whole-route result for an identical route fingerprint is effective, while
-unrelated older configuration results remain preserved. Evidence is human
-entered, not automatic physical proof; manual PASS is not tour scheduling,
-reservation, READY, or movement authorization. Approved narration/audio
-duration is not yet linked to versioned POI content, so API duration is
-explicitly incomplete and reports the dwell subtotal only. Branch authoring,
-branch requests/cutoff, project POI YAML/frame mapping, Tour runtime and command
-transport remain staged or pending. See ADR-0023. ERD, preparation sequence and
-verification-state diagrams require member redraw/review and remain pending.
+The current route navigation fingerprint comprises exact map ID/checksum,
+start/end pose, ordered POI navigation fingerprints, camera presets and
+head-step configuration. Dwell is excluded from navigation identity but is
+recomputed for every revision's incomplete duration projection. Historical
+revision/run hashes are preserved; compatibility is established from their
+immutable map/pose/ordered-stop/camera/head-step snapshots. The newest
+whole-route result for the same navigation configuration is effective, while
+unrelated configurations retain their outcomes. Evidence is human-entered, not
+automatic physical proof; manual PASS is not tour scheduling, reservation,
+READY, or movement authorization. Approved narration/audio duration is not yet
+linked to versioned POI content, so API duration is explicitly incomplete and
+reports the dwell subtotal only. Branch authoring, branch requests/cutoff,
+project POI YAML/frame mapping, Tour runtime and command transport remain staged
+or pending. See ADR-0023. ERD, preparation sequence and verification-state
+diagrams require member redraw/review and remain pending.

@@ -101,13 +101,14 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
             if (latest?.Id != selected.Verification.Id || latest.ResultCode != "PASS")
                 throw new ConflictException("A newer POI verification result supersedes the selected PASS.", "POI_VERIFICATION_STALE");
         }
-        ValidatePose(map, i.StartX, i.StartY, i.StartYaw, "start");
         var package = MapPackageValidator.Validate(map.PackageBytes);
         MapPackageValidator.EnsureFreePosition(package, i.StartX, i.StartY, i.StartYaw);
         if (i.EndMode == "POSE")
         {
-            ValidatePose(map, i.EndX!.Value, i.EndY!.Value, i.EndYaw!.Value, "end");
-            MapPackageValidator.EnsureFreePosition(package, i.EndX.Value, i.EndY.Value, i.EndYaw.Value);
+            var endX = i.EndX ?? throw new ValidationException("End pose X is required.");
+            var endY = i.EndY ?? throw new ValidationException("End pose Y is required.");
+            var endYaw = i.EndYaw ?? throw new ValidationException("End pose yaw is required.");
+            MapPackageValidator.EnsureFreePosition(package, endX, endY, endYaw);
         }
 
         var now = clock.GetUtcNow();
@@ -121,10 +122,12 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
             repo.Add(route);
         }
         var fingerprint = ConfigurationFingerprint(map.Id, map.PackageSha256, i, evidence);
-        var retainedConfigurationRuns = route is null
-            ? Array.Empty<RouteTestRun>()
-            : await repo.GetTestRunsForConfigurationAsync(route.Id, fingerprint, ct);
-        var inheritedRun = retainedConfigurationRuns.LastOrDefault();
+        var targetNavigation = RouteNavigationConfigurationFactory.FromDraft(map.Id, map.PackageSha256, i, byId);
+        var retainedRouteRuns = route is null ? Array.Empty<RouteTestRun>() : await repo.GetTestRunsForRouteAsync(route.Id, ct);
+        var inheritedRun = retainedRouteRuns
+            .Where(run => run.RouteRevision is not null && RouteNavigationConfigurationFactory.SameNavigation(
+                RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), targetNavigation))
+            .OrderBy(run => run.CheckedAt).ThenBy(run => run.Id).LastOrDefault();
         var revision = new RouteRevision
         {
             Id = Guid.NewGuid(), RouteId = routeId, RevisionNumber = number, Name = i.Name.Trim(), Description = Clean(i.Description),
@@ -147,6 +150,13 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
         }
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_CREATED", EntityType = "RouteRevision",
             EntityId = revision.Id.ToString("D"), ResultCode = "DRAFT", DataJson = JsonSerializer.Serialize(new { routeId, number, map.Id, map.PackageSha256 }), OccurredAt = now });
+        IReadOnlyList<RouteTestRunView> inheritedTestRuns = inheritedRun is null ? [] :
+        [new RouteTestRunView(inheritedRun.Id, inheritedRun.RouteRevisionId, inheritedRun.MapVersionId,
+            Convert.ToHexString(inheritedRun.MapPackageSha256).ToLowerInvariant(),
+            await repo.GetRobotCodeAsync(inheritedRun.RobotId, ct) ?? "", inheritedRun.CheckedByUserId,
+            inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
+            inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
+            inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt)];
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,
@@ -157,7 +167,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
                 var selected = byId[s.PoiRevisionId];
                 return new RouteRevisionStopView(selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw, selected.Revision.CameraPreset);
-            }).ToArray(), [], [new RouteRevisionSummaryView(revision.Id, number, map.Id,
+            }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], []);
     }
@@ -170,13 +180,10 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
     }
     internal static byte[] ConfigurationFingerprint(Guid mapId, byte[] checksum, RouteRevisionDraftInput input, IReadOnlyList<RoutePoiRevisionEvidence> evidence) =>
         Hash(new { mapId, Checksum = Convert.ToHexString(checksum), input.StartX, input.StartY, input.StartYaw, input.EndMode, input.EndX, input.EndY, input.EndYaw,
-            Stops = input.Stops.Select((s, index) => new { NavigationFingerprint = Convert.ToHexString(evidence.Single(e => e.Revision.Id == s.PoiRevisionId).Revision.NavigationFingerprint),
-                Order = index + 1, s.DwellSeconds, HeadSteps = s.HeadSteps }) });
-    internal static void ValidatePose(MapVersion map, decimal x, decimal y, decimal yaw, string field)
-    {
-        var maxX = (decimal)map.ImageWidth * map.Resolution;
-        var maxY = (decimal)map.ImageHeight * map.Resolution;
-        if (x < 0 || y < 0 || x > maxX || y > maxY || yaw is < -3.141593m or > 3.141593m)
-            throw new ValidationException($"Route {field} pose is outside the selected map or yaw range.");
-    }
+            Stops = input.Stops.Select((s, index) =>
+            {
+                var poi = evidence.Single(e => e.Revision.Id == s.PoiRevisionId).Revision;
+                return new { NavigationFingerprint = Convert.ToHexString(poi.NavigationFingerprint),
+                    Order = index + 1, poi.CameraPreset, HeadSteps = s.HeadSteps };
+            }) });
 }

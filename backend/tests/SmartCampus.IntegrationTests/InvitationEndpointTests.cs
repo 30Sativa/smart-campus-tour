@@ -252,8 +252,11 @@ public sealed class InvitationEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()),
             token: await LoginAsync(host.Client, "rep.two"))).Status);
         var staff = await LoginAsync(host.Client, "invite.staff");
-        Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Status);
-        Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()), token: staff)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{Guid.NewGuid()}/revoke", Write(item, Guid.NewGuid()), token: staff)).Status);
+        var admin = await LoginAsync(host.Client, "rep.admin");
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Get, Path(id), token: admin)).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.SendAsync(HttpMethod.Post, Path(id) + $"/{invitation}/revoke", Write(item, Guid.NewGuid()), token: admin)).Status);
         var code = await CodeAsync(f, invitation);
         var results = await Task.WhenAll(AccessAsync(host.Client, f.TourId, "join", code), AccessAsync(host.Client, f.TourId, "join", code));
         Assert.Single(results, r => r.Status == HttpStatusCode.OK);

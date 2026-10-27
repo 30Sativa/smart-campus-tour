@@ -9,11 +9,14 @@ Implemented backend slice: Route identity and immutable fixed-route revisions, S
 | `POST /api/staff/routes` | `Staff` (Tour Staff) | Creates a Route and draft revision 1 |
 | `POST /api/staff/routes/{routeId}/revisions` | `Staff` | Appends a new immutable draft revision; requires `expectedCurrentRevision` |
 | `POST /api/staff/routes/{routeId}/revisions/{revisionId}/submit` | `Staff` | Appends a submission receipt for the exact current revision |
+| `GET /api/routes` | `Staff`, `TechnicalStaff` | Lists paged current VERSIONED revisions, including drafts; supports search, sort and optional exact `mapVersionId` filter |
 | `GET /api/routes/{routeId}/revisions?revisionId={id}&includeHistory=true` | `Staff`, `TechnicalStaff` | Reads exact selected/current revision, POI evidence links and test history |
 | `GET /api/technical/route-verifications/queue` | `TechnicalStaff` | Lists submitted revisions with no whole-route run yet |
 | `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | `TechnicalStaff` | Appends a manual PASS/FAIL run for a submitted revision |
 
 The old `/api/staff/manage/routes` and `/api/admin/routes` URLs retain the legacy contract and operate only on `AuthoringMode=LEGACY`. The latter URL is a current Staff-only compatibility alias. Legacy Route activation is not certification. New revision endpoints use the shared `Routes` identity table but do not serialize or mutate legacy `RouteStops`.
+
+`GET /api/routes` lists current VERSIONED revision views, including drafts not yet submitted. Query fields are `search`, `mapVersionId`, `page` (default 1), `size` (default 20, maximum 100) and `sort` (`name`, `-name`, `createdAt`, `-createdAt`). A route appears once with its current revision; older revisions remain available from the history endpoint. This does not change the separate legacy catalog contract.
 
 ## Create → submit → FAIL → revise → PASS → history
 
@@ -80,7 +83,7 @@ The operator participant must be a different active account with role `Staff`; t
 
 ### 4. Correct and resubmit as a new revision
 
-`POST /api/staff/routes/{routeId}/revisions`, with `expectedCurrentRevision: 1`, a new `requestId`, and the corrected complete map/stop/start/end configuration. The new row receives revision number 2. Revision 1, its submission and FAIL remain in history. A changed navigation fingerprint requires a whole-route run of revision 2. A content-only POI revision with unchanged map, pose/camera, stop order and dwell can keep the same navigation fingerprint and cite its previous PASS source; the route fingerprint excludes content revision IDs and evidence IDs.
+`POST /api/staff/routes/{routeId}/revisions`, with `expectedCurrentRevision: 1`, a new `requestId`, and the corrected complete map/stop/start/end configuration. The new row receives revision number 2. Revision 1, its submission and FAIL remain in history. A navigation change requires a whole-route run of revision 2. Content-only POI revisions or dwell-only changes can retain the same navigation evidence when map, poses, ordered POI navigation fingerprints, camera presets and head steps are unchanged. The route fingerprint excludes dwell, content revision IDs and evidence IDs; the exact source TestRun remains identified and immutable.
 
 Submit revision 2 and record the same observations as PASS: all stops reached, localization passed and safe stop observed. PASS without all observations is rejected; FAIL requires at least one failed observation and a reason. New run records append; the latest run for the same route configuration is effective, so a newer FAIL cannot be hidden by an earlier PASS.
 
@@ -88,7 +91,7 @@ Submit revision 2 and record the same observations as PASS: all stops reached, l
 
 `GET /api/routes/{routeId}/revisions?revisionId={revision2Id}&includeHistory=true`
 
-Each stop includes the exact POI revision, map and source PASS evidence IDs. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, measured duration, evidence, and timestamp. The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. Do not treat measured route test duration as recalculated content duration.
+Each stop includes the exact POI revision, map and source PASS evidence IDs. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, measured duration, evidence, and timestamp. The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and recalculated `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. A reused navigation TestRun is the source of evidence only; its measured duration is not presented as the duration of the new dwell configuration.
 
 ## Common responses and retry rules
 
