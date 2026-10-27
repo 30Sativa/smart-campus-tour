@@ -104,6 +104,19 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task LegacyTourCreate_CannotSelectAVersionedRouteIdentity()
+    {
+        await using var f = await Fixture.Create();
+        await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET AuthoringMode='VERSIONED' WHERE Id='{f.Route.Id:D}';");
+
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.NotFound);
+
+        await using var db = f.Context();
+        Assert.Empty(await db.Tours.ToArrayAsync());
+        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
     public async Task OptimisticConcurrency_HasOneWinner_AndNoOpPreservesVersionAndAudit()
     {
         await using var f = await Fixture.Create();

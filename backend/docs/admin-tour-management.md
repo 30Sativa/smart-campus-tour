@@ -1,9 +1,14 @@
 # Staff Tour Management API
 
-Implemented scope: `docs/decisions/0018-admin-tour-management.md` and
-`docs/architecture.md`. Staff management screens bind to this API; operational simulation surfaces
-remain separate. No SQL schema patch, physical data seeding, dispatch or robot
-operation is needed for this feature.
+Implemented scope: legacy pre-execution behavior in
+`docs/decisions/0018-admin-tour-management.md` and `docs/architecture.md`.
+Every endpoint below currently requires the `Staff` JWT role (product label:
+Tour Staff); `/api/admin/tours` is a Staff-only compatibility alias. This API
+selects only `AuthoringMode=LEGACY` Routes and creates SCHEDULED Tours in the
+legacy model. It does not persist an exact RouteRevision, assigned Operator,
+robot reservation or READY snapshot. Do not use it to integrate the versioned
+Route scheduling target. The versioned scheduling writer is intentionally not
+enabled; see [ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
 
 ## Create a Tour from an existing SQL Route
 
@@ -101,7 +106,33 @@ exercise HTTP Route creation, Tour commands, Representative registration,
 invitation/session cancellation, replay/concurrency and rollback. Without the
 variable SQL tests report SKIPPED. The existing runtime POIs/Routes are untouched.
 
-Next tasks: coordinated registered rescheduling
-and participant notifications/expiry updates, READY/Finalize/Reopen, branch
-preparation, and Staff/runtime readiness/Start. These are not implicitly
-implemented by CRUD or the IsActive flag.
+The versioned Tour flow is blocked until a reliable configured route-duration
+source is available for the 15-minute-buffer reservation and the existing
+registration path can report row-level and email-change decisions. Current
+versioned Route views return `INCOMPLETE_CONTENT_AUDIO_DATA`; measured route-test
+duration is not substituted for configured total duration. Physical attendant
+and operational safety-console evidence also has no current source, so READY
+must remain blocked/unknown for those checks. No target reservation, READY,
+Finalize/Reopen or Start endpoint is currently available. Branch preparation,
+coordinated registered rescheduling and participant notification/expiry updates
+remain separate work.
+
+## Versioned Tour handoff status
+
+| Check | Current evidence | Status for target scheduling |
+|---|---|---|
+| Exact submitted RouteRevision and latest navigation result | `/api/routes/{routeId}/revisions` returns immutable revision and PASS/FAIL source evidence | Readable, but current Tour cannot persist the selected revision |
+| Configured total path duration | Route view reports `INCOMPLETE_CONTENT_AUDIO_DATA`; only dwell subtotal is known | **Blocked**; do not substitute measured navigation-test duration |
+| Explicit assigned Operator | User can be validated as one active `Staff` role, but Tour has no Operator field or API | **Unavailable** |
+| Robot interval and overlap | No versioned reservation table or interval query; legacy Tours have no reservation duration/robot link suitable for exclusion | **Unknown**; do not claim a conflict-free slot |
+| Registration-row/email decisions | Current registration is aggregate; there is no row email-change request workflow | **Unknown** when deciding READY |
+| Safety attendant/operations-console preflight | No persisted check source in backend | **Unknown**; READY must remain blocked |
+
+Target role/action boundary: Tour scheduling, configuration, readiness and
+pre-Start cancellation belong to `Staff` (product label Tour Staff). The assigned
+Operator is an explicitly selected active Staff account; CreatedByUserId cannot
+stand in for that assignment. Admin has no routine Tour-management permission;
+F-14 remains pending. Technical Staff, Representatives and Viewers have no Tour
+scheduling action. Start and assigned-Operator runtime actions are outside this
+slice and have no endpoint. These are target boundaries, not claims that the
+versioned API is implemented.

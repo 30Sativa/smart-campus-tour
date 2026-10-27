@@ -33,8 +33,13 @@ This is the pre-execution SQL slice in
 `docs/decisions/0018-admin-tour-management.md`; Staff now owns the existing
 pre-execution API. All endpoints require Staff, and CreatedByUserId is attribution
 only. `/api/staff/manage/tours` is canonical; `/api/admin/tours` is a Staff-only
-compatibility alias. No READY/Finalize/Reopen, robot assignment, Staff operation
-or branch-request endpoint is implemented here.
+compatibility alias. Route selection is restricted to `AuthoringMode=LEGACY`.
+This API cannot persist a RouteRevisionId, assigned Operator, robot reservation,
+or immutable READY snapshot. It is not a versioned Route scheduling path. No
+target READY/Finalize/Reopen, explicit robot/Operator assignment, reservation,
+Staff operation or branch-request endpoint is implemented here. ADR-0024 records
+why no versioned Tour/reservation writer can be safely enabled until route
+duration and row/email decision sources exist.
 
 | Method | Path | Behavior |
 |---|---|---|
