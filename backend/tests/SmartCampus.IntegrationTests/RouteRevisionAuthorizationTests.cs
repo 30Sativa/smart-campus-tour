@@ -27,4 +27,11 @@ public sealed class RouteRevisionAuthorizationTests
         Assert.Equal($"{ApplicationRoles.Staff},{ApplicationRoles.TechnicalStaff}", method.GetCustomAttribute<AuthorizeAttribute>()?.Roles);
         Assert.DoesNotContain(ApplicationRoles.Admin, method.GetCustomAttribute<AuthorizeAttribute>()!.Roles, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void VersionedRouteCatalogAllowsOnlyStaffAndTechnicalStaff()
+    {
+        var method = typeof(RouteRevisionsController).GetMethod(nameof(RouteRevisionsController.List), BindingFlags.Instance | BindingFlags.Public)!;
+        Assert.Equal($"{ApplicationRoles.Staff},{ApplicationRoles.TechnicalStaff}", method.GetCustomAttribute<AuthorizeAttribute>()?.Roles);
+    }
 }

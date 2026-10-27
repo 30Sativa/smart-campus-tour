@@ -25,6 +25,19 @@ public sealed class MapPackageValidatorTests
     }
 
     [Theory]
+    [InlineData(0, 0, 0.5, 0.5)]
+    [InlineData(-1, -2, -0.5, -1.5)]
+    [InlineData(3, 4, 4.5, 5.5)]
+    public void Free_position_uses_world_coordinates_relative_to_map_origin(int originX, int originY, double x, double y)
+    {
+        var map = MapPackageValidator.Validate(Package(
+            $"image: campus.pgm\nmode: trinary\nresolution: 1\norigin: [{originX}, {originY}, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n",
+            Pgm("P2\n2 2\n255\n255 255 255 255\n")));
+
+        MapPackageValidator.EnsureFreePosition(map, (decimal)x, (decimal)y, 0m);
+    }
+
+    [Theory]
     [InlineData(false, 0x0A)]
     [InlineData(false, 0x0D)]
     [InlineData(false, 0x20)]

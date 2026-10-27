@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -83,15 +84,36 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
         await db.RouteTestRuns.AsNoTracking().Where(r => r.RouteRevisionId == revisionId)
             .OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).ToArrayAsync(ct);
 
-    public async Task<IReadOnlyList<RouteTestRun>> GetTestRunsForConfigurationAsync(Guid routeId, byte[] fingerprint, CancellationToken ct) =>
-        await db.RouteTestRuns.AsNoTracking().Where(test => test.NavigationFingerprint == fingerprint &&
-            db.RouteRevisions.Any(revision => revision.Id == test.RouteRevisionId && revision.RouteId == routeId))
-            .OrderBy(test => test.CheckedAt).ThenBy(test => test.Id).ToArrayAsync(ct);
-
     public async Task<IReadOnlyList<RouteTestRun>> GetTestRunsForRouteAsync(Guid routeId, CancellationToken ct) =>
         await db.RouteTestRuns.AsNoTracking().Where(test =>
             db.RouteRevisions.Any(revision => revision.Id == test.RouteRevisionId && revision.RouteId == routeId))
+            .Include(test => test.RouteRevision).ThenInclude(revision => revision.RouteRevisionStops)
             .OrderBy(test => test.CheckedAt).ThenBy(test => test.Id).ToArrayAsync(ct);
+
+    public async Task<PagedResult<Guid>> ListCurrentRevisionIdsAsync(string? search, Guid? mapVersionId,
+        string sort, int page, int size, CancellationToken ct)
+    {
+        var current = db.RouteRevisions.AsNoTracking().Where(revision =>
+            db.Routes.Any(route => route.Id == revision.RouteId && route.AuthoringMode == "VERSIONED") &&
+            revision.RevisionNumber == db.RouteRevisions.Where(candidate => candidate.RouteId == revision.RouteId)
+                .Max(candidate => candidate.RevisionNumber));
+        if (search is not null)
+            current = current.Where(revision => revision.Name.Contains(search) ||
+                (revision.Description != null && revision.Description.Contains(search)));
+        if (mapVersionId.HasValue) current = current.Where(revision => revision.MapVersionId == mapVersionId.Value);
+
+        var total = await current.LongCountAsync(ct);
+        var ordered = sort switch
+        {
+            "-name" => current.OrderByDescending(revision => revision.Name),
+            "createdAt" => current.OrderBy(revision => revision.CreatedAt),
+            "-createdAt" => current.OrderByDescending(revision => revision.CreatedAt),
+            _ => current.OrderBy(revision => revision.Name)
+        };
+        var ids = await ordered.ThenBy(revision => revision.RouteId)
+            .Skip((page - 1) * size).Take(size).Select(revision => revision.Id).ToArrayAsync(ct);
+        return new PagedResult<Guid>(ids, page, size, total);
+    }
 
     public Task<RouteRevisionSubmission?> FindSubmissionRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct) =>
         db.RouteRevisionSubmissions.AsNoTracking().SingleOrDefaultAsync(s => s.SubmittedByUserId == actorUserId && s.RequestId == requestId, ct);

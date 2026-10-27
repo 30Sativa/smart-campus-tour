@@ -12,6 +12,22 @@ namespace SmartCampus.Api.Controllers;
 [Route("api")]
 public sealed class RouteRevisionsController(ISender sender) : ControllerBase
 {
+    [HttpGet("routes")]
+    [Authorize(Roles = ApplicationRoles.Staff + "," + ApplicationRoles.TechnicalStaff)]
+    public async Task<IActionResult> List([FromQuery] string? search, [FromQuery] Guid? mapVersionId,
+        [FromQuery] int page = 1, [FromQuery] int size = 20, [FromQuery] string sort = "name", CancellationToken ct = default)
+    {
+        var result = await sender.Send(new ListVersionedRoutesQuery(search, mapVersionId, page, size,
+            string.IsNullOrWhiteSpace(sort) ? "name" : sort.Trim()), ct);
+        return Ok(new PagedResponse<RouteRevisionView>
+        {
+            Success = true,
+            Message = "Current versioned routes retrieved.",
+            Data = result.Items,
+            Pagination = new PaginationMetadata(result.Page, result.PageSize, result.TotalItems, result.TotalPages)
+        });
+    }
+
     [HttpPost("staff/routes")]
     [Authorize(Roles = ApplicationRoles.Staff)]
     public async Task<IActionResult> Create([FromBody] RouteRevisionDraftInput input, CancellationToken ct) =>

@@ -40,9 +40,14 @@ internal static class RouteRevisionMapper
                 eligibilityIssues.Add($"POI_VERIFICATION_REQUIRED:{stop.PoiProposalRevisionId:D}");
         }
         var submissions = await repo.GetSubmissionsAsync(revision.Id, ct);
-        var allRuns = await repo.GetTestRunsForConfigurationAsync(route.Id, revision.NavigationFingerprint, ct);
-        var runs = history ? await repo.GetTestRunsForRouteAsync(route.Id, ct) : allRuns.TakeLast(1).ToArray();
-        var effective = allRuns.OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).LastOrDefault();
+        var targetNavigation = RouteNavigationConfigurationFactory.FromRevision(revision, stops);
+        var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);
+        var effectiveConfigurationRuns = routeRuns.Where(run => run.RouteRevision is not null &&
+            RouteNavigationConfigurationFactory.SameNavigation(
+                RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), targetNavigation))
+            .OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).ToArray();
+        var runs = history ? routeRuns : effectiveConfigurationRuns;
+        var effective = effectiveConfigurationRuns.LastOrDefault();
         var duration = "INCOMPLETE_CONTENT_AUDIO_DATA";
         var dwell = stops.Sum(s => s.DwellSeconds);
         var dtoRuns = new List<RouteTestRunView>(runs.Count);
@@ -56,7 +61,12 @@ internal static class RouteRevisionMapper
         var summaries = new List<RouteRevisionSummaryView>();
         foreach (var historical in revisionRecords.Where(r => history || r.Id == revision.Id).OrderBy(r => r.RevisionNumber))
         {
-            var historicalRuns = await repo.GetTestRunsForConfigurationAsync(route.Id, historical.NavigationFingerprint, ct);
+            var historicalStops = await repo.GetStopsAsync(historical.Id, ct);
+            var historicalNavigation = RouteNavigationConfigurationFactory.FromRevision(historical, historicalStops);
+            var historicalRuns = routeRuns.Where(run => run.RouteRevision is not null &&
+                RouteNavigationConfigurationFactory.SameNavigation(
+                    RouteNavigationConfigurationFactory.FromRevision(run.RouteRevision, run.RouteRevision.RouteRevisionStops.ToArray()), historicalNavigation))
+                .OrderBy(run => run.CheckedAt).ThenBy(run => run.Id);
             var last = historicalRuns.LastOrDefault();
             summaries.Add(new RouteRevisionSummaryView(historical.Id, historical.RevisionNumber, historical.MapVersionId,
                 Convert.ToHexString(historical.MapPackageSha256).ToLowerInvariant(),

@@ -35,11 +35,11 @@ public sealed class RosterEmailCorrectionEndpointTests
         Assert.Equal(HttpStatusCode.OK, result.Status);
         return result.Data.GetProperty("id").GetGuid();
     }
-    private static async Task ApproveAsync(Fixture f, Guid id, string admin)
+    private static async Task ApproveAsync(Fixture f, Guid id, string staff)
     {
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Detail(id) + "/approve", new {
-            expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: admin)).Status);
+            expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: staff)).Status);
     }
     private static async Task<string> CodeAsync(Fixture f, Guid invitation)
     {
@@ -73,9 +73,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         {
             f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
             var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
             id = await SubmitAsync(f);
-            await ApproveAsync(f, id, admin);
-            detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+            await ApproveAsync(f, id, staff);
+            detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             rowId = RowId(detail, 1); // Correct the shared-viewing row.
             var items = (await f.SendAsync(HttpMethod.Get, Support(id))).Data.GetProperty("items");
             var otherId = items[0].GetProperty("id").GetGuid();
@@ -93,7 +94,7 @@ public sealed class RosterEmailCorrectionEndpointTests
             Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session", cookie: targetJoin.Cookie)).Status);
             Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: otherJoin.Cookie)).Status);
             Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, targetId))).Status);
-            var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+            var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             Assert.Equal("APPROVED", after.GetProperty("summary").GetProperty("state").GetString());
             Assert.Equal(detail.GetProperty("reviewedAt").GetRawText(), after.GetProperty("reviewedAt").GetRawText());
             Assert.Equal(detail.GetProperty("reviewedByUserId").GetRawText(), after.GetProperty("reviewedByUserId").GetRawText());
@@ -116,19 +117,21 @@ public sealed class RosterEmailCorrectionEndpointTests
             Assert.DoesNotContain(oldCode, audit.DataJson!);
         }
         await using var restarted = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
-        f.Bind(restarted.Client, await LoginAsync(restarted.Client, "rep.admin"));
+        var adminAfterRestart = await LoginAsync(restarted.Client, "rep.admin");
+        var staffAfterRestart = await LoginAsync(restarted.Client, "review.staff");
+        f.Bind(restarted.Client, adminAfterRestart);
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, rowId), write!)).Status);
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, rowId), write! with { Email = "different@example.test" }), "IDEMPOTENCY_CONFLICT");
         await using var final = f.Context();
         Assert.Equal(1, await final.AuditLogs.CountAsync(a => a.Action == CorrectRosterEmailCommandHandler.AuditAction));
         Assert.Equal(3, await final.AuditLogs.CountAsync(a => a.Action == "EMAIL_SEND_REQUESTED"));
-        var current = (await f.SendAsync(HttpMethod.Get, Detail(id))).Data;
+        var current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staffAfterRestart)).Data;
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, rowId), Write(current, "later@example.test", index: 1))).Status);
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, rowId), write!), "IDEMPOTENCY_CONFLICT");
         // Reusing the earlier UUID with the later recipient must not masquerade as the original request.
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, rowId), write! with { Email = "later@example.test" }), "IDEMPOTENCY_CONFLICT");
         Assert.Equal(4, await final.AuditLogs.CountAsync(a => a.Action == "EMAIL_SEND_REQUESTED"));
-        current = (await f.SendAsync(HttpMethod.Get, Detail(id))).Data;
+        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staffAfterRestart)).Data;
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, rowId), Write(current, "fixed@example.test", index: 1))).Status);
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, rowId), write!), "IDEMPOTENCY_CONFLICT");
         Assert.Equal(5, await final.AuditLogs.CountAsync(a => a.Action == "EMAIL_SEND_REQUESTED"));
@@ -141,19 +144,20 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
         foreach (var state in new[] { "SUBMITTED", "REJECTED" })
         {
-            var before = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+            var before = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             if (state == "REJECTED")
             {
                 Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Detail(id) + "/reject", new {
-                    expectedRowVersion = Version(before), expectedTourRowVersion = before.GetProperty("tourRowVersion").GetString(), reason = "Fix email" }, token: admin)).Status);
-                before = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+                    expectedRowVersion = Version(before), expectedTourRowVersion = before.GetProperty("tourRowVersion").GetString(), reason = "Fix email" }, token: staff)).Status);
+                before = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             }
             var row = RowId(before);
             Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, row), Write(before, state.ToLowerInvariant() + "@example.test"), token: admin)).Status);
-            var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+            var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             Assert.Equal(state, after.GetProperty("summary").GetProperty("state").GetString());
             Assert.Equal(before.GetProperty("rejectionReason").GetRawText(), after.GetProperty("rejectionReason").GetRawText());
             Assert.Equal(before.GetProperty("reviewedAt").GetRawText(), after.GetProperty("reviewedAt").GetRawText());
@@ -165,7 +169,7 @@ public sealed class RosterEmailCorrectionEndpointTests
         var owned = await f.DataAsync($"/registrations/{id}");
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit", new {
             input = Input(await f.DataAsync($"/tours/{f.TourId}"), "Group", "rejected@example.test", mixed: true), expectedRowVersion = Version(owned) })).Status);
-        await ApproveAsync(f, id, admin);
+        await ApproveAsync(f, id, staff);
     }
 
     [SchemaV11Fact]
@@ -176,8 +180,9 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var row = RowId(detail);
         var write = Write(detail);
         foreach (var user in new[] { "rep.one", "rep.two", "correction.staff" })
@@ -206,32 +211,33 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
         foreach (var state in new[] { "READY", "RUNNING", "COMPLETED", "CANCELLED" })
         {
             await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='{state}' WHERE Id='{f.TourId}';");
-            var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+            var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             Assert.False(detail.GetProperty("correctEmail").GetProperty("allowed").GetBoolean());
             Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail), token: admin), "TOUR_LOCKED");
         }
         await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='SCHEDULED' WHERE Id='{f.TourId}'; UPDATE dbo.GroupRegistrations SET State='CANCELLED' WHERE Id='{id}';");
-        var current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(current)), Write(current), token: admin), "STATE_CONFLICT");
         await f.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='SUBMITTED' WHERE Id='{id}';");
-        await ApproveAsync(f, id, admin);
-        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        await ApproveAsync(f, id, staff);
+        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(current)), Write(current), token: admin), "INVITATIONS_DISABLED");
         await using (var enabled = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings()))
         {
             f.Bind(enabled.Client, await LoginAsync(enabled.Client, "rep.admin"));
-            current = (await f.SendAsync(HttpMethod.Get, Detail(id))).Data;
+            current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
             Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, RowId(current)), Write(current))).Status);
             await using var db = f.Context();
             Assert.Equal(1, await db.Invitations.CountAsync()); // Missing invitations: issue only the corrected row.
         }
         f.Bind(host.Client, admin);
         await f.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED' WHERE Id='{id}';");
-        current = (await f.SendAsync(HttpMethod.Get, Detail(id))).Data;
+        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(current)), Write(current, "later@example.test")), "INVITATION_BOUNDARY");
     }
 
@@ -242,9 +248,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
         var other = await SubmitAsync(f, "reserved@example.test", mixed: false);
-        var current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var row = RowId(current);
         foreach (var email in new[] { " ROOM@EXAMPLE.COM ", " RESERVED@EXAMPLE.TEST " })
         {
@@ -257,10 +264,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         var oldEmailGroup = await SubmitAsync(f, "viewer@example.test", mixed: false);
         Assert.NotEqual(id, oldEmailGroup);
         await f.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED' WHERE Id='{other}';");
-        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        current = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, row), Write(current, "reserved@example.test"), token: admin)).Status);
         var third = await SubmitAsync(f, "third@example.test", mixed: false);
-        var otherDetail = (await f.SendAsync(HttpMethod.Get, Detail(third), token: admin)).Data;
+        var otherDetail = (await f.SendAsync(HttpMethod.Get, Detail(third), token: staff)).Data;
         Assert.Equal(HttpStatusCode.NotFound, (await f.SendAsync(HttpMethod.Post, Path(id, RowId(otherDetail)), Write(current), token: admin)).Status);
     }
 
@@ -271,20 +278,21 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var write = Write(detail);
         var pair = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), write, token: admin),
             f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), write with { RequestId = Guid.NewGuid(), Email = "second@example.test" }, token: admin));
         Assert.Single(pair, p => p.Status == HttpStatusCode.OK);
         Conflict(Assert.Single(pair, p => p.Status == HttpStatusCode.Conflict), "STALE_VERSION");
-        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         pair = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail, "race@example.test"), token: admin),
-            f.SendAsync(HttpMethod.Post, Detail(id) + "/approve", new { expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: admin));
+            f.SendAsync(HttpMethod.Post, Detail(id) + "/approve", new { expectedRowVersion = Version(detail), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() }, token: staff));
         Assert.Single(pair, p => p.Status == HttpStatusCode.OK);
         Conflict(Assert.Single(pair, p => p.Status == HttpStatusCode.Conflict), "STALE_VERSION");
         const string stale = "AAAAAAAAAAE=";
-        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         write = Write(detail, "stale@example.test");
         foreach (var invalid in new[] { write with { ExpectedTourRowVersion = stale }, write with { ExpectedRowVersion = stale }, write with { ExpectedRosterRowVersion = stale } })
             Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), invalid, token: admin), "STALE_VERSION");
@@ -297,15 +305,16 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var first = await SubmitAsync(f, "first@example.test", mixed: false);
         var second = await SubmitAsync(f, "second@example.test", mixed: false);
-        var a = (await f.SendAsync(HttpMethod.Get, Detail(first), token: admin)).Data;
-        var b = (await f.SendAsync(HttpMethod.Get, Detail(second), token: admin)).Data;
+        var a = (await f.SendAsync(HttpMethod.Get, Detail(first), token: staff)).Data;
+        var b = (await f.SendAsync(HttpMethod.Get, Detail(second), token: staff)).Data;
         var pair = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(first, RowId(a)), Write(a, "winner@example.test"), token: admin),
             f.SendAsync(HttpMethod.Post, Path(second, RowId(b)), Write(b, " WINNER@EXAMPLE.TEST "), token: admin));
         Assert.Single(pair, p => p.Status == HttpStatusCode.OK);
         Conflict(Assert.Single(pair, p => p.Status == HttpStatusCode.Conflict), "EMAIL_RESERVED");
-        a = (await f.SendAsync(HttpMethod.Get, Detail(first), token: admin)).Data;
+        a = (await f.SendAsync(HttpMethod.Get, Detail(first), token: staff)).Data;
         pair = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(first, RowId(a)), Write(a, "admin-edit@example.test"), token: admin),
             f.SendAsync(HttpMethod.Put, $"/registrations/{first}", new { input = Input(await f.DataAsync($"/tours/{f.TourId}"), "Group", "rep-edit@example.test"), expectedRowVersion = Version(a) }));
         Assert.Single(pair, p => p.Status == HttpStatusCode.OK);
@@ -319,9 +328,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        await ApproveAsync(f, id, admin);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        await ApproveAsync(f, id, staff);
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var items = (await f.SendAsync(HttpMethod.Get, Support(id))).Data.GetProperty("items");
         var invitation = items[0].GetProperty("id").GetGuid();
         var oldCode = await CodeAsync(f, invitation);
@@ -329,7 +339,7 @@ public sealed class RosterEmailCorrectionEndpointTests
         var write = Write(detail);
         await f.Database.ExecuteAsync("ALTER TABLE dbo.AuditLogs ADD CONSTRAINT CK_TestCorrectionAudit CHECK (Action <> 'ROSTER_EMAIL_CORRECTED');");
         Assert.Equal(HttpStatusCode.InternalServerError, (await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), write, token: admin)).Status);
-        var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        var after = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Assert.Equal(detail.GetRawText(), after.GetRawText());
         Assert.Equal(oldCode, await CodeAsync(f, invitation));
         Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: joined.Cookie)).Status);
@@ -350,9 +360,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        await ApproveAsync(f, id, admin);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        await ApproveAsync(f, id, staff);
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         await using var db = f.Context();
         var target = await db.Invitations.AsNoTracking().SingleAsync(i => i.RosterRowId == RowId(detail));
         var oldAttempt = (await db.AuditLogs.SingleAsync(a => a.Action == "EMAIL_SEND_REQUESTED" && a.EntityId == target.Id.ToString("D"))).CorrelationId!.Value;
@@ -367,7 +378,7 @@ public sealed class RosterEmailCorrectionEndpointTests
         Assert.Equal("viewer@example.test", oldClaim.Recipient);
         await f.Database.ExecuteAsync($"UPDATE dbo.AuditLogs SET OccurredAt=DATEADD(minute,-2,OccurredAt) WHERE CorrelationId='{oldAttempt}' AND Action='EMAIL_SEND_REQUESTED';");
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", new {
-            requestId = Guid.NewGuid(), expectedRowVersion = Convert.ToBase64String(target.RowVersion) }, token: admin)).Status);
+            requestId = Guid.NewGuid(), expectedRowVersion = Convert.ToBase64String(target.RowVersion) }, token: staff)).Status);
         var oldPending = (await db.AuditLogs.OrderByDescending(a => a.Id).FirstAsync(a => a.Action == "EMAIL_SEND_REQUESTED")).CorrelationId!.Value;
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail), token: admin)).Status);
         Assert.Null(await Send(new ClaimEmailCommand(oldPending, false)));
@@ -388,10 +399,10 @@ public sealed class RosterEmailCorrectionEndpointTests
         var newCode = await CodeAsync(f, target.Id);
         var retryId = Guid.NewGuid();
         var retry = new { requestId = retryId, expectedRowVersion = Version(item) };
-        Conflict(await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: admin), "EMAIL_COOLDOWN");
+        Conflict(await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: staff), "EMAIL_COOLDOWN");
         await f.Database.ExecuteAsync($"UPDATE dbo.AuditLogs SET OccurredAt=DATEADD(minute,-2,OccurredAt) WHERE CorrelationId='{attempt}' AND Action='EMAIL_SEND_REQUESTED';");
-        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: admin)).Status);
-        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: admin)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: staff)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{target.Id}/resend", retry, token: staff)).Status);
         Assert.Equal(newCode, await CodeAsync(f, target.Id));
         var latest = (await db.AuditLogs.OrderByDescending(a => a.Id).FirstAsync(a => a.Action == "EMAIL_SEND_REQUESTED")).CorrelationId!.Value;
         var resent = await Send(new ClaimEmailCommand(latest, false));
@@ -399,7 +410,7 @@ public sealed class RosterEmailCorrectionEndpointTests
         Assert.Equal(claimed.Recipient, resent.Recipient);
         Assert.Equal(claimed.ProtectedCode, resent.ProtectedCode);
         await Send(new RecordEmailResultCommand(latest, "ACCEPTED", "OK"));
-        Assert.Equal("APPROVED", (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data.GetProperty("summary").GetProperty("state").GetString());
+        Assert.Equal("APPROVED", (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data.GetProperty("summary").GetProperty("state").GetString());
     }
 
     [SchemaV11Fact]
@@ -409,21 +420,22 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        await ApproveAsync(f, id, admin);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        await ApproveAsync(f, id, staff);
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var item = (await f.SendAsync(HttpMethod.Get, Support(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Support(id) + $"/{invitation}/revoke", new {
-            requestId = Guid.NewGuid(), expectedRowVersion = Version(item) }, token: admin)).Status);
+            requestId = Guid.NewGuid(), expectedRowVersion = Version(item) }, token: staff)).Status);
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail), token: admin), "STALE_VERSION");
-        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail) with { ExpectedInvitationRowVersion = null }, token: admin), "STALE_VERSION");
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail), token: admin)).Status);
         await f.Database.ExecuteAsync($"UPDATE dbo.Invitations SET ExpiresAt=DATEADD(day,-1,SYSDATETIMEOFFSET()) WHERE Id='{invitation}';");
-        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         Conflict(await f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail, "expired@example.test"), token: admin), "INVITATION_UNAVAILABLE");
-        Assert.Equal("fixed@example.test", (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data.GetProperty("roster")[0].GetProperty("email").GetString());
+        Assert.Equal("fixed@example.test", (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data.GetProperty("roster")[0].GetProperty("email").GetString());
     }
 
     [SchemaV11Fact]
@@ -433,14 +445,15 @@ public sealed class RosterEmailCorrectionEndpointTests
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var admin = await LoginAsync(host.Client, "rep.admin");
+        var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
-        await ApproveAsync(f, id, admin);
-        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: admin)).Data;
+        await ApproveAsync(f, id, staff);
+        var detail = (await f.SendAsync(HttpMethod.Get, Detail(id), token: staff)).Data;
         var item = (await f.SendAsync(HttpMethod.Get, Support(id))).Data.GetProperty("items")[0];
         var invitation = item.GetProperty("id").GetGuid();
         await f.Database.ExecuteAsync("UPDATE dbo.AuditLogs SET OccurredAt=DATEADD(minute,-2,OccurredAt) WHERE Action='EMAIL_SEND_REQUESTED';");
         var outcomes = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(id, RowId(detail)), Write(detail), token: admin),
-            f.SendAsync(HttpMethod.Post, Support(id) + $"/{invitation}/reissue", new { requestId = Guid.NewGuid(), expectedRowVersion = Version(item) }, token: admin));
+            f.SendAsync(HttpMethod.Post, Support(id) + $"/{invitation}/reissue", new { requestId = Guid.NewGuid(), expectedRowVersion = Version(item) }, token: staff));
         Assert.Single(outcomes, r => r.Status == HttpStatusCode.OK);
         Conflict(Assert.Single(outcomes, r => r.Status == HttpStatusCode.Conflict), "STALE_VERSION");
         await using var db = f.Context();

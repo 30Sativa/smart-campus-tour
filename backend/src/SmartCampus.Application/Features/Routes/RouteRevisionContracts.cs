@@ -1,4 +1,5 @@
 using SmartCampus.Domain.Entities;
+using SmartCampus.Application.Common.Models;
 
 namespace SmartCampus.Application.Features.Routes;
 
@@ -34,6 +35,12 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
 
 public sealed record RoutePoiRevisionEvidence(PoiProposalRevision Revision, PoiVerificationRecord Verification);
 
+public sealed record RouteNavigationStopConfiguration(int StopOrder, byte[] PoiNavigationFingerprint,
+    string CameraPreset, IReadOnlyList<RouteHeadStep> HeadSteps);
+public sealed record RouteNavigationConfiguration(Guid MapVersionId, byte[] MapPackageSha256,
+    decimal StartX, decimal StartY, decimal StartYaw, string EndMode, decimal? EndX, decimal? EndY,
+    decimal? EndYaw, IReadOnlyList<RouteNavigationStopConfiguration> Stops);
+
 public interface IRouteRevisionRepository
 {
     Task LockRequestAsync(Guid actorUserId, Guid requestId, string operation, CancellationToken ct);
@@ -52,8 +59,9 @@ public interface IRouteRevisionRepository
     Task<IReadOnlyList<RouteRevisionStop>> GetStopsAsync(Guid revisionId, CancellationToken ct);
     Task<IReadOnlyList<RouteRevisionSubmission>> GetSubmissionsAsync(Guid revisionId, CancellationToken ct);
     Task<IReadOnlyList<RouteTestRun>> GetTestRunsAsync(Guid revisionId, CancellationToken ct);
-    Task<IReadOnlyList<RouteTestRun>> GetTestRunsForConfigurationAsync(Guid routeId, byte[] fingerprint, CancellationToken ct);
     Task<IReadOnlyList<RouteTestRun>> GetTestRunsForRouteAsync(Guid routeId, CancellationToken ct);
+    Task<PagedResult<Guid>> ListCurrentRevisionIdsAsync(string? search, Guid? mapVersionId,
+        string sort, int page, int size, CancellationToken ct);
     Task<RouteRevisionSubmission?> FindSubmissionRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<RouteTestRun?> FindTestRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<User?> FindUserAsync(Guid userId, CancellationToken ct);

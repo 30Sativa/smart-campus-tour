@@ -15,6 +15,7 @@ internal static class ApiOperationDocumentation
     private static readonly IReadOnlyDictionary<string, (string Summary, string Description)> Operations =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
         {
+            ["RouteRevisionsController.List"] = ("[Tour Staff/Technical Staff] Liệt kê tuyến VERSIONED", "Pages current revisions of VERSIONED routes only, including unsubmitted drafts; it never mixes legacy catalog rows or emits multiple history rows for one Route. Requires Staff or TechnicalStaff. Supports `search`, `mapVersionId`, `page`, `size` (1–100), and `sort` (`name`, `-name`, `createdAt`, `-createdAt`). Each item is the full current revision view with exact map version/key, submit state, effective navigation result/source TestRun, dwell subtotal, and incomplete content/audio duration status. Invalid paging/sort returns 400; missing JWT 401; unsupported role 403. A TestRun is manual navigation evidence, not duration completion or Tour READY. " + JwtErrors),
             ["AdminAccountsController.List"] = ("[Admin] Liệt kê và tìm tài khoản", "Lists safe account summaries with paging and optional search/sort. Requires the Admin JWT role. `page` and `size` control the page; `expand` is unsupported. Does not expose credentials. " + JwtErrors),
             ["AdminAccountsController.Create"] = ("[Admin] Tạo tài khoản người dùng", "Creates one account using `username`, `fullName`, `role`, and `initialPassword`. Supported roles are the backend application roles, including `TechnicalStaff`; each account has exactly one role. Requires Admin. A normalized duplicate username conflicts (409); invalid or unsupported role/input is 400. " + JwtErrors),
             ["AdminAccountsController.Deactivate"] = ("[Admin] Vô hiệu hóa tài khoản", "Deactivates the account identified by `id`; repeat calls are idempotent where allowed by the account lifecycle. Requires Admin. A missing account returns 404; a forbidden target returns 403. " + JwtErrors),
@@ -167,6 +168,8 @@ internal static class ApiOperationDocumentation
                 : ("LEGACY — Tour Staff Routes", summary, description);
         if (controller == "RouteRevisions")
         {
+            if (path == "/api/routes")
+                return ("Tour Staff / Technical Staff — Versioned Route Catalog", summary, description);
             if (path.StartsWith("/api/technical/route-verifications", StringComparison.Ordinal) || path.StartsWith("/api/technical/routes", StringComparison.Ordinal))
                 return ("Technical Staff — Route Verification", summary, description);
             if (path.StartsWith("/api/staff/routes", StringComparison.Ordinal))
