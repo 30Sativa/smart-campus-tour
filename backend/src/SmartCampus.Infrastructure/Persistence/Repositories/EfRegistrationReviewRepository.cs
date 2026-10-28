@@ -20,7 +20,10 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
     {
         var query = context.GroupRegistrations.AsNoTracking();
         if (request.TourId is not null) query = query.Where(r => r.TourId == request.TourId);
-        if (request.State is not null) query = query.Where(r => r.State == request.State);
+        if (request.State == "SUBMITTED")
+            query = query.Where(r => r.State == "SUBMITTED" ||
+                r.RosterRows.Any(row => row.IsActive && row.ParticipationState == RosterParticipationStates.Pending));
+        else if (request.State is not null) query = query.Where(r => r.State == request.State);
         if (request.From is not null) query = query.Where(r => r.Tour.ScheduledStartAt >= request.From);
         if (request.To is not null) query = query.Where(r => r.Tour.ScheduledStartAt < request.To);
         if (!string.IsNullOrWhiteSpace(request.Search))

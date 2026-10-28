@@ -67,9 +67,12 @@ describe('Technical Staff API integration', () => {
     expect(JSON.parse(String(call.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion, resultCode: 'PASS', robotCode: 'amr-01' })
   })
 
-  it('does not present route certification as completed while its backend contract is pending', () => {
+  it('distinguishes the backend test-run contract from the unwired workspace and physical proof', () => {
     renderPage(<TechnicalConfirmationsPage />)
-    expect(screen.getByText(/Route certification vẫn pending/)).toBeInTheDocument()
+    expect(screen.getByText(/Backend đã có API queue và test-run/)).toBeInTheDocument()
+    expect(screen.getByText(/màn hình này chưa được nối đầy đủ/)).toBeInTheDocument()
+    expect(screen.getByText(/không chứng minh robot đã chạy thật/)).toBeInTheDocument()
+    expect(screen.getByText(/không tự làm tuyến READY/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument()
   })
 })
