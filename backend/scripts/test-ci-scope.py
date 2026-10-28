@@ -50,9 +50,11 @@ def run() -> None:
             git("add", path)
             git("commit", "--quiet", "-m", "change " + path)
             head = git("rev-parse", "HEAD")
+            child_env = os.environ.copy()
+            child_env.pop("GITHUB_OUTPUT", None)
             result = subprocess.run(
                 ["bash", script_path, base, head], cwd=root, text=True,
-                capture_output=True, check=True,
+                capture_output=True, check=True, env=child_env,
             )
             return dict(line.split("=", 1) for line in result.stdout.splitlines())
 
