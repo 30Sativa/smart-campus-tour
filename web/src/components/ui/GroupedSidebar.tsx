@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { ChevronDown, ChevronLeft, LogOut, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
@@ -28,7 +28,7 @@ const EASE = 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:tran
  * A badge fades into a dot on its icon, and choosing a group unfolds the
  * sidebar with that group open.
  */
-export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], onNavigate, onLogout, open, panelRef, closeRef }: {
+export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], highlight, onNavigate, onLogout, open, panelRef, closeRef }: {
   id: string
   label: string
   navLabel: string
@@ -38,6 +38,8 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   currentPath: string | null
   badges?: Record<string, Badge>
   secondary?: Secondary[]
+  /** Something live to keep in view under the logo, e.g. the running session; told whether the sidebar is a rail. */
+  highlight?: (rail: boolean) => ReactNode
   onNavigate: () => void
   onLogout: () => void
   open: boolean
@@ -45,6 +47,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   closeRef?: Ref<HTMLButtonElement>
 }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({})
+  const hasHeadings = entries.some((entry) => entry.kind === 'heading')
   const rail = useSidebarStore((state) => state.collapsed)
   const toggleRail = useSidebarStore((state) => state.toggle)
   const setRail = useSidebarStore((state) => state.setCollapsed)
@@ -99,9 +102,17 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
       </div>
 
       <nav className="w-[248px] flex-1 overflow-x-hidden overflow-y-auto px-3.5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
-        <p className={`mt-3 mb-2 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-[#9ca3af] uppercase ${fade}`}>Trang</p>
+        {highlight && <div className="mt-1">{highlight(rail)}</div>}
+        {!hasHeadings && <p className={`mt-3 mb-1 px-3 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Trang</p>}
         <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
-          {entries.map((entry) => {
+          {entries.map((entry, index) => {
+            if (entry.kind === 'heading') {
+              return (
+                <div key={entry.key} className={index === 0 ? 'pt-2' : 'mt-2 border-t border-[#f1f3f5] pt-2'}>
+                  <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>{entry.label}</p>
+                </div>
+              )
+            }
             if (entry.kind === 'link') {
               const { path, label: name, icon: Icon } = entry.item
               const active = currentPath === path
@@ -163,7 +174,9 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
 
         {secondary.length > 0 && (
           <>
-            <p className={`mt-5 mb-2 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-[#9ca3af] uppercase ${fade}`}>Khác</p>
+            <div className="mt-2 border-t border-[#f1f3f5] pt-2">
+              <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Khu vực khác</p>
+            </div>
             <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
               {secondary.map(({ to, label: name, icon: Icon, current }) => (
                 <Link key={to} to={to} onClick={onNavigate} aria-current={current ? 'page' : undefined} title={rail ? name : undefined}

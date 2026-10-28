@@ -63,7 +63,7 @@ export default function AdminDashboardPage() {
   return (
     <AdminPage>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[28px] font-bold tracking-[-0.03em] text-[#111827] sm:text-[30px]">Tổng quan chuẩn bị</h1>
+        <h1 className="text-[22px] leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-2xl">Tổng quan chuẩn bị</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden h-9 items-center gap-2 rounded-lg bg-white px-3 text-[12.5px] font-medium text-[#374151] shadow-[0_0_0_1px_#e5e7eb] sm:inline-flex"><CalendarDays size={15} className="text-[#9ca3af]" aria-hidden="true" />{dmy(startOfDay(0))} – {dmy(end)}</span>
           <Link to="/staff/manage/registrations/pending" className={buttonClass('secondary')}><ClipboardCheck size={16} aria-hidden="true" />Duyệt đăng ký{kpi.pending ? ` · ${kpi.pending}` : ''}</Link>

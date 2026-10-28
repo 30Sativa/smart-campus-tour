@@ -16,6 +16,7 @@ import { statusInfo } from '../../features/staff/status'
 import { formatHeartbeat } from '../../features/staff/formatters'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { useDeviceRailStore } from '../../stores/device-rail-store'
+import { notify } from '../../components/ui/toast-store'
 
 /**
  * Robot & devices management. Monitors physical, Gazebo and emulator fleet.
@@ -194,7 +195,10 @@ function RobotCard({ robot, now }: { robot: AmrStatus; now: number }) {
           setOpen(false)
           confirm.reset()
         }}
-        onConfirm={(note) => confirm.mutate({ robotId: robot.id, note }, { onSuccess: () => setOpen(false) })}
+        onConfirm={(note) => confirm.mutate({ robotId: robot.id, note }, { onSuccess: () => {
+          notify({ title: `${robot.name} sẵn sàng cho buổi kế tiếp`, detail: 'Đã ghi xác nhận sau tour vào nhật ký robot.' })
+          setOpen(false)
+        } })}
       />
     </div>
   )

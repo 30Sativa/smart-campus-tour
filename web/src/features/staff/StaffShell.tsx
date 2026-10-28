@@ -1,12 +1,12 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, LogOut, ShieldAlert, UserRound, X } from 'lucide-react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, LogOut, MonitorPlay, ShieldAlert, UserRound, X } from 'lucide-react'
+import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { isAdminRole, roleLabel } from '../../auth/roles'
 import { usePendingReviewCount } from '../administration/registrations/hooks'
 import { LiveDot } from './StaffUi'
-import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
+import { RouteView } from '../../components/ui/RouteView'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
@@ -15,6 +15,7 @@ import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, activeNavPath } from './
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
 import { StaffBell } from './StaffBell'
 import { REASON_SHORT } from './reason'
+import type { TourOperation } from '../../api/contracts/staff'
 
 const TOAST_MS = 9_000
 
@@ -46,6 +47,7 @@ export default function StaffShell() {
   const connection = useStaffRealtimeSync(setToast)
   const today = useTours()
   const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
+  const running = today.data?.find((tour) => tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance') ?? today.data?.find((tour) => tour.state === 'Running')
 
   const currentPath = activeNavPath(location.pathname)
   // Registrations, Routes and POIs already read the live SQL backend; everything else here is labelled sample data.
@@ -90,11 +92,12 @@ export default function StaffShell() {
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
+        highlight={running ? (rail) => <RunningCard tour={running} rail={rail} onNavigate={closeMenu} /> : undefined}
       />
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-9">
-          <div className="flex h-[62px] items-center gap-3 border-b border-[#e5e7eb]">
+        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="flex h-14 items-center gap-3 border-b border-[#e5e7eb]">
             <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
             <span
               role="status"
@@ -117,14 +120,36 @@ export default function StaffShell() {
         {!onLiveSqlPage && <DevDataBadge>dữ liệu mẫu · mô phỏng thời gian thực</DevDataBadge>}
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
-          <Suspense fallback={<PageSkeleton />}>
-            <Outlet />
-          </Suspense>
+          <RouteView />
         </main>
 
         {toast && <AssistanceToast notice={toast} onClose={() => setToast(null)} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * The session running now, kept in view under the logo: one click to its live
+ * control. Red when it needs assistance. On the rail it shrinks to its icon.
+ */
+function RunningCard({ tour, rail, onNavigate }: { tour: TourOperation; rail: boolean; onNavigate: () => void }) {
+  const assist = tour.operationalStatus === 'NeedsAssistance'
+  const index = tour.progress?.stopIndex
+  const where = index != null && tour.stops[index] ? `Điểm ${index + 1}/${tour.stops.length}: ${tour.stops[index].name}` : 'Đang về điểm kết thúc'
+  return (
+    <Link to={`/staff/live/${tour.id}`} onClick={onNavigate} title={rail ? `Đang chạy ${tour.code}` : undefined}
+      aria-label={`Đang chạy ${tour.code}${assist ? ', cần hỗ trợ' : ''}. Mở điều hành trực tiếp`}
+      className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-xl px-3 py-2 text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#b23e31] hover:bg-[#9c3328]' : 'bg-[#173b59] hover:bg-[#1f4b70]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
+      {rail ? <MonitorPlay size={17} aria-hidden="true" className="hidden shrink-0 lg:block" /> : null}
+      <span className={`${rail ? 'lg:hidden' : ''} flex min-w-0 items-center gap-2.5`}>
+        <LiveDot tone={assist ? 'warn' : 'ok'} />
+        <span className="min-w-0">
+          <span className="block truncate text-[12.5px] font-semibold">Đang chạy {tour.code}{assist ? ', cần hỗ trợ' : ''}</span>
+          <span className="block truncate text-[11px] text-white/80">{where}</span>
+        </span>
+      </span>
+    </Link>
   )
 }
 
@@ -181,7 +206,7 @@ function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClos
   return (
     <div
       role="alert"
-      className="fixed right-5 bottom-20 z-40 w-[min(380px,calc(100vw-2.5rem))] rounded-xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-white p-4 shadow-xl transition-[opacity,transform] duration-300 motion-reduce:transition-none ease-out starting:translate-y-3 starting:opacity-0 lg:bottom-5"
+      className="fixed top-[68px] right-4 z-40 w-[min(380px,calc(100vw-2rem))] rounded-xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-white p-4 shadow-xl transition-[opacity,transform] duration-300 motion-reduce:transition-none ease-out starting:-translate-y-3 starting:opacity-0 lg:right-5"
     >
       <div className="flex items-start gap-3">
         <ShieldAlert size={20} className="mt-0.5 shrink-0 text-[#dc2626]" aria-hidden="true" />

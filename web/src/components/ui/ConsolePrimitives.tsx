@@ -7,19 +7,20 @@ import { buttonClass, inputClass } from './ui-classes'
 
 
 export const panelClass =
-  'overflow-hidden rounded-[18px] border border-[var(--ops-border,#d9e9f5)] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[box-shadow,border-color] duration-200'
+  'overflow-hidden rounded-[14px] border border-[var(--ops-border,#d9e9f5)] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[box-shadow,border-color] duration-200'
 
 
 
 /**
- * The page's own heading. Eyebrow, title and supporting line each say something new.
+ * The page's own heading, kept to a few lines so the work starts high on the
+ * screen: a short context line, the title, one supporting sentence, and the
+ * page's actions on the right. `scale` is kept for callers; both read the same.
  */
 export function PageHeader({
   eyebrow,
   title,
   description,
   action,
-  scale = 'default',
 }: {
   eyebrow: string
   title: string
@@ -27,25 +28,14 @@ export function PageHeader({
   action?: ReactNode
   scale?: 'default' | 'console'
 }) {
-  const console_ = scale === 'console'
   return (
-    <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
-      <div>
-        <p className={`font-bold tracking-[0.15em] text-[#4388b4] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>
-          {eyebrow}
-        </p>
-        <h1
-          className={`mt-1.5 font-bold tracking-[-0.055em] text-[#123a59] ${
-            console_ ? 'text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]' : 'text-[28px] sm:text-[34px]'
-          }`}
-        >
-          {title}
-        </h1>
-        <p className={`mt-1.5 max-w-3xl text-[#738da2] ${console_ ? 'text-sm sm:text-[15px] leading-relaxed' : 'text-sm leading-6'}`}>
-          {description}
-        </p>
+    <header className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-[#2d719e]">{eyebrow}</p>
+        <h1 className="mt-0.5 text-[22px] leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-2xl">{title}</h1>
+        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-[#64748b]">{description}</p>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </header>
   )
 }

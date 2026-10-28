@@ -7,6 +7,7 @@ import { useTourCommand } from '../staff-hooks'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { REASON_GUIDE, REASON_SHORT } from '../reason'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../components/ui/toast-store'
 
 type Recovery = Extract<TourCommand, 'retryLeg' | 'rerunPoi' | 'retryFront' | 'confirmComplete'>
 
@@ -17,14 +18,14 @@ const RECOVERY: Record<Recovery, { label: string; icon: LucideIcon; confirm: str
   confirmComplete: { label: 'Xác nhận hoàn tất', icon: Flag, confirm: 'Robot đã về và dừng tại điểm kết thúc. Xác nhận để đóng buổi ở trạng thái Hoàn thành.' },
 }
 
-const DONE: Record<TourCommand, string> = {
-  hold: 'Đã giữ tại POI: robot không tự đi tiếp khi hết thời gian dừng.',
-  next: 'Đã đóng lượt dừng; robot quay FRONT rồi sang chặng kế.',
-  endEarly: 'Đã kết thúc sớm. Robot được giữ tới khi xác nhận đã dừng.',
-  retryLeg: 'Đã gửi lại chặng với mã mới.',
-  rerunPoi: 'Đã mở lượt dừng mới tại POI.',
-  retryFront: 'Đã gửi lại lệnh FRONT.',
-  confirmComplete: 'Buổi đã hoàn thành.',
+const DONE: Record<TourCommand, { title: string; detail: string }> = {
+  hold: { title: 'Đã giữ tại POI', detail: 'Robot không tự đi tiếp khi hết thời gian dừng.' },
+  next: { title: 'Đã đóng lượt dừng', detail: 'Robot quay FRONT rồi sang chặng kế.' },
+  endEarly: { title: 'Đã kết thúc sớm', detail: 'Robot được giữ tới khi xác nhận đã dừng.' },
+  retryLeg: { title: 'Đã gửi lại chặng', detail: 'Lệnh mang mã mới; theo dõi vị trí robot trên dải trạng thái.' },
+  rerunPoi: { title: 'Đã mở lượt dừng mới tại POI', detail: 'Thời gian dừng được tính lại từ đầu.' },
+  retryFront: { title: 'Đã gửi lại lệnh FRONT', detail: 'Kiểm tra khung hình camera sau khi robot quay xong.' },
+  confirmComplete: { title: 'Buổi đã hoàn thành', detail: 'Nhật ký buổi đã được lưu vào Lịch sử phiên.' },
 }
 
 function errorText(error: unknown) {
@@ -54,7 +55,7 @@ const INCIDENT_STEPS = [
 export function OperationControls({ tour }: { tour: TourOperation }) {
   const command = useTourCommand()
   const [pending, setPending] = useState<Recovery | 'endEarly' | null>(null)
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ tone: 'error'; text: string } | null>(null)
   const actions = tour.allowedActions
   const assist = tour.operationalStatus === 'NeedsAssistance'
   // One recovery attempt per incident (an incident = this Tour needing assistance
@@ -70,7 +71,7 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
       { tourId: tour.id, command: cmd, reason },
       {
         onSuccess: () => {
-          setMessage({ tone: 'ok', text: DONE[cmd] })
+          notify({ tone: cmd === 'endEarly' ? 'info' : 'success', title: `${tour.code} · ${DONE[cmd].title}`, detail: DONE[cmd].detail })
           setPending(null)
           if (cmd in RECOVERY && cmd !== 'confirmComplete') setAttempted(incident)
         },
@@ -137,7 +138,7 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
       )}
 
       {message && (
-        <p role={message.tone === 'ok' ? 'status' : 'alert'} className={`mt-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-opacity duration-300 starting:opacity-0 ${message.tone === 'ok' ? 'bg-[#effbf5] text-[#1f7a55]' : 'bg-[#fff1ef] text-[#b23e31]'}`}>
+        <p role="alert" className="mt-3 rounded-xl bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31] transition-opacity duration-300 starting:opacity-0">
           {message.text}
         </p>
       )}

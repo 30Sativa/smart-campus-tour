@@ -13,6 +13,7 @@ import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass, buttonClass } from '../../../components/ui/ui-classes'
 import { PageHeader, LoadingPanel } from '../../../components/ui/ConsolePrimitives'
 import '../../../features/administration/pois/poi-form.css'
+import { notify } from '../../../components/ui/toast-store'
 
 type PoiForm = {
   name: string
@@ -250,6 +251,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     } else if (poi.data && !isCreate) {
       update.mutate({ id: poi.data.id, input: { ...input, expectedRowVersion: draft.rowVersion } }, {
         onSuccess: async () => {
+          notify({ title: `Đã lưu POI “${input.name}”`, detail: 'Tuyến dùng POI này nhận vị trí mới ở version tuyến kế tiếp.' })
           const result = await poi.refetch()
           if (result.data) {
             setDraft({ form: fromPoi(result.data), rowVersion: result.data.rowVersion })
@@ -264,6 +266,9 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     if (!poi.data) return
     setActive.mutate({ id: poi.data.id, version: poi.data.rowVersion, isActive: !poi.data.isActive }, {
       onSuccess: () => {
+        notify(poi.data?.isActive
+          ? { tone: 'info', title: `Đã ngừng dùng POI “${poi.data.name}”`, detail: 'Tuyến mới không chọn được POI này nữa.' }
+          : { title: `Đã dùng lại POI “${poi.data?.name ?? ''}”`, detail: 'POI có thể được chọn khi soạn tuyến.' })
         setConfirmAvailability(false)
         void poi.refetch()
       },

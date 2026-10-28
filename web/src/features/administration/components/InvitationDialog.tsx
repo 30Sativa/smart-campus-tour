@@ -5,6 +5,7 @@ import { buttonClass } from '../../../components/ui/ui-classes'
 import { formatSlot } from '../admin-format'
 import { readAdminError } from '../admin-status'
 import { useInvitationPreview, useSendInvitation } from '../admin-hooks'
+import { notify } from '../../../components/ui/toast-store'
 
 /** Copy a value, saying so. The clipboard can be refused (permissions, http); then it says that instead. */
 export function CopyButton({ value, label }: { value: string; label: string }) {
@@ -52,7 +53,10 @@ export function InvitationDialog({ registrationId, onClose }: { registrationId: 
       withReason={false}
       busy={send.isPending || !data}
       error={failed ? `${failed.message} Đăng ký vẫn ở trạng thái Đã duyệt; bạn có thể gửi lại.` : preview.isError ? readAdminError(preview.error).message : null}
-      onConfirm={() => registrationId && send.mutate(registrationId, { onSuccess: close })}
+      onConfirm={() => registrationId && send.mutate(registrationId, { onSuccess: () => {
+        notify({ title: 'Đã gửi thông tin tham gia', detail: data?.recipient ? `Email tới ${data.recipient}.` : 'Email tới đại diện của đoàn.' })
+        close()
+      } })}
       onCancel={close}
     >
       {preview.isLoading && <div className="h-40 animate-pulse rounded-xl bg-[#f1f5f9]" aria-busy="true" aria-label="Đang tạo bản xem trước" />}

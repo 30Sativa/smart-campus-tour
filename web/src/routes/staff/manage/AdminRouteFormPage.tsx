@@ -10,6 +10,7 @@ import { useRoute, useSaveRoute } from '../../../features/administration/routes/
 import { routeError, stopIssue } from '../../../features/administration/routes/route-messages'
 import { RouteStopsEditor, type StopDraft } from '../../../features/administration/routes/RouteStopsEditor'
 import type { RouteDetails, RouteInput } from '../../../features/administration/routes/types'
+import { notify } from '../../../components/ui/toast-store'
 
 type RouteDraft = Omit<RouteInput, 'startX' | 'startY' | 'startYaw'> & { startX: number | null; startY: number | null; startYaw: number | null }
 const EMPTY: RouteDraft = { name: '', description: null, mapKey: '', mapFrame: '', startX: null, startY: null, startYaw: null, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, stops: [] }
@@ -100,6 +101,7 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
     }
     try {
       const id = await save.mutateAsync({ id: editing ? source?.id : undefined, version, input: configuration })
+      notify({ title: `Đã lưu tuyến “${configuration.name}”`, detail: `${configuration.stops.length} điểm dừng. Nhân viên kỹ thuật cần xác nhận version này trước khi tạo Tour.` })
       navigate(`/staff/manage/routes/${id}`)
     } catch { /* Preserve the complete draft; display the backend conflict below. */ }
   }
@@ -179,7 +181,7 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
       </section>}
 
       {save.isError && <Notice tone="danger">{routeError(save.error)}</Notice>}
-      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-[#e2e8f0] bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-9 lg:px-9">
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-[#e2e8f0] bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <Link to={backHref} className={buttonClass('secondary')}>Hủy</Link>
         <span className="min-w-40 flex-1 text-right text-[13px] text-[#64748b]">{!passable(step) && STEP_HINTS[step]}</span>
         {step > 0 && <button type="button" className={buttonClass('secondary')} onClick={() => setStep(step - 1)}>← Quay lại</button>}

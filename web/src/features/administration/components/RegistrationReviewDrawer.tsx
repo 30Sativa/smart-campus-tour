@@ -11,6 +11,7 @@ import { useAdminRegistration, useReviewRegistration } from '../admin-hooks'
 import { InvitationStatus, Notice, RegistrationStateBadge, TourStateBadge } from '../AdminUi'
 import { CopyButton, InvitationDialog } from './InvitationDialog'
 import { RosterTable } from './RegistrationParts'
+import { notify } from '../../../components/ui/toast-store'
 
 const STALE_TEXT = 'Danh sách đã được cập nhật. Vui lòng tải lại dữ liệu trước khi duyệt.'
 
@@ -53,6 +54,9 @@ export function RegistrationReviewDrawer({ registrationId, onClose }: { registra
       { id: reg.id, decision, version: reg.version, reason },
       {
         onSuccess: () => {
+          notify(decision === 'approve'
+            ? { title: `Đã duyệt đoàn ${reg.schoolName}`, detail: 'Bước tiếp theo: gửi thông tin tham gia cho đại diện.' }
+            : { tone: 'info', title: `Đã từ chối đoàn ${reg.schoolName}`, detail: 'Lý do đã được gửi cho đại diện trường.' })
           setConfirm(null)
           void query.refetch()
         },

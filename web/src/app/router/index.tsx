@@ -13,7 +13,7 @@ import { homePathForRole } from '../../auth/roles'
  *   `/`        public   marketing pages, no account
  *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
  *   `/admin/*` admin    accounts and roles, Admin only
- *   `/technical/*`      Technical Staff: map versions, POI import, technical confirmation
+ *   `/technical/*`      Technical Staff: overview, map versions, POI checks and import, route confirmation, activity
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
@@ -74,9 +74,14 @@ const AdminPoiFormPage = lazy(() => import('../../routes/staff/manage/AdminPoiFo
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
+const TechnicalOverviewPage = lazy(() => import('../../routes/technical/TechnicalOverviewPage'))
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
+const TechnicalMapDetailPage = lazy(() => import('../../routes/technical/TechnicalMapDetailPage'))
+const TechnicalPoisPage = lazy(() => import('../../routes/technical/TechnicalPoisPage'))
 const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
 const TechnicalConfirmationsPage = lazy(() => import('../../routes/technical/TechnicalConfirmationsPage'))
+const TechnicalRouteVersionPage = lazy(() => import('../../routes/technical/TechnicalRouteVersionPage'))
+const TechnicalActivityPage = lazy(() => import('../../routes/technical/TechnicalActivityPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -272,11 +277,15 @@ export const routes = [
     path: '/technical',
     element: <TechnicalArea />,
     children: [
-      // Technical Staff: map versions, POI YAML import, version-bound confirmation (SRS v1.9 §3.2.c).
-      { index: true, element: <Navigate to="/technical/maps" replace /> },
+      // Technical Staff: overview, map versions, on-site POI checks, POI YAML import, version-bound confirmation, activity (SRS v1.9 §3.2.c).
+      { index: true, element: <TechnicalOverviewPage /> },
       { path: 'maps', element: <TechnicalMapsPage /> },
+      { path: 'maps/:mapKey', element: <TechnicalMapDetailPage /> },
+      { path: 'pois', element: <TechnicalPoisPage /> },
       { path: 'poi-import', element: <TechnicalPoiImportPage /> },
       { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
+      { path: 'confirmations/:id', element: <TechnicalRouteVersionPage /> },
+      { path: 'activity', element: <TechnicalActivityPage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],
   },

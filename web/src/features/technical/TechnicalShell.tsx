@@ -1,15 +1,17 @@
-import { Suspense, useCallback, useState } from 'react'
-import { Outlet, useLocation } from 'react-router'
+import { useCallback, useState } from 'react'
+import { Wrench } from 'lucide-react'
+import { useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
-import { PageSkeleton } from '../../components/ui/ConsolePrimitives'
+import { RouteView } from '../../components/ui/RouteView'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
-import { TECHNICAL_NAV, TECHNICAL_NAV_ENTRIES, technicalActivePath } from './technical-nav'
+import { TECHNICAL_NAV, TECHNICAL_NAV_ENTRIES, TECHNICAL_ROOT, technicalActivePath } from './technical-nav'
+import { useRouteConfirmations, useTechnicalPois } from './technical-hooks'
 
-/** The Technical Staff shell: same console chrome as Staff and Admin. */
+/** The Technical Staff shell: same console chrome (and logo) as Staff and Admin. */
 export default function TechnicalShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
@@ -19,6 +21,8 @@ export default function TechnicalShell() {
   const navRef = useMobileNav(menuOpen, closeMenu)
   const current = technicalActivePath(location.pathname)
   const title = TECHNICAL_NAV.find(({ path }) => path === current)?.label ?? 'Kỹ thuật'
+  const openPois = useTechnicalPois().data?.filter((poi) => poi.state !== 'VERIFIED').length ?? 0
+  const openRoutes = useRouteConfirmations().data?.filter((route) => route.state !== 'CONFIRMED').length ?? 0
 
   return (
     <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
@@ -27,24 +31,34 @@ export default function TechnicalShell() {
         id="technical-navigation"
         label="Khu vực kỹ thuật"
         navLabel="Điều hướng kỹ thuật"
-        homePath="/technical"
+        homePath={TECHNICAL_ROOT}
         subtitle="DT-AMR · Kỹ thuật"
         entries={TECHNICAL_NAV_ENTRIES}
         currentPath={current}
+        badges={{
+          '/technical/pois': { value: openPois, label: `${openPois} POI chờ xác minh`, tone: 'info' },
+          '/technical/confirmations': { value: openRoutes, label: `${openRoutes} version tuyến chưa xác nhận`, tone: 'danger' },
+        }}
         onNavigate={closeMenu}
         onLogout={handleLogout}
         open={menuOpen}
         panelRef={navRef}
       />
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-9">
-          <div className="flex h-[62px] items-center justify-between gap-3 border-b border-[#e5e7eb]">
+        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="flex h-14 items-center justify-between gap-3 border-b border-[#e5e7eb]">
             <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
-            <p className="shrink-0 text-right text-xs"><span className="block font-semibold text-[#334155]">{user?.username}</span><span className="text-[#94a3b8]">{roleLabel(user?.role)}</span></p>
+            <div role="group" aria-label="Tài khoản đang đăng nhập" className="ml-auto flex min-w-0 items-center gap-2.5 border-l border-[#e5e7eb] pl-3.5">
+              <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-[#173b59] text-white"><Wrench size={15} /></span>
+              <span className="hidden min-w-0 sm:block">
+                <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{user?.username}</span>
+                <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(user?.role)}</span>
+              </span>
+            </div>
           </div>
         </header>
         {!location.pathname.startsWith('/technical/poi-import') && <DevDataBadge>dữ liệu mẫu · chưa có API kỹ thuật</DevDataBadge>}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><Suspense fallback={<PageSkeleton />}><Outlet /></Suspense></main>
+        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><RouteView /></main>
       </div>
     </div>
   )

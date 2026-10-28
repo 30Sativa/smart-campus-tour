@@ -45,7 +45,7 @@ function SortHeading({ field, label, sort, onSort }: {
 }
 
 function RoleValue({ role }: { role: AccountListItem['role'] }) {
-  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="font-medium text-[#334155]">{role}</span>
+  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="font-medium text-[#334155]">{role === 'TechnicalStaff' ? 'Technical Staff' : role}</span>
 }
 
 function AccountAction({ account, onAction }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction'] }) {

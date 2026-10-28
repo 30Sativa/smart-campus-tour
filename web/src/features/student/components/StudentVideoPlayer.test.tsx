@@ -26,6 +26,13 @@ describe('StudentVideoPlayer fallback', () => {
     expect(screen.queryByText(/Tạm mất hình ảnh trực tiếp/)).toBeNull()
   })
 
+  it('mutes the live audio while the fallback plays', () => {
+    whep.status = 'offline'
+    const { container } = render(<StudentVideoPlayer streamUrl="/videos/home.mp4" />)
+    const [live] = Array.from(container.querySelectorAll('video'))
+    expect(live.muted).toBe(true)
+  })
+
   it('keeps the reconnecting message when there is no fallback video', () => {
     whep.status = 'offline'
     render(<StudentVideoPlayer />)

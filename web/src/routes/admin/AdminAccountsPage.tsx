@@ -19,7 +19,6 @@ export default function AdminAccountsPage() {
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<{ account: AccountListItem; action: AccountLifecycleAction } | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const debouncedSearch = useDebouncedValue(search.trim(), 300)
   const accounts = useAccounts({ search: debouncedSearch || undefined, sort: sort || undefined, page, size: PAGE_SIZE })
 
@@ -34,13 +33,11 @@ export default function AdminAccountsPage() {
   return (
     <AdminPage>
       <PageHeader
-        eyebrow="Quản trị"
+        eyebrow="Tài khoản"
         title="Quản lý tài khoản"
-        description="Tạo tài khoản Staff và Đại diện trường, tìm kiếm và cập nhật trạng thái truy cập. Admin được quản lý qua cấu hình ban đầu."
-        action={<button type="button" onClick={() => { setNotice(null); setCreateOpen(true) }} className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo tài khoản</button>}
+        description="Tạo tài khoản Staff, Technical Staff và Đại diện trường, tìm kiếm và bật tắt quyền truy cập. Admin được cấp riêng qua cấu hình ban đầu."
+        action={<button type="button" onClick={() => setCreateOpen(true)} className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo tài khoản</button>}
       />
-
-      {notice && <div className="mb-4"><Notice>{notice}</Notice></div>}
 
       <section className={panelClass} aria-label="Danh sách tài khoản">
         <PanelHead title="Tài khoản" description="Tìm theo tên đăng nhập hoặc họ tên. Danh sách và thứ tự do máy chủ cung cấp." />
@@ -74,7 +71,7 @@ export default function AdminAccountsPage() {
               accounts={pageData.data}
               sort={sort}
               onSort={changeSort}
-              onLifecycleAction={(account, action) => { setNotice(null); setPendingAction({ account, action }) }}
+              onLifecycleAction={(account, action) => setPendingAction({ account, action })}
             />
             <div className="px-4 py-2 text-xs text-[#64748b]" aria-live="polite">
               Trang {pageData.pagination.page} / {totalPages} · {pageData.pagination.totalItems} tài khoản
@@ -91,12 +88,12 @@ export default function AdminAccountsPage() {
         ) : null}
       </section>
 
-      {createOpen && <CreateAccountDialog onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); setNotice('Đã tạo tài khoản.') }} />}
+      {createOpen && <CreateAccountDialog onClose={() => setCreateOpen(false)} onCreated={() => setCreateOpen(false)} />}
       {pendingAction && <AccountStatusAction
         account={pendingAction.account}
         action={pendingAction.action}
         onClose={() => setPendingAction(null)}
-        onCompleted={(message) => { setPendingAction(null); setNotice(message) }}
+        onCompleted={() => setPendingAction(null)}
       />}
     </AdminPage>
   )

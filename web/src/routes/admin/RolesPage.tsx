@@ -10,7 +10,7 @@ import { ADMIN_NAV } from '../../features/administration/admin-nav'
 const AREA_PAGES: Record<string, string[]> = {
   public: ['Trang giới thiệu', 'Đăng nhập', 'Trang xem tour (link mời)'],
   staff: STAFF_NAV.map((item) => item.label),
-  admin: ADMIN_NAV.map((item) => item.label),
+  admin: ADMIN_NAV.filter((item) => item.path.startsWith('/admin')).map((item) => item.label),
   representative: REP_NAV.map((item) => item.label),
   technical: TECHNICAL_NAV.map((item) => item.label),
 }

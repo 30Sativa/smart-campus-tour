@@ -4,6 +4,7 @@ import { inputClass } from '../../../../components/ui/ui-classes'
 import { emailCorrectionError } from '../email-correction-error'
 import { useEmailCorrection } from '../hooks'
 import type { EmailCorrectionInput, ReviewDetails, ReviewRosterRow } from '../types'
+import { notify } from '../../../../components/ui/toast-store'
 
 export function EmailCorrectionDialog({ registration, row, onClose, onSaved, onConflict }: {
   registration: ReviewDetails; row: ReviewRosterRow; onClose: () => void; onSaved: () => void; onConflict: (message: string) => void
@@ -21,7 +22,10 @@ export function EmailCorrectionDialog({ registration, row, onClose, onSaved, onC
       expectedInvitationRowVersion: row.invitationRowVersion }
     setAttempt(input)
     mutation.mutate({ id: registration.summary.id, rowId: row.id, input }, {
-      onSuccess: onSaved,
+      onSuccess: () => {
+        notify({ title: 'Đã đổi email', detail: `Thư mời sẽ gửi tới ${input.email}.` })
+        onSaved()
+      },
       onError: failure => {
         const info = emailCorrectionError(failure)
         if (info.reload) onConflict(info.message)

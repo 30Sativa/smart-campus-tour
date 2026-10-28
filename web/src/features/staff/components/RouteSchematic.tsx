@@ -3,22 +3,24 @@ import { Link } from 'react-router'
 import type { AmrStatus, TourOperation } from '../../../api/contracts/staff'
 
 /** Ordered POI diagram for the live console. The rail shows sequence, not a Nav2 trajectory. */
-export function RouteSchematic({ tour, robot, selectedStopId, onSelect }: {
+export function RouteSchematic({ tour, robot, selectedStopId, onSelect, compact = false }: {
   tour: TourOperation
   robot?: AmrStatus
   selectedStopId?: string | null
   onSelect: (id: string) => void
+  /** Shorter, for the live page where controls and status share the screen. */
+  compact?: boolean
 }) {
   const currentIndex = tour.progress?.stopIndex ?? null
   const isReturning = tour.progress?.step === 'ReturningToEnd'
   return (
-    <section className="relative flex min-h-[430px] flex-col overflow-hidden rounded-[20px] border border-[#d9e9f5] bg-[#f5faff]" aria-label="Sơ đồ tuyến vận hành">
+    <section className={`relative flex flex-col overflow-hidden border border-[#d9e9f5] bg-[#f5faff] ${compact ? 'rounded-xl' : 'min-h-[430px] rounded-[20px]'}`} aria-label="Sơ đồ tuyến vận hành">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(#d9e9f5_1px,transparent_1px),linear-gradient(90deg,#d9e9f5_1px,transparent_1px)] [background-size:34px_34px]" />
-      <div className="relative flex flex-wrap items-center justify-between gap-2 p-4">
+      <div className={`relative flex flex-wrap items-center justify-between gap-2 ${compact ? 'px-3 pt-3' : 'p-4'}`}>
         <span className="inline-flex items-center gap-2 rounded-lg border border-[#d3e7f4] bg-white px-3 py-2 text-[11px] font-bold text-[#285c7d]"><MapPinned size={15} aria-hidden="true" />Sơ đồ tuyến · {robot?.source ?? 'Chưa rõ nguồn'}</span>
         <span className="rounded-lg border border-[#d3e7f4] bg-white px-3 py-2 text-[11px] font-bold text-[#285c7d]">{tour.stops.length} POI · {tour.code}</span>
       </div>
-      <div className="relative flex flex-1 flex-col justify-center gap-5 px-5 py-7 sm:px-8">
+      <div className={`relative flex flex-1 flex-col justify-center ${compact ? 'gap-3 px-4 py-3' : 'gap-5 px-5 py-7 sm:px-8'}`}>
         <div className="flex items-center gap-2 text-sm font-bold text-[#173b59]"><Bot size={18} aria-hidden="true" />{robot?.name ?? 'Chưa gán robot'}<span className="text-xs font-medium text-[#758ea0]">· {robot?.executionState ?? 'Chưa rõ trạng thái'}</span></div>
         <ol className="flex min-w-0 gap-0 overflow-x-auto pb-3" aria-label="Các POI theo thứ tự">
           {tour.stops.map((stop, index) => {
@@ -39,7 +41,7 @@ export function RouteSchematic({ tour, robot, selectedStopId, onSelect }: {
         </ol>
         {tour.stops.length === 0 && <p className="text-sm text-[#738da2]">Chưa có POI trong tuyến.</p>}
       </div>
-      <div className="relative flex flex-wrap items-center justify-between gap-3 border-t border-[#d9e9f5] bg-white/70 p-4 text-[11px] text-[#5c7b91]">
+      <div className={`relative flex flex-wrap items-center justify-between gap-3 border-t border-[#d9e9f5] bg-white/70 text-[11px] text-[#5c7b91] ${compact ? 'px-4 py-2' : 'p-4'}`}>
         <span>Nguồn: {robot?.source ?? '—'} · Pose: {robot?.poseAgeSeconds == null ? 'chưa có' : `${robot.poseAgeSeconds.toFixed(1)} giây`}</span>
         <Link to="/staff/digital-twin" className="inline-flex items-center gap-1 font-bold text-[#2d78a9] hover:underline">Mở Digital Twin 3D<ArrowUpRight size={13} aria-hidden="true" /></Link>
       </div>

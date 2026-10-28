@@ -55,9 +55,9 @@ export function StaffPage({
   className?: string
 }) {
   return (
-    <div className={`min-h-full bg-[#f6f7f9] px-4 py-6 sm:px-6 lg:px-9 lg:py-8 ${className}`}>
+    <div className={`min-h-full bg-[#f6f7f9] px-4 py-5 sm:px-6 lg:px-8 lg:py-6 ${className}`}>
       <div
-        className={`mx-auto w-full transition-[opacity,translate] duration-300 ease-out starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-none ${
+        className={`mx-auto w-full ${
           wide ? 'max-w-[1600px]' : 'max-w-[1440px]'
         }`}
       >

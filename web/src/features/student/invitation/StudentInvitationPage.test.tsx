@@ -263,3 +263,10 @@ it('stops live playback within 10 s after the invitation is revoked or reissued'
     vi.useRealTimers()
   }
 })
+
+it('offers no fallback video in the waiting room (fallback is a running-Tour degraded mode)', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/view') ? response(view) : response({ ...info, fallbackVideoUrl: 'https://example.com/fallback' })))
+  mount()
+  expect(await screen.findByText('Bạn đã vào phòng chờ')).toBeVisible()
+  expect(screen.queryByRole('link', { name: /video dự phòng/i })).toBeNull()
+})

@@ -18,6 +18,7 @@ import { RegistrationList, StartChecklist, TourStateBadges } from '../../feature
 import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
 import { useNow } from '../../features/staff/use-now'
 import { startTimeGate } from '../../features/staff/start-time'
+import { notify } from '../../components/ui/toast-store'
 
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
   { key: 'robotPlaced', label: 'Robot và điều hướng: đặt đúng điểm xuất phát, đã định vị', hint: 'Kiểm tra tại chỗ: vị trí trên Twin khớp thực tế, tuyến thông thoáng.' },
@@ -149,7 +150,10 @@ export default function StartCheckPage() {
         onConfirm={() => {
           // The page switches away from Ready as soon as the cache refreshes,
           // so navigate from the promise, not from a mutate callback.
-          start.mutateAsync({ tourId: data.id, confirmation }).then(() => navigate(`/staff/live/${data.id}`), () => undefined)
+          start.mutateAsync({ tourId: data.id, confirmation }).then(() => {
+            notify({ title: `Đã bắt đầu ${data.code}`, detail: 'Robot rời điểm xuất phát. Theo dõi buổi ở Điều hành trực tiếp.' })
+            navigate(`/staff/live/${data.id}`)
+          }, () => undefined)
         }}
       />
     </StaffPage>

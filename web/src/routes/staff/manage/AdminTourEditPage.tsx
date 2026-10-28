@@ -7,6 +7,7 @@ import { newRequestId, useTour, useUpdateTour } from '../../../features/administ
 import { tourError } from '../../../features/administration/tours/tour-messages'
 import { TourForm } from '../../../features/administration/tours/TourForm'
 import type { TourInput } from '../../../features/administration/tours/types'
+import { notify } from '../../../components/ui/toast-store'
 
 /** Edit a SCHEDULED Tour. Schedule and Route lock once it has registrations or history (ADR-0018). */
 export default function AdminTourEditPage() {
@@ -23,7 +24,10 @@ export default function AdminTourEditPage() {
     const key = JSON.stringify([input, routeVersion, data.tour.rowVersion])
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
     update.mutate({ id: tourId, requestId: attempt.current.id, rowVersion: data.tour.rowVersion,
-      routeVersion: input.routeId === data.tour.routeId ? null : routeVersion, input }, { onSuccess: () => navigate(back) })
+      routeVersion: input.routeId === data.tour.routeId ? null : routeVersion, input }, { onSuccess: () => {
+        notify({ title: `Đã lưu thay đổi “${input.name}”` })
+        navigate(back)
+      } })
   }
 
   return <AdminPage>
