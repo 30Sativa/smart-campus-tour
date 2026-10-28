@@ -26,8 +26,9 @@ flock -n 9 || fail 'A deploy, backup or maintenance operation is active.'
 # The pre-upgrade backup must be new and verified while the shared operation lock is held.
 "$BACKUP" --pre-deploy --deployment-lock-held
 
+# The profile keeps db-init defined when a pre-split current API release still depends on it.
 DB_INIT_IMAGE=$db_init_image docker compose \
-  --project-name campustour \
+  --project-name campustour --profile db-bootstrap \
   --env-file "$CONFIG/backend.env" \
   --env-file "$CURRENT/release.env" \
   -f "$CURRENT/docker-compose.yml" \
@@ -38,7 +39,7 @@ tool_revision=$(docker image inspect --format '{{index .Config.Labels "org.openc
 tool_schema=$(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$db_init_image")
 [[ "$tool_revision" == "$source_sha" && "$tool_schema" == "$schema_version" ]] || fail 'Pulled DB tool labels do not match the verified manifest.'
 
-compose=(docker compose --project-name campustour --env-file "$CONFIG/backend.env" --env-file "$CURRENT/release.env" \
+compose=(docker compose --project-name campustour --profile db-bootstrap --env-file "$CONFIG/backend.env" --env-file "$CURRENT/release.env" \
   -f "$CURRENT/docker-compose.yml" -f "$CAMPUS_RELEASE_DB_INIT_COMPOSE")
 # The image entrypoint is init-db.sh (bootstrap/check only); the upgrader is a separate script in the same tool.
 DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init /deployment/upgrade-db.sh --upgrade-to-v1.4
