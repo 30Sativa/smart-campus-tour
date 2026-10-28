@@ -226,6 +226,11 @@ if args[:1] == ["compose"]:
     compose_command = next((value for value in args[1:] if value in {
         "config", "pull", "stop", "ps", "run", "up"
     }), None)
+    # Like real Compose, a missing -f file makes the whole command invalid.
+    for i, arg in enumerate(args[:-1]):
+        if arg == "-f" and not Path(args[i + 1]).exists():
+            print(f'compose file "{args[i + 1]}" is invalid: no such file or directory', file=sys.stderr)
+            sys.exit(1)
 if args[:1] == ["pull"]:
     sys.exit(0)
 if args[:2] == ["image", "inspect"]:
@@ -627,6 +632,9 @@ def run() -> None:
         volume_after = state["volumes"]["campustour_sqlserver-data"]
         if volume_after["data_id"] != volume["data_id"] or volume_after.get("init_count", 0) < 2:
             raise AssertionError("retry replaced the SQL volume instead of preserving and rechecking it")
+        # The active release now looks like one installed before the DB tool split
+        # (db-init in its main Compose file); later deploys and rollbacks must still use it.
+        Path(host_env["CAMPUS_DEPLOY_ROOT"], "releases", sha, "docker-compose.db-init.yml").unlink()
 
         old_api_id = state["containers"]["campustour-api-1"]["id"]
         next_sha = "c" * 40

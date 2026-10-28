@@ -101,9 +101,11 @@ preflight() {
 compose_for() {
   local dir=$1
   shift
+  local files=(-f "$dir/docker-compose.yml")
+  # Releases installed before the DB tool split define db-init in their main file.
+  [[ ! -f "$dir/docker-compose.db-init.yml" ]] || files+=(-f "$dir/docker-compose.db-init.yml")
   docker compose --project-name campustour --env-file "$CONFIG/backend.env" \
-    --env-file "$dir/release.env" -f "$dir/docker-compose.yml" \
-    -f "$dir/docker-compose.db-init.yml" "$@"
+    --env-file "$dir/release.env" "${files[@]}" "$@"
 }
 
 read_current_sha() {
