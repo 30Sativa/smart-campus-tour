@@ -13,6 +13,7 @@ import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass, buttonClass } from '../../../components/ui/ui-classes'
 import { PageHeader, LoadingPanel } from '../../../components/ui/ConsolePrimitives'
 import '../../../features/administration/pois/poi-form.css'
+import { notify } from '../../../components/ui/toast-store'
 
 type PoiForm = {
   name: string
@@ -48,7 +49,7 @@ const STEPS = [
   { title: 'Kiểm tra & tạo', hint: 'Xem lại lần cuối' },
 ]
 
-const cardClass = 'rounded-[20px] border border-[#d9e9f5] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[border-color,box-shadow] duration-300 focus-within:border-[#a8cde6] focus-within:shadow-[0_18px_40px_-30px_#285c7d]'
+const cardClass = 'rounded-xl border border-[#d9e9f5] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[border-color,box-shadow] duration-300 focus-within:border-[#a8cde6] focus-within:shadow-[0_18px_40px_-30px_#285c7d]'
 
 function fromPoi(poi: PoiDetails): PoiForm {
   return {
@@ -83,8 +84,8 @@ export default function StaffManagePoiFormPage() {
   const poi = usePoi(poiId)
   const pageTitle = isCreate ? 'Tạo POI' : 'Chi tiết POI'
 
-  if (!isCreate && poi.isPending) return <AdminPage><PageHeader eyebrow="Danh mục POI" title={pageTitle} description="Đang tải dữ liệu POI." /><LoadingPanel label="Đang tải POI…" /></AdminPage>
-  if (!isCreate && poi.isError && !poi.data) return <AdminPage><PageHeader eyebrow="Danh mục POI" title={pageTitle} description="Không tải được chi tiết POI." /><AdminErrorPanel title={poiRequestError(poi.error, 'Không thể tải POI.')} onRetry={() => void poi.refetch()} /></AdminPage>
+  if (!isCreate && poi.isPending) return <AdminPage><PageHeader eyebrow="Chuẩn bị Tour · POI" title={pageTitle} description="Đang tải dữ liệu POI." /><LoadingPanel label="Đang tải POI…" /></AdminPage>
+  if (!isCreate && poi.isError && !poi.data) return <AdminPage><PageHeader eyebrow="Chuẩn bị Tour · POI" title={pageTitle} description="Không tải được chi tiết POI." /><AdminErrorPanel title={poiRequestError(poi.error, 'Không thể tải POI.')} onRetry={() => void poi.refetch()} /></AdminPage>
   if (!isCreate && !poi.data) return <AdminPage><AdminErrorPanel title="Không tìm thấy POI." /><Link to="/staff/manage/pois" className={buttonClass('secondary')}><ArrowLeft size={15} aria-hidden="true" />Về danh sách POI</Link></AdminPage>
 
   return <PoiForm key={poiId ?? 'new'} isCreate={isCreate} poi={poi} />
@@ -250,6 +251,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     } else if (poi.data && !isCreate) {
       update.mutate({ id: poi.data.id, input: { ...input, expectedRowVersion: draft.rowVersion } }, {
         onSuccess: async () => {
+          notify({ title: `Đã lưu POI “${input.name}”`, detail: 'Tuyến dùng POI này nhận vị trí mới ở version tuyến kế tiếp.' })
           const result = await poi.refetch()
           if (result.data) {
             setDraft({ form: fromPoi(result.data), rowVersion: result.data.rowVersion })
@@ -264,6 +266,9 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
     if (!poi.data) return
     setActive.mutate({ id: poi.data.id, version: poi.data.rowVersion, isActive: !poi.data.isActive }, {
       onSuccess: () => {
+        notify(poi.data?.isActive
+          ? { tone: 'info', title: `Đã ngừng dùng POI “${poi.data.name}”`, detail: 'Tuyến mới không chọn được POI này nữa.' }
+          : { title: `Đã dùng lại POI “${poi.data?.name ?? ''}”`, detail: 'POI có thể được chọn khi soạn tuyến.' })
         setConfirmAvailability(false)
         void poi.refetch()
       },
@@ -313,7 +318,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
   return (
     <AdminPage>
       <PageHeader
-        eyebrow="Danh mục POI"
+        eyebrow="Chuẩn bị Tour · POI"
         title={isCreate ? 'Tạo POI' : poi.data!.name}
         description={isCreate ? 'Tạo định danh và nội dung ban đầu. POI mới luôn ở trạng thái không khả dụng.' : 'Cập nhật POI trên cùng mã định danh; thay đổi được kiểm tra lại theo Route và Tour.'}
         action={<Link to="/staff/manage/pois" className={buttonClass('secondary')}><ArrowLeft size={16} aria-hidden="true" />Danh sách POI</Link>}
@@ -331,7 +336,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
 
       <form
         noValidate onSubmit={submit} onKeyDown={keyDown} aria-label={pageTitle}
-        className={`grid items-start gap-5 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}
+        className={`grid items-start gap-3 ${wide ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}
       >
         <div className="min-w-0 space-y-5">
           <FormSection id="poi-section-info" step={1} active={step === 0} done={!!form.name.trim()} title="Thông tin POI" description="Tên là nhãn hiển thị; hệ thống giữ ID bất biến." tag="Bắt buộc" delay={0}>
@@ -435,7 +440,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             ] : [['', 'Chưa có. Có thể bổ sung sau khi tạo POI.']]} />
           </FormSection>}
 
-          <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#d9e9f5] bg-white/95 px-3 py-3 shadow-[0_-10px_30px_-24px_#285c7d] backdrop-blur-md">
+          <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#d9e9f5] bg-white/95 px-3 py-3 shadow-[0_-10px_30px_-24px_#285c7d] backdrop-blur-md">
             {isCreate
               ? <button type="button" onClick={() => openStep(step - 1)} className={`${buttonClass('secondary')} ${step === 0 ? 'invisible' : ''}`}><ArrowLeft size={15} aria-hidden="true" />Quay lại</button>
               : <Link to="/staff/manage/pois" className={buttonClass('secondary')}>Hủy</Link>}
@@ -466,7 +471,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             </ul>
           </section>
 
-          {!isCreate && <section className={`${cardClass} p-5`}>
+          {!isCreate && <section className={`${cardClass} p-4`}>
             <h2 className="font-bold text-[#173b59]">Khả dụng và mức sử dụng</h2>
             <div className="mt-3 flex items-center gap-2 text-sm">{poi.data!.isActive ? <Check size={16} className="text-[#2f7a5b]" aria-hidden="true" /> : <TriangleAlert size={16} className="text-[#b7791f]" aria-hidden="true" />}<span className="font-semibold">{poi.data!.isActive ? 'Có thể chọn cho Route mới' : 'Không khả dụng cho Route mới'}</span></div>
             <p className="mt-2 text-xs leading-5 text-[#647b8d]">Trạng thái này không xác nhận tính đầy đủ của nội dung hoặc khả năng điều hướng vật lý.</p>
@@ -481,7 +486,7 @@ function PoiForm({ isCreate, poi }: { isCreate: boolean; poi: ReturnType<typeof 
             {setActive.isError && <div className="mt-2 space-y-2" role="alert"><p className="text-xs text-[#b23e31]">{poiRequestError(setActive.error, 'Không thể đổi trạng thái POI.')}</p><button type="button" onClick={() => { void poi.refetch(); setActive.reset() }} className={buttonClass('secondary', 'sm')}><RotateCcw size={13} aria-hidden="true" />Tải lại trạng thái</button></div>}
           </section>}
 
-          <section className="rounded-[20px] border border-[#d9e9f5] bg-[#f7fbfe] p-5">
+          <section className="rounded-xl border border-[#d9e9f5] bg-[#f7fbfe] p-4">
             <h2 className="font-bold text-[#173b59]">POI không đồng nghĩa Route-ready</h2>
             <p className="mt-2 text-[13px] leading-6 text-[#647b8d]">Route và RouteStop do kỹ thuật chuẩn bị. Một POI có thể tồn tại khi chưa có narration hoặc chưa được kiểm tra đường đi; không dùng IsActive làm bằng chứng robot có thể tới điểm.</p>
           </section>
@@ -511,7 +516,7 @@ function FormSection({ id, step, active, done, title, description, tag, delay, c
   const headingId = `${id}-heading`
   return (
     <section id={id} aria-labelledby={headingId} className={`${cardClass} poi-step-in scroll-mt-24 ${active ? '' : 'hidden'}`} style={{ animationDelay: `${delay}ms` }}>
-      <header className="flex items-start gap-3.5 px-5 pt-5 sm:px-6">
+      <header className="flex items-start gap-3.5 px-3.5 pt-5 sm:px-6">
         <span aria-hidden="true" className={`grid size-8.5 shrink-0 place-items-center rounded-[11px] border-[1.5px] font-mono text-[13px] font-semibold transition-all duration-300 ${done ? 'border-[#2d719e] bg-[#2d719e] text-white' : 'border-[#d9e9f5] bg-[#f1f7fc] text-[#54738a]'}`}>
           {done ? <Check size={16} strokeWidth={3} className="poi-pop" /> : String(step).padStart(2, '0')}
         </span>
@@ -521,7 +526,7 @@ function FormSection({ id, step, active, done, title, description, tag, delay, c
         </div>
         <span className="hidden shrink-0 rounded-full bg-[#f1f7fc] px-2.5 py-0.5 text-[11px] font-bold text-[#54738a] sm:inline">{tag}</span>
       </header>
-      <div className="space-y-4 px-5 pt-4 pb-5 sm:px-6 sm:pb-6">{children}</div>
+      <div className="space-y-4 px-3.5 pt-4 pb-5 sm:px-6 sm:pb-6">{children}</div>
     </section>
   )
 }
@@ -596,7 +601,7 @@ function PoiPreview({ map, name, description, pose, seconds, hasAudio, active }:
  */
 function StepNav({ steps, step, reached, mode, done, onSelect }: { steps: typeof STEPS; step: number; reached: number; mode: 'steps' | 'tabs'; done: boolean[]; onSelect: (step: number) => void }) {
   return (
-    <nav aria-label={mode === 'steps' ? 'Các bước tạo POI' : 'Các phần của POI'} className="mb-5 rounded-[20px] border border-[#d9e9f5] bg-white px-3 py-3 shadow-[0_12px_32px_-30px_#285c7d] sm:px-4">
+    <nav aria-label={mode === 'steps' ? 'Các bước tạo POI' : 'Các phần của POI'} className="mb-5 rounded-xl border border-[#d9e9f5] bg-white px-3 py-3 shadow-[0_12px_32px_-30px_#285c7d] sm:px-4">
       <ol className="flex items-center">
         {steps.map((item, index) => {
           const current = index === step
@@ -632,7 +637,7 @@ function StepNav({ steps, step, reached, mode, done, onSelect }: { steps: typeof
 
 function ReviewRow({ icon: Icon, title, rows, missing = false, optional = false, onEdit }: { icon: typeof FileText; title: string; rows: Array<[string, string]>; missing?: boolean; optional?: boolean; onEdit: () => void }) {
   return (
-    <div className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-3 rounded-2xl border p-3.5 ${missing ? 'border-[#f5c8c2] bg-[#fff4f2]' : 'border-[#e2e8f0]'}`}>
+    <div className={`grid grid-cols-[34px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border p-3.5 ${missing ? 'border-[#f5c8c2] bg-[#fff4f2]' : 'border-[#e2e8f0]'}`}>
       <span className={`grid size-8.5 place-items-center rounded-[11px] ${missing ? 'bg-white text-[#dc2626]' : optional ? 'bg-[#f1f7fc] text-[#86a0b3]' : 'bg-[#e5f3ff] text-[#2d78a9]'}`}><Icon size={16} aria-hidden="true" /></span>
       <div className="min-w-0">
         <p className="text-[13.5px] leading-[34px] font-bold text-[#173b59]">{title}</p>

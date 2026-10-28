@@ -44,7 +44,7 @@ export default function StaffManageTourDetailPage() {
     {success && <div className="mb-4"><Notice tone="success">{success}</Notice></div>}
     {tour.state === 'SCHEDULED' && <div className="mb-4"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn. Chốt Tour (READY) chưa có trên hệ thống thật.</Notice></div>}
 
-    <section className={`${panelClass} p-5`} aria-label="Thông tin Tour">
+    <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Item label="Thời gian dự kiến" value={formatSlot(tour.scheduledStartAt)} />
         <Item label="Trạng thái" value={TOUR_STATE_LABEL[tour.state]} />
@@ -57,7 +57,7 @@ export default function StaffManageTourDetailPage() {
       </dl>
     </section>
 
-    <section className={`${panelClass} mt-5 p-5`} aria-label="Tuyến của Tour">
+    <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[15px] font-semibold">Tuyến: {route.name}</h2>
         <Link to={`/staff/manage/routes/${route.id}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>

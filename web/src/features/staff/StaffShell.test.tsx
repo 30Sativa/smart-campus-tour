@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAuthStore } from '../../stores/auth-store'
 import StaffShell from './StaffShell'
+import { STAFF_NAV } from './staff-nav'
 
 function renderShell(role = 'Staff', path = '/staff') {
   useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role })
@@ -21,6 +22,15 @@ describe('StaffShell', () => {
     view.unmount()
     renderShell('Admin')
     expect(screen.getByRole('link', { name: 'Khu vực quản trị' })).toHaveAttribute('href', '/admin')
+  })
+
+  it('lists every page under always-open sections in the order of a working day', () => {
+    renderShell()
+    const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
+    expect(['Trong ngày', 'Điều hành', 'Chuẩn bị Tour', 'Lịch sử'].map((heading) => within(nav).getByText(heading))).toHaveLength(4)
+    for (const page of STAFF_NAV) expect(within(nav).getByRole('link', { name: new RegExp(page.label) })).toHaveAttribute('href', page.path)
+    // Nothing folds: no group toggles inside the page list.
+    expect(within(nav).queryAllByRole('button', { expanded: false })).toHaveLength(0)
   })
 
   it('shows the signed-in account at the top right and no page search', () => {

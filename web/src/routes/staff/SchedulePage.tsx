@@ -46,7 +46,7 @@ export default function SchedulePage() {
   return (
     <StaffPage>
       <PageHeader
-        eyebrow="Lịch trình"
+        eyebrow="Trong ngày"
         title="Lịch tour"
         description="Xem lịch theo ngày. Lịch được tạo từ các đơn đặt tour được duyệt; nhân viên vận hành theo dõi và chuẩn bị thiết bị tương ứng."
         action={
@@ -86,7 +86,7 @@ export default function SchedulePage() {
       />
 
       <section className={panelClass} aria-label={`Lịch tour ${heading}`}>
-        <div className="flex items-center justify-between gap-3 border-b border-[#f1f5f9] px-5 py-3.5">
+        <div className="flex items-center justify-between gap-3 border-b border-[#f1f5f9] px-3.5 py-3.5">
           <div className="flex items-center gap-2.5">
             <span className="grid size-8 place-items-center rounded-lg bg-[#eff6ff] text-[#2563eb]">
               <Calendar size={16} />
@@ -104,15 +104,15 @@ export default function SchedulePage() {
         </div>
 
         {tours.isPending ? (
-          <div className="p-5">
+          <div className="p-4">
             <LoadingPanel />
           </div>
         ) : tours.isError ? (
-          <div className="p-5">
+          <div className="p-4">
             <ErrorPanel error={tours.error} onRetry={tours.refetch} />
           </div>
         ) : tours.data.length === 0 ? (
-          <div className="p-5">
+          <div className="p-4">
             <EmptyPanel>Không có tour nào trong ngày này.</EmptyPanel>
           </div>
         ) : (

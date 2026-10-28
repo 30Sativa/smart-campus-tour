@@ -1,11 +1,12 @@
 import { Bot, CalendarDays, CalendarPlus, ClipboardCheck, ClipboardList, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, MonitorPlay, Route, ShieldCheck, Headset } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
-import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
+import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
- * Staff navigation: preparing Tours (Tours, registrations, Routes, POIs),
- * the day's sessions and their groups, running the live session with the
- * robot, and the log of what happened (SRS v1.9 §3.2.c).
+ * Staff navigation in the order of a working day: the day's sessions, running
+ * the live session with the robot, preparing Tours (Tours, registrations,
+ * Routes, POIs), and the log of what happened (SRS v1.9 §3.2.c). Every section
+ * stays open so each page is one click away.
  *
  * Administration (users, roles, permissions, configuration) is not hidden from
  * this list, it does not belong to it. Those live at `/admin/*` behind their own
@@ -13,10 +14,10 @@ import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grou
  * without pulling in the whole shell.
  */
 export const STAFF_NAV_SECTIONS: NavSection[] = [
-  { label: null, items: [{ label: 'Tổng quan vận hành', path: '/staff', icon: LayoutDashboard }] },
   {
-    label: 'Buổi tham quan',
+    label: 'Trong ngày',
     items: [
+      { label: 'Tổng quan vận hành', path: '/staff', icon: LayoutDashboard },
       { label: 'Buổi hôm nay', path: '/staff/tours', icon: ListChecks },
       { label: 'Lịch buổi', path: '/staff/schedule', icon: CalendarDays },
     ],
@@ -33,13 +34,16 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     // Tour preparation is Staff work (SRS v1.9 §3.2.c), moved here from `/admin/*`.
     label: 'Chuẩn bị Tour',
     items: [
+      // In the order a Tour is built: POIs, then a route over them, then the
+      // Tour itself, then the groups that register for it, then the Tour list
+      // where it is locked READY.
       { label: 'Tổng quan chuẩn bị', path: '/staff/manage', icon: ClipboardList },
-      { label: 'Danh sách Tour', path: '/staff/manage/tours', icon: ListChecks },
+      { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
+      { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
       { label: 'Tạo Tour', path: '/staff/manage/tours/new', icon: CalendarPlus },
       { label: 'Đăng ký chờ duyệt', path: '/staff/manage/registrations/pending', icon: ClipboardCheck },
       { label: 'Tất cả đăng ký', path: '/staff/manage/registrations', icon: ListTodo },
-      { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
-      { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
+      { label: 'Danh sách Tour', path: '/staff/manage/tours', icon: ListChecks },
     ],
   },
   {
@@ -48,8 +52,8 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
   },
 ]
 
-/** The sidebar's entries: "Buổi tham quan" and "Điều hành" fold; single pages are links. */
-export const STAFF_NAV_ENTRIES: GroupedNavEntry[] = groupNavSections(STAFF_NAV_SECTIONS, { 'Buổi tham quan': ListChecks, 'Điều hành': MonitorPlay, 'Chuẩn bị Tour': ClipboardList })
+/** The sidebar's entries: a heading per section, then its pages; nothing folds. */
+export const STAFF_NAV_ENTRIES: GroupedNavEntry[] = sectionNav(STAFF_NAV_SECTIONS)
 
 /** Every page, flat: the shell's page search and the access matrix read this. */
 export const STAFF_NAV: NavItem[] = STAFF_NAV_SECTIONS.flatMap((section) => section.items)

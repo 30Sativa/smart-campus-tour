@@ -41,7 +41,7 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020): overview,
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview,
     create/edit a Tour while Scheduled, pick a prepared route, review groups
     (approve / reject with a reason), send participation e-mails, Chốt (→ Ready)
     / Mở lại / Hủy before Start. POIs at `/staff/manage/pois` are API-backed:
@@ -70,7 +70,7 @@ shared rules; this file only covers what is specific to `web/`.
     `/admin/reports`) now redirect to their `/staff/*` equivalent;
     the Tour preparation URLs (`/admin/{tours,registrations,routes,pois}/...`)
     redirect to `/staff/manage/...` and `/admin/history` to `/staff/history`
-    (2026-10-27, ADR-0020). `/admin` itself is NOT redirected to `/staff`. Those redirects are migration scaffolding — delete them once the
+    (2026-10-27, ADR-0025). `/admin` itself is NOT redirected to `/staff`. Those redirects are migration scaffolding — delete them once the
     old links are gone.
   - The frontend route namespace and backend API namespace remain separate;
     endpoints still follow the owning role and capability.

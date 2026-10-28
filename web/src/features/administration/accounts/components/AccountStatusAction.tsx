@@ -1,4 +1,5 @@
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../../components/ui/toast-store'
 import { useDeactivateAccount, useReactivateAccount } from '../hooks'
 import { accountRequestError } from '../errors'
 import type { AccountLifecycleAction } from './AccountTable'
@@ -8,7 +9,7 @@ export function AccountStatusAction({ account, action, onClose, onCompleted }: {
   account: AccountListItem
   action: AccountLifecycleAction
   onClose: () => void
-  onCompleted: (message: string) => void
+  onCompleted: () => void
 }) {
   const deactivate = useDeactivateAccount()
   const reactivate = useReactivateAccount()
@@ -29,7 +30,12 @@ export function AccountStatusAction({ account, action, onClose, onCompleted }: {
       error={mutation.isError ? accountRequestError(mutation.error, 'Không thể cập nhật tài khoản. Vui lòng thử lại.') : null}
       withReason={false}
       onConfirm={() => mutation.mutate(account.id, {
-        onSuccess: () => onCompleted(isDeactivation ? 'Đã vô hiệu hóa tài khoản.' : 'Đã kích hoạt lại tài khoản.'),
+        onSuccess: () => {
+          notify(isDeactivation
+            ? { title: `Đã vô hiệu hóa ${account.username}`, detail: 'Tài khoản không đăng nhập được nữa. Có thể kích hoạt lại bất cứ lúc nào.' }
+            : { title: `Đã kích hoạt lại ${account.username}`, detail: 'Tài khoản đăng nhập lại được bằng mật khẩu hiện có.' })
+          onCompleted()
+        },
       })}
       onCancel={onClose}
     >

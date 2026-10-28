@@ -74,7 +74,7 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
   const sources = [...new Set(placed.map((robot) => robot.source).filter((source) => source && source !== 'Physical'))]
 
   const heading = (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-2 text-sm font-extrabold text-[#0f172a]">
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-2 text-sm font-bold text-[#0f172a]">
       <LiveDot tone={demo ? 'muted' : 'ok'} pulse={!demo} />{title}
       {demo ? <span className="rounded-full bg-[#eaf4ff] px-2 py-0.5 text-[11px] font-bold text-[#2f62b8]">6 robot · Chưa kết nối miniPC</span> : sources.length > 0 && <span className="font-mono text-[10px] font-normal text-[#8a98ac]">· có dữ liệu {sources.join(', ')}</span>}
     </span>
@@ -86,7 +86,7 @@ export function OperationalTwin({ robots, tour, selectedStopId, className = '', 
   )
 
   return (
-    <section className={`flex flex-col overflow-hidden rounded-2xl border border-[#dce9fb] bg-[#edf2fa] ${expanded ? 'fixed inset-3 z-50 h-[calc(100dvh-1.5rem)] shadow-2xl' : `relative ${demo ? 'min-h-[600px] max-sm:min-h-[560px]' : ''} ${className}`}`} aria-label="Digital Twin vận hành 3D">
+    <section className={`flex flex-col overflow-hidden rounded-xl border border-[#dce9fb] bg-[#edf2fa] ${expanded ? 'fixed inset-3 z-50 h-[calc(100dvh-1.5rem)] shadow-2xl' : `relative ${demo ? 'min-h-[600px] max-sm:min-h-[560px]' : ''} ${className}`}`} aria-label="Digital Twin vận hành 3D">
       {demo ? (
         <div className="min-h-0 flex-1">
           <PatrolDemo

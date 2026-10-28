@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kỹ thuật · bản thiết kế mới</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0f172a; --navy:#173b59; --primary:#2d719e; --primary-deep:#245e84; --wash:#e5f3ff; --wash-2:#f1f8fe;
+  --ground:#f6f7f9; --surface:#fff; --line:#e2e8f0; --line-soft:#eef1f4; --muted:#64748b; --text-2:#334155;
+  --ok:#1f7a55; --ok-bg:#effbf5; --warn:#8a5a06; --warn-bg:#fff8e6; --bad:#b23e31; --bad-bg:#fff1ef;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Be Vietnam Pro",system-ui,sans-serif;background:var(--ground);color:var(--ink);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--primary)}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+.shell{display:flex;min-height:100vh}
+
+/* sidebar: same chrome as the app, logo kept */
+.side{width:220px;flex:none;background:#fff;box-shadow:1px 0 0 #eceef1;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.brand{text-decoration:none;color:var(--ink);display:flex;align-items:center;gap:10px;height:56px;padding:0 14px}
+.brand .mark{width:32px;height:32px;border-radius:11px;background:#fff;box-shadow:0 0 0 1px #e5e7eb,0 6px 14px -8px rgba(17,24,39,.35);display:grid;place-items:center}
+.brand .mark img{width:25px;height:25px;object-fit:contain}
+.brand b{display:block;font-size:14px;letter-spacing:-.03em}
+.brand small{display:block;font-size:11px;color:#6b7280;font-weight:600}
+.nav{padding:6px 12px;display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:11px;min-height:34px;padding:0 10px;border-radius:9px;color:#374151;text-decoration:none;font-size:13px;font-weight:500}
+.nav a:hover{background:#f3f4f6;color:var(--ink)}
+.nav a[aria-current=page]{background:var(--wash-2);color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--primary)}
+.nav .count{margin-left:auto;min-width:20px;height:18px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;background:var(--primary);padding:0 6px}
+.nav .count.bad{background:#dc2626}
+.who{margin-top:auto;padding:14px 18px;border-top:1px solid #eceef1;font-size:12.5px}
+.who b{display:block;font-size:13px}
+.who span{color:var(--muted)}
+
+.main{flex:1;min-width:0;padding:20px 28px 48px;max-width:1320px}
+.top{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.top h1{font-size:21px;font-weight:700;letter-spacing:-.025em;line-height:1.15;color:var(--navy)}
+.top p{color:var(--muted);margin-top:3px;font-size:12.5px;max-width:64ch}
+.top .grow{flex:1 1 360px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:34px;padding:0 13px;border-radius:9px;border:1px solid #d9e9f5;background:#fff;color:#285c7d;font-weight:600;font-size:13px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--wash-2);border-color:#a8cde6}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.primary:hover{background:var(--primary-deep)}
+.btn.small{min-height:30px;padding:0 10px;font-size:12.5px;border-radius:8px}
+.btn:disabled{background:#e3edf4;border-color:#e3edf4;color:#64748b;cursor:not-allowed}
+
+/* blocking strip: the one red thing on the page */
+.block{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:9px 14px;border-radius:10px;background:var(--bad-bg);border:1px solid #f5c8c2;margin-bottom:14px;font-size:12.5px}
+.block .t{flex:1 1 380px}
+.block b{color:var(--bad);font-weight:700}
+.block span{color:#7a2e26}
+
+/* hero: the map and its evidence */
+.hero{display:grid;grid-template-columns:330px minmax(0,1fr) minmax(0,1fr);background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.mapwrap{position:relative;background:#e2eaf2;min-height:300px;display:flex;align-items:center;justify-content:center}
+.mapwrap svg{display:block;width:100%;height:auto;max-height:560px}
+.mapimg{image-rendering:pixelated}
+.mapcap{position:absolute;left:10px;bottom:10px;background:rgba(255,255,255,.94);border-radius:9px;padding:6px 10px;font-size:11.5px;color:var(--text-2);box-shadow:0 6px 18px -10px rgba(23,59,89,.4)}
+.mapcap b{color:var(--navy);font-size:12.5px;display:block}
+.pin{cursor:pointer}
+.pin:focus-visible circle.ring{stroke:var(--primary);stroke-width:7}
+
+.todo{padding:16px 18px;border-left:1px solid var(--line)}
+.todo h3{font-size:13px;font-weight:600;margin-bottom:6px}
+.todo ul{list-style:none;margin:0 0 12px;padding:0}
+.todo li button,.todo li a{display:flex;align-items:center;gap:8px;width:100%;padding:6px 0;border:none;border-top:1px solid var(--line-soft);background:none;text-align:left;cursor:pointer;color:var(--ink);text-decoration:none;font-size:12.5px}
+.todo li:first-child button,.todo li:first-child a{border-top:none}
+.todo li span.g{flex:1}
+.todo li button:hover,.todo li a:hover{color:var(--primary)}
+.evid{padding:16px 18px;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.evid h2{font-size:16px;font-weight:700;letter-spacing:-.02em;color:var(--navy)}
+.evid .sub{color:var(--muted);margin-top:1px;font-size:12px}
+.track{list-style:none;margin:14px 0 0;padding:0;position:relative}
+.track li{position:relative;padding:0 0 12px 28px}
+.track li:last-child{padding-bottom:0}
+.track li::before{content:"";position:absolute;left:7px;top:18px;bottom:-2px;width:2px;background:var(--line)}
+.track li.done::before{background:var(--primary)}
+.track li:last-child::before{display:none}
+.track .dot{position:absolute;left:0;top:1px;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);background:#fff}
+.track .done .dot{background:var(--primary);border-color:var(--primary)}
+.track .done .dot::after{content:"";position:absolute;left:3.5px;top:1px;width:4px;height:7px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.track .part .dot{border-color:var(--primary);background:conic-gradient(var(--primary) var(--p),#fff 0)}
+.track .val{font-size:14px;font-weight:700;letter-spacing:-.01em;color:var(--ink);line-height:1.2}
+.track .what{font-size:11.5px;color:var(--muted)}
+.track .open{margin-top:5px;display:flex;flex-wrap:wrap;gap:6px}
+.chipbtn{border:1px solid #f0d89f;background:var(--warn-bg);color:var(--warn);border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:600;cursor:pointer}
+.chipbtn.bad{border-color:#f5c8c2;background:var(--bad-bg);color:var(--bad)}
+.evid .actions{margin-top:auto;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* other versions: a quiet list, not cards */
+.sec{margin-top:18px}
+.sec h2{font-size:14px;font-weight:600;letter-spacing:-.01em;margin-bottom:7px;display:flex;justify-content:space-between;align-items:baseline}
+.sec h2 a{font-size:12px;font-weight:600;text-decoration:none}
+.rows{background:#fff;border:1px solid var(--line);border-radius:12px}
+.vrow{display:grid;grid-template-columns:130px minmax(0,1fr) auto;gap:16px;align-items:center;padding:9px 16px;border-top:1px solid var(--line-soft)}
+.vrow:first-child{border-top:none}
+.vrow .k{font-weight:700}
+.vrow .k small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.rail{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:relative}
+.rail::before{content:"";position:absolute;left:6px;right:6px;top:6px;height:2px;background:var(--line)}
+.rail .fill{position:absolute;left:6px;top:6px;height:2px;background:var(--primary)}
+.rail span{position:relative;padding-top:15px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail span::before{content:"";position:absolute;left:0;top:1px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--line)}
+.rail span.d::before{background:var(--primary);border-color:var(--primary)}
+.rail span.w::before{border-color:#d69412;background:var(--warn-bg)}
+.rail span.d{color:var(--text-2)}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.log{list-style:none;margin:0;padding:4px 0;background:#fff;border:1px solid var(--line);border-radius:12px}
+.log li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:6px 14px;font-size:12.5px}
+.log time{color:var(--muted)}
+.log b{font-weight:600}
+.log small{display:block;color:var(--muted)}
+.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.board > div{padding:10px 12px;border-left:1px solid var(--line-soft)}
+.board > div:first-child{border-left:none}
+.board h3{font-size:12px;font-weight:700;margin-bottom:4px;display:flex;justify-content:space-between}
+.board a{display:block;padding:6px 0;border-top:1px solid var(--line-soft);text-decoration:none;color:var(--ink);font-size:12.5px}
+.board a:hover{color:var(--primary)}
+.board a small{display:block;color:var(--muted);font-size:11.5px}
+
+/* POI + route pages: map left, field sheet right */
+.work{display:grid;grid-template-columns:360px minmax(0,1fr);gap:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.sheet{border-left:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;min-width:0}
+.sheet > .c1{border-right:1px solid var(--line);align-self:stretch}
+.sheet > .c1 .plist{border-bottom:none}
+.sheet .hd{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.sheet .hd h2{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--navy)}
+.sheet .bd{padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.plist{list-style:none;margin:0;padding:0;border-bottom:1px solid var(--line)}
+.plist button{width:100%;display:flex;align-items:center;gap:10px;padding:7px 16px;background:none;border:none;text-align:left;cursor:pointer;border-top:1px solid var(--line-soft)}
+.plist li:first-child button{border-top:none}
+.plist button:hover{background:#f8fafc}
+.plist button[aria-pressed=true]{background:var(--wash-2);box-shadow:inset 3px 0 0 var(--primary)}
+.plist .n{flex:1;min-width:0}
+.plist .n b{display:block;font-weight:600}
+.plist .n small{color:var(--muted);font-size:11.5px}
+.st{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;border:1px solid}
+.st.ok{color:var(--ok);background:var(--ok-bg);border-color:#cde9dc}
+.st.warn{color:var(--warn);background:var(--warn-bg);border-color:#f0d89f}
+.st.bad{color:var(--bad);background:var(--bad-bg);border-color:#f5c8c2}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px;margin:0}
+.facts dt{color:var(--muted)} .facts dd{margin:0;text-align:right;font-weight:600}
+.prev{font-size:12.5px;padding:7px 10px;border-radius:8px;background:var(--bad-bg);color:#7a2e26}
+.ck{display:flex;align-items:center;gap:10px;min-height:36px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:12.5px}
+.ck input{width:16px;height:16px;accent-color:var(--primary);flex:none}
+.ck:has(input:checked){border-color:#a8cde6;background:var(--wash-2)}
+fieldset{border:none;margin:0;padding:0}
+legend,.lbl{font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:4px;display:block}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--line-soft);padding:3px;border-radius:9px}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0}
+.seg span{display:flex;flex-direction:row;gap:4px;align-items:center;justify-content:center;min-height:32px;border-radius:7px;font-size:12.5px;font-weight:600;color:#475569;cursor:pointer}
+.seg span svg{margin:0}
+.seg input:checked+span{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(15,23,42,.12)}
+.seg input:focus-visible+span{outline:2px solid var(--primary)}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res label{position:relative}
+.res input{position:absolute;opacity:0}
+.res span{display:flex;align-items:center;justify-content:center;min-height:36px;border:1px solid #cbd5e1;border-radius:9px;font-weight:600;cursor:pointer;color:#475569}
+.res input:focus-visible+span{outline:2px solid var(--primary)}
+.res input[value=pass]:checked+span{border:2px solid var(--ok);background:var(--ok-bg);color:var(--ok)}
+.res input[value=fail]:checked+span{border:2px solid var(--bad);background:var(--bad-bg);color:var(--bad)}
+.inp{width:100%;min-height:34px;border:1px solid #d9e9f5;border-radius:9px;padding:5px 10px;font-size:13px;background:#fff}
+.miss{font-size:12px;color:var(--bad);margin:0;padding-left:18px}
+.okline{font-size:12.5px;padding:7px 10px;border-radius:8px;background:var(--ok-bg);color:var(--ok)}
+.filters{display:flex;gap:5px;flex-wrap:wrap;padding:9px 16px;border-bottom:1px solid var(--line)}
+.filters button{min-height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--text-2);cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+
+.stops{list-style:none;margin:0;padding:0;counter-reset:s}
+.stops li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 16px;border-top:1px solid var(--line-soft);counter-increment:s}
+.stops li::before{content:counter(s);width:22px;height:22px;border-radius:50%;background:var(--wash);color:var(--navy);font-weight:700;font-size:11px;display:grid;place-items:center}
+.stops li.new{background:#fffbeb}
+.chg{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0}
+.tag{font-size:11px;font-weight:600;color:var(--muted)}
+.tag.mv{color:var(--bad)}
+
+.view[hidden]{display:none}
+@media (max-width:1180px){.hero{grid-template-columns:300px minmax(0,1fr)}.todo{grid-column:1/-1;border-left:none;border-top:1px solid var(--line)}.work{grid-template-columns:300px minmax(0,1fr)}.sheet{grid-template-columns:minmax(0,1fr)}.sheet>.c1{border-right:none;border-bottom:1px solid var(--line)}.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:820px){.hero,.work{grid-template-columns:minmax(0,1fr)}.evid,.sheet{border-left:none;border-top:1px solid var(--line)}.mapwrap svg{max-height:420px}}
+@media (max-width:820px){
+  .shell{flex-direction:column}.side{width:auto;height:auto;position:static}.nav{flex-direction:row;overflow-x:auto}.nav a{white-space:nowrap}.who{display:none}
+  .main{padding:20px 16px 48px}.vrow{grid-template-columns:minmax(0,1fr)}.board{grid-template-columns:minmax(0,1fr)}.board>div{border-left:none;border-top:1px solid var(--line-soft)}
+  .rail span{font-size:0}.top h1{font-size:24px}
+}
+@media (prefers-reduced-motion:no-preference){.pulse{animation:pulse 2.4s ease-out infinite}@keyframes pulse{0%{r:14;opacity:.5}100%{r:40;opacity:0}}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <a class="brand" href="#overview" data-go="overview"><span class="mark"><img src="data:image/png;base64,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" alt=""></span><span><b>CampusTour</b><small>DT-AMR · Kỹ thuật</small></span></a>
+    <nav class="nav" aria-label="Điều hướng kỹ thuật">
+      <a href="#overview" data-go="overview" aria-current="page">Tổng quan</a>
+      <a href="#maps" data-go="overview">Version map</a>
+      <a href="#poi" data-go="poi">POI <span class="count" id="poiCount">3</span></a>
+      <a href="#import" data-go="overview">Import POI (YAML)</a>
+      <a href="#route" data-go="route">Xác nhận tuyến <span class="count bad">2</span></a>
+      <a href="#log" data-go="overview">Nhật ký</a>
+    </nav>
+    <div class="who"><b>kythuat01</b><span>Nhân viên kỹ thuật</span></div>
+  </aside>
+
+  <main class="main">
+    <!-- ===== Tổng quan ===== -->
+    <section class="view" id="v-overview" aria-label="Tổng quan kỹ thuật">
+      <div class="top">
+        <div class="grow"><h1>Robot đang chạy map2-v2</h1><p>Localization đạt từ chiều qua. Còn 3 POI chưa xác minh, và một version tuyến đang giữ chân buổi tham quan sắp tới.</p></div>
+        <a class="btn" href="#import">Import POI</a>
+        <a class="btn primary" href="#maps">Upload version map</a>
+      </div>
+
+      <div class="block" role="status">
+        <div class="t"><b>Thư viện – AI Lab v4 đang chặn buổi 30/10, 9:00.</b> <span>Cần xác minh Phòng Robotics rồi chạy thử lại toàn tuyến.</span></div>
+        <a class="btn small primary" href="#route" data-go="route">Mở test tuyến</a>
+      </div>
+
+      <div class="hero">
+        <div class="mapwrap">
+          <svg id="heroMap" viewBox="380 200 880 1400" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Bản đồ map2-v2 với các POI"></svg>
+          <div class="mapcap"><b>AMR-01 ở Sảnh thang máy</b>Vị trí khớp Twin, lệch 4,2 cm</div>
+        </div>
+        <div class="evid">
+          <h2>map2-v2</h2>
+          <p class="sub">Tầng 6, tòa Alpha. Quét lại hành lang, thêm khu Robotics.</p>
+          <ol class="track" aria-label="Bằng chứng của map2-v2">
+            <li class="done"><span class="dot"></span><div class="val">1d2cd4d1…fec9</div><div class="what">Upload 25/10, 4,2 MB</div></li>
+            <li class="done"><span class="dot"></span><div class="val">AMR-01</div><div class="what">Deploy 26/10, 01:00, checksum khớp</div></li>
+            <li class="done"><span class="dot"></span><div class="val">4,2 cm</div><div class="what">Localization đạt ở 3 điểm đo</div></li>
+            <li class="part" style="--p:57%"><span class="dot"></span><div class="val">4 / 7 POI</div><div class="what">đã xác minh tại chỗ</div></li>
+            <li class="part" style="--p:50%"><span class="dot"></span><div class="val">2 / 4 tuyến</div><div class="what">đã xác nhận trên map này</div></li>
+          </ol>
+          <div class="actions"><a class="btn small" href="#maps">Chi tiết version</a></div>
+        </div>
+        <div class="todo">
+          <h3>POI cần xác minh</h3>
+          <ul>
+            <li><button data-poi="tp-4"><span class="g">Phòng Robotics</span><span class="st warn">Chờ</span></button></li>
+            <li><button data-poi="tp-6"><span class="g">Khu trưng bày</span><span class="st warn">Chờ</span></button></li>
+            <li><button data-poi="tp-7"><span class="g">Phòng hội thảo</span><span class="st bad">Không đạt</span></button></li>
+          </ul>
+          <h3>Tuyến chờ test</h3>
+          <ul>
+            <li><a href="#route" data-go="route"><span class="g">Thư viện – AI Lab v4</span><span class="st bad">Chặn lịch</span></a></li>
+            <li><a href="#route" data-go="route"><span class="g">Hành lang tầng 6 v1</span><span class="st warn">Chưa xác nhận</span></a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Các version khác <a href="#maps">Tất cả version</a></h2>
+        <div class="rows">
+          <div class="vrow"><div class="k">map2-v3<small>Upload sáng nay, chưa deploy</small></div><div class="rail"><i class="fill" style="width:12%"></i><span class="d">Upload</span><span class="w">Chờ deploy</span><span>Localization</span><span>POI</span><span>Tuyến</span></div><a class="btn small" href="#maps">Ghi deploy</a></div>
+          <div class="vrow"><div class="k">map2-v1<small>Giữ cho tuyến cũ đã xác nhận</small></div><div class="rail"><i class="fill" style="width:calc(100% - 12px)"></i><span class="d">Upload</span><span class="d">AMR-01</span><span class="d">5,1 cm</span><span class="d">3/3 POI</span><span class="d">1/1 tuyến</span></div><a class="btn small" href="#maps">Mở</a></div>
+        </div>
+      </div>
+
+      <div class="two sec">
+        <div>
+          <h2>Tuyến theo trạng thái <a href="#route" data-go="route">Xác nhận tuyến</a></h2>
+          <div class="board">
+            <div><h3 style="color:var(--bad)">Cần xác nhận lại <span>1</span></h3><a href="#route" data-go="route">Thư viện – AI Lab v4<small>Đang chặn buổi 30/10</small></a></div>
+            <div><h3 style="color:var(--warn)">Chưa xác nhận <span>1</span></h3><a href="#route" data-go="route">Hành lang tầng 6 v1<small>2 điểm dừng</small></a></div>
+            <div><h3 style="color:var(--ok)">Đã xác nhận <span>3</span></h3><a href="#route">Thư viện – AI Lab v3.1<small>Giữ xác nhận của v3</small></a><a href="#route">Thư viện – AI Lab v3<small>Chạy thử cùng Nguyễn Văn An</small></a></div>
+          </div>
+        </div>
+        <div>
+          <h2>Hoạt động gần đây <a href="#log">Nhật ký</a></h2>
+          <ul class="log">
+            <li><time>Hôm nay 16:02</time><div><b>Staff sửa thuyết minh</b> Thư viện – AI Lab v3.1<small>Giữ xác nhận của v3</small></div></li>
+            <li><time>Hôm nay 12:10</time><div><b>Staff tạo v4</b> Thư viện – AI Lab<small>Đổi thứ tự dừng, cần xác nhận lại</small></div></li>
+            <li><time>Hôm qua 04:00</time><div><b>Bạn xác nhận</b> Thư viện – AI Lab v3<small>Chạy thử cùng Nguyễn Văn An</small></div></li>
+            <li><time>Hôm qua 03:00</time><div><b>Bạn ghi localization</b> map2-v2<small>Đạt, lệch 4,2 cm</small></div></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== POI ===== -->
+    <section class="view" id="v-poi" aria-label="Xác minh POI" hidden>
+      <div class="top"><div class="grow"><h1>Xác minh POI trên map2-v2</h1><p>Ra tận nơi, cho robot tới điểm, chọn góc camera rồi ghi kết quả. Staff chỉ đề xuất vị trí.</p></div><a class="btn" href="#import">Import YAML</a></div>
+      <div class="work">
+        <div class="mapwrap"><svg id="poiMap" viewBox="380 200 880 1400" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Bản đồ POI, bấm điểm để xác minh"></svg></div>
+        <div class="sheet">
+          <div class="c1"><div class="filters" role="group" aria-label="Lọc POI"><button data-f="open" aria-pressed="true">Cần làm</button><button data-f="all" aria-pressed="false">Tất cả</button><button data-f="VERIFIED" aria-pressed="false">Đã xác minh</button></div>
+          <ul class="plist" id="plist"></ul></div>
+          <div id="form"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Tuyến ===== -->
+    <section class="view" id="v-route" aria-label="Test và xác nhận tuyến" hidden>
+      <div class="top"><div class="grow"><h1>Thư viện – AI Lab v4</h1><p>Thêm Phòng Robotics và đổi thứ tự dừng, nên v4 không thừa hưởng xác nhận của v3. Đang chặn buổi 30/10, 9:00.</p></div><span class="st bad" style="font-size:11.5px;padding:3px 10px">Cần xác nhận lại</span></div>
+      <div class="work">
+        <div class="mapwrap"><svg id="routeMap" viewBox="380 200 880 1400" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Lộ trình v4"></svg><div class="mapcap"><b>Thứ tự dừng của v4</b>Nét đứt nối các điểm theo thứ tự, không phải quỹ đạo robot</div></div>
+        <div class="sheet">
+          <div class="c1"><div class="hd"><h2>Thay đổi so với v3</h2>
+            <div class="chg"><span>Thêm điểm dừng Phòng Robotics</span><span class="tag mv">ảnh hưởng di chuyển</span></div>
+            <div class="chg"><span>Đổi thứ tự dừng 3 và 4</span><span class="tag mv">ảnh hưởng di chuyển</span></div>
+            <div class="chg"><span>Sửa thuyết minh tại Thư viện</span><span class="tag">chỉ nội dung</span></div>
+          </div>
+          <ol class="stops" aria-label="Điểm dừng">
+            <li><span>Sảnh thang máy</span><span class="st ok">Đã xác minh</span></li>
+            <li><span>Thư viện</span><span class="st ok">Đã xác minh</span></li>
+            <li class="new" id="stopRobotics"><span>Phòng Robotics</span><button class="btn small" data-poi="tp-4">Xác minh</button></li>
+            <li><span>AI Lab</span><span class="st ok">Đã xác minh</span></li>
+          </ol></div>
+          <form class="bd" id="routeForm">
+            <label><span class="lbl">Người vận hành chạy thử cùng</span><select class="inp" name="op"><option value="">Chọn người vận hành</option><option>Nguyễn Văn An</option><option>Trần Thị Bình</option></select></label>
+            <fieldset><legend>Các chặng đã chạy thử</legend>
+              <div style="display:grid;gap:6px">
+                <label class="ck"><input type="checkbox" name="leg"> Sảnh thang máy – Thư viện</label>
+                <label class="ck"><input type="checkbox" name="leg"> Thư viện – Phòng Robotics</label>
+                <label class="ck"><input type="checkbox" name="leg"> Phòng Robotics – AI Lab</label>
+                <label class="ck"><input type="checkbox" name="leg"> Nhánh rẽ: AI Lab – Hành lang tầng 6</label>
+              </div>
+            </fieldset>
+            <fieldset><legend>Kết quả</legend><div class="res"><label><input type="radio" name="res" value="pass"><span>Đạt</span></label><label><input type="radio" name="res" value="fail"><span>Không đạt</span></label></div></fieldset>
+            <div id="routeMiss"></div>
+            <button class="btn primary" id="routeBtn" type="submit" disabled>Xác nhận kỹ thuật</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const MAP = 'data:image/png;base64,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';
+const POIS = [
+  { id: 'tp-1', name: 'Sảnh thang máy', u: 510, v: 300, s: 'VERIFIED', cam: 'FRONT', src: 'Staff đề xuất' },
+  { id: 'tp-2', name: 'Thư viện', u: 990, v: 396, s: 'VERIFIED', cam: 'LEFT', src: 'Staff đề xuất' },
+  { id: 'tp-3', name: 'AI Lab', u: 498, v: 702, s: 'VERIFIED', cam: 'RIGHT', src: 'Staff đề xuất' },
+  { id: 'tp-4', name: 'Phòng Robotics', u: 1152, v: 900, s: 'PENDING', cam: null, src: 'Staff đề xuất' },
+  { id: 'tp-5', name: 'Hành lang tầng 6', u: 552, v: 1098, s: 'VERIFIED', cam: 'FRONT', src: 'Staff đề xuất' },
+  { id: 'tp-6', name: 'Khu trưng bày', u: 1140, v: 1362, s: 'PENDING', cam: null, src: 'Import YAML' },
+  { id: 'tp-7', name: 'Phòng hội thảo', u: 600, v: 1500, s: 'FAILED', cam: 'FRONT', src: 'Staff đề xuất', prev: 'Lần trước, 26/10: robot lệch 18 cm, vướng cánh cửa khi quay.' },
+];
+const COLOR = { VERIFIED: '#1f7a55', PENDING: '#d69412', FAILED: '#b23e31' };
+const LABEL = { VERIFIED: ['ok', 'Đã xác minh'], PENDING: ['warn', 'Chờ xác minh'], FAILED: ['bad', 'Không đạt'] };
+const ROUTE = ['tp-1', 'tp-2', 'tp-4', 'tp-3'];
+let sel = 'tp-4', filter = 'open';
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function drawMap(svg, { pins, route, robot, interactive }) {
+  const r = 17;
+  let html = `<image class="mapimg" href="${MAP}" x="0" y="0" width="1419" height="1949"/>`;
+  if (route) html += `<polyline points="${route.map((id) => { const p = POIS.find((x) => x.id === id); return p.u + ',' + p.v; }).join(' ')}" fill="none" stroke="#2d719e" stroke-width="9" stroke-dasharray="22 14" stroke-linejoin="round" stroke-linecap="round"/>`;
+  if (robot) html += `<circle class="pulse" cx="600" cy="380" r="14" fill="#2d719e" opacity=".4"/><rect x="586" y="366" width="28" height="28" rx="8" fill="#2d719e" stroke="#fff" stroke-width="5"/>`;
+  pins.forEach((p, i) => {
+    const on = interactive && p.id === sel;
+    const num = route ? route.indexOf(p.id) + 1 : 0;
+    html += `<g class="pin" ${interactive ? `tabindex="0" role="button" aria-label="Xác minh ${esc(p.name)}" data-poi="${p.id}"` : 'aria-hidden="true"'}>
+      ${on ? `<circle cx="${p.u}" cy="${p.v}" r="${r * 2.4}" fill="#2d719e" opacity=".18"/>` : ''}
+      <circle class="ring" cx="${p.u}" cy="${p.v}" r="${on ? r * 1.35 : r}" fill="${COLOR[p.s]}" stroke="#fff" stroke-width="6"/>
+      ${num ? `<text x="${p.u}" y="${p.v + 6}" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">${num}</text>` : ''}
+      <text x="${p.u}" y="${p.v + 54}" text-anchor="middle" font-size="30" font-weight="600" fill="#0f172a" stroke="#fff" stroke-width="10" paint-order="stroke">${esc(p.name)}</text></g>`;
+  });
+  svg.innerHTML = html;
+}
+
+function poiForm(p) {
+  const [cls, lab] = LABEL[p.s];
+  const cams = ['LEFT', 'FRONT', 'RIGHT'];
+  const icon = { LEFT: 'M15 6l-6 6 6 6', FRONT: 'M6 15l6-6 6 6', RIGHT: 'M9 6l6 6-6 6' };
+  return `<form class="bd" id="pf">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h2 style="font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--navy)">${esc(p.name)}</h2><span class="st ${cls}">${lab}</span></div>
+    <dl class="facts"><dt>Nguồn</dt><dd>${p.src}</dd><dt>Góc camera hiện tại</dt><dd>${p.cam || 'chưa chọn'}</dd></dl>
+    ${p.prev ? `<p class="prev">${esc(p.prev)}</p>` : ''}
+    <label class="ck"><input type="checkbox" name="arrived"> Robot tới đúng vị trí</label>
+    <label><span class="lbl">Sai lệch đo được (cm)</span><input class="inp" name="err" type="number" min="0" step="0.1"></label>
+    <fieldset><legend>Góc camera khi dừng</legend><div class="seg">${cams.map((c) => `<label><input type="radio" name="cam" value="${c}" ${p.cam === c ? 'checked' : ''}><span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="${icon[c]}"/></svg>${c === 'LEFT' ? 'Trái' : c === 'FRONT' ? 'Trước' : 'Phải'}</span></label>`).join('')}</div></fieldset>
+    <label class="ck"><input type="checkbox" name="frame"> Khung hình livestream đúng nội dung</label>
+    <fieldset><legend>Kết quả</legend><div class="res"><label><input type="radio" name="res" value="pass"><span>Đạt</span></label><label><input type="radio" name="res" value="fail"><span>Không đạt</span></label></div></fieldset>
+    <div id="pmiss"></div>
+    <button class="btn primary" type="submit" disabled>Lưu kết quả</button>
+  </form>`;
+}
+
+function renderPoi() {
+  const list = POIS.filter((p) => filter === 'all' || (filter === 'open' ? p.s !== 'VERIFIED' : p.s === filter));
+  document.getElementById('plist').innerHTML = list.map((p) => { const [cls, lab] = LABEL[p.s]; return `<li><button aria-pressed="${p.id === sel}" data-poi="${p.id}"><span class="n"><b>${esc(p.name)}</b><small>${p.src}${p.cam ? ', camera ' + p.cam : ''}</small></span><span class="st ${cls}">${lab}</span></button></li>`; }).join('') || '<li style="padding:16px 24px;color:var(--muted)">Không còn POI nào cần làm.</li>';
+  const p = POIS.find((x) => x.id === sel);
+  document.getElementById('form').innerHTML = p ? poiForm(p) : '';
+  drawMap(document.getElementById('poiMap'), { pins: POIS.filter((x) => filter === 'all' || x.id === sel || (filter === 'open' ? x.s !== 'VERIFIED' : x.s === filter)), interactive: true });
+  document.getElementById('poiCount').textContent = POIS.filter((x) => x.s !== 'VERIFIED').length;
+}
+
+function checkPoi() {
+  const f = document.getElementById('pf'); if (!f) return;
+  const d = new FormData(f), res = d.get('res');
+  const miss = res === 'pass' ? [!d.get('arrived') && 'robot tới đúng vị trí', !d.get('cam') && 'góc camera', !d.get('frame') && 'khung hình đúng'].filter(Boolean) : [];
+  f.querySelector('button[type=submit]').disabled = !res || miss.length > 0;
+  document.getElementById('pmiss').innerHTML = miss.length ? `<p class="miss" style="padding:0">Để ghi Đạt còn thiếu: ${miss.join(', ')}.</p>` : '';
+}
+
+function checkRoute() {
+  const f = document.getElementById('routeForm'), d = new FormData(f);
+  const legs = [...f.querySelectorAll('[name=leg]')], open = legs.filter((x) => !x.checked).length;
+  const robotics = POIS.find((p) => p.id === 'tp-4').s === 'VERIFIED';
+  const miss = [!robotics && 'Xác minh Phòng Robotics', !d.get('op') && 'Chọn người vận hành', open && `Tick ${open} chặng còn lại`, d.get('res') !== 'pass' && 'Chọn kết quả Đạt'].filter(Boolean);
+  const btn = document.getElementById('routeBtn');
+  if (d.get('res') === 'fail') { btn.disabled = !d.get('op'); btn.textContent = 'Ghi lần test không đạt'; document.getElementById('routeMiss').innerHTML = ''; return; }
+  btn.textContent = 'Xác nhận kỹ thuật'; btn.disabled = miss.length > 0;
+  document.getElementById('routeMiss').innerHTML = miss.length ? `<p class="lbl" style="margin:0 0 4px">Còn lại trước khi xác nhận</p><ul class="miss">${miss.map((m) => `<li>${m}</li>`).join('')}</ul>` : '<p class="okline">Đủ điều kiện. Xác nhận gắn với map2-v2, 4 POI và tuyến v4.</p>';
+}
+
+function renderRoute() {
+  drawMap(document.getElementById('routeMap'), { pins: ROUTE.map((id) => POIS.find((p) => p.id === id)), route: ROUTE });
+  const r = POIS.find((p) => p.id === 'tp-4');
+  if (r.s === 'VERIFIED') document.getElementById('stopRobotics').innerHTML = '<span>Phòng Robotics</span><span class="st ok">Đã xác minh</span>';
+  checkRoute();
+}
+
+function show(view) {
+  document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== 'v-' + view; });
+  document.querySelectorAll('.nav a').forEach((a) => a.toggleAttribute('aria-current', false));
+  const cur = document.querySelector(`.nav a[href="#${view === 'overview' ? 'overview' : view}"]`); if (cur) cur.setAttribute('aria-current', 'page');
+  if (view === 'poi') renderPoi(); if (view === 'route') renderRoute();
+  window.scrollTo(0, 0);
+}
+
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  const poi = e.target.closest('[data-poi]');
+  if (poi) { e.preventDefault(); sel = poi.dataset.poi; if (filter === 'VERIFIED' && POIS.find((p) => p.id === sel).s !== 'VERIFIED') filter = 'open'; show('poi'); return; }
+  if (go) { e.preventDefault(); show(go.dataset.go); return; }
+  const f = e.target.closest('[data-f]');
+  if (f) { filter = f.dataset.f; document.querySelectorAll('[data-f]').forEach((b) => b.setAttribute('aria-pressed', b === f)); renderPoi(); }
+});
+document.addEventListener('keydown', (e) => { const g = e.target.closest && e.target.closest('g[data-poi]'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); sel = g.dataset.poi; renderPoi(); } });
+document.addEventListener('change', (e) => { if (e.target.closest('#pf')) checkPoi(); if (e.target.closest('#routeForm')) checkRoute(); });
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (e.target.id === 'pf') { const d = new FormData(e.target), p = POIS.find((x) => x.id === sel); p.s = d.get('res') === 'pass' ? 'VERIFIED' : 'FAILED'; if (d.get('cam')) p.cam = d.get('cam'); const next = POIS.find((x) => x.s !== 'VERIFIED'); sel = next ? next.id : null; renderPoi(); }
+  if (e.target.id === 'routeForm') { const ok = new FormData(e.target).get('res') === 'pass'; e.target.innerHTML = ok ? '<p class="okline">Đã xác nhận v4. Staff có thể xếp lịch buổi 30/10.</p>' : '<p class="prev">Đã ghi lần test không đạt vào lịch sử tuyến.</p>'; }
+});
+drawMap(document.getElementById('heroMap'), { pins: POIS, robot: true });
+</script>
+</body>
+</html>

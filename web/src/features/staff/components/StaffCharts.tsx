@@ -19,8 +19,8 @@ const axisTick = { fontSize: 10, fill: '#6b7280' }
 
 function CardHead({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-5 py-3.5">
-      <h2 id={id} className="text-sm font-semibold tracking-[-0.01em] text-[#1f2937]">{title}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-3.5 py-2.5">
+      <h2 id={id} className="text-[13px] font-semibold text-[#1f2937]">{title}</h2>
       {children}
     </div>
   )
@@ -30,7 +30,7 @@ function LegendFigure({ color, value, label }: { color: string; value: number | 
   return (
     <span className="inline-flex items-baseline gap-2">
       <span aria-hidden="true" className="size-[9px] self-center rounded-full border-[2.5px]" style={{ borderColor: color }} />
-      <b className="text-[26px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</b>
+      <b className="text-[20px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</b>
       <span className="text-xs text-[#6b7280]">{label}</span>
     </span>
   )
@@ -53,13 +53,13 @@ export function SparkCard({ title, to, label, value, unit, note, series }: { tit
   const data = series.map((v, i) => ({ i, v }))
   return (
     <section className={`${CARD} flex flex-col`} aria-labelledby={`${id}-t`}>
-      <div className="px-5 pt-[18px]">
-        <h2 id={`${id}-t`} className="text-[15px] font-semibold text-[#1f2937]"><Link to={to} className="rounded hover:text-[#2d719e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">{title}</Link></h2>
-        <p className="mt-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-[#6b7280] uppercase">{label}</p>
+      <div className="px-3.5 pt-3">
+        <h2 id={`${id}-t`} className="text-[13px] font-semibold text-[#1f2937]"><Link to={to} className="rounded hover:text-[#2d719e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">{title}</Link></h2>
+        <p className="mt-2.5 text-[11.5px] font-medium text-[#6b7280]">{label}</p>
         <p className="mt-0.5 flex items-baseline gap-2"><span className="text-[30px] leading-tight font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</span><span className="text-[13px] font-semibold text-[#6b7280]">{unit}</span></p>
         <p className="text-xs text-[#6b7280]">{note}</p>
       </div>
-      <div className="mt-auto h-[76px] w-full" aria-hidden="true">
+      <div className="mt-auto h-[56px] w-full" aria-hidden="true">
         <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <defs><linearGradient id={`${id}-g`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={DONE} stopOpacity={0.2} /><stop offset="1" stopColor={DONE} stopOpacity={0} /></linearGradient></defs>
@@ -76,8 +76,8 @@ export function AttentionCard({ tours, readyRobots, robotCount }: { tours: TourO
   const assist = tours.filter((tour) => tour.operationalStatus === 'NeedsAssistance')
   const waiting = tours.filter((tour) => tour.state === 'Scheduled').length
   return (
-    <section className={`${CARD} flex flex-col gap-2.5 px-5 py-[18px]`} aria-labelledby="ov-attention">
-      <h2 id="ov-attention" className="text-[15px] font-semibold text-[#1f2937]">Cần xử lý</h2>
+    <section className={`${CARD} flex flex-col gap-2.5 px-3.5 py-3`} aria-labelledby="ov-attention">
+      <h2 id="ov-attention" className="text-[13px] font-semibold text-[#1f2937]">Cần xử lý</h2>
       {assist.length ? (
         <Link to={`/staff/live/${assist[0].id}`} className="flex flex-col gap-1 rounded-[10px] bg-[#fef2f2] p-3 hover:bg-[#fee2e2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
           <span className="text-[30px] leading-none font-bold text-[#b42318] tabular-nums">{assist.length}</span>
@@ -108,11 +108,11 @@ export function StudentsThroughDay({ tours, now }: { tours: TourOperation[]; now
           </Link>
         )}
       </CardHead>
-      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 pt-4">
+      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-3.5 pt-3">
         <LegendFigure color={DONE} value={day.joined} label="đã tham gia" />
         <LegendFigure color={REST} value={day.planned} label="theo lịch cả ngày" />
       </p>
-      <div className="h-[240px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh trong ngày: ${day.joined} đã tham gia, ${day.planned} theo lịch`}>
+      <div className="h-[200px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh trong ngày: ${day.joined} đã tham gia, ${day.planned} theo lịch`}>
         {day.planned === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Hôm nay chưa có buổi nào.</p> : (
           <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <AreaChart data={day.points} margin={{ top: 16, right: 16, bottom: 0, left: -12 }}>
@@ -157,7 +157,7 @@ export function TodayByState({ tours }: { tours: TourOperation[] }) {
   return (
     <section className={CARD} aria-labelledby="ov-donut">
       <CardHead id="ov-donut" title="Buổi hôm nay theo trạng thái" />
-      <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
+      <div className="grid justify-items-center gap-4 px-3.5 pt-2 pb-3.5">
         <div className="relative size-[200px]" role="img" aria-label={`${tours.length} buổi: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ') || 'chưa có'}`}>
           <svg viewBox="0 0 42 42" className="size-full -rotate-90" aria-hidden="true">
             <circle cx="21" cy="21" r="16" fill="none" stroke="#f3f4f6" strokeWidth="5.5" />
@@ -170,7 +170,7 @@ export function TodayByState({ tours }: { tours: TourOperation[] }) {
             ))}
           </svg>
           <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-            <span className="text-[28px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{shown ? shown.value : tours.length}</span>
+            <span className="text-[20px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{shown ? shown.value : tours.length}</span>
             <span className="mt-1 max-w-24 text-xs text-[#6b7280]">{shown ? shown.label : 'buổi'}</span>
           </div>
         </div>
@@ -194,11 +194,11 @@ export function RunResults({ days }: { days: DayResult[] }) {
   return (
     <section className={CARD} aria-labelledby="ov-results">
       <CardHead id="ov-results" title="Kết quả buổi chạy · 7 ngày" />
-      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 pt-4">
+      <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-3.5 pt-3">
         <LegendFigure color={DONE} value={completed} label="hoàn thành" />
         <LegendFigure color={REST} value={cancelled} label="kết thúc sớm / hủy" />
       </p>
-      <div className="h-[230px] px-2 pt-2 pb-3" role="img" aria-label={days.map((d) => `${d.label}: ${d.completed} hoàn thành, ${d.cancelled} kết thúc sớm hoặc hủy`).join('; ')}>
+      <div className="h-[190px] px-2 pt-2 pb-3" role="img" aria-label={days.map((d) => `${d.label}: ${d.completed} hoàn thành, ${d.cancelled} kết thúc sớm hoặc hủy`).join('; ')}>
         {completed + cancelled === 0 ? <p className="grid h-full place-items-center text-sm text-[#6b7280]">Chưa có buổi nào kết thúc trong 7 ngày qua.</p> : (
           <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barGap={2} barCategoryGap="30%">

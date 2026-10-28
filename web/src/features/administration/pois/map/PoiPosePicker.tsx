@@ -176,7 +176,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const arrow = `M 0 0 L ${arrowLength} 0 M ${arrowLength * 0.72} ${-arrowLength * 0.2} L ${arrowLength} 0 L ${arrowLength * 0.72} ${arrowLength * 0.2}`
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white">
+    <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e8f0] px-3 py-2.5">
         <div className="pl-1"><p className="text-sm font-semibold text-[#1e293b]">Bản đồ ROS</p><p className="mt-0.5 font-mono text-xs text-[#64748b]">{map.mapKey} · {map.resolution} m/ô</p></div>
         <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-1 rounded-xl bg-[#f1f7fc] p-1">
@@ -201,7 +201,7 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
 
       <div className="relative bg-[#eef3f8] bg-[linear-gradient(#e4ecf4_1px,transparent_1px),linear-gradient(90deg,#e4ecf4_1px,transparent_1px)] bg-[length:24px_24px]">
         {rasterState.status === 'loading' && <div className="flex h-[460px] items-center justify-center text-sm text-[#64748b]" role="status">Đang tải bản đồ…</div>}
-        {rasterState.status === 'error' && <div className="flex h-[460px] flex-col items-center justify-center gap-3 px-5 text-center" role="alert"><p className="text-sm text-[#334155]">Không tải được ảnh đúng kích thước bản đồ. Tọa độ trong form vẫn được giữ.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setRasterState({ status: 'loading' }); setRetry((value) => value + 1) }}><RotateCcw size={14} aria-hidden="true" />Tải lại bản đồ</button></div>}
+        {rasterState.status === 'error' && <div className="flex h-[460px] flex-col items-center justify-center gap-3 px-3.5 text-center" role="alert"><p className="text-sm text-[#334155]">Không tải được ảnh đúng kích thước bản đồ. Tọa độ trong form vẫn được giữ.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setRasterState({ status: 'loading' }); setRetry((value) => value + 1) }}><RotateCcw size={14} aria-hidden="true" />Tải lại bản đồ</button></div>}
         {ready && <>
           <svg
             ref={svgRef}

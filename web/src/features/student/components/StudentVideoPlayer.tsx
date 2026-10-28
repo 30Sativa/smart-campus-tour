@@ -64,6 +64,11 @@ export function StudentVideoPlayer({
   const questWaiting = questUrl && questStatus !== 'live' && !degraded ? questStatus : null
   const noSource = !questUrl && !streamUrl
 
+  // SRS v0.2: during fallback the live audio is muted; the fallback video carries the sound.
+  useEffect(() => {
+    if (degraded && videoRef.current) videoRef.current.muted = true
+  }, [degraded])
+
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -129,7 +134,7 @@ export function StudentVideoPlayer({
         loop={!questUrl}
         playsInline
         autoPlay
-        muted={audioMuted}
+        muted={audioMuted || degraded}
       />
       {degraded && (
         <video

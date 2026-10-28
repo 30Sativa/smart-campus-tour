@@ -46,7 +46,7 @@ export default function StaffManagePoisPage() {
   return (
     <AdminPage>
       <PageHeader
-        eyebrow="Danh mục POI"
+        eyebrow="Chuẩn bị Tour · POI"
         title="Quản lý POI"
         description="Tạo và cập nhật điểm tham quan. POI giữ nguyên mã định danh khi đổi nội dung hoặc pose."
         action={<Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo POI</Link>}
@@ -79,7 +79,7 @@ export default function StaffManagePoisPage() {
           </div>
 
           {pois.isPending ? (
-            <div className="space-y-2 p-5" aria-busy="true" aria-label="Đang tải danh sách POI">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-12 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" />)}</div>
+            <div className="space-y-2 p-4" aria-busy="true" aria-label="Đang tải danh sách POI">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-12 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" />)}</div>
           ) : pageData?.data.length === 0 ? (
             <EmptyState
               title={debouncedSearch || activeFilter !== 'all' ? 'Không tìm thấy POI phù hợp' : 'Chưa có POI nào'}

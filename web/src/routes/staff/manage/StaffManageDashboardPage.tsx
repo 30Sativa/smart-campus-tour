@@ -62,8 +62,8 @@ export default function StaffManageDashboardPage() {
 
   return (
     <AdminPage>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-[28px] font-bold tracking-[-0.03em] text-[#111827] sm:text-[30px]">Tổng quan chuẩn bị</h1>
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-[20px] leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-xl">Tổng quan chuẩn bị</h1>
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden h-9 items-center gap-2 rounded-lg bg-white px-3 text-[12.5px] font-medium text-[#374151] shadow-[0_0_0_1px_#e5e7eb] sm:inline-flex"><CalendarDays size={15} className="text-[#9ca3af]" aria-hidden="true" />{dmy(startOfDay(0))} – {dmy(end)}</span>
           <Link to="/staff/manage/registrations/pending" className={buttonClass('secondary')}><ClipboardCheck size={16} aria-hidden="true" />Duyệt đăng ký{kpi.pending ? ` · ${kpi.pending}` : ''}</Link>
@@ -74,24 +74,24 @@ export default function StaffManageDashboardPage() {
       {failed ? (
         <AdminErrorPanel title="Không thể tải số liệu tổng quan." onRetry={() => { void tours.refetch(); void regs.refetch() }} />
       ) : loading ? (
-        <div className="grid gap-5" aria-busy="true" aria-label="Đang tải tổng quan">
-          <div className="grid gap-5 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="h-[190px] animate-pulse rounded-xl bg-[#eceef1] motion-reduce:animate-none" />)}</div>
-          <div className="grid gap-5 lg:grid-cols-2">{[0, 1].map((i) => <div key={i} className="h-[330px] animate-pulse rounded-xl bg-[#eceef1] motion-reduce:animate-none" />)}</div>
+        <div className="grid gap-3" aria-busy="true" aria-label="Đang tải tổng quan">
+          <div className="grid gap-3 md:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="h-[190px] animate-pulse rounded-xl bg-[#eceef1] motion-reduce:animate-none" />)}</div>
+          <div className="grid gap-3 lg:grid-cols-2">{[0, 1].map((i) => <div key={i} className="h-[330px] animate-pulse rounded-xl bg-[#eceef1] motion-reduce:animate-none" />)}</div>
         </div>
       ) : (
         <>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard title="Tour sắp tới" to="/staff/manage/tours?state=Scheduled" label="7 ngày tới" value={kpi.soon} unit="Tour" series={kpi.soonSeries} note="Đường: số Tour mỗi ngày, 14 ngày tới" />
             <KpiCard title="Học sinh đã duyệt" to="/staff/manage/registrations?state=APPROVED" label="Tour đang mở" value={kpi.students} unit="học sinh" series={kpi.studentSeries} note="Đường: học sinh được duyệt, 14 ngày qua" />
             <KpiCard title="Đoàn chờ duyệt" to="/staff/manage/registrations/pending" label="Cần Staff quyết định" value={kpi.pending} unit="đoàn" series={kpi.pendingSeries} note="Đường: đăng ký mới mỗi ngày, 14 ngày qua" />
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
             <StudentsByTour tours={T} registrations={R} now={now} />
             <StudentsPerDay tours={T} registrations={R} />
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <ToursByState tours={T} />
             <section className={cardClass} aria-labelledby="dash-upcoming">
               <CardHead id="dash-upcoming" title="Tour sắp diễn ra"><Link to="/staff/manage/tours" className={buttonClass('ghost', 'sm')}>Tất cả Tour<ChevronRight size={14} aria-hidden="true" /></Link></CardHead>
@@ -99,7 +99,7 @@ export default function StaffManageDashboardPage() {
             </section>
           </div>
 
-          <div className="mt-5"><RegistrationFunnel registrations={R} /></div>
+          <div className="mt-3"><RegistrationFunnel registrations={R} /></div>
         </>
       )}
       <RegistrationReviewDrawer registrationId={reviewId} onClose={close} />
@@ -112,7 +112,7 @@ function UpcomingTable({ tours, registrations }: { tours: AdminTour[]; registrat
     <div className="overflow-x-auto px-3.5 pb-2">
       <table className="w-full min-w-[620px] text-left text-[13px]" aria-label="Tour sắp diễn ra">
         <thead>
-          <tr className="text-[10.5px] font-semibold tracking-[0.06em] text-[#9ca3af] uppercase">
+          <tr className="text-[11.5px] font-medium text-[#9ca3af]">
             <th scope="col" className="rounded-l-md bg-[#f9fafb] px-3 py-2.5 font-semibold">Tour</th>
             <th scope="col" className="bg-[#f9fafb] px-3 py-2.5 text-center font-semibold">Thời gian</th>
             <th scope="col" className="bg-[#f9fafb] px-3 py-2.5 text-center font-semibold">Đoàn duyệt</th>

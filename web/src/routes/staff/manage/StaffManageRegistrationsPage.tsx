@@ -37,7 +37,7 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
   const rows = query.data?.data ?? []
   const total = query.data?.pagination.totalItems ?? 0
   return <AdminPage>
-    <PageHeader eyebrow="Đăng ký đoàn" title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
+    <PageHeader eyebrow="Chuẩn bị Tour · Đăng ký đoàn" title={mode === 'pending' ? 'Đăng ký chờ duyệt' : 'Tất cả đăng ký'}
       description="Xem đăng ký từ đại diện và xét duyệt khi Tour còn nhận đăng ký. Mỗi quyết định được lưu cùng lịch sử thao tác." />
     <section className={cardClass} aria-label="Danh sách đăng ký">
       <div className="space-y-3 border-b border-slate-100 p-4">
@@ -52,8 +52,8 @@ export default function StaffManageRegistrationsPage({ mode }: { mode: 'pending'
         {mode === 'all' && <StageTabs<RegistrationState | 'all'> label="Lọc trạng thái đăng ký" value={state ?? 'all'} onChange={value => update({ state: value === 'all' ? null : value })}
           stages={[{ key: 'all', label: 'Tất cả', color: STATE_COLOR.all }, ...REGISTRATION_STATES.map(key => ({ key, label: REGISTRATION_STATE_LABEL[key].label, color: STATE_COLOR[key], separated: key === 'REJECTED' }))]} />}
       </div>
-      {invalidRange ? <div className="p-5"><Notice tone="warn">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</Notice></div>
-        : query.isError ? <div className="p-5"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
+      {invalidRange ? <div className="p-4"><Notice tone="warn">Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.</Notice></div>
+        : query.isError ? <div className="p-4"><AdminErrorPanel title="Không thể tải danh sách đăng ký." onRetry={() => void query.refetch()} /></div>
         : query.isLoading ? <SkeletonRows rows={5} label="Đang tải đăng ký" /> : rows.length === 0 ? <EmptyState title="Không có đăng ký khớp bộ lọc." action={page > 1 ? <button className={buttonClass('secondary', 'sm')} onClick={() => update({ page: null })}>Về trang đầu</button> : undefined} />
           : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm" aria-label="Đăng ký từ đại diện">
             <thead className="bg-slate-50 text-xs text-slate-500"><tr>{['Đoàn / Trường', 'Tour', 'Đại diện', 'Dòng lời mời', 'Trạng thái', ''].map((label, i) => <th key={i} scope="col" className="px-4 py-3">{label}</th>)}</tr></thead>

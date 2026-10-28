@@ -9,7 +9,8 @@ describe('administration navigation', () => {
 
   it.each([
     ['/admin/accounts', '/admin/accounts'],
-    ['/admin/roles', null],
+    ['/admin/roles', '/admin/roles'],
+    ['/staff', '/staff'],
     ['/admin', null],
   ])('lights the right entry for %s', (path, expected) => {
     expect(adminActivePath(path)).toBe(expected)

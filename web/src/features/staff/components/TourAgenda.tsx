@@ -56,7 +56,7 @@ export function TourAgenda({ tours, now, selectedId, onSelect, showNow, label }:
         const hint = timeHint(tour, now)
         return [
           index === nowIndex ? (
-            <li key="now" aria-label={`Bây giờ ${clockLabel(minuteOfDay(now))}`} className="flex items-center gap-2.5 py-2 pr-2 pl-[86px] text-[11.5px] font-extrabold text-[#0f172a] max-sm:pl-[66px]">
+            <li key="now" aria-label={`Bây giờ ${clockLabel(minuteOfDay(now))}`} className="flex items-center gap-2.5 py-2 pr-2 pl-[86px] text-[11.5px] font-bold text-[#0f172a] max-sm:pl-[66px]">
               <span aria-hidden="true" className="-ml-[5px] size-[9px] shrink-0 rounded-full bg-[#0f172a]" />
               Bây giờ · {clockLabel(minuteOfDay(now))}
               <span aria-hidden="true" className="h-0.5 flex-1 rounded-full bg-[#0f172a]/85" />
@@ -72,7 +72,7 @@ export function TourAgenda({ tours, now, selectedId, onSelect, showNow, label }:
               }`}
             >
               <span>
-                <span className="block text-[17px] leading-tight font-extrabold text-[#0f172a] tabular-nums max-sm:text-[15px]">{formatTime(tour.scheduledAt)}</span>
+                <span className="block text-[17px] leading-tight font-bold text-[#0f172a] tabular-nums max-sm:text-[15px]">{formatTime(tour.scheduledAt)}</span>
                 {hint && <span className="mt-1 block text-[11px] text-[#94a3b8]">{hint}</span>}
               </span>
               <span className="relative flex justify-center" aria-hidden="true">
@@ -87,7 +87,7 @@ export function TourAgenda({ tours, now, selectedId, onSelect, showNow, label }:
                   <span className="rounded-md bg-[#eff6ff] px-1.5 py-px font-mono text-[11.5px] font-bold text-[#2563eb]">{tour.code}</span>
                   <TourStateBadges tour={tour} />
                 </span>
-                <span className="mt-1.5 block text-[15px] font-extrabold text-[#0f172a]">{tour.name}</span>
+                <span className="mt-1.5 block text-[15px] font-bold text-[#0f172a]">{tour.name}</span>
                 <span className="mt-0.5 block truncate text-[12.5px] text-[#64748b]">
                   {tour.routeName} · {tour.stops.length} POI · {groups.groups} đoàn · {groups.students} học sinh
                   {tour.robotName ? ` · ${tour.robotName}` : ''}

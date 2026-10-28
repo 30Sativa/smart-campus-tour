@@ -133,9 +133,7 @@ export function StudentInvitationPage({ tourId }: { tourId: string }) {
         intro={`${sessionLabel}. Khi nhân viên vận hành bắt đầu buổi tham quan, trang này sẽ tự chuyển sang buổi tham quan trực tiếp. Mã còn hạn tới ${date(info.invitationExpiresAt)}.`}
         meta={`${info.tourName} • Giờ dự kiến ${date(info.scheduledStartAt)}`}
         showMicCheck={false}
-      >
-        <FallbackVideoLink url={fallback} />
-      </StudentWaitingRoom>
+      />
       <div className="st-ctn st-invitation-status">{status}</div>
     </>
   }

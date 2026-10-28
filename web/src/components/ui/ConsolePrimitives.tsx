@@ -7,19 +7,20 @@ import { buttonClass, inputClass } from './ui-classes'
 
 
 export const panelClass =
-  'overflow-hidden rounded-[18px] border border-[var(--ops-border,#d9e9f5)] bg-white shadow-[0_12px_32px_-30px_#285c7d] transition-[box-shadow,border-color] duration-200'
+  'overflow-hidden rounded-xl border border-[#e2e8f0] bg-white transition-[box-shadow,border-color] duration-200'
 
 
 
 /**
- * The page's own heading. Eyebrow, title and supporting line each say something new.
+ * The page's own heading, kept to a few lines so the work starts high on the
+ * screen: a short context line, the title, one supporting sentence, and the
+ * page's actions on the right. `scale` is kept for callers; both read the same.
  */
 export function PageHeader({
   eyebrow,
   title,
   description,
   action,
-  scale = 'default',
 }: {
   eyebrow: string
   title: string
@@ -27,25 +28,14 @@ export function PageHeader({
   action?: ReactNode
   scale?: 'default' | 'console'
 }) {
-  const console_ = scale === 'console'
   return (
-    <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${console_ ? 'mb-7' : 'mb-6'}`}>
-      <div>
-        <p className={`font-bold tracking-[0.15em] text-[#4388b4] uppercase ${console_ ? 'text-xs' : 'text-[11px]'}`}>
-          {eyebrow}
-        </p>
-        <h1
-          className={`mt-1.5 font-bold tracking-[-0.055em] text-[#123a59] ${
-            console_ ? 'text-[30px] leading-[1.15] sm:text-[38px] lg:text-[42px]' : 'text-[28px] sm:text-[34px]'
-          }`}
-        >
-          {title}
-        </h1>
-        <p className={`mt-1.5 max-w-3xl text-[#738da2] ${console_ ? 'text-sm sm:text-[15px] leading-relaxed' : 'text-sm leading-6'}`}>
-          {description}
-        </p>
+    <header className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-[#2d719e]">{eyebrow}</p>
+        <h1 className="mt-0.5 text-[22px] leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-2xl">{title}</h1>
+        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-[#64748b]">{description}</p>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </header>
   )
 }
@@ -55,10 +45,10 @@ export function PageHeader({
 export function LoadingPanel({ label = 'Đang tải dữ liệu vận hành…' }: { label?: string }) {
   return (
     <div
-      className={`${panelClass} flex min-h-60 items-center justify-center gap-3 p-8 text-sm font-semibold text-[#64748b]`}
+      className={`${panelClass} flex min-h-40 items-center justify-center gap-2.5 p-6 text-[13px] font-semibold text-[#64748b]`}
       aria-busy="true"
     >
-      <LoaderCircle className="animate-spin text-[#2563eb]" size={20} />
+      <LoaderCircle className="animate-spin text-[#2d719e]" size={18} />
       {label}
     </div>
   )
@@ -70,7 +60,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-[#64748b]">{label}</dt>
-      <dd className="mt-1 text-sm font-semibold break-words text-[#0f172a]">{children}</dd>
+      <dd className="mt-0.5 text-[13px] font-semibold break-words text-[#0f172a]">{children}</dd>
     </div>
   )
 }
@@ -89,24 +79,24 @@ export function FilterChips<T extends string>({
   label: string
 }) {
   return (
-    <div role="group" aria-label={label} className="flex gap-1.5 overflow-x-auto py-1">
+    <div role="group" aria-label={label} className="flex gap-1.5 overflow-x-auto py-0.5">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
-          className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold transition-[background-color,color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] ${
+          className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition-[background-color,color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${
             value === option.value
-              ? 'bg-[#0f172a] text-white shadow-xs'
-              : 'bg-white text-[#64748b] border border-[#e2e8f0] hover:text-[#0f172a] hover:border-[#cbd5e1]'
+              ? 'border-[#173b59] bg-[#173b59] text-white'
+              : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1] hover:text-[#0f172a]'
           }`}
         >
           {option.label}
           {option.count != null && (
             <span
-              className={`rounded-md px-1.5 text-[11px] font-semibold tabular-nums ${
-                value === option.value ? 'bg-white/20 text-white' : 'bg-[#f1f5f9] text-[#64748b]'
+              className={`text-[11px] font-semibold tabular-nums ${
+                value === option.value ? 'text-white/80' : 'text-[#94a3b8]'
               }`}
             >
               {option.count}
@@ -138,23 +128,23 @@ export function SummaryTile({
   const body = (
     <>
       <span
-        className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]"
+        className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f1f8fe] text-[#2d719e]"
         aria-hidden="true"
       >
-        <Icon size={20} strokeWidth={2} />
+        <Icon size={16} strokeWidth={2} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-2xl font-black tracking-tight text-[#0f172a] tabular-nums leading-none">
+        <span className="block text-xl leading-tight font-bold tracking-[-0.01em] text-[#0f172a] tabular-nums">
           {value}
         </span>
-        <span className="mt-1.5 block truncate text-xs font-bold text-[#64748b]">{label}</span>
-        {hint && <span className="mt-0.5 block text-[11px] leading-4 text-[#94a3b8]">{hint}</span>}
+        <span className="block truncate text-[11.5px] text-[#64748b]">{label}</span>
+        {hint && <span className="block text-[11px] leading-4 text-[#94a3b8]">{hint}</span>}
       </span>
     </>
   )
 
   const shape =
-    'flex items-center gap-3.5 rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200'
+    'flex items-center gap-3 rounded-xl border bg-white px-3.5 py-2.5 text-left transition-colors duration-200'
 
   if (!onSelect) return <div className={`${shape} border-[#e2e8f0]`}>{body}</div>
 
@@ -165,7 +155,7 @@ export function SummaryTile({
       aria-pressed={selected}
       className={`${shape} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${
         selected
-          ? 'border-[#2563eb] bg-[#f8fafc] ring-1 ring-[#2563eb]'
+          ? 'border-[#2d719e] bg-[#f1f8fe] ring-1 ring-[#2d719e]'
           : 'border-[#e2e8f0] hover:border-[#cbd5e1] hover:bg-[#f8fafc]'
       }`}
     >
@@ -179,10 +169,10 @@ export function SummaryTile({
 export function CellIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
     <span
-      className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#eff6ff] text-[#2563eb]"
+      className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#f1f8fe] text-[#2d719e]"
       aria-hidden="true"
     >
-      <Icon size={16} strokeWidth={2} />
+      <Icon size={15} strokeWidth={2} />
     </span>
   )
 }
@@ -199,10 +189,10 @@ export function PanelHead({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f1f5f9] px-5 py-3.5">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eef1f4] px-3.5 py-2.5">
       <div className="min-w-0">
-        <h2 className="font-bold text-sm text-[#0f172a]">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-[#64748b]">{description}</p>}
+        <h2 className="text-[13px] font-semibold text-[#0f172a]">{title}</h2>
+        {description && <p className="text-[11.5px] text-[#64748b]">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -214,14 +204,14 @@ export function PanelHead({
 export function PageSkeleton() {
   return (
     <div
-      className="flex flex-1 items-start justify-center bg-[#f8fafc] p-8"
+      className="flex flex-1 items-start justify-center bg-[#f6f7f9] px-4 py-5 lg:px-8"
       aria-busy="true"
       aria-label="Đang tải trang"
     >
       <div className="w-full max-w-[1500px] space-y-4">
-        <div className="h-14 max-w-md animate-pulse rounded-2xl bg-[#e2e8f0]" />
-        <div className="h-24 animate-pulse rounded-2xl bg-[#e2e8f0]" />
-        <div className="h-72 animate-pulse rounded-2xl bg-[#e2e8f0]" />
+        <div className="h-12 max-w-md animate-pulse rounded-xl bg-[#e2e8f0]" />
+        <div className="h-16 animate-pulse rounded-xl bg-[#e2e8f0]" />
+        <div className="h-72 animate-pulse rounded-xl bg-[#e2e8f0]" />
       </div>
     </div>
   )
@@ -244,20 +234,21 @@ export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: st
   const active = tone && typeof value === 'number' && value > 0
   const body = (
     <>
-      <span className={`flex items-center gap-1.5 text-xs font-medium ${active ? STAT_TONE[tone] : 'text-[#64748b]'}`}><Icon size={14} aria-hidden="true" />{label}</span>
-      <span className={`mt-1.5 block text-[28px] leading-none font-bold tracking-tight tabular-nums transition-colors duration-300 ${active ? STAT_TONE[tone] : 'text-[#0f172a]'}`}>{value}</span>
-      {hint && <span className="mt-1.5 block truncate text-xs text-[#94a3b8]">{hint}</span>}
+      <span className={`flex items-center gap-1.5 text-[11.5px] ${active ? STAT_TONE[tone] : 'text-[#64748b]'}`}><Icon size={13} aria-hidden="true" />{label}</span>
+      <span className={`block text-xl leading-tight font-bold tracking-[-0.01em] tabular-nums transition-colors duration-300 ${active ? STAT_TONE[tone] : 'text-[#0f172a]'}`}>{value}</span>
+      {hint && <span className="block truncate text-[11.5px] text-[#94a3b8]">{hint}</span>}
     </>
   )
-  const shape = 'block rounded-2xl border border-[#d9e9f5] bg-white px-4 py-4 shadow-[0_12px_32px_-30px_#285c7d]'
+  const shape = 'block min-w-0 bg-white px-3.5 py-2.5'
   if (!to) return <div className={shape}>{body}</div>
-  return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#f8fafc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]`}>{body}</Link>
+  return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9]`}>{body}</Link>
 }
 
 
 
 export function StatStrip({ label, children, columns = 'sm:grid-cols-3 xl:grid-cols-6' }: { label: string; children: ReactNode; columns?: string }) {
-  return <section aria-label={label} className={`grid grid-cols-2 gap-3 ${columns}`}>{children}</section>
+  // One panel, cells split by hairlines: the eye reads the row as one line of figures.
+  return <section aria-label={label} className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[#e2e8f0] bg-[#eef1f4] ${columns}`}>{children}</section>
 }
 
 
@@ -265,10 +256,10 @@ export function StatStrip({ label, children, columns = 'sm:grid-cols-3 xl:grid-c
 /** A section title that sits above its panel, so the panel itself carries no header chrome. */
 export function SectionHeading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
   return (
-    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+    <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <h2 className="text-base font-semibold tracking-[-0.015em] text-[#0f172a]">{title}</h2>
-        {note && <p className="truncate text-[13px] text-[#94a3b8]">{note}</p>}
+        <h2 className="text-sm font-semibold tracking-[-0.01em] text-[#0f172a]">{title}</h2>
+        {note && <p className="truncate text-xs text-[#94a3b8]">{note}</p>}
       </div>
       {action}
     </div>
@@ -282,8 +273,8 @@ export function SearchField({ value, onChange, placeholder, label, className = '
   return (
     <label className={`relative block ${className}`}>
       <span className="sr-only">{label}</span>
-      <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#94a3b8]" aria-hidden="true" />
-      <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={`${inputClass} pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden`} />
+      <Search size={14} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[#94a3b8]" aria-hidden="true" />
+      <input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={`${inputClass} pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden`} />
       {value && (
         <button type="button" onClick={() => onChange('')} aria-label="Xóa tìm kiếm" className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] hover:text-[#1e293b]">
           <X size={14} aria-hidden="true" />
@@ -316,12 +307,12 @@ export function Pagination({ page, pageCount, total, pageSize, onPage, label }: 
   const from = (page - 1) * pageSize + 1
   const to = Math.min(total, page * pageSize)
   return (
-    <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f1f5f9] px-4 py-3">
-      <p className="text-[13px] text-[#64748b]"><span className="font-semibold text-[#1e293b] tabular-nums">{from}-{to}</span> trên <span className="tabular-nums">{total}</span></p>
+    <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eef1f4] px-3 py-2">
+      <p className="text-xs text-[#64748b]"><span className="font-semibold text-[#1e293b] tabular-nums">{from}-{to}</span> trên <span className="tabular-nums">{total}</span></p>
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} className={buttonClass('ghost', 'sm')} aria-label="Trang trước"><ChevronLeft size={16} aria-hidden="true" /></button>
         {pageWindow(page, pageCount).map((n, i) => n == null ? <span key={`gap-${i}`} className="px-1 text-[13px] text-[#94a3b8]" aria-hidden="true">…</span> : (
-          <button key={n} type="button" onClick={() => onPage(n)} aria-current={n === page ? 'page' : undefined} className={`grid size-9 place-items-center rounded-lg text-[13px] font-medium tabular-nums transition-colors ${n === page ? 'bg-[#0f172a] text-white' : 'text-[#475569] hover:bg-[#f1f5f9]'}`}>{n}</button>
+          <button key={n} type="button" onClick={() => onPage(n)} aria-current={n === page ? 'page' : undefined} className={`grid size-7 place-items-center rounded-[7px] border text-xs font-medium tabular-nums transition-colors ${n === page ? 'border-[#173b59] bg-[#173b59] text-white' : 'border-[#e2e8f0] bg-white text-[#475569] hover:bg-[#f1f5f9]'}`}>{n}</button>
         ))}
         <button type="button" onClick={() => onPage(page + 1)} disabled={page >= pageCount} className={buttonClass('ghost', 'sm')} aria-label="Trang sau"><ChevronRight size={16} aria-hidden="true" /></button>
       </div>

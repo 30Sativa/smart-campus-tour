@@ -29,7 +29,7 @@ export default function TourHistoryPage() {
   return (
     <StaffPage>
       <PageHeader
-        eyebrow="Báo cáo & Lịch sử"
+        eyebrow="Lịch sử"
         title="Lịch sử tour"
         description="Lịch sử các buổi tham quan từ xa trước đây. Xem lộ trình thực tế, các mốc thời gian và nhật ký can thiệp kỹ thuật."
       />
@@ -40,22 +40,22 @@ export default function TourHistoryPage() {
         <StatTile icon={CircleX} label="Kết thúc sớm / hủy" value={cancelled} tone={cancelled ? 'danger' : undefined} />
       </StatStrip>
 
-      <section className={`${panelClass} mt-6`} aria-label="Lịch sử tour">
-        <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className={`${panelClass} mt-4`} aria-label="Lịch sử tour">
+        <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách tour lưu trữ</h2>
           <SearchField value={search} onChange={setSearch} label="Tìm kiếm lịch sử" placeholder="Tìm theo buổi, mã, tuyến hoặc trường…" className="w-full sm:w-72" />
         </div>
 
         {tours.isPending ? (
-          <div className="p-5">
+          <div className="p-4">
             <LoadingPanel />
           </div>
         ) : tours.isError ? (
-          <div className="p-5">
+          <div className="p-4">
             <ErrorPanel error={tours.error} onRetry={tours.refetch} />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-5">
+          <div className="p-4">
             <EmptyPanel>
               {search.trim() ? 'Không tìm thấy tour nào phù hợp với từ khóa.' : 'Chưa có tour nào trong lịch sử.'}
             </EmptyPanel>

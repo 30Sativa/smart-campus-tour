@@ -19,7 +19,7 @@ export default function StaffManageTourListPage() {
   const term = useDebouncedValue(search, 300)
   const tours = useTours({ search: term, state: state || undefined, page, size: PAGE_SIZE })
   return <AdminPage>
-    <PageHeader eyebrow="Tour" title="Quản lý Tour" description="Tạo Tour từ tuyến khả dụng để đại diện trường đăng ký đoàn. Tour đang diễn ra và đã kết thúc chỉ xem."
+    <PageHeader eyebrow="Chuẩn bị Tour" title="Quản lý Tour" description="Tạo Tour từ tuyến khả dụng để đại diện trường đăng ký đoàn. Tour đang diễn ra và đã kết thúc chỉ xem."
       action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo Tour mới</Link>} />
     <section className={panelClass} aria-label="Danh sách Tour">
       <div className="flex flex-wrap gap-3 border-b border-[#e2e8f0] p-4">
@@ -32,7 +32,7 @@ export default function StaffManageTourListPage() {
       {tours.isError ? <AdminErrorPanel title={tourError(tours.error)} onRetry={() => void tours.refetch()} /> : tours.isPending ? <SkeletonRows rows={4} label="Đang tải danh sách Tour" /> : tours.data.data.length === 0 ?
         <EmptyState title="Chưa có Tour phù hợp" description="Tạo Tour mới từ một tuyến khả dụng hoặc đổi bộ lọc." /> :
         <ul className="divide-y divide-[#e2e8f0]">{tours.data.data.map(tour => <li key={tour.id}>
-          <Link to={`/staff/manage/tours/${tour.id}`} className="flex flex-wrap items-center justify-between gap-3 p-5 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
+          <Link to={`/staff/manage/tours/${tour.id}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
             <div><p className="text-[15px] font-semibold text-[#173b59]">{tour.name}</p><p className="mt-1 text-sm text-[#64748b]">{formatSlot(tour.scheduledStartAt)} · {tour.routeName} · {tour.registrationCount} đoàn đăng ký</p></div>
             <span className="rounded-full border border-[#d9e9f5] px-3 py-1 text-xs">{TOUR_STATE_LABEL[tour.state]}</span>
           </Link>

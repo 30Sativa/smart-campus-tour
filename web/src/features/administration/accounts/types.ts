@@ -1,4 +1,5 @@
-export type AccountRole = 'Admin' | 'Staff' | 'Representative'
+/** Application roles as the account API returns them (ADR-0020: TechnicalStaff added). */
+export type AccountRole = 'Admin' | 'Staff' | 'TechnicalStaff' | 'Representative'
 export type CreatableAccountRole = Exclude<AccountRole, 'Admin'>
 
 export type AccountListItem = {
