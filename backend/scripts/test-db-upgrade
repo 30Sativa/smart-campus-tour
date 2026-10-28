@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Disposable Docker test of the real DB tool upgrade path (deploy/upgrade-db.sh inside the DB tool image).
+# Never targets the production Compose project. From repo root: bash backend/scripts/test-db-upgrade
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+for tool in docker openssl; do
+  command -v "$tool" >/dev/null || { echo "Required tool: $tool" >&2; exit 1; }
+done
+docker info >/dev/null
+
+db_init_image=${DB_INIT_IMAGE:-campustour-db-init:upgrade-test}
+sqlserver_image=${SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04}
+name="campustour-upgrade-test-$(date +%s)-$$"
+[[ "$name" =~ ^campustour-upgrade-test-[0-9]+-[0-9]+$ ]] || { echo 'Unsafe disposable resource name.' >&2; exit 1; }
+scratch=$(mktemp -d)
+cleanup() {
+  docker rm -f "$name-sql" >/dev/null 2>&1 || true
+  docker network rm "$name" >/dev/null 2>&1 || true
+  rm -rf "$scratch"
+}
+trap cleanup EXIT
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+export SQLCMDPASSWORD="Aa1!$(openssl rand -hex 24)"
+app_password="Aa1!$(openssl rand -hex 24)"
+
+if [[ ${DEPLOYMENT_TEST_BUILD_IMAGES:-true} == true ]]; then
+  docker build --pull --build-arg "SQLSERVER_IMAGE=$sqlserver_image" --tag "$db_init_image" --file backend/Dockerfile.db-init backend
+else
+  docker image inspect "$db_init_image" >/dev/null
+fi
+
+docker network create "$name" >/dev/null
+docker run -d --name "$name-sql" --network "$name" --network-alias sqlserver \
+  -e ACCEPT_EULA=Y -e MSSQL_PID=Express -e "MSSQL_SA_PASSWORD=$SQLCMDPASSWORD" "$sqlserver_image" >/dev/null
+
+# The DB tool runs with the same hardening as docker-compose.db-init.yml.
+tool() {
+  docker run --rm -i --network "$name" --read-only --tmpfs /tmp:size=16m,mode=1777 --cap-drop ALL \
+    --security-opt no-new-privileges:true -e SQLCMDPASSWORD "$@"
+}
+sql() { tool --entrypoint /opt/mssql-tools18/bin/sqlcmd "$db_init_image" -S sqlserver -U sa -C -b -l 30 -r 1 "$@"; }
+query() { sql -d SmartCampusTourV11 -h -1 -W -Q "SET NOCOUNT ON; $1" | tr -d '\r'; }
+# Exactly the invocation used by deploy/upgrade-db-schema-ec2.sh; extra docker args inject test faults.
+upgrade() { tool "$@" --entrypoint /bin/bash "$db_init_image" /deployment/upgrade-db.sh --upgrade-to-v1.4; }
+check_only() { tool --entrypoint /bin/bash "$db_init_image" /deployment/init-db.sh --check-only; }
+
+for attempt in $(seq 1 60); do
+  sql -d master -Q 'SELECT 1' >/dev/null 2>&1 && break
+  [[ $attempt == 60 ]] && fail 'SQL Server did not answer within 120 seconds.'
+  sleep 2
+done
+
+# Supported baseline: the recognized v1.1 snapshot with its runtime login, role and business data.
+v11_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.1.sql | sha256sum | cut -d ' ' -f 1")
+[[ "$v11_hash" == 96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68 ]] || fail 'Unexpected v1.1 snapshot hash.'
+sql -d master <<SQL
+SET NOCOUNT ON;
+CREATE DATABASE SmartCampusTourV11;
+GO
+CREATE LOGIN smartcampus_api WITH PASSWORD=N'$app_password', CHECK_POLICY=ON;
+GO
+SQL
+sql -d SmartCampusTourV11 <<SQL
+:r /database/smart-campus-tour-schema-v1.1.sql
+:r /database/smart-campus-tour-permissions.sql
+SET NOCOUNT ON;
+CREATE USER smartcampus_api FOR LOGIN smartcampus_api;
+ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;
+EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$v11_hash';
+DECLARE @now datetimeoffset(3) = '2026-10-01T00:00:00+00:00';
+INSERT dbo.Users (Id, Username, NormalizedUsername, PasswordHash, FullName, IsActive, CreatedAt) VALUES
+  ('10000000-0000-0000-0000-000000000001', N'upgrade.admin', N'UPGRADE.ADMIN', N'hash-admin', N'Upgrade Admin', 1, @now),
+  ('10000000-0000-0000-0000-000000000002', N'upgrade.rep', N'UPGRADE.REP', N'hash-rep', N'Upgrade Rep', 1, @now);
+INSERT dbo.UserRoles (UserId, Role) VALUES
+  ('10000000-0000-0000-0000-000000000001', 'ADMIN'), ('10000000-0000-0000-0000-000000000002', 'SCHOOL_REPRESENTATIVE');
+INSERT dbo.Routes (Id, Name, MapKey, MapFrame, StartX, StartY, StartYaw, EndMode, IsActive, CreatedAt) VALUES
+  ('20000000-0000-0000-0000-000000000001', N'Upgrade route', N'demo', N'map', 0, 0, 0, 'LAST_POI', 1, @now);
+INSERT dbo.Pois (Id, Name, MapKey, MapFrame, X, Y, Yaw, NarrationText, IsActive, CreatedAt) VALUES
+  ('30000000-0000-0000-0000-000000000001', N'Upgrade POI', N'demo', N'map', 1.5, 2.5, 0.5, N'Narration kept', 1, @now);
+INSERT dbo.RouteStops (Id, RouteId, PoiId, StopOrder, DwellSeconds, HeadStepsJson) VALUES
+  ('40000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 1, 30, N'[]');
+INSERT dbo.Tours (Id, Name, RouteId, ActiveRouteId, ScheduledStartAt, State, IsHeld, CreatedByUserId, CreatedAt) VALUES
+  ('50000000-0000-0000-0000-000000000001', N'Upgrade tour', '20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001',
+   '2026-12-01T02:00:00+00:00', 'SCHEDULED', 0, '10000000-0000-0000-0000-000000000001', @now);
+INSERT dbo.GroupRegistrations (Id, TourId, RepresentativeUserId, SchoolName, GroupName, ContactName, ContactEmail, State,
+  ReviewedByUserId, ReviewedAt, SubmittedAt, CreatedAt) VALUES
+  ('60000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+   N'School', N'Approved group', N'Contact', N'contact@example.test', 'APPROVED', '10000000-0000-0000-0000-000000000001', @now, @now, @now),
+  ('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+   N'School', N'Submitted group', N'Contact', N'contact@example.test', 'SUBMITTED', NULL, NULL, @now, @now);
+INSERT dbo.RosterRows (Id, RegistrationId, RowNumber, RowType, DisplayName, Email, IsActive, CreatedAt) VALUES
+  ('70000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', 2, 'INDIVIDUAL', N'Viewer A', N'a@example.test', 1, @now),
+  ('70000000-0000-0000-0000-000000000002', '60000000-0000-0000-0000-000000000002', 2, 'SHARED_VIEWING', N'Room B', N'b@example.test', 1, @now);
+GO
+SQL
+
+# Business data present in the v1.1 baseline, by its original columns (new v1.4 columns are excluded).
+baseline_data() {
+  query "SELECT CONVERT(varchar(64), HASHBYTES('SHA2_256', CONCAT(
+    (SELECT Id, Username, NormalizedUsername, PasswordHash, FullName, IsActive, CreatedAt, UpdatedAt FROM dbo.Users ORDER BY Id FOR JSON PATH),
+    (SELECT UserId, Role FROM dbo.UserRoles ORDER BY UserId, Role FOR JSON PATH),
+    (SELECT Id, Name, MapKey, MapFrame, StartX, StartY, StartYaw, EndMode, IsActive, CreatedAt FROM dbo.Routes ORDER BY Id FOR JSON PATH),
+    (SELECT Id, Name, MapKey, MapFrame, X, Y, Yaw, NarrationText, IsActive, CreatedAt FROM dbo.Pois ORDER BY Id FOR JSON PATH),
+    (SELECT Id, RouteId, PoiId, StopOrder, DwellSeconds, HeadStepsJson FROM dbo.RouteStops ORDER BY Id FOR JSON PATH),
+    (SELECT Id, Name, RouteId, ActiveRouteId, ScheduledStartAt, State, CreatedByUserId, CreatedAt FROM dbo.Tours ORDER BY Id FOR JSON PATH),
+    (SELECT Id, TourId, RepresentativeUserId, GroupName, ContactEmail, State, ReviewedByUserId, ReviewedAt, SubmittedAt FROM dbo.GroupRegistrations ORDER BY Id FOR JSON PATH),
+    (SELECT Id, RegistrationId, RowNumber, RowType, DisplayName, Email, IsActive FROM dbo.RosterRows ORDER BY Id FOR JSON PATH))), 2);"
+}
+# Every row of every user table, including rowversions, so any UPDATE/INSERT/DELETE is visible.
+all_data() {
+  query "DECLARE @sql nvarchar(max) = (SELECT STRING_AGG(CONVERT(nvarchar(max),
+      N'SELECT N''' + name + N''' AS t, COUNT_BIG(*) AS n, CHECKSUM_AGG(BINARY_CHECKSUM(*)) AS c FROM dbo.' + QUOTENAME(name)), N' UNION ALL ')
+    FROM sys.tables WHERE is_ms_shipped = 0 AND schema_id = SCHEMA_ID(N'dbo')) + N' ORDER BY t;';
+    EXEC sys.sp_executesql @sql;"
+}
+markers() {
+  query "SELECT CONCAT(
+    CONVERT(nvarchar(32), (SELECT value FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion')), '|',
+    CONVERT(nvarchar(64), (SELECT value FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash')));"
+}
+runtime_can_read_email_changes() {
+  query "EXECUTE AS USER=N'smartcampus_api';
+    SELECT CONCAT(HAS_PERMS_BY_NAME(N'dbo.RosterEmailChangeRequests',N'OBJECT',N'SELECT'),
+      HAS_PERMS_BY_NAME(N'dbo.RosterEmailChangeRequests',N'OBJECT',N'UPDATE'),
+      HAS_PERMS_BY_NAME(N'dbo.RosterEmailChangeRequests',N'OBJECT',N'DELETE'));
+    REVERT;"
+}
+
+before=$(baseline_data)
+[[ $(markers) == "|$v11_hash" ]] || fail 'Baseline markers were not created as expected.'
+
+# 1. Fault after the v1.4 marker: the final runtime grant step fails, as a dropped connection or grant error would.
+printf "THROW 51090, 'Injected runtime grant failure after the v1.4 marker.', 1;\nGO\n" > "$scratch/failing-runtime-permissions.sql"
+chmod 0644 "$scratch/failing-runtime-permissions.sql"
+if upgrade -v "$scratch/failing-runtime-permissions.sql:/database/smart-campus-tour-runtime-permissions.sql:ro" > "$scratch/first.log" 2>&1; then
+  cat "$scratch/first.log" >&2
+  fail 'Upgrade succeeded although the runtime grant step failed.'
+fi
+grep -q 'Injected runtime grant failure' "$scratch/first.log" || { cat "$scratch/first.log" >&2; fail 'Upgrade failed for an unexpected reason.'; }
+upgraded_markers=$(markers)
+[[ "$upgraded_markers" == "1.4|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43" ]] ||
+  fail "Expected v1.4 marker with the retained upgrade snapshot hash, got $upgraded_markers."
+[[ $(baseline_data) == "$before" ]] || fail 'Upgrade changed baseline business data.'
+[[ $(runtime_can_read_email_changes) == 000 ]] || fail 'Fault injection did not leave runtime grants incomplete.'
+after_failure=$(all_data)
+# API deploy check stays read-only and refuses the incomplete grants.
+if check_only > "$scratch/check.log" 2>&1; then
+  fail 'Read-only check accepted incomplete runtime grants.'
+fi
+[[ $(all_data) == "$after_failure" && $(runtime_can_read_email_changes) == 000 ]] || fail 'Read-only check changed database state.'
+
+# 2. Rerun completes the missing grants without DDL/backfill and without changing data or markers.
+upgrade > "$scratch/second.log" 2>&1 || { cat "$scratch/second.log" >&2; fail 'Rerun did not complete the runtime grants.'; }
+grep -q 'completing runtime grants without DDL or backfill' "$scratch/second.log" || fail 'Rerun did not take the grant-completion path.'
+if grep -q 'Applying additive database patch: patches/' "$scratch/second.log"; then fail 'Rerun re-applied a schema patch.'; fi
+grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/second.log" || fail 'Rerun did not finish with the read-only compatibility check.'
+[[ $(runtime_can_read_email_changes) == 110 ]] || fail 'Runtime grants do not match the v1.4 email-change use case after rerun.'
+[[ $(markers) == "$upgraded_markers" ]] || fail 'Rerun changed the schema or snapshot markers.'
+[[ $(all_data) == "$after_failure" ]] || fail 'Rerun changed business data.'
+[[ $(baseline_data) == "$before" ]] || fail 'Rerun changed baseline business data.'
+
+# 3. A further rerun is idempotent.
+upgrade > "$scratch/third.log" 2>&1 || { cat "$scratch/third.log" >&2; fail 'Repeated upgrade failed.'; }
+[[ $(all_data) == "$after_failure" && $(markers) == "$upgraded_markers" ]] || fail 'Repeated upgrade changed data or markers.'
+check_only > "$scratch/check.log" 2>&1 || { cat "$scratch/check.log" >&2; fail 'Read-only check rejected the completed upgrade.'; }
+
+# 4. Marker 1.4 never vouches for an unknown snapshot or incomplete structure.
+query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';" >/dev/null
+if upgrade > "$scratch/unknown.log" 2>&1; then fail 'Marker 1.4 with an unknown snapshot hash was accepted.'; fi
+grep -q 'snapshot marker is unknown or absent; refusing to complete grants' "$scratch/unknown.log" || { cat "$scratch/unknown.log" >&2; fail 'Unknown snapshot was not refused clearly.'; }
+query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'${upgraded_markers#1.4|}';" >/dev/null
+query "DROP TABLE dbo.RosterEmailChangeRequests;" >/dev/null
+if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.4 with missing v1.4 structure was accepted.'; fi
+grep -q 'required v1.4 structure is incomplete; refusing to complete grants' "$scratch/incomplete.log" || { cat "$scratch/incomplete.log" >&2; fail 'Incomplete structure was not refused clearly.'; }
+if grep -q 'Applying additive database patch' "$scratch/incomplete.log"; then fail 'Grants ran against an incomplete structure.'; fi
+[[ $(markers) == "$upgraded_markers" ]] || fail 'Refused upgrade changed markers.'
+echo 'PASS: real DB tool upgrade from v1.1 keeps data and the snapshot marker, recovers from a grant failure after the v1.4 marker, reruns idempotently, keeps --check-only read-only, and refuses unknown snapshots or incomplete v1.4 structure.'

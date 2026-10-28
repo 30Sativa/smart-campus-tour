@@ -175,6 +175,13 @@ jobs:
             BUILD_DATE=${{ github.event.pull_request.updated_at }}
           cache-from: type=gha,scope=backend-db-init
           cache-to: type=gha,mode=max,scope=backend-db-init
+      - name: Test the candidate DB tool upgrade path on a disposable database
+        if: needs.changes.outputs.database_tool_changed == 'true'
+        env:
+          DB_INIT_IMAGE: campustour-db-init:pr-${{ github.event.pull_request.number }}
+          SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
+          DEPLOYMENT_TEST_BUILD_IMAGES: "false"
+        run: bash backend/scripts/test-db-upgrade
       - name: Reuse the last verified DB tool when its inputs are unchanged
         if: needs.changes.outputs.database_tool_changed != 'true'
         run: docker pull ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.4
@@ -298,6 +305,13 @@ jobs:
           [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$API_IMAGE") == "$SOURCE_SHA" ]]
           [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$DB_INIT_IMAGE") == "${{ steps.dbartifact.outputs.db_source }}" ]]
           [[ $(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$DB_INIT_IMAGE") == 1.4 ]]
+      - name: Test the published DB tool upgrade path on a disposable database
+        if: needs.changes.outputs.database_tool_changed == 'true'
+        env:
+          DB_INIT_IMAGE: ${{ steps.dbartifact.outputs.db_image }}
+          SQLSERVER_IMAGE: ${{ steps.bases.outputs.sql }}
+          DEPLOYMENT_TEST_BUILD_IMAGES: "false"
+        run: bash backend/scripts/test-db-upgrade
       - name: Smoke-test exact published candidate images
         env:
           BACKEND_IMAGE: ghcr.io/30sativa/smart-campus-tour/backend@${{ steps.api.outputs.digest }}
