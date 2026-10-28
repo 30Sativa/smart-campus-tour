@@ -9,7 +9,6 @@ import { routeProgress } from '../../features/staff/attention'
 import { formatCountdown, formatTime } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
 import { TODAY_STAGES, byStart, matchesSearch, studentsToday, type TodayFilter } from '../../features/staff/today-board'
-import { TodayLanes } from '../../features/staff/components/TodayLanes'
 import { TourAgenda } from '../../features/staff/components/TourAgenda'
 import { TourInspector } from '../../features/staff/components/TourInspector'
 import { KpiRow, KpiTile } from '../../components/ui/Charts'
@@ -74,8 +73,7 @@ export default function ToursTodayPage() {
       ) : (
         <div>
           <section className={panelClass} aria-label="Danh sách buổi hôm nay">
-            {all.length > 0 && <TodayLanes tours={all} now={now} selectedId={selected?.id} onSelect={select} />}
-            <div className="flex flex-col gap-2.5 border-b border-[#f1f4f8] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 border-b border-[#eef1f4] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
               <StateFilter<TodayFilter>
                 label="Lọc buổi theo trạng thái"
                 value={view}
