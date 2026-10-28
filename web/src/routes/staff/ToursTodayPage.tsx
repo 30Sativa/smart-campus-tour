@@ -60,7 +60,7 @@ export default function ToursTodayPage() {
   return (
     <StaffPage>
       <PageHeader
-        eyebrow="Quản lý Tour"
+        eyebrow="Trong ngày"
         title="Buổi hôm nay"
         description="Bấm vào một buổi để xem đoàn, lộ trình, nhật ký và bước tiếp theo. Nhân viên vận hành kiểm tra thiết bị và bắt đầu khi buổi ở trạng thái Sẵn sàng."
         action={tours.data ? <Glance tours={all} now={now} onSelect={select} /> : undefined}
@@ -71,10 +71,10 @@ export default function ToursTodayPage() {
       ) : tours.isError ? (
         <ErrorPanel error={tours.error} onRetry={tours.refetch} />
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_440px]">
           <section className={panelClass} aria-label="Danh sách buổi hôm nay">
             {all.length > 0 && <TodayLanes tours={all} now={now} selectedId={selected?.id} onSelect={select} />}
-            <div className="flex flex-col gap-2.5 border-b border-[#f1f4f8] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2.5 border-b border-[#f1f4f8] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <StateFilter<TodayFilter>
                 label="Lọc buổi theo trạng thái"
                 value={view}
@@ -87,7 +87,7 @@ export default function ToursTodayPage() {
               <SearchField value={search} onChange={setSearch} placeholder="Tìm theo mã, tên, trường…" label="Tìm buổi hôm nay" className="w-full sm:w-64" />
             </div>
             {rows.length === 0 ? (
-              <div className="p-5">
+              <div className="p-4">
                 <EmptyPanel>
                   {search.trim()
                     ? 'Không tìm thấy buổi nào phù hợp từ khóa.'
@@ -113,14 +113,14 @@ function Glance({ tours, now, onSelect }: { tours: TourOperation[]; now: number;
   const running = tours.find((tour) => tour.state === 'Running')
   const next = tours.find((tour) => (tour.state === 'Ready' || tour.state === 'Scheduled') && new Date(tour.scheduledAt).getTime() >= now)
   const card = 'min-w-[132px] rounded-xl bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
-  const caption = 'block text-[10.5px] font-bold tracking-[0.06em] text-[#94a3b8] uppercase'
+  const caption = 'block text-[11.5px] font-medium text-[#94a3b8]'
   const progress = running ? routeProgress(running) : null
   return (
     <div className="flex flex-wrap gap-2.5" aria-label="Tóm tắt trong ngày">
       {running && (
         <button type="button" onClick={() => onSelect(running.id)} className={`${card} transition-shadow hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_#cbd5e1]`}>
           <span className={caption}>Đang chạy</span>
-          <span className="mt-0.5 flex items-center gap-1.5 text-[15px] font-extrabold text-[#0f172a]">
+          <span className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold text-[#0f172a]">
             <span aria-hidden="true" className="size-2 rounded-full bg-[#2563eb]" />
             {running.code}
             {progress && <span className="text-xs font-medium text-[#64748b]">· POI {Math.min(progress.done + 1, progress.total)}/{progress.total}</span>}
@@ -130,7 +130,7 @@ function Glance({ tours, now, onSelect }: { tours: TourOperation[]; now: number;
       {next && (
         <button type="button" onClick={() => onSelect(next.id)} className={`${card} transition-shadow hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_#cbd5e1]`}>
           <span className={caption}>Kế tiếp</span>
-          <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-extrabold text-[#0f172a]">
+          <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-bold text-[#0f172a]">
             {next.code} · {formatTime(next.scheduledAt)}
             <span className="text-xs font-medium text-[#64748b]">{formatCountdown(next.scheduledAt, now)}</span>
           </span>
@@ -138,7 +138,7 @@ function Glance({ tours, now, onSelect }: { tours: TourOperation[]; now: number;
       )}
       <div className={card}>
         <span className={caption}>Trong ngày</span>
-        <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-extrabold text-[#0f172a]">
+        <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-bold text-[#0f172a]">
           {tours.length} buổi
           <span className="text-xs font-medium text-[#64748b]">· {studentsToday(tours)} học sinh đã duyệt</span>
         </span>

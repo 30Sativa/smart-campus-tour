@@ -49,18 +49,18 @@ export default function TourDetailPage() {
       />
 
       {tour.state === 'Scheduled' && tour.readyBlockers.length > 0 && (
-        <div className="mb-5 rounded-2xl border border-[#fde68a] bg-[#fffbeb] p-4 text-xs font-medium text-[#b45309] flex items-center gap-2 shadow-xs">
+        <div className="mb-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4 text-xs font-medium text-[#b45309] flex items-center gap-2 shadow-xs">
           <strong className="font-bold">Chưa sẵn sàng:</strong>
           <span>{tour.readyBlockers.join(' · ')}. Chốt buổi ở mục Chuẩn bị Tour khi đủ điều kiện.</span>
         </div>
       )}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
         <div className="space-y-5">
           {/* Card: Thông tin buổi */}
           <section className={panelClass} aria-label="Thông tin buổi">
             <PanelHead title="Thông tin buổi tham quan" />
-            <dl className="grid grid-cols-2 gap-x-5 gap-y-4 p-5 sm:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-x-5 gap-y-4 p-4 sm:grid-cols-3">
               <Field label="Mã buổi">
                 <span className="font-mono text-xs font-bold text-[#2563eb] bg-[#eff6ff] px-2 py-0.5 rounded">
                   {tour.code}
@@ -120,13 +120,13 @@ export default function TourDetailPage() {
         <aside className="space-y-5">
           <section className={panelClass} aria-label="Lộ trình">
             <PanelHead title="Lộ trình & tiến độ" />
-            <div className="p-5">
+            <div className="p-4">
               <TourTimeline tour={tour} />
             </div>
           </section>
           <section className={panelClass} aria-label="Đoàn đăng ký">
             <PanelHead title="Đoàn đăng ký" description="Duyệt và gửi thông tin tham gia ở mục Chuẩn bị Tour." />
-            <div className="p-5">
+            <div className="p-4">
               <RegistrationList registrations={tour.registrations} />
             </div>
           </section>

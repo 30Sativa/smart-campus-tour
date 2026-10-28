@@ -42,7 +42,7 @@ export default function RobotPage() {
   return (
     <StaffPage wide>
       <PageHeader
-        eyebrow="Quản lý Thiết bị"
+        eyebrow="Điều hành"
         title="Robot & Thiết bị"
         description="Kết nối, định vị, đầu xoay, telemetry và trạng thái phục vụ của hạm đội robot tự hành trong khuôn viên."
         action={
@@ -68,7 +68,7 @@ export default function RobotPage() {
           beside it as compact cards that open in place ("Xem chi tiết"). The headset reads
           its own source (the robot miniPC), so it shows even when the robot list fails.
           Map beside the rail from xl, map first then the cards below. */}
-      <div className={`grid grid-cols-1 items-start gap-5 ${railHidden ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
+      <div className={`grid grid-cols-1 items-start gap-3 ${railHidden ? '' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
         <section className={`min-w-0 xl:sticky xl:top-20 ${mapExpanded ? 'z-[60]' : ''}`} aria-label="Bản đồ vị trí hạm đội">
           {robots.isPending ? (
             <LoadingPanel />
@@ -82,7 +82,7 @@ export default function RobotPage() {
         </section>
         {/* Hidden means unmounted: the headset card stops polling the miniPC too. */}
         {!railHidden && <aside className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1" aria-label="Thiết bị">
-          <h2 className="text-[11px] font-extrabold tracking-[0.1em] text-[#94a3b8] uppercase sm:col-span-2 xl:col-span-1">Thiết bị trên xe</h2>
+          <h2 className="text-[11.5px] font-medium text-[#94a3b8] sm:col-span-2 xl:col-span-1">Thiết bị trên xe</h2>
           {onCar.map((robot) => (
             <RobotCard key={robot.id} robot={robot} now={now} />
           ))}
@@ -102,7 +102,7 @@ function SummaryChip({ label, value, dot, alert = false }: { label: string; valu
     <span className={`inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold whitespace-nowrap shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.06)] ${alert ? 'text-[#b91c1c]' : 'text-[#475569]'}`}>
       <span aria-hidden="true" className="size-2 rounded-full" style={{ background: dot }} />
       {label}
-      <b className="text-base font-extrabold text-[#0f172a] tabular-nums">{value}</b>
+      <b className="text-base font-bold text-[#0f172a] tabular-nums">{value}</b>
     </span>
   )
 }

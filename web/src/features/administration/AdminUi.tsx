@@ -15,7 +15,7 @@ import { ADMIN_ENTITY_STATUS, REGISTRATION_STATE, TOUR_STATE } from './admin-sta
 /** Frame of every admin page: the operations page frame, so both consoles share gutters and width. */
 export function AdminPage({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-full bg-[#f6f7f9] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+    <div className="min-h-full bg-[#f6f7f9] px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
       <div className="mx-auto w-full max-w-[1360px]">
         {children}
       </div>
@@ -96,7 +96,7 @@ export function EmptyState({ title, description, action }: { title: string; desc
 /** Placeholder rows while a list loads: the page keeps its shape. */
 export function SkeletonRows({ rows = 5, label = 'Đang tải' }: { rows?: number; label?: string }) {
   return (
-    <div className="space-y-2 p-5" aria-busy="true" aria-label={label}>
+    <div className="space-y-2 p-4" aria-busy="true" aria-label={label}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="h-12 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" style={{ animationDelay: `${i * 80}ms` }} />
       ))}

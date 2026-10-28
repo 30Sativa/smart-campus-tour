@@ -55,7 +55,7 @@ export function DeviceCard({
             {icon}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-extrabold text-[#0f172a]">{title}</span>
+            <span className="block truncate text-[15px] font-bold text-[#0f172a]">{title}</span>
             {tag && <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-[#64748b]">{tag}</span>}
           </span>
         </div>
@@ -99,7 +99,7 @@ export function DeviceCard({
 export function Stat({ label, tone, children }: { label: string; tone?: StatusTone; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <span className="block text-[10.5px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</span>
+      <span className="block text-[11.5px] font-medium ">{label}</span>
       <span className={`mt-1 flex min-h-5 min-w-0 items-center gap-1.5 text-xs font-bold ${tone ? TONE_TEXT[tone] : 'text-[#0f172a]'}`}>{children}</span>
     </div>
   )

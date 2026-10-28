@@ -66,14 +66,14 @@ export function TourTable({
     <>
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full text-left text-sm" aria-label={label}>
-          <thead className="bg-[#f8fafc] text-[11px] font-bold tracking-[0.05em] text-[#64748b] uppercase border-b border-[#e2e8f0]">
+          <thead className="bg-[#f8fafc] text-[11.5px] font-medium text-[#64748b] border-b border-[#e2e8f0]">
             <tr>
-              <th className="px-5 py-3">Giờ</th>
+              <th className="px-3.5 py-3">Giờ</th>
               <th className="px-3 py-3">Buổi tham quan</th>
               <th className="px-3 py-3">Đoàn đăng ký</th>
               <th className="px-3 py-3">Robot</th>
               <th className="px-3 py-3">Trạng thái</th>
-              <th className="px-5 py-3 text-right">
+              <th className="px-3.5 py-3 text-right">
                 <span className="sr-only">Thao tác</span>
               </th>
             </tr>
@@ -84,8 +84,8 @@ export function TourTable({
               const countdown = formatCountdown(tour.scheduledAt, now)
               return (
                 <tr key={tour.id} className="transition-colors hover:bg-[#f8fafc]">
-                  <td className="px-5 py-3.5 align-top">
-                    <p className="font-extrabold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</p>
+                  <td className="px-3.5 py-3.5 align-top">
+                    <p className="font-bold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</p>
                     <p className="mt-0.5 text-xs whitespace-nowrap text-[#94a3b8]">
                       {showDate
                         ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(
@@ -132,7 +132,7 @@ export function TourTable({
                       <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#94a3b8]">{tour.endReason}</p>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-right align-top">
+                  <td className="px-3.5 py-3.5 text-right align-top">
                     <TourActionLink tour={tour} />
                   </td>
                 </tr>

@@ -97,7 +97,7 @@ export default function StaffShell() {
 
       <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="flex h-14 items-center gap-3 border-b border-[#e5e7eb]">
+          <div className="flex h-13 items-center gap-3 border-b border-[#e5e7eb]">
             <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
             <span
               role="status"

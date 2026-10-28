@@ -10,7 +10,7 @@ type Badge = { value: number; label: string; tone?: 'info' | 'danger' }
 type Secondary = { to: string; label: string; icon: LucideIcon; current?: boolean }
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
-const tinted = 'bg-gradient-to-r from-[#e5f3ff] to-[#f1f8fe]'
+const tinted = 'bg-[#f1f8fe] shadow-[inset_3px_0_0_#2d719e]'
 /** One curve and one length for everything that moves when the sidebar folds. */
 const EASE = 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none'
 
@@ -54,7 +54,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
 
   /** Fades on the rail (wide screens only: the phone drawer is always full). */
   const fade = `transition-opacity ${EASE} ${rail ? 'lg:pointer-events-none lg:opacity-0' : ''}`
-  const row = `relative flex min-h-9 items-center gap-[11px] rounded-[10px] px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
+  const row = `relative flex min-h-8 items-center gap-[11px] rounded-lg px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
 
   const pill = (badge?: Badge) => {
     if (!badge || badge.value <= 0) return null
@@ -76,10 +76,10 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
       data-collapsed={rail || undefined}
       className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-[248px] shrink-0 flex-col overflow-hidden bg-white shadow-[1px_0_0_#eceef1] transition-[transform,width] ${EASE} lg:sticky lg:translate-x-0 focus-visible:outline-none ${rail ? 'lg:w-[68px]' : ''} ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)]' : '-translate-x-full'}`}
     >
-      <div className="relative flex h-16 w-[248px] shrink-0 items-center px-[15px]">
+      <div className="relative flex h-14 w-[248px] shrink-0 items-center px-[15px]">
         <Link to={homePath} onClick={onNavigate} tabIndex={rail ? -1 : undefined} className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl pr-9 ${focusRing} ${fade}`}>
-          <span className="grid size-[38px] shrink-0 place-items-center rounded-[11px] bg-white shadow-[0_0_0_1px_#e5e7eb,0_6px_14px_-8px_rgba(17,24,39,0.35)] transition-transform duration-500 group-hover:-rotate-6 motion-reduce:transition-none">
-            <img src="/images/logo.png" alt="" width={30} height={30} className="size-[30px] object-contain" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-white shadow-[0_0_0_1px_#e5e7eb,0_6px_14px_-8px_rgba(17,24,39,0.35)] transition-transform duration-500 group-hover:-rotate-6 motion-reduce:transition-none">
+            <img src="/images/logo.png" alt="" width={25} height={25} className="size-[25px] object-contain" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-bold tracking-[-0.03em] text-[#0f172a]">CampusTour</span>
@@ -108,7 +108,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
           {entries.map((entry, index) => {
             if (entry.kind === 'heading') {
               return (
-                <div key={entry.key} className={index === 0 ? 'pt-2' : 'mt-2 border-t border-[#f1f3f5] pt-2'}>
+                <div key={entry.key} className={index === 0 ? 'pt-1' : 'mt-1.5 border-t border-[#eef1f4] pt-1.5'}>
                   <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>{entry.label}</p>
                 </div>
               )

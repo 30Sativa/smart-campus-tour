@@ -78,10 +78,10 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
   if (loading) {
     return (
       <div className="mb-7 space-y-4" aria-busy="true" aria-label="Đang tải tổng quan đăng ký">
-        <div className="h-[92px] animate-pulse rounded-2xl bg-[#f1f5f9] motion-reduce:animate-none" />
+        <div className="h-[92px] animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" />
         <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <div className="h-72 animate-pulse rounded-2xl bg-[#f1f5f9] motion-reduce:animate-none" />
-          <div className="h-72 animate-pulse rounded-2xl bg-[#f1f5f9] motion-reduce:animate-none" />
+          <div className="h-72 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" />
+          <div className="h-72 animate-pulse rounded-xl bg-[#f1f5f9] motion-reduce:animate-none" />
         </div>
       </div>
     )
@@ -102,14 +102,14 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
 
       {total > 0 && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <section className={`${panelClass} p-5`} aria-labelledby="reg-by-state">
+          <section className={`${panelClass} p-4`} aria-labelledby="reg-by-state">
             <div className="flex items-baseline justify-between gap-3">
               <h2 id="reg-by-state" className="text-[15px] font-semibold tracking-[-0.01em] text-[#0f172a]">Theo trạng thái</h2>
               {activeState !== 'all' && (
                 <button type="button" onClick={() => onSelectState('all')} className="text-xs font-semibold text-[#2563eb] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] rounded">Bỏ lọc</button>
               )}
             </div>
-            <div className="mt-3 flex flex-col items-center gap-5 sm:flex-row lg:flex-col xl:flex-row">
+            <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row lg:flex-col xl:flex-row">
               <div className="relative size-44 shrink-0" role="img" aria-label={`${total} đăng ký: ${donut.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ')}`}>
                 <ResponsiveContainer width="100%" height="100%" debounce={160}>
                   <PieChart>
@@ -133,7 +133,7 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-                  <span className="text-[28px] leading-none font-bold tracking-tight text-[#0f172a] tabular-nums">{activeState === 'all' ? total : stats.byState[activeState]}</span>
+                  <span className="text-[20px] leading-none font-bold tracking-tight text-[#0f172a] tabular-nums">{activeState === 'all' ? total : stats.byState[activeState]}</span>
                   <span className="mt-1 text-xs text-[#64748b]">{activeState === 'all' ? 'đăng ký' : REGISTRATION_STATE[activeState].label.toLowerCase()}</span>
                 </div>
               </div>
@@ -163,7 +163,7 @@ export function RegistrationInsights({ registrations, loading, activeState, onSe
             </div>
           </section>
 
-          <section className={`${panelClass} p-5`} aria-labelledby="reg-by-tour">
+          <section className={`${panelClass} p-4`} aria-labelledby="reg-by-tour">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 id="reg-by-tour" className="text-[15px] font-semibold tracking-[-0.01em] text-[#0f172a]">Theo Tour</h2>

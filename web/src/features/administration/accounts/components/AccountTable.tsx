@@ -45,11 +45,12 @@ function SortHeading({ field, label, sort, onSort }: {
 }
 
 function RoleValue({ role }: { role: AccountListItem['role'] }) {
-  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="font-medium text-[#334155]">{role === 'TechnicalStaff' ? 'Technical Staff' : role}</span>
+  return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="inline-flex rounded-full border border-[#cfe1fb] bg-[#eef5ff] px-2 py-px text-[11px] font-bold whitespace-nowrap text-[#2f62b8]">{role === 'TechnicalStaff' ? 'Technical Staff' : role}</span>
 }
 
 function AccountAction({ account, onAction }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction'] }) {
-  if (account.role === 'Admin' || account.role === null) return <span className="text-xs text-[#94a3b8]">-</span>
+  if (account.role === 'Admin') return <span className="text-xs text-[#94a3b8]">cấu hình riêng</span>
+  if (account.role === null) return <span className="text-xs text-[#94a3b8]">-</span>
   const action: AccountLifecycleAction = account.isActive ? 'deactivate' : 'reactivate'
   return (
     <button
@@ -67,13 +68,13 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
   return (
     <>
       <TableFrame label="Danh sách tài khoản" wide>
-        <thead className="border-b border-[#f1f5f9] bg-[#f8fafc]">
+        <thead className="border-b border-[#e2e8f0] bg-[#f8fafc]">
           <tr>
             {SORT_COLUMNS.map((column) => <SortHeading key={column.field} {...column} sort={sort} onSort={onSort} />)}
             <th scope="col" className={thClass}>Thao tác</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#f1f5f9]">
+        <tbody className="divide-y divide-[#eef1f4]">
           {accounts.map((account) => (
             <tr key={account.id} data-account-id={account.id} className={rowClass}>
               <td className={`${tdClass} font-semibold text-[#1e293b]`}>{account.username}</td>
@@ -90,7 +91,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
 
       <ul className="divide-y divide-[#f1f5f9] md:hidden" aria-label="Danh sách tài khoản">
         {accounts.map((account) => (
-          <li key={account.id} data-account-id={account.id} className="space-y-3 p-4">
+          <li key={account.id} data-account-id={account.id} className="space-y-2.5 px-3.5 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-[#1e293b]">{account.fullName}</p>

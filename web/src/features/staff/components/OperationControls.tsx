@@ -90,13 +90,13 @@ export function OperationControls({ tour }: { tour: TourOperation }) {
     <div>
       {assist ? (
         <div className="rounded-xl border border-[#ffe3a3] bg-[#fffcf2] p-4">
-          <p className="text-sm font-extrabold text-[#b23e31]">Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}</p>
+          <p className="text-sm font-bold text-[#b23e31]">Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}</p>
           {tour.reasonDetail && <p className="mt-1 text-[13px] leading-5 text-[#40546f]">{tour.reasonDetail}</p>}
           {tour.reason && REASON_GUIDE[tour.reason] && <p className="mt-2 text-xs leading-5 text-[#71819a]">{REASON_GUIDE[tour.reason]}</p>}
           <ol className="mt-3 space-y-2" aria-label="Trình tự xử lý sự cố">
             {INCIDENT_STEPS.map((step, index) => (
               <li key={step.title} className="flex gap-2.5 text-[12.5px] leading-5 text-[#40546f]">
-                <span aria-hidden="true" className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-extrabold ${index === 2 && recoveryUsed ? 'bg-[#e2e8f0] text-[#64748b]' : index === 3 && recoveryUsed ? 'bg-[#b23e31] text-white' : 'bg-[#fff2d9] text-[#8a5a06]'}`}>{index + 1}</span>
+                <span aria-hidden="true" className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${index === 2 && recoveryUsed ? 'bg-[#e2e8f0] text-[#64748b]' : index === 3 && recoveryUsed ? 'bg-[#b23e31] text-white' : 'bg-[#fff2d9] text-[#8a5a06]'}`}>{index + 1}</span>
                 <span><b className="text-[#173b59]">{step.title}.</b> {step.text}</span>
               </li>
             ))}

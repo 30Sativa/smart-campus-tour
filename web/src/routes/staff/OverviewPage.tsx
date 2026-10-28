@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ChevronRight, MonitorPlay } from 'lucide-react'
+import { MonitorPlay } from 'lucide-react'
 import { Link } from 'react-router'
 import type { AmrStatus, TourOperation } from '../../api/contracts/staff'
 import { useStaffAmrs, useTours } from '../../features/staff/staff-hooks'
@@ -17,7 +17,7 @@ import { AttentionCard, RunResults, SparkCard, StudentsThroughDay, TodayByState 
 import { lastSevenDays, studentsThroughDay, tookPlace } from '../../features/staff/overview-data'
 
 /** Flat white card, the same as the admin dashboard. */
-const CARD = 'rounded-xl bg-white shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
+const CARD = 'rounded-xl border border-[#e2e8f0] bg-white'
 
 /**
  * Staff Dashboard for Smart Campus Tour Operations Center.
@@ -55,88 +55,71 @@ export default function OverviewPage() {
     <StaffPage>
       <Header running={running} />
 
-      {/* ── KPI cards with their trend, the Admin dashboard's shape ─────────── */}
-      <section aria-label="Số liệu chính" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* ── Figures first, one row ─────────────────────────────────────────── */}
+      <section aria-label="Số liệu chính" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SparkCard to="/staff/history" title="Buổi đã chạy" label="7 ngày qua" value={ran} unit="buổi" note={`${completed} hoàn thành · ${ran - completed} kết thúc sớm / hủy`} series={days.map((day) => day.total)} />
         <SparkCard to="/staff/history" title="Tỉ lệ hoàn thành" label="7 ngày qua" value={ran ? Math.round((completed / ran) * 100) : '–'} unit="%" note={`${completed} hoàn thành / ${ran} buổi`} series={days.map((day) => day.rate)} />
         <SparkCard to="/staff/tours" title="Học sinh đã tham gia" label="Hôm nay" value={day.joined} unit={`/ ${day.planned} HS`} note={`${joined.length} buổi đã chạy · còn ${today.length - joined.length} buổi`} series={joinedSeries} />
         <AttentionCard tours={tours.data} readyRobots={readyRobots} robotCount={physicalRobots.length} />
       </section>
 
-      {/* ── Charts: only counts the API returned (no seeded series, no ratings:
+      {/* ── The day's work: sessions on the left, what is running and the robot on the right ── */}
+      <div className="mt-3 grid items-start gap-3 min-[1200px]:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
+        <section className={`${CARD} min-w-0`} aria-label="Buổi hôm nay">
+          <PanelTitle
+            title="Danh sách buổi hôm nay"
+            action={<Link to="/staff/tours" className="text-xs font-semibold text-[#2d719e] hover:underline">Xem theo trạng thái</Link>}
+          />
+          <ul className="divide-y divide-[#eef1f4]">
+            {tours.data.map((tour) => (
+              <TourRow key={tour.id} tour={tour} now={now} />
+            ))}
+          </ul>
+        </section>
+
+        <div className="grid min-w-0 gap-3">
+          <section className="min-w-0" aria-label="Buổi đang chạy">
+            {running ? (
+              <RunningPanel tour={running} robot={robots.data.find((robot) => robot.id === running.robotId)} now={now} />
+            ) : (
+              <div className={CARD}>
+                <PanelTitle title="Vận hành trực tiếp" />
+                <div className="px-3.5 py-4 text-center">
+                  <p className="text-[13px] font-semibold text-[#64748b]">Hiện không có buổi nào đang chạy.</p>
+                  {next && (
+                    <Link to={`/staff/tours/${next.id}/start`} className={`${buttonClass('primary')} mt-3`}>
+                      Kiểm tra & bắt đầu {next.code} · {formatTime(next.scheduledAt)}
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+          {physical && (
+            <section className={CARD} aria-label="Robot">
+              <PanelTitle title="Đội robot" action={<Link to="/staff/robot" className="text-xs font-semibold text-[#2d719e] hover:underline">Robot & thiết bị</Link>} />
+              <div className="px-3.5 py-3">
+                <RobotHeader robot={physical} />
+                <div className="mt-2.5">
+                  <RobotTelemetry robot={physical} now={now} />
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+
+      {/* ── Analysis: only counts the API returned (no seeded series, no ratings:
           feedback is PENDING GVHD in the scope). ─────────────────────────── */}
-      <section aria-label="Biểu đồ vận hành" className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <section aria-label="Biểu đồ vận hành" className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <StudentsThroughDay tours={tours.data} now={now} />
         <TodayByState tours={tours.data} />
         <RunResults days={days} />
         <RunningFunnel tours={tours.data} robots={robots.data} now={now} />
       </section>
-      <div className="mt-4">
+      <div className="mt-3">
         <StudentsByTour tours={tours.data} />
       </div>
-
-      {/* ── Running session beside the robot; what needs attention lives in the header bell. ── */}
-      <div className="mt-6 grid items-start gap-5 min-[1200px]:grid-cols-[minmax(0,1.8fr)_minmax(300px,0.85fr)]">
-        <section className="min-w-0" aria-label="Buổi đang chạy">
-          <SectionHeading
-            title="Vận hành trực tiếp"
-            action={
-              running ? (
-                <Link to={`/staff/live/${running.id}`} className={buttonClass('ghost', 'sm')}>
-                  Mở điều hành<ChevronRight size={14} aria-hidden="true" />
-                </Link>
-              ) : undefined
-            }
-          />
-          {running ? (
-            <RunningPanel tour={running} robot={robots.data.find((robot) => robot.id === running.robotId)} now={now} />
-          ) : (
-            <div className={`${CARD} px-5 py-8 text-center`}>
-              <p className="text-[14px] font-semibold text-[#64748b]">Hiện tại không có buổi nào đang chạy.</p>
-              {next && (
-                <Link to={`/staff/tours/${next.id}/start`} className={`${buttonClass('primary')} mt-4`}>
-                  Kiểm tra & bắt đầu {next.code} · {formatTime(next.scheduledAt)}
-                </Link>
-              )}
-            </div>
-          )}
-        </section>
-        {physical && (
-          <section className="min-w-0" aria-label="Robot">
-            <SectionHeading
-              title="Đội robot"
-              action={
-                <Link to="/staff/robot" className={buttonClass('ghost', 'sm')}>
-                  Xem tất cả<ChevronRight size={14} aria-hidden="true" />
-                </Link>
-              }
-            />
-            <div className={`${CARD} p-5`}>
-              <RobotHeader robot={physical} />
-              <div className="mt-3">
-                <RobotTelemetry robot={physical} now={now} />
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* ── Today's sessions ─────────────────────────────────────────────────── */}
-      <section className="mt-6 min-w-0" aria-label="Buổi hôm nay">
-        <SectionHeading
-          title="Danh sách buổi hôm nay"
-          action={
-            <Link to="/staff/tours" className={buttonClass('ghost', 'sm')}>
-              Xem theo trạng thái<ChevronRight size={14} aria-hidden="true" />
-            </Link>
-          }
-        />
-        <ul className={`${CARD} divide-y divide-[#f1f5f9]`}>
-          {tours.data.map((tour) => (
-            <TourRow key={tour.id} tour={tour} now={now} />
-          ))}
-        </ul>
-      </section>
     </StaffPage>
   )
 }
@@ -145,12 +128,12 @@ function Header({ running }: { running?: TourOperation }) {
   const today = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   return (
     <PageHeader
-            eyebrow="Trung tâm Điều hành Smart Campus Tour"
+            eyebrow="Trong ngày"
       title="Tổng quan vận hành"
       description={`${today.charAt(0).toUpperCase()}${today.slice(1)}. Học sinh tham quan từ xa qua web; một robot thật chạy một buổi tại một thời điểm. Luồng bình thường tự chạy, Staff can thiệp khi cần.`}
       action={
         <Link to={running ? `/staff/live/${running.id}` : '/staff/live'} className={buttonClass('primary', 'md')}>
-          <MonitorPlay size={17} aria-hidden="true" />
+          <MonitorPlay size={15} aria-hidden="true" />
           Điều hành trực tiếp
         </Link>
       }
@@ -158,13 +141,10 @@ function Header({ running }: { running?: TourOperation }) {
   )
 }
 
-function SectionHeading({ title, note, action }: { title: string; note?: string; action?: ReactNode }) {
+function PanelTitle({ title, action }: { title: string; action?: ReactNode }) {
   return (
-    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-      <div className="flex min-w-0 items-baseline gap-2.5">
-        <h2 className="text-[16px] font-bold tracking-tight text-[#0f172a]">{title}</h2>
-        {note && <p className="truncate text-xs text-[#94a3b8]">{note}</p>}
-      </div>
+    <div className="flex items-center justify-between gap-2 border-b border-[#eef1f4] px-3.5 py-2.5">
+      <h2 className="text-[13px] font-semibold text-[#0f172a]">{title}</h2>
       {action}
     </div>
   )
@@ -177,20 +157,18 @@ function RunningPanel({ tour, robot, now }: { tour: TourOperation; robot?: AmrSt
   const assist = tour.operationalStatus === 'NeedsAssistance'
   return (
     <article
-      className={`rounded-xl bg-white p-5 transition-shadow duration-200 ${
-        assist ? 'shadow-[0_0_0_1.5px_#f87171]' : 'shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
-      }`}
+      className={`rounded-xl border bg-white px-3.5 py-3 transition-colors duration-200 ${assist ? 'border-[#f87171]' : 'border-[#e2e8f0]'}`}
     >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-bold text-[#2563eb] bg-[#eff6ff] px-2 py-0.5 rounded-md">
+            <span className="rounded-md bg-[#f1f8fe] px-2 py-0.5 font-mono text-xs font-bold text-[#2d719e]">
               {tour.code}
             </span>
             <span className="size-1.5 rounded-full bg-[#10b981]" />
             <span className="text-xs font-bold text-[#16a34a]">Đang chạy</span>
           </div>
-          <h3 className="mt-1 text-[18px] font-extrabold tracking-tight text-[#0f172a]">{tour.name}</h3>
+          <h3 className="mt-1 text-[15px] font-bold tracking-tight text-[#0f172a]">{tour.name}</h3>
           <p className="text-xs text-[#64748b]">
             {tour.routeName} · {groups.groups} đoàn · {groups.students} học sinh · {tour.robotName}
           </p>
@@ -211,16 +189,16 @@ function TourRow({ tour, now }: { tour: TourOperation; now: number }) {
   const groups = groupSummary(tour)
   const countdown = tour.state === 'Scheduled' || tour.state === 'Ready' ? formatCountdown(tour.scheduledAt, now) : null
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-5 py-3.5 transition-colors hover:bg-[#f8fafc]">
-      <span className="w-[84px] shrink-0">
-        <span className="block text-[15px] font-extrabold text-[#0f172a] tabular-nums leading-none">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 transition-colors hover:bg-[#fafcfe]">
+      <span className="w-[72px] shrink-0">
+        <span className="block text-sm font-bold text-[#0f172a] tabular-nums leading-none">
           {formatTime(tour.scheduledAt)}
         </span>
         {countdown && <span className="mt-1 block text-[11px] whitespace-nowrap text-[#94a3b8]">{countdown}</span>}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-sm font-bold text-[#0f172a]">{tour.name}</span>
+          <span className="truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span>
           <span className="shrink-0 font-mono text-[11px] font-semibold text-[#64748b] bg-[#f1f5f9] px-1.5 py-0.2 rounded">
             {tour.code}
           </span>

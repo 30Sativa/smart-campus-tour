@@ -11,7 +11,7 @@ import { statusLabel } from '../status'
 export function LiveCameraPreview({ livestream, robotName, className = '' }: { livestream: Livestream; robotName?: string | null; className?: string }) {
   const live = livestream.state === 'Live' && livestream.url
   return (
-    <figure className={`relative aspect-video overflow-hidden rounded-2xl bg-[#101c2e] ${className}`}>
+    <figure className={`relative aspect-video overflow-hidden rounded-xl bg-[#101c2e] ${className}`}>
       {live ? (
         <video key={livestream.url} src={livestream.url ?? undefined} className="size-full object-cover" autoPlay muted loop playsInline aria-label={`Camera ${robotName ?? 'robot'}`} />
       ) : (

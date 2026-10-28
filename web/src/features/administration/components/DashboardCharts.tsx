@@ -20,7 +20,7 @@ const dm = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`
 
 export function CardHead({ title, id, children }: { title: string; id: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-5 py-3.5">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-3.5 py-3.5">
       <h2 id={id} className="text-sm font-semibold tracking-[-0.01em] text-[#1f2937]">{title}</h2>
       {children}
     </div>
@@ -33,9 +33,9 @@ export function KpiCard({ title, to, label, value, unit, series, note }: { title
   const data = series.map((v, i) => ({ i, v }))
   return (
     <section className={`${cardClass} flex flex-col`} aria-labelledby={`${id}-t`}>
-      <div className="px-5 pt-[18px]">
+      <div className="px-3.5 pt-[18px]">
         <h2 id={`${id}-t`} className="text-[15px] font-semibold text-[#1f2937]"><Link to={to} className="rounded hover:text-[#2d719e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">{title}</Link></h2>
-        <p className="mt-2.5 text-[10.5px] font-semibold tracking-[0.08em] text-[#9ca3af] uppercase">{label}</p>
+        <p className="mt-2.5 text-[11.5px] font-medium text-[#9ca3af]">{label}</p>
         <p className="mt-0.5 flex items-baseline gap-2"><span className="text-[30px] leading-tight font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</span><span className="text-[13px] font-semibold text-[#9ca3af]">{unit}</span></p>
         <p className="text-xs text-[#9ca3af]">{note}</p>
       </div>
@@ -75,7 +75,7 @@ export function StudentsByTour({ tours, registrations, now }: { tours: AdminTour
   return (
     <section className={cardClass} aria-labelledby="dash-bars">
       <CardHead id="dash-bars" title="Học sinh đã gửi và đã duyệt theo Tour" />
-      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-5 pt-4">
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-3.5 pt-4">
         <Legend color={SENT} value={sent} label="Đã gửi" />
         <Legend color={APPROVED} value={approved} label="Đã duyệt" />
       </div>
@@ -101,7 +101,7 @@ function Legend({ color, value, label }: { color: string; value: number; label: 
   return (
     <span className="inline-flex items-baseline gap-2">
       <span aria-hidden="true" className="size-[9px] self-center rounded-full border-[2.5px]" style={{ borderColor: color }} />
-      <b className="text-[26px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</b>
+      <b className="text-[20px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{value}</b>
       <span className="text-xs text-[#9ca3af]">{label}</span>
     </span>
   )
@@ -147,7 +147,7 @@ export function StudentsPerDay({ tours, registrations }: { tours: AdminTour[]; r
           </Link>
         )}
       </CardHead>
-      <p className="flex flex-wrap items-baseline gap-2 px-5 pt-4"><b className="text-[26px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{today}</b><span className="text-xs text-[#9ca3af]">hôm nay · {total} học sinh trong 14 ngày</span></p>
+      <p className="flex flex-wrap items-baseline gap-2 px-3.5 pt-4"><b className="text-[20px] leading-none font-bold tracking-[-0.03em] text-[#111827] tabular-nums">{today}</b><span className="text-xs text-[#9ca3af]">hôm nay · {total} học sinh trong 14 ngày</span></p>
       <div className="h-[250px] px-2 pt-2 pb-3" role="img" aria-label={`Học sinh tham gia 14 ngày gần nhất: ${days.filter((d) => d.students).map((d) => `${d.label} ${d.students}`).join(', ') || 'chưa có'}`}>
         <ResponsiveContainer width="100%" height="100%" debounce={160}>
           <AreaChart data={days} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
@@ -182,7 +182,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
   return (
     <section className={cardClass} aria-labelledby="dash-donut">
       <CardHead id="dash-donut" title="Tour theo trạng thái" />
-      <div className="grid justify-items-center gap-4 px-5 pt-3 pb-5">
+      <div className="grid justify-items-center gap-4 px-3.5 pt-3 pb-5">
         <div className="relative size-[200px]" role="img" aria-label={`${tours.length} Tour: ${data.map((d) => `${d.value} ${d.label.toLowerCase()}`).join(', ')}`}>
           <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <PieChart>
@@ -193,7 +193,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
             </PieChart>
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 grid place-content-center text-center">
-            <span className="text-[28px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{tours.length}</span>
+            <span className="text-[20px] leading-none font-bold tracking-tight text-[#111827] tabular-nums">{tours.length}</span>
             <span className="mt-1 text-xs text-[#9ca3af]">Tour</span>
           </div>
         </div>
@@ -240,7 +240,7 @@ export function RegistrationFunnel({ registrations }: { registrations: AdminRegi
           ))}
         </div>
       </CardHead>
-      <ol className="grid gap-4 px-5 py-5">
+      <ol className="grid gap-4 px-3.5 py-4">
         {rows.map((row) => (
           <li key={row.label} className="grid gap-x-5 gap-y-1.5 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
             <p className="text-[13px] font-semibold text-[#1f2937]">{row.label}<span className="block text-xs font-medium text-[#6b7280] tabular-nums">{row.value} {unit}</span></p>

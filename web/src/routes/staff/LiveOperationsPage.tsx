@@ -55,7 +55,7 @@ export default function LiveOperationsPage() {
             )
           }
         />
-        <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-xs">
+        <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-xs">
           <OperationalTwin robots={robots.data ?? []} className="h-[clamp(380px,62vh,720px)]" />
         </div>
       </StaffPage>
@@ -87,10 +87,10 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
   const events = [...tour.events].reverse().slice(0, 14)
 
   return (
-    <StaffPage wide className="!py-5 lg:!py-6">
+    <StaffPage wide className="!py-4 lg:!py-6">
       {/* One line: which session, its state, and the way to its full record. */}
       <header className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h1 className="min-w-0 text-[21px] leading-tight font-bold tracking-[-0.025em] text-[#173b59]">
+        <h1 className="min-w-0 text-[20px] leading-tight font-bold tracking-[-0.025em] text-[#173b59]">
           <span className="text-[#2d719e]">{tour.code}</span> {tour.name}
         </h1>
         <TourStateBadges tour={tour} />

@@ -40,7 +40,7 @@ export function RouteStopsEditor({ stops, pois, onChange }: { stops: StopDraft[]
           <span>{shown.length} / {pois.length} POI</span>
         </div>
       </div>
-      {shown.length === 0 ? <p className="p-6 text-center text-sm text-[#64748b]">Không có POI phù hợp.</p> :
+      {shown.length === 0 ? <p className="p-4 text-center text-sm text-[#64748b]">Không có POI phù hợp.</p> :
         <ul className="max-h-96 divide-y divide-[#eef2f6] overflow-y-auto">{shown.map(poi => {
           const checked = selected.has(poi.id)
           return <li key={poi.id}><label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-[#f8fafc]">
@@ -56,7 +56,7 @@ export function RouteStopsEditor({ stops, pois, onChange }: { stops: StopDraft[]
         <h3 className="font-semibold">Thứ tự điểm dừng ({stops.length})</h3>
         <span className="text-xs text-[#64748b]">Tổng dwell {totalDwell}s</span>
       </div>
-      {stops.length === 0 ? <p className="p-6 text-center text-sm text-[#64748b]">Chưa có điểm dừng. Tick POI ở danh sách bên trái.</p> :
+      {stops.length === 0 ? <p className="p-4 text-center text-sm text-[#64748b]">Chưa có điểm dừng. Tick POI ở danh sách bên trái.</p> :
         <ol className="max-h-[32rem] divide-y divide-[#eef2f6] overflow-y-auto">{stops.map((stop, index) => {
           const n = index + 1
           const issue = stopIssue(stop)

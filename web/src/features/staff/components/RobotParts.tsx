@@ -158,7 +158,7 @@ export function RobotHeader({ robot, action }: { robot: AmrStatus; action?: Reac
         </span>
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[16px] font-extrabold text-[#0f172a]">{robot.name}</span>
+            <span className="font-mono text-[16px] font-bold text-[#0f172a]">{robot.name}</span>
             <SourceBadge source={robot.source} />
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[#64748b]">

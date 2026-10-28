@@ -48,8 +48,8 @@ export function TourForm({ initial, currentRoute, scheduleLocked = false, submit
     onSubmit({ name: name.trim(), description: description.trim() || null, routeId, scheduledStartAt: at, fallbackVideoUrl: video.trim() || null }, route.data.version)
   }
 
-  return <form onSubmit={submit} className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-    <fieldset disabled={busy} className={`${panelClass} space-y-4 p-5`}>
+  return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+    <fieldset disabled={busy} className={`${panelClass} space-y-4 p-4`}>
       <legend className="sr-only">Thông tin Tour</legend>
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
@@ -69,7 +69,7 @@ export function TourForm({ initial, currentRoute, scheduleLocked = false, submit
       </div>
     </fieldset>
 
-    <section className={`${panelClass} p-5`} aria-label="Xem trước tuyến">
+    <section className={`${panelClass} p-4`} aria-label="Xem trước tuyến">
       <h2 className="text-[15px] font-semibold">Xem trước tuyến</h2>
       {!routeId ? <p className="py-10 text-center text-sm text-[#94a3b8]">Chọn một tuyến để xem các điểm dừng.</p>
         : route.isError ? <p className="py-6 text-sm text-[#9d3428]">Không tải được cấu hình tuyến.</p>

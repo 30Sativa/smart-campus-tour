@@ -11,7 +11,7 @@ import { groupSummary } from './attention'
 export const DONE = '#2d719e'
 export const REST = '#8cc6ea'
 export const NAVY = '#173b59'
-export const CARD = 'min-w-0 overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
+export const CARD = 'min-w-0 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white'
 
 const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 const pad = (n: number) => String(n).padStart(2, '0')

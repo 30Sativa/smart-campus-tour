@@ -19,7 +19,7 @@ export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () =>
       className={`${panelClass} flex min-h-60 flex-col items-center justify-center gap-3 p-8 text-center text-[#64748b]`}
       role="alert"
     >
-      <div className="grid size-11 place-items-center rounded-2xl bg-[#fef2f2] text-[#ef4444]">
+      <div className="grid size-11 place-items-center rounded-xl bg-[#fef2f2] text-[#ef4444]">
         <AlertCircle size={22} />
       </div>
       <p className="font-bold text-[#0f172a] text-sm max-w-md">{detail}</p>
@@ -55,7 +55,7 @@ export function StaffPage({
   className?: string
 }) {
   return (
-    <div className={`min-h-full bg-[#f6f7f9] px-4 py-5 sm:px-6 lg:px-8 lg:py-6 ${className}`}>
+    <div className={`min-h-full bg-[#f6f7f9] px-4 py-4 sm:px-6 lg:px-8 lg:py-6 ${className}`}>
       <div
         className={`mx-auto w-full ${
           wide ? 'max-w-[1600px]' : 'max-w-[1440px]'

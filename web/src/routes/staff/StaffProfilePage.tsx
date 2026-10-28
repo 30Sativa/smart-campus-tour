@@ -30,14 +30,14 @@ function initialsOf(name: string) {
 function Card({ title, note, action, children }: { title: string; note?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className={panelClass} aria-label={title}>
-      <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-3.5 pt-5">
         <div className="min-w-0">
-          <h2 className="text-[15px] font-extrabold text-[#0f172a]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#0f172a]">{title}</h2>
           {note && <p className="mt-0.5 text-[12.5px] text-[#64748b]">{note}</p>}
         </div>
         {action}
       </div>
-      <div className="px-5 pt-3.5 pb-5">{children}</div>
+      <div className="px-3.5 pt-3.5 pb-5">{children}</div>
     </section>
   )
 }
@@ -64,12 +64,12 @@ export default function StaffProfilePage() {
     <StaffPage>
       <PageHeader eyebrow="Tài khoản" title="Hồ sơ của tôi" description="Tài khoản vận hành, quyền của vai trò và ca hôm nay." />
 
-      <section className={`${panelClass} relative flex flex-wrap items-center gap-x-6 gap-y-4 p-6 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#2563eb]`} aria-label="Thông tin chính">
-        <span aria-hidden="true" className="grid size-[68px] shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#2d719e,#2563eb)] text-[22px] font-extrabold text-white shadow-[0_0_0_5px_#eff6ff]">
+      <section className={`${panelClass} relative flex flex-wrap items-center gap-x-6 gap-y-4 p-4 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#2563eb]`} aria-label="Thông tin chính">
+        <span aria-hidden="true" className="grid size-[68px] shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#2d719e,#2563eb)] text-[20px] font-bold text-white shadow-[0_0_0_5px_#eff6ff]">
           {initialsOf(name)}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[22px] font-extrabold tracking-tight text-[#0f172a]">{name}</h2>
+          <h2 className="truncate text-[20px] font-bold tracking-tight text-[#0f172a]">{name}</h2>
           <p className="mt-0.5 text-[13.5px] text-[#64748b]">{roleLabel(user?.role)}</p>
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ecfdf3] px-2.5 py-0.5 text-xs font-bold text-[#15803d]">
@@ -81,8 +81,8 @@ export default function StaffProfilePage() {
         </div>
         <dl className="flex flex-wrap gap-2.5">
           <div className="min-w-[132px] rounded-xl border border-[#eef0f3] px-3.5 py-2.5">
-            <dt className="text-[10.5px] font-bold tracking-[0.06em] text-[#94a3b8] uppercase">Đang chạy</dt>
-            <dd className="mt-0.5 text-lg font-extrabold text-[#0f172a]">
+            <dt className="text-[11.5px] font-medium text-[#94a3b8]">Đang chạy</dt>
+            <dd className="mt-0.5 text-lg font-bold text-[#0f172a]">
               {running ? (
                 <>
                   {running.code}
@@ -94,8 +94,8 @@ export default function StaffProfilePage() {
             </dd>
           </div>
           <div className="min-w-[132px] rounded-xl border border-[#eef0f3] px-3.5 py-2.5">
-            <dt className="text-[10.5px] font-bold tracking-[0.06em] text-[#94a3b8] uppercase">Hôm nay</dt>
-            <dd className="mt-0.5 text-lg font-extrabold text-[#0f172a]">
+            <dt className="text-[11.5px] font-medium text-[#94a3b8]">Hôm nay</dt>
+            <dd className="mt-0.5 text-lg font-bold text-[#0f172a]">
               {tours.data ? today.length : '–'}
               <span className="ml-1.5 text-xs font-medium text-[#64748b]">buổi · {finished} đã xong</span>
             </dd>
@@ -103,8 +103,8 @@ export default function StaffProfilePage() {
         </dl>
       </section>
 
-      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="grid gap-5">
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="grid gap-3">
           <Card
             title="Ca hôm nay"
             note="Buổi đang chạy và buổi kế tiếp của cả đội vận hành."
@@ -123,8 +123,8 @@ export default function StaffProfilePage() {
                     return (
                       <li key={tour.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
                         <span className="w-20 shrink-0">
-                          <span className="block text-[10.5px] font-bold tracking-[0.06em] text-[#94a3b8] uppercase">{label}</span>
-                          <span className="block text-[15px] font-extrabold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</span>
+                          <span className="block text-[11.5px] font-medium text-[#94a3b8]">{label}</span>
+                          <span className="block text-[15px] font-bold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</span>
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-bold text-[#0f172a]">
@@ -145,9 +145,9 @@ export default function StaffProfilePage() {
 
           {isStaffRole(user?.role) && (
             <Card title="Quyền của vai trò Staff" note="Mọi Staff đang hoạt động vận hành được mọi buổi; không phân công theo buổi.">
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <h3 className="mb-2 text-xs font-extrabold tracking-[0.05em] text-[#15803d] uppercase">Được làm</h3>
+                  <h3 className="mb-2 text-xs font-semibold text-[#15803d]">Được làm</h3>
                   <ul className="grid gap-2 text-[13px] text-[#0f172a]">
                     {CAN.map((item) => (
                       <li key={item} className="flex items-start gap-2 leading-snug"><Check size={15} strokeWidth={3} aria-hidden="true" className="mt-0.5 shrink-0 text-[#16a34a]" />{item}</li>
@@ -155,7 +155,7 @@ export default function StaffProfilePage() {
                   </ul>
                 </div>
                 <div>
-                  <h3 className="mb-2 text-xs font-extrabold tracking-[0.05em] text-[#64748b] uppercase">Thuộc Admin</h3>
+                  <h3 className="mb-2 text-xs font-semibold text-[#64748b]">Thuộc Admin</h3>
                   <ul className="grid gap-2 text-[13px] text-[#64748b]">
                     {ADMIN_ONLY.map((item) => (
                       <li key={item} className="flex items-start gap-2 leading-snug"><Minus size={15} strokeWidth={2.6} aria-hidden="true" className="mt-0.5 shrink-0 text-[#94a3b8]" />{item}</li>
@@ -167,7 +167,7 @@ export default function StaffProfilePage() {
           )}
         </div>
 
-        <div className="grid gap-5">
+        <div className="grid gap-3">
           <Card title="Tài khoản" note="Do Admin cấp; mỗi tài khoản một vai trò.">
             <dl className="grid">
               {[

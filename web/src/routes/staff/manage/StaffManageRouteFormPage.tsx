@@ -113,7 +113,7 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
 
   return <AdminPage>
     <Link to={backHref} className="mb-4 inline-block text-sm text-[#2d719e]">← Quay lại</Link>
-    <PageHeader eyebrow="Tuyến" title={editing ? 'Chỉnh sửa tuyến' : source ? 'Sao chép tuyến' : 'Tạo tuyến'} description="Chọn POI và cấu hình thứ tự. Tuyến mới được lưu ở trạng thái không khả dụng." />
+    <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title={editing ? 'Chỉnh sửa tuyến' : source ? 'Sao chép tuyến' : 'Tạo tuyến'} description="Chọn POI và cấu hình thứ tự. Tuyến mới được lưu ở trạng thái không khả dụng." />
     {configurationLocked && <div className="mb-4"><Notice tone="info">Hành trình đã được tham chiếu nên bị khóa. Có thể sửa tên và mô tả khi không có Tour đã chốt hoặc đang chạy.</Notice></div>}
     {allLocked && <div className="mb-4"><Notice tone="warn">Tour đã chốt hoặc đang chạy đang sử dụng tuyến này. Mọi thay đổi bị khóa.</Notice></div>}
 
@@ -127,7 +127,7 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
     })}</ol>
 
     <form onSubmit={event => void submit(event)} className="space-y-5">
-      {step === 0 && <fieldset disabled={save.isPending || allLocked} className={`${panelClass} space-y-4 p-5`}>
+      {step === 0 && <fieldset disabled={save.isPending || allLocked} className={`${panelClass} space-y-4 p-4`}>
         <legend className="sr-only">Thông tin tuyến và map</legend>
         <label className="block text-sm">Tên tuyến<input required maxLength={150} className={inputClass} value={input.name} onChange={e => patch({ name: e.target.value })} /></label>
         <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={input.description ?? ''} onChange={e => patch({ description: e.target.value || null })} /></label>
@@ -142,14 +142,14 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
         {truncated}
       </fieldset>}
 
-      {step === 1 && <fieldset disabled={save.isPending || configurationLocked || allLocked} className={`${panelClass} space-y-4 p-5`}>
+      {step === 1 && <fieldset disabled={save.isPending || configurationLocked || allLocked} className={`${panelClass} space-y-4 p-4`}>
         <legend className="sr-only">Điểm dừng</legend>
         <div><h2 className="text-[15px] font-semibold">Chọn điểm dừng trên {input.mapKey} / {input.mapFrame}</h2><p className="mt-1 text-sm text-[#64748b]">Dwell cố định theo tuyến. Thời gian giữ các góc nhìn cộng lại không vượt dwell.</p></div>
         {poiError || poiLoading || <RouteStopsEditor stops={stops} pois={mapPois} onChange={setStops} />}
         {truncated}
       </fieldset>}
 
-      {step === 2 && <fieldset disabled={save.isPending || configurationLocked || allLocked} className={`${panelClass} space-y-5 p-5`}>
+      {step === 2 && <fieldset disabled={save.isPending || configurationLocked || allLocked} className={`${panelClass} space-y-5 p-4`}>
         <legend className="sr-only">Điểm bắt đầu và kết thúc</legend>
         <div className="space-y-3">
           <h2 className="text-[15px] font-semibold">Điểm bắt đầu</h2>
@@ -164,7 +164,7 @@ function RouteForm({ source, editing }: { source?: RouteDetails; editing: boolea
         {input.endMode === 'POSE' && <div className="grid gap-3 sm:grid-cols-3">{(['endX', 'endY', 'endYaw'] as const).map((field, i) => <PoseField key={field} label={`End ${['x (m)', 'y (m)', 'yaw (rad)'][i]}`} value={input[field]} yaw={i === 2} onChange={value => patch({ [field]: value })} />)}</div>}
       </fieldset>}
 
-      {step === 3 && <section className={`${panelClass} space-y-5 p-5`} aria-label="Xem lại tuyến">
+      {step === 3 && <section className={`${panelClass} space-y-5 p-4`} aria-label="Xem lại tuyến">
         <h2 className="text-[15px] font-semibold">Xem lại trước khi lưu</h2>
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Summary label="Tên tuyến" value={input.name} />

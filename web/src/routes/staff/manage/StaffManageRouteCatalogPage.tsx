@@ -15,7 +15,7 @@ export default function StaffManageRouteCatalogPage() {
   const term = useDebouncedValue(search, 300)
   const routes = useRoutes({ search: term, page, size: 20, isActive: active === 'all' ? undefined : active === 'active' })
   return <AdminPage>
-    <PageHeader eyebrow="Tuyến" title="Danh mục tuyến" description="Sắp xếp hành trình từ các POI đã có. Khả dụng không đồng nghĩa đã kiểm chứng robot thực tế."
+    <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title="Danh mục tuyến" description="Sắp xếp hành trình từ các POI đã có. Khả dụng không đồng nghĩa đã kiểm chứng robot thực tế."
       action={<Link to="/staff/manage/routes/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo tuyến</Link>} />
     <section className={panelClass} aria-label="Danh sách tuyến">
       <div className="flex flex-wrap gap-3 border-b border-[#e2e8f0] p-4">
@@ -27,7 +27,7 @@ export default function StaffManageRouteCatalogPage() {
       {routes.isError ? <AdminErrorPanel title={routeError(routes.error)} onRetry={() => void routes.refetch()} /> : routes.isPending ? <SkeletonRows rows={4} /> : routes.data?.data.length === 0 ?
         <EmptyState title="Chưa có tuyến phù hợp" description="Tạo tuyến từ POI hiện có hoặc điều chỉnh bộ lọc." /> :
         <ul className="divide-y divide-[#e2e8f0]">{routes.data?.data.map(route => <li key={route.id}>
-          <Link to={`/staff/manage/routes/${route.id}`} className="flex flex-wrap items-center justify-between gap-3 p-5 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
+          <Link to={`/staff/manage/routes/${route.id}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
             <div><p className="text-[15px] font-semibold text-[#173b59]">{route.name}</p><p className="mt-1 text-sm text-[#64748b]">{route.mapKey} / {route.mapFrame} · {route.stopCount} điểm dừng</p></div>
             <span className="rounded-full border border-[#d9e9f5] px-3 py-1 text-xs">{route.isActive ? 'Khả dụng' : 'Không khả dụng'}</span>
           </Link>

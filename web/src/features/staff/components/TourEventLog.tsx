@@ -12,8 +12,8 @@ const ACCENT_EVENTS = new Set([
 ])
 
 /** Every logged step of a Tour, oldest first, with who did it and why. */
-export function TourEventLog({ events, className = 'space-y-3.5 p-5' }: { events: TourEvent[]; className?: string }) {
-  if (events.length === 0) return <p className="p-5 text-xs text-[#94a3b8]">Chưa có mốc nào được ghi nhận.</p>
+export function TourEventLog({ events, className = 'space-y-3.5 p-4' }: { events: TourEvent[]; className?: string }) {
+  if (events.length === 0) return <p className="p-4 text-xs text-[#94a3b8]">Chưa có mốc nào được ghi nhận.</p>
   return (
     <ol className={className}>
       {events.map((event) => (
