@@ -3,7 +3,7 @@
 Implemented scope: legacy pre-execution behavior in
 `docs/decisions/0018-admin-tour-management.md` and `docs/architecture.md`.
 Every endpoint below currently requires the `Staff` JWT role (product label:
-Tour Staff); `/api/admin/tours` is a Staff-only compatibility alias. This API
+Tour Staff); the former `/api/admin/tours` alias is retired under ADR-0027. This API
 selects only `AuthoringMode=LEGACY` Routes and creates SCHEDULED Tours in the
 legacy model. It does not persist an exact RouteRevision, assigned Operator,
 robot reservation or READY snapshot. Do not use it to integrate the versioned
@@ -97,7 +97,7 @@ order. Expansion is rejected; detail already
 contains its Route contract. Summary counts mean persisted registration and
 invitation records, not attendance. Staff accounts may manage all Tours;
 Admin and Representative roles cannot use this Staff API. Former
-`/api/admin/tours` URLs are Staff-only compatibility aliases.
+`/api/admin/tours` is no longer routed. Use the Staff endpoints listed above.
 
 From repo root, set `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` to a disposable local
 SQL Server test instance with CREATE DATABASE permission, then run

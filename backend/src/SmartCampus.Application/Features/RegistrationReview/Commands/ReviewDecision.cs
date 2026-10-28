@@ -19,6 +19,10 @@ internal static class ReviewDecision
         RowVersionToken.EnsureCurrent(registration.RowVersion, request.ExpectedRowVersion);
         ReviewPolicy.Evaluate(tour.State, registration.State, await repository.HasInvitationsAsync(registration.Id, ct))
             .EnsureAllowed();
+        var pendingRows = registration.RosterRows.Where(row => row.IsActive &&
+            row.ParticipationState == RosterParticipationStates.Pending).ToArray();
+        if (pendingRows.Length != 1 || registration.RosterRows.Count(row => row.IsActive) != 1)
+            throw new ConflictException("Duyệt nhiều dòng cần dùng endpoint quyết định từng row.", "ROW_REVIEW_REQUIRED");
         return (tour, registration);
     }
 
@@ -27,6 +31,13 @@ internal static class ReviewDecision
         DateTimeOffset now)
     {
         registration.State = state;
+        var row = registration.RosterRows.Single(item => item.IsActive);
+        row.ParticipationState = state == RegistrationStates.Approved
+            ? RosterParticipationStates.Accepted : RosterParticipationStates.Rejected;
+        row.ReviewedByUserId = reviewer;
+        row.ReviewedAt = now;
+        row.ReviewReason = rejectionReason;
+        row.UpdatedAt = now;
         registration.RejectionReason = rejectionReason;
         registration.ReviewedByUserId = reviewer;
         registration.ReviewedAt = now;

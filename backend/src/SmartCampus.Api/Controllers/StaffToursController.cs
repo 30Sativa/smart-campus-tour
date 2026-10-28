@@ -19,7 +19,6 @@ namespace SmartCampus.Api.Controllers;
 [ApiController]
 [Authorize(Roles = ApplicationRoles.Staff)]
 [Route("api/staff/manage/tours")]
-[Route("api/admin/tours")]
 public sealed class StaffToursController(ISender sender) : ControllerBase
 {
     [HttpGet]

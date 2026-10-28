@@ -18,7 +18,7 @@ namespace SmartCampus.IntegrationTests;
 public sealed class TourManagementEndpointTests
 {
     [SchemaV11Fact]
-    public async Task Create_ReadAndFilterSqlTours_AndRegistrationSeesTheNewTour()
+    public async Task ReadAndFilterLegacyTour_AndRegistrationSeesIt()
     {
         await using var f = await Fixture.Create();
         var id = await f.CreateTour();
@@ -35,7 +35,7 @@ public sealed class TourManagementEndpointTests
         Assert.Equal(3, representative.GetProperty("stops").GetArrayLength());
         foreach (var query in new[] { "?search=SQL&state=SCHEDULED&size=1", $"?from={Uri.EscapeDataString(f.Input().ScheduledStartAt.AddHours(-1).ToString("O"))}&sort=-createdAt" })
         {
-            var list = await f.Send(HttpMethod.Get, "/api/admin/tours" + query);
+            var list = await f.Send(HttpMethod.Get, "/api/staff/manage/tours" + query);
             Assert.Single(list.EnumerateArray());
         }
         await using var db = f.Context();
@@ -52,24 +52,24 @@ public sealed class TourManagementEndpointTests
     {
         await using var f = await Fixture.Create();
         var request = f.CreateRequest();
-        var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => f.Send(HttpMethod.Post, "/api/admin/tours", request)));
-        var id = responses[0].GetProperty("id").GetGuid();
-        Assert.Equal(id, responses[1].GetProperty("id").GetGuid());
-        await f.Send(HttpMethod.Post, "/api/admin/tours", request with { Configuration = request.Configuration with { Name = "Different" } }, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request with { Configuration = request.Configuration with { Name = "Different" } }, HttpStatusCode.Conflict);
+        var id = await f.CreateTour();
         var detail = await f.Detail(id);
         var update = new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Name = "Changed" });
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", update);
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", update);
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", update);
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", update);
         detail = await f.Detail(id);
         var cancel = new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Cancelled test");
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel);
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel);
-        Assert.Equal(id, (await f.Send(HttpMethod.Post, "/api/admin/tours", request)).GetProperty("id").GetGuid());
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
         Assert.Equal("CANCELLED", (await f.Detail(id)).Tour.State);
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel with { RequestId = request.RequestId }, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel with { RequestId = request.RequestId }, HttpStatusCode.Conflict);
         await using var db = f.Context();
         Assert.Single(await db.Tours.ToArrayAsync());
-        Assert.Equal(3, await db.AuditLogs.CountAsync(a => a.EntityType == "Tour"));
+        Assert.Equal(2, await db.AuditLogs.CountAsync(a => a.EntityType == "Tour"));
     }
 
     [SchemaV11Fact]
@@ -81,7 +81,7 @@ public sealed class TourManagementEndpointTests
             var expected = token is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
             foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post, HttpMethod.Put })
             {
-                using var request = new HttpRequestMessage(method, method == HttpMethod.Put ? $"/api/admin/tours/{Guid.NewGuid()}" : "/api/admin/tours");
+                using var request = new HttpRequestMessage(method, method == HttpMethod.Put ? $"/api/staff/manage/tours/{Guid.NewGuid()}" : "/api/staff/manage/tours");
                 if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 request.Content = JsonContent.Create(f.CreateRequest());
                 using var response = await f.Client.SendAsync(request);
@@ -89,17 +89,17 @@ public sealed class TourManagementEndpointTests
             }
         }
         foreach (var input in new[] { f.Input() with { Name = " " }, f.Input() with { ScheduledStartAt = f.Now.AddMinutes(-1) }, f.Input() with { FallbackVideoUrl = "javascript:alert(1)" } })
-            await f.Send(HttpMethod.Post, "/api/admin/tours", f.CreateRequest() with { Configuration = input }, HttpStatusCode.BadRequest);
-        await f.Send(HttpMethod.Post, "/api/admin/tours", f.CreateRequest() with { RequestId = Guid.Empty }, HttpStatusCode.BadRequest);
+            await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest() with { Configuration = input }, HttpStatusCode.BadRequest);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest() with { RequestId = Guid.Empty }, HttpStatusCode.BadRequest);
         foreach (var query in new[] { "?size=101", "?page=0", "?state=INVALID", "?sort=robot", "?expand=route" })
-            await f.Send(HttpMethod.Get, "/api/admin/tours" + query, expected: HttpStatusCode.BadRequest);
+            await f.Send(HttpMethod.Get, "/api/staff/manage/tours" + query, expected: HttpStatusCode.BadRequest);
         var id = await f.CreateTour();
-        using var delete = new HttpRequestMessage(HttpMethod.Delete, $"/api/admin/tours/{id}");
+        using var delete = new HttpRequestMessage(HttpMethod.Delete, $"/api/staff/manage/tours/{id}");
         delete.Headers.Authorization = new AuthenticationHeaderValue("Bearer", f.Admin);
         using var deleted = await f.Client.SendAsync(delete);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, deleted.StatusCode);
         var detail = await f.Detail(id);
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Name = "Other Admin" }), token: f.OtherAdmin);
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Name = "Other Admin" }), token: f.OtherAdmin);
         Assert.Equal(f.AdminId, (await f.Detail(id)).Tour.CreatedByUserId);
     }
 
@@ -122,47 +122,37 @@ public sealed class TourManagementEndpointTests
         await using var f = await Fixture.Create();
         var id = await f.CreateTour();
         var version = (await f.Detail(id)).Tour.RowVersion;
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), version, null, f.Input()));
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), version, null, f.Input()));
         Assert.Equal(version, (await f.Detail(id)).Tour.RowVersion);
-        var responses = await Task.WhenAll(new[] { "First", "Second" }.Select(name => f.SendStatus(HttpMethod.Put, $"/api/admin/tours/{id}",
+        var responses = await Task.WhenAll(new[] { "First", "Second" }.Select(name => f.SendStatus(HttpMethod.Put, $"/api/staff/manage/tours/{id}",
             new UpdateTourRequest(Guid.NewGuid(), version, null, f.Input() with { Name = name }))));
         Assert.Single(responses, status => status == HttpStatusCode.OK);
         Assert.Single(responses, status => status == HttpStatusCode.Conflict);
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), version, "stale"), HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), version, "stale"), HttpStatusCode.Conflict);
         await using var db = f.Context();
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "TOUR_UPDATED"));
     }
 
     [SchemaV11Fact]
-    public async Task RouteChangesPreserveOldItinerary_AndAllNonScheduledStatesRejectUpdates()
+    public async Task RouteAndScheduleChangesFailClosedWithoutConfiguredDuration()
     {
         await using var f = await Fixture.Create();
         var id = await f.CreateTour();
         var target = await f.NewRoute();
         var detail = await f.Detail(id);
         var input = f.Input() with { RouteId = target.Id, ScheduledStartAt = f.Input().ScheduledStartAt.AddDays(1).ToOffset(TimeSpan.FromHours(7)) };
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, target.Version, input));
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, target.Version, input), HttpStatusCode.Conflict);
         detail = await f.Detail(id);
-        Assert.Equal(target.Id, detail.Route.Id);
-        Assert.Equal(target.Id, detail.ActiveRoute.Id);
-        var previous = (await f.Send(HttpMethod.Get, $"/api/admin/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        Assert.True(previous.Usage.HasReferences);
-        Assert.False(previous.Usage.CanEditConfiguration);
-        await using (var db = f.Context())
-        {
-            var history = await db.TourEvents.SingleAsync();
-            Assert.Equal("TOUR_ROUTE_CHANGED", history.EventType);
-            Assert.Equal(f.Route.Id, history.RouteId);
-            Assert.Null(history.LegId);
-            Assert.Null(history.TargetPoiId);
-        }
+        Assert.Equal(f.Route.Id, detail.Route.Id);
+        Assert.Equal(f.Route.Id, detail.ActiveRoute.Id);
+        await using (var db = f.Context()) Assert.Empty(await db.TourEvents.ToArrayAsync());
         foreach (var state in new[] { "READY", "RUNNING", "COMPLETED", "CANCELLED" })
         {
             await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='{state}' WHERE Id='{id}';");
             detail = await f.Detail(id);
             Assert.False(detail.Permissions.CanEditMetadata);
-            await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, input with { Name = "Blocked" }), HttpStatusCode.Conflict);
-            if (state != "READY") await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Blocked"), HttpStatusCode.Conflict);
+            await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, input with { Name = "Blocked" }), HttpStatusCode.Conflict);
+            if (state != "READY") await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Blocked"), HttpStatusCode.Conflict);
         }
     }
 
@@ -176,10 +166,10 @@ public sealed class TourManagementEndpointTests
         var detail = await f.Detail(id);
         Assert.False(detail.Permissions.CanChangeScheduleAndRoute);
         foreach (var input in new[] { f.Input() with { ScheduledStartAt = f.Input().ScheduledStartAt.AddDays(1) }, f.Input() with { RouteId = target.Id } })
-            await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, target.Version, input), HttpStatusCode.Conflict);
-        var approvedBefore = await f.Send(HttpMethod.Get, $"/api/admin/registrations/{registration}");
-        await f.Send(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Description = "Corrected info" }));
-        var after = await f.Send(HttpMethod.Get, $"/api/admin/registrations/{registration}");
+            await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, target.Version, input), HttpStatusCode.Conflict);
+        var approvedBefore = await f.Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Description = "Corrected info" }));
+        var after = await f.Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
         Assert.Equal(approvedBefore.GetProperty("rowVersion").GetString(), after.GetProperty("rowVersion").GetString());
         Assert.NotEqual(approvedBefore.GetProperty("tourRowVersion").GetString(), after.GetProperty("tourRowVersion").GetString());
         Assert.Equal("SUBMITTED", after.GetProperty("summary").GetProperty("state").GetString());
@@ -194,7 +184,7 @@ public sealed class TourManagementEndpointTests
         var session = await f.ApproveAndJoin(id, registration);
         var detail = await f.Detail(id);
         var cancel = new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "  Cancelled by test  ");
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
         detail = await f.Detail(id);
         Assert.Equal("CANCELLED", detail.Tour.State);
         Assert.Null(detail.StartedAt);
@@ -216,7 +206,7 @@ public sealed class TourManagementEndpointTests
         await f.Send(HttpMethod.Post, $"/api/registrations/{registration}/invitations/{revoked.Id}/resend", new {
             requestId = Guid.NewGuid(), expectedRowVersion = Convert.ToBase64String(revoked.RowVersion) }, HttpStatusCode.Conflict);
         var version = detail.Tour.RowVersion;
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
         Assert.Equal(version, (await f.Detail(id)).Tour.RowVersion);
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "TOUR_CANCELLED"));
         Assert.False((await f.Detail(id)).Route.Usage.CanEditConfiguration);
@@ -230,11 +220,13 @@ public sealed class TourManagementEndpointTests
         var registration = await f.Submit(id);
         await f.ApproveAndJoin(id, registration);
         var pendingInput = RepresentativeEndpointTests.Input(await f.Send(HttpMethod.Get, $"/api/representative/tours/{id}", token: f.Representative), "Pending group", "pending@example.test");
-        var pending = (await f.Send(HttpMethod.Post, $"/api/representative/tours/{id}/registrations", pendingInput, token: f.Representative, key: Guid.NewGuid())).GetProperty("id").GetGuid();
+        await f.Database.InsertUserAsync(true, username: "tour.pending.rep", roles: ["SCHOOL_REPRESENTATIVE"]);
+        var pendingRepresentative = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.pending.rep");
+        var pending = (await f.Send(HttpMethod.Post, $"/api/representative/tours/{id}/registrations", pendingInput, token: pendingRepresentative, key: Guid.NewGuid())).GetProperty("id").GetGuid();
         var version = (await f.Detail(id)).Tour.RowVersion;
         var cancel = new CancelTourRequest(Guid.NewGuid(), version, "Audit failure");
         await f.Database.ExecuteAsync("ALTER TABLE dbo.AuditLogs ADD CONSTRAINT CK_TestTourCancel CHECK (Action <> 'TOUR_CANCELLED');");
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel, HttpStatusCode.InternalServerError);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel, HttpStatusCode.InternalServerError);
         Assert.Equal(version, (await f.Detail(id)).Tour.RowVersion);
         await using (var db = f.Context())
         {
@@ -244,13 +236,13 @@ public sealed class TourManagementEndpointTests
             Assert.Equal("SUBMITTED", (await db.GroupRegistrations.SingleAsync(r => r.Id == pending)).State);
         }
         await f.Database.ExecuteAsync("ALTER TABLE dbo.AuditLogs DROP CONSTRAINT CK_TestTourCancel;");
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", cancel);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
         await using (var db = f.Context())
         {
             Assert.Equal("CANCELLED", (await db.GroupRegistrations.SingleAsync(r => r.Id == pending)).State);
             Assert.Equal("APPROVED", (await db.GroupRegistrations.SingleAsync(r => r.Id == registration)).State);
         }
-        Assert.Empty((await f.Send(HttpMethod.Get, "/api/admin/registrations?state=SUBMITTED")).EnumerateArray());
+        Assert.Empty((await f.Send(HttpMethod.Get, "/api/staff/manage/registrations?state=SUBMITTED")).EnumerateArray());
     }
 
     [SchemaV11Fact]
@@ -261,7 +253,7 @@ public sealed class TourManagementEndpointTests
         var detail = await f.Detail(id);
         var input = await f.RegistrationInput(id);
         var results = await Task.WhenAll(
-            f.SendStatus(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Race")),
+            f.SendStatus(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Race")),
             f.SendStatus(HttpMethod.Post, $"/api/representative/tours/{id}/registrations", input, f.Representative, Guid.NewGuid()));
         Assert.Equal(HttpStatusCode.OK, results[0]);
         Assert.Contains(results[1], new[] { HttpStatusCode.OK, HttpStatusCode.Conflict });
@@ -283,13 +275,13 @@ public sealed class TourManagementEndpointTests
             await using var command = new SqlCommand($"UPDATE dbo.{table} SET IsActive=0 WHERE Id=@id", connection, transaction);
             command.Parameters.AddWithValue("@id", table == "Pois" ? f.PoiIds[0] : f.Route.Id);
             await command.ExecuteNonQueryAsync();
-            var creating = f.SendStatus(HttpMethod.Post, "/api/admin/tours", f.CreateRequest());
+            var creating = f.SendStatus(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest());
             await Task.WhenAny(creating, Task.Delay(200));
             Assert.False(creating.IsCompleted);
             await transaction.CommitAsync();
             Assert.Contains(await creating, new[] { HttpStatusCode.BadRequest, HttpStatusCode.Conflict });
             await f.Database.ExecuteAsync($"UPDATE dbo.{table} SET IsActive=1;");
-            if (table == "Pois") f.Route = (await f.Send(HttpMethod.Get, $"/api/admin/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
+            if (table == "Pois") f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
         }
         await using var db = f.Context();
         Assert.Empty(await db.Tours.ToArrayAsync());
@@ -297,15 +289,13 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task CreateAuditFailure_RollsBackTourAndAllowsTheSameRequestToRetry()
+    public async Task CreateBlockerDoesNotWriteSuccessReceiptOrTour()
     {
         await using var f = await Fixture.Create();
         var request = f.CreateRequest();
-        await f.Database.ExecuteAsync("ALTER TABLE dbo.AuditLogs ADD CONSTRAINT CK_TestTourCreate CHECK (Action <> 'TOUR_CREATED');");
-        await f.Send(HttpMethod.Post, "/api/admin/tours", request, HttpStatusCode.InternalServerError);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
         await using (var db = f.Context()) Assert.Empty(await db.Tours.ToArrayAsync());
-        await f.Database.ExecuteAsync("ALTER TABLE dbo.AuditLogs DROP CONSTRAINT CK_TestTourCreate;");
-        await f.Send(HttpMethod.Post, "/api/admin/tours", request);
+        await using (var db = f.Context()) Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
     }
 
     [SchemaV11Fact]
@@ -313,14 +303,14 @@ public sealed class TourManagementEndpointTests
     {
         await using var f = await Fixture.Create();
         var body = f.CreateRequest();
-        await f.Send(HttpMethod.Post, "/api/admin/tours", body with { Configuration = body.Configuration with { RouteId = Guid.NewGuid() } }, HttpStatusCode.NotFound);
-        await f.Send(HttpMethod.Post, "/api/admin/tours", body with { ExpectedRouteVersion = new string('0', 64) }, HttpStatusCode.Conflict);
-        await f.Send(HttpMethod.Post, $"/api/admin/routes/{f.Route.Id}/deactivate", new { expectedVersion = f.Route.Version });
-        f.Route = (await f.Send(HttpMethod.Get, $"/api/admin/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        await f.Send(HttpMethod.Post, "/api/admin/tours", f.CreateRequest(), HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", body with { Configuration = body.Configuration with { RouteId = Guid.NewGuid() } }, HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", body with { ExpectedRouteVersion = new string('0', 64) }, HttpStatusCode.Conflict);
+        await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive=0 WHERE Id='{f.Route.Id:D}';");
+        f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.Conflict);
         await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive=1 WHERE Id='{f.Route.Id}'; UPDATE dbo.RouteStops SET HeadStepsJson=N'[]' WHERE RouteId='{f.Route.Id}';");
-        f.Route = (await f.Send(HttpMethod.Get, $"/api/admin/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        await f.Send(HttpMethod.Post, "/api/admin/tours", f.CreateRequest(), HttpStatusCode.BadRequest);
+        f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.BadRequest);
         await using var db = f.Context();
         Assert.Empty(await db.Tours.ToArrayAsync());
     }
@@ -334,14 +324,13 @@ public sealed class TourManagementEndpointTests
         var input = await f.RegistrationInput(id);
         var changed = f.Input() with { ScheduledStartAt = f.Input().ScheduledStartAt.AddDays(1) };
         var results = await Task.WhenAll(
-            f.SendStatus(HttpMethod.Put, $"/api/admin/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, changed)),
+            f.SendStatus(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, changed)),
             f.SendStatus(HttpMethod.Post, $"/api/representative/tours/{id}/registrations", input, f.Representative, Guid.NewGuid()));
-        Assert.Single(results, status => status == HttpStatusCode.OK);
-        Assert.Single(results, status => status == HttpStatusCode.Conflict);
+        Assert.Equal(HttpStatusCode.Conflict, results[0]);
+        Assert.Equal(HttpStatusCode.OK, results[1]);
         await using var db = f.Context();
-        Assert.Equal(results[1] == HttpStatusCode.OK ? 1 : 0, await db.GroupRegistrations.CountAsync());
-        Assert.Equal(results[0] == HttpStatusCode.OK ? changed.ScheduledStartAt : f.Input().ScheduledStartAt,
-            (await f.Detail(id)).Tour.ScheduledStartAt);
+        Assert.Single(await db.GroupRegistrations.ToArrayAsync());
+        Assert.Equal(f.Input().ScheduledStartAt, (await f.Detail(id)).Tour.ScheduledStartAt);
     }
 
     [SchemaV11Fact]
@@ -362,7 +351,7 @@ public sealed class TourManagementEndpointTests
         Assert.True(detail.Usage.HasAllowedBranches);
         Assert.True(detail.Permissions.CanCancel);
         Assert.False(detail.Permissions.CanChangeScheduleAndRoute);
-        await f.Send(HttpMethod.Post, $"/api/admin/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Before Start"));
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Before Start"));
         await using var db = f.Context();
         Assert.Single(await db.TourAllowedBranches.ToArrayAsync());
         Assert.Single(await db.RouteVariants.ToArrayAsync());
@@ -384,7 +373,7 @@ public sealed class TourManagementEndpointTests
         var request = f.CreateRequest();
         request = request with { Configuration = request.Configuration with {
             ScheduledStartAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).AddSeconds(1) } };
-        var creating = f.SendStatus(HttpMethod.Post, "/api/admin/tours", request);
+        var creating = f.SendStatus(HttpMethod.Post, "/api/staff/manage/tours", request);
         await Task.Delay(1300);
         await transaction.CommitAsync();
         Assert.Equal(HttpStatusCode.BadRequest, await creating);
@@ -393,23 +382,17 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task CreationReceiptReplaysFromAnotherApiProcess()
+    public async Task TourCreationFailsClosedWithoutConfiguredDurationOrReceipt()
     {
         await using var f = await Fixture.Create();
         var request = f.CreateRequest();
-        var id = (await f.Send(HttpMethod.Post, "/api/admin/tours", request)).GetProperty("id").GetGuid();
-        var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(p => p.Key.Replace(":", "__"), p => p.Value);
-        await using var secondHost = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, settings);
-        var token = await RepresentativeEndpointTests.LoginAsync(secondHost.Client, "tour.admin");
-        using var retry = new HttpRequestMessage(HttpMethod.Post, "/api/admin/tours") { Content = JsonContent.Create(request) };
-        retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        using var response = await secondHost.Client.SendAsync(retry);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(id, json.GetProperty("data").GetProperty("id").GetGuid());
+        var first = await f.SendBody(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        var second = await f.SendBody(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        Assert.Equal("TOUR_DURATION_UNAVAILABLE", first.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal("TOUR_DURATION_UNAVAILABLE", second.GetProperty("errors").GetProperty("code").GetString());
         await using var db = f.Context();
-        Assert.Single(await db.Tours.ToArrayAsync());
-        Assert.Single(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
+        Assert.Empty(await db.Tours.ToArrayAsync());
+        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
     }
 
     private sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, PoiManagementEndpointTests.ApiHost host, Guid adminId) : IAsyncDisposable
@@ -465,31 +448,55 @@ public sealed class TourManagementEndpointTests
         }
         public async Task<RouteDetails> NewRoute()
         {
-            var created = await Send(HttpMethod.Post, "/api/admin/routes", new RouteInput("SQL route", null, "tour-test-map", "map", 0, 0, 0,
-                "LAST_POI", null, null, null, PoiIds.Select(id => new RouteStopInput(id, 30, [new("FRONT", 30)])).ToArray()));
-            var id = created.GetProperty("id").GetGuid();
-            var route = (await Send(HttpMethod.Get, $"/api/admin/routes/{id}")).Deserialize<RouteDetails>(Json)!;
-            await Send(HttpMethod.Post, $"/api/admin/routes/{id}/activate", new { expectedVersion = route.Version });
-            return (await Send(HttpMethod.Get, $"/api/admin/routes/{id}")).Deserialize<RouteDetails>(Json)!;
+            var id = Guid.NewGuid();
+            await using (var db = Context())
+            {
+                db.Routes.Add(new Route { Id = id, Name = "SQL route", MapKey = "tour-test-map", MapFrame = "map",
+                    StartX = 0, StartY = 0, StartYaw = 0, EndMode = "LAST_POI", IsActive = true,
+                    AuthoringMode = "LEGACY", CreatedAt = Now });
+                db.RouteStops.AddRange(PoiIds.Select((poiId, index) => new RouteStop { Id = Guid.NewGuid(), RouteId = id,
+                    PoiId = poiId, StopOrder = index + 1, DwellSeconds = 30, HeadStepsJson = "[{\"preset\":\"FRONT\",\"holdSeconds\":30}]" }));
+                await db.SaveChangesAsync();
+            }
+            return (await Send(HttpMethod.Get, $"/api/staff/manage/routes/{id}")).Deserialize<RouteDetails>(Json)!;
         }
-        public async Task<Guid> CreateTour() => (await Send(HttpMethod.Post, "/api/admin/tours", CreateRequest())).GetProperty("id").GetGuid();
-        public async Task<TourDetails> Detail(Guid id) => (await Send(HttpMethod.Get, $"/api/admin/tours/{id}")).Deserialize<TourDetails>(Json)!;
+        // Tour fixtures are inserted directly because target scheduling is intentionally blocked until
+        // an approved configured-duration source exists. API creation has its own fail-closed test.
+        public async Task<Guid> CreateTour()
+        {
+            var id = Guid.NewGuid();
+            await using var db = Context();
+            db.Tours.Add(new Tour { Id = id, Name = Input().Name, RouteId = Route.Id, ActiveRouteId = Route.Id,
+                ScheduledStartAt = Input().ScheduledStartAt, State = "SCHEDULED", CreatedByUserId = AdminId, CreatedAt = Now });
+            await db.SaveChangesAsync();
+            return id;
+        }
+        public async Task<TourDetails> Detail(Guid id) => (await Send(HttpMethod.Get, $"/api/staff/manage/tours/{id}")).Deserialize<TourDetails>(Json)!;
         public async Task<object> RegistrationInput(Guid tour) => RepresentativeEndpointTests.Input(
             await Send(HttpMethod.Get, $"/api/representative/tours/{tour}", token: Representative), "Test group", "viewer@example.test");
         public async Task<Guid> Submit(Guid tour) => (await Send(HttpMethod.Post, $"/api/representative/tours/{tour}/registrations",
             await RegistrationInput(tour), token: Representative, key: Guid.NewGuid())).GetProperty("id").GetGuid();
         public async Task<(string Code, string Cookie)> ApproveAndJoin(Guid tour, Guid registration)
         {
-            var detail = await Send(HttpMethod.Get, $"/api/admin/registrations/{registration}");
-            await Send(HttpMethod.Post, $"/api/admin/registrations/{registration}/approve", new {
-                expectedRowVersion = detail.GetProperty("rowVersion").GetString(), expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString() });
+            var detail = await Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
+            foreach (var row in detail.GetProperty("roster").EnumerateArray().ToArray())
+            {
+                detail = await Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
+                var current = detail.GetProperty("roster").EnumerateArray()
+                    .Single(item => item.GetProperty("id").GetGuid() == row.GetProperty("id").GetGuid());
+                await Send(HttpMethod.Post, $"/api/staff/manage/registrations/{registration}/rows/{current.GetProperty("id").GetGuid()}/accept", new {
+                    requestId = Guid.NewGuid(), expectedRegistrationRowVersion = detail.GetProperty("rowVersion").GetString(),
+                    expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString(),
+                    expectedRowVersion = current.GetProperty("rowVersion").GetString() });
+            }
             await using var db = Context();
-            var invitation = await db.Invitations.SingleAsync();
+            var invitation = await db.Invitations.OrderBy(i => i.CreatedAt).FirstAsync();
             var code = new InvitationCodeService(InvitationPrimitiveTests.Configuration()).Reveal(invitation.Id, invitation.AccessVersion, invitation.AccessCodeProtected);
             using var request = Request(HttpMethod.Post, $"/api/student/tours/{tour}/join", new { accessCode = code }, null);
             using var response = await Client.SendAsync(request);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            return (code, response.Headers.GetValues("Set-Cookie").Single().Split(';')[0]);
+            var cookies = response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0]);
+            return (code, string.Join("; ", cookies));
         }
         private static HttpRequestMessage Request(HttpMethod method, string path, object? body, string? token, Guid? key = null)
         {
@@ -508,6 +515,16 @@ public sealed class TourManagementEndpointTests
             if (string.IsNullOrEmpty(text)) return default;
             using var json = JsonDocument.Parse(text);
             return json.RootElement.TryGetProperty("data", out var data) ? data.Clone() : default;
+        }
+        public async Task<JsonElement> SendBody(HttpMethod method, string path, object? body = null,
+            HttpStatusCode expected = HttpStatusCode.OK, string? token = null, Guid? key = null)
+        {
+            using var request = Request(method, path, body, token ?? Admin, key);
+            using var response = await Client.SendAsync(request);
+            var text = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == expected, $"{method} {path}: expected {expected}, got {response.StatusCode}: {text}");
+            using var json = JsonDocument.Parse(text);
+            return json.RootElement.Clone();
         }
         public async Task<HttpStatusCode> SendStatus(HttpMethod method, string path, object body, string? token = null, Guid? key = null)
         {

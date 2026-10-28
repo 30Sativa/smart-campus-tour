@@ -90,10 +90,18 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
                 r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion, r.RejectionReason, r.ReviewedAt,
                 HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
                 Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)
-                    .Select(row => new RosterInput(row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName)).ToArray()
+                      .Select(row => new { row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName,
+                          row.ParticipationState, row.RowVersion, row.ReviewedAt, row.ReviewedByUserId, row.ReviewReason,
+                          InvitationVersion = row.Invitation == null ? null : row.Invitation.RowVersion }).ToArray()
             }).SingleOrDefaultAsync(ct);
         return result is null ? null : new(result.Summary, result.ContactName, result.ContactEmail,
-            result.RowVersion, result.TourVersion, result.RejectionReason, result.ReviewedAt, result.Rows,
+              result.RowVersion, result.TourVersion, result.RejectionReason, result.ReviewedAt,
+              result.Rows.Select(row => new RosterRowView(row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email,
+                  row.ClassName, row.ParticipationState, RowVersionToken.Encode(row.RowVersion), row.ReviewedAt,
+                  row.ReviewedByUserId, row.ReviewReason,
+                  row.InvitationVersion == null ? null : RowVersionToken.Encode(row.InvitationVersion),
+                  result.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Accepted,
+                  result.Summary.TourState == "SCHEDULED", false, false)).ToArray(),
             result.HasInvitations);
     }
     private static int Offset(RepresentativeListRequest request) => (int)Math.Min((long)(request.Page - 1) * request.Size, int.MaxValue);

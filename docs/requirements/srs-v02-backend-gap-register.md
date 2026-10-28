@@ -2,8 +2,8 @@
 
 Read live on **2026-10-27**; owner authorizes SRS adoption and the scoped
 Technical Staff map/POI implementation. Google Docs are updated separately
-under revision guard. Code baseline for this follow-up branch: Route PR #90 commit
-`ce844c0` (based on `main` at `a350139`).
+under revision guard. Wave C baseline is Wave B commit `572f5c3`; Route PR #90
+commit `ce844c0` is its parent feature baseline.
 This register distinguishes implemented API/schema from pending hardware,
 frontend, route and broader authorization work.
 
@@ -41,15 +41,13 @@ Dependencies are staged by wave W1–W6 below; AC references are targets only.
 | FR-08/09; CFG-02, POI-01/02 | Mutable legacy Pois plus Admin endpoints remain in place; separate immutable revisions now exist for the new Staff flow | **Implemented in ADR-0021 slice:** Staff draft/revise/submit; TechnicalStaff per-revision PASS/FAIL, evidence/history and free-cell/map-version checks. Project POI YAML import/frame conversion remains pending | W2 partial; project template decision pending | API/unit/schema tests; AC-06/08 target not claimed as physical pass |
 | FR-10/11/13, BR-07..10; CFG-01/03 | Legacy Routes/RouteStops aggregate hash remains for catalog rows; v1.3 adds immutable `RouteRevisions`, exact map/checksum and POI revision/source-PASS stop links, submission receipts, append-only run evidence and configuration fingerprint | **Implemented:** fixed-route draft/revise/submit, Staff/TechnicalStaff current-revision catalog, Technical-only manual PASS/FAIL, explicit active single-role Staff test participant, origin-aware free-cell validation, latest cross-map deployment lock/check, history and audit. Current navigation fingerprint includes map/checksum, poses, ordered POI navigation fingerprints, camera preset and head-step configuration, excluding dwell. Historical hashes remain unchanged; compatibility uses immutable snapshots. Duration stays incomplete and reports recalculated dwell subtotal. Scheduling/READY and physical-test execution remain unimplemented | W2 + manual physical evidence; Database First v1.3 patch | API/unit and disposable SQL regression; AC-06 remains target, no physical result claimed |
 | FR-12/14/16; TOUR-01..08 | Staff-authorized legacy Tour CRUD only; selects `AuthoringMode=LEGACY`, stores no exact RouteRevision or assigned Operator; no reservation, READY snapshot, reopen or target cancellation workflow | **Blocked, fail-closed (ADR-0024):** do not create a versioned Tour or claim target lifecycle until exact-version duration, registration/email decisions and physical readiness sources are available. Existing aliases cannot select VERSIONED routes. No versioned Tour writer is exposed in this phase | W1/W2/W3/W4 plus approved duration and row/email evidence sources | AC-06/08 remain target; no SCHEDULED/READY acceptance pass claimed |
-| FR-15, BR-06 | `Tours` has `ScheduledStartAt` but no robot reservation; versioned Route reports `INCOMPLETE_CONTENT_AUDIO_DATA`; manual test duration does not establish configured total duration | **Blocked, fail-closed (ADR-0024):** no reservation can be safely computed or persisted until a version-bound duration source defines the tested-path interval. Do not substitute `MeasuredDurationSeconds`; legacy Tour times do not establish intervals for a robot | W2/W3 schema after duration-source decision; additive Database First patch | 15-minute boundary/overlap/concurrency/retry cases remain unimplemented; no NFR-REL-02 claim |
+| FR-15, BR-06 | `Tours` has `ScheduledStartAt` but no robot reservation; versioned Route reports `INCOMPLETE_CONTENT_AUDIO_DATA`; manual test duration does not establish configured total duration | **Blocked, fail-closed (ADR-0024):** no new Tour scheduling or schedule/route changes through legacy aliases until a version-bound approved configured-duration source defines the interval. Never substitute `MeasuredDurationSeconds`; existing eligible legacy metadata edits/cancel remain separate | W2/W3 schema after duration-source decision; additive Database First patch | 15-minute boundary/overlap/concurrency/retry cases remain unimplemented; no NFR-REL-02 claim |
 | FR-17/18/27; OPS-01/02 | No production Start/dispatch; robot current-tour column alone is not assignment logic | Start from READY, check scheduled time, atomic robot claim/state then send first leg; dedup and preflight | W1/W2/W3/W6 + transport decision | AC-01/10; NFR-REL-02 |
-| FR-22, BR-03/04/05; REG-02/06/08 | RegistrationInputValidator accepts **1..1000**; Tour/registration models lack row decisions/capacity holds | **Backlog:** ≤10, 48h cutoff, unique Rep/Tour, seat holds and Staff review ≤2 working days | W4 schema/transactions | AC-02/08; boundary/cutoff/concurrency cases |
-| FR-22/23, BR-11; REG-03 | RepresentativeRegistrationPolicy blocks all edits after APPROVED or any invitation | **Backlog:** allow target row operations only with coordinated writer/approval/access changes; never only relax policy | W4 after row decision design | AC-02 unchanged codes/session |
-| FR-23, BR-11; REG-03 | RegistrationDraftWriter.Replace deactivates every old active row and inserts fresh GUIDs | **Backlog:** stable-row diff; preserve unchanged IDs/approval/credential/session; affected-only revocation and additions pending, in one Tour transaction | W4 writer+review+access together | AC-02, concurrent update/review rollback |
-| FR-23/24/26, BR-11/13 | InvitationPolicy, GetInvitations and EfStudentAccessRepository require registration.State == APPROVED | **Backlog:** row-level participation/access; old accepted rows remain valid while unrelated added rows await review | W4 schema + writer + all guards/readers/delivery jobs | AC-02/09; old row access while registration has pending work |
-| FR-23, BR-05/11; REG-09/06 | AdminRegistrationsController direct email correction; no EmailChangeRequest entity | **Backlog:** request/review; old email/code valid until decision; rejected request preserves access; accepted request atomically changes affected credential | W4 schema + Staff review authorization | AC-02/08; no direct role-attribute swap |
-| FR-24/39/40, BR-12; INV-01..04 | Resend/reissue/revoke and email worker exist; Admin/own-Representative support; whole-registration eligibility | Migrate ownership/row guards; retain retries/correlation, separate email result from participation | W1/W4 | AC-02/08 |
-| FR-26/44, NFR-REL-03; INV-05/06 | Unique open session exists; current idle policy is 10min, not same-device 2min reconnect | Explicit reconnect identity/grace and continued access checks; second browser cannot take over | W4 | AC-09 |
+| FR-22, BR-03/04/05; REG-02/06/08 | New v1.4 row participation decisions; `RegistrationInputValidator` limits viewing-point rows to 10; cutoff and Representative/Tour uniqueness are enforced under Tour-first lock | **Implemented in Wave C:** new registrations/additional rows blocked inside 48h; one registration per Representative/Tour; duplicate/reserved emails remain transaction-serialized. No global seat capacity exists in SRS/schema, so no total-attendee capacity is invented. | Wave C Database First v1.4 + application transaction | Unit and opt-in SQL boundary/concurrency tests; AC-02/08 remain acceptance targets |
+| FR-22/23, BR-11; REG-03 | v1.4 per-row PENDING/ACCEPTED/REJECTED/REMOVED state; stable IDs and access scoped to row | **Implemented in Wave C:** stable diff preserves unchanged IDs/status/access, new rows pending, removed rows only lose their own credential/session/reservation; Staff row review. Aggregate review endpoint rejects multi-row decisions. | Wave C | SQL API tests; unchanged accepted row access with another row pending/rejected |
+| FR-23, BR-05/11; REG-09/06 | `RosterEmailChangeRequests` v1.4; legacy Admin direct correction endpoint still exists as a compatibility URL | **Implemented in Wave C:** Representative request + Staff review; pending/rejected preserves current email/access; accepted updates one row and rotates that row invitation/session in one Tour transaction; legacy direct Admin command returns `LEGACY_EMAIL_CORRECTION_DISABLED` | Wave C; email delivery adapter | SQL tests; no real external email send in tests |
+| FR-24/39/40, BR-12; INV-01..04 | Resend/reissue/revoke and email worker pre-existed; current Staff/Representative routes exist | **Partially implemented in Wave C:** invitations can be issued only for active ACCEPTED rows, and unrelated aggregate registration state no longer gates access. Other ownership/support migrations outside the new row-specific endpoints remain backlog; media pipeline remains separate. | Wave C with W1/W5 | AC-02/08 target; only backend-supported actions claimed |
+| FR-26/44, NFR-REL-03; INV-05/06 | Unique open session plus v1.4 device-token hash | **Implemented in Wave C:** same browser may reconnect within 2 minutes using tour-scoped device token; another browser cannot take over; no IP-only identity | Wave C | AC-09 target; SQL integration verifies browser binding and grace boundary |
 | FR-45, NFR-SEC-05; ACC-04/INV-05 | Existing IP join limiter is not the target configurable invalid-code abuse policy | Server invalid-attempt budget/cooldown + administrative settings; default values TBD | W1/W4 + decision | AC-09 |
 | FR-25/38, NFR-SEC-02 | Viewer session checks exist; no complete live/fallback relay authorization enforcement | Authorize initial+continued playback, credential/session/Tour revocation ≤10s including copied URL | W4/W5 + media adapter | AC-07 real-browser evidence |
 | FR-28/29/30; CFG-04/CONT-01/02 | Poi narration/audio fields and assistant approved pack; no full Staff versioned approval bank | Version/approve/withdraw content; externally produced audio, duration/dwell validation | W1/W2/W5 | AC-04/06; FR-29 has no separate listed AC |
@@ -65,16 +63,24 @@ Dependencies are staged by wave W1–W6 below; AC references are targets only.
 | FR-49/50; POI-02/OPS-01 | Existing head-step data; no exact POI camera-revision verification or pre-start Quest asset receipt/cue | One checked preset/revision; approved asset delivery+receipt before Start, camera before guide cue | W2/W6; M2/guide integration decision | AC-01 physical guide flow; no implementation claim |
 | SRS §6.1 / Phiếu §3.3 / FR-42 | Telemetry slice/emulator scaffolds are not benchmark evidence | 1/5/10/20 at 5Hz, 30s+5min ×≥3; 2 baselines; dashboard-before-render timestamps, clocks and metrics; p95 <1s evaluated per load | Dataset/benchmark tools; delivery/freshness pass thresholds pending | AC-05; AC-03 isolation; no new research screen |
 
-## Required coupled registration work
+## Wave C coupled registration implementation and remaining decisions
 
-The four defects in policy, writer, row review and access are **one dependency
-cluster**, not four independent permission tweaks. Before opening post-approval
-edits, introduce row participation/review semantics and email requests through
-Database First; change stable-row diff and review; update invitation issuance,
-all session/media/Q&A readers and worker guards; preserve Tour-first locking,
-idempotency and rollback. Demonstrate accepted old rows retain access while new
-rows are pending. Never infer compliance from unchanged access-code strings
-alone when aggregate APPROVED gating still denies playback.
+Wave C introduces row participation and email-request semantics through
+Database First, stable-row diff, Staff row review, invitation issuance checks,
+session binding and the existing student Q&A access guard. Tour-first locking,
+rowversion guards and transaction rollback remain required. It does not deliver
+media relay authorization or a versioned Tour/READY writer. The
+`HasPendingDecisionsAsync` predicate reports active pending row/email decisions
+for future readiness consumption; because Wave B has no versioned
+scheduling/READY write API, this wave does not claim the predicate is wired to
+a lifecycle transition.
+
+No total seat-capacity rule is defined by SRS or represented in the current
+Tour schema, so no global attendee capacity is invented. The two-working-day
+Staff review target is tracked from submission/pending state; automatic
+escalation or due-date calculation remains pending until an institutional
+working-day/holiday calendar is defined. A review target is not an automatic
+approval/rejection rule.
 
 ## Delivery waves
 
@@ -86,6 +92,11 @@ alone when aggregate APPROVED gating still denies playback.
 | W4 Per-row registration/email/invitations/sessions | 10 rows, cutoff/holds, stable diff, row review, request/review email, credential preservation, reconnect and invalid-code limits | W1; coupled schema/writer/guards/transaction cluster; AC-02/08/09 and delivery retry cases |
 | W5 Approved-bank Q&A, admission and media | Staff approval, deterministic answer outcomes, global 8/20 queue, continuous live/fallback authorization | W2/W4; provider terms pending for voice; AC-04/07/09, overload tests |
 | W6 Operation, incident, End Early | Preflight/Start, command intent/dedup, movement guards, branches after cutoff decision, incident/recovery, FR-48 notifications/revoke, safe release | W1–W5 + command transport/physical integration decisions; AC-01/10/11; F-14 excluded until approved |
+
+Wave C implements the backend row-registration slice as a separate branch and
+database v1.4 snapshot/patch. SQL integration results remain explicitly
+opt-in; `SKIPPED` is not SQL verification. Screens and diagrams have not been
+updated or redrawn.
 
 These are a dependency plan, not six implementation claims. Report 5 test-case
 IDs and schema migration scripts must be created in the corresponding slice,

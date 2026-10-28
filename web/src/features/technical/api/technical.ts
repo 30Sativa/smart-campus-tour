@@ -13,6 +13,12 @@ export type MapVersion = {
   imageWidth: number
   imageHeight: number
   resolution: number
+  originX: number
+  originY: number
+  originYaw: number
+  negate: boolean
+  occupiedThreshold: number
+  freeThreshold: number
   frameId: string
   validationStatus: string
   uploadedAt: string
@@ -48,6 +54,7 @@ export type PoiRevision = {
   isSubmitted: boolean
   submittedAt: string | null
   navigationStatus: string
+  verificationSourceRevisionId: string | null
 }
 
 export type PoiProposal = {
@@ -57,10 +64,19 @@ export type PoiProposal = {
   revision: PoiRevision
 }
 
+export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision }
+export type PoiVerification = {
+  id: string; proposalId: string; proposalRevisionId: string; revisionNumber: number; mapVersionId: string
+  mapKey: string; robotCode: string; resultCode: 'PASS' | 'FAIL'; reached: boolean; stopped: boolean
+  localizationPassed: boolean; cameraPresetConfirmed: boolean; reason: string | null; evidenceNote: string
+  checkedByUserId: string; checkedAt: string
+}
+
 type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
   listMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions').then(response => response.data ?? []),
+  getMapPackage: (id: string) => apiClient<Blob>(`/api/maps/versions/${id}/package`, { responseType: 'blob' }),
   uploadMap: (input: { areaKey: string; areaName: string; package: File }) => {
     const formData = new FormData()
     formData.set('areaKey', input.areaKey)
@@ -74,7 +90,16 @@ export const technicalApi = {
     apiClient<Envelope<DeploymentCheck>>(`/api/technical/map-versions/${mapVersionId}/deployment-checks`, {
       method: 'POST', json: { ...input, requestId: crypto.randomUUID() },
     }).then(response => response.data!),
-  listPoiProposals: () => apiClient<Envelope<PoiProposal[]>>('/api/staff/poi-proposals').then(response => response.data ?? []),
+  listPoiProposals: (mapVersionId?: string) => apiClient<Envelope<PoiProposal[]>>(`/api/staff/poi-proposals${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
+  getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
+  getPoiHistory: (id: string) => apiClient<Envelope<{ proposalId: string; revisions: PoiRevision[]; verificationRecords: PoiVerification[] }>>(`/api/staff/poi-proposals/${id}/history`).then(response => response.data!),
+  listPoiVerificationQueue: (mapVersionId?: string) => apiClient<Envelope<PoiVerificationQueueItem[]>>(`/api/technical/poi-verifications${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
+  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+    apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
+  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
+  submitPoiProposal: (id: string, proposal: PoiProposal) =>
+    apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
   verifyPoi: (input: {
     proposalId: string
     revisionNumber: number

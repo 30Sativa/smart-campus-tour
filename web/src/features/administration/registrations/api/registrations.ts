@@ -9,6 +9,6 @@ export const registrationsApi = {
     return apiClient<PagedApiResponse<ReviewSummary>>(`/api/staff/manage/registrations?${params}`, { signal })
   },
   get: (id: string, signal?: AbortSignal) => apiClient<ApiResponse<ReviewDetails>>(`/api/staff/manage/registrations/${encodeURIComponent(id)}`, { signal }),
-  review: (id: string, decision: 'approve' | 'reject', input: ReviewInput) =>
-    apiClient<ApiResponse<null>>(`/api/staff/manage/registrations/${encodeURIComponent(id)}/${decision}`, { method: 'POST', json: input }),
+  reviewRow: (registrationId: string, rowId: string, decision: 'accept' | 'reject', input: ReviewInput) =>
+    apiClient<ApiResponse<null>>(`/api/staff/manage/registrations/${encodeURIComponent(registrationId)}/rows/${encodeURIComponent(rowId)}/${decision}`, { method: 'POST', json: input }),
 }

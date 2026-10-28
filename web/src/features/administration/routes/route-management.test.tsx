@@ -5,36 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageRouteCatalogPage from '../../../routes/staff/manage/StaffManageRouteCatalogPage'
 import StaffManageRouteDetailsPage from '../../../routes/staff/manage/StaffManageRouteDetailsPage'
 import StaffManageRouteFormPage from '../../../routes/staff/manage/StaffManageRouteFormPage'
+import { versionedRoutesApi } from './versioned-api'
 import { useAuthStore } from '../../../stores/auth-store'
-import type { RouteDetails } from './types'
 
-const VERSION = 'A'.repeat(64)
-const POIS = [1, 2].map(i => ({ id: `poi-${i}`, name: `POI ${i}`, mapKey: 'map2-v1', mapFrame: 'map', x: i, y: -i, yaw: 0, isActive: true }))
-function route(overrides: Partial<RouteDetails> = {}): RouteDetails {
-  return {
-    id: 'route-1', name: 'Tuyến thử', description: null, mapKey: 'map2-v1', mapFrame: 'map', isActive: false,
-    createdAt: '2026-10-19T00:00:00Z', updatedAt: null, stopCount: 2, version: VERSION,
-    startX: 1, startY: -1, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null,
-    stops: POIS.map((p, i) => ({ id: `stop-${i}`, poiId: p.id, poiName: p.name, stopOrder: i + 1, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 30 }] })),
-    usage: { hasReferences: false, hasReadyOrRunningTours: false, canEditConfiguration: true, canEditMetadataAndAvailability: true, canDelete: true },
-    configurationIssues: [], availabilityIssues: [], ...overrides,
-  }
-}
-function response(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
-}
-function detail(data = route()) { return response({ success: true, data }) }
-function api(handler: (path: string, init?: RequestInit) => Response | Promise<Response>) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const path = new URL(String(input), 'http://localhost').pathname
-    if (path === '/api/staff/manage/pois') return Promise.resolve(response({ data: POIS, pagination: { page: 1, pageSize: 10, totalItems: 2, totalPages: 1 } }))
-    return Promise.resolve(handler(path, init))
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
-}
-function renderAt(path: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
+const proposals = [
+  { id: 'p-pass', currentRevision: 2, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pass', revisionNumber: 2, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Verified entrance', purpose: 'Entry', description: null, x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-pass' } },
+  { id: 'p-pending', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pending', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Pending POI', purpose: 'Pending', description: null, x: 1, y: 1, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } },
+  { id: 'p-other-map', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-other', revisionNumber: 1, mapVersionId: 'map-v2', mapKey: 'library-v2', name: 'Other map POI', purpose: 'Other', description: null, x: 2, y: 2, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-other' } },
+]
+const route = { routeId: 'route-1', revisionId: 'route-rev-1', revisionNumber: 1, name: 'Library tour', description: null, mapVersionId: 'map-v1', mapKey: 'library-v1', mapPackageSha256: 'a'.repeat(64), startX: 10, startY: 20, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null, durationStatus: 'INCOMPLETE_CONTENT_AUDIO_DATA', dwellDurationSeconds: 30, stops: [{ poiRevisionId: 'poi-rev-pass', sourcePoiVerificationRecordId: 'verify-1', stopOrder: 1, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified entrance', x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }], testRuns: [], revisionHistory: [{ revisionId: 'route-rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapPackageSha256: 'a'.repeat(64), configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null, createdAt: '2026-10-27T10:00:00Z' }], eligibilityIssues: ['INCOMPLETE_CONTENT_AUDIO_DATA'] }
+const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, pagination: { page: 1, pageSize: 100, totalItems: 0, totalPages: 0 }, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
+let requests: Array<{ url: URL; init?: RequestInit }> = []
+let submissionFailure: 409 | 500 | null = null
+let currentRoute = structuredClone(route)
+
+function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
     <Route path="/staff/manage/routes" element={<StaffManageRouteCatalogPage />} />
     <Route path="/staff/manage/routes/new" element={<StaffManageRouteFormPage />} />
@@ -42,113 +28,105 @@ function renderAt(path: string) {
     <Route path="/staff/manage/routes/:routeId/edit" element={<StaffManageRouteFormPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
-afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
-describe('live Route management', () => {
-  it('opens the create Route form from the catalog without loading the removed preview', async () => {
-    api(() => response({ data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } }))
-    renderAt('/staff/manage/routes')
-    expect(await screen.findByText('Chưa có tuyến phù hợp')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: 'Tạo tuyến' }))
-    expect(await screen.findByRole('heading', { name: 'Tạo tuyến' })).toBeInTheDocument()
+describe('Staff versioned Route workflow', () => {
+  beforeEach(() => {
+    requests = []
+    submissionFailure = null
+    currentRoute = structuredClone(route)
+    useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([{ map, latestDeployment: null }])
+      if (url.pathname === '/api/staff/poi-proposals') return response(proposals)
+      if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
+      if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return response(route)
+      if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
+      if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
+        await new Promise(resolve => setTimeout(resolve, 40))
+        if (submissionFailure) return new Response(JSON.stringify({ message: submissionFailure === 409 ? 'Revision đã cũ.' : 'Lỗi máy chủ.' }), { status: submissionFailure })
+        currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'NOT_TESTED', revisionHistory: currentRoute.revisionHistory.map(item => ({ ...item, isSubmitted: true })) }
+        return response(currentRoute)
+      }
+      return response(null)
+    }))
   })
+  afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
-  it('creates an inactive Route from real API POIs and sends the edited stop order without fixture fields', async () => {
-    let posted: Record<string, unknown> | undefined
-    api((_, init) => {
-      if (init?.method === 'POST') { posted = JSON.parse(String(init.body)) as typeof posted; return response({ data: { id: 'route-1' } }) }
-      return detail()
-    })
+  it('selects only PASS POI revisions for the chosen map and creates/submits the exact route revision', async () => {
     renderAt('/staff/manage/routes/new')
-    fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Tuyến đầu tiên' } })
-    await screen.findByRole('option', { name: 'map2-v1 / map · 2 POI' })
-    fireEvent.change(screen.getByLabelText('Map'), { target: { value: JSON.stringify(['map2-v1', 'map']) } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
-    fireEvent.click(screen.getByLabelText('Chọn POI 1'))
-    fireEvent.click(screen.getByLabelText('Chọn POI 2'))
-    expect(screen.getByRole('button', { name: 'Tiếp →' })).toBeDisabled()
-    for (const i of [1, 2]) {
-      fireEvent.change(screen.getByLabelText(`Thời gian dừng ${i} (giây)`), { target: { value: '30' } })
-      fireEvent.change(screen.getByLabelText(`Giữ ${i}.1 (giây)`), { target: { value: '30' } })
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Đưa POI 2 lên' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
-    expect(screen.getByLabelText('Start x (m)')).toHaveValue(null)
-    fireEvent.change(screen.getByLabelText('Lấy pose từ POI'), { target: { value: 'poi-1' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tiếp →' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
-    await screen.findByRole('heading', { name: 'Tuyến thử' })
-    expect(posted).toMatchObject({ name: 'Tuyến đầu tiên', mapKey: 'map2-v1', mapFrame: 'map', startX: 1, startY: -1, endMode: 'LAST_POI', endX: null })
-    expect(posted?.stops).toEqual([
-      { poiId: 'poi-2', dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 30 }] },
-      { poiId: 'poi-1', dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 30 }] },
-    ])
-    expect(posted).not.toHaveProperty('isActive')
-    expect(screen.getByText(/Không khả dụng cho lựa chọn mới/)).toBeInTheDocument()
+    fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
+    fireEvent.change(screen.getByLabelText('Map version'), { target: { value: 'map-v1' } })
+    expect(await screen.findByText('Verified entrance')).toBeInTheDocument()
+    expect(screen.queryByText('Pending POI')).not.toBeInTheDocument()
+    expect(screen.queryByText('Other map POI')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu revision nháp' }))
+    expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
+    const create = requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!
+    const createBody = JSON.parse(String(create.init?.body))
+    expect(createBody).toMatchObject({ mapVersionId: 'map-v1', expectedCurrentRevision: 0, stops: [{ poiRevisionId: 'poi-rev-pass', dwellSeconds: 30 }] })
+    expect(createBody.requestId).toBeTruthy()
+    expect(requests.some(r => r.url.pathname === '/api/technical/poi-verifications')).toBe(false)
+    expect(screen.getByText(/duration.*chưa đủ điều kiện lập lịch/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit')).toBe(true))
+    const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
+    expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedCurrentRevision: 1 })
   })
 
-  it('retains a draft after a stale SQL revision conflict and never automatically retries the write', async () => {
-    const fetchMock = api((_, init) => init?.method === 'PUT'
-      ? response({ success: false, errors: { code: 'STALE_ROUTE' } }, 409) : detail())
-    renderAt('/staff/manage/routes/route-1/edit')
-    const name = await screen.findByLabelText('Tên tuyến')
-    fireEvent.change(name, { target: { value: 'Nội dung chưa lưu' } })
-    fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
-    expect(await screen.findByText(/^Tuyến đã thay đổi/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Thông tin & map/ }))
-    expect(screen.getByLabelText('Tên tuyến')).toHaveValue('Nội dung chưa lưu')
-    const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
-    expect(writes).toHaveLength(1)
-    expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ expectedVersion: VERSION, configuration: { name: 'Nội dung chưa lưu' } })
+  it('reads the requested revision ID from the route history link', async () => {
+    renderAt('/staff/manage/routes/route-1?revisionId=route-rev-old')
+    expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
+    const detail = requests.find(r => r.url.pathname === '/api/routes/route-1/revisions')!
+    expect(detail.url.searchParams.get('revisionId')).toBe('route-rev-old')
   })
 
-  it('freezes a referenced itinerary and deletion while allowing metadata correction', async () => {
-    api(() => detail(route({ usage: { hasReferences: true, hasReadyOrRunningTours: false, canEditConfiguration: false, canEditMetadataAndAvailability: true, canDelete: false } })))
-    renderAt('/staff/manage/routes/route-1/edit')
-    expect(await screen.findByLabelText('Tên tuyến')).toBeEnabled()
-    expect(await screen.findByLabelText('Map')).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: /Điểm dừng/ }))
-    expect(screen.getByRole('button', { name: 'Đưa POI 2 lên' })).toBeDisabled()
+  it('shows pending state, saves a successful submit and refreshes route data', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    await client.fetchQuery({ queryKey: ['versioned-routes'], queryFn: () => versionedRoutesApi.list() })
+    const catalogReads = requests.filter(item => item.url.pathname === '/api/routes' && item.init?.method !== 'POST').length
+    renderAt('/staff/manage/routes/route-1', client)
+    const submit = await screen.findByRole('button', { name: 'Gửi kiểm chứng tuyến' })
+    fireEvent.click(submit)
+    expect(await screen.findByRole('button', { name: 'Đang gửi…' })).toBeDisabled()
+    expect(await screen.findByRole('status')).toHaveTextContent(/đã được backend ghi nhận/i)
+    await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/routes/route-1/revisions').length).toBeGreaterThan(1))
+    await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/routes' && item.init?.method !== 'POST').length).toBeGreaterThan(catalogReads))
+    expect(currentRoute.isSubmitted).toBe(true)
   })
 
-  it('copies a referenced active Route into a new editable configuration using POST with no source identities', async () => {
-    let posted: Record<string, unknown> | undefined
-    api((_, init) => {
-      if (init?.method === 'POST') { posted = JSON.parse(String(init.body)) as typeof posted; return response({ data: { id: 'route-2' } }) }
-      return detail(route({ isActive: true, usage: { hasReferences: true, hasReadyOrRunningTours: true, canEditConfiguration: false, canEditMetadataAndAvailability: false, canDelete: false } }))
-    })
-    renderAt('/staff/manage/routes/new?copyFrom=route-1')
-    expect(await screen.findByLabelText('Tên tuyến')).toHaveValue('Tuyến thử (bản sao)')
-    expect(await screen.findByLabelText('Map')).toBeEnabled()
-    fireEvent.click(screen.getByRole('button', { name: /Xem lại & lưu/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu tuyến' }))
-    await waitFor(() => expect(posted).toBeDefined())
-    expect(posted).not.toHaveProperty('id')
-    expect(posted).not.toHaveProperty('isActive')
-    expect(posted).not.toHaveProperty('expectedVersion')
-    expect(posted?.stops).toEqual(route().stops.map(({ poiId, dwellSeconds, headSteps }) => ({ poiId, dwellSeconds, headSteps })))
-  })
-
-  it('shows API failure with retry and never serves prepared-route demo data', async () => {
-    const fetchMock = api(() => response({ success: false }, 500))
-    renderAt('/staff/manage/routes')
-    expect(await screen.findByText('Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.')).toBeInTheDocument()
-    expect(screen.queryByRole('listitem')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-  })
-
-  it('confirms availability changes and sends the latest detail revision', async () => {
-    const fetchMock = api((_, init) => init?.method === 'POST' ? response({ success: true }) : detail())
+  it('keeps a stale submit unsent as success and requires explicit reload after conflict', async () => {
+    submissionFailure = 409
     renderAt('/staff/manage/routes/route-1')
-    fireEvent.click(await screen.findByRole('button', { name: 'Cho phép sử dụng' }))
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }))
-    await screen.findByText('Đã cho phép chọn tuyến cho Tour mới.')
-    const write = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
-    expect(String(write[0])).toContain('/api/staff/manage/routes/route-1/activate')
-    expect(JSON.parse(String(write[1]?.body))).toEqual({ expectedVersion: VERSION })
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
+    expect(await screen.findByText(/Revision hoặc dữ liệu nguồn đã thay đổi/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tải lại revision' })).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(currentRoute.isSubmitted).toBe(false)
+    expect(requests.filter(item => item.url.pathname.endsWith('/submit'))).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại revision' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tải lại revision' })).not.toBeInTheDocument())
+    expect(requests.filter(item => item.url.pathname.endsWith('/submit'))).toHaveLength(1)
+  })
+
+  it('shows server submit failures without changing the revision to submitted', async () => {
+    submissionFailure = 500
+    renderAt('/staff/manage/routes/route-1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
+    expect(await screen.findByText(/Máy chủ chưa xử lý được yêu cầu/)).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(currentRoute.isSubmitted).toBe(false)
+    expect(screen.getByRole('button', { name: 'Gửi kiểm chứng tuyến' })).toBeEnabled()
+  })
+
+  it('keeps historical revisions readable but does not offer submit for an older revision', async () => {
+    const historical = { ...route, revisionHistory: [...route.revisionHistory,
+      { ...route.revisionHistory[0], revisionId: 'route-rev-2', revisionNumber: 2, isSubmitted: false }] }
+    currentRoute = historical
+    renderAt('/staff/manage/routes/route-1?revisionId=route-rev-1')
+    expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
+    expect(screen.getByText(/revision lịch sử, chỉ xem được/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gửi kiểm chứng tuyến' })).not.toBeInTheDocument()
   })
 })

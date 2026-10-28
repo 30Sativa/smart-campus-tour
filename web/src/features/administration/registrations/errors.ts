@@ -3,7 +3,7 @@ import { ApiError } from '../../../api/client'
 export function reviewError(error: unknown): { message: string; reload: boolean; fields: string[] } {
   const fallback = 'Không thực hiện được. Kiểm tra kết nối rồi thử lại.'
   if (!(error instanceof ApiError)) return { message: fallback, reload: false, fields: [] }
-  if (error.status === 401 || error.status === 403) return { message: 'Bạn không có quyền xét duyệt. Vui lòng đăng nhập lại bằng tài khoản quản trị.', reload: false, fields: [] }
+  if (error.status === 401 || error.status === 403) return { message: 'Bạn không có quyền xét duyệt. Hãy đăng nhập bằng tài khoản Staff được cấp quyền.', reload: false, fields: [] }
   try {
     const body = JSON.parse(error.body) as { message?: string; errors?: { code?: string; fields?: Record<string, string[]> } | Record<string, string[]> }
     const errors = body.errors

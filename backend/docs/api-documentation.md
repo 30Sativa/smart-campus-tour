@@ -45,14 +45,10 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
   Upload stores a validated package version but does not deploy it. Deployment
   checks are manually entered evidence. POI submission is not PASS; a technical
   result is scoped to the recorded revision/fingerprint and evidence.
-- Existing Admin-era POI/Route/Tour/Registration endpoints are explicitly tagged
-  `LEGACY`. Their descriptions state the actual role enforced by the current
-  backend (the old business URLs are Staff-only aliases, except the separate
-  email-correction action, which remains Admin-only) and the target Tour Staff
-  ownership. They are not marked OpenAPI-deprecated without an
-  accepted retirement decision. `/api/admin/pois` points to the versioned POI
-  proposal and Technical verification APIs only; those APIs do not replace
-  Route, Tour, or Registration workflows.
+- Remaining legacy reads and the partial Staff pre-execution Tour API are
+  identified as legacy/pending in Swagger. The replaced Admin aliases, legacy
+  POI catalog and mutable Route authoring operations are absent from routing
+  and OpenAPI under ADR-0027. Admin account management remains Admin-only.
 
 ### Endpoint migration/status snapshot
 
@@ -61,11 +57,12 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
 | `/api/admin/accounts` | Admin | Admin | Implemented account management, including TechnicalStaff accounts |
 | `/api/technical/map-versions/*`, `/api/maps/versions/*` | Upload/check: TechnicalStaff; version reads: Staff or TechnicalStaff | Technical Staff for map setup; Staff may read versions | Implemented backend API; deployment check is manual evidence; physical commissioning pending |
 | `/api/staff/poi-proposals/*` | Mutations: Staff; reads: Staff or TechnicalStaff | POI proposal: Tour Staff; verification: Technical Staff | Implemented versioned proposal and per-revision result API; route certification and frontend integration pending |
-| `/api/admin/pois/*` | Staff-only compatibility alias | Tour Staff for legacy catalog ownership; new map-linked POIs use proposal/verification endpoints | Legacy catalog remains available; not the new versioned POI workflow |
-| `/api/admin/routes/*` | Staff-only compatibility alias | Tour Staff | Legacy current Route model; route revision/certification migration pending |
-| `/api/admin/tours/*` | Staff-only compatibility alias | Assigned Tour Staff | Legacy preparation/cancellation slice; complete scheduling, reservation and READY migration pending |
-| `/api/admin/registrations/*` review paths | Staff-only compatibility alias | Tour Staff | Legacy aggregate review; row-level registration/email workflow migration pending |
-| `/api/admin/registrations/{id}/roster/{rowId}/email` | Admin | Tour Staff request/review workflow | Legacy Admin endpoint; target workflow not implemented |
+| `/api/staff/poi-proposals/*`, `/api/technical/poi-*/*` | Staff proposal operations; Technical verification | Tour Staff proposals; Technical Staff verification | Versioned workflow implemented; project YAML import pending |
+| `GET /api/staff/manage/routes*` | Staff | Legacy Route projection for existing Tour readers | Retained legacy reads only; authoring uses versioned Route APIs |
+| `/api/staff/routes*`, `/api/routes*`, `/api/technical/route-verifications*` | Staff authoring/read; Technical manual test evidence | Tour Staff authoring; Technical Staff check | Versioned Route preparation implemented; physical tests/scheduling pending |
+| `/api/staff/manage/tours/*` | Staff | Assigned Tour Staff | Partial legacy pre-execution slice; schedule/reservation/READY migration pending |
+| `/api/staff/manage/registrations/*` | Staff reads and per-row review; Representative email request / Staff review | Tour Staff registration workflow | Current row-specific workflow; no aggregate review or direct Admin email replacement |
+| Former `/api/admin/pois/*`, `/api/admin/routes/*`, `/api/admin/tours/*`, `/api/admin/registrations/*` | No route | Business ownership as above | Retired under ADR-0027; legacy data retained |
 
 Authentication, invitation/session, Representative, Viewer, robot Fleet Sync,
 and platform endpoints are separately tagged with their actual current access

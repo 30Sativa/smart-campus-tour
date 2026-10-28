@@ -19,6 +19,14 @@ public partial class RosterRow
 
     public string? ClassName { get; set; }
 
+    public string ParticipationState { get; set; } = "PENDING";
+
+    public Guid? ReviewedByUserId { get; set; }
+
+    public DateTimeOffset? ReviewedAt { get; set; }
+
+    public string? ReviewReason { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
@@ -28,6 +36,8 @@ public partial class RosterRow
     public byte[] RowVersion { get; set; } = null!;
 
     public virtual Invitation? Invitation { get; set; }
+
+    public virtual ICollection<RosterEmailChangeRequest> EmailChangeRequests { get; set; } = new List<RosterEmailChangeRequest>();
 
     public virtual GroupRegistration Registration { get; set; } = null!;
 }

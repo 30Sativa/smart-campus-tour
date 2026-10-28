@@ -3,6 +3,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Messaging;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
 
 namespace SmartCampus.Application.Features.Invitations.Queries.GetInvitations;
 
@@ -25,8 +26,9 @@ public sealed class GetInvitationsQueryHandler(IInvitationRepository repository,
                 send && cooldown, settings.Enabled && cooldown && InvitationPolicy.CanReissue(read.Tour, read.Registration, i, now),
                 settings.Enabled && InvitationPolicy.CanRevoke(read.Tour, read.Registration, i, now));
         }).ToArray();
-        var missing = read.Registration.RosterRows.Any(r => r.IsActive && read.Invitations.All(i => i.RosterRowId != r.Id));
-        return new(settings.Enabled, settings.Enabled && read.Registration.State == "APPROVED" &&
+        var missing = read.Registration.RosterRows.Any(r => r.IsActive &&
+            r.ParticipationState == RosterParticipationStates.Accepted && read.Invitations.All(i => i.RosterRowId != r.Id));
+        return new(settings.Enabled, settings.Enabled &&
             read.Tour.State is "SCHEDULED" or "READY" or "RUNNING" && missing &&
             read.Tour.ScheduledStartAt.AddHours(settings.ExpiryHoursAfterStart) > now, items);
     }

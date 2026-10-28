@@ -52,6 +52,15 @@ public sealed class SchemaV13FactAttribute : FactAttribute, ITraitAttribute
     }
 }
 
+public sealed class SchemaV14FactAttribute : FactAttribute, ITraitAttribute
+{
+    public SchemaV14FactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 {
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
@@ -110,6 +119,43 @@ public sealed class SchemaV11Tests
         Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Routes WHERE AuthoringMode='LEGACY';"));
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RouteRevisions;"));
         Assert.Equal(4, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name IN ('RouteRevisions','RouteRevisionStops','RouteRevisionSubmissions','RouteTestRuns');"));
+    }
+
+    [SchemaV14Fact]
+    public async Task V13ToV14Patch_IsAdditiveIdempotentAndBackfillsRowDecisions()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.3.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';");
+        await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
+        await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RosterRows WHERE ParticipationState='ACCEPTED';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.BrowserSessions') AND name='DeviceTokenHash';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE name='CK_RosterRows_ParticipationState';"));
+    }
+
+    [SchemaV14Fact]
+    public async Task PendingDecisionPredicate_CoversRowAndEmailRequestsButNotResolvedHistory()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        await using var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(db.ConnectionString).Options);
+        var repository = new EfRegistrationRepository(context);
+        Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
+        await db.ExecuteAsync($"""
+            INSERT dbo.RosterRows(Id,RegistrationId,RowNumber,RowType,DisplayName,Email,IsActive,CreatedAt)
+            VALUES('{Id(99)}','{Id(44)}',2,'SHARED_VIEWING',N'Room',N'room99@example.invalid',1,SYSDATETIMEOFFSET());
+            """);
+        Assert.True(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
+        await db.ExecuteAsync($"UPDATE dbo.RosterRows SET ParticipationState='REJECTED' WHERE Id='{Id(99)}';");
+        Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
+        await db.ExecuteAsync($"""
+            INSERT dbo.RosterEmailChangeRequests(Id,RosterRowId,RequestId,CurrentEmail,ProposedEmail,RequestedByUserId,State,CreatedAt)
+            VALUES('{Id(98)}','{Id(61)}','{Id(97)}',N'student1@example.invalid',N'new@example.invalid','{Id(1)}','PENDING',SYSDATETIMEOFFSET());
+            """);
+        Assert.True(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
+        await db.ExecuteAsync($"UPDATE dbo.RosterEmailChangeRequests SET State='REJECTED', ReviewedAt=SYSDATETIMEOFFSET(), ReviewedByUserId='{Id(2)}' WHERE Id='{Id(98)}';");
+        Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
     }
 
     [SchemaV13Fact]
@@ -347,7 +393,7 @@ public sealed class SchemaV11Tests
     [SchemaV12Fact]
     public async Task V11ToV12Upgrade_IsAdditiveAndRerunnableForRecognizedV12Marker()
     {
-        await using var db = await TestDatabase.CreateAsync();
+        await using var db = await TestDatabase.CreateAsync("snapshot.sql");
         await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';");
         await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
         await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
@@ -541,7 +587,7 @@ public sealed class SchemaV11Tests
     [SchemaV11Fact]
     public async Task BusinessKeys_RejectDuplicates_AllowDifferentRegistrationsAndRoutes()
     {
-        await using var db = await TestDatabase.CreateAsync();
+        await using var db = await TestDatabase.CreateAsync("snapshot.sql");
         await db.ExpectErrorAsync(2627, $"UPDATE dbo.Users SET NormalizedUsername=N'USER1' WHERE Id='{Id(2)}';");
         await db.ExpectErrorAsync(2627, $"UPDATE dbo.Robots SET RobotCode=N'robot_1' WHERE Id='{Id(82)}';");
         await db.ExpectErrorAsync(2627, $"UPDATE dbo.RouteStops SET StopOrder=1 WHERE Id='{Id(24)}';");
@@ -697,7 +743,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.4.sql")
         {
             var db = new TestDatabase();
             try
@@ -776,6 +822,10 @@ public sealed class SchemaV11Tests
 
         private async Task SeedAsync()
         {
+            var hasParticipationState = await ScalarAsync<int>("SELECT CASE WHEN COL_LENGTH(N'dbo.RosterRows',N'ParticipationState') IS NULL THEN 0 ELSE 1 END;") == 1;
+            var rowInsert = hasParticipationState
+                ? "INSERT dbo.RosterRows(Id,RegistrationId,RowNumber,RowType,DisplayName,Email,ParticipationState,IsActive,CreatedAt) VALUES('{0}','{1}',1,'INDIVIDUAL',N'Test Student {2}',N'student{2}@example.invalid','ACCEPTED',1,SYSDATETIMEOFFSET());"
+                : "INSERT dbo.RosterRows(Id,RegistrationId,RowNumber,RowType,DisplayName,Email,IsActive,CreatedAt) VALUES('{0}','{1}',1,'INDIVIDUAL',N'Test Student {2}',N'student{2}@example.invalid',1,SYSDATETIMEOFFSET());";
             for (var i = 1; i <= 2; i++)
                 await ExecuteAsync($"""
                     INSERT dbo.Users(Id,Username,NormalizedUsername,PasswordHash,FullName,IsActive,CreatedAt)
@@ -808,8 +858,7 @@ public sealed class SchemaV11Tests
                     VALUES('{Id(40+i)}',N'Tour {i}','{Id(11)}','{Id(11)}',SYSDATETIMEOFFSET(),'SCHEDULED',0,'{Id(1)}',SYSDATETIMEOFFSET());
                     INSERT dbo.GroupRegistrations(Id,TourId,RepresentativeUserId,SchoolName,GroupName,ContactName,ContactEmail,State,SubmittedAt,CreatedAt)
                     VALUES('{Id(43+i)}','{Id(41)}','{Id(1)}',N'Test School',N'Group {i}',N'Test Contact',N'contact{i}@example.invalid','APPROVED',SYSDATETIMEOFFSET(),SYSDATETIMEOFFSET());
-                    INSERT dbo.RosterRows(Id,RegistrationId,RowNumber,RowType,DisplayName,Email,IsActive,CreatedAt)
-                    VALUES('{Id(60+i)}','{Id(43+i)}',1,'INDIVIDUAL',N'Test Student {i}',N'student{i}@example.invalid',1,SYSDATETIMEOFFSET());
+                    {string.Format(rowInsert, Id(60+i), Id(43+i), i)}
                     INSERT dbo.Invitations(Id,RosterRowId,AccessCodeHash,AccessCodeProtected,AccessVersion,CodeIssuedAt,ExpiresAt,CreatedAt)
                     VALUES('{Id(70+i)}','{Id(60+i)}',CONVERT(binary(32),{i}),0x01,1,SYSDATETIMEOFFSET(),DATEADD(day,1,SYSDATETIMEOFFSET()),SYSDATETIMEOFFSET());
                     INSERT dbo.TourAllowedBranches(Id,TourId,RouteVariantId,IsEnabled,CreatedAt)

@@ -24,6 +24,7 @@ public sealed class UpdateTourCommandHandler(ITourManagementRepository repositor
         var scheduleChanged = tour.ScheduledStartAt != input.ScheduledStartAt;
         if ((routeChanged || scheduleChanged) && !permissions.CanChangeScheduleAndRoute)
             throw new ConflictException("Tour đã có đăng ký, nhánh hoặc lịch sử; cần workflow thay đổi lịch/tuyến riêng.", "TOUR_CONFIGURATION_LOCKED");
+        if (routeChanged || scheduleChanged) TourPreparation.RequireConfiguredDuration();
         var now = clock.GetUtcNow();
         if (scheduleChanged) TourPreparation.RequireFuture(input.ScheduledStartAt, now);
         var changed = new List<string>();

@@ -14,9 +14,9 @@ Implemented backend slice: Route identity and immutable fixed-route revisions, S
 | `GET /api/technical/route-verifications/queue` | `TechnicalStaff` | Lists submitted revisions with no whole-route run yet |
 | `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | `TechnicalStaff` | Appends a manual PASS/FAIL run for a submitted revision |
 
-The old `/api/staff/manage/routes` and `/api/admin/routes` URLs retain the legacy contract and operate only on `AuthoringMode=LEGACY`. The latter URL is a current Staff-only compatibility alias. Legacy Route activation is not certification. New revision endpoints use the shared `Routes` identity table but do not serialize or mutate legacy `RouteStops`.
+The old mutable Route write operations and `/api/admin/routes` alias are retired under ADR-0027. Two Staff-only reads (`GET /api/staff/manage/routes` and `GET /api/staff/manage/routes/{id}`) remain for the legacy Tour projection and return only `AuthoringMode=LEGACY`. They cannot author or activate Routes. New revision endpoints use the shared `Routes` identity table but do not serialize or mutate legacy `RouteStops`.
 
-`GET /api/routes` lists current VERSIONED revision views, including drafts not yet submitted. Query fields are `search`, `mapVersionId`, `page` (default 1), `size` (default 20, maximum 100) and `sort` (`name`, `-name`, `createdAt`, `-createdAt`). A route appears once with its current revision; older revisions remain available from the history endpoint. This does not change the separate legacy catalog contract.
+`GET /api/routes` lists current VERSIONED revision views, including drafts not yet submitted. Query fields are `search`, `mapVersionId`, `page` (default 1), `size` (default 20, maximum 100) and `sort` (`name`, `-name`, `createdAt`, `-createdAt`). A route appears once with its current revision; older revisions remain available from the history endpoint. The legacy GET projection remains separate and read-only for the existing Tour model.
 
 ## Create → submit → FAIL → revise → PASS → history
 
