@@ -19,8 +19,8 @@ POST /api/staff/manage/registrations/{registrationId}/rows/{rowId}/reject
 The request body includes a fresh `requestId`, `expectedRegistrationRowVersion`,
 `expectedTourRowVersion`, and `expectedRowVersion`; rejection also requires a
 reason (maximum 1000 characters). A stale snapshot returns 409. Aggregate
-registration accept/reject endpoints remain only for exactly one active pending
-row; multi-row approvals must not be implied by a single aggregate action.
+registration-wide accept/reject and Admin URL aliases are retired under
+ADR-0027; only per-row Staff decisions are routed.
 
 ## Email-change queue
 
@@ -33,9 +33,8 @@ rechecks current email and reservation uniqueness, changes the single accepted
 row and rotates its invitation/session atomically, and queues delivery through
 the existing mail worker.
 
-Legacy `POST /api/admin/registrations/{id}/roster/{rowId}/email` is still
-Admin-authorized for compatibility but always returns
-`409 LEGACY_EMAIL_CORRECTION_DISABLED`; do not integrate the direct mutation.
+The legacy Admin direct-email route is no longer mapped. Do not integrate the
+direct mutation; use the Representative request and Staff review workflow.
 
 ## Limits
 

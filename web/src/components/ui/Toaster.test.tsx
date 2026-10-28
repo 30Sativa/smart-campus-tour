@@ -11,7 +11,7 @@ function renderToaster() {
 describe('Toaster', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('shows what finished, with its next step, and leaves on its own', () => {
+  it('shows what finished, with its next step, and leaves on its own', async () => {
     vi.useFakeTimers()
     renderToaster()
     act(() => { notify({ title: 'Đã tạo tài khoản staff04', detail: 'Vai trò Staff.', action: { label: 'Danh sách', to: '/admin/accounts' } }) })
@@ -21,22 +21,23 @@ describe('Toaster', () => {
     expect(toast).toHaveTextContent('Vai trò Staff.')
     expect(screen.getByRole('link', { name: 'Danh sách' })).toHaveAttribute('href', '/admin/accounts')
 
-    act(() => { vi.advanceTimersByTime(5_500) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('holds while pointed at and closes on request; errors are alerts', () => {
+  it('holds while pointed at and closes on request; errors are alerts', async () => {
     vi.useFakeTimers()
     renderToaster()
     act(() => { notify({ tone: 'error', title: 'Không ghi được deploy' }) })
 
     const toast = screen.getByRole('alert')
     fireEvent.mouseEnter(toast)
-    act(() => { vi.advanceTimersByTime(20_000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000) })
     expect(screen.getByRole('alert')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đóng thông báo' }))
-    act(() => { vi.advanceTimersByTime(300) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(300) })
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

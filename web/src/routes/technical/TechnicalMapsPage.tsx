@@ -5,7 +5,7 @@ import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { useMapVersions, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
-import { errorText, stamp } from '../../features/technical/technical-format'
+import { errorText, mapUploadFieldErrors, stamp } from '../../features/technical/technical-format'
 import type { MapVersionItem } from '../../features/technical/api/technical'
 
 const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
@@ -81,6 +81,8 @@ function UploadDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   const [areaKey, setAreaKey] = useState('')
   const [areaName, setAreaName] = useState('')
   const [packageFile, setPackageFile] = useState<File | null>(null)
+  const uploadErrors = upload.error ? mapUploadFieldErrors(upload.error) : {}
+  const fieldChanged = () => upload.reset()
   const close = () => { upload.reset(); onClose() }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -91,10 +93,10 @@ function UploadDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     <Drawer open={open} title="Upload version map" description="Chọn package ZIP đã tạo bên ngoài web. Upload không tự triển khai map lên robot." onClose={close}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Hủy</button><button type="submit" form="map-upload-form" className={buttonClass('primary')} disabled={!packageFile || upload.isPending}>{upload.isPending ? 'Đang tải…' : 'Upload version'}</button></div>}>
       <form id="map-upload-form" className="space-y-3.5" onSubmit={submit}>
-        <div><label className={labelClass} htmlFor="map-area-key">Mã khu vực</label><input id="map-area-key" className={`${inputClass} mt-1`} required maxLength={80} pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?" value={areaKey} onChange={(event) => setAreaKey(event.target.value)} placeholder="library-floor-1" /></div>
-        <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={(event) => setAreaName(event.target.value)} /></div>
-        <div><label className={labelClass} htmlFor="map-package">Package map (.zip)</label><input id="map-package" className={`${inputClass} mt-1`} required type="file" accept=".zip,application/zip" onChange={(event) => setPackageFile(event.target.files?.[0] ?? null)} /></div>
-        {upload.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(upload.error)}</p>}
+        <div><label className={labelClass} htmlFor="map-area-key">Mã khu vực</label><input id="map-area-key" aria-describedby="map-area-key-help" aria-invalid={Boolean(uploadErrors.areaKey)} className={`${inputClass} mt-1`} required maxLength={80} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={areaKey} onChange={(event) => { setAreaKey(event.target.value); fieldChanged() }} placeholder="library-floor-1" />{uploadErrors.areaKey && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaKey}</p>}<p id="map-area-key-help" className="mt-1 text-xs text-[#64748b]">Chữ thường không dấu, số và dấu gạch nối; bắt đầu/kết thúc bằng chữ hoặc số.</p></div>
+        <div><label className={labelClass} htmlFor="map-area-name">Tên khu vực</label><input id="map-area-name" aria-invalid={Boolean(uploadErrors.areaName)} className={`${inputClass} mt-1`} required maxLength={150} value={areaName} onChange={(event) => { setAreaName(event.target.value); fieldChanged() }} />{uploadErrors.areaName && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.areaName}</p>}</div>
+        <div><label className={labelClass} htmlFor="map-package">Package map (.zip)</label><input id="map-package" aria-describedby="map-package-help" aria-invalid={Boolean(uploadErrors.package)} className={`${inputClass} mt-1`} required type="file" accept=".zip,application/zip" onChange={(event) => { setPackageFile(event.target.files?.[0] ?? null); fieldChanged() }} />{uploadErrors.package && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{uploadErrors.package}</p>}<p id="map-package-help" className="mt-1 text-xs text-[#64748b]">ZIP chứa trực tiếp một file ROS YAML và một file PGM được YAML tham chiếu; không đặt trong thư mục con.</p></div>
+        {uploadErrors.form && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e18]">{uploadErrors.form}</p>}
         <Note tone="warn">Robot vẫn chạy map hiện tại cho tới khi bạn nạp package mới và ghi kiểm tra.</Note>
       </form>
     </Drawer>

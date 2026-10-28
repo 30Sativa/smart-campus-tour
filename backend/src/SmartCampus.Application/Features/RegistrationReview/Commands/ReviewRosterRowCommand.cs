@@ -35,7 +35,8 @@ public sealed class ReviewRosterRowCommandValidator : AbstractValidator<ReviewRo
 }
 
 public sealed class ReviewRosterRowCommandHandler(IRegistrationRepository registrations,
-    InvitationSettings invitationSettings, InvitationIssuer issuer, TimeProvider clock)
+    InvitationSettings invitationSettings, InvitationIssuer issuer, TimeProvider clock,
+    IValidator<RosterInput> rosterInputValidator)
     : IRequestHandler<ReviewRosterRowCommand, Unit>
 {
     public async Task<Unit> Handle(ReviewRosterRowCommand command, CancellationToken ct)
@@ -64,8 +65,11 @@ public sealed class ReviewRosterRowCommandHandler(IRegistrationRepository regist
         var now = clock.GetUtcNow();
         if (command.Decision == "accept")
         {
+            var acceptedRosterRow = new RosterInput(row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName);
+            var rowValidation = await rosterInputValidator.ValidateAsync(acceptedRosterRow, ct);
+            if (!rowValidation.IsValid) throw new ValidationException(rowValidation.Errors);
             await RegistrationEmailReservation.EnsureAvailableAsync(registrations, tour.Id, registration.Id,
-                [new RosterInput(row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName)], ct);
+                [acceptedRosterRow], ct);
             row.ParticipationState = RosterParticipationStates.Accepted;
             row.ReviewReason = null;
             if (invitationSettings.Enabled)

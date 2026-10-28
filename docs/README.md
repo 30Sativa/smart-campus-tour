@@ -32,10 +32,12 @@ copying them here.
 
 ## 3. Architecture and Product Decisions
 
-ADR-0020 supersedes only the listed business parts of earlier ADRs. Admin-era
-Route/Tour API contracts are retained as compatibility aliases where migrated;
-consult each endpoint's current role boundary below.
-The new TechnicalStaff account foundation does not implement Technical workspaces.
+ADR-0020 supersedes only the listed business parts of earlier ADRs. The
+owner-authorized API cutover in [ADR-0027](decisions/0027-versioned-map-poi-and-route-api-cutover.md)
+retires replaced Admin POI/Route/Tour/registration aliases and legacy authoring
+operations while retaining only reads still used by the pre-execution Tour
+slice. See `backend/docs/api-cutover.md` for the endpoint-by-endpoint inventory.
+TechnicalStaff login does not by itself implement every Technical workspace.
 
 The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)
 replaces seed-only business Route/dwell preparation; earlier ADRs retain their

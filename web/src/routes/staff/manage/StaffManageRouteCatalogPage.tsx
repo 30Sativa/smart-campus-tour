@@ -1,38 +1,20 @@
-import { useState } from 'react'
 import { Link } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { PageHeader, Pagination, SearchField, panelClass } from '../../../components/ui/ConsolePrimitives'
-import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
-import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../../features/administration/AdminUi'
-import { useDebouncedValue } from '../../../features/administration/use-debounced-value'
-import { useRoutes } from '../../../features/administration/routes/hooks'
-import { routeError } from '../../../features/administration/routes/route-messages'
+import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
+import { buttonClass } from '../../../components/ui/ui-classes'
+import { AdminPage, Notice } from '../../../features/administration/AdminUi'
+import { versionedRoutesApi } from '../../../features/administration/routes/versioned-api'
 
 export default function StaffManageRouteCatalogPage() {
-  const [search, setSearch] = useState('')
-  const [active, setActive] = useState('all')
-  const [page, setPage] = useState(1)
-  const term = useDebouncedValue(search, 300)
-  const routes = useRoutes({ search: term, page, size: 20, isActive: active === 'all' ? undefined : active === 'active' })
+  const routes = useQuery({ queryKey: ['versioned-routes'], queryFn: () => versionedRoutesApi.list() })
   return <AdminPage>
-    <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title="Danh mục tuyến" description="Sắp xếp hành trình từ các POI đã có. Khả dụng không đồng nghĩa đã kiểm chứng robot thực tế."
-      action={<Link to="/staff/manage/routes/new" className={buttonClass('primary')}><Plus size={17} aria-hidden="true" />Tạo tuyến</Link>} />
-    <section className={panelClass} aria-label="Danh sách tuyến">
-      <div className="flex flex-wrap gap-3 border-b border-[#e2e8f0] p-4">
-        <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm tuyến" placeholder="Tên hoặc mô tả" />
-        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái tuyến" className={inputClass} value={active} onChange={e => { setActive(e.target.value); setPage(1) }}>
-          <option value="all">Tất cả</option><option value="active">Khả dụng</option><option value="inactive">Không khả dụng</option>
-        </select></label>
-      </div>
-      {routes.isError ? <AdminErrorPanel title={routeError(routes.error)} onRetry={() => void routes.refetch()} /> : routes.isPending ? <SkeletonRows rows={4} /> : routes.data?.data.length === 0 ?
-        <EmptyState title="Chưa có tuyến phù hợp" description="Tạo tuyến từ POI hiện có hoặc điều chỉnh bộ lọc." /> :
-        <ul className="divide-y divide-[#e2e8f0]">{routes.data?.data.map(route => <li key={route.id}>
-          <Link to={`/staff/manage/routes/${route.id}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-[#2d719e]">
-            <div><p className="text-[15px] font-semibold text-[#173b59]">{route.name}</p><p className="mt-1 text-sm text-[#64748b]">{route.mapKey} / {route.mapFrame} · {route.stopCount} điểm dừng</p></div>
-            <span className="rounded-full border border-[#d9e9f5] px-3 py-1 text-xs">{route.isActive ? 'Khả dụng' : 'Không khả dụng'}</span>
-          </Link>
-        </li>)}</ul>}
-      {routes.data && <Pagination page={page} pageCount={Math.max(1, routes.data.pagination.totalPages)} total={routes.data.pagination.totalItems} pageSize={20} onPage={setPage} label="tuyến" />}
+    <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title="Danh sách tuyến versioned" description="Các tuyến mới luôn tham chiếu revision POI và map version chính xác."
+      action={<Link to="/staff/manage/routes/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo tuyến</Link>} />
+    <div className="mb-4"><Notice tone="warn">Tour/Scheduling vẫn đang dùng luồng đọc legacy và chưa nhận route revision mới. Không thể lập lịch hoặc READY chỉ từ việc tuyến đã lưu hay có test-run.</Notice></div>
+    <section className={`${panelClass} overflow-hidden`} aria-label="Danh sách tuyến versioned">
+      {routes.isPending ? <p className="p-6">Đang tải…</p> : routes.error ? <p className="p-4 text-sm text-red-700" role="alert">Không tải được tuyến versioned.</p> : !routes.data?.data.length ? <p className="p-6 text-center text-sm text-[#64748b]">Chưa có tuyến versioned.</p> :
+        <ul className="divide-y divide-[#e2e8f0]">{routes.data.data.map(route => <li key={route.routeId}><Link to={`/staff/manage/routes/${route.routeId}`} className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-[#f8fafc]"><span><b>{route.name}</b><small className="mt-1 block text-[#64748b]">{route.mapKey} · {route.stops.length} POI · revision {route.revisionNumber}</small></span><span className="rounded-full border px-3 py-1 text-xs">{route.isSubmitted ? `Đã gửi · ${route.verificationStatus}` : 'Bản nháp'}</span></Link></li>)}</ul>}
     </section>
   </AdminPage>
 }

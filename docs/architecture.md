@@ -8,34 +8,37 @@ The current target is in `docs/requirements/campus-tour-scope.md`; source eviden
 implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
 TechnicalStaff accounts, the scoped versioned map/POI API, and Wave C's
 per-row registration/email-change slice are implemented.
-Tour, Route, legacy POI catalog, and registration review are Staff-authorized
-under `/api/staff/manage/*`; old `/api/admin/{tours,routes,pois,registrations}`
-paths remain Staff-only compatibility aliases. The legacy direct email-correction
-URL remains Admin-only but fails closed; the target request/review flow is
-Representative-owned and Staff-reviewed.
+Staff owns versioned POI proposals and route revisions, per-row registration
+review, and the existing pre-execution Tour operations. Admin business aliases,
+the legacy POI catalog API, legacy Route authoring writes, aggregate registration
+review, and direct Admin email correction have been removed from HTTP routing.
+Read-only legacy Route projections remain for the Tour slice that cannot yet
+consume RouteRevision. Admin account management remains available.
 F-14, conflicting branch cutoff, project YAML/frame mapping and M2 command transport remain pending.
 Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
 
-## Staff management API authorization migration (2026-10-27)
+## API ownership and retired compatibility routes (2026-10-28)
 
-`Staff` is the only role allowed to access Tour, Route, legacy POI catalog and
-registration-review management endpoints. Each controller exposes the current
-`/api/staff/manage/...` path and retains its former `/api/admin/...` URL as a
-path-compatibility alias; the legacy prefix does not retain Admin authority.
-`Admin` is limited to account/role administration. Invitation endpoints accept
-Staff for organization-wide support or Representative scoped to their own
-registration. TechnicalStaff remains limited to versioned map upload and POI
-verification endpoints. Row-level registration decisions are Staff-only;
-email-change requests are Representative-owned and Staff-reviewed. Legacy
-direct Admin roster-email correction is disabled with a conflict response.
+The accepted cutover is recorded in
+[ADR-0027](decisions/0027-versioned-map-poi-and-route-api-cutover.md). `Staff`
+is the application/JWT role for Tour Staff; `TechnicalStaff` has only the
+map-upload, deployment-evidence and POI-verification policies. Admin keeps
+account management. The old `/api/admin/{pois,routes,tours,registrations}`
+aliases and direct Admin email correction are not routed. `GET
+/api/staff/manage/routes` and its detail read remain a legacy projection used by
+the existing Tour model; route creation/edit/activation is versioned under
+`/api/staff/routes`. Staff registration review remains under its Staff path and
+uses per-row actions. The legacy POI catalog endpoints and aggregate approve/
+reject endpoints are removed. Existing SQL tables and rows are retained.
 
 ## Tour Management API (legacy pre-execution slice)
 
 This is the pre-execution SQL slice in
 `docs/decisions/0018-admin-tour-management.md`; Staff now owns the existing
 pre-execution API. All endpoints require Staff, and CreatedByUserId is attribution
-only. `/api/staff/manage/tours` is canonical; `/api/admin/tours` is a Staff-only
-compatibility alias. Route selection is restricted to `AuthoringMode=LEGACY`.
+only. `/api/staff/manage/tours` is canonical; the former `/api/admin/tours`
+compatibility alias was retired under ADR-0027. Route selection is restricted
+to `AuthoringMode=LEGACY`.
 This API cannot persist a RouteRevisionId, assigned Operator, robot reservation,
 or immutable READY snapshot. It is not a versioned Route scheduling path. No
 target READY/Finalize/Reopen, explicit robot/Operator assignment, reservation,
@@ -111,49 +114,18 @@ TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
 TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
 commissioning or readiness for robot operation.
 
-## Staff Route Management API (original CRUD slice ADR-0017, current owner ADR-0020)
+## Versioned Route authoring and legacy Tour read boundary
 
-The live Staff catalog at `/staff/manage/routes` uses SQL-backed endpoints below;
-Tour operations fixtures retain their separate mock Route contract. ADR-0017
-records the original CRUD decision; ADR-0020 supersedes its Admin ownership with
-Staff ownership while preserving the technical persistence and commissioning
-boundary.
-
-- Staff-only `GET /api/staff/manage/routes?search=&page=1&size=20&isActive=` returns
-  `PagedResponse` with id, name, description, mapKey, mapFrame, isActive,
-  stopCount, createdAt and updatedAt. Supports `sort=name,-name,createdAt,-createdAt`
-  (one field per request, default name), then id; size 1–100. Expansion is rejected.
-- `GET /api/staff/manage/routes/{id}` returns `BaseResponse` detail: the same Route
-  fields, startX/startY/startYaw, endMode/endX/endY/endYaw, ordered `stops`
-  (id, poiId, poiName, stopOrder, dwellSeconds, headSteps), opaque `version`,
-  `usage` (hasReferences, hasReadyOrRunningTours, canEditConfiguration,
-  canEditMetadataAndAvailability, canDelete), `configurationIssues` and
-  `availabilityIssues`. Issue entries are stable codes; they are not physical
-  verification or a Tour READY verdict.
-- `POST /api/staff/manage/routes` takes name, description, mapKey, mapFrame,
-  startX/startY/startYaw, endMode (`LAST_POI` or `POSE`), nullable End pose,
-  and ordered stops `{poiId,dwellSeconds,headSteps:[{preset,holdSeconds}]}`.
-  Order is derived from array position. It creates an inactive Route and
-  returns `{id}`. Copying uses the same endpoint with a new identity.
-- `PUT /api/staff/manage/routes/{id}` takes `{expectedVersion, configuration}`, where
-  `configuration` has the POST fields above.
-  `POST /api/staff/manage/routes/{id}/activate` and `/deactivate`, and
-  `DELETE /api/staff/manage/routes/{id}` take `{expectedVersion}`. Successful writes
-  use `BaseResponse`; reload detail for the current version. Delete is only
-  allowed without any configuration/history reference. Deactivation retains
-  existing Tour/variant references. No operation sends robot commands.
-- Responses: 400 invalid fields/POI/map/activation configuration, 401/403
-  authentication/role failure, 404 missing Route, 409 `STALE_ROUTE` or
-  `ROUTE_IN_USE` or `ROUTE_CONCURRENT_CHANGE` conflicts. Every successful change appends an AuditLog with
-  actor, Route id and changed field names, atomically with SQL changes.
-
-No schema change: version is a SHA-256 aggregate revision compared under a
-Route UPDLOCK in a serializable transaction. Referenced route configuration
-is immutable for every Tour state and every variant; READY/RUNNING use also
-locks metadata and availability. Active POIs and exact map/frame consistency
-are rechecked on activation/configuration writes. SQL reads protect those
-checks until commit. Future Tour selection/readiness and technical imports
-must coordinate the same route/POI locks and revalidate these inputs.
+The former Route catalog create/update/availability/delete operations under
+`/api/staff/manage/routes` and its `/api/admin/routes` alias are retired. New
+authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
+submission and Technical Staff manual test evidence described in
+`backend/docs/route-revisions.md` and ADR-0023. Route stops carry exact
+`PoiRevisionId` and the corresponding effective verification evidence; they do
+not pass legacy `PoiId` values. The two remaining Staff Route GET operations
+serve existing Tour records only. Versioned Route to Tour selection,
+scheduling, reservations and READY remain blocked by ADR-0024; these APIs do
+not imply a schedulable Tour or hardware acceptance.
 
 How the pieces of CampusTour DT-AMR fit together. This file covers what
 crosses a folder boundary. Anything internal to one folder is documented
@@ -592,89 +564,15 @@ JWT may remain usable until its natural expiry (about 15 minutes plus validation
 clock skew). This is the accepted V1 limitation; no token version or blacklist
 is used.
 
-### 3.0.2 Legacy POI catalog management (Staff API)
+### 3.0.2 Retired POI catalog API and retained legacy data
 
-The POI catalog endpoints require the `Staff` role. They implement legacy
-catalog behavior selected in [ADR-0014](decisions/0014-admin-poi-management.md).
-`/api/staff/manage/pois` is canonical; the former `/api/admin/pois` routes are
-Staff-only compatibility aliases:
-
-| Endpoint | Request and success | Rejection behavior |
-|---|---|---|
-| `GET /api/staff/manage/pois` | Optional `search`, `sort`, `page`, `size`, and `isActive`; HTTP 200 with POI summaries and pagination. | Invalid page/size/sort or non-empty `expand`: 400. Anonymous: 401. Non-Staff: 403. |
-| `GET /api/staff/manage/pois/{id}` | HTTP 200 with POI details, base64 `rowVersion`, and current usage/editability flags. | Missing POI: 404. Anonymous: 401. Non-Staff: 403. |
-| `POST /api/staff/manage/pois` | JSON fields: `name`, `description`, `mapKey`, `mapFrame`, `x`, `y`, `yaw`, `narrationText`, `audioUrl`, `narrationSeconds`, `fallbackVideoUrl`; HTTP 200 with the new ID. New rows are inactive. | Invalid input: 400. Anonymous: 401. Non-Staff: 403. |
-| `PUT /api/staff/manage/pois/{id}` | Same content/map/pose fields plus current base64 `expectedRowVersion`; HTTP 200. | Invalid input: 400. Missing POI: 404. Stale version, a live Tour lock, or editing referenced geometry: 409. |
-| `POST /api/staff/manage/pois/{id}/activate` | JSON `{ "expectedRowVersion": "..." }`; HTTP 200. | Missing POI: 404. Stale version or a live Tour lock: 409. |
-| `POST /api/staff/manage/pois/{id}/deactivate` | Same body as activate; HTTP 200. Existing route/history references remain intact. | Missing POI: 404. Stale version or a live Tour lock: 409. |
-
-List search covers name/description. Sort accepts `name`, `isActive`,
-`createdAt`, or `updatedAt`, with `-` for descending; `page` defaults to 1,
-`size` to 20 and is limited to 1–100. A non-empty `expand` is rejected. There
-is no delete endpoint. `IsActive` only means selectable for a newly prepared
-Route; it is not evidence of narration readiness or physical navigation
-verification.
-
-Content and availability remain editable for referenced POIs except while a
-`READY` or `RUNNING` Tour uses the POI through its base route, active route, or
-enabled branch. Map/frame/x/y/yaw can be changed only before any `RouteStop` or
-historical `TourEvent` references the POI. POI writes and audit rows commit
-together inside a POI-specific serializable SQL transaction. Updates and
-lifecycle operations require the current SQL Server `RowVersion`; the
-transaction takes an update lock on the POI row before reading that token, so
-concurrent requests with one version serialize into one success and one 409
-stale-version conflict. Stale writes preserve the stable POI ID. This scope
-does not implement audio upload or route editing. Existing v1.1
-databases need `backend/database/patches/add-poi-rowversion-v1.1.sql` before
-this API build.
-
-#### 3.0.2.1 Admin occupancy-map pose picker
-
-The Web picker uses a versioned static map package exported from
-`robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
-source files; Web owns the deployment derivative. `map2-v2`, frame `map`,
-identifies the current snapshot; `map2-v1` remains registered for existing POIs.
-Neither key is an alias for demo, Student, or Twin maps.
-The exporter records source SHA-256 hashes, resolution, the full origin pose,
-dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
-same cell as the source pixel, with Nav2 Humble trinary classification. There
-is no crop, resize, rotation, or interpolation. Changed geometry or occupancy
-semantics requires a new MapKey. Web builds use committed assets and do not
-need the robot filesystem. Source parity is checked by `web/scripts/verify`.
-The exporter and Web catalog accept only zero origin yaw: Nav2 Humble's
-StaticLayer and AMCL use origin position without map orientation, so a rotated
-OccupancyGrid is outside this navigation package contract. Web resolves the
-static image path against Vite `BASE_URL` for both display and cell sampling.
-
-For continuous image coordinates `(u,v)`, measured from the top-left edge,
-let `(a,b) = resolution * (u, height-v)`. ROS position is
-`origin.xy + R(origin.yaw) * (a,b)`. Cell centers use half-pixel coordinates;
-continuous pointer positions do not receive an extra half-cell offset. Yaw is
-body heading in radians about +Z, positive counter-clockwise from +X. The Web
-picker quantizes newly edited x/y to four decimals and yaw to six; unchanged
-stored poses retain their values. Pixel conversion is separate from calibrated
-Student/Twin presentation transforms. With this map, ROS `(0,0)` projects to
-image `(306,427)`.
-
-Create/Edit share a picker with position, heading, numeric fine-tuning, and
-view-only zoom/pan when pose is locked. A missing MapKey/frame package never
-falls back to a different map. Selecting a different map clears the draft pose
-and requires a new position/heading. Existing POI endpoints, RowVersion,
-transactional locks, and inactive-on-create behavior are unchanged. Occupied
-and unknown cells produce advisory warnings, not navigation verification.
-The API still validates numeric precision/range, not map existence, bounds,
-occupancy, reachability, or loaded robot-map identity.
-
-The current source uses `negate: 0` and `free_thresh: 0.196`; gray 205 is
-unknown (`1-205/255 > 0.196`). `map2-v2` records these thresholds and is the
-source-parity check target and default for new POIs. `map2-v1` remains an
-immutable snapshot with `free_thresh: 0.25`, where gray 205 is free and no
-cells are unknown. Existing POIs retain their key and raster; switching to
-the new map requires explicit pose review and never bulk-relabels stored POIs.
-Do not infer occupancy from the source image's appearance or alter robot
-thresholds as part of the picker. Deployment-map binding, current robot pose,
-navigation testing, and fleet integration remain separate work. A later
-threshold change requires a new key and source-parity check target.
+The legacy POI catalog API (/api/staff/manage/pois and /api/admin/pois) has
+been removed from routing and OpenAPI under owner-authorized ADR-0027. New
+Staff POI work uses the immutable map-version/proposal/revision workflow in
+§3.0.3. The legacy POI rows and their SQL tables remain intact because
+existing legacy Route/Tour records still reference them; HTTP API retirement
+does not delete or migrate that data. The old Route authoring API must not
+consume proposal IDs as legacy POI IDs.
 
 ### 3.0.3 Versioned map package and per-POI technical verification (ADR-0021)
 
@@ -683,8 +581,8 @@ The additive v1.2 schema and new `/api/technical/map-versions` and
 deployment evidence, Staff proposals/revisions/submission, and TechnicalStaff
 per-revision checks. The complete endpoint/request/role/error/audit contract is
 in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md).
-The new endpoints do not grant Admin access. Existing `AdminPoisController`
-remains a legacy authorization gap and its rows are not migrated by this slice.
+The new endpoints do not grant Admin access. Existing legacy POI rows are not
+migrated or deleted; only their old HTTP catalog interface has been retired.
 
 The supported upload is a bounded ZIP of root ROS trinary YAML and referenced
 8-bit PGM. Upload is not robot deployment; TechnicalStaff records exact package
@@ -1137,20 +1035,20 @@ PII. Invitation/email/session, branch runtime and voting are
 outside this slice. Staff review is implemented separately below; Admin/Staff
 Tour preview mocks continue to use their own simulation records.
 
-#### 3.2.2 Staff registration review HTTP boundary (legacy aggregate workflow)
+#### 3.2.2 Staff registration review HTTP boundary (per-row workflow)
 
-This integrates `backend/` and `web/` against the existing v1.1 schema; no
-schema change is required. Review list/detail/approve/reject require the Staff
-JWT role under `/api/staff/manage/registrations`; `/api/admin/registrations`
-is a Staff-only compatibility alias. The direct email-correction command in
-§3.2.4 remains Admin-only pending the target request/review workflow.
+This integrates `backend/` and `web/` against the current schema. Review
+list/detail and per-row accept/reject require the Staff JWT role under
+`/api/staff/manage/registrations`; former Admin aliases and aggregate decisions
+are retired under ADR-0027. Email changes use the Representative request and
+Staff review workflow in §3.2.3; direct Admin correction is no longer routed.
 
 | Method | Path | Behavior |
 |---|---|---|
 | GET | /api/staff/manage/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
 | GET | /api/staff/manage/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
-| POST | /api/staff/manage/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
-| POST | /api/staff/manage/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
+| POST | /api/staff/manage/registrations/{id}/rows/{rowId}/accept | Accepts one pending row after row, registration and Tour version checks |
+| POST | /api/staff/manage/registrations/{id}/rows/{rowId}/reject | Rejects one pending row with a reason after version checks |
 
 Collections use BaseResponse/PagedResponse and page/size/search/sort; expand is
 unsupported. Search covers school, group, Representative full name and Tour name.
@@ -1306,16 +1204,16 @@ and retention remain separate. Admin email
 correction is implemented below.
 HTTPS and browser cookie/local-network permissions still apply to local BE use.
 
-#### 3.2.4 Admin roster email correction (implemented)
+#### 3.2.4 Historical Admin roster email correction (retired)
 
-This preserves the legacy backend Admin-only correction endpoint; it is not
-integrated into the live Staff registration drawer or target request/review flow.
-Business authority is the historical scope in Section 5.2; it is a single-row correction,
-not approval reversal or roster replacement.
+This section records the historical contract only. The Admin-only correction
+endpoint is retired under ADR-0027; the current path is the request/review
+workflow in §3.2.3. Business authority described below belongs to the prior
+baseline and is not a current routable operation.
 
-POST /api/admin/registrations/{id}/roster/{rowId}/email requires the Admin JWT
-role. This legacy operation is not exposed by the Staff UI; the target
-row-level request/review workflow is pending. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
+Former route `POST /api/admin/registrations/{id}/roster/{rowId}/email` required
+the Admin JWT role. It is no longer mapped. Its historical body was
+{requestId, email, expectedRowVersion, expectedTourRowVersion,
 expectedRosterRowVersion, expectedInvitationRowVersion?}. UUID requestId and
 8-byte base64 version tokens are required; the invitation token is null only
 when the selected row has no invitation. Unknown JSON properties are rejected;

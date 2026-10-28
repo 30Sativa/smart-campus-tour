@@ -79,11 +79,24 @@ public sealed class BusinessFlowIntegrationTests
         using var submitPoi = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{proposalId}/submit", staffToken,
             new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1, expectedRowVersion = rowVersion });
         Assert.Equal(HttpStatusCode.OK, submitPoi.StatusCode);
-        Assert.Equal("NOT_CHECKED", (await Body(submitPoi)).GetProperty("data").GetProperty("revision").GetProperty("navigationStatus").GetString());
+        var submittedPoi = (await Body(submitPoi)).GetProperty("data");
+        Assert.Equal("NOT_CHECKED", submittedPoi.GetProperty("revision").GetProperty("navigationStatus").GetString());
+
+        // Exercise the Technical queue DTO used by the real UI. It supplies the
+        // exact submitted revision and current proposal rowversion for the decision.
+        using var verificationQueue = await Get(host.Client,
+            $"/api/technical/poi-verifications?mapVersionId={mapId}", technicalToken);
+        Assert.Equal(HttpStatusCode.OK, verificationQueue.StatusCode);
+        var queuedProposal = Assert.Single((await Body(verificationQueue)).GetProperty("data").EnumerateArray());
+        Assert.Equal(proposalId, queuedProposal.GetProperty("proposalId").GetGuid());
+        Assert.Equal(1, queuedProposal.GetProperty("currentRevision").GetInt32());
+        Assert.Equal(poiRevisionId, queuedProposal.GetProperty("revision").GetProperty("id").GetGuid());
+        Assert.Equal(rowVersion, queuedProposal.GetProperty("rowVersion").GetString());
 
         using var verifyPoi = await Json(host.Client, HttpMethod.Post,
             $"/api/technical/poi-proposals/{proposalId}/revisions/1/verification", technicalToken,
-            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1, expectedRowVersion = rowVersion,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = queuedProposal.GetProperty("currentRevision").GetInt32(),
+                expectedRowVersion = queuedProposal.GetProperty("rowVersion").GetString(),
                 robotCode = "flow_physical", resultCode = "PASS", reached = true, stopped = true,
                 localizationPassed = true, cameraPresetConfirmed = true, reason = (string?)null,
                 evidenceNote = "SIMULATED BACKEND TEST evidence; no physical robot test was run." });

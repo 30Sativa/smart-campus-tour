@@ -15,6 +15,7 @@ const proposal = {
   id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=',
   revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
 }
+const queueItem = { proposalId: proposal.id, currentRevision: proposal.currentRevision, rowVersion: proposal.rowVersion, revision: proposal.revision }
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
 
@@ -30,7 +31,7 @@ describe('Technical Staff API integration', () => {
       const url = new URL(String(input), 'http://localhost')
       requests.push({ url, init })
       if (url.pathname === '/api/maps/versions' && init?.method !== 'POST') return response([{ map, latestDeployment: null }])
-      if (url.pathname === '/api/staff/poi-proposals') return response([proposal])
+      if (url.pathname === '/api/technical/poi-verifications') return response([queueItem])
       if (url.pathname === '/api/technical/map-versions' && init?.method === 'POST') return response(map)
       if (url.pathname === '/api/technical/map-versions/map-v1/deployment-checks') return response({ id: 'check-1', mapVersionId: 'map-v1', robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Checked', checkedAt: '2026-10-27T10:00:00Z' })
       if (url.pathname.endsWith('/verification')) return response({ id: 'verification-1' })
@@ -61,6 +62,7 @@ describe('Technical Staff API integration', () => {
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã đi kiểm tra tại chỗ.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
     await waitFor(() => expect(requests.some(item => item.url.pathname === '/api/technical/poi-proposals/proposal-1/revisions/1/verification')).toBe(true))
+    expect(requests.some(item => item.url.pathname === '/api/technical/poi-verifications')).toBe(true)
     const call = requests.find(item => item.url.pathname.endsWith('/verification'))!
     expect(JSON.parse(String(call.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion, resultCode: 'PASS', robotCode: 'amr-01' })
   })

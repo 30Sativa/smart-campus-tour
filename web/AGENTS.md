@@ -41,18 +41,7 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview,
-    create/edit a Tour while Scheduled, pick a prepared route, review groups
-    (approve / reject with a reason), send participation e-mails, Chốt (→ Ready)
-    / Mở lại / Hủy before Start. POIs at `/staff/manage/pois` are API-backed:
-    content edits, map/pose only before route/history use (ADR-0014). Route CRUD
-    at `/staff/manage/routes[...]` is API/SQL-backed under ADR-0017; reuse
-    `features/administration/routes/` (legacy feature folder pending ownership migration). Referenced itineraries are immutable;
-    copy to create a new route. Availability never certifies physical safety.
-    Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy
-    feature modules remain under `features/administration/*` pending a focused
-    module move. They call `/api/staff/manage/*`; former `/api/admin/*` paths
-    are Staff-only compatibility aliases. Screen map: `web/docs/admin-tours.md`.
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. Tour reads still use the legacy Staff projection; scheduling/READY is blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
     existing `/api/technical/*` and `/api/maps/*` contracts. Project POI YAML

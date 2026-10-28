@@ -104,16 +104,13 @@ public sealed class ApiDocumentationEndpointTests
         Assert.Equal("Technical Staff — POI Verification", verification.GetProperty("tags")[0].GetString());
         Assert.Contains("navigation fingerprint", verification.GetProperty("description").GetString(), StringComparison.Ordinal);
 
-        var legacyPoi = paths.GetProperty("/api/admin/pois").GetProperty("post");
-        Assert.StartsWith("[LEGACY", legacyPoi.GetProperty("summary").GetString(), StringComparison.Ordinal);
-        Assert.Equal("LEGACY — Admin POI URL (Staff-only alias)", legacyPoi.GetProperty("tags")[0].GetString());
-        Assert.Contains("Current backend permission is Staff", legacyPoi.GetProperty("description").GetString(), StringComparison.Ordinal);
-        Assert.Contains("/api/staff/poi-proposals", legacyPoi.GetProperty("description").GetString(), StringComparison.Ordinal);
-        Assert.True(legacyPoi.GetProperty("security")[0].TryGetProperty("Bearer", out _));
-
-        var legacyEmailCorrection = paths.GetProperty("/api/admin/registrations/{id}/roster/{rowId}/email").GetProperty("post");
-        Assert.Contains("currently requires Admin", legacyEmailCorrection.GetProperty("description").GetString(), StringComparison.Ordinal);
-        Assert.True(legacyEmailCorrection.GetProperty("security")[0].TryGetProperty("Bearer", out _));
+        foreach (var retired in new[] { "/api/admin/pois", "/api/staff/manage/pois", "/api/admin/routes",
+                     "/api/admin/tours", "/api/admin/registrations", "/api/admin/registrations/{id}/roster/{rowId}/email",
+                     "/api/staff/manage/registrations/{id}/approve", "/api/staff/manage/registrations/{id}/reject" })
+            Assert.False(paths.TryGetProperty(retired, out _), $"Retired endpoint remains in OpenAPI: {retired}");
+        Assert.True(paths.TryGetProperty("/api/staff/poi-proposals", out _));
+        Assert.True(paths.TryGetProperty("/api/staff/manage/registrations/{id}/rows/{rowId}/accept", out _));
+        Assert.True(paths.TryGetProperty("/api/admin/accounts", out _));
 
         var bearer = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("Bearer");
         Assert.Equal("http", bearer.GetProperty("type").GetString());

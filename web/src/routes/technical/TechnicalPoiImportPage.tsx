@@ -6,28 +6,29 @@ import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, stamp } from '../../features/technical/technical-format'
-import { usePoiProposals, useVerifyPoi } from '../../features/technical/technical-hooks'
-import type { PoiProposal } from '../../features/technical/api/technical'
+import { usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
+import type { PoiVerificationQueueItem } from '../../features/technical/api/technical'
 
 /**
  * POI verification: what is waiting, as one table; the check itself opens in a
  * drawer beside it, bound to the exact revision and row version it was opened on.
  */
 export default function TechnicalPoiImportPage() {
-  const proposals = usePoiProposals()
+  const proposals = usePoiVerificationQueue()
+  const allProposals = usePoiProposals()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const all = useMemo(() => proposals.data ?? [], [proposals.data])
-  const queue = useMemo(() => all.filter((item) => item.revision.isSubmitted && item.revision.navigationStatus !== 'PASS'), [all])
-  const selected = queue.find((item) => item.id === selectedId)
+  const queue = all
+  const selected = queue.find((item) => item.proposalId === selectedId)
   const failing = queue.filter((item) => item.revision.navigationStatus === 'FAIL').length
-  const passed = all.filter((item) => item.revision.navigationStatus === 'PASS').length
+  const passed = (allProposals.data ?? []).filter(item => item.revision.navigationStatus === 'PASS').length
 
   return (
     <TechnicalPage>
       <PageHeader eyebrow="POI" title="Kiểm chứng POI" description="Ghi kết quả kiểm tra tại chỗ cho POI Staff đã gửi, gắn với đúng revision và version map. Đây là bằng chứng người kiểm tra nhập, không phải dữ liệu robot tự gửi." />
 
-      {!proposals.isPending && !proposals.error && (
+      {!proposals.isPending && !proposals.error && !allProposals.isPending && !allProposals.error && (
         <div className="mb-3">
           <StatStrip label="Tổng hợp kiểm chứng POI" columns="sm:grid-cols-3">
             <StatTile icon={Clock3} label="Chờ kiểm chứng" value={queue.length - failing} tone="warn" />
@@ -44,13 +45,13 @@ export default function TechnicalPoiImportPage() {
             <table className="w-full min-w-[760px] text-left">
               <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Map</th><th className={thClass}>Tọa độ</th><th className={thClass}>Trạng thái</th><th className={thClass}>Đã gửi</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">
-                {queue.map((item) => <tr key={item.id} className={rowClass}>
+                {queue.map((item) => <tr key={`${item.proposalId}:${item.revision.revisionNumber}`} className={rowClass}>
                   <td className={tdClass}><span className="font-semibold text-[#0f172a]">{item.revision.name}</span><p className="text-[11.5px] text-[#64748b]">{item.revision.purpose}</p></td>
                   <td className={`${tdClass} font-mono text-xs`}>{item.revision.mapKey} · r{item.revision.revisionNumber}</td>
                   <td className={`${tdClass} font-mono text-xs text-[#64748b]`}>{item.revision.x}, {item.revision.y}, {item.revision.yaw}</td>
                   <td className={tdClass}><ToneBadge tone={item.revision.navigationStatus === 'FAIL' ? 'danger' : 'warn'}>{item.revision.navigationStatus === 'FAIL' ? 'Cần kiểm tra lại' : 'Chờ kiểm chứng'}</ToneBadge></td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{stamp(item.revision.submittedAt)}</td>
-                  <td className={`${tdClass} text-right`}><button className={buttonClass('primary', 'sm')} type="button" onClick={() => setSelectedId(item.id)}>Ghi kết quả</button></td>
+                  <td className={`${tdClass} text-right`}><button className={buttonClass('primary', 'sm')} type="button" onClick={() => setSelectedId(item.proposalId)}>Ghi kết quả</button></td>
                 </tr>)}
                 {!queue.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={6}>Không có POI đang chờ kiểm chứng.</td></tr>}
               </tbody>
@@ -59,12 +60,12 @@ export default function TechnicalPoiImportPage() {
         )}
       </section>
 
-      {selected && <VerifyDrawer key={selected.id} proposal={selected} onClose={() => setSelectedId(null)} />}
+      {selected && <VerifyDrawer key={selected.proposalId} proposal={selected} onClose={() => setSelectedId(null)} />}
     </TechnicalPage>
   )
 }
 
-function VerifyDrawer({ proposal, onClose }: { proposal: PoiProposal; onClose: () => void }) {
+function VerifyDrawer({ proposal, onClose }: { proposal: PoiVerificationQueueItem; onClose: () => void }) {
   const verify = useVerifyPoi()
   const [robotCode, setRobotCode] = useState('')
   const [evidence, setEvidence] = useState('')
@@ -79,7 +80,7 @@ function VerifyDrawer({ proposal, onClose }: { proposal: PoiProposal; onClose: (
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     verify.mutate({
-      proposalId: proposal.id,
+      proposalId: proposal.proposalId,
       revisionNumber: revision.revisionNumber,
       expectedRowVersion: proposal.rowVersion,
       robotCode,
