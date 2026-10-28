@@ -25,6 +25,8 @@ python3 "$source_root/backend/deploy/validate-release-manifest.py" "$destination
 # Authenticated Contents API works for private repositories; EC2 never fetches GitHub source.
 gh api -H 'Accept: application/vnd.github.raw+json' "/repos/$repo/contents/backend/docker-compose.yml?ref=$release" > "$destination/release/docker-compose.yml"
 [[ -s "$destination/release/docker-compose.yml" ]] || fail 'Release Compose file is empty.'
+gh api -H 'Accept: application/vnd.github.raw+json' "/repos/$repo/contents/backend/docker-compose.db-init.yml?ref=$release" > "$destination/release/docker-compose.db-init.yml"
+[[ -s "$destination/release/docker-compose.db-init.yml" ]] || fail 'Release database-tool Compose file is empty.'
 # Only committed files: ignored api.env/local credentials must never enter a bundle.
 git -C "$source_root" archive "$ops" backend/deploy | tar -x --strip-components=2 -C "$destination/ops"
 printf '%s\n' "$release" "$ops" "$release_run" "$ops_run" > "$destination/verified-revisions"

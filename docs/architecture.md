@@ -1879,7 +1879,7 @@ the data-use condition of the provider tier.
 | `robot/` Docker profiles | GitHub Actions / local Docker | `docker compose --profile debug` or `--profile sim` | development/simulation only |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
-| `backend/` | multi-stage .NET 10 image (`backend/Dockerfile`) | `backend/docker-compose.yml`: HTTPS API + SQL Server + one-shot database bootstrap | one x86_64 AWS EC2 |
+| `backend/` | .NET 10 API (`backend/Dockerfile`); separately versioned DB bootstrap/upgrade tool (`backend/Dockerfile.db-init`) | `backend/docker-compose.yml`: HTTPS API + pinned SQL Server and persistent volume; `backend/docker-compose.db-init.yml` is explicit opt-in only | one x86_64 AWS EC2 |
 | `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; image TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
@@ -1907,14 +1907,17 @@ non-root user. SQL Server 2022 Express is the default edition, uses a persistent
 named volume and an internal Docker network, and publishes no host database port.
 The API has a separate outbound network for invitation delivery.
 
-The one-shot `db-init` waits for SQL health, applies the existing v1.1 snapshot
-transactionally only to an empty database, marks its canonical snapshot hash in
-database metadata, and provisions the dedicated `smartcampus_api` login. It
-rejects existing unmarked/different snapshots instead of migrating them; the
-bootstrap check recognizes only the two explicitly audited comment-equivalent
-snapshots documented in `backend/database/README.md`, preserving the old marker.
-Runtime
-permissions preserve append-only AuditLogs/TourEvents, grant writes for current
+The API deployment never migrates the schema or changes the SQL Server engine.
+It runs the separately versioned `db-init` tool in read-only `--check-only`
+mode before promoting only the API container. Fresh bootstrap uses an explicit
+`--bootstrap` operation against an empty database. Existing data upgrades use
+the separately locked Backend Database Schema Upgrade workflow: it takes and
+verifies a full backup, applies ordered additive Database First patches, checks
+the resulting v1.4 structure and runtime grants, and retains the original
+bootstrap hash while recording the application schema version. The distinct
+Backend SQL Maintenance workflow changes only the pinned SQL Server engine and
+resource settings. All three operations share the production host/deploy lock.
+Unknown schemas fail closed. Runtime permissions preserve append-only AuditLogs/TourEvents, grant writes for current
 implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
 and read access only to robot/variant/branch data.
 The deployment adds two anonymous operational routes: `GET /health/live`

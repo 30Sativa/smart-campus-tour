@@ -40,12 +40,16 @@ and `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`)
 remain recognized as the accepted comment-only pair, but now return
 `UPGRADE_REQUIRED`: they do not prove the v1.4 tables/columns exist. The
 initializer refuses them without changing data or markers, and also refuses
-unknown or unmarked non-empty schemas. To upgrade existing data, take and verify
-a full backup, obtain the normal database-change approval, then apply the
-documented additive patches in order (v1.1→v1.2, v1.2→v1.3, v1.3→v1.4),
-re-scaffold/review, and deploy only after the resulting schema and permissions
-are verified. No Compose startup performs that migration or changes an older
-marker. Any executable schema change needs its own ADR/database change process.
+unknown or unmarked non-empty schemas. Normal API deployment runs this tool only
+in read-only `--check-only` mode; it cannot bootstrap, migrate, change login
+credentials, or change the SQL Server engine. Empty-database bootstrap is an
+explicit `--bootstrap` operation. Existing data uses the separately locked
+Backend Database Schema Upgrade workflow, which takes and verifies a full
+backup before applying additive patches in order (v1.1→v1.2, v1.2→v1.3,
+v1.3→v1.4), then checks the resulting structure and runtime grants. It retains
+the original bootstrap hash and records `CampusTourSchemaVersion=1.4` only
+after required structure checks. Unknown markers or incomplete upgrades fail
+closed. Any executable schema change needs its own ADR/database change process.
 
 For a fresh v1.4 database the initializer applies, in order, the full schema,
 the log role, map/POI grants, Route revision grants, then creates the runtime

@@ -84,10 +84,13 @@ Local `mode=max` export tests the intermediate-layer portability invariant
 without registry writes; actual Actions GHA import/export is still exercised by
 the normal API build. No SQL container or production host is involved.
 Only disposable context files/builders are changed; builders/cache are cleaned
-on exit. Both PR and main image jobs run this check before building the API
-runtime. Existing runtime/initializer and exact-release Compose smoke tests
-continue to verify the final images. Backend verification also checks script
-syntax without requiring Docker.
+on exit. PR and main image jobs run this check only when API cache-relevant
+inputs change. Database-tool Dockerfile changes exercise their own image build
+and SQL smoke path, not this .NET restore-cache regression. Backend verification
+and candidate image build/smoke run in parallel when independent; the final
+release manifest waits for all applicable gates. Existing runtime/initializer
+and exact-release Compose smoke tests continue to verify the final images.
+Backend verification also checks script syntax without requiring Docker.
 
 Local verification for this patch (Ubuntu 24.04 WSL, SDK 10.0.402):
 

@@ -5,6 +5,34 @@ No AWS resources, GitHub secrets or production deployment were changed.
 
 ## 1. Architecture and review findings
 
+### API, schema and SQL engine lifecycle (2026-10-28)
+
+`backend/docker-compose.yml` contains the API and pinned SQL Server with its
+persistent volume. The separate `backend/docker-compose.db-init.yml` exposes
+the versioned database tool only for explicit operations. API deploy runs its
+`--check-only` command, then changes only the API container; it cannot create a
+database, change login credentials, apply a schema patch, or change the SQL
+Server image. Empty-database bootstrap is an explicit `--bootstrap` operation.
+Existing data uses Backend Database Schema Upgrade, not Backend SQL Maintenance.
+The former takes a verified full backup under the host operation lock, applies
+the ordered v1.1→v1.4 additive patches, then verifies structure and runtime
+permissions. The latter continues to handle SQL Server engine/resource changes.
+
+Backend Verify uses a path classifier. Web/robot/digital-twin/AI-only commits do
+not start backend verification, image builds or deployment. Backend verification
+and candidate API image build/smoke run independently in parallel. The DB tool
+image is rebuilt only when its SQL, bootstrap, Compose or Dockerfile inputs
+change; otherwise a previously verified immutable artifact is reused. A release
+manifest is created only after applicable gates pass and records the API
+source/digest separately from the database tool source/digest/schema version.
+Backend Deploy checks for that manifest before entering the production
+environment, so backend docs-only or non-backend pushes do not deploy an API.
+
+Baseline Backend Verify run `40643877772` measured about 5m48s for backend
+verification, 1m55s for Docker cache portability, and 6m13s for image
+publication/smoke; these stages were sequential. Post-change wall time is
+pending actual cold and warm CI runs and will be reported from their timestamps.
+
 PR → Backend Verify → merge main → private GHCR digests + release manifest →
 automatic Backend Deploy on successful push/main Backend Verify → pinned OpenSSH → EC2 Docker Compose. SQL maintenance
 remains a separate manual workflow. Both use `production` and shared concurrency.
@@ -266,9 +294,11 @@ one pending run per group: a newer queued run replaces an older pending one,
 including a pending manual dispatch. When a deploy starts it skips its release
 unless that SHA is still the head of main, so an older run finishing late can
 never roll the API back. If the newer head then fails CI, nothing newer is
-deployed; dispatch the last good SHA manually if needed. Every push to main runs
-Backend Verify, so a web-only merge also redeploys the backend (brief API
-restart plus a pre-deploy backup); avoid merging during a live tour. After the
+deployed; dispatch the last good SHA manually if needed. Backend Verify detects
+backend-owned paths: a web-only or unrelated push does not build/publish a backend
+release, and deploy preflight skips before entering the production environment
+when there is no verified release artifact. An actual backend release still has
+a brief API restart plus a pre-deploy backup; avoid releasing during a live tour. After the
 SSH step, the workflow polls `vars.BACKEND_HEALTH_URL` (default
 `https://api.fptcampustour.cloud/health/ready`) from the internet; a failure
 there means DNS, security group or certificate, not a rollback.

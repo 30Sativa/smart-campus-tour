@@ -27,15 +27,29 @@ if [[ ${SMARTCAMPUS_REQUIRE_SQL_TESTS:-false} == true && -z ${sql_test_connectio
   exit 1
 fi
 
-results_dir=${SMARTCAMPUS_TEST_RESULTS_DIR:-"${TMPDIR:-/tmp}/campustour-test-results-$$"}
+if [[ -n ${SMARTCAMPUS_TEST_RESULTS_DIR:-} ]]; then
+  results_dir=$SMARTCAMPUS_TEST_RESULTS_DIR
+elif [[ "$DOTNET" == dotnet.exe && $(uname -s) == Linux ]] && command -v wslpath >/dev/null 2>&1; then
+  results_dir="/mnt/c/tmp/campustour-test-results-$$"
+else
+  results_dir="${TMPDIR:-/tmp}/campustour-test-results-$$"
+fi
 mkdir -p "$results_dir"
+dotnet_results_dir=$results_dir
+# Under WSL, dotnet.exe is a Windows process and writes its TRX output through
+# the Windows path namespace. Keep the collector's Linux path and translate
+# only the path passed to the Windows SDK host.
+if [[ "$DOTNET" == dotnet.exe && $(uname -s) == Linux ]] && command -v wslpath >/dev/null 2>&1; then
+  dotnet_results_dir=$(wslpath -w "$results_dir")
+fi
 
-bash -n deploy/init-db.sh deploy/deploy-ec2.sh deploy/install-host-tools.sh deploy/backup-sqlserver.sh deploy/check-ec2.sh \
+bash -n deploy/init-db.sh deploy/upgrade-db.sh deploy/upgrade-db-schema-ec2.sh deploy/deploy-ec2.sh deploy/install-host-tools.sh deploy/backup-sqlserver.sh deploy/check-ec2.sh \
   deploy/stack-start.sh deploy/refresh-certificate.sh scripts/test-deployment scripts/test-deploy-ec2.sh \
   scripts/test-backup-upload-failure.sh scripts/test-certificate-reconciliation.sh scripts/test-operation-locks.sh
 bash -n deploy/prepare-release.sh deploy/ssh-deploy.sh deploy/receive-release.sh
 bash -n scripts/resolve-base-images scripts/test-docker-build-cache
 "$PYTHON" scripts/test-base-image-resolution.py
+"$PYTHON" scripts/test-ci-scope.py
 "$PYTHON" scripts/test-ssh-deployment.py
 "$PYTHON" scripts/test-jq-programs.py
 bash scripts/test-deploy-ec2.sh
@@ -52,18 +66,18 @@ bash scripts/test-operation-locks.sh
 
 if [[ ${SMARTCAMPUS_REQUIRE_SQL_TESTS:-false} == true ]]; then
   "$DOTNET" test tests/SmartCampus.UnitTests/SmartCampus.UnitTests.csproj \
-    --no-build --results-directory "$results_dir/unit" --logger 'trx;LogFileName=unit.trx'
+    --no-build --results-directory "$dotnet_results_dir/unit" --logger 'trx;LogFileName=unit.trx'
   "$DOTNET" test tests/SmartCampus.IntegrationTests/SmartCampus.IntegrationTests.csproj \
     --no-build --filter 'Category!=SqlIntegration' \
-    --results-directory "$results_dir/integration" --logger 'trx;LogFileName=integration.trx'
+    --results-directory "$dotnet_results_dir/integration" --logger 'trx;LogFileName=integration.trx'
   "$DOTNET" test tests/SmartCampus.IntegrationTests/SmartCampus.IntegrationTests.csproj \
     --no-build --filter 'Category=SqlIntegration' \
-    --results-directory "$results_dir/sql" --logger 'trx;LogFileName=sql.trx'
+    --results-directory "$dotnet_results_dir/sql" --logger 'trx;LogFileName=sql.trx'
 else
   "$DOTNET" test tests/SmartCampus.UnitTests/SmartCampus.UnitTests.csproj \
-    --no-build --results-directory "$results_dir/unit" --logger 'trx;LogFileName=unit.trx'
+    --no-build --results-directory "$dotnet_results_dir/unit" --logger 'trx;LogFileName=unit.trx'
   "$DOTNET" test tests/SmartCampus.IntegrationTests/SmartCampus.IntegrationTests.csproj \
-    --no-build --results-directory "$results_dir/integration" --logger 'trx;LogFileName=integration.trx'
+    --no-build --results-directory "$dotnet_results_dir/integration" --logger 'trx;LogFileName=integration.trx'
 fi
 
 "$PYTHON" scripts/verify-test-results.py "$results_dir" "${SMARTCAMPUS_REQUIRE_SQL_TESTS:-false}"

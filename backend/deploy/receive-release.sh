@@ -3,7 +3,7 @@
 set -euo pipefail
 fail() { echo "FAIL: $*" >&2; exit 1; }
 [[ $(id -u) == 0 ]] || fail 'Run the receiver as root.'
-[[ $# == 2 && ( $1 == application || $1 == sql-maintenance ) && $2 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail 'Invalid receiver arguments.'
+[[ $# == 2 && ( $1 == application || $1 == sql-maintenance || $1 == schema-upgrade ) && $2 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail 'Invalid receiver arguments.'
 mode=$1 registry_user=$2
 bundle=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 mapfile -t revisions < "$bundle/verified-revisions"
@@ -31,12 +31,19 @@ python3 "$bundle/ops/validate-release-manifest.py" "$bundle/release/backend-rele
 api=$(sed -n 's/^api_image=//p' "$credentials/images")
 initializer=$(sed -n 's/^db_init_image=//p' "$credentials/images")
 sql=$(sed -n 's/^sqlserver_image=//p' "$credentials/images")
+export DB_INIT_SOURCE_SHA=$(sed -n 's/^db_init_source_sha=//p' "$credentials/images")
+export DB_SCHEMA_VERSION=$(sed -n 's/^database_schema_version=//p' "$credentials/images")
 docker login ghcr.io --username "$registry_user" --password-stdin
 # Serialize the installer + deploy pair as well as the inner operation locks.
 exec 7>"${CAMPUS_DELIVERY_LOCK:-/run/lock/campustour-delivery.lock}"
 flock -n 7 || fail 'Another delivery is active; inspect it before retrying.'
 bash "$bundle/ops/install-host-tools.sh" "$ops" "$bundle/ops"
 export CAMPUS_RELEASE_COMPOSE="$bundle/release/docker-compose.yml"
+export CAMPUS_RELEASE_DB_INIT_COMPOSE="$bundle/release/docker-compose.db-init.yml"
+if [[ "$mode" == schema-upgrade ]]; then
+  bash "$bundle/ops/upgrade-db-schema-ec2.sh" "$initializer" "$DB_INIT_SOURCE_SHA" "$DB_SCHEMA_VERSION"
+  exit 0
+fi
 options=()
 [[ "$mode" != sql-maintenance ]] || options+=(--sql-maintenance)
 bash "$bundle/ops/deploy-ec2.sh" "${options[@]}" "$release" "$api" "$initializer" "$sql" "$ops"

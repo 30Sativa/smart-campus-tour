@@ -23,7 +23,7 @@ fi
 backend_image=${BACKEND_IMAGE:-campustour-backend:deployment-test}
 db_init_image=${DB_INIT_IMAGE:-campustour-db-init:deployment-test}
 sqlserver_image=${SQLSERVER_IMAGE:-mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04}
-dc=(docker compose --project-name "$project" --env-file "$scratch/test.env" -f backend/docker-compose.yml)
+dc=(docker compose --project-name "$project" --env-file "$scratch/test.env" -f backend/docker-compose.yml -f backend/docker-compose.db-init.yml)
 cleanup() {
   local resource label safe=1
   if [[ ! "$project" =~ ^campustour-test-[0-9]+-[0-9]+$ || "$project" == campustour ]]; then
@@ -96,13 +96,13 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=localhost' \
 chmod 644 "$scratch/key.pem" "$scratch/cert.pem"
 
 print_initializer_logs() {
-  echo 'Disposable Compose startup failed; database initializer logs follow:' >&2
+  echo 'Disposable Compose startup failed; database-tool logs follow:' >&2
   "${dc[@]}" logs --no-color --tail=200 db-init >&2 || true
 }
 
 if [[ ${DEPLOYMENT_TEST_BUILD_IMAGES:-true} == true ]]; then
   docker build --pull --target runtime --tag "$backend_image" --file backend/Dockerfile backend
-  docker build --pull --target db-init --tag "$db_init_image" --file backend/Dockerfile backend
+  docker build --pull --build-arg "SQLSERVER_IMAGE=$sqlserver_image" --tag "$db_init_image" --file backend/Dockerfile.db-init backend
 else
   docker image inspect "$backend_image" >/dev/null
   docker image inspect "$db_init_image" >/dev/null
@@ -110,16 +110,21 @@ fi
 api_image_id=$(docker image inspect --format '{{.Id}}' "$backend_image")
 db_init_image_id=$(docker image inspect --format '{{.Id}}' "$db_init_image")
 "${dc[@]}" config --quiet
-if ! "${dc[@]}" up -d --wait --wait-timeout 240 api; then
+if ! "${dc[@]}" up -d --wait --wait-timeout 180 sqlserver; then
   print_initializer_logs
   exit 1
 fi
 printf 'Tested API image config: %s\nTested initializer image config: %s\n' "$api_image_id" "$db_init_image_id"
 
+"${dc[@]}" run -T --rm db-init --bootstrap
+if ! "${dc[@]}" up -d --wait --wait-timeout 240 api; then
+  print_initializer_logs
+  exit 1
+fi
+
 seed_admin() { "${dc[@]}" run -T --rm seed-admin; }
 seed_admin
 seed_admin
-"${dc[@]}" run -T --rm --no-deps db-init
 
 sql_as_sa() {
   "${dc[@]}" exec -T sqlserver /bin/bash -c \
@@ -144,9 +149,8 @@ stored_schema_hash=$(sql_as_sa -h -1 -W -Q "SET NOCOUNT ON; SELECT CONVERT(nvarc
   echo 'Unexpected initial schema hash in the disposable SQL database.' >&2
   exit 1
 }
-old_schema_hash=96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68
-sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$old_schema_hash';"
-if "${dc[@]}" run -T --rm --no-deps db-init; then
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.3';"
+if "${dc[@]}" run -T --rm --no-deps db-init --check-only; then
   echo 'Candidate initializer accepted a recognized but incompatible pre-v1.4 schema.' >&2
   exit 1
 fi
@@ -155,7 +159,7 @@ fi
   exit 1
 }
 assert_login
-sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$stored_schema_hash';"
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_updateextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';"
 
 # Compose run starts an isolated API candidate without reconciling dependencies or publishing the production port.
 candidate_name="$project-candidate-api"
@@ -319,8 +323,8 @@ SQL
 "${dc[@]}" down
 "${dc[@]}" up -d --wait --wait-timeout 240 api
 assert_login
-sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';"
-if "${dc[@]}" run -T --rm --no-deps db-init; then
+sql_as_sa -d SmartCampusTourV11 -Q "EXEC sys.sp_dropextendedproperty @name=N'CampusTourSchemaVersion'; EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';"
+if "${dc[@]}" run -T --rm --no-deps db-init --check-only; then
   echo 'Initializer must reject an existing unmarked database.' >&2
   exit 1
 fi

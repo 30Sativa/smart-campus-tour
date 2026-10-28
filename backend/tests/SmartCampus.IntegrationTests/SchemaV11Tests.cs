@@ -403,6 +403,51 @@ public sealed class SchemaV11Tests
         Assert.Equal("USER1", await db.ScalarAsync<string>($"SELECT NormalizedUsername FROM dbo.Users WHERE Id='{Id(1)}';"));
     }
 
+    [SchemaV14Fact]
+    public async Task V11ToV14DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot.sql");
+        await db.ExecuteAsync("""
+            EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';
+            CREATE USER smartcampus_api WITHOUT LOGIN;
+            """);
+
+        // Production starts from the recognized v1.1 marker. This verifies the
+        // exact ordered path, not isolated patches against later snapshots.
+        await db.ApplyFileAsync("add-poi-rowversion-v1.1.sql");
+        await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
+        await db.ApplyFileAsync("upgrade-v1.1-to-v1.2-map-poi.sql");
+        await db.ApplyFileAsync("permissions.sql");
+        await db.ApplyFileAsync("map-poi-permissions.sql");
+        await db.ApplyFileAsync("upgrade-v1.2-to-v1.3-route-revisions.sql");
+        await db.ApplyFileAsync("upgrade-v1.2-to-v1.3-route-revisions.sql");
+        await db.ApplyFileAsync("route-revision-permissions.sql");
+        await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
+        await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
+        await db.ApplyFileAsync("runtime-permissions.sql");
+        await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
+
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Users;"));
+        Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.Pois WHERE Id='{Id(10)}';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Routes WHERE AuthoringMode='LEGACY';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
+        Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
+            await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
+
+        await using var connection = await db.OpenAsync();
+        await ExecuteAsync(connection, "EXECUTE AS USER='smartcampus_api';");
+        try
+        {
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','SELECT');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RouteRevisions','OBJECT','INSERT');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RosterEmailChangeRequests','OBJECT','INSERT');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','UPDATE');"));
+        }
+        finally { await ExecuteAsync(connection, "REVERT;"); }
+    }
+
     [SchemaV12Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {

@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+# This image is a separately versioned database bootstrap/upgrade tool.
+ARG SQLSERVER_IMAGE=mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+FROM ${SQLSERVER_IMAGE}
+
+ARG VCS_REF=unknown
+ARG VERSION=1.4
+ARG BUILD_DATE=unknown
+ARG SQLSERVER_IMAGE
+
+# Set traverse permission on copied directories while keeping files non-writable.
+COPY --chmod=u=rwX,go=rX deploy/init-db.sh /deployment/init-db.sh
+COPY --chmod=u=rwX,go=rX deploy/upgrade-db.sh /deployment/upgrade-db.sh
+COPY --chmod=u=rwX,go=rX \
+    database/smart-campus-tour-schema-v1.1.sql \
+    database/smart-campus-tour-schema-v1.2.sql \
+    database/smart-campus-tour-schema-v1.3.sql \
+    database/smart-campus-tour-schema-v1.4.sql \
+    database/patches/upgrade-v1.1-to-v1.2-map-poi.sql \
+    database/patches/upgrade-v1.2-to-v1.3-route-revisions.sql \
+    database/patches/upgrade-v1.3-to-v1.4-row-registration.sql \
+    database/patches/add-poi-rowversion-v1.1.sql \
+    database/smart-campus-tour-map-poi-permissions.sql \
+    database/smart-campus-tour-route-revision-permissions.sql \
+    database/smart-campus-tour-bootstrap-check.sql \
+    database/smart-campus-tour-permissions.sql \
+    database/smart-campus-tour-runtime-permissions.sql \
+    /database/
+
+LABEL org.opencontainers.image.title="Smart Campus Tour Database Bootstrap Tool" \
+      org.opencontainers.image.source="https://github.com/30Sativa/smart-campus-tour" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.created="$BUILD_DATE" \
+      org.opencontainers.image.base.name="$SQLSERVER_IMAGE" \
+      org.smartcampus.database.schema-version="$VERSION"
+
+ENTRYPOINT ["/bin/bash", "/deployment/init-db.sh"]

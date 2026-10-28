@@ -230,7 +230,12 @@ if args[:1] == ["pull"]:
     sys.exit(0)
 if args[:2] == ["image", "inspect"]:
     fmt = args[args.index("--format") + 1]
-    if "revision" in fmt:
+    target = args[-1]
+    if "org.smartcampus.database.schema-version" in fmt:
+        print("1.4")
+    elif "revision" in fmt and "backend-db-init@" in target:
+        print(os.environ["FAKE_DB_INIT_SOURCE_SHA"])
+    elif "revision" in fmt:
         print(os.environ["FAKE_RELEASE_SHA"])
     elif "base.name" in fmt:
         print(os.environ["FAKE_MANIFEST_SQL_IMAGE"])
@@ -441,6 +446,8 @@ def run() -> None:
             (fake_bin / name).symlink_to(cli)
         fixture = root_tmp / "compose.fixture"
         fixture.write_text("services: {}\n")
+        db_init_fixture = root_tmp / "compose.db-init.fixture"
+        db_init_fixture.write_text("services:\n  db-init: {}\n")
         host_sql_image = "mcr.microsoft.com/mssql/server@sha256:" + "e" * 64
         api_digest = "ghcr.io/30sativa/smart-campus-tour/backend@sha256:" + "b" * 64
         init_digest = "ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:" + "d" * 64
@@ -509,6 +516,8 @@ def run() -> None:
                 "CAMPUS_BACKUP_STAGE_DIR": str(backup_dir),
                 "CAMPUS_BACKUP_ENV": str(config / "backup.env"),
                 "CAMPUS_API_ENV_FILE": str(config / "api.env"),
+                "CAMPUS_RELEASE_COMPOSE": str(fixture),
+                "CAMPUS_RELEASE_DB_INIT_COMPOSE": str(db_init_fixture),
                 "CAMPUS_TLS_CERT_PATH": str(cert_dir / "active" / "fullchain.pem"),
                 "CAMPUS_TLS_KEY_PATH": str(cert_dir / "active" / "privkey.pem"),
                 "CAMPUS_OPERATION_LOCK": str(run_dir / "operation.lock"),
@@ -516,6 +525,8 @@ def run() -> None:
                 "COMPOSE_OWNER": "unused",
                 "BACKEND_IMAGE": api_digest,
                 "DB_INIT_IMAGE": init_digest,
+                "DB_INIT_SOURCE_SHA": "9" * 40,
+                "DB_SCHEMA_VERSION": "1.4",
                 "SQLSERVER_IMAGE": host_sql_image,
                 "SQL_SA_PASSWORD": "Aa1!" + "a" * 64,
                 "SQL_APP_PASSWORD": "b" * 64,
@@ -540,6 +551,7 @@ def run() -> None:
             child_env = os.environ.copy()
             child_env.update(env)
             child_env["FAKE_RELEASE_SHA"] = release_sha
+            child_env["FAKE_DB_INIT_SOURCE_SHA"] = env["DB_INIT_SOURCE_SHA"]
             child_env["FAKE_MANIFEST_SQL_IMAGE"] = manifest_sql_image
             child_env["FAKE_FAIL_API_HEALTH"] = "1" if fail_candidate else "0"
             child_env["FAKE_FAIL_INIT"] = "1" if fail_init else "0"

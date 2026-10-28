@@ -13,9 +13,11 @@ REPO = Path(__file__).resolve().parents[2]
 DEPLOY = REPO / "backend/deploy"
 SHA, OPS = "a" * 40, "c" * 40
 MANIFEST = {
-    "format_version": 1, "source_sha": SHA,
+    "format_version": 2, "source_sha": SHA,
     "api_image": "ghcr.io/30sativa/smart-campus-tour/backend@sha256:" + "b" * 64,
     "db_init_image": "ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:" + "b" * 64,
+    "db_init_source_sha": "9" * 40,
+    "database_schema_version": "1.4",
     "sqlserver_image": "mcr.microsoft.com/mssql/server@sha256:" + "b" * 64,
     "sdk_image": "mcr.microsoft.com/dotnet/sdk@sha256:" + "b" * 64,
     "runtime_image": "mcr.microsoft.com/dotnet/aspnet@sha256:" + "b" * 64,
@@ -32,6 +34,8 @@ mode = os.environ.get('FAIL_MODE', '')
 if name == 'git':
     if 'rev-parse' in args:
         print(os.environ['OPS'])
+    elif 'status' in args:
+        pass
     elif 'archive' in args:
         with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as archive:
             for path in Path(os.environ['DEPLOY_SOURCE']).rglob('*'):
@@ -132,7 +136,8 @@ def main():
         # Execute the real receiver with isolated installer/deploy boundaries.
         (bundle / "ops/install-host-tools.sh").write_text("#!/bin/bash\nexit 0\n")
         (bundle / "ops/deploy-ec2.sh").write_text(
-            '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_COMPOSE" ]] || exit 81\n'
+            '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_COMPOSE" && -s "$CAMPUS_RELEASE_DB_INIT_COMPOSE" ]] || exit 81\n'
+            '[[ "$DB_INIT_SOURCE_SHA" == "' + MANIFEST["db_init_source_sha"] + '" && "$DB_SCHEMA_VERSION" == "1.4" ]] || exit 82\n'
             'printf "%s\\n" "$@" > "$DEPLOY_ARGS"\n'
             'if [[ ${FAIL_MODE:-} == interrupted ]]; then touch "$INTERRUPT_READY"; sleep 30; fi\n'
             'if [[ ${FAIL_MODE:-} == reader-gone ]]; then\n'
@@ -155,6 +160,18 @@ def main():
         assert log_text.count(f"delivery mode=sql-maintenance release={SHA} ops={OPS} run=71") == 3, log_text
         assert "receiver-disposable-secret" not in log_text
         assert oct(delivery_log.parent.stat().st_mode & 0o777) == "0o700"
+
+        (bundle / "ops/upgrade-db-schema-ec2.sh").write_text(
+            '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_DB_INIT_COMPOSE" ]] || exit 81\n'
+            'printf "%s\\n" "$@" > "$SCHEMA_UPGRADE_ARGS"\n'
+        )
+        env.update(FAIL_MODE="success", SCHEMA_UPGRADE_ARGS=str(root / "schema-upgrade-args"))
+        result = subprocess.run(["bash", str(bundle / "ops/receive-release.sh"), "schema-upgrade", "actor"],
+                                env=env, input="receiver-disposable-secret\n", text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert (root / "schema-upgrade-args").read_text().splitlines() == [
+            MANIFEST["db_init_image"], MANIFEST["db_init_source_sha"], MANIFEST["database_schema_version"]
+        ]
 
         # A vanished SSH reader (cancelled runner, dropped connection) must not kill the deployment mid-step.
         env.update(FAIL_MODE="reader-gone", DEPLOY_COMPLETED=str(root / "deploy-completed"))

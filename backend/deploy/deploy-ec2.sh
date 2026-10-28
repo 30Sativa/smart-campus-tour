@@ -14,6 +14,8 @@ validate_inputs() {
     fail 'Database initializer image must use the approved GHCR repository and an immutable sha256 digest.'
   [[ "$sqlserver_image" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ||
     fail 'SQL Server image must be a pinned Microsoft Container Registry digest.'
+  [[ ${DB_INIT_SOURCE_SHA:-} =~ ^[0-9a-f]{40}$ && ${DB_SCHEMA_VERSION:-} == 1.4 ]] ||
+    fail 'Database tool source SHA and schema version must come from the validated release manifest.'
 }
 
 if [[ ${1:-} == --validate-only ]]; then
@@ -100,7 +102,8 @@ compose_for() {
   local dir=$1
   shift
   docker compose --project-name campustour --env-file "$CONFIG/backend.env" \
-    --env-file "$dir/release.env" -f "$dir/docker-compose.yml" "$@"
+    --env-file "$dir/release.env" -f "$dir/docker-compose.yml" \
+    -f "$dir/docker-compose.db-init.yml" "$@"
 }
 
 read_current_sha() {
@@ -362,7 +365,7 @@ rollback_release() {
     return 1
   }
   echo "Checking schema compatibility with previous release $old_sha before application rollback."
-  if ! compose_for "$old_dir" run -T --rm --no-deps db-init; then
+  if ! compose_for "$old_dir" run -T --rm --no-deps db-init --check-only; then
     echo 'Previous release database guard rejected the current database; application rollback is unsafe.' >&2
     return 1
   fi
@@ -527,8 +530,12 @@ fi
 validate_sql_image "$current_sql_image"
 
 candidate_tmp=$(mktemp -d "$ROOT/.release-$release_sha.XXXXXX")
-if [[ ! -s "$RELEASE_COMPOSE" ]] || ! cp -- "$RELEASE_COMPOSE" "$candidate_tmp/docker-compose.yml"; then
+RELEASE_DB_INIT_COMPOSE=${CAMPUS_RELEASE_DB_INIT_COMPOSE:-}
+if [[ ! -s "$RELEASE_COMPOSE" || ! -s "$RELEASE_DB_INIT_COMPOSE" ]] || \
+  ! cp -- "$RELEASE_COMPOSE" "$candidate_tmp/docker-compose.yml" || \
+  ! cp -- "$RELEASE_DB_INIT_COMPOSE" "$candidate_tmp/docker-compose.db-init.yml"; then
   rm -f -- "$candidate_tmp/docker-compose.yml"
+  rm -f -- "$candidate_tmp/docker-compose.db-init.yml"
   rmdir "$candidate_tmp" 2>/dev/null || true
   fail 'Could not copy the Compose file from the verified application release bundle.'
 fi
@@ -542,6 +549,8 @@ printf '%s\n' \
   "COMPOSE_OWNER=$COMPOSE_OWNER" \
   "BACKEND_IMAGE=$api_image" \
   "DB_INIT_IMAGE=$db_init_image" \
+  "DB_INIT_SOURCE_SHA=$DB_INIT_SOURCE_SHA" \
+  "DB_SCHEMA_VERSION=$DB_SCHEMA_VERSION" \
   "SQLSERVER_IMAGE=$current_sql_image" \
   "API_ENV_FILE=$API_ENV" \
   "TLS_CERT_PATH=$TLS_CERT" \
@@ -549,11 +558,12 @@ printf '%s\n' \
   "SQL_BACKUP_DIR=$BACKUP_STAGE_DIR" \
   "SOURCE_SHA=$release_sha" \
   "OPS_SHA=$ops_sha" > "$candidate_tmp/release.env"
-chmod 0644 "$candidate_tmp/docker-compose.yml" "$candidate_tmp/release.env"
+chmod 0644 "$candidate_tmp/docker-compose.yml" "$candidate_tmp/docker-compose.db-init.yml" "$candidate_tmp/release.env"
 if [[ -e "$candidate_dir" ]]; then
   [[ -d "$candidate_dir" && ! -L "$candidate_dir" ]] || fail 'Candidate release path is not a directory.'
   [[ "$candidate_dir" != "$previous_dir" ]] || fail 'Selected application release is already active.'
   mv -f "$candidate_tmp/docker-compose.yml" "$candidate_dir/docker-compose.yml"
+  mv -f "$candidate_tmp/docker-compose.db-init.yml" "$candidate_dir/docker-compose.db-init.yml"
   mv -f "$candidate_tmp/release.env" "$candidate_dir/release.env"
   rmdir "$candidate_tmp"
 else
@@ -572,7 +582,7 @@ candidate_host=$(jq -r '.services.api.environment.AllowedHosts // empty' <<<"$ca
 openssl x509 -in "$TLS_CERT" -checkhost "$candidate_host" -noout >/dev/null ||
   fail 'Configured TLS certificate does not cover API_HOST.'
 [[ $(jq -r '.services.api.image' <<<"$candidate_config") == "$api_image" ]] || fail 'Resolved API image differs from the approved digest.'
-[[ $(jq -r '.services["db-init"].image' <<<"$candidate_config") == "$db_init_image" ]] || fail 'Resolved initializer image differs from the approved digest.'
+[[ $(jq -r '.services["db-init"].image' <<<"$candidate_config") == "$db_init_image" ]] || fail 'Resolved database-tool image differs from the approved digest.'
 [[ $(jq -r '.services.sqlserver.image' <<<"$candidate_config") == "$current_sql_image" ]] || fail 'Resolved SQL Server image differs from the managed SQL pin.'
 [[ $(jq -r '.services.api.labels["com.smartcampus.deployment.owner"] // empty' <<<"$candidate_config") == "$COMPOSE_OWNER" ]] ||
   fail 'Resolved Compose services do not carry the persistent deployment owner marker.'
@@ -678,12 +688,10 @@ if [[ -z "$previous_sha" || "$current_sql_image" != "$previous_sql_image" ]]; th
   docker pull "$current_sql_image"
 fi
 api_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$api_image")
-init_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$db_init_image")
-init_sql_image=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}' "$db_init_image")
-[[ "$api_revision" == "$release_sha" && "$init_revision" == "$release_sha" ]] ||
-  fail 'API and database initializer images do not match the requested application commit.'
-[[ "$init_sql_image" == "$manifest_sql_image" ]] ||
-  fail 'Database initializer base image differs from the SQL image in the release manifest.'
+init_schema_version=$(docker image inspect --format '{{index .Config.Labels "org.smartcampus.database.schema-version"}}' "$db_init_image")
+init_source_sha=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$db_init_image")
+[[ "$api_revision" == "$release_sha" && "$init_schema_version" == "$DB_SCHEMA_VERSION" && "$init_source_sha" == "$DB_INIT_SOURCE_SHA" ]] ||
+  fail 'API image source or separately versioned database-tool schema label does not match the approved manifest.'
 
 if [[ -n "$previous_sha" ]]; then
   [[ -x "$BACKUP_SCRIPT" ]] || fail 'Pre-deployment backup program is missing; install and verify it before deploying.'
@@ -702,7 +710,7 @@ if [[ -z "$previous_sha" ]]; then
   atomic_write "$STATE/sqlserver-config-hash" 0600 "$live_sql_config_hash"
   atomic_write "$STATE/sqlserver-maintenance-fingerprint" 0600 "$candidate_sql_maintenance_fingerprint"
 fi
-compose_for "$candidate_dir" run -T --rm --no-deps db-init
+compose_for "$candidate_dir" run -T --rm --no-deps db-init --check-only
 prepare_candidate_api "$candidate_dir" "$release_sha"
 
 if (( sql_maintenance == 1 )) && [[ "$desired_sql_config_hash" != "$live_sql_config_hash" ]]; then
@@ -712,7 +720,7 @@ if (( sql_maintenance == 1 )) && [[ "$desired_sql_config_hash" != "$live_sql_con
   fi
   compose_for "$candidate_dir" up -d --wait --wait-timeout 420 sqlserver
   assert_sql_healthy "$candidate_dir" "$current_sql_image"
-  compose_for "$candidate_dir" run -T --rm --no-deps db-init
+  compose_for "$candidate_dir" run -T --rm --no-deps db-init --check-only
   remove_candidate_api
   prepare_candidate_api "$candidate_dir" "$release_sha"
 fi

@@ -6,6 +6,7 @@ BEGIN TRANSACTION;
 DECLARE @schemaHash nvarchar(64) = (SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourBootstrapHash');
 IF @schemaHash IS NULL OR @schemaHash NOT IN (
+    N'b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43',
     N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68',
     N'2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67')
     THROW 51050, 'This additive patch requires the explicitly recognized v1.3 schema marker.', 1;
@@ -78,6 +79,31 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.RosterEmailChangeRequests') AND name=N'IX_RosterEmailChangeRequests_Review')
     CREATE INDEX IX_RosterEmailChangeRequests_Review
         ON dbo.RosterEmailChangeRequests(State, CreatedAt, Id);
+GO
+
+-- Record the application schema version only after validating the structures
+-- required by the v1.4 API. The original bootstrap snapshot hash is retained.
+IF OBJECT_ID(N'dbo.MapVersions', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.MapDeploymentChecks', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.PoiProposalRevisions', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.PoiVerificationRecords', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.RouteRevisions', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.RouteTestRuns', N'U') IS NULL
+    OR OBJECT_ID(N'dbo.RosterEmailChangeRequests', N'U') IS NULL
+    OR COL_LENGTH(N'dbo.Pois', N'RowVersion') IS NULL
+    OR COL_LENGTH(N'dbo.Routes', N'AuthoringMode') IS NULL
+    OR COL_LENGTH(N'dbo.RosterRows', N'ParticipationState') IS NULL
+    OR COL_LENGTH(N'dbo.BrowserSessions', N'DeviceTokenHash') IS NULL
+    THROW 51051, 'Required v1.4 schema structures are missing; schema version was not recorded.', 1;
+
+DECLARE @schemaVersion nvarchar(32) = CONVERT(nvarchar(32),
+    (SELECT value FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion'));
+IF @schemaVersion IS NULL
+    EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';
+ELSE IF @schemaVersion IN (N'1.3', N'1.4')
+    EXEC sys.sp_updateextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';
+ELSE
+    THROW 51052, 'Unexpected prior CampusTourSchemaVersion; inspect the partial upgrade before retrying.', 1;
 GO
 
 COMMIT TRANSACTION;
