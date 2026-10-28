@@ -6,7 +6,8 @@ import { useStaffAmrs, useTours } from '../../features/staff/staff-hooks'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { groupSummary, tourAction } from '../../features/staff/attention'
+import { buildAttentionQueue, groupSummary, tourAction } from '../../features/staff/attention'
+import { AttentionList } from '../../features/staff/components/AttentionList'
 import { formatCountdown, formatTime } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
 import { RunStatus } from '../../features/staff/components/RunStatus'
@@ -54,6 +55,7 @@ export default function OverviewPage() {
   return (
     <StaffPage>
       <Header running={running} />
+      <AttentionList items={buildAttentionQueue({ tours: tours.data, robots: robots.data }, now)} />
 
       {/* ── Figures first, one row ─────────────────────────────────────────── */}
       <section aria-label="Số liệu chính" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -53,13 +53,13 @@ describe('staff session workflow', () => {
 
   it('offers each session the next step its state calls for', async () => {
     renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
-    // The whole day in one list; choosing a session opens it beside the list
+    // The whole day in one list; choosing a session opens it in the middle of the page
     // with the one next step its state calls for.
     const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
     // By the code chip: a note may name another session ("Đang phục vụ T-01").
     const open = async (code: string) => {
       fireEvent.click((await within(agenda).findByText(code, { selector: 'span' })).closest('button') as HTMLElement)
-      return screen.getByRole('complementary', { name: 'Chi tiết buổi' })
+      return screen.getByRole('dialog', { name: 'Chi tiết buổi' })
     }
     expect(within(await open('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
     expect(within(await open('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
@@ -75,7 +75,7 @@ describe('staff session workflow', () => {
     const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
     expect(within(agenda).getByText('T-02', { selector: 'span' }).closest('button')).toHaveAttribute('aria-pressed', 'true')
     expect(within(agenda).queryByText('T-01', { selector: 'span' })).toBeNull()
-    expect(within(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).getByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', { name: 'Chi tiết buổi' })).getByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
   })
 
   it('filters the day from the state dropdown', async () => {

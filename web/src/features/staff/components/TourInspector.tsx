@@ -18,46 +18,33 @@ type Tab = 'overview' | 'groups' | 'route' | 'log'
 const STREAM_LABEL: Record<string, string> = { Live: 'Đang phát', Connecting: 'Đang kết nối', Offline: 'Mất tín hiệu' }
 
 /**
- * The selected Tour beside the day board: its next step, what holds it back,
- * and its groups, route and log in tabs. On a wide screen it sits beside the
- * list; below that it slides in from the right over the page.
+ * The chosen Tour, opened in the middle of the page over a dimmed list: its
+ * next step, what holds it back, and its groups, route and log in tabs.
+ * Escape, the close button or a click outside closes it (the page owns that,
+ * through `useMobileNav`).
  */
-export function TourInspector({ tour, now, open, wide, onClose, panelRef }: {
+export function TourInspector({ tour, now, open, onClose, panelRef }: {
   tour?: TourOperation
   now: number
-  /** Below xl: whether the panel is slid in. */
   open: boolean
-  /** At xl and up the panel is always shown beside the list. */
-  wide: boolean
   onClose: () => void
   panelRef?: Ref<HTMLElement>
 }) {
+  if (!open || !tour) return null
   return (
-    <>
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-[#0f172a]/40 transition-opacity duration-300 xl:hidden motion-reduce:transition-none ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-      />
-      <aside
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
+      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none" />
+      <section
         ref={panelRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
         aria-label="Chi tiết buổi"
-        inert={!wide && !open}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col overflow-hidden bg-white shadow-2xl transition-transform duration-300 ease-out outline-none motion-reduce:transition-none sm:rounded-l-2xl xl:sticky xl:inset-auto xl:top-6 xl:z-auto xl:max-h-[calc(100vh-3rem)] xl:w-auto xl:max-w-none xl:translate-x-0 xl:rounded-xl xl:border xl:border-[var(--ops-border,#d9e9f5)] xl:shadow-[0_12px_32px_-30px_#285c7d] ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] outline-none transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:max-h-[calc(100dvh-3rem)]"
       >
-        {tour ? (
-          <InspectorBody key={tour.id} tour={tour} now={now} onClose={onClose} />
-        ) : (
-          <div className="grid flex-1 place-content-center gap-1.5 px-8 py-16 text-center text-sm text-[#64748b]">
-            <b className="text-[15px] text-[#0f172a]">Chọn một buổi</b>
-            Bấm vào buổi trong danh sách hoặc trên dải thời gian để xem đoàn, lộ trình và nhật ký.
-          </div>
-        )}
-      </aside>
-    </>
+        <InspectorBody key={tour.id} tour={tour} now={now} onClose={onClose} />
+      </section>
+    </div>
   )
 }
 
@@ -77,11 +64,11 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
   return (
     <>
       <span aria-hidden="true" className="h-1.5 shrink-0" style={{ background: tourColor(tour) }} />
-      <div className="relative px-3.5 pt-4 pb-3">
-        <button type="button" onClick={onClose} aria-label="Đóng chi tiết" className="absolute top-3 right-3 grid size-9 place-items-center rounded-lg border border-[#e6ebf1] text-[#64748b] transition-colors hover:bg-[#f8fafc] hover:text-[#0f172a] xl:hidden">
+      <div className="relative px-5 pt-4 pb-3">
+        <button type="button" onClick={onClose} aria-label="Đóng chi tiết" className="absolute top-3 right-3 grid size-9 place-items-center rounded-lg bg-[#f1f5f9] text-[#64748b] transition-colors hover:bg-[#e2e8f0] hover:text-[#0f172a]">
           <X size={16} aria-hidden="true" />
         </button>
-        <span className="flex flex-wrap items-center gap-1.5 pr-10 xl:pr-0">
+        <span className="flex flex-wrap items-center gap-1.5 pr-10">
           <span className="rounded-md bg-[#eff6ff] px-1.5 py-px font-mono text-[11.5px] font-bold text-[#2563eb]">{tour.code}</span>
           <TourStateBadges tour={tour} />
         </span>
@@ -99,7 +86,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
         </p>
       </div>
 
-      <div className="flex gap-2 px-3.5 pb-3">
+      <div className="flex gap-2 px-5 pb-3">
         <Link to={action.to} className={`${buttonClass(action.kind === 'primary' || tour.state === 'Running' ? 'primary' : 'secondary', 'md')} flex-1`}>
           {action.label}
         </Link>
@@ -113,7 +100,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
 
       <Notice tour={tour} />
 
-      <div role="tablist" aria-label="Thông tin buổi" className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e6ebf1] px-3.5">
+      <div role="tablist" aria-label="Thông tin buổi" className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e6ebf1] px-5">
         {tabs.map((item) => (
           <button
             key={item.key}
@@ -132,7 +119,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
         ))}
       </div>
 
-      <div key={tab} role="tabpanel" className="min-h-0 flex-1 overflow-y-auto px-3.5 pt-4 pb-6 transition-[opacity,translate] duration-300 starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-none">
+      <div key={tab} role="tabpanel" className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-6 transition-[opacity,translate] duration-300 starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-none">
         {tab === 'overview' ? (
           <Overview tour={tour} now={now} />
         ) : tab === 'groups' ? (

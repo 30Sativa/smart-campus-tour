@@ -17,6 +17,7 @@ import { formatHeartbeat } from '../../features/staff/formatters'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { useDeviceRailStore } from '../../stores/device-rail-store'
 import { notify } from '../../components/ui/toast-store'
+import { KpiRow, KpiTile } from '../../components/ui/Charts'
 
 /**
  * Robot & devices management. Monitors physical, Gazebo and emulator fleet.
@@ -46,23 +47,25 @@ export default function RobotPage() {
         title="Robot & Thiết bị"
         description="Kết nối, định vị, đầu xoay, telemetry và trạng thái phục vụ của hạm đội robot tự hành trong khuôn viên."
         action={
-          <Link to="/staff/digital-twin" className={buttonClass('secondary', 'md')}>
-            <Cpu size={16} aria-hidden="true" />
-            Mô phỏng 3D Digital Twin
-          </Link>
+          <>
+            <button type="button" onClick={toggleRail} aria-pressed={!railHidden} className={buttonClass('secondary', 'md')}>
+              {railHidden ? <PanelRightOpen size={15} aria-hidden="true" /> : <PanelRightClose size={15} aria-hidden="true" />}
+              {railHidden ? 'Hiện robot & kính' : 'Ẩn robot & kính'}
+            </button>
+            <Link to="/staff/digital-twin" className={buttonClass('secondary', 'md')}>
+              <Cpu size={15} aria-hidden="true" />
+              Mô phỏng 3D Digital Twin
+            </Link>
+          </>
         }
       />
 
-      <div className="-mt-2 mb-5 flex flex-wrap items-center gap-2" aria-label="Tóm tắt hạm đội">
-        <SummaryChip label="Tổng số robot" value={total} dot="#64748b" />
-        <SummaryChip label="Sẵn sàng nhận tour" value={available} dot="#10b981" />
-        <SummaryChip label="Đang chạy tour" value={inTour} dot="#2563eb" />
-        <SummaryChip label="Cần kiểm tra" value={needsCheck} dot={needsCheck > 0 ? '#dc2626' : '#cbd5e1'} alert={needsCheck > 0} />
-        <button type="button" onClick={toggleRail} aria-pressed={!railHidden} className={`${buttonClass('secondary', 'md')} ml-auto`}>
-          {railHidden ? <PanelRightOpen size={16} aria-hidden="true" /> : <PanelRightClose size={16} aria-hidden="true" />}
-          {railHidden ? 'Hiện robot & kính' : 'Ẩn robot & kính'}
-        </button>
-      </div>
+      <KpiRow label="Tóm tắt hạm đội">
+        <KpiTile label="Tổng số robot" value={total} />
+        <KpiTile label="Sẵn sàng nhận tour" value={available} note={total ? `trên ${total}` : undefined} />
+        <KpiTile label="Đang chạy tour" value={inTour} />
+        <KpiTile label="Cần kiểm tra" value={needsCheck} tone={needsCheck > 0 ? 'danger' : 'plain'} />
+      </KpiRow>
 
       {/* The fleet map is the centre of the page; robots and the Meta Quest 3 headset sit
           beside it as compact cards that open in place ("Xem chi tiết"). The headset reads
@@ -93,17 +96,6 @@ export default function RobotPage() {
         </aside>}
       </div>
     </StaffPage>
-  )
-}
-
-/** One number of the fleet summary, as a small chip beside the page title. */
-function SummaryChip({ label, value, dot, alert = false }: { label: string; value: number; dot: string; alert?: boolean }) {
-  return (
-    <span className={`inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3 text-[13px] font-semibold whitespace-nowrap shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.06)] ${alert ? 'text-[#b91c1c]' : 'text-[#475569]'}`}>
-      <span aria-hidden="true" className="size-2 rounded-full" style={{ background: dot }} />
-      {label}
-      <b className="text-base font-bold text-[#0f172a] tabular-nums">{value}</b>
-    </span>
   )
 }
 

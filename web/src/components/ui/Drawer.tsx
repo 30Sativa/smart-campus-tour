@@ -19,9 +19,9 @@ function useOverlay(open: boolean, onClose: () => void) {
   return panelRef
 }
 
-const scrim = 'fixed inset-0 bg-[#0f172a]/25 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
+const scrim = 'fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
 
-/** A right-hand sheet for a task with its own steps: it slides in, the page stays behind it. */
+/** A task or a record opened in the middle of the page, the page dimmed behind it. */
 export function Drawer({ open, title, description, onClose, children, footer, wide = false }: {
   open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean
 }) {
@@ -29,7 +29,7 @@ export function Drawer({ open, title, description, onClose, children, footer, wi
   const panelRef = useOverlay(open, onClose)
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
       <div className={scrim} onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
@@ -37,7 +37,7 @@ export function Drawer({ open, title, description, onClose, children, footer, wi
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`absolute top-0 right-0 z-10 flex h-full w-full flex-col ${wide ? 'max-w-2xl' : 'max-w-md'} border-l border-[#e2e8f0] bg-white shadow-[-24px_0_64px_rgba(31,49,77,0.18)] transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none focus-visible:outline-none`}
+        className={`relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none sm:max-h-[calc(100dvh-3rem)] ${wide ? 'max-w-3xl' : 'max-w-xl'}`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[#eef1f4] px-5 py-3.5">
           <div>

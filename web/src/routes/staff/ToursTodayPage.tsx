@@ -8,11 +8,11 @@ import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { routeProgress } from '../../features/staff/attention'
 import { formatCountdown, formatTime } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
-import { useMediaQuery } from '../../features/staff/use-media-query'
-import { TODAY_STAGES, byStart, defaultTour, matchesSearch, studentsToday, type TodayFilter } from '../../features/staff/today-board'
+import { TODAY_STAGES, byStart, matchesSearch, studentsToday, type TodayFilter } from '../../features/staff/today-board'
 import { TodayLanes } from '../../features/staff/components/TodayLanes'
 import { TourAgenda } from '../../features/staff/components/TourAgenda'
 import { TourInspector } from '../../features/staff/components/TourInspector'
+import { KpiRow, KpiTile } from '../../components/ui/Charts'
 import { StateFilter } from '../../features/staff/components/StateFilter'
 
 const STATES = TODAY_STAGES.map((stage) => stage.key)
@@ -28,7 +28,6 @@ export default function ToursTodayPage() {
   const [search, setSearch] = useState('')
   const tours = useTours()
   const now = useNow(30_000)
-  const wide = useMediaQuery('(min-width: 1280px)')
 
   const asked = params.get('view')
   const view: TodayFilter = asked === 'ended' ? 'Completed' : asked && STATES.includes(asked as TourState) ? (asked as TourState) : 'all'
@@ -37,8 +36,8 @@ export default function ToursTodayPage() {
 
   const askedTour = params.get('tour')
   const chosen = all.find((tour) => tour.id === askedTour)
-  const selected = chosen ?? (wide ? defaultTour(all, now) : undefined)
-  const drawerOpen = !wide && Boolean(chosen)
+  const selected = chosen
+  const drawerOpen = Boolean(chosen)
 
   const update = useCallback(
     (change: (next: URLSearchParams) => void) =>
@@ -62,16 +61,18 @@ export default function ToursTodayPage() {
       <PageHeader
         eyebrow="Trong ngày"
         title="Buổi hôm nay"
-        description="Bấm vào một buổi để xem đoàn, lộ trình, nhật ký và bước tiếp theo. Nhân viên vận hành kiểm tra thiết bị và bắt đầu khi buổi ở trạng thái Sẵn sàng."
+        description="Bấm một buổi để mở chi tiết ngay giữa màn hình: đoàn, lộ trình, nhật ký và bước tiếp theo."
         action={tours.data ? <Glance tours={all} now={now} onSelect={select} /> : undefined}
       />
+
+      {tours.data && <TodayFigures tours={all} now={now} />}
 
       {tours.isPending ? (
         <LoadingPanel />
       ) : tours.isError ? (
         <ErrorPanel error={tours.error} onRetry={tours.refetch} />
       ) : (
-        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_440px]">
+        <div>
           <section className={panelClass} aria-label="Danh sách buổi hôm nay">
             {all.length > 0 && <TodayLanes tours={all} now={now} selectedId={selected?.id} onSelect={select} />}
             <div className="flex flex-col gap-2.5 border-b border-[#f1f4f8] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -101,10 +102,25 @@ export default function ToursTodayPage() {
             )}
           </section>
 
-          <TourInspector tour={selected} now={now} open={drawerOpen} wide={wide} onClose={close} panelRef={panelRef} />
+          <TourInspector tour={selected} now={now} open={drawerOpen} onClose={close} panelRef={panelRef} />
         </div>
       )}
     </StaffPage>
+  )
+}
+
+/** The day in four figures: how many, how many need help, what is next, what cannot run yet. */
+function TodayFigures({ tours, now }: { tours: TourOperation[]; now: number }) {
+  const assist = tours.filter((tour) => tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance')
+  const next = tours.find((tour) => (tour.state === 'Ready' || tour.state === 'Scheduled') && new Date(tour.scheduledAt).getTime() >= now)
+  const unready = tours.filter((tour) => tour.state === 'Scheduled')
+  return (
+    <KpiRow label="Trong ngày">
+      <KpiTile label="Tổng buổi" value={tours.length} note={`${studentsToday(tours)} học sinh đã duyệt`} />
+      <KpiTile label="Cần hỗ trợ" value={assist.length} note={assist.map((tour) => tour.code).join(', ') || 'không có'} tone={assist.length ? 'danger' : 'plain'} />
+      <KpiTile label="Sắp tới" value={next ? formatTime(next.scheduledAt) : '—'} note={next ? `${next.code} · ${formatCountdown(next.scheduledAt, now)}` : 'hết buổi hôm nay'} />
+      <KpiTile label="Chưa chốt" value={unready.length} note={unready.map((tour) => tour.code).join(', ') || 'tất cả đã chốt'} tone={unready.length ? 'warn' : 'plain'} />
+    </KpiRow>
   )
 }
 
