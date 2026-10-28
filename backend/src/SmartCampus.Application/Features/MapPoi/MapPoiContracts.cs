@@ -9,7 +9,9 @@ public sealed record MapVersionView(
     decimal OccupiedThreshold, decimal FreeThreshold, string FrameId, string ValidationStatus,
     Guid UploadedByUserId, DateTimeOffset UploadedAt);
 
-public sealed record MapVersionListItem(MapVersionView Map, MapDeploymentCheckView? LatestDeployment);
+public sealed record MapVersionListItem(MapVersionView Map, MapDeploymentCheckView? LatestDeployment,
+    string TechnicalCheckStatus, bool CanUseForPoiPreparation, string? PreparationBlockReasonCode,
+    string? PreparationBlockReason, MapDeploymentCheckView? PreparationEvidence);
 
 public sealed record MapDeploymentCheckView(
     Guid Id, Guid MapVersionId, string RobotCode, string PackageSha256,

@@ -16,6 +16,8 @@ public interface IMapVersionRepository
     Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksForMapAsync(Guid mapVersionId, CancellationToken cancellationToken);
+    Task LockMapPreparationStateAsync(Guid mapVersionId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksAsync(Guid mapVersionId, CancellationToken cancellationToken);
     void Add(MapArea area);
     void Add(MapVersion mapVersion);

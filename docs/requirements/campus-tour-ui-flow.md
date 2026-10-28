@@ -1,11 +1,11 @@
 # PWA workflow target — SRS v0.2
 
-Updated 2026-10-27 from Report 3 SRS v0.2 aligned to Phiếu v1.9.
+Updated 2026-10-28 from Report 3 SRS v0.2 aligned to Phiếu v1.9 and ADR-0028.
 [Detailed scope](campus-tour-scope.md) governs business rules; this is a workflow
 projection, not an implementation or diagram-completion claim. Historical
 Review 1 flow is preserved in Git at `e70fb52`. Repo business succession is
 [ADR-0020](../decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
-No frontend code changes ship in this backend slice.
+The technical map check must pass before Staff can prepare or submit a POI.
 
 ## 1. Defined screens and guards
 
@@ -32,12 +32,17 @@ artifacts, not a new research workspace.
 ## 2. Preparation and tour lifecycle
 
 Technical creates map externally → upload immutable version → manually deploy
-and verify localization/display → Staff proposes / Technical imports POIs
+and verify localization/display → only then Staff proposes/submits POIs /
+Technical imports or verifies POIs
 (unverified) → Technical verifies POIs → Staff composes route/content →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves
 15min + longest permitted path +15min → review all row/email decisions →
 READY locks route/content/list → preflight at published time → Start while READY
 → validate guards/claim robot/commit RUNNING → dispatch first leg.
+
+**Diagram follow-up:** redraw the workflow diagram so successful map technical
+check is explicitly before the Tour Staff POI proposal/submission step. This
+document update does not redraw it.
 
 Saving or activating catalog data is not physical confirmation. A new
 movement-affecting revision requires retest; retained tested configuration stays

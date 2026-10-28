@@ -4,7 +4,7 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
 
 /** Technical Staff work only (SRS v1.9 §3.2.c): no Tour preparation, no robot driving. */
 export const TECHNICAL_NAV_SECTIONS: NavSection[] = [
-  { label: 'Bản đồ', items: [{ label: 'Version map', path: '/technical/maps', icon: Map }] },
+  { label: 'Bản đồ', items: [{ label: 'Quản lý bản đồ', path: '/technical/maps', icon: Map }] },
   { label: 'POI', items: [{ label: 'Kiểm chứng POI', path: '/technical/poi-import', icon: FileUp }] },
   { label: 'Tuyến', items: [{ label: 'Xác nhận kỹ thuật', path: '/technical/confirmations', icon: CheckCheck }] },
 ]

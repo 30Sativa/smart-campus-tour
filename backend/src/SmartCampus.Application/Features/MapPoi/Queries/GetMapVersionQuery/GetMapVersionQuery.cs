@@ -12,8 +12,10 @@ public sealed class GetMapVersionQueryHandler(IMapVersionRepository repository)
     {
         var map = await repository.FindMapVersionAsync(query.Id, false, ct)
             ?? throw new NotFoundException("Map version", query.Id);
-        var latest = await repository.GetLatestDeploymentCheckAsync(map.Id, null, ct);
+        var eligibility = await MapPreparationEligibility.LoadAsync(repository, map, ct);
         return new(MapPoiReadModelMapper.ToMapView(map, map.AreaKeyNavigation.DisplayName),
-            latest is null ? null : MapPoiReadModelMapper.ToDeploymentView(latest));
+            eligibility.LatestDeployment is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.LatestDeployment), eligibility.TechnicalCheckStatus,
+            eligibility.CanUseForPoiPreparation, eligibility.BlockReasonCode, eligibility.BlockReason,
+            eligibility.Evidence is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.Evidence));
     }
 }

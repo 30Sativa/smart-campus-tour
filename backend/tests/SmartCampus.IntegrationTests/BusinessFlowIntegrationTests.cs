@@ -57,12 +57,37 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("VALID", map.GetProperty("validationStatus").GetString());
         var mapHash = map.GetProperty("packageSha256").GetString();
 
+        using var pendingMaps = await Get(host.Client, "/api/maps/versions?areaKey=flow-area", staffToken);
+        Assert.Equal(HttpStatusCode.OK, pendingMaps.StatusCode);
+        var pendingMap = Assert.Single((await Body(pendingMaps)).GetProperty("data").EnumerateArray());
+        Assert.Equal("PENDING", pendingMap.GetProperty("technicalCheckStatus").GetString());
+        Assert.False(pendingMap.GetProperty("canUseForPoiPreparation").GetBoolean());
+        Assert.Equal("TECHNICAL_CHECK_PENDING", pendingMap.GetProperty("preparationBlockReasonCode").GetString());
+
+        var auditsBeforeBlockedProposal = await database.CountRowsAsync("dbo.AuditLogs");
+        using var blockedProposal = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
+            new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",
+                description = "Should remain unpersisted", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+        Assert.Equal(HttpStatusCode.Conflict, blockedProposal.StatusCode);
+        var blockedBody = await Body(blockedProposal);
+        Assert.Equal("TECHNICAL_CHECK_PENDING", blockedBody.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposals"));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalRevisions"));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalSubmissions"));
+        Assert.Equal(auditsBeforeBlockedProposal, await database.CountRowsAsync("dbo.AuditLogs"));
+
         using var deployment = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technicalToken,
             new { requestId = Guid.NewGuid(), robotCode = "flow_physical", packageSha256 = mapHash,
                 localizationPassed = true, displayPassed = true,
                 evidenceNote = "SIMULATED BACKEND TEST evidence; not a physical robot result." });
         Assert.Equal(HttpStatusCode.OK, deployment.StatusCode);
         Assert.True((await Body(deployment)).GetProperty("data").GetProperty("passed").GetBoolean());
+        using var eligibleMaps = await Get(host.Client, "/api/maps/versions?areaKey=flow-area", staffToken);
+        var eligibleMap = Assert.Single((await Body(eligibleMaps)).GetProperty("data").EnumerateArray());
+        Assert.Equal("PASSED", eligibleMap.GetProperty("technicalCheckStatus").GetString());
+        Assert.True(eligibleMap.GetProperty("canUseForPoiPreparation").GetBoolean());
+        Assert.Equal("flow_physical", eligibleMap.GetProperty("preparationEvidence").GetProperty("robotCode").GetString());
+        Assert.False(eligibleMap.GetProperty("preparationEvidence").GetProperty("id").GetGuid() == Guid.Empty);
 
         using var createPoi = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
             new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",

@@ -23,6 +23,7 @@ public sealed class SubmitPoiProposalCommandValidator : AbstractValidator<Submit
 }
 
 public sealed class SubmitPoiProposalCommandHandler(
+    IMapVersionRepository mapRepository,
     IPoiProposalRepository proposalRepository,
     IPoiVerificationRepository verificationRepository,
     IMapPoiRequestLock requestLock,
@@ -52,6 +53,11 @@ public sealed class SubmitPoiProposalCommandHandler(
             ?? throw new ConflictException("The proposal's current revision is missing.");
         if (await proposalRepository.FindSubmissionAsync(revision.Id, cancellationToken) is not null)
             throw new ConflictException("This POI revision has already been submitted.");
+
+        var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: false, cancellationToken)
+            ?? throw new NotFoundException("Map version", revision.MapVersionId);
+        await mapRepository.LockMapPreparationStateAsync(map.Id, cancellationToken);
+        (await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken)).EnsureCanUse();
 
         var now = timeProvider.GetUtcNow();
         var submission = new PoiProposalSubmission
