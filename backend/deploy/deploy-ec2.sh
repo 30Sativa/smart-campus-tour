@@ -582,7 +582,8 @@ candidate_host=$(jq -r '.services.api.environment.AllowedHosts // empty' <<<"$ca
 openssl x509 -in "$TLS_CERT" -checkhost "$candidate_host" -noout >/dev/null ||
   fail 'Configured TLS certificate does not cover API_HOST.'
 [[ $(jq -r '.services.api.image' <<<"$candidate_config") == "$api_image" ]] || fail 'Resolved API image differs from the approved digest.'
-[[ $(jq -r '.services["db-init"].image' <<<"$candidate_config") == "$db_init_image" ]] || fail 'Resolved database-tool image differs from the approved digest.'
+# db-init sits behind the db-bootstrap profile, which plain `config` omits.
+[[ $(compose_for "$candidate_dir" --profile db-bootstrap config --format json | jq -r '.services["db-init"].image') == "$db_init_image" ]] || fail 'Resolved database-tool image differs from the approved digest.'
 [[ $(jq -r '.services.sqlserver.image' <<<"$candidate_config") == "$current_sql_image" ]] || fail 'Resolved SQL Server image differs from the managed SQL pin.'
 [[ $(jq -r '.services.api.labels["com.smartcampus.deployment.owner"] // empty' <<<"$candidate_config") == "$COMPOSE_OWNER" ]] ||
   fail 'Resolved Compose services do not carry the persistent deployment owner marker.'

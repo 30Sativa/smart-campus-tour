@@ -327,6 +327,9 @@ if args[:1] == ["exec"]:
 if compose_command == "config":
     env, content = parse_envs()
     resolved = model(env, content)
+    # Like real Compose, `config` omits services whose profile is not active.
+    if not any(args[i:i + 2] == ["--profile", "db-bootstrap"] for i in range(len(args) - 1)):
+        resolved["services"].pop("db-init")
     if "--hash" in args:
         sql_config = resolved["services"]["sqlserver"]
         payload = json.dumps(sql_config, sort_keys=True, separators=(",", ":")).encode()
