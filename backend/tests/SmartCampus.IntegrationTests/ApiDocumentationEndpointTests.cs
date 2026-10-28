@@ -100,6 +100,56 @@ public sealed class ApiDocumentationEndpointTests
         Assert.Equal("Tour Staff — POI Proposals", proposal.GetProperty("tags")[0].GetString());
         Assert.Contains("does not mean the POI has passed", proposal.GetProperty("description").GetString(), StringComparison.Ordinal);
 
+        var legacyRouteList = paths.GetProperty("/api/staff/manage/routes").GetProperty("get");
+        Assert.Equal("[Tour Staff] Liệt kê tuyến phục vụ Tour hiện hành", legacyRouteList.GetProperty("summary").GetString());
+        Assert.Equal("Tour Staff — Tra cứu tuyến", legacyRouteList.GetProperty("tags")[0].GetString());
+        Assert.Contains("AuthoringMode=LEGACY", legacyRouteList.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("POST /api/staff/routes", legacyRouteList.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("GET /api/routes/{routeId}/revisions", legacyRouteList.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Single(paths.GetProperty("/api/staff/manage/routes").EnumerateObject());
+
+        var legacyRouteGet = paths.GetProperty("/api/staff/manage/routes/{id}").GetProperty("get");
+        Assert.Equal("[Tour Staff] Xem chi tiết tuyến phục vụ Tour hiện hành", legacyRouteGet.GetProperty("summary").GetString());
+        Assert.Equal("Tour Staff — Tra cứu tuyến", legacyRouteGet.GetProperty("tags")[0].GetString());
+        Assert.Contains("AuthoringMode=LEGACY", legacyRouteGet.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Contains("does not certify a map/POI tuple", legacyRouteGet.GetProperty("description").GetString(), StringComparison.Ordinal);
+        Assert.Single(paths.GetProperty("/api/staff/manage/routes/{id}").EnumerateObject());
+
+        var tourOperations = new[]
+        {
+            (Path: "/api/staff/manage/tours", Method: "get", Summary: "[Tour Staff] Liệt kê Tour"),
+            (Path: "/api/staff/manage/tours/{id}", Method: "get", Summary: "[Tour Staff] Xem chi tiết Tour"),
+            (Path: "/api/staff/manage/tours", Method: "post", Summary: "[Tour Staff] Tạo Tour"),
+            (Path: "/api/staff/manage/tours/{id}", Method: "put", Summary: "[Tour Staff] Cập nhật Tour"),
+            (Path: "/api/staff/manage/tours/{id}/cancel", Method: "post", Summary: "[Tour Staff] Hủy Tour trước Start")
+        };
+        foreach (var (path, method, expectedSummary) in tourOperations)
+        {
+            var operation = paths.GetProperty(path).GetProperty(method);
+            Assert.Equal(expectedSummary, operation.GetProperty("summary").GetString());
+            Assert.Equal("Tour Staff — Quản lý Tour", operation.GetProperty("tags")[0].GetString());
+            Assert.DoesNotContain("LEGACY", operation.GetProperty("summary").GetString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("exact RouteRevision", operation.GetProperty("description").GetString(), StringComparison.Ordinal);
+            Assert.Contains("assigned Operator", operation.GetProperty("description").GetString(), StringComparison.Ordinal);
+            Assert.Contains("robot reservation", operation.GetProperty("description").GetString(), StringComparison.Ordinal);
+            Assert.Contains("READY snapshot", operation.GetProperty("description").GetString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("/api/admin", operation.GetProperty("description").GetString(), StringComparison.OrdinalIgnoreCase);
+        }
+        var tourCreateDescription = paths.GetProperty("/api/staff/manage/tours").GetProperty("post").GetProperty("description").GetString();
+        Assert.Contains("TOUR_DURATION_UNAVAILABLE", tourCreateDescription, StringComparison.Ordinal);
+        Assert.Contains("does not create a Tour", tourCreateDescription, StringComparison.Ordinal);
+        var tourUpdateDescription = paths.GetProperty("/api/staff/manage/tours/{id}").GetProperty("put").GetProperty("description").GetString();
+        Assert.Contains("Metadata-only edits are allowed", tourUpdateDescription, StringComparison.Ordinal);
+        Assert.Contains("Changing the scheduled time or Route is blocked with `TOUR_DURATION_UNAVAILABLE`", tourUpdateDescription, StringComparison.Ordinal);
+        var tourCancelDescription = paths.GetProperty("/api/staff/manage/tours/{id}/cancel").GetProperty("post").GetProperty("description").GetString();
+        Assert.Contains("before Start", tourCancelDescription, StringComparison.Ordinal);
+        Assert.Contains("revokes invitation access and closes existing sessions", tourCancelDescription, StringComparison.Ordinal);
+
+        Assert.False(paths.TryGetProperty("/api/admin/routes", out _));
+        Assert.False(paths.TryGetProperty("/api/admin/tours", out _));
+        Assert.DoesNotContain("LEGACY — Tour Staff Route Reads", root.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("LEGACY — Tour Staff Tour Management", root.GetRawText(), StringComparison.Ordinal);
+
         var verification = paths.GetProperty("/api/technical/poi-proposals/{id}/revisions/{revisionNumber}/verification").GetProperty("post");
         Assert.Equal("Technical Staff — POI Verification", verification.GetProperty("tags")[0].GetString());
         Assert.Contains("navigation fingerprint", verification.GetProperty("description").GetString(), StringComparison.Ordinal);
