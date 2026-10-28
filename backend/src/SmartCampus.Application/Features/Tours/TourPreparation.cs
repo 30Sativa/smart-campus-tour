@@ -23,6 +23,13 @@ internal static class TourPreparation
             throw new ValidationException([new ValidationFailure("Configuration.ScheduledStartAt", "Lịch Tour mới phải ở tương lai.")]);
     }
 
+    public static void RequireConfiguredDuration()
+    {
+        throw new ConflictException(
+            "Không thể lập lịch Tour cho đến khi có nguồn tổng thời lượng cấu hình được phê duyệt cho đúng phiên bản Route. Thời lượng đo từ lần thử điều hướng không thay thế nguồn này.",
+            "TOUR_DURATION_UNAVAILABLE");
+    }
+
     public static TourPermissions Permissions(Tour tour, TourUsage usage)
     {
         var noOperationalUse = !usage.HasOperationalHistory && !usage.HasRobotOwnership;

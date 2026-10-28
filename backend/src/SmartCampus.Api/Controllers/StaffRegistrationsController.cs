@@ -13,6 +13,9 @@ using SmartCampus.Application.Features.RegistrationReview.Queries.GetRegistratio
 using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations;
 using SmartCampus.Application.Features.RegistrationReview.Queries.ListRegistrations.Dtos;
 using SmartCampus.Application.Features.RosterEmailCorrection.Commands.CorrectRosterEmail;
+using SmartCampus.Application.Features.RosterEmailCorrection.Commands;
+using SmartCampus.Application.Features.RosterEmailCorrection.Queries;
+using SmartCampus.Application.Features.RosterEmailCorrection;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -57,12 +60,65 @@ public sealed class StaffRegistrationsController(ISender sender) : ControllerBas
         return Ok(Committed());
     }
 
+    [HttpPost("{id:guid}/rows/{rowId:guid}/accept")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<object?>>> AcceptRow(Guid id, Guid rowId,
+        [FromBody] ReviewRosterRowRequest request, CancellationToken ct)
+    {
+        await sender.Send(new ReviewRosterRowCommand(id, rowId, User.GetRequiredUserId(), "accept", request), ct);
+        return Ok(Committed());
+    }
+
+    [HttpPost("{id:guid}/rows/{rowId:guid}/reject")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<object?>>> RejectRow(Guid id, Guid rowId,
+        [FromBody] ReviewRosterRowRequest request, CancellationToken ct)
+    {
+        await sender.Send(new ReviewRosterRowCommand(id, rowId, User.GetRequiredUserId(), "reject", request), ct);
+        return Ok(Committed());
+    }
+
     [HttpPost("~/api/admin/registrations/{id:guid}/roster/{rowId:guid}/email")]
     [Authorize(Roles = ApplicationRoles.Admin)]
     public async Task<ActionResult<BaseResponse<object?>>> CorrectEmail(Guid id, Guid rowId,
         [FromBody] CorrectRosterEmailRequest request, CancellationToken ct)
     {
         await sender.Send(new CorrectRosterEmailCommand(id, rowId, User.GetRequiredUserId(), request), ct);
+        return Ok(Committed());
+    }
+
+    [HttpGet("~/api/staff/manage/roster-email-change-requests")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<RosterEmailChangeView>>>> EmailChangeRequests(
+        [FromQuery] string? state, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RosterEmailChangeView>> { Success = true, Message = "OK",
+            Data = await sender.Send(new ListRosterEmailChangesQuery(null, null, state), ct) });
+
+    [HttpGet("~/api/staff/manage/roster-email-change-requests/{requestId:guid}")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<RosterEmailChangeView>>> EmailChangeRequest(Guid requestId, CancellationToken ct)
+    {
+        var rows = await sender.Send(new ListRosterEmailChangesQuery(null, null, null), ct);
+        var item = rows.SingleOrDefault(row => row.Id == requestId);
+        if (item is null) return NotFound();
+        return Ok(new BaseResponse<RosterEmailChangeView> { Success = true, Message = "OK", Data = item });
+    }
+
+    [HttpPost("~/api/staff/manage/roster-email-change-requests/{requestId:guid}/accept")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<object?>>> AcceptEmailChange(Guid requestId,
+        [FromBody] ReviewRosterEmailChangeRequest request, CancellationToken ct)
+    {
+        await sender.Send(new ReviewRosterEmailChangeCommand(requestId, User.GetRequiredUserId(), "accept", request), ct);
+        return Ok(Committed());
+    }
+
+    [HttpPost("~/api/staff/manage/roster-email-change-requests/{requestId:guid}/reject")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<ActionResult<BaseResponse<object?>>> RejectEmailChange(Guid requestId,
+        [FromBody] ReviewRosterEmailChangeRequest request, CancellationToken ct)
+    {
+        await sender.Send(new ReviewRosterEmailChangeCommand(requestId, User.GetRequiredUserId(), "reject", request), ct);
         return Ok(Committed());
     }
 

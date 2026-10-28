@@ -6,11 +6,13 @@ The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
 [ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
 The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
 implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
-TechnicalStaff accounts and the scoped versioned map/POI API are implemented.
+TechnicalStaff accounts, the scoped versioned map/POI API, and Wave C's
+per-row registration/email-change slice are implemented.
 Tour, Route, legacy POI catalog, and registration review are Staff-authorized
 under `/api/staff/manage/*`; old `/api/admin/{tours,routes,pois,registrations}`
 paths remain Staff-only compatibility aliases. The legacy direct email-correction
-command remains Admin-only and does not satisfy the target request/review workflow.
+URL remains Admin-only but fails closed; the target request/review flow is
+Representative-owned and Staff-reviewed.
 F-14, conflicting branch cutoff, project YAML/frame mapping and M2 command transport remain pending.
 Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
 
@@ -22,10 +24,10 @@ registration-review management endpoints. Each controller exposes the current
 path-compatibility alias; the legacy prefix does not retain Admin authority.
 `Admin` is limited to account/role administration. Invitation endpoints accept
 Staff for organization-wide support or Representative scoped to their own
-registration. TechnicalStaff remains limited to the versioned map upload and
-POI verification endpoints. The existing direct roster-email correction stays
-Admin-only pending the target row-level request/review workflow; it is not part
-of the new Staff contract.
+registration. TechnicalStaff remains limited to versioned map upload and POI
+verification endpoints. Row-level registration decisions are Staff-only;
+email-change requests are Representative-owned and Staff-reviewed. Legacy
+direct Admin roster-email correction is disabled with a conflict response.
 
 ## Tour Management API (legacy pre-execution slice)
 
@@ -38,22 +40,25 @@ This API cannot persist a RouteRevisionId, assigned Operator, robot reservation,
 or immutable READY snapshot. It is not a versioned Route scheduling path. No
 target READY/Finalize/Reopen, explicit robot/Operator assignment, reservation,
 Staff operation or branch-request endpoint is implemented here. ADR-0024 records
-why no versioned Tour/reservation writer can be safely enabled until route
-duration and row/email decision sources exist.
+why Tour scheduling remains blocked until an approved configured-duration
+source exists and row/email decisions can be rechecked.
 
 | Method | Path | Behavior |
 |---|---|---|
 | GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
-| POST | `/api/staff/manage/tours` | `{requestId, expectedRouteVersion, configuration}`; creates SCHEDULED, no robot/execution state. |
-| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; SCHEDULED before execution only. |
+| POST | `/api/staff/manage/tours` | `{requestId, expectedRouteVersion, configuration}`; currently returns 409 `TOUR_DURATION_UNAVAILABLE` after validating the legacy route; no Tour or success receipt is written. |
+| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`. |
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
 absolute HTTP(S) without embedded credentials. Schedule is a DateTimeOffset,
-normalized to UTC, with millisecond precision. New/changed schedules must be
-in the future. Creating or changing Route requires its current opaque version,
+normalized to UTC, with millisecond precision. Future-time and route checks run,
+but creating a Tour and changing its schedule/route fail closed because the
+approved configured-duration source is unavailable. `MeasuredDurationSeconds`
+from a manual route test is not a substitute (ADR-0024). Creating or changing
+Route requires its current opaque version,
 active Route, active POIs and valid data/map/pose/stops/head configuration.
 Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
 
@@ -166,11 +171,12 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The current backend persistence model is defined by
-`backend/database/smart-campus-tour-schema-v1.1.sql` and
-[ADR-0012](decisions/0012-v1-1-schema-and-operation-scope.md). It is scaffolded
-to EF and applied to the local development database `SmartCampusTourV11` on
-SQL Server `localhost,1433`; it does not migrate existing data. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
+The backend persistence baseline has advanced through v1.4; this branch adds
+the row-registration/email-request schema in
+`backend/database/smart-campus-tour-schema-v1.4.sql` and
+[ADR-0026](decisions/0026-row-level-registration-and-email-change.md). The
+developer's local `SmartCampusTourV11` remains an older database and is not
+altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
@@ -189,10 +195,10 @@ without terminating the session; revoke/reissue invalidates the old code and
 session and sends a new code to the approved email, retaining invitation identity
 and expiry. The SRS target limits Representative support to owned rows and permits Staff
 support for managed tours. Email changes use Representative request + Staff review;
-unchanged accepted rows keep credentials while new rows await review. Current
-Admin-authorized support/correction endpoints are documented in Sections 3.2.3/4
-and remain implementation gaps, not target authority. Their migration must include
-row review, stable identities, all access guards, delivery jobs and Tour transactions.
+unchanged accepted rows keep credentials while new rows await review. Wave C
+implements the row-specific registration and email-request APIs; legacy direct
+Admin email correction is disabled. Media-relay authorization and broader
+Staff/Representative support migration remain separate gaps.
 
 [ADR-0011](decisions/0011-student-data-use-for-tour.md) limits student data to
 registration, invitations and aggregate Tour operational statistics. V1 excludes
@@ -1264,7 +1270,13 @@ filtered UNIQUE enforce one active session; expired sessions close before INSERT
 The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
 Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
 session for configured SessionIdleMinutes (default 10), bounded by invitation
-expiry. First successful entry records INVITATION_ENTERED once per invitation.
+expiry. Reconnect/heartbeat is a separate two-minute grace from the active
+session's `LastSeenAt`: both the session and device cookies may be presented,
+or a matching device cookie alone may recover that browser by rotating the
+session token. A stale session cookie does not bypass the grace, and the
+10-minute idle lease does not enlarge it. The Tour-scoped device token is a
+browser credential, never an IP-derived identity. First successful entry
+records INVITATION_ENTERED once per invitation.
 
 Student GET /api/student/tours/{tourId}/view (same cookie and exact-origin check,
 no body, `Cache-Control: no-store`) returns the read-only route for the session's

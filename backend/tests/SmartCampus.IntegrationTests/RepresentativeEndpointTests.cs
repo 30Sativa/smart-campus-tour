@@ -31,15 +31,16 @@ public sealed class RepresentativeEndpointTests
             Assert.Equal(2, details.GetProperty("roster").GetArrayLength());
             Assert.Equal("SHARED_VIEWING", details.GetProperty("roster")[1].GetProperty("rowType").GetString());
             Assert.Equal("one@example.com", details.GetProperty("roster")[0].GetProperty("email").GetString());
-            var another = await fixture.SendAsync(HttpMethod.Post, $"/tours/{fixture.TourId}/registrations", Input(tour, "Shared only", "room2@example.com", sharedOnly: true), Guid.NewGuid());
+            var another = await fixture.SendAsync(HttpMethod.Post, $"/tours/{fixture.TourId}/registrations", Input(tour, "Shared only", "room2@example.com", sharedOnly: true), Guid.NewGuid(), await LoginAsync(host.Client, "rep.two"));
             Assert.Equal(HttpStatusCode.OK, another.Status);
             Assert.NotEqual(id, another.Data.GetProperty("id").GetGuid());
             var list = await fixture.SendAsync(HttpMethod.Get, "/registrations?size=1");
             Assert.Single(list.Data.EnumerateArray());
-            Assert.Equal(2, list.Body.GetProperty("pagination").GetProperty("totalItems").GetInt32());
+            Assert.Equal(1, list.Body.GetProperty("pagination").GetProperty("totalItems").GetInt32());
             Assert.Equal(0, await fixture.Database.CountRowsAsync("dbo.Invitations"));
 
-            var updateBody = new { input = Input(tour, "Updated", "new@example.com"), expectedRowVersion = Version(details) };
+            var updateInput = Input(tour, "Updated", "one@example.com", rowIds: [details.GetProperty("roster")[0].GetProperty("id").GetGuid()]);
+            var updateBody = new { input = updateInput, expectedRowVersion = Version(details) };
             var updated = await fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}", updateBody);
             Assert.Equal(HttpStatusCode.OK, updated.Status);
             Assert.Equal(JsonValueKind.Null, updated.Data.ValueKind);
@@ -49,7 +50,7 @@ public sealed class RepresentativeEndpointTests
             Assert.NotEqual(Version(details), updateBody.expectedRowVersion);
             await using (var db = fixture.Context())
             {
-                Assert.Equal(2, await db.RosterRows.CountAsync(r => r.RegistrationId == id && !r.IsActive));
+                Assert.Equal(1, await db.RosterRows.CountAsync(r => r.RegistrationId == id && !r.IsActive));
                 Assert.Equal(1, await db.RosterRows.CountAsync(r => r.RegistrationId == id && r.IsActive));
                 Assert.All(await db.AuditLogs.ToArrayAsync(), audit => Assert.Null(audit.DataJson));
             }
@@ -61,16 +62,18 @@ public sealed class RepresentativeEndpointTests
             Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel", cancelBody)).Status);
             details = await fixture.DataAsync($"/registrations/{id}");
             Assert.Equal("CANCELLED", details.GetProperty("summary").GetProperty("state").GetString());
-            // "Đăng ký của tôi" splits the list: the cancelled one is closed, the other group stays active.
+            // "Đăng ký của tôi" is owner-scoped; this Representative has no other active group.
             var closed = await fixture.SendAsync(HttpMethod.Get, "/registrations?group=closed");
             Assert.Equal(id, Assert.Single(closed.Data.EnumerateArray()).GetProperty("id").GetGuid());
             Assert.Equal(JsonValueKind.Null, closed.Data[0].GetProperty("rejectionReason").ValueKind);
             var active = await fixture.SendAsync(HttpMethod.Get, "/registrations?group=active");
-            Assert.NotEqual(id, Assert.Single(active.Data.EnumerateArray()).GetProperty("id").GetGuid());
+            Assert.Empty(active.Data.EnumerateArray());
 
             // Cancellation releases the email, so the original group must recheck on re-registration.
+            await fixture.Database.InsertUserAsync(true, username: "rep.three", roles: ["SCHOOL_REPRESENTATIVE"]);
+            var thirdToken = await LoginAsync(host.Client, "rep.three");
             Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/tours/{fixture.TourId}/registrations",
-                Input(tour, "Takes released email", "new@example.com"), Guid.NewGuid())).Status);
+                Input(tour, "Takes released email", "new@example.com"), Guid.NewGuid(), thirdToken)).Status);
             var resubmit = await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit",
                 new { input = Input(tour, "Original again", "new@example.com"), expectedRowVersion = Version(details) });
             Assert.Equal(HttpStatusCode.Conflict, resubmit.Status);
@@ -158,7 +161,8 @@ public sealed class RepresentativeEndpointTests
         Assert.Equal(1, races.Count(r => r.Status == HttpStatusCode.OK));
         Assert.Equal(1, races.Count(r => r.Status == HttpStatusCode.Conflict));
         var details = await fixture.DataAsync($"/registrations/{id}");
-        var payload = new { input = Input(tour, "Changed", "same@example.com"), expectedRowVersion = Version(details) };
+        var payload = new { input = Input(tour, "Changed", "same@example.com",
+            rowIds: [details.GetProperty("roster")[0].GetProperty("id").GetGuid()]), expectedRowVersion = Version(details) };
         var updates = await Task.WhenAll(fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}", payload),
             fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}", payload));
         Assert.Equal(1, updates.Count(r => r.Status == HttpStatusCode.OK));
@@ -181,16 +185,22 @@ public sealed class RepresentativeEndpointTests
         await fixture.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED', RejectionReason=N'Fix list', ReviewedAt=SYSDATETIMEOFFSET(), ReviewedByUserId='{fixture.AdminId}' WHERE Id='{id}';");
         var details = await fixture.DataAsync($"/registrations/{id}");
         Assert.True(details.GetProperty("allowedActions").GetProperty("resubmit").GetProperty("allowed").GetBoolean());
-        Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit", new { input = body, expectedRowVersion = Version(details) })).Status);
+        var stableRow = details.GetProperty("roster")[0].GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit",
+            new { input = Input(tour, "States", "states@example.com", rowIds: [stableRow]), expectedRowVersion = Version(details) })).Status);
         details = await fixture.DataAsync($"/registrations/{id}");
         Assert.Equal(JsonValueKind.Null, details.GetProperty("rejectionReason").ValueKind);
         Assert.Equal(JsonValueKind.Null, details.GetProperty("reviewedAt").ValueKind);
         await fixture.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='APPROVED' WHERE Id='{id}';");
         details = await fixture.DataAsync($"/registrations/{id}");
-        Assert.False(details.GetProperty("allowedActions").GetProperty("cancel").GetProperty("allowed").GetBoolean());
+        Assert.True(details.GetProperty("allowedActions").GetProperty("cancel").GetProperty("allowed").GetBoolean());
+        var rowId = details.GetProperty("roster")[0].GetProperty("id").GetGuid();
+        var stableInput = Input(tour, "States", "states@example.com", rowIds: [rowId]);
+        Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}",
+            new { input = stableInput, expectedRowVersion = Version(details) })).Status);
+        details = await fixture.DataAsync($"/registrations/{id}");
         var cancel = new { expectedRowVersion = Version(details), expectedTourRowVersion = tour.GetProperty("rowVersion").GetString() };
-        Assert.Equal(HttpStatusCode.Conflict, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel", cancel)).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}", new { input = body, expectedRowVersion = Version(details) })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel", cancel)).Status);
         foreach (var state in new[] { "READY", "RUNNING", "COMPLETED", "CANCELLED" })
         {
             await fixture.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='{state}' WHERE Id='{fixture.TourId}';");
@@ -223,7 +233,7 @@ public sealed class RepresentativeEndpointTests
         Assert.Contains("Roster[0].Email", blocked.Body.GetProperty("errors").GetProperty("fields").EnumerateObject().Select(p => p.Name));
 
         // REJECTED releases it, so resubmitting the original group must recheck and leave it unchanged.
-        await fixture.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED', RejectionReason=N'Fix list' WHERE Id='{id}';");
+        await fixture.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED', RejectionReason=N'Fix list' WHERE Id='{id}'; UPDATE dbo.RosterRows SET ParticipationState='REJECTED' WHERE RegistrationId='{id}' AND IsActive=1;");
         Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Post, path, Input(tour, "Other school", "held@example.com"), Guid.NewGuid(), otherToken)).Status);
         var details = await fixture.DataAsync($"/registrations/{id}");
         var resubmit = await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit",
@@ -260,14 +270,15 @@ public sealed class RepresentativeEndpointTests
             await context.SaveChangesAsync();
         }
         var details = await fixture.DataAsync($"/registrations/{id}");
-        Assert.False(details.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
-        Assert.Equal(HttpStatusCode.Conflict, (await fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}",
+        Assert.True(details.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await fixture.SendAsync(HttpMethod.Put, $"/registrations/{id}",
             new { input = body, expectedRowVersion = Version(details) })).Status);
         Assert.Equal(HttpStatusCode.Conflict, (await fixture.SendAsync(HttpMethod.Post, $"/registrations/{id}/cancel",
             new { expectedRowVersion = Version(details), expectedTourRowVersion = Version(tour) })).Status);
         Assert.Equal(1, await fixture.Database.CountRowsAsync("dbo.Invitations"));
         await using var final = fixture.Context();
         Assert.Equal("SUBMITTED", (await final.GroupRegistrations.SingleAsync()).State);
+        Assert.Equal(1, await final.RosterRows.CountAsync(row => row.RegistrationId == id && row.IsActive));
     }
 
     [SchemaV11Fact]
@@ -293,10 +304,20 @@ public sealed class RepresentativeEndpointTests
     }
 
     internal static string Version(JsonElement data) => data.GetProperty("rowVersion").GetString()!;
-    internal static SmartCampus.Application.Features.Registrations.RegistrationInput Input(JsonElement tour, string group, string email, bool mixed = false, bool sharedOnly = false) =>
-        new("School", group, "Contact", "contact@example.com", Version(tour), mixed ?
-            [new(2, "INDIVIDUAL", "Same name", email.Trim(), null), new(4, "SHARED_VIEWING", "Same name", "room@example.com", "10A")]
-            : [new(2, sharedOnly ? "SHARED_VIEWING" : "INDIVIDUAL", "Viewer", email.Trim(), null)]);
+    internal static SmartCampus.Application.Features.Registrations.RegistrationInput Input(JsonElement tour, string group, string email,
+        bool mixed = false, bool sharedOnly = false, IReadOnlyList<Guid>? rowIds = null)
+    {
+        var roster = mixed
+            ? new List<SmartCampus.Application.Features.Registrations.RosterInput>
+            {
+                new(2, "INDIVIDUAL", "Same name", email.Trim(), null),
+                new(4, "SHARED_VIEWING", "Same name", "room@example.com", "10A")
+            }
+            : [new(2, sharedOnly ? "SHARED_VIEWING" : "INDIVIDUAL", "Viewer", email.Trim(), null)];
+        if (rowIds is not null)
+            for (var index = 0; index < Math.Min(roster.Count, rowIds.Count); index++) roster[index] = roster[index] with { RowId = rowIds[index] };
+        return new("School", group, "Contact", "contact@example.com", Version(tour), roster);
+    }
     internal static async Task<string> LoginAsync(HttpClient client, string username)
     {
         using var response = await client.PostAsJsonAsync("/api/auth/login", new { username, password = "integration-test-password" });

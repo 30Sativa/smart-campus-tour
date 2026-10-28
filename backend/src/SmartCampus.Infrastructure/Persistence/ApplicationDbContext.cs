@@ -44,6 +44,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<RosterRow> RosterRows { get; set; }
 
+    public virtual DbSet<RosterEmailChangeRequest> RosterEmailChangeRequests { get; set; }
+
     public virtual DbSet<Route> Routes { get; set; }
 
     public virtual DbSet<RouteRevision> RouteRevisions { get; set; }
@@ -171,6 +173,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.ExpiresAt).HasPrecision(3);
             entity.Property(e => e.LastSeenAt).HasPrecision(3);
             entity.Property(e => e.SessionTokenHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.DeviceTokenHash)
                 .HasMaxLength(32)
                 .IsFixedLength();
 
@@ -540,6 +545,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.DisplayName).HasMaxLength(150);
             entity.Property(e => e.Email).HasMaxLength(254);
+            entity.Property(e => e.ParticipationState).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.ReviewReason).HasMaxLength(1000);
+            entity.Property(e => e.ReviewedAt).HasPrecision(3);
             entity.Property(e => e.RowType)
                 .HasMaxLength(30)
                 .IsUnicode(false);
@@ -552,6 +560,29 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.RegistrationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RosterRows_RegistrationId");
+        });
+
+        modelBuilder.Entity<RosterEmailChangeRequest>(entity =>
+        {
+            entity.HasIndex(e => new { e.RequestedByUserId, e.RequestId }, "UQ_RosterEmailChangeRequests_Request").IsUnique();
+            entity.HasIndex(e => e.RosterRowId, "UX_RosterEmailChangeRequests_OnePending")
+                .IsUnique().HasFilter("([State]='PENDING')");
+            entity.HasIndex(e => new { e.State, e.CreatedAt, e.Id }, "IX_RosterEmailChangeRequests_Review");
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CurrentEmail).HasMaxLength(254);
+            entity.Property(e => e.ProposedEmail).HasMaxLength(254);
+            entity.Property(e => e.State).HasMaxLength(20).IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.ReviewedAt).HasPrecision(3);
+            entity.Property(e => e.ReviewReason).HasMaxLength(1000);
+            entity.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
+            entity.HasOne(d => d.RosterRow).WithMany(p => p.EmailChangeRequests)
+                .HasForeignKey(d => d.RosterRowId).OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RosterEmailChangeRequests_RosterRow");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("FK_RosterEmailChangeRequests_Requester");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewedByUserId)
+                .HasConstraintName("FK_RosterEmailChangeRequests_Reviewer");
         });
 
         modelBuilder.Entity<Route>(entity =>

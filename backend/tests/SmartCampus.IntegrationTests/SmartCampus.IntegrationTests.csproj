@@ -28,7 +28,9 @@
     <None Include="..\..\database\smart-campus-tour-schema-v1.1.sql" Link="Schema\snapshot.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.2.sql" Link="Schema\snapshot-v1.2.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.3.sql" Link="Schema\snapshot-v1.3.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.4.sql" Link="Schema\snapshot-v1.4.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.2-to-v1.3-route-revisions.sql" Link="Schema\upgrade-v1.2-to-v1.3-route-revisions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.3-to-v1.4-row-registration.sql" Link="Schema\upgrade-v1.3-to-v1.4-row-registration.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-route-revision-permissions.sql" Link="Schema\route-revision-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.1-to-v1.2-map-poi.sql" Link="Schema\upgrade-v1.1-to-v1.2-map-poi.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-map-poi-permissions.sql" Link="Schema\map-poi-permissions.sql" CopyToOutputDirectory="PreserveNewest" />

@@ -6,10 +6,13 @@ DECLARE @hash nvarchar(64) = (
     SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourBootstrapHash');
 DECLARE @current nvarchar(64) = N'$(SchemaHash)';
-IF @hash = @current OR (
-    @current = N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68'
-    AND @hash = N'2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67')
+DECLARE @v14 nvarchar(64) = N'$(SchemaHashV14)';
+IF @hash = @current AND @current = @v14
     SELECT 'READY';
+ELSE IF @hash IN (
+    N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68',
+    N'2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67')
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @hash IS NULL AND NOT EXISTS (SELECT 1 FROM sys.tables WHERE is_ms_shipped = 0)
     SELECT 'EMPTY';
 ELSE

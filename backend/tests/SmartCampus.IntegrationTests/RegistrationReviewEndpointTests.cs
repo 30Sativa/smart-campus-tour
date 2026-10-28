@@ -31,7 +31,9 @@ public sealed class RegistrationReviewEndpointTests
         var staff = await LoginAsync(host.Client, "review.staff");
         f.Bind(host.Client, rep);
         var id = await SubmitAsync(f);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.two"));
         var second = await SubmitAsync(f, "other@example.com", "Second group");
+        f.Bind(host.Client, rep);
         var list = await f.SendAsync(HttpMethod.Get, "/api/staff/manage/registrations?state=SUBMITTED&size=1", token: staff);
         Assert.Single(list.Data.EnumerateArray());
         Assert.Equal(2, list.Body.GetProperty("pagination").GetProperty("totalItems").GetInt32());
@@ -45,15 +47,17 @@ public sealed class RegistrationReviewEndpointTests
         Assert.Equal("Sửa thông tin", owned.GetProperty("rejectionReason").GetString());
         Assert.True(owned.GetProperty("allowedActions").GetProperty("resubmit").GetProperty("allowed").GetBoolean());
         var tour = await f.DataAsync($"/tours/{f.TourId}");
-        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit",
-            new { input = Input(tour, "Shared group", "fixed@example.com", sharedOnly: true), expectedRowVersion = Version(owned) })).Status);
+        var existingRowId = owned.GetProperty("roster")[0].GetProperty("id").GetGuid();
+        var resubmitted = await f.SendAsync(HttpMethod.Post, $"/registrations/{id}/resubmit",
+            new { input = Input(tour, "Shared group", "fixed@example.com", sharedOnly: true, rowIds: [existingRowId]), expectedRowVersion = Version(owned) });
+        Assert.True(resubmitted.Status == HttpStatusCode.OK, resubmitted.Body.GetRawText());
         detail = (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Data;
         Assert.Equal(JsonValueKind.Null, detail.GetProperty("reviewedAt").ValueKind);
         Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(detail), token: staff)).Status);
         Assert.Equal(HttpStatusCode.Conflict, (await f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(detail), token: staff)).Status);
         owned = await f.DataAsync($"/registrations/{id}");
         Assert.Equal("APPROVED", owned.GetProperty("summary").GetProperty("state").GetString());
-        Assert.False(owned.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
+        Assert.True(owned.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
         Assert.Equal(JsonValueKind.Null, owned.GetProperty("rejectionReason").ValueKind);
         await using var db = f.Context();
         var registration = await db.GroupRegistrations.SingleAsync(r => r.Id == id);
@@ -111,6 +115,7 @@ public sealed class RegistrationReviewEndpointTests
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.two"));
         var detail = (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Data;
         var pair = await Task.WhenAll(f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(detail), token: staff),
             f.SendAsync(HttpMethod.Post, Path(id, "reject"), Decision(detail, "Fix"), token: staff));
@@ -169,6 +174,7 @@ public sealed class RegistrationReviewEndpointTests
         f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
         var staff = await LoginAsync(host.Client, "review.staff");
         var id = await SubmitAsync(f);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.two"));
         var other = await SubmitAsync(f, "taken@example.com");
         await f.Database.ExecuteAsync($"UPDATE dbo.RosterRows SET Email=' TAKEN@EXAMPLE.COM ' WHERE RegistrationId='{id}';");
         var current = (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Data;
@@ -177,10 +183,18 @@ public sealed class RegistrationReviewEndpointTests
         Assert.DoesNotContain("taken@example.com", conflict.Body.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("SUBMITTED", (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Data.GetProperty("summary").GetProperty("state").GetString());
         await f.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='REJECTED' WHERE Id='{other}'; UPDATE dbo.RosterRows SET RowType='BAD' WHERE RegistrationId='{id}';");
-        Assert.Equal(HttpStatusCode.BadRequest, (await f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(current), token: staff)).Status);
-        await f.Database.ExecuteAsync($"UPDATE dbo.RosterRows SET IsActive=0 WHERE RegistrationId='{id}';");
-        Assert.Equal(HttpStatusCode.BadRequest, (await f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(current), token: staff)).Status);
-        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, Path(id, "reject"), Decision(current, "Sửa roster"), token: staff)).Status);
+        current = (await f.SendAsync(HttpMethod.Get, Path(id), token: staff)).Data;
+        var invalidRoster = await f.SendAsync(HttpMethod.Post, Path(id, "approve"), Decision(current), token: staff);
+        Assert.True(invalidRoster.Status == HttpStatusCode.BadRequest, invalidRoster.Body.GetRawText());
+        var row = current.GetProperty("roster")[0];
+        var rejected = await f.SendAsync(HttpMethod.Post,
+            $"{Path(id)}/rows/{row.GetProperty("id").GetGuid()}/reject", new
+            {
+                requestId = Guid.NewGuid(), expectedRegistrationRowVersion = Version(current),
+                expectedTourRowVersion = current.GetProperty("tourRowVersion").GetString(),
+                expectedRowVersion = Version(row), reason = "Sửa roster"
+            }, token: staff);
+        Assert.Equal(HttpStatusCode.OK, rejected.Status);
     }
 
     [SchemaV11Fact]

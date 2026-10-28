@@ -57,12 +57,17 @@ public sealed class EfRegistrationReviewRepository(ApplicationDbContext context)
             HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
             Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)
                 .Select(row => new { row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email, row.ClassName,
-                    row.RowVersion, InvitationVersion = row.Invitation == null ? null : row.Invitation.RowVersion }).ToArray()
+                    row.ParticipationState, row.RowVersion, row.ReviewedAt, row.ReviewedByUserId, row.ReviewReason,
+                    InvitationVersion = row.Invitation == null ? null : row.Invitation.RowVersion }).ToArray()
         }).SingleOrDefaultAsync(ct);
         return read is null ? null : new(read.Summary, read.ContactName, read.ContactEmail, read.RowVersion,
             read.TourVersion, read.RejectionReason, read.ReviewedAt, read.ReviewedByUserId,
             read.Rows.Select(row => new ReviewRosterRow(row.Id, row.RowNumber, row.RowType, row.DisplayName, row.Email,
-                row.ClassName, RowVersionToken.Encode(row.RowVersion), row.InvitationVersion is null ? null : RowVersionToken.Encode(row.InvitationVersion))).ToArray(),
+                row.ClassName, row.ParticipationState, RowVersionToken.Encode(row.RowVersion), row.ReviewedAt,
+                row.ReviewedByUserId, row.ReviewReason,
+                row.InvitationVersion is null ? null : RowVersionToken.Encode(row.InvitationVersion),
+                read.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Pending,
+                read.Summary.TourState == "SCHEDULED" && row.ParticipationState == RosterParticipationStates.Pending)).ToArray(),
             read.HasInvitations);
     }
 }

@@ -59,8 +59,10 @@ COPY --chmod=u=rwX,go=rX \
     database/smart-campus-tour-schema-v1.1.sql \
     database/smart-campus-tour-schema-v1.2.sql \
     database/smart-campus-tour-schema-v1.3.sql \
+    database/smart-campus-tour-schema-v1.4.sql \
     database/patches/upgrade-v1.1-to-v1.2-map-poi.sql \
     database/patches/upgrade-v1.2-to-v1.3-route-revisions.sql \
+    database/patches/upgrade-v1.3-to-v1.4-row-registration.sql \
     database/smart-campus-tour-map-poi-permissions.sql \
     database/smart-campus-tour-route-revision-permissions.sql \
     database/smart-campus-tour-bootstrap-check.sql \

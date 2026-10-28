@@ -1,4 +1,5 @@
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Registrations;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Invitations;
@@ -6,16 +7,19 @@ namespace SmartCampus.Application.Features.Invitations;
 public static class InvitationPolicy
 {
     public static bool CanSend(Tour tour, GroupRegistration registration, Invitation invitation, DateTimeOffset now) =>
-        registration.State == "APPROVED" && invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
+        invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
+        invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
         invitation.RevokedAt is null && tour.State is "SCHEDULED" or "READY" or "RUNNING";
 
     public static bool CanRevoke(Tour tour, GroupRegistration registration, Invitation invitation, DateTimeOffset now) =>
-        registration.State == "APPROVED" && invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
+        invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
+        invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
         invitation.RevokedAt is null && (tour.State is "SCHEDULED" or "READY" or "RUNNING" ||
         tour.State == "CANCELLED" && tour.StartedAt is not null);
 
     public static bool CanReissue(Tour tour, GroupRegistration registration, Invitation invitation, DateTimeOffset now) =>
-        registration.State == "APPROVED" && invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
+        invitation.RosterRow.ParticipationState == RosterParticipationStates.Accepted &&
+        invitation.RosterRow.IsActive && invitation.ExpiresAt > now &&
         tour.State is "SCHEDULED" or "READY" or "RUNNING";
 
     public static void Require(bool allowed) {

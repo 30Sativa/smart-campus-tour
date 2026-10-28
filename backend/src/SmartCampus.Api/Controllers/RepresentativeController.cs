@@ -24,6 +24,9 @@ using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeR
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistrations.Dtos;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration;
 using SmartCampus.Application.Features.Representative.Queries.GetRepresentativeRegistration.Dtos;
+using SmartCampus.Application.Features.RosterEmailCorrection.Commands;
+using SmartCampus.Application.Features.RosterEmailCorrection.Queries;
+using SmartCampus.Application.Features.RosterEmailCorrection;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -72,6 +75,15 @@ public sealed class RepresentativeController(ISender sender) : ControllerBase
         await sender.Send(new CancelRegistrationCommand(id, User.GetRequiredUserId(), request), ct);
         return Ok(Success<object?>(null));
     }
+    [HttpPost("registrations/{id:guid}/rows/{rowId:guid}/email-change-requests")]
+    public async Task<ActionResult<BaseResponse<Guid>>> RequestEmailChange(Guid id, Guid rowId,
+        [FromBody] RequestRosterEmailChangeRequest request, CancellationToken ct) =>
+        Ok(Success(await sender.Send(new RequestRosterEmailChangeCommand(id, rowId, User.GetRequiredUserId(), request), ct)));
+
+    [HttpGet("registrations/{id:guid}/email-change-requests")]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<RosterEmailChangeView>>>> EmailChangeRequests(Guid id,
+        [FromQuery] string? state, CancellationToken ct) =>
+        Ok(Success(await sender.Send(new ListRosterEmailChangesQuery(id, User.GetRequiredUserId(), state), ct)));
     private static RepresentativeListRequest ListRequest(CollectionQueryParameters p, Guid? tour = null, string? state = null, string? group = null) =>
         new(p.Search, p.Sort, p.Page, p.Size, p.Expand, tour, state, group);
     private static BaseResponse<T> Success<T>(T? data) => new() { Success = true, Message = "OK", Data = data };

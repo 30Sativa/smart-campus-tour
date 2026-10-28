@@ -2,6 +2,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Domain.Entities;
+using SmartCampus.Application.Features.Registrations;
 
 namespace SmartCampus.Application.Features.Invitations;
 
@@ -12,7 +13,8 @@ public sealed class InvitationIssuer(IInvitationRepository repository, IInvitati
         var expiry = tour.ScheduledStartAt.AddHours(settings.ExpiryHoursAfterStart);
         if (expiry <= now) throw new ConflictException("Giờ Tour và hạn lời mời đã qua.", "INVITATION_EXPIRED");
         var existing = (await repository.LoadAsync(registration.Id, ct)).Select(i => i.RosterRowId).ToHashSet();
-        foreach (var row in registration.RosterRows.Where(r => r.IsActive && !existing.Contains(r.Id)))
+        foreach (var row in registration.RosterRows.Where(r => r.IsActive &&
+                     r.ParticipationState == RosterParticipationStates.Accepted && !existing.Contains(r.Id)))
         {
             await IssueRowAsync(row, tour, actor, now, ct);
         }
@@ -20,6 +22,8 @@ public sealed class InvitationIssuer(IInvitationRepository repository, IInvitati
 
     public async Task IssueRowAsync(RosterRow row, Tour tour, Guid actor, DateTimeOffset now, CancellationToken ct)
     {
+        if (!row.IsActive || row.ParticipationState != RosterParticipationStates.Accepted)
+            throw new ConflictException("Chỉ dòng đã được Staff chấp nhận mới đủ điều kiện phát hành lời mời.", "ROW_NOT_ACCEPTED");
         var expiry = tour.ScheduledStartAt.AddHours(settings.ExpiryHoursAfterStart);
         if (expiry <= now) throw new ConflictException("Giờ Tour và hạn lời mời đã qua.", "INVITATION_EXPIRED");
         var id = Guid.NewGuid();

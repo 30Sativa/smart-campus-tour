@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Routes.Commands.CreateRoute;
 using SmartCampus.Application.Features.Routes.Commands.UpdateRoute;
@@ -110,11 +111,9 @@ public sealed class DeploymentDatabaseTests
         await Send(new SetRouteAvailabilityCommand(routeId, actor.Id, route.Version, true));
         route = await Send(new GetRouteQuery(routeId));
         var schedule = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds());
-        var tour = await Send(new CreateTourCommand(actor.Id, new CreateTourRequest(Guid.NewGuid(), route.Version,
-            new TourInput("Runtime Tour", null, routeId, schedule, null))));
-        var detail = await Send(new GetTourQuery(tour.Id));
-        await Send(new CancelTourCommand(tour.Id, actor.Id, new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Test cancel")));
-        Assert.Equal("CANCELLED", (await Send(new GetTourQuery(tour.Id))).Tour.State);
+        var blocker = await Assert.ThrowsAsync<ConflictException>(() => Send(new CreateTourCommand(actor.Id,
+            new CreateTourRequest(Guid.NewGuid(), route.Version, new TourInput("Runtime Tour", null, routeId, schedule, null)))));
+        Assert.Equal("TOUR_DURATION_UNAVAILABLE", blocker.Code);
         var unused = (await Send(new CreateRouteCommand(actor.Id, input))).Id;
         await Send(new DeleteRouteCommand(unused, actor.Id, (await Send(new GetRouteQuery(unused))).Version));
         foreach (var statement in new[] { "DELETE dbo.Tours WHERE 1=0", "UPDATE dbo.AuditLogs SET ResultCode='FAIL' WHERE 1=0", "DELETE dbo.TourEvents WHERE 1=0" })
@@ -142,7 +141,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsOnlyKnownEquivalentMarker_AndDoesNotRewriteItOrData()
+    public async Task Bootstrap_RequiresV14AndDoesNotAdoptOrRewriteOlderMarkers()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "preserved.user", roles: ["STAFF"]);
@@ -150,15 +149,21 @@ public sealed class DeploymentDatabaseTests
         await using var connection = new SqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
-        await using (var command = new SqlCommand(guard.Replace("$(SchemaHash)", CurrentHash), connection))
-            Assert.Equal("READY", await command.ExecuteScalarAsync());
+        var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
+        var v14Guard = guard.Replace("$(SchemaHash)", v14Hash).Replace("$(SchemaHashV14)", v14Hash);
+        await using (var command = new SqlCommand(v14Guard, connection))
+            Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         Assert.Equal(1, await database.CountRowsAsync("dbo.Users"));
         await using (var marker = new SqlCommand("SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash'", connection))
             Assert.Equal(PreviousHash, await marker.ExecuteScalarAsync());
-        await using (var changedSnapshot = new SqlCommand(guard.Replace("$(SchemaHash)", new string('0', 64)), connection))
-            Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => changedSnapshot.ExecuteScalarAsync())).Number);
+        await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{new string('0', 64)}';");
+        await using (var unknown = new SqlCommand(v14Guard, connection))
+            Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unknown.ExecuteScalarAsync())).Number);
+        await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v14Hash}';");
+        await using (var current = new SqlCommand(v14Guard, connection))
+            Assert.Equal("READY", await current.ExecuteScalarAsync());
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';");
-        await using var unmarked = new SqlCommand(guard.Replace("$(SchemaHash)", CurrentHash), connection);
+        await using var unmarked = new SqlCommand(v14Guard, connection);
         Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unmarked.ExecuteScalarAsync())).Number);
     }
 

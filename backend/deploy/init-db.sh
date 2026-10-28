@@ -8,8 +8,8 @@ if [[ ! ${SQL_APP_PASSWORD:-} =~ ^[A-Za-z0-9!_-]{32,128}$ ]]; then
 fi
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
 sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -l 15 -r 1)
-schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.1.sql | sha256sum | cut -d ' ' -f 1)
-export SchemaHash="$schema_hash" AppPassword="$SQL_APP_PASSWORD"
+schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.4.sql | sha256sum | cut -d ' ' -f 1)
+export SchemaHash="$schema_hash" SchemaHashV14="$schema_hash" AppPassword="$SQL_APP_PASSWORD"
 
 "${sql[@]}" -d master -Q "IF DB_ID(N'SmartCampusTourV11') IS NULL CREATE DATABASE SmartCampusTourV11;"
 state=$("${sql[@]}" -d SmartCampusTourV11 -h -1 -W -i /database/smart-campus-tour-bootstrap-check.sql)
@@ -22,13 +22,19 @@ if [[ "$state" == EMPTY ]]; then
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 GO
-:r /database/smart-campus-tour-schema-v1.1.sql
+  :r /database/smart-campus-tour-schema-v1.4.sql
 :r /database/smart-campus-tour-permissions.sql
+  :r /database/smart-campus-tour-map-poi-permissions.sql
+  :r /database/smart-campus-tour-route-revision-permissions.sql
 EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(SchemaHash)';
 COMMIT TRANSACTION;
 GO
 SQL
 elif [[ "$state" != READY ]]; then
+  if [[ "$state" == UPGRADE_REQUIRED ]]; then
+    echo 'Database schema is older than v1.4. Stop the deployment and follow the reviewed, backed-up Database First upgrade path; this initializer never migrates existing data.' >&2
+    exit 1
+  fi
   echo 'Unexpected database bootstrap state.' >&2
   exit 1
 fi

@@ -18,6 +18,10 @@ public sealed class GlobalExceptionHandler(
     {
         var (statusCode, message, errors) = exception switch
         {
+            _ when IsPendingEmailChangeUniqueViolation(exception) => (
+                StatusCodes.Status409Conflict,
+                "Dòng này đã có yêu cầu đổi email đang chờ Staff xử lý.",
+                (object?)new { code = "EMAIL_CHANGE_PENDING" }),
             ValidationException validationException => (
                 StatusCodes.Status400BadRequest,
                 "One or more validation errors occurred.",
@@ -91,6 +95,11 @@ public sealed class GlobalExceptionHandler(
 
     private static int? SqlNumber(Exception error) => error is SqlException sql ? sql.Number :
         error.InnerException is null ? null : SqlNumber(error.InnerException);
+
+    private static bool IsPendingEmailChangeUniqueViolation(Exception error) =>
+        (error is SqlException { Number: 2601 or 2627 } sql &&
+         sql.Message.Contains("UX_RosterEmailChangeRequests_OnePending", StringComparison.Ordinal)) ||
+        (error.InnerException is not null && IsPendingEmailChangeUniqueViolation(error.InnerException));
 
     private static IReadOnlyDictionary<string, string[]> CreateValidationErrors(
         ValidationException exception)
