@@ -16,16 +16,19 @@ COPY --chmod=u=rwX,go=rX \
     database/smart-campus-tour-schema-v1.2.sql \
     database/smart-campus-tour-schema-v1.3.sql \
     database/smart-campus-tour-schema-v1.4.sql \
-    database/patches/upgrade-v1.1-to-v1.2-map-poi.sql \
-    database/patches/upgrade-v1.2-to-v1.3-route-revisions.sql \
-    database/patches/upgrade-v1.3-to-v1.4-row-registration.sql \
-    database/patches/add-poi-rowversion-v1.1.sql \
     database/smart-campus-tour-map-poi-permissions.sql \
     database/smart-campus-tour-route-revision-permissions.sql \
     database/smart-campus-tour-bootstrap-check.sql \
     database/smart-campus-tour-permissions.sql \
     database/smart-campus-tour-runtime-permissions.sql \
     /database/
+# A multi-source COPY flattens paths; upgrade-db.sh reads patches from /database/patches/.
+COPY --chmod=u=rwX,go=rX \
+    database/patches/upgrade-v1.1-to-v1.2-map-poi.sql \
+    database/patches/upgrade-v1.2-to-v1.3-route-revisions.sql \
+    database/patches/upgrade-v1.3-to-v1.4-row-registration.sql \
+    database/patches/add-poi-rowversion-v1.1.sql \
+    /database/patches/
 
 LABEL org.opencontainers.image.title="Smart Campus Tour Database Bootstrap Tool" \
       org.opencontainers.image.source="https://github.com/30Sativa/smart-campus-tour" \

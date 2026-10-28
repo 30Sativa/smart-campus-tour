@@ -8,7 +8,8 @@ set -euo pipefail
 }
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
 
-sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -l 30 -r 1)
+# -I: sqlcmd defaults QUOTED_IDENTIFIER OFF, which rejects the filtered indexes created by the patches.
+sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -I -l 30 -r 1)
 database_exists=$("${sql[@]}" -d master -h -1 -W -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'SmartCampusTourV11') IS NULL THEN 0 ELSE 1 END;" | tr -d '\r\n ')
 [[ "$database_exists" == 1 ]] || { echo 'Existing SmartCampusTourV11 database is required; this command never bootstraps.' >&2; exit 1; }
 
