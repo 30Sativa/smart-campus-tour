@@ -48,6 +48,10 @@ slice; current business APIs still have the old ownership shown in the gap regis
 Technical Staff creates maps outside the web, uploads immutable versions with
 source/checksum/metadata, manually deploys the exact version to the robot and
 records localization/display evidence. Upload is not robot deployment.
+The upload form chooses either a new area (key and name) or an existing area
+from the full persisted catalog; the server allocates the next version. The
+deployment-check form chooses a database robot whose persisted source type is
+PHYSICAL; online telemetry is not the robot catalog.
 After a map version has a successful exact-checksum localization and display
 check recorded for at least one physical robot, Staff may click-propose POIs or
 Technical Staff may import a project YAML template; both create unverified POI

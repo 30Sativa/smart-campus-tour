@@ -612,6 +612,26 @@ reach/stop/localization/camera observations against that exact version and
 physical robot. These operator-entered records do not prove backend-executed
 hardware tests. POI verification does not test or certify a complete route.
 
+TechnicalStaff map upload offers new-area and existing-area modes. The complete
+read-only `/api/technical/map-areas` catalog reads `MapAreas` directly, so its
+contents do not depend on the capped map-version list. Existing-area mode shows
+and locks the stored key/name; a duplicate key in new-area mode directs the
+operator to select the existing area. The server allocates each version inside
+the existing transaction-owned area lock and returns the assigned version.
+The physical-robot picker uses a read-only `/api/technical/physical-robots`
+database lookup filtered only by the existing `SourceType=PHYSICAL` condition.
+It returns ID/code/display name only; the write command revalidates the robot
+and exact checksum. It neither depends on online telemetry nor causes map
+deployment or robot control. Retries of an unchanged upload or deployment-check
+payload reuse the same request ID; a changed payload starts a new request ID.
+
+When a current POI map version falls outside the normal version-list page, the
+Staff screen fetches that exact version by ID for preview. If backend eligibility
+has since failed, its map/pose/revision/history remains readable in a
+non-editable pose view with the backend block reason. A 409 caused by a changed
+technical check refreshes eligibility metadata without changing local form
+values or the selected map.
+
 Project POI YAML/frame mapping, route revision/test tuple, scheduling/READY,
 robot deployment control, frontend workspaces and physical acceptance remain
 pending/not implemented. v1.1 remains immutable; v1.2 has an additive upgrade

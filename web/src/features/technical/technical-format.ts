@@ -15,6 +15,8 @@ export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaNa
   try {
     const payload = JSON.parse(error.body) as { errors?: Record<string, unknown>; message?: unknown }
     const errors = payload.errors
+    if (typeof errors === 'object' && errors !== null && 'code' in errors && errors.code === 'MAP_AREA_NAME_CONFLICT')
+      return { areaKey: 'Mã khu vực này đã tồn tại. Hãy chuyển sang “Khu vực đã có” để giữ nguyên tên đã lưu.' }
     if (!errors || typeof errors !== 'object') return { form: typeof payload.message === 'string' ? payload.message : 'Không upload được package map.' }
     const mapped: { areaKey?: string; areaName?: string; package?: string; form?: string } = {}
     for (const [field, raw] of Object.entries(errors)) {

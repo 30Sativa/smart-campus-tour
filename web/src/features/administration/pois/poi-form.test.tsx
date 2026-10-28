@@ -104,6 +104,30 @@ describe('Staff versioned POI workflow', () => {
     expect(screen.getByText(/Chưa có bản đồ được kỹ thuật xác nhận đạt/)).toBeInTheDocument()
   })
 
+  it('loads an exact historical map missing from the capped list and keeps its POI preview read-only', async () => {
+    const blockedMap = { ...eligibleMap, technicalCheckStatus: 'FAILED', canUseForPoiPreparation: false,
+      preparationBlockReasonCode: 'TECHNICAL_CHECK_NOT_PASSED', preparationBlockReason: 'Bản đồ cần được kiểm tra lại.', preparationEvidence: null }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([])
+      if (url.pathname === '/api/maps/versions/map-v1') return response(blockedMap)
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response(proposal)
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1/history') return response({ proposalId: 'proposal-1', revisions: [proposal.revision], verificationRecords: [] })
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+    expect(await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })).toBeInTheDocument()
+    expect(requests.some(request => request.url.pathname === '/api/maps/versions/map-v1')).toBe(true)
+    expect(screen.getByText(/Map của đề xuất hiện không đủ điều kiện/)).toBeInTheDocument()
+    expect(screen.getByLabelText('X (m)')).toBeDisabled()
+    expect(screen.getByLabelText('Y (m)')).toBeDisabled()
+    expect(screen.getByLabelText('Yaw (rad)')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Lưu revision nháp' })).toBeDisabled()
+    expect(screen.getByLabelText('Tên POI')).toHaveValue('Library entry')
+    expect(screen.getByLabelText('Bản đồ')).toHaveValue('map-v1')
+  })
+
   it('keeps the typed POI draft visible when backend eligibility changes during entry', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })

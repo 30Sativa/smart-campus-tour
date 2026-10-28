@@ -67,7 +67,7 @@ public sealed class CreateMapVersionCommandHandler(
         }
         else if (!string.Equals(area.DisplayName, areaName, StringComparison.Ordinal))
         {
-            throw new ConflictException("The area key already belongs to a different display name.");
+            throw new ConflictException("Mã khu vực này đã được dùng với tên khác. Chọn khu vực đã có hoặc dùng mã mới.", "MAP_AREA_NAME_CONFLICT");
         }
 
         var version = await repository.GetNextMapVersionAsync(areaKey, cancellationToken);

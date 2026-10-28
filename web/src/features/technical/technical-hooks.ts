@@ -11,6 +11,14 @@ export function useMapVersions() {
   return useQuery({ queryKey: keys.maps, queryFn: technicalApi.listMaps })
 }
 
+export function useMapAreas(enabled = true) {
+  return useQuery({ queryKey: ['technical', 'map-areas'], queryFn: technicalApi.listMapAreas, enabled })
+}
+
+export function usePhysicalRobots(enabled = true) {
+  return useQuery({ queryKey: ['technical', 'physical-robots'], queryFn: technicalApi.listPhysicalRobots, enabled })
+}
+
 export function usePoiProposals() {
   return useQuery({ queryKey: keys.poiProposals, queryFn: () => technicalApi.listPoiProposals() })
 }
@@ -32,8 +40,8 @@ function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: r
 }
 
 export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, keys.maps, (input, map) => ({
-  title: `Đã lưu ${map?.mapKey ?? input.package.name}`,
-  detail: 'Upload chưa triển khai map lên robot. Ghi kiểm tra sau khi robot đã nạp đúng package.',
+  title: `Đã lưu ${map?.mapKey ?? input.package.name} · v${map?.versionNumber ?? ''}`,
+  detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
 }))
 
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed

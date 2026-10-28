@@ -24,6 +24,9 @@ export type MapVersion = {
   uploadedAt: string
 }
 
+export type MapAreaOption = { areaKey: string; displayName: string }
+export type PhysicalRobotOption = { id: string; robotCode: string; displayName: string | null }
+
 export type DeploymentCheck = {
   id: string
   mapVersionId: string
@@ -84,19 +87,22 @@ type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
   listMaps: () => apiClient<Envelope<MapVersionItem[]>>('/api/maps/versions').then(response => response.data ?? []),
+  getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
+  listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
+  listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
   getMapPackage: (id: string) => apiClient<Blob>(`/api/maps/versions/${id}/package`, { responseType: 'blob' }),
-  uploadMap: (input: { areaKey: string; areaName: string; package: File }) => {
+  uploadMap: (input: { areaKey: string; areaName: string; requestId: string; package: File }) => {
     const formData = new FormData()
     formData.set('areaKey', input.areaKey)
     formData.set('areaName', input.areaName)
-    formData.set('requestId', crypto.randomUUID())
+    formData.set('requestId', input.requestId)
     formData.set('package', input.package)
     return apiClient<Envelope<MapVersion>>('/api/technical/map-versions', { method: 'POST', formData })
       .then(response => response.data!)
   },
-  recordDeployment: ({ mapVersionId, ...input }: Omit<DeploymentCheck, 'id' | 'mapVersionId' | 'checkedAt' | 'passed'> & { mapVersionId: string }) =>
+  recordDeployment: ({ mapVersionId, requestId, ...input }: Omit<DeploymentCheck, 'id' | 'mapVersionId' | 'checkedAt' | 'passed'> & { mapVersionId: string; requestId: string }) =>
     apiClient<Envelope<DeploymentCheck>>(`/api/technical/map-versions/${mapVersionId}/deployment-checks`, {
-      method: 'POST', json: { ...input, requestId: crypto.randomUUID() },
+      method: 'POST', json: { ...input, requestId },
     }).then(response => response.data!),
   listPoiProposals: (mapVersionId?: string) => apiClient<Envelope<PoiProposal[]>>(`/api/staff/poi-proposals${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
   getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
