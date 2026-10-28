@@ -138,7 +138,7 @@ describe('route table', () => {
       signIn('TechnicalStaff')
       const router = renderAt('/technical')
       await settled(router, '/technical/maps')
-      expect(await screen.findByRole('heading', { name: 'Version map', level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Quản lý bản đồ', level: 1 })).toBeInTheDocument()
     })
 
     it('keeps Staff out of the technical area', async () => {

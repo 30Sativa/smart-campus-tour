@@ -1,7 +1,12 @@
 import { ApiError } from '../../api/client'
 
 export function errorText(error: unknown) {
-  if (error instanceof ApiError && error.body) return error.body
+  if (error instanceof ApiError && error.body) {
+    try {
+      const payload = JSON.parse(error.body) as { message?: unknown }
+      if (typeof payload.message === 'string' && payload.message.trim()) return payload.message
+    } catch { /* Non-JSON responses use the transport error below. */ }
+  }
   return error instanceof Error ? error.message : 'Không lưu được. Thử lại.'
 }
 

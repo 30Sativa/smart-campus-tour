@@ -48,8 +48,13 @@ slice; current business APIs still have the old ownership shown in the gap regis
 Technical Staff creates maps outside the web, uploads immutable versions with
 source/checksum/metadata, manually deploys the exact version to the robot and
 records localization/display evidence. Upload is not robot deployment.
-Staff click-proposes POIs or Technical Staff imports a project YAML template;
-both create unverified POI revisions bound to the map version.
+After a map version has a successful exact-checksum localization and display
+check recorded for at least one physical robot, Staff may click-propose POIs or
+Technical Staff may import a project YAML template; both create unverified POI
+revisions bound to the map version. A new map version does not inherit the
+check. Later robot deployment elsewhere preserves the map version's historical
+preparation eligibility, while POI verification still requires its robot's
+latest deployment record to name that exact map version/checksum.
 This project POI template is not the ROS navigation-map YAML. Its field schema
 and frame/unit conversion remain pending template-owner validation.
 

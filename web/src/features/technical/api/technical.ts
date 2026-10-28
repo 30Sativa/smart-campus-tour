@@ -36,7 +36,15 @@ export type DeploymentCheck = {
   checkedAt: string
 }
 
-export type MapVersionItem = { map: MapVersion; latestDeployment: DeploymentCheck | null }
+export type MapVersionItem = {
+  map: MapVersion
+  latestDeployment: DeploymentCheck | null
+  technicalCheckStatus: 'PENDING' | 'FAILED' | 'PASSED'
+  canUseForPoiPreparation: boolean
+  preparationBlockReasonCode: string | null
+  preparationBlockReason: string | null
+  preparationEvidence: DeploymentCheck | null
+}
 
 export type PoiRevision = {
   id: string

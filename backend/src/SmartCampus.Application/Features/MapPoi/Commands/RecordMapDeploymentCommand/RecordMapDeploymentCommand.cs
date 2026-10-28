@@ -57,6 +57,7 @@ public sealed class RecordMapDeploymentCommandHandler(
             throw new ConflictException("Deployment evidence must name the exact uploaded package checksum.", "MAP_CHECKSUM_MISMATCH");
         var robot = await repository.FindPhysicalRobotAsync(request.RobotCode.Trim(), cancellationToken)
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());
+        await repository.LockMapPreparationStateAsync(map.Id, cancellationToken);
         await repository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         var latestDeployment = await repository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var now = timeProvider.GetUtcNow();

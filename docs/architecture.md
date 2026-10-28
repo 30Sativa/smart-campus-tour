@@ -574,7 +574,7 @@ existing legacy Route/Tour records still reference them; HTTP API retirement
 does not delete or migrate that data. The old Route authoring API must not
 consume proposal IDs as legacy POI IDs.
 
-### 3.0.3 Versioned map package and per-POI technical verification (ADR-0021)
+### 3.0.3 Versioned map package and per-POI technical verification (ADR-0021, ADR-0028)
 
 The additive v1.2 schema and new `/api/technical/map-versions` and
 `/api/staff/poi-proposals` contracts implement map package versioning, manual
@@ -583,6 +583,24 @@ per-revision checks. The complete endpoint/request/role/error/audit contract is
 in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md).
 The new endpoints do not grant Admin access. Existing legacy POI rows are not
 migrated or deleted; only their old HTTP catalog interface has been retired.
+
+Under ADR-0028, a valid uploaded package alone is not selectable for new POI
+work. Map list/detail return backend-calculated `technicalCheckStatus`,
+`canUseForPoiPreparation`, a block reason code/text, and the evidence record
+(robot, time and check) used by that calculation. For each exact map-version /
+physical-robot pair, the newest record is effective; a matching-checksum
+localization+display pass on any one robot makes that exact version eligible.
+A newer failure for the same pair supersedes the older pass, and a new map
+version inherits no evidence. This gate is checked in the same transaction by
+create proposal, create revision (including map changes), and submit. An
+ineligible state returns 409 before proposal/revision/submission or success
+audit writes. A transaction-owned per-map preparation lock serializes these
+mutations with deployment-check inserts. A committed idempotent retry still
+returns its committed result.
+Eligibility remains historical to its map version when a robot later moves
+elsewhere; POI verification retains ADR-0021's stricter latest cross-map
+deployment check for the robot used to verify it. See
+[`ADR-0028`](decisions/0028-map-technical-check-before-poi-preparation.md).
 
 The supported upload is a bounded ZIP of root ROS trinary YAML and referenced
 8-bit PGM. Upload is not robot deployment; TechnicalStaff records exact package

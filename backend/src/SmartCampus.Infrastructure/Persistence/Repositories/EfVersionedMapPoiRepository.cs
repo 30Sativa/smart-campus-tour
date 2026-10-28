@@ -81,6 +81,17 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             """, cancellationToken);
     }
 
+    public Task LockMapPreparationStateAsync(Guid mapVersionId, CancellationToken cancellationToken)
+    {
+        var resource = $"map-poi:map-preparation:{mapVersionId:D}";
+        return dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            DECLARE @lockResult int;
+            EXEC @lockResult = sys.sp_getapplock @Resource = {resource}, @LockMode = N'Exclusive',
+                @LockOwner = N'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51023, 'Could not acquire map preparation state lock.', 1;
+            """, cancellationToken);
+    }
+
     public Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken) =>
         dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
             .Where(check => check.RobotId == robotId)
@@ -94,6 +105,12 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         if (robotId.HasValue) query = query.Where(check => check.RobotId == robotId.Value);
         return query.OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id).FirstOrDefaultAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksForMapAsync(Guid mapVersionId, CancellationToken cancellationToken) =>
+        await dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)
+            .Where(check => check.MapVersionId == mapVersionId)
+            .OrderByDescending(check => check.CheckedAt).ThenByDescending(check => check.Id)
+            .ToArrayAsync(cancellationToken);
 
     public async Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksAsync(Guid mapVersionId, CancellationToken cancellationToken) =>
         await dbContext.MapDeploymentChecks.AsNoTracking().Include(check => check.Robot)

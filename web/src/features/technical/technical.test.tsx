@@ -11,6 +11,8 @@ const map = {
   packageFileName: 'library-v1.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm',
   imageWidth: 100, imageHeight: 80, resolution: 0.05, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z',
 }
+const mapItem = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null,
+  preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: 'a'.repeat(64), localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Fixture evidence', checkedAt: '2026-10-27T10:00:00Z' } }
 const proposal = {
   id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=',
   revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
@@ -30,7 +32,7 @@ describe('Technical Staff API integration', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost')
       requests.push({ url, init })
-      if (url.pathname === '/api/maps/versions' && init?.method !== 'POST') return response([{ map, latestDeployment: null }])
+      if (url.pathname === '/api/maps/versions' && init?.method !== 'POST') return response([mapItem])
       if (url.pathname === '/api/technical/poi-verifications') return response([queueItem])
       if (url.pathname === '/api/technical/map-versions' && init?.method === 'POST') return response(map)
       if (url.pathname === '/api/technical/map-versions/map-v1/deployment-checks') return response({ id: 'check-1', mapVersionId: 'map-v1', robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Checked', checkedAt: '2026-10-27T10:00:00Z' })
@@ -42,8 +44,10 @@ describe('Technical Staff API integration', () => {
 
   it('lists real map versions and posts manual deployment evidence to the map-version endpoint', async () => {
     renderPage(<TechnicalMapsPage />)
+    expect(await screen.findByText('Quản lý bản đồ')).toBeInTheDocument()
     expect(await screen.findByText('library-v1')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Ghi kiểm tra' }))
+    expect(screen.getByText('Đã có kiểm tra kỹ thuật đạt')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     fireEvent.change(screen.getByLabelText('Mã robot'), { target: { value: 'amr-01' } })
     fireEvent.click(screen.getByLabelText('Localization đạt'))
     fireEvent.click(screen.getByLabelText('Map hiển thị đúng'))
