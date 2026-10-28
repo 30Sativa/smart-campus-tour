@@ -9,6 +9,8 @@ digest=$(printf 'b%.0s' {1..64})
 api="ghcr.io/30sativa/smart-campus-tour/backend@sha256:$digest"
 db_init="ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:$digest"
 sql="mcr.microsoft.com/mssql/server@sha256:$digest"
+export DB_INIT_SOURCE_SHA=$ops_sha
+export DB_SCHEMA_VERSION=1.4
 bash deploy/deploy-ec2.sh --validate-only "$sha" "$api" "$db_init" "$sql" "$ops_sha" >/dev/null
 bash deploy/deploy-ec2.sh --validate-only "$sha" "$api" "$db_init" "$sql" "$ops_sha" --sql-maintenance >/dev/null
 
@@ -23,6 +25,11 @@ expect_rejected "$sha" "$api" "$db_init" "$sql" "${ops_sha}x"
 expect_rejected "$sha" "ghcr.io/30sativa/smart-campus-tour/backend:latest" "$db_init" "$sql" "$sha"
 expect_rejected "$sha" "$api" "ghcr.io/30sativa/smart-campus-tour/backend-db-init:sha256:$digest" "$sql" "$sha"
 expect_rejected "$sha" "$api" "$db_init" "mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04" "$sha"
+unset DB_INIT_SOURCE_SHA
+if bash deploy/deploy-ec2.sh --validate-only "$sha" "$api" "$db_init" "$sql" "$ops_sha" >/dev/null 2>&1; then
+  echo 'FAIL: deployment validation accepted a release without database-tool provenance.' >&2
+  exit 1
+fi
 if output=$(bash deploy/backup-sqlserver.sh --unexpected-argument 2>&1); then
   echo 'FAIL: backup script accepted an unknown mode.' >&2
   exit 1

@@ -39,28 +39,6 @@ services:
     security_opt: [no-new-privileges:true]
     logging: *logging
 
-  db-init:
-    image: ${DB_INIT_IMAGE:?Set DB_INIT_IMAGE to the release's pinned initializer image}
-    platform: linux/amd64
-    environment:
-      SQLCMDPASSWORD: ${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in backend/.env}
-      SQL_APP_PASSWORD: ${SQL_APP_PASSWORD:?Set SQL_APP_PASSWORD in backend/.env}
-    networks: [database]
-    labels:
-      com.smartcampus.deployment.owner: ${COMPOSE_OWNER:?Set COMPOSE_OWNER to the host deployment owner ID}
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    read_only: true
-    tmpfs:
-      - /tmp:size=16m,mode=1777
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    mem_limit: ${DB_INIT_MEMORY_LIMIT:-192m}
-    cpus: ${DB_INIT_CPUS:-0.25}
-    restart: "no"
-    logging: *logging
-
   api:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to the release's immutable API image}
     platform: linux/amd64
@@ -105,8 +83,6 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     ports:
       - "${API_BIND_IP:-0.0.0.0}:${API_HTTPS_PORT:-443}:8443"
     healthcheck:
@@ -143,8 +119,6 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     restart: "no"
 
 volumes:

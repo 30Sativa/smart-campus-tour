@@ -160,11 +160,31 @@ public sealed class DeploymentDatabaseTests
         await using (var unknown = new SqlCommand(v14Guard, connection))
             Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unknown.ExecuteScalarAsync())).Number);
         await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v14Hash}';");
+        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';");
         await using (var current = new SqlCommand(v14Guard, connection))
             Assert.Equal("READY", await current.ExecuteScalarAsync());
+        await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourSchemaVersion';");
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';");
         await using var unmarked = new SqlCommand(v14Guard, connection);
         Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unmarked.ExecuteScalarAsync())).Number);
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_AcceptsVerifiedV14UpgradeMarkerWithoutReplacingBootstrapHash()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        var originalHash = PreviousHash;
+        await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{originalHash}';");
+        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';");
+        await using var connection = new SqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
+        var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
+        var v14Guard = guard.Replace("$(SchemaHash)", v14Hash).Replace("$(SchemaHashV14)", v14Hash);
+        await using var command = new SqlCommand(v14Guard, connection);
+        Assert.Equal("READY", await command.ExecuteScalarAsync());
+        await using var marker = new SqlCommand("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';", connection);
+        Assert.Equal(originalHash, await marker.ExecuteScalarAsync());
     }
 
     private const string CurrentHash = "96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68";

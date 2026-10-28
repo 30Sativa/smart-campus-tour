@@ -2,7 +2,7 @@
 # Same transport for manual CLI and workflow_dispatch. No secret command arguments.
 set -euo pipefail
 fail() { echo "FAIL: $*" >&2; exit 1; }
-[[ $# == 2 && ( $2 == application || $2 == sql-maintenance ) ]] || fail 'usage: ssh-deploy.sh BUNDLE_DIRECTORY application|sql-maintenance'
+[[ $# == 2 && ( $2 == application || $2 == sql-maintenance || $2 == schema-upgrade ) ]] || fail 'usage: ssh-deploy.sh BUNDLE_DIRECTORY application|sql-maintenance|schema-upgrade'
 bundle=$(cd "$1" && pwd) mode=$2
 [[ ${DEPLOY_SSH_HOST:-} =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail 'Invalid DEPLOY_SSH_HOST.'
 [[ ${DEPLOY_SSH_USER:-} =~ ^[a-z_][a-z0-9_-]*$ ]] || fail 'Invalid DEPLOY_SSH_USER.'

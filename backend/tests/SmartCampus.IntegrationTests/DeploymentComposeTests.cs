@@ -46,16 +46,14 @@ public sealed class DeploymentComposeTests
         var services = config.RootElement.GetProperty("services");
         var api = services.GetProperty("api");
         var sql = services.GetProperty("sqlserver");
-        var init = services.GetProperty("db-init");
         var seed = services.GetProperty("seed-admin");
         var apiEnvironment = api.GetProperty("environment");
         var connection = apiEnvironment.GetProperty("ConnectionStrings__DefaultConnection").GetString()!;
 
         Assert.Equal("campustour-backend:config-test", api.GetProperty("image").GetString());
         Assert.False(api.TryGetProperty("build", out _));
-        Assert.Equal("campustour-db-init:config-test", init.GetProperty("image").GetString());
-        Assert.False(init.TryGetProperty("build", out _));
-        Assert.False(init.TryGetProperty("volumes", out _));
+        Assert.False(services.TryGetProperty("db-init", out _));
+        Assert.False(api.TryGetProperty("depends_on", out var apiDependencies) && apiDependencies.TryGetProperty("db-init", out _));
         Assert.Contains("User ID=smartcampus_api", connection);
         Assert.Contains(fixture.AppPassword, connection);
         Assert.DoesNotContain(fixture.SaPassword, api.GetRawText());
@@ -70,14 +68,10 @@ public sealed class DeploymentComposeTests
         Assert.Equal("2684354560", sql.GetProperty("mem_limit").GetString());
         Assert.Equal(1.25, sql.GetProperty("cpus").GetDouble());
         Assert.Equal("2048", sql.GetProperty("environment").GetProperty("MSSQL_MEMORY_LIMIT_MB").GetString());
-        Assert.Equal("201326592", init.GetProperty("mem_limit").GetString());
-        Assert.Equal(0.25, init.GetProperty("cpus").GetDouble());
-        Assert.Equal("service_completed_successfully",
-            api.GetProperty("depends_on").GetProperty("db-init").GetProperty("condition").GetString());
         Assert.Equal("service_healthy",
-            init.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
-        Assert.Equal("service_completed_successfully",
-            seed.GetProperty("depends_on").GetProperty("db-init").GetProperty("condition").GetString());
+            api.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
+        Assert.Equal("service_healthy",
+            seed.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
         Assert.Equal("InternalTestAdminPassword123!",
             seed.GetProperty("environment").GetProperty("InitialAdminSeed__Password").GetString());
         Assert.False(seed.TryGetProperty("ports", out _));
@@ -89,6 +83,19 @@ public sealed class DeploymentComposeTests
         var healthcheck = api.GetProperty("healthcheck").GetProperty("test").EnumerateArray()
             .Select(value => value.GetString()).ToArray();
         Assert.Contains(healthcheck, value => value?.Contains("/health/ready", StringComparison.Ordinal) == true);
+
+        var toolResult = await fixture.ResolveAsync(includeDbInit: true);
+        Assert.True(toolResult.ExitCode == 0, toolResult.Error);
+        using var toolConfig = JsonDocument.Parse(toolResult.Output);
+        var init = toolConfig.RootElement.GetProperty("services").GetProperty("db-init");
+        Assert.Equal("campustour-db-init:config-test", init.GetProperty("image").GetString());
+        Assert.False(init.TryGetProperty("build", out _));
+        Assert.False(init.TryGetProperty("volumes", out _));
+        Assert.True(init.GetProperty("read_only").GetBoolean());
+        Assert.Equal("201326592", init.GetProperty("mem_limit").GetString());
+        Assert.Equal(0.25, init.GetProperty("cpus").GetDouble());
+        Assert.Equal("service_healthy",
+            init.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
 
         var backupMount = sql.GetProperty("volumes").EnumerateArray()
             .Single(volume => volume.GetProperty("target").GetString() == "/var/opt/mssql/backup");
@@ -135,7 +142,7 @@ public sealed class DeploymentComposeTests
         }
 
         public async Task<(int ExitCode, string Output, string Error)> ResolveAsync(
-            bool missingAppPassword = false, bool missingReleaseImages = false)
+            bool missingAppPassword = false, bool missingReleaseImages = false, bool includeDbInit = false)
         {
             var start = new ProcessStartInfo("docker")
             {
@@ -145,8 +152,18 @@ public sealed class DeploymentComposeTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
-            foreach (var argument in new[] { "compose", "--env-file", Path.Combine(directory, "test.env"),
-                         "-f", Path.Combine(backend, "docker-compose.yml"), "--profile", "tools", "config", "--format", "json" })
+            var arguments = new List<string> { "compose", "--env-file", Path.Combine(directory, "test.env"),
+                "-f", Path.Combine(backend, "docker-compose.yml") };
+            if (includeDbInit)
+            {
+                arguments.AddRange(["-f", Path.Combine(backend, "docker-compose.db-init.yml"), "--profile", "db-bootstrap"]);
+            }
+            else
+            {
+                arguments.AddRange(["--profile", "tools"]);
+            }
+            arguments.AddRange(["config", "--format", "json"]);
+            foreach (var argument in arguments)
                 start.ArgumentList.Add(argument);
             var environment = new Dictionary<string, string>
             {

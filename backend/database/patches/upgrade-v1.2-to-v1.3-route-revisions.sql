@@ -6,6 +6,7 @@ BEGIN TRANSACTION;
 DECLARE @schemaHash nvarchar(64) = (SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourBootstrapHash');
 IF @schemaHash IS NULL OR @schemaHash NOT IN (
+    N'b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43',
     N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68',
     N'2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67')
     THROW 51040, 'This additive patch requires the explicitly recognized v1.2 schema marker.', 1;
