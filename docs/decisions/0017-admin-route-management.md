@@ -1,5 +1,8 @@
 # ADR-0017: Admin Route CRUD and configuration preservation
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Admin Route CRUD remains current implementation. Target authoring belongs to Staff with immutable revisions and Technical exact-version confirmation. Preserve concurrency/history safeguards; this notice does not implement or silently change API authorization. No new advisor approval is recorded.
+
+
 Date: 2026-10-19. Status: implementation scope explicitly authorized by the
 project owner; this is not a record of advisor approval.
 

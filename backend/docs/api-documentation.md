@@ -36,6 +36,41 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
   `POST /api/fleet/v1/sync` (FleetRobot scheme) are not marked.
 - Request/response schemas, including field names such as `password`. It holds no
   configuration, connection strings, keys or data.
+- Operations carry a concise summary, a role/function tag, and an expanded
+  description of the current authorization, important request fields, state
+  effects, and applicable errors. Product label **Tour Staff** maps to the
+  existing `Staff` role; `Tour Operator` is an assigned duty, not a role.
+- Versioned map/POI operations are grouped under `Technical Staff — Maps`,
+  `Tour Staff — POI Proposals`, and `Technical Staff — POI Verification`.
+  Upload stores a validated package version but does not deploy it. Deployment
+  checks are manually entered evidence. POI submission is not PASS; a technical
+  result is scoped to the recorded revision/fingerprint and evidence.
+- Existing Admin-era POI/Route/Tour/Registration endpoints are explicitly tagged
+  `LEGACY`. Their descriptions state the actual role enforced by the current
+  backend (the old business URLs are Staff-only aliases, except the separate
+  email-correction action, which remains Admin-only) and the target Tour Staff
+  ownership. They are not marked OpenAPI-deprecated without an
+  accepted retirement decision. `/api/admin/pois` points to the versioned POI
+  proposal and Technical verification APIs only; those APIs do not replace
+  Route, Tour, or Registration workflows.
+
+### Endpoint migration/status snapshot
+
+| Endpoint group | Current permission | Target ownership | Status |
+|---|---|---|---|
+| `/api/admin/accounts` | Admin | Admin | Implemented account management, including TechnicalStaff accounts |
+| `/api/technical/map-versions/*`, `/api/maps/versions/*` | Upload/check: TechnicalStaff; version reads: Staff or TechnicalStaff | Technical Staff for map setup; Staff may read versions | Implemented backend API; deployment check is manual evidence; physical commissioning pending |
+| `/api/staff/poi-proposals/*` | Mutations: Staff; reads: Staff or TechnicalStaff | POI proposal: Tour Staff; verification: Technical Staff | Implemented versioned proposal and per-revision result API; route certification and frontend integration pending |
+| `/api/admin/pois/*` | Staff-only compatibility alias | Tour Staff for legacy catalog ownership; new map-linked POIs use proposal/verification endpoints | Legacy catalog remains available; not the new versioned POI workflow |
+| `/api/admin/routes/*` | Staff-only compatibility alias | Tour Staff | Legacy current Route model; route revision/certification migration pending |
+| `/api/admin/tours/*` | Staff-only compatibility alias | Assigned Tour Staff | Legacy preparation/cancellation slice; complete scheduling, reservation and READY migration pending |
+| `/api/admin/registrations/*` review paths | Staff-only compatibility alias | Tour Staff | Legacy aggregate review; row-level registration/email workflow migration pending |
+| `/api/admin/registrations/{id}/roster/{rowId}/email` | Admin | Tour Staff request/review workflow | Legacy Admin endpoint; target workflow not implemented |
+
+Authentication, invitation/session, Representative, Viewer, robot Fleet Sync,
+and platform endpoints are separately tagged with their actual current access
+mechanism. Swagger is a description of current API behavior plus clearly
+identified target ownership; tags do not grant permissions.
 
 Testing endpoints from Swagger UI: call `POST /api/auth/login`, copy
 `accessToken` from the response, click **Authorize** and paste it. Cookie endpoints

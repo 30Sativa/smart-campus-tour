@@ -15,7 +15,7 @@ public sealed class UpdateTourCommandValidator : AbstractValidator<UpdateTourCom
         {
             RuleFor(c => c.Request.RequestId).NotEmpty();
             RuleFor(c => c.Request.ExpectedRowVersion).Must(RowVersionToken.IsValid);
-            RuleFor(c => c.Request.ExpectedRouteVersion).Must(v => v is null || RouteRevision.IsValid(v));
+            RuleFor(c => c.Request.ExpectedRouteVersion).Must(v => v is null || LegacyRouteRevision.IsValid(v));
             RuleFor(c => c.Request.Configuration).NotNull().SetValidator(new TourInputValidator());
         });
     }

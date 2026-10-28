@@ -10,7 +10,7 @@ public sealed class UpdateRouteCommandHandler(IRouteManagementRepository reposit
     public async Task<Unit> Handle(UpdateRouteCommand command, CancellationToken ct)
     {
         var route = await repository.FindAsync(command.Id, true, ct) ?? throw new NotFoundException("Route was not found.");
-        RouteRevision.EnsureCurrent(route, command.Input.ExpectedVersion);
+        LegacyRouteRevision.EnsureCurrent(route, command.Input.ExpectedVersion);
         var usage = await repository.GetUsageAsync(route.Id, ct);
         if (!usage.CanEditMetadataAndAvailability)
             throw new ConflictException("A READY or RUNNING Tour uses this Route.", "ROUTE_IN_USE");

@@ -5,7 +5,7 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Routes;
 
-public static class RouteRevision
+public static class LegacyRouteRevision
 {
     // No timestamp-only concurrency: cover the whole persisted aggregate, including stop identities.
     public static string For(Route route) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new

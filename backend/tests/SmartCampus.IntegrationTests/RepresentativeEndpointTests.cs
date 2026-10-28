@@ -308,11 +308,12 @@ public sealed class RepresentativeEndpointTests
     {
         public JsonElement Data => Body.TryGetProperty("data", out var data) ? data : default;
     }
-    internal sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, Guid tourId, Guid adminId) : IAsyncDisposable
+    internal sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, Guid tourId, Guid adminId, Guid staffId) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
         public Guid TourId => tourId;
         public Guid AdminId => adminId;
+        public Guid StaffId => staffId;
         private HttpClient? client;
         private string? token;
         public void Bind(HttpClient httpClient, string? accessToken) { client = httpClient; token = accessToken; }
@@ -323,10 +324,11 @@ public sealed class RepresentativeEndpointTests
             try
             {
                 var admin = await database.InsertUserAsync(true, username: "rep.admin", roles: ["ADMIN"]);
+                var staff = await database.InsertUserAsync(true, username: "review.staff", roles: ["STAFF"]);
                 await database.InsertUserAsync(true, username: "rep.one", roles: ["SCHOOL_REPRESENTATIVE"]);
                 await database.InsertUserAsync(true, username: "rep.two", roles: ["SCHOOL_REPRESENTATIVE"]);
                 var tourId = Guid.NewGuid();
-                var fixture = new Fixture(database, tourId, admin.Id);
+                var fixture = new Fixture(database, tourId, admin.Id, staff.Id);
                 await using var context = fixture.Context();
                 var now = DateTimeOffset.UtcNow;
                 var poi = new Poi { Id = Guid.NewGuid(), Name = "Demo POI", MapKey = "demo", MapFrame = "map", CreatedAt = now, IsActive = true };

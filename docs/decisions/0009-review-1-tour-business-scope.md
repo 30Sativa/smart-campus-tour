@@ -1,5 +1,8 @@
 # ADR-0009: Chốt nghiệp vụ Tour sau Review 1
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Admin business ownership, direct email correction and post-End-Early fallback are superseded as target by Staff/Technical ownership, row request/review and terminal revocation. Original Review 1 decisions and approval status below are historical. No new advisor approval is recorded.
+
+
 - Ngày: 30/09/2026.
 - Trạng thái: **nhóm chấp nhận để triển khai**; GVHD giao nhóm tự quyết theo thông tin nhóm cung cấp và sẽ xem lại ở Review 2. Không ghi nhận GVHD đã duyệt từng thay đổi.
 - Phạm vi: quyết định nghiệp vụ cho `backend/` và `web/`, liên quan điều phối Tour trong `docs/architecture.md`. ADR không xác nhận code hoặc phần cứng đã đáp ứng.

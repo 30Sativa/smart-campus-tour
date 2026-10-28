@@ -10,7 +10,7 @@ public sealed class DeleteRouteCommandHandler(IRouteManagementRepository reposit
     public async Task<Unit> Handle(DeleteRouteCommand command, CancellationToken ct)
     {
         var route = await repository.FindAsync(command.Id, true, ct) ?? throw new NotFoundException("Route was not found.");
-        RouteRevision.EnsureCurrent(route, command.ExpectedVersion);
+        LegacyRouteRevision.EnsureCurrent(route, command.ExpectedVersion);
         if (!(await repository.GetUsageAsync(route.Id, ct)).CanDelete)
             throw new ConflictException("Referenced Routes cannot be deleted. Deactivate when permitted.", "ROUTE_IN_USE");
         await repository.ReplaceStopsAsync(route, [], ct);

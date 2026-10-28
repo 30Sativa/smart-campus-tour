@@ -1,5 +1,24 @@
 # CampusTour database snapshots
 
+## v1.2 versioned map/POI slice (ADR-0021)
+
+`smart-campus-tour-schema-v1.2.sql` is the full snapshot for a newly created
+database. `patches/upgrade-v1.1-to-v1.2-map-poi.sql` is an additive patch for
+an explicitly recognized v1.1 database and preserves existing rows; take and
+verify a full backup before the normal reviewed deployment process. The patch
+is idempotent for the v1.2 schema marker and rejects unknown/unmarked schemas.
+Neither file should be run against a shared or production database outside its
+approved change window. v1.1 and its recognized hashes remain unchanged.
+
+After v1.2 schema installation and the existing `campus_tour_app` role setup,
+apply `smart-campus-tour-map-poi-permissions.sql`. It grants read/insert for
+immutable map, deployment, revision, submission and verification records, plus
+only the current revision pointer fields on `PoiProposals`; it grants no
+update/delete on immutable result tables. Re-scaffold from a disposable v1.2
+database with `backend/scripts/scaffold-db`, then review generated output and
+the documented one-to-many corrections. Integration tests use a disposable
+SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
+
 ## Status
 
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
@@ -106,3 +125,28 @@ invitation/session revocation remain future implementation.
 - Retention: enumerate RosterRows.DisplayName/Email/ClassName, group contacts and identifying free text, invitation secrets and sessions, import/export copies and links. Revoke rights, preserve only non-identifying aggregate statistics, then delete/de-identify operational data according to configured retention and FK order. See ADR-0011/0012; no cleanup job or retention duration is introduced here.
 
 Runtime users must not be dbo/sysadmin/db_owner, own schemas/tables, have DDL control or column-level grants overriding the intended restriction. The log role protects ordinary app access, not privileged DB administrators. Production identity provisioning and permissions must be checked under the real runtime account before use.
+
+## v1.3 immutable Route revisions (ADR-0023)
+
+`smart-campus-tour-schema-v1.3.sql` is the new-empty-database snapshot and
+retains all v1.2 structures. For an explicitly recognized v1.2 database, apply
+`patches/upgrade-v1.2-to-v1.3-route-revisions.sql` through the reviewed database
+change process after a full backup. The accepted `CampusTourBootstrapHash`
+values are the two known original snapshot hashes retained by the v1.1→v1.2
+upgrade; the map/POI upgrade preserves that marker. Unknown/unmarked schemas
+are rejected. The patch is additive and leaves `Routes`/`RouteStops` records
+unchanged; old rows default to `AuthoringMode=LEGACY`.
+
+After the patch and existing role scripts, apply
+`smart-campus-tour-route-revision-permissions.sql`. The runtime role can read
+and insert versioned route revisions, stops, submission receipts and test runs,
+but cannot update/delete those records. Route API code uses the same `Routes`
+identity table and legacy APIs filter to LEGACY rows. This patch has not been
+applied to any shared or production database. SQL integration tests cover the
+new snapshot and repeat application of the patch on a disposable database.
+
+Database First model generation was run against a disposable v1.3 local SQL
+database using EF Core scaffolding; generated entities and mappings were
+reviewed, including the manually corrected EF relationship/cardinality rules.
+The disposable database was removed. This work branch does not apply the patch
+to a shared database or scaffold/migrate a database at application startup.

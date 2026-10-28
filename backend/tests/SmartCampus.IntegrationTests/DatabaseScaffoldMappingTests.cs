@@ -26,8 +26,10 @@ public sealed class DatabaseScaffoldMappingTests
             new[]
             {
                 "AuditLogs", "BranchRequests", "BrowserSessions", "GroupRegistrations",
-                "Invitations", "Pois", "RefreshTokens", "Robots", "RosterRows",
-                "Routes", "RouteStops", "RouteVariants", "TourAllowedBranches",
+                "Invitations", "MapAreas", "MapDeploymentChecks", "MapVersions", "PoiProposalRevisions",
+                "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
+                "Robots", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
+                "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
                 "TourEvents", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
             tables);

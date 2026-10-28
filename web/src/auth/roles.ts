@@ -10,16 +10,12 @@
  *
  *   Staff    `/staff/*`, Tour preparation and operations
  *   TechnicalStaff `/technical/*`, map versions and technical confirmation
- *   Admin    `/admin/*`, administration, and `/staff/*` as well
+ *   Admin    `/admin/*`, accounts and roles
  *   Representative `/dai-dien/*`, a school registers its group (flow review §4)
  *
  * The public pages at `/` and the invited viewer page at `/tour/*` need no
  * account at all. Viewers never sign in (SRS LI-09–14: no viewer accounts or
  * self-registration), so there is no visitor role.
- *
- * Admin is deliberately allowed into `/staff/*`: an administrator can look at
- * the operations console. The reverse is not true, and Admin still *lands* on
- * `/admin` after signing in, because that is the console built for the role.
  *
  * The product once split operations into `CampusStaff` and `TourOperator`. The
  * two never diverged in permissions or in UI, so they are one `Staff` role now.
@@ -33,8 +29,8 @@ export const REPRESENTATIVE_ROLE = 'Representative' as const
 /** Technical Staff: map versions, POI YAML import, physical checks and version-bound confirmation (SRS v1.9 §3.2.c). */
 export const TECHNICAL_ROLE = 'TechnicalStaff' as const
 
-/** May open `/staff/*`. */
-export const STAFF_ROLES = [STAFF_ROLE, ADMIN_ROLE] as const
+/** Staff owns Tour preparation and operations; Admin has no Staff workspace access. */
+export const STAFF_ROLES = [STAFF_ROLE] as const
 
 /** Every role an account can sign in with (Auth V1). */
 export const ALL_ROLES = [STAFF_ROLE, ADMIN_ROLE, REPRESENTATIVE_ROLE, TECHNICAL_ROLE] as const
@@ -115,10 +111,7 @@ export function isTechnicalRole(role?: string | null): boolean {
 /**
  * May Start, Hold, Next, End Early, recover a run or confirm a robot ready.
  *
- * Narrower than `isStaffRole`: Admin may LOOK at `/staff/*` but does not run
- * robots. Auth V1 assigns exactly one application role per account, so an
- * Admin account is read-only in the operations console; the server applies
- * the same rule.
+ * Only Staff can enter the Staff workspace and operate Tours.
  */
 export function canOperateTours(role?: string | null): boolean {
   return normalizeRole(role) === STAFF_ROLE

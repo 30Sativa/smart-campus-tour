@@ -1,5 +1,8 @@
 # ADR-0013: Một application role trên mỗi account V1
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). The supported-role set now includes TECHNICAL_STAFF / TechnicalStaff. The exactly-one-role invariant, fail-closed behavior and unchanged schema are retained. The original three-role decision below is historical. No new advisor approval is recorded.
+
+
 - Ngày: 01/10/2026.
 - Trạng thái: **nhóm chấp nhận để triển khai**; GVHD xem lại ở Review 2. Không ghi nhận GVHD đã duyệt quyết định này.
 - Phạm vi: role contract của Auth/Web V1; không thay đổi schema persistence.

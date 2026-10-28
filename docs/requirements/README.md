@@ -1,46 +1,37 @@
-# Business Requirements
+# Business requirements
 
-These documents describe the desired CampusTour behavior. Read their status
-labels; group-confirmed decisions, items for later advisor review, optional
-work, and out-of-scope work are not interchangeable.
+The current backend target is **Report 3 SRS v0.2 aligned to Phiếu v1.9**,
+adopted by owner instruction on 2026-10-27 through
+[ADR-0020](../decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
+Adoption does not imply advisor approval or completed implementation.
 
-## Canonical documents
+## Reading order and authority
 
-- [campus-tour-scope.md](campus-tour-scope.md) — detailed business baseline.
-  It may contain confirmed group decisions, pending items, and Future/out-of-
-  scope items. The status written for each item controls; the document does not
-  claim every item is advisor-approved or implemented.
-- [campus-tour-scope-summary.md](campus-tour-scope-summary.md) — concise
-  discussion copy. It cannot override the detailed scope.
-- [campus-tour-ui-flow.md](campus-tour-ui-flow.md) — screens and user flow
-  derived from the detailed scope. If they differ on a business rule, the
-  detailed scope wins and this flow needs synchronization.
+1. [Current detailed scope](campus-tour-scope.md) summarizes the live SRS target.
+2. [Backend gap register and source ledger](srs-v02-backend-gap-register.md)
+   records exact SRS IDs, observed code/schema, dependencies and acceptance.
+3. [Scope summary](campus-tour-scope-summary.md) and
+   [UI flow](campus-tour-ui-flow.md) project that target; they cannot override it.
+4. `docs/architecture.md` and repo ADRs define public technical contracts,
+   including current endpoints and implementation status.
+5. Code/SQL describe implementation, not the target. Report 4 is supporting
+   design; diagrams pending redraw do not negate SRS requirements.
 
-## How to resolve sources
+Read the stated status: **target** is owner-authorized future behavior;
+**current** is observed implementation; **pending** requires the stated
+decision/evidence and must not be implemented automatically. AC references are
+acceptance targets, not Passed results or invented Report 5 test-case IDs.
 
-- Source code and SQL schema show **current implementation and persistence**;
-  they are not automatically the target business requirement.
-- `docs/architecture.md` and `docs/decisions/` record cross-system technical
-  contracts and accepted decisions. A business change that alters a public
-  technical contract must be reconciled there before implementation.
-- ADR-0009 records the Review 1 business decisions selected by the group.
-  ADR-0010 replaces its secret-link entry with a Tour page link and personal
-  access code, exchanged for a browser session after validation.
-  ADR-0011 limits student data to registration, invitations, and Tour
-  operational statistics; it excludes post-Tour admissions contact and CRM.
-  The advisor will review them at Review 2; do not describe that as prior
-  approval. The live-versus-video experience evaluation remains optional and
-  pending confirmation as described in the detailed scope.
-- When implementation, schema, scope, or technical contracts conflict, report
-  the exact mismatch. Do not silently claim a target feature already exists or
-  implement a proposal that the scope marks pending.
+## History
 
-## Updating decisions without duplicating policy
+The previous scope, summary and UI-flow wording remains preserved unchanged in
+Git at baseline `e70fb52`:
+[scope](https://github.com/30Sativa/smart-campus-tour/blob/e70fb52/docs/requirements/campus-tour-scope.md),
+[summary](https://github.com/30Sativa/smart-campus-tour/blob/e70fb52/docs/requirements/campus-tour-scope-summary.md),
+[flow](https://github.com/30Sativa/smart-campus-tour/blob/e70fb52/docs/requirements/campus-tour-ui-flow.md).
+It is historical Review 1 material, not a second active target. Original ADR
+content/dates are retained with scoped succession notices. Old P0/P1/R1 IDs
+belong to that historical baseline; current work uses SRS UC/FR/BR/NFR/AC IDs.
 
-Record a changed decision in its owning ADR first, or in a successor when the
-decision is superseded. Keep the detailed scope's affected acceptance criteria
-and the UI's affected user actions consistent, with references to that ADR.
-The short summary is a reading aid. Do not copy a full policy into every file
-or create a new ADR merely for wording fixes; do not leave stale user-visible
-rules just because another file contains a reference. A mismatch must be
-reconciled explicitly under the authority rules above.
+HTTPS Fleet Sync ADR-0019 remains effective and telemetry-only. Business
+ownership succession does not authorize robot commands or alter that contract.

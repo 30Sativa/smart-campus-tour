@@ -13,7 +13,7 @@ import { homePathForRole } from '../../auth/roles'
  *   `/`        public   marketing pages, no account
  *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
  *   `/admin/*` admin    accounts and roles, Admin only
- *   `/technical/*`      Technical Staff: overview, map versions, POI checks and import, route confirmation, activity
+ *   `/technical/*`      Technical Staff: map versions, POI import, technical confirmation
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
@@ -59,29 +59,24 @@ const DigitalTwinPage = lazy(() => import('../../routes/staff/DigitalTwinPage'))
 const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'))
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
-const AdminDashboardPage = lazy(() => import('../../routes/staff/manage/AdminDashboardPage'))
-const AdminTourListPage = lazy(() => import('../../routes/staff/manage/AdminTourListPage'))
-const AdminTourCreatePage = lazy(() => import('../../routes/staff/manage/AdminTourCreatePage'))
-const AdminTourDetailPage = lazy(() => import('../../routes/staff/manage/AdminTourDetailPage'))
-const AdminTourEditPage = lazy(() => import('../../routes/staff/manage/AdminTourEditPage'))
-const AdminRegistrationsPage = lazy(() => import('../../routes/staff/manage/AdminRegistrationsPage'))
-const AdminRouteCatalogPage = lazy(() => import('../../routes/staff/manage/AdminRouteCatalogPage'))
-const AdminRouteDetailsPage = lazy(() => import('../../routes/staff/manage/AdminRouteDetailsPage'))
-const AdminRouteFormPage = lazy(() => import('../../routes/staff/manage/AdminRouteFormPage'))
+const StaffManageDashboardPage = lazy(() => import('../../routes/staff/manage/StaffManageDashboardPage'))
+const StaffManageTourListPage = lazy(() => import('../../routes/staff/manage/StaffManageTourListPage'))
+const StaffManageTourCreatePage = lazy(() => import('../../routes/staff/manage/StaffManageTourCreatePage'))
+const StaffManageTourDetailPage = lazy(() => import('../../routes/staff/manage/StaffManageTourDetailPage'))
+const StaffManageTourEditPage = lazy(() => import('../../routes/staff/manage/StaffManageTourEditPage'))
+const StaffManageRegistrationsPage = lazy(() => import('../../routes/staff/manage/StaffManageRegistrationsPage'))
+const StaffManageRouteCatalogPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteCatalogPage'))
+const StaffManageRouteDetailsPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteDetailsPage'))
+const StaffManageRouteFormPage = lazy(() => import('../../routes/staff/manage/StaffManageRouteFormPage'))
 const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPage'))
-const AdminPoisPage = lazy(() => import('../../routes/staff/manage/AdminPoisPage'))
-const AdminPoiFormPage = lazy(() => import('../../routes/staff/manage/AdminPoiFormPage'))
+const StaffManagePoisPage = lazy(() => import('../../routes/staff/manage/StaffManagePoisPage'))
+const StaffManagePoiFormPage = lazy(() => import('../../routes/staff/manage/StaffManagePoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
-const TechnicalOverviewPage = lazy(() => import('../../routes/technical/TechnicalOverviewPage'))
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
-const TechnicalMapDetailPage = lazy(() => import('../../routes/technical/TechnicalMapDetailPage'))
-const TechnicalPoisPage = lazy(() => import('../../routes/technical/TechnicalPoisPage'))
 const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
 const TechnicalConfirmationsPage = lazy(() => import('../../routes/technical/TechnicalConfirmationsPage'))
-const TechnicalRouteVersionPage = lazy(() => import('../../routes/technical/TechnicalRouteVersionPage'))
-const TechnicalActivityPage = lazy(() => import('../../routes/technical/TechnicalActivityPage'))
 
 function ShellFallback({ background }: { background: string }) {
   return <div className="min-h-[100dvh]" style={{ background }} aria-busy="true" aria-label="Đang tải" />
@@ -238,20 +233,20 @@ export const routes = [
       { path: 'profile', element: <StaffProfilePage /> },
       // Tour preparation, moved from `/admin/*` (SRS v1.9 §3.2.c: Staff owns
       // content, registrations, Routes and scheduling).
-      { path: 'manage', element: <AdminDashboardPage /> },
-      { path: 'manage/tours', element: <AdminTourListPage /> },
-      { path: 'manage/tours/new', element: <AdminTourCreatePage /> },
-      { path: 'manage/tours/:tourId', element: <AdminTourDetailPage /> },
-      { path: 'manage/tours/:tourId/edit', element: <AdminTourEditPage /> },
-      { path: 'manage/registrations', element: <AdminRegistrationsPage mode="all" /> },
-      { path: 'manage/registrations/pending', element: <AdminRegistrationsPage mode="pending" /> },
-      { path: 'manage/routes', element: <AdminRouteCatalogPage /> },
-      { path: 'manage/routes/new', element: <AdminRouteFormPage /> },
-      { path: 'manage/routes/:routeId', element: <AdminRouteDetailsPage /> },
-      { path: 'manage/routes/:routeId/edit', element: <AdminRouteFormPage /> },
-      { path: 'manage/pois', element: <AdminPoisPage /> },
-      { path: 'manage/pois/new', element: <AdminPoiFormPage /> },
-      { path: 'manage/pois/:poiId', element: <AdminPoiFormPage /> },
+      { path: 'manage', element: <StaffManageDashboardPage /> },
+      { path: 'manage/tours', element: <StaffManageTourListPage /> },
+      { path: 'manage/tours/new', element: <StaffManageTourCreatePage /> },
+      { path: 'manage/tours/:tourId', element: <StaffManageTourDetailPage /> },
+      { path: 'manage/tours/:tourId/edit', element: <StaffManageTourEditPage /> },
+      { path: 'manage/registrations', element: <StaffManageRegistrationsPage mode="all" /> },
+      { path: 'manage/registrations/pending', element: <StaffManageRegistrationsPage mode="pending" /> },
+      { path: 'manage/routes', element: <StaffManageRouteCatalogPage /> },
+      { path: 'manage/routes/new', element: <StaffManageRouteFormPage /> },
+      { path: 'manage/routes/:routeId', element: <StaffManageRouteDetailsPage /> },
+      { path: 'manage/routes/:routeId/edit', element: <StaffManageRouteFormPage /> },
+      { path: 'manage/pois', element: <StaffManagePoisPage /> },
+      { path: 'manage/pois/new', element: <StaffManagePoiFormPage /> },
+      { path: 'manage/pois/:poiId', element: <StaffManagePoiFormPage /> },
       // Renamed with the operations redesign (2026-09-21). Migration only:
       // drop once no bookmark points at them.
       { path: 'amr', element: <Navigate to="/staff/robot" replace /> },
@@ -277,15 +272,11 @@ export const routes = [
     path: '/technical',
     element: <TechnicalArea />,
     children: [
-      // Technical Staff: overview, map versions, on-site POI checks, POI YAML import, version-bound confirmation, activity (SRS v1.9 §3.2.c).
-      { index: true, element: <TechnicalOverviewPage /> },
+      // Technical Staff: map versions, POI YAML import, version-bound confirmation (SRS v1.9 §3.2.c).
+      { index: true, element: <Navigate to="/technical/maps" replace /> },
       { path: 'maps', element: <TechnicalMapsPage /> },
-      { path: 'maps/:mapKey', element: <TechnicalMapDetailPage /> },
-      { path: 'pois', element: <TechnicalPoisPage /> },
       { path: 'poi-import', element: <TechnicalPoiImportPage /> },
       { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
-      { path: 'confirmations/:id', element: <TechnicalRouteVersionPage /> },
-      { path: 'activity', element: <TechnicalActivityPage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],
   },

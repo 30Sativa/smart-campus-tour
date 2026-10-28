@@ -49,8 +49,8 @@ describe('area access', () => {
     expect(areaById('admin').allows('Staff')).toBe(false)
   })
 
-  it('lets an admin into both, which is the policy this app has always had', () => {
-    expect(areaById('staff').allows('Admin')).toBe(true)
+  it('keeps Admin in system administration, not Staff business workflows', () => {
+    expect(areaById('staff').allows('Admin')).toBe(false)
     expect(areaById('admin').allows('Admin')).toBe(true)
   })
 

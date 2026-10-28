@@ -31,7 +31,29 @@ public partial class User
 
     public virtual ICollection<GroupRegistration> GroupRegistrationReviewedByUsers { get; set; } = new List<GroupRegistration>();
 
+    public virtual ICollection<MapArea> MapAreas { get; set; } = new List<MapArea>();
+
+    public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
+
+    public virtual ICollection<MapVersion> MapVersions { get; set; } = new List<MapVersion>();
+
+    public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
+
+    public virtual ICollection<PoiProposalSubmission> PoiProposalSubmissions { get; set; } = new List<PoiProposalSubmission>();
+
+    public virtual ICollection<PoiProposal> PoiProposals { get; set; } = new List<PoiProposal>();
+
+    public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
+
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    public virtual ICollection<RouteRevisionSubmission> RouteRevisionSubmissions { get; set; } = new List<RouteRevisionSubmission>();
+
+    public virtual ICollection<RouteRevision> RouteRevisions { get; set; } = new List<RouteRevision>();
+
+    public virtual ICollection<RouteTestRun> RouteTestRunCheckedByUsers { get; set; } = new List<RouteTestRun>();
+
+    public virtual ICollection<RouteTestRun> RouteTestRunParticipatingStaffUsers { get; set; } = new List<RouteTestRun>();
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
 
