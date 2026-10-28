@@ -5,6 +5,8 @@ namespace SmartCampus.Application.Common.Abstractions.Persistence;
 /// <summary>Persistence operations for map versions and their manual deployment checks.</summary>
 public interface IMapVersionRepository
 {
+    Task<IReadOnlyList<MapArea>> ListMapAreasAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken);
     Task<MapArea?> LockAreaAsync(string areaKey, CancellationToken cancellationToken);
     Task<MapArea?> GetAreaAsync(string areaKey, CancellationToken cancellationToken);
     Task<MapVersion?> FindMapUploadRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);

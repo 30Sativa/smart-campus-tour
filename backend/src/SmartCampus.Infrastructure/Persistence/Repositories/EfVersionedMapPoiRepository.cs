@@ -8,6 +8,17 @@ namespace SmartCampus.Infrastructure.Persistence.Repositories;
 public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) :
     IMapPoiRequestLock, IMapVersionRepository, IPoiProposalRepository, IPoiVerificationRepository
 {
+    public async Task<IReadOnlyList<MapArea>> ListMapAreasAsync(CancellationToken cancellationToken) =>
+        await dbContext.MapAreas.AsNoTracking()
+            .OrderBy(area => area.DisplayName).ThenBy(area => area.AreaKey)
+            .ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken) =>
+        await dbContext.Robots.AsNoTracking()
+            .Where(robot => robot.SourceType == "PHYSICAL")
+            .OrderBy(robot => robot.DisplayName).ThenBy(robot => robot.RobotCode)
+            .ToArrayAsync(cancellationToken);
+
     public async Task LockRequestAsync(Guid actorUserId, Guid requestId, string operation, CancellationToken cancellationToken)
     {
         var resource = $"map-poi:{operation}:{actorUserId:D}:{requestId:D}";

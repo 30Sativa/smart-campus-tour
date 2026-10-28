@@ -21,6 +21,211 @@ public sealed class BusinessFlowIntegrationTests
     private const string Password = "integration-test-password";
 
     [SchemaV14Fact]
+    public async Task MapAreaAndPhysicalRobotLookups_AreCompleteSafeAndMapUploadRetriesReplayServerVersion()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "catalog.admin", roles: ["ADMIN"]);
+        var robotId = Guid.NewGuid();
+        var gazeboId = Guid.NewGuid();
+        await database.ExecuteAsync($"""
+            INSERT dbo.Robots(Id, RobotCode, SourceType, DisplayName, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
+            VALUES ('{robotId:D}', N'catalog-physical', 'PHYSICAL', N'Physical test robot', 0x020304, 0, 0, SYSDATETIMEOFFSET()),
+                   ('{gazeboId:D}', N'catalog-gazebo', 'GAZEBO', N'Gazebo robot', 0x050607, 1, 0, SYSDATETIMEOFFSET());
+            """);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var admin = await Login(host.Client, "catalog.admin");
+        var technicalId = await CreateAccount(host.Client, admin, "catalog.technical", "TechnicalStaff");
+        var technical = await Login(host.Client, "catalog.technical");
+
+        var extraAreas = string.Join(",", Enumerable.Range(1, 60).Select(index =>
+            $"(N'catalog-area-{index:D2}', N'Catalog Area {index}', '{technicalId:D}', SYSDATETIMEOFFSET())"));
+        await database.ExecuteAsync($"INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES {extraAreas};");
+
+        var package = CreateMapPackage();
+        var firstRequestId = Guid.NewGuid();
+        using var firstUpload = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", firstRequestId, package);
+        Assert.Equal(HttpStatusCode.OK, firstUpload.StatusCode);
+        var first = (await Body(firstUpload)).GetProperty("data");
+        Assert.Equal(1, first.GetProperty("versionNumber").GetInt32());
+
+        using var uploadRetry = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", firstRequestId, package);
+        Assert.Equal(HttpStatusCode.OK, uploadRetry.StatusCode);
+        var replay = (await Body(uploadRetry)).GetProperty("data");
+        Assert.Equal(first.GetProperty("id").GetGuid(), replay.GetProperty("id").GetGuid());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.MapVersions"));
+
+        using var nextUpload = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", Guid.NewGuid(), package);
+        Assert.Equal(HttpStatusCode.OK, nextUpload.StatusCode);
+        var second = (await Body(nextUpload)).GetProperty("data");
+        Assert.Equal("catalog-main", second.GetProperty("areaKey").GetString());
+        Assert.Equal("Catalog Main", second.GetProperty("areaName").GetString());
+        Assert.Equal(2, second.GetProperty("versionNumber").GetInt32());
+        Assert.Equal("catalog-main-v2", second.GetProperty("mapKey").GetString());
+
+        using var conflictingName = await UploadMap(host.Client, technical, "catalog-main", "Different Name", Guid.NewGuid(), package);
+        Assert.Equal(HttpStatusCode.Conflict, conflictingName.StatusCode);
+        Assert.Equal("MAP_AREA_NAME_CONFLICT", (await Body(conflictingName)).GetProperty("errors").GetProperty("code").GetString());
+
+        using var areaResponse = await Get(host.Client, "/api/technical/map-areas", technical);
+        Assert.Equal(HttpStatusCode.OK, areaResponse.StatusCode);
+        var areas = (await Body(areaResponse)).GetProperty("data").EnumerateArray().ToArray();
+        Assert.Equal(61, areas.Length);
+        var storedArea = Assert.Single(areas, area => area.GetProperty("areaKey").GetString() == "catalog-main");
+        Assert.Equal("Catalog Main", storedArea.GetProperty("displayName").GetString());
+
+        using var robotResponse = await Get(host.Client, "/api/technical/physical-robots", technical);
+        Assert.Equal(HttpStatusCode.OK, robotResponse.StatusCode);
+        var robots = (await Body(robotResponse)).GetProperty("data").EnumerateArray().ToArray();
+        var listedRobot = Assert.Single(robots);
+        Assert.Equal(robotId, listedRobot.GetProperty("id").GetGuid());
+        Assert.Equal("catalog-physical", listedRobot.GetProperty("robotCode").GetString());
+        Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
+        Assert.Equal(new[] { "displayName", "id", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+
+        var mapSha = first.GetProperty("packageSha256").GetString();
+        var checkRequestId = Guid.NewGuid();
+        using var recorded = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
+            new { requestId = checkRequestId, robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
+        Assert.Equal(HttpStatusCode.OK, recorded.StatusCode);
+        var checkId = (await Body(recorded)).GetProperty("data").GetProperty("id").GetGuid();
+        using var recordRetry = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
+            new { requestId = checkRequestId, robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
+        Assert.Equal(HttpStatusCode.OK, recordRetry.StatusCode);
+        Assert.Equal(checkId, (await Body(recordRetry)).GetProperty("data").GetProperty("id").GetGuid());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.MapDeploymentChecks"));
+
+        await database.ExecuteAsync($"UPDATE dbo.Robots SET SourceType='GAZEBO' WHERE Id='{robotId:D}';");
+        using var staleRobot = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; stale robot type should be rejected." });
+        Assert.Equal(HttpStatusCode.NotFound, staleRobot.StatusCode);
+        Assert.Equal(1, await database.CountRowsAsync("dbo.MapDeploymentChecks"));
+    }
+
+    [SchemaV14Fact]
+    public async Task PoiRevisionAndSubmitRecheckEligibilityAndSerializeWithConcurrentDeploymentEvidence()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "mapgate.admin", roles: ["ADMIN"]);
+        var robotId = Guid.NewGuid();
+        await database.ExecuteAsync($"""
+            INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
+            VALUES ('{robotId:D}', N'mapgate-physical', 'PHYSICAL', 0x020304, 0, 0, SYSDATETIMEOFFSET());
+            """);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var admin = await Login(host.Client, "mapgate.admin");
+        _ = await CreateAccount(host.Client, admin, "mapgate.technical", "TechnicalStaff");
+        _ = await CreateAccount(host.Client, admin, "mapgate.staff", "Staff");
+        var technical = await Login(host.Client, "mapgate.technical");
+        var staff = await Login(host.Client, "mapgate.staff");
+        var package = CreateMapPackage();
+        using var upload = await UploadMap(host.Client, technical, "mapgate", "Map Gate", Guid.NewGuid(), package);
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+        var map = (await Body(upload)).GetProperty("data");
+        var mapId = map.GetProperty("id").GetGuid();
+        var packageSha = map.GetProperty("packageSha256").GetString();
+
+        // Race a failed technical check against POI creation. Both legal lock orders
+        // leave the map ineligible and therefore must reject the proposal mutation.
+        var raceCreateId = Guid.NewGuid();
+        var deploymentRace = Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
+                localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; concurrent failed map evidence." });
+        var proposalRace = Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff,
+            new { requestId = raceCreateId, draft = new { mapVersionId = mapId, name = "Race POI", purpose = "Entry",
+                description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+        await Task.WhenAll(deploymentRace, proposalRace);
+        using var racedCheck = await deploymentRace;
+        using var racedCreate = await proposalRace;
+        Assert.Equal(HttpStatusCode.OK, racedCheck.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, racedCreate.StatusCode);
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposals"));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalRevisions"));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalSubmissions"));
+
+        using var passingCheck = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
+                localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
+        Assert.Equal(HttpStatusCode.OK, passingCheck.StatusCode);
+
+        var createRequestId = Guid.NewGuid();
+        var createBody = new { requestId = createRequestId, draft = new { mapVersionId = mapId, name = "Library", purpose = "Entry",
+            description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+        using var created = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, createBody);
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var proposal = (await Body(created)).GetProperty("data");
+        var proposalId = proposal.GetProperty("id").GetGuid();
+        using var createRetry = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, createBody);
+        Assert.Equal(HttpStatusCode.OK, createRetry.StatusCode);
+        Assert.Equal(proposalId, (await Body(createRetry)).GetProperty("data").GetProperty("id").GetGuid());
+
+        var revisionRequestId = Guid.NewGuid();
+        var revisedDraft = new { mapVersionId = mapId, name = "Library revised", purpose = "Entry", description = (string?)null,
+            x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" };
+        var revisionBody = new { requestId = revisionRequestId, expectedCurrentRevision = 1,
+            expectedRowVersion = proposal.GetProperty("rowVersion").GetString(), draft = revisedDraft };
+        using var revised = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{proposalId}/draft", staff, revisionBody);
+        Assert.Equal(HttpStatusCode.OK, revised.StatusCode);
+        var revision = (await Body(revised)).GetProperty("data");
+        Assert.Equal(2, revision.GetProperty("currentRevision").GetInt32());
+        using var revisionRetry = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{proposalId}/draft", staff, revisionBody);
+        Assert.Equal(HttpStatusCode.OK, revisionRetry.StatusCode);
+        Assert.Equal(2, (await Body(revisionRetry)).GetProperty("data").GetProperty("currentRevision").GetInt32());
+
+        var submitRequestId = Guid.NewGuid();
+        var submitBody = new { requestId = submitRequestId, expectedRevisionNumber = 2,
+            expectedRowVersion = revision.GetProperty("rowVersion").GetString() };
+        using var submitted = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{proposalId}/submit", staff, submitBody);
+        Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
+        using var submitRetry = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{proposalId}/submit", staff, submitBody);
+        Assert.Equal(HttpStatusCode.OK, submitRetry.StatusCode);
+        Assert.True((await Body(submitRetry)).GetProperty("data").GetProperty("revision").GetProperty("isSubmitted").GetBoolean());
+
+        var submittedProposal = (await Body(submitted)).GetProperty("data");
+        using var poiPass = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/poi-proposals/{proposalId}/revisions/2/verification", technical,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 2, expectedRowVersion = submittedProposal.GetProperty("rowVersion").GetString(),
+                robotCode = "mapgate-physical", resultCode = "PASS", reached = true, stopped = true,
+                localizationPassed = true, cameraPresetConfirmed = true, reason = (string?)null,
+                evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
+        Assert.Equal(HttpStatusCode.OK, poiPass.StatusCode);
+        using var history = await Get(host.Client, $"/api/staff/poi-proposals/{proposalId}/history", staff);
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        var historyData = (await Body(history)).GetProperty("data");
+        Assert.Equal(2, historyData.GetProperty("revisions").GetArrayLength());
+        Assert.Single(historyData.GetProperty("verificationRecords").EnumerateArray());
+
+        var secondProposalBody = new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Second POI", purpose = "Exit",
+            description = (string?)null, x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+        using var secondCreated = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, secondProposalBody);
+        Assert.Equal(HttpStatusCode.OK, secondCreated.StatusCode);
+        var secondProposal = (await Body(secondCreated)).GetProperty("data");
+        var secondProposalId = secondProposal.GetProperty("id").GetGuid();
+
+        using var newerFailure = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
+                localizationPassed = false, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; newer failure supersedes prior pass." });
+        Assert.Equal(HttpStatusCode.OK, newerFailure.StatusCode);
+
+        var beforeBlockedRevisionCount = await database.CountRowsAsync("dbo.PoiProposalRevisions");
+        var beforeBlockedSubmissionCount = await database.CountRowsAsync("dbo.PoiProposalSubmissions");
+        var beforeBlockedAuditCount = await database.CountRowsAsync("dbo.AuditLogs");
+        using var blockedRevision = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{proposalId}/draft", staff,
+            new { requestId = Guid.NewGuid(), expectedCurrentRevision = 2,
+                expectedRowVersion = (await Body(await Get(host.Client, $"/api/staff/poi-proposals/{proposalId}", staff))).GetProperty("data").GetProperty("rowVersion").GetString(),
+                draft = new { mapVersionId = mapId, name = "Should not persist", purpose = "Entry", description = (string?)null,
+                    x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+        Assert.Equal(HttpStatusCode.Conflict, blockedRevision.StatusCode);
+        Assert.Equal("TECHNICAL_CHECK_NOT_PASSED", (await Body(blockedRevision)).GetProperty("errors").GetProperty("code").GetString());
+        using var blockedSubmit = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{secondProposalId}/submit", staff,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1, expectedRowVersion = secondProposal.GetProperty("rowVersion").GetString() });
+        Assert.Equal(HttpStatusCode.Conflict, blockedSubmit.StatusCode);
+        Assert.Equal("TECHNICAL_CHECK_NOT_PASSED", (await Body(blockedSubmit)).GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal(beforeBlockedRevisionCount, await database.CountRowsAsync("dbo.PoiProposalRevisions"));
+        Assert.Equal(beforeBlockedSubmissionCount, await database.CountRowsAsync("dbo.PoiProposalSubmissions"));
+        Assert.Equal(beforeBlockedAuditCount, await database.CountRowsAsync("dbo.AuditLogs"));
+    }
+
+    [SchemaV14Fact]
     public async Task VersionedMapPoiRouteChain_RecordsSimulatedEvidence_AndStopsAtSchedulingDependency()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -273,6 +478,19 @@ public sealed class BusinessFlowIntegrationTests
         using var response = await client.PostAsJsonAsync("/api/auth/login", new { username, password = Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await Body(response)).GetProperty("accessToken").GetString()!;
+    }
+
+    private static async Task<HttpResponseMessage> UploadMap(HttpClient client, string token, string areaKey,
+        string areaName, Guid requestId, byte[] package)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(areaKey), "areaKey");
+        content.Add(new StringContent(areaName), "areaName");
+        content.Add(new StringContent(requestId.ToString()), "requestId");
+        var packageContent = new ByteArrayContent(package);
+        packageContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        content.Add(packageContent, "package", "catalog-map.zip");
+        return await Send(client, HttpMethod.Post, "/api/technical/map-versions", token, content);
     }
 
     private static async Task<HttpResponseMessage> Json(HttpClient client, HttpMethod method, string path, string token, object body)

@@ -112,8 +112,10 @@ about unrecoverable tokens must be reconciled with NFR-SEC-01 recoverably protec
 invitation resend before changing credential storage; this account slice does
 not alter invitation cryptography.
 
-This slice changes no robot, web or ai-assistant. Scoped Google Docs text updates
-are performed separately; diagrams stay pending and are not redrawn. TechnicalStaff
+The Map→POI follow-up adds read-only area/physical-robot lookups and updates the
+Technical Staff upload/check and Staff POI web screens. It changes no robot
+transport or ai-assistant behavior. Scoped Google Docs text updates are
+performed separately; diagrams stay pending and are not redrawn. TechnicalStaff
 login and human-entered check records are not physical AC-01/06 evidence or full AC-08.
 SQL tests create disposable databases only when
 `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is supplied; SKIPPED is not DB verification.

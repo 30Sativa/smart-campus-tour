@@ -15,7 +15,7 @@ Use the SRS screen IDs exactly; components need not be separate routes.
 |---|---|---|
 | SCR-PUBLIC | Public | Entry information; no registration or invitation/session authority from URL |
 | SCR-ADMIN | Admin | Manage accounts, configuration and administrative audit; one supported role/account |
-| SCR-TECH-MAP | Technical Staff | Upload/version map; separate deployment/localization evidence from upload |
+| SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose a registered physical robot for manual deployment/localization evidence; keep upload distinct from check result |
 | SCR-TECH-POI | Technical Staff | Import unverified POIs; verify exact POI/route revisions; project YAML/frame mapping pending |
 | SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation |
 | SCR-STAFF-REVIEW | Staff | Decide pending rows and requested email changes; tour SCHEDULED; ≤2-working-day target |
@@ -32,7 +32,7 @@ artifacts, not a new research workspace.
 ## 2. Preparation and tour lifecycle
 
 Technical creates map externally → upload immutable version → manually deploy
-and verify localization/display → only then Staff proposes/submits POIs /
+and verify localization/display on a selected registered physical robot → only then Staff proposes/submits POIs /
 Technical imports or verifies POIs
 (unverified) → Technical verifies POIs → Staff composes route/content →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves

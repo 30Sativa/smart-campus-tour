@@ -34,6 +34,18 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         return Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map package validated and versioned.", Data = result });
     }
 
+    [HttpGet("technical/map-areas")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<MapAreaOption>>>> ListMapAreas(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<MapAreaOption>> { Success = true, Message = "Map areas retrieved.",
+            Data = await sender.Send(new ListMapAreasQuery(), ct) });
+
+    [HttpGet("technical/physical-robots")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotOption>>>> ListPhysicalRobots(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<PhysicalRobotOption>> { Success = true, Message = "Physical robots retrieved.",
+            Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
+
     [HttpGet("maps/versions")]
     [Authorize(Roles = StaffAndTechnical)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapVersionListItem>>>> ListMaps(
