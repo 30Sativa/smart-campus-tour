@@ -8,6 +8,18 @@ base=$1 head=$2
   exit 2
 }
 
+# A failed comparison must fail the job: an empty path list would otherwise read as "no backend change".
+for sha in "$base" "$head"; do
+  git cat-file -e "$sha^{commit}" 2>/dev/null || {
+    echo "FAIL: commit $sha is not available in this checkout; cannot classify backend changes." >&2
+    exit 1
+  }
+done
+changed_paths=$(git diff --name-only "$base" "$head") || {
+  echo "FAIL: git diff $base $head failed; cannot classify backend changes." >&2
+  exit 1
+}
+
 backend_changed=false release_needed=false database_tool_changed=false cache_test_needed=false
 while IFS= read -r path; do
   [[ -n "$path" ]] || continue
@@ -24,14 +36,14 @@ while IFS= read -r path; do
       release_needed=true ;;
   esac
   case "$path" in
-    backend/database/*.sql|backend/database/patches/*.sql|backend/deploy/init-db.sh|backend/deploy/upgrade-db.sh|backend/Dockerfile.db-init|backend/docker-compose.db-init.yml)
+    backend/database/*.sql|backend/database/patches/*.sql|backend/deploy/init-db.sh|backend/deploy/upgrade-db.sh|backend/Dockerfile.db-init|backend/docker-compose.db-init.yml|backend/scripts/test-db-upgrade)
       database_tool_changed=true ;;
   esac
   case "$path" in
     backend/Dockerfile|backend/.dockerignore|backend/global.json|backend/Directory.Build.props|backend/Directory.Build.targets|backend/src/*/*.csproj|backend/src/*/packages.lock.json|backend/tests/*/*.csproj|backend/tests/*/packages.lock.json|backend/scripts/resolve-base-images|backend/scripts/test-docker-build-cache|.github/workflows/backend-verify.yml)
       cache_test_needed=true ;;
   esac
-done < <(git diff --name-only "$base" "$head")
+done <<< "$changed_paths"
 
 if [[ -n ${GITHUB_OUTPUT:-} ]]; then
   {

@@ -40,6 +40,7 @@ tool_schema=$(docker image inspect --format '{{index .Config.Labels "org.smartca
 
 compose=(docker compose --project-name campustour --env-file "$CONFIG/backend.env" --env-file "$CURRENT/release.env" \
   -f "$CURRENT/docker-compose.yml" -f "$CAMPUS_RELEASE_DB_INIT_COMPOSE")
-DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps db-init --upgrade-to-v1.4
+# The image entrypoint is init-db.sh (bootstrap/check only); the upgrader is a separate script in the same tool.
+DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init /deployment/upgrade-db.sh --upgrade-to-v1.4
 DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps db-init --check-only
 echo "PASS: application database schema is compatible at v$schema_version; API image, SQL Server engine and persistent volume were not changed."

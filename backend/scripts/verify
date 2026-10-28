@@ -45,7 +45,7 @@ fi
 
 bash -n deploy/init-db.sh deploy/upgrade-db.sh deploy/upgrade-db-schema-ec2.sh deploy/deploy-ec2.sh deploy/install-host-tools.sh deploy/backup-sqlserver.sh deploy/check-ec2.sh \
   deploy/stack-start.sh deploy/refresh-certificate.sh scripts/test-deployment scripts/test-deploy-ec2.sh \
-  scripts/test-backup-upload-failure.sh scripts/test-certificate-reconciliation.sh scripts/test-operation-locks.sh
+  scripts/test-backup-upload-failure.sh scripts/test-certificate-reconciliation.sh scripts/test-operation-locks.sh scripts/test-db-upgrade
 bash -n deploy/prepare-release.sh deploy/ssh-deploy.sh deploy/receive-release.sh
 bash -n scripts/resolve-base-images scripts/test-docker-build-cache
 "$PYTHON" scripts/test-base-image-resolution.py

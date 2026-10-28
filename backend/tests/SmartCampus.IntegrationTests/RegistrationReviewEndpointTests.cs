@@ -77,6 +77,58 @@ public sealed class RegistrationReviewEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task PendingQueue_KeepsApprovedGroupsWithPendingRows_ButNeverCancelledGroups()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.Database.InsertUserAsync(true, username: "rep.three", roles: ["SCHOOL_REPRESENTATIVE"]);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
+        var staff = await LoginAsync(host.Client, "review.staff");
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        var mixed = await f.SendAsync(HttpMethod.Post, $"/tours/{f.TourId}/registrations", Input(tour, "Partly approved", "mixed@example.com", mixed: true), Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.OK, mixed.Status);
+        var approved = mixed.Data.GetProperty("id").GetGuid();
+        var detail = (await f.SendAsync(HttpMethod.Get, Path(approved), token: staff)).Data;
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, RowPath(approved, detail, "accept"), Decision(detail), token: staff)).Status);
+        detail = (await f.SendAsync(HttpMethod.Get, Path(approved), token: staff)).Data;
+        Assert.Equal("APPROVED", detail.GetProperty("summary").GetProperty("state").GetString());
+        Assert.Equal(["ACCEPTED", "PENDING"], detail.GetProperty("roster").EnumerateArray().Select(row => row.GetProperty("participationState").GetString()));
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.two"));
+        var cancelled = await SubmitAsync(f, "cancelled@example.com", "Cancelled group");
+        // Tour-wide cancellation leaves the registration's active rows PENDING; only the registration state changes.
+        await f.Database.ExecuteAsync($"UPDATE dbo.GroupRegistrations SET State='CANCELLED', CancelledAt=SYSDATETIMEOFFSET() WHERE Id='{cancelled}';");
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.three"));
+        var submitted = await SubmitAsync(f, "submitted@example.com", "Submitted group");
+
+        var seen = new List<Guid>();
+        foreach (var page in new[] { 1, 2, 3 })
+        {
+            var list = await f.SendAsync(HttpMethod.Get, $"/api/staff/manage/registrations?state=SUBMITTED&size=1&page={page}", token: staff);
+            Assert.Equal(HttpStatusCode.OK, list.Status);
+            Assert.Equal(2, list.Body.GetProperty("pagination").GetProperty("totalItems").GetInt32());
+            var items = list.Data.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToArray();
+            Assert.Equal(page <= 2 ? 1 : 0, items.Length);
+            seen.AddRange(items);
+        }
+        Assert.Equal(new[] { approved, submitted }.Order(), seen.Order());
+        Assert.DoesNotContain(cancelled, seen);
+        var cancelledList = await f.SendAsync(HttpMethod.Get, "/api/staff/manage/registrations?state=CANCELLED", token: staff);
+        Assert.Equal(cancelled, Assert.Single(cancelledList.Data.EnumerateArray()).GetProperty("id").GetGuid());
+
+        // Once its last PENDING row is decided, the APPROVED group leaves the queue.
+        var pendingRow = detail.GetProperty("roster")[1];
+        Assert.Equal(HttpStatusCode.OK, (await f.SendAsync(HttpMethod.Post, $"{Path(approved)}/rows/{pendingRow.GetProperty("id").GetGuid()}/reject", new
+        {
+            requestId = Guid.NewGuid(), expectedRegistrationRowVersion = Version(detail),
+            expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString(),
+            expectedRowVersion = Version(pendingRow), reason = "Not needed"
+        }, token: staff)).Status);
+        var remaining = await f.SendAsync(HttpMethod.Get, "/api/staff/manage/registrations?state=SUBMITTED", token: staff);
+        Assert.Equal(submitted, Assert.Single(remaining.Data.EnumerateArray()).GetProperty("id").GetGuid());
+        Assert.Equal(1, remaining.Body.GetProperty("pagination").GetProperty("totalItems").GetInt32());
+    }
+
+    [SchemaV11Fact]
     public async Task StaffOnly_AllEndpoints_ValidateInputsAndDoNotWriteOnFailure()
     {
         await using var f = await Fixture.CreateAsync();
