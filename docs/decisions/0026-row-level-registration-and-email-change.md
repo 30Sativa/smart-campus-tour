@@ -1,4 +1,4 @@
-# ADR-0025: Row-level registration decisions and email changes
+# ADR-0026: Row-level registration decisions and email changes
 
 - Status: owner-authorized backend implementation boundary, 2026-10-28
 - Authority: Report 3 SRS v0.2 aligned to Phiếu v1.9; Wave C scope

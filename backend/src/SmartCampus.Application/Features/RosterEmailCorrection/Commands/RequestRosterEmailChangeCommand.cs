@@ -54,6 +54,8 @@ public sealed class RequestRosterEmailChangeCommandHandler(IRegistrationReposito
         RowVersionToken.EnsureCurrent(row.RowVersion, request.ExpectedRowVersion);
         if (row.ParticipationState != RosterParticipationStates.Accepted)
             throw new ConflictException("Chỉ dòng đã được chấp nhận mới có thể yêu cầu đổi email.", "ROW_NOT_ACCEPTED");
+        if (await requests.FindPendingForRowAsync(row.Id, ct) is not null)
+            throw new ConflictException("Dòng này đã có yêu cầu đổi email đang chờ Staff xử lý.", "EMAIL_CHANGE_PENDING");
         if (RegistrationEmail.Normalize(row.Email) == email)
             throw new ConflictException("Email đề nghị phải khác email hiện tại.", "EMAIL_UNCHANGED");
         if (registration.RosterRows.Any(other => other.IsActive && other.Id != row.Id &&

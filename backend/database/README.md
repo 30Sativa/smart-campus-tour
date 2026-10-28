@@ -27,22 +27,31 @@ SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 
-### Bootstrap compatibility and runtime permissions (2026-10-19)
+### Bootstrap compatibility and runtime permissions (2026-10-28)
 
 Treat the deployed snapshot as immutable, including comments. Put changing
 business explanations in docs/ADRs; in particular ADR-0017 freezes Route
 configuration from any Tour reference even if an older SQL comment mentions READY.
-The initializer hashes the entire LF-normalized source and checks its marker via
-`backend/database/smart-campus-tour-bootstrap-check.sql`. Only this audited pair
-is compatible: current `96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
-and prior `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`.
-They differ only in two Route/dwell comments. Tests reconstruct those exact
-changes and check both hashes. Recognizing the old marker preserves it and all
-data; no automatic marker rewrite or unknown-schema adoption is performed.
-Any further executable schema change needs its own ADR/database change process.
+The Compose initializer creates an empty database from
+`smart-campus-tour-schema-v1.4.sql`; its bootstrap check requires the exact
+LF-normalized v1.4 hash marker before granting runtime permissions. The two
+historical v1.1 marker values (`96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
+and `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`)
+remain recognized as the accepted comment-only pair, but now return
+`UPGRADE_REQUIRED`: they do not prove the v1.4 tables/columns exist. The
+initializer refuses them without changing data or markers, and also refuses
+unknown or unmarked non-empty schemas. To upgrade existing data, take and verify
+a full backup, obtain the normal database-change approval, then apply the
+documented additive patches in order (v1.1→v1.2, v1.2→v1.3, v1.3→v1.4),
+re-scaffold/review, and deploy only after the resulting schema and permissions
+are verified. No Compose startup performs that migration or changes an older
+marker. Any executable schema change needs its own ADR/database change process.
 
-Apply `backend/database/smart-campus-tour-runtime-permissions.sql` after the log
-role script for runtime business permissions. Route/RouteStops CRUD and Tour
+For a fresh v1.4 database the initializer applies, in order, the full schema,
+the log role, map/POI grants, Route revision grants, then creates the runtime
+user and applies `backend/database/smart-campus-tour-runtime-permissions.sql`.
+That runtime script grants the v1.4 email request table only SELECT/INSERT/UPDATE
+and leaves DELETE denied; it does not skip missing objects. Route/RouteStops CRUD and Tour
 SELECT/INSERT/UPDATE are included; Tour DELETE and runtime robot/branch writes
 are absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
 the real Route/Tour preparation pipeline under an impersonated restricted user.
@@ -116,7 +125,7 @@ and a two-minute window. See
 `backend/docs/representative-registration.md` and
 `backend/docs/registration-review.md` for API details and boundaries.
 
-## v1.4 row-level registration and email change (ADR-0025)
+## v1.4 row-level registration and email change (ADR-0026)
 
 `smart-campus-tour-schema-v1.4.sql` is the snapshot for an empty database and
 retains v1.3 tables. Existing v1.3 schemas require

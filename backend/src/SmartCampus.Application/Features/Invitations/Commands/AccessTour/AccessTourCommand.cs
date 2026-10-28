@@ -31,9 +31,14 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
     {
         if (!settings.Enabled) throw Invalid();
         var tokenHash = command.SessionToken is null ? null : codes.Hash("browser-session:" + command.SessionToken);
+        var deviceHash = command.DeviceToken is null ? null : codes.Hash("browser-device:" + command.DeviceToken);
         var id = command.Operation == "join"
             ? await repository.FindInvitationIdAsync(command.TourId, codes.Hash(command.AccessCode!), ct)
-            : tokenHash is null ? null : await repository.FindSessionInvitationIdAsync(command.TourId, tokenHash, ct);
+            : tokenHash is not null
+                ? await repository.FindSessionInvitationIdAsync(command.TourId, tokenHash, ct)
+                : deviceHash is not null
+                    ? await repository.FindDeviceInvitationIdAsync(command.TourId, deviceHash, ct)
+                    : null;
         if (id is null) {
             if (command.Operation == "leave") return new(null, null, null);
             throw Invalid();
@@ -61,10 +66,12 @@ public sealed class AccessTourCommandHandler(IStudentAccessRepository repository
         if (active is not null)
         {
             var sameSession = current?.Id == active.Id;
-            var sameDevice = deviceToken is not null && active.DeviceTokenHash is not null &&
-                CryptographicOperations.FixedTimeEquals(active.DeviceTokenHash, codes.Hash("browser-device:" + deviceToken));
-            var withinReconnectGrace = active.LastSeenAt is not null && active.LastSeenAt >= now.AddMinutes(-2);
-            if (!sameSession && !(command.Operation == "join" && sameDevice && withinReconnectGrace))
+            var sameDevice = deviceHash is not null && active.DeviceTokenHash is not null &&
+                CryptographicOperations.FixedTimeEquals(active.DeviceTokenHash, deviceHash);
+            var withinReconnectGrace = ViewerReconnectPolicy.IsWithinGrace(active.LastSeenAt, now);
+            if (sameSession && !withinReconnectGrace) throw Invalid();
+            if (!sameSession && sameDevice && !withinReconnectGrace) throw Invalid();
+            if (!sameSession && !(sameDevice && withinReconnectGrace))
                 throw new ConflictException("Lời mời đang được dùng trên browser khác. Liên hệ đại diện để thu hồi/cấp mã mới.", "INVITATION_IN_USE");
             if (sameSession && active.DeviceTokenHash is not null && !sameDevice)
                 throw new ConflictException("Phiên không khớp browser đã liên kết với lời mời.", "INVITATION_IN_USE");

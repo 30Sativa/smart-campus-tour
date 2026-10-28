@@ -11,6 +11,10 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
     public Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct) =>
         context.BrowserSessions.AsNoTracking().Where(s => s.Invitation.RosterRow.Registration.TourId == tourId && s.SessionTokenHash == tokenHash)
             .Select(s => (Guid?)s.InvitationId).SingleOrDefaultAsync(ct);
+    public Task<Guid?> FindDeviceInvitationIdAsync(Guid tourId, byte[] deviceTokenHash, CancellationToken ct) =>
+        context.BrowserSessions.AsNoTracking().Where(s => s.EndedAt == null && s.DeviceTokenHash == deviceTokenHash &&
+                s.Invitation.RosterRow.Registration.TourId == tourId)
+            .Select(s => (Guid?)s.InvitationId).SingleOrDefaultAsync(ct);
     public Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct) =>
         context.Invitations.Include(i => i.RosterRow).ThenInclude(r => r.Registration)
             .Include(i => i.BrowserSessions.Where(s => s.EndedAt == null))

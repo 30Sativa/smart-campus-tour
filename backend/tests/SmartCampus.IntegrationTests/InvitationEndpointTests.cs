@@ -166,6 +166,118 @@ public sealed class InvitationEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task RosterDiffCanKeepA_RemoveB_AndAddCPendingWithoutChangingAAccess()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        var representative = await LoginAsync(host.Client, "rep.one");
+        var staff = await LoginAsync(host.Client, "review.staff");
+        f.Bind(host.Client, representative);
+        var registrationId = await ApproveAsync(f, staff);
+        var detail = await f.DataAsync($"/registrations/{registrationId}");
+        var originalRows = detail.GetProperty("roster").EnumerateArray().ToArray();
+        var rowAId = originalRows[0].GetProperty("id").GetGuid();
+        var rowBId = originalRows[1].GetProperty("id").GetGuid();
+
+        await using var invitationDb = f.Context();
+        var invitationA = await invitationDb.Invitations.Where(item => item.RosterRowId == rowAId).Select(item => item.Id).SingleAsync();
+        var invitationB = await invitationDb.Invitations.Where(item => item.RosterRowId == rowBId).Select(item => item.Id).SingleAsync();
+        var sessionA = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationA));
+        var sessionB = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationB));
+        Assert.Equal(HttpStatusCode.OK, sessionA.Status);
+        Assert.Equal(HttpStatusCode.OK, sessionB.Status);
+
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        var input = Input(tour, "Group", "viewer@example.test") with
+        {
+            Roster =
+            [
+                new(2, "INDIVIDUAL", "Same name", "viewer@example.test", null, rowAId),
+                new(6, "INDIVIDUAL", "New viewer", "new@example.test", null)
+            ]
+        };
+        var update = await f.SendAsync(HttpMethod.Put, $"/registrations/{registrationId}",
+            new { input, expectedRowVersion = Version(detail) });
+        Assert.Equal(HttpStatusCode.OK, update.Status);
+
+        await using (var db = f.Context())
+        {
+            var rowA = await db.RosterRows.SingleAsync(row => row.Id == rowAId);
+            var rowB = await db.RosterRows.SingleAsync(row => row.Id == rowBId);
+            var rowC = await db.RosterRows.SingleAsync(row => row.RegistrationId == registrationId && row.Id != rowAId && row.Id != rowBId);
+            Assert.True(rowA.IsActive);
+            Assert.Equal("ACCEPTED", rowA.ParticipationState);
+            Assert.False(rowB.IsActive);
+            Assert.Equal("REMOVED", rowB.ParticipationState);
+            Assert.True(rowC.IsActive);
+            Assert.Equal("PENDING", rowC.ParticipationState);
+            var a = await db.Invitations.SingleAsync(invitation => invitation.Id == invitationA);
+            var b = await db.Invitations.SingleAsync(invitation => invitation.Id == invitationB);
+            Assert.Null(a.RevokedAt);
+            Assert.NotNull(b.RevokedAt);
+            Assert.Equal(1, await db.BrowserSessions.CountAsync(session => session.InvitationId == invitationA && session.EndedAt == null));
+            Assert.Equal(0, await db.BrowserSessions.CountAsync(session => session.InvitationId == invitationB && session.EndedAt == null));
+            Assert.Equal("INVITATION_REVOKED", (await db.BrowserSessions.SingleAsync(session => session.InvitationId == invitationB)).EndReason);
+            Assert.False(await db.Invitations.AnyAsync(invitation => invitation.RosterRowId == rowC.Id));
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session", cookie: CookieHeader(sessionA.Cookie!))).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session", cookie: CookieHeader(sessionB.Cookie!))).Status);
+    }
+
+    [SchemaV11Fact]
+    public async Task RosterUpdateEnforcesTenRowsAndRollsBackInvalidOrLateFailure()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString);
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var tour = await f.DataAsync($"/tours/{f.TourId}");
+        var created = await f.SendAsync(HttpMethod.Post, $"/tours/{f.TourId}/registrations",
+            Input(tour, "Capacity", "capacity-0@example.test"), Guid.NewGuid());
+        var id = created.Data.GetProperty("id").GetGuid();
+        var detail = await f.DataAsync($"/registrations/{id}");
+        var originalId = detail.GetProperty("roster")[0].GetProperty("id").GetGuid();
+        var roster = Enumerable.Range(0, 10).Select(index => new SmartCampus.Application.Features.Registrations.RosterInput(
+            index + 2, "INDIVIDUAL", $"Viewer {index}", $"capacity-{index}@example.test", null,
+            index == 0 ? originalId : null)).ToArray();
+        var input = Input(tour, "Capacity", "capacity-0@example.test") with { Roster = roster };
+        var atLimit = await f.SendAsync(HttpMethod.Put, $"/registrations/{id}", new { input, expectedRowVersion = Version(detail) });
+        Assert.Equal(HttpStatusCode.OK, atLimit.Status);
+        detail = await f.DataAsync($"/registrations/{id}");
+        Assert.Equal(10, detail.GetProperty("roster").GetArrayLength());
+
+        var tooMany = roster.Append(new SmartCampus.Application.Features.Registrations.RosterInput(
+            12, "INDIVIDUAL", "Viewer 10", "capacity-10@example.test", null)).ToArray();
+        var rejected = await f.SendAsync(HttpMethod.Put, $"/registrations/{id}", new
+        {
+            input = input with { Roster = tooMany }, expectedRowVersion = Version(detail)
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.Status);
+        Assert.Equal(10, await f.Database.CountRowsAsync("dbo.RosterRows"));
+
+        var invalid = await f.SendAsync(HttpMethod.Put, $"/registrations/{id}", new
+        {
+            input = input with { Roster = [roster[0], roster[1] with { Email = roster[0].Email }] },
+            expectedRowVersion = Version(detail)
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.Status);
+        Assert.Equal(10, await f.Database.CountRowsAsync("dbo.RosterRows"));
+
+        await f.Database.ExecuteAsync("CREATE TRIGGER dbo.FailRegistrationUpdate ON dbo.AuditLogs AFTER INSERT AS BEGIN IF EXISTS (SELECT 1 FROM inserted WHERE Action='REGISTRATION_UPDATED') THROW 51013, 'Test-only registration update failure.', 1; END;");
+        var failed = await f.SendAsync(HttpMethod.Put, $"/registrations/{id}", new
+        {
+            input = input with { Roster = [roster[0], new(20, "INDIVIDUAL", "Late", "late@example.test", null)] },
+            expectedRowVersion = Version(detail)
+        });
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.Status);
+        await f.Database.ExecuteAsync("DROP TRIGGER dbo.FailRegistrationUpdate;");
+        await using var db = f.Context();
+        Assert.Equal(10, await db.RosterRows.CountAsync(row => row.RegistrationId == id && row.IsActive));
+        Assert.Equal(10, await db.RosterRows.CountAsync(row => row.RegistrationId == id));
+        Assert.Equal(1, await db.AuditLogs.CountAsync(audit => audit.Action == "REGISTRATION_UPDATED"));
+    }
+
+    [SchemaV11Fact]
     public async Task TerminalAndExpiredAccess_CannotSendOrExtendExpiry_EndEarlyCanStillRevoke()
     {
         await using var f = await Fixture.CreateAsync();
@@ -283,6 +395,59 @@ public sealed class InvitationEndpointTests
         Assert.Equal("IDLE_TIMEOUT", (await db.BrowserSessions.SingleAsync(s => s.EndedAt != null)).EndReason);
         await f.Database.ExecuteAsync("UPDATE dbo.Tours SET State='COMPLETED';");
         Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "join", code)).Status);
+    }
+
+    [SchemaV11Fact]
+    public async Task ReconnectGraceRejectsStaleSessionCookieAndRecoversFromDeviceCookieOnly()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(f.Database.ConnectionString, Settings());
+        f.Bind(host.Client, await LoginAsync(host.Client, "rep.one"));
+        var registration = await ApproveAsync(f, await LoginAsync(host.Client, "review.staff"));
+        var item = (await f.SendAsync(HttpMethod.Get, Path(registration))).Data.GetProperty("items")[0];
+        var invitationId = item.GetProperty("id").GetGuid();
+        var joined = await AccessAsync(host.Client, f.TourId, "join", await CodeAsync(f, invitationId));
+        Assert.Equal(HttpStatusCode.OK, joined.Status);
+        var cookies = joined.Cookie!.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => value.Split(';')[0]).ToArray();
+        Assert.Equal(2, cookies.Length);
+        var bothCookies = string.Join("; ", cookies);
+        var sessionCookie = cookies.Single(cookie => !cookie.Contains("device", StringComparison.OrdinalIgnoreCase));
+        var deviceCookie = cookies.Single(cookie => cookie.Contains("device", StringComparison.OrdinalIgnoreCase));
+
+        var staleLastSeen = DateTimeOffset.UtcNow.AddMinutes(-3);
+        await using (var db = f.Context())
+        {
+            var session = await db.BrowserSessions.SingleAsync(row => row.InvitationId == invitationId && row.EndedAt == null);
+            session.LastSeenAt = staleLastSeen;
+            await db.SaveChangesAsync();
+        }
+        var stale = await AccessAsync(host.Client, f.TourId, "session", cookie: bothCookies);
+        Assert.Equal(HttpStatusCode.Unauthorized, stale.Status);
+        Assert.Null(stale.Cookie);
+        var deviceOnlyStale = await AccessAsync(host.Client, f.TourId, "session", cookie: deviceCookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, deviceOnlyStale.Status);
+        Assert.Null(deviceOnlyStale.Cookie);
+        await using (var db = f.Context())
+        {
+            var session = await db.BrowserSessions.SingleAsync(row => row.InvitationId == invitationId && row.EndedAt == null);
+            Assert.InRange((session.LastSeenAt!.Value - staleLastSeen).Duration(), TimeSpan.Zero, TimeSpan.FromMilliseconds(2));
+            Assert.True(session.LastSeenAt < DateTimeOffset.UtcNow.AddMinutes(-2));
+        }
+
+        await using (var db = f.Context())
+        {
+            var session = await db.BrowserSessions.SingleAsync(row => row.InvitationId == invitationId && row.EndedAt == null);
+            session.LastSeenAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
+        var deviceOnlyReconnect = await AccessAsync(host.Client, f.TourId, "session", cookie: deviceCookie);
+        Assert.Equal(HttpStatusCode.OK, deviceOnlyReconnect.Status);
+        Assert.NotNull(deviceOnlyReconnect.Cookie);
+        Assert.Contains($"campus_tour_{f.TourId:N}", deviceOnlyReconnect.Cookie!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await AccessAsync(host.Client, f.TourId, "session", cookie: sessionCookie)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await AccessAsync(host.Client, f.TourId, "session",
+            cookie: CookieHeader(deviceOnlyReconnect.Cookie!))).Status);
     }
 
     [SchemaV11Fact]

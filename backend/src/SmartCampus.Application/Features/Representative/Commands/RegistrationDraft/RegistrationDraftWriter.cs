@@ -13,9 +13,9 @@ internal static class RegistrationDraftWriter
     {
         var active = registration.RosterRows.Where(row => row.IsActive).ToDictionary(row => row.Id);
         var invitationByRow = invitations.ToDictionary(invitation => invitation.RosterRowId);
-        if (active.Count > 0 && input.Roster.Any(row => row.RowId is null))
-            throw new ConflictException("Cập nhật danh sách phải giữ RowId của các dòng hiện có; dòng mới không gửi RowId.", "ROW_ID_REQUIRED");
-
+        // A roster update is a stable-identity diff: existing IDs retain their rows,
+        // omitted active IDs are removals, and entries without IDs are additions.
+        // Do not interpret a mixed removal/addition as replacing every existing row.
         var seen = new HashSet<Guid>();
         foreach (var item in input.Roster.Where(row => row.RowId is not null))
         {

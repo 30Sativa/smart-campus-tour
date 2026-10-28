@@ -2,13 +2,13 @@
 CAMPUS TOUR DT-AMR — DATABASE SCHEMA SNAPSHOT v1.4
 
 Additive Database First baseline: backend/database/smart-campus-tour-schema-v1.3.sql
-Decision: docs/decisions/0025-row-level-registration-and-email-change.md
+Decision: docs/decisions/0026-row-level-registration-and-email-change.md
 Nguồn nghiệp vụ hiện hành:
 - docs/requirements/campus-tour-scope.md
 - docs/decisions/0009-review-1-tour-business-scope.md
 - docs/decisions/0010-personal-access-code-entry.md
 - docs/decisions/0011-student-data-use-for-tour.md
-- docs/decisions/0025-row-level-registration-and-email-change.md
+- docs/decisions/0026-row-level-registration-and-email-change.md
 
 Mục tiêu của v1.1:
 - Thay flow group-code + matching tên/lớp bằng invitation + mã truy cập + browser session.

@@ -15,6 +15,11 @@ watch it. Creating a registration or adding a row is blocked from 48 hours
 before the scheduled start. Existing rows in an update must include their
 current `rowId`; omitting a row removes that row and revokes only its own
 invitation/session. A newly added row omits `rowId` and starts `PENDING`.
+One update may mix retained rows, omitted-row removals, and additions. Supplied
+IDs must identify active rows in this registration; unknown or inactive IDs
+are rejected. This is a stable-row diff, not whole-list replacement: keep the
+IDs for rows that remain. The active-row limit remains 10, and only additions
+are blocked by the 48-hour cutoff.
 
 `GET /api/representative/registrations/{id}` returns roster rows including
 `id`, `participationState`, `rowVersion`, invitation row version and allowed

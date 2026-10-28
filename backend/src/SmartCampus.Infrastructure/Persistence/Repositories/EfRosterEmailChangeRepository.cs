@@ -25,6 +25,10 @@ public sealed class EfRosterEmailChangeRepository(ApplicationDbContext context) 
         context.RosterEmailChangeRequests.AsNoTracking().SingleOrDefaultAsync(request =>
             request.RequestedByUserId == requester && request.RequestId == requestId, ct);
 
+    public Task<RosterEmailChangeRequest?> FindPendingForRowAsync(Guid rowId, CancellationToken ct) =>
+        context.RosterEmailChangeRequests.AsNoTracking().SingleOrDefaultAsync(request =>
+            request.RosterRowId == rowId && request.State == "PENDING", ct);
+
     public async Task<bool> IsEmailReservedAsync(Guid tourId, Guid exceptRowId, string normalizedEmail, CancellationToken ct)
     {
         var rowReservation = await context.RosterRows.AnyAsync(row => row.Id != exceptRowId && row.IsActive &&

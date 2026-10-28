@@ -174,7 +174,7 @@ implementation status remain governed here and by the relevant ADR.
 The backend persistence baseline has advanced through v1.4; this branch adds
 the row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and
-[ADR-0025](decisions/0025-row-level-registration-and-email-change.md). The
+[ADR-0026](decisions/0026-row-level-registration-and-email-change.md). The
 developer's local `SmartCampusTourV11` remains an older database and is not
 altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
@@ -1270,7 +1270,13 @@ filtered UNIQUE enforce one active session; expired sessions close before INSERT
 The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
 Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
 session for configured SessionIdleMinutes (default 10), bounded by invitation
-expiry. First successful entry records INVITATION_ENTERED once per invitation.
+expiry. Reconnect/heartbeat is a separate two-minute grace from the active
+session's `LastSeenAt`: both the session and device cookies may be presented,
+or a matching device cookie alone may recover that browser by rotating the
+session token. A stale session cookie does not bypass the grace, and the
+10-minute idle lease does not enlarge it. The Tour-scoped device token is a
+browser credential, never an IP-derived identity. First successful entry
+records INVITATION_ENTERED once per invitation.
 
 Student GET /api/student/tours/{tourId}/view (same cookie and exact-origin check,
 no body, `Cache-Control: no-store`) returns the read-only route for the session's

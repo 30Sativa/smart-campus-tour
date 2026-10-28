@@ -10,6 +10,7 @@ public interface IStudentAccessRepository
 {
     Task<Guid?> FindInvitationIdAsync(Guid tourId, byte[] codeHash, CancellationToken ct);
     Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct);
+    Task<Guid?> FindDeviceInvitationIdAsync(Guid tourId, byte[] deviceTokenHash, CancellationToken ct);
     /// <summary>Loads the tracked invitation/access context with open sessions only, after the caller locks its Tour.</summary>
     Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct);
     /// <summary>
