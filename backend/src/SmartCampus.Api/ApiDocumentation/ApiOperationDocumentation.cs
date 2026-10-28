@@ -36,20 +36,8 @@ internal static class ApiOperationDocumentation
             ["MapPoiController.VerificationQueue"] = ("[Technical Staff] Xem hàng đợi kiểm chứng POI", "Lists submitted current POI revisions that still need a result, optionally filtered by `mapVersionId`. Requires TechnicalStaff. Queue eligibility is based on the current revision and its navigation fingerprint; a prior result remains tied to its revision/fingerprint and is not copied to a changed movement configuration. " + JwtErrors),
             ["MapPoiController.RecordVerification"] = ("[Technical Staff] Ghi nhận PASS/FAIL cho revision POI", "Appends one technical result for proposal `id` and `revisionNumber`. Body includes `requestId`, `expectedRevisionNumber`, `expectedRowVersion`, `robotCode`, `resultCode`, reach/stop/localization/camera observations, and evidence or failure reason. Requires TechnicalStaff. PASS requires all required observations and matching deployed-map evidence for the exact `mapVersionId`/checksum and navigation fingerprint; FAIL requires a failed observation and reason. This is recorded human evidence, not proof the backend executed a physical test. Stale state/already-recorded result returns 409; missing map/robot/proposal returns 404; invalid evidence returns 400. " + JwtErrors),
 
-            ["StaffPoisController.List"] = ("[LEGACY — Tour Staff] Liệt kê POI catalog theo mô hình cũ", StaffLegacy + " Lists legacy POI catalog records. For the new POI workflow use only `/api/staff/poi-proposals` and Technical verification at `/api/technical/poi-verifications` plus `/api/technical/poi-proposals/{id}/revisions/{revisionNumber}/verification`. These APIs do not replace Route, Tour, or Registration workflows."),
-            ["StaffPoisController.Get"] = ("[LEGACY — Tour Staff] Xem POI catalog theo mô hình cũ", StaffLegacy + " Reads legacy POI `id`. For the new POI workflow use only `/api/staff/poi-proposals` and the two Technical verification APIs. This legacy catalog is not the revisioned map-linked workflow."),
-            ["StaffPoisController.Create"] = ("[LEGACY — Tour Staff] Tạo POI catalog theo mô hình cũ", StaffLegacy + " Creates a legacy POI initially inactive. For the new POI workflow use only `/api/staff/poi-proposals` and the Technical verification APIs; this endpoint does not create a versioned proposal."),
-            ["StaffPoisController.Update"] = ("[LEGACY — Tour Staff] Cập nhật POI catalog theo mô hình cũ", StaffLegacy + " Updates legacy POI `id`. This is not a versioned proposal/revision. For the new POI workflow use only `/api/staff/poi-proposals` and the Technical verification APIs."),
-            ["StaffPoisController.Activate"] = ("[LEGACY — Tour Staff] Kích hoạt POI catalog theo mô hình cũ", StaffLegacy + " Activates legacy POI `id` using `expectedRowVersion`; stale row version returns 409. For the new POI workflow use only `/api/staff/poi-proposals` and the Technical verification APIs."),
-            ["StaffPoisController.Deactivate"] = ("[LEGACY — Tour Staff] Ngừng kích hoạt POI catalog theo mô hình cũ", StaffLegacy + " Deactivates legacy POI `id` using `expectedRowVersion`; stale row version returns 409."),
-
-            ["StaffRoutesController.List"] = ("[LEGACY — Tour Staff] Liệt kê tuyến theo mô hình hiện tại", StaffLegacy + " Lists persisted Route records. Route certification against exact map/POI versions and schedule readiness are not implemented here."),
-            ["StaffRoutesController.Get"] = ("[LEGACY — Tour Staff] Xem tuyến theo mô hình hiện tại", StaffLegacy + " Reads persisted Route `id`; missing route returns 404. This is not a versioned route-verification result."),
-            ["StaffRoutesController.Create"] = ("[LEGACY — Tour Staff] Tạo tuyến theo mô hình hiện tại", StaffLegacy + " Creates a persisted Route, initially inactive. Route versioning/certification and schedule readiness are not implemented here."),
-            ["StaffRoutesController.Update"] = ("[LEGACY — Tour Staff] Cập nhật tuyến theo mô hình hiện tại", StaffLegacy + " Updates persisted Route `id`; the operation does not establish route certification."),
-            ["StaffRoutesController.Activate"] = ("[LEGACY — Tour Staff] Kích hoạt tuyến catalog", StaffLegacy + " Activates the current persisted Route using `expectedVersion`. Stale version returns 409; activation is not route technical verification."),
-            ["StaffRoutesController.Deactivate"] = ("[LEGACY — Tour Staff] Ngừng kích hoạt tuyến catalog", StaffLegacy + " Deactivates the current persisted Route using `expectedVersion`. Stale version returns 409."),
-            ["StaffRoutesController.Delete"] = ("[LEGACY — Tour Staff] Xóa tuyến catalog", StaffLegacy + " Deletes persisted Route `id` using `expectedVersion`. Stale or referenced-state conflicts return 409; missing Route returns 404."),
+            ["StaffRoutesController.List"] = ("[LEGACY — Tour Staff] Đọc tuyến catalog cũ cho Tour hiện hành", StaffLegacy + " Read-only compatibility projection needed by the not-yet-migrated legacy Tour flow. Authoring uses `/api/routes` and `/api/staff/routes`; this endpoint cannot create or edit a versioned route."),
+            ["StaffRoutesController.Get"] = ("[LEGACY — Tour Staff] Đọc chi tiết tuyến cũ cho Tour hiện hành", StaffLegacy + " Reads a persisted legacy Route for existing Tour detail/selection. It does not return a RouteRevision or certify a map/POI tuple. Versioned authoring uses `/api/routes/{routeId}/revisions`."),
 
             ["RouteRevisionsController.Create"] = ("[Tour Staff] Tạo tuyến revision nháp", "Creates a versioned route identity and immutable revision 1 from `mapVersionId` and exact `poiRevisionId` values. Requires Staff (product label Tour Staff). Each selected POI must have an effective navigation PASS for the same exact map version; request includes `requestId`, `expectedCurrentRevision=0`, route poses, ordered stops and dwell. This stores manual preparation data only; it does not submit, verify, schedule or activate a tour. Invalid pose/input returns 400; missing IDs 404; stale, reused idempotency key, mismatched map or missing/currently superseded POI PASS returns 409. " + JwtErrors),
             ["RouteRevisionsController.Revise"] = ("[Tour Staff] Tạo route revision tiếp theo", "Appends an immutable draft revision under the existing versioned Route ID. `expectedCurrentRevision` protects concurrent edits; map/POI revision IDs are exact references, never resolved to latest by read. A new navigation fingerprint requires its own whole-route test; earlier revisions and test evidence remain available. Requires Staff. Validation returns 400; missing Route/map/POI 404; stale revision, invalidated POI evidence or idempotency conflict 409. " + JwtErrors),
@@ -65,16 +53,13 @@ internal static class ApiOperationDocumentation
             ["StaffToursController.Cancel"] = ("[LEGACY — Tour Staff] Hủy tour legacy trước khi bắt đầu", StaffLegacy + " Cancels a pre-Start Tour under current access-revocation behavior. This is not runtime End Early; F-14 remains pending. It does not release a versioned robot reservation because this legacy Tour model has none. " + JwtErrors),
 
             ["StaffRegistrationsController.List"] = ("[Tour Staff] Liệt kê hồ sơ và dòng đang chờ", "Lists registration summaries; review age comes from `submittedAt`, and pending row/email decisions remain separate from delivery or session state. Requires Staff JWT. Invalid filters return 400; unauthorized roles 401/403. " + JwtErrors),
-            ["StaffRegistrationsController.Get"] = ("[Tour Staff] Xem trạng thái từng dòng đăng ký", "Reads registration and current row IDs, `participationState`, rowVersion, review metadata and per-row action eligibility. Requires Staff JWT. Use the row accept/reject endpoints; the aggregate decision is retained only for a one-row registration. " + JwtErrors),
-            ["StaffRegistrationsController.Approve"] = ("[LEGACY — Tour Staff] Duyệt hồ sơ một dòng", StaffLegacy + " Compatibility action for a registration with exactly one active pending row. Multi-row decisions return 409 `ROW_REVIEW_REQUIRED`; use `/{id}/rows/{rowId}/accept` for each row. This does not infer decisions from a registration-level state." + JwtErrors),
-            ["StaffRegistrationsController.Reject"] = ("[LEGACY — Tour Staff] Từ chối hồ sơ một dòng", StaffLegacy + " Compatibility action for a registration with exactly one active pending row. Multi-row decisions return 409 `ROW_REVIEW_REQUIRED`; use `/{id}/rows/{rowId}/reject`. A rejection reason is required." + JwtErrors),
+            ["StaffRegistrationsController.Get"] = ("[Tour Staff] Xem trạng thái từng dòng đăng ký", "Reads registration and current row IDs, `participationState`, rowVersion, review metadata and per-row action eligibility. Requires Staff JWT. Review each row through its accept/reject action; aggregate registration decisions are not exposed." + JwtErrors),
             ["StaffRegistrationsController.AcceptRow"] = ("[Tour Staff] Chấp nhận một điểm xem", "Accepts only the active PENDING row identified by `rowId`. Body includes `requestId`, expected Tour/registration/row rowVersions. Only Staff may review; acceptance changes that row to ACCEPTED and makes it eligible for its own invitation. Stale/state conflicts return 409; unknown registration/row returns 404; invalid input 400." + JwtErrors),
             ["StaffRegistrationsController.RejectRow"] = ("[Tour Staff] Từ chối một điểm xem", "Rejects only the active PENDING row identified by `rowId`; body requires `requestId`, expected Tour/registration/row rowVersions and a reason. Other rows and credentials remain unchanged. Stale/state conflicts return 409; unknown registration/row returns 404; invalid input 400." + JwtErrors),
             ["StaffRegistrationsController.EmailChangeRequests"] = ("[Tour Staff] Liệt kê yêu cầu đổi email", "Lists email-change requests with old/proposed addresses and review versions; the endpoint is Staff-only and does not mutate invitation access." + JwtErrors),
             ["StaffRegistrationsController.EmailChangeRequest"] = ("[Tour Staff] Xem yêu cầu đổi email", "Reads the request and current request/Tour/registration/row versions needed for a conditional review. Missing request returns 404; only Staff may view." + JwtErrors),
             ["StaffRegistrationsController.AcceptEmailChange"] = ("[Tour Staff] Chấp nhận yêu cầu đổi email", "Accepts a pending request using its request rowVersion plus expected Tour/registration/row versions. In one Tour-first transaction it updates only the target row, rotates its invitation credential and closes its old browser session; delivery is queued after commit. Stale/conflicting state returns 409; invalid input 400; missing request 404." + JwtErrors),
             ["StaffRegistrationsController.RejectEmailChange"] = ("[Tour Staff] Từ chối yêu cầu đổi email", "Rejects a pending email-change request using version guards and optional reason. The approved email, current credential and session remain unchanged. Stale/conflicting state returns 409; invalid input 400; missing request 404." + JwtErrors),
-            ["StaffRegistrationsController.CorrectEmail"] = ("[LEGACY — Admin] Direct email correction is disabled", AdminLegacy + " This old endpoint still requires Admin but now returns 409 `LEGACY_EMAIL_CORRECTION_DISABLED`; it cannot bypass Representative request and Staff review." + JwtErrors),
 
             ["AuthController.Login"] = ("Đăng nhập và nhận access token", "Authenticates username/password and sets the refresh-token cookie. Anonymous endpoint; request origin must be allowed by backend configuration. Invalid credentials are rejected; login rate limiting applies. The response contains the JWT `accessToken` and role."),
             ["AuthController.Refresh"] = ("Làm mới phiên đăng nhập", "Uses the HttpOnly refresh cookie to issue a new access token and refresh cookie. Anonymous transport endpoint; the cookie and allowed request origin are required. Invalid/expired or blocked sessions return 401/403 and clear the refresh cookie."),
@@ -166,14 +151,8 @@ internal static class ApiOperationDocumentation
         }
 
         if (controller == "AdminAccounts") return ("Admin — Accounts", summary, description);
-        if (controller == "StaffPois")
-            return path.StartsWith("/api/admin/pois", StringComparison.Ordinal)
-                ? ("LEGACY — Admin POI URL (Staff-only alias)", summary, description + " This old Admin URL is a Staff-only compatibility alias. For the new POI workflow, use only `/api/staff/poi-proposals` and Technical verification at `/api/technical/poi-verifications` plus `/api/technical/poi-proposals/{id}/revisions/{revisionNumber}/verification`; these do not replace Route, Tour, or Registration APIs.")
-                : ("LEGACY — Tour Staff POI Catalog", summary, description);
         if (controller == "StaffRoutes")
-            return path.StartsWith("/api/admin/routes", StringComparison.Ordinal)
-                ? ("LEGACY — Admin Routes URL (Staff-only alias)", summary, description + " The old Admin URL is currently authorized for Staff only.")
-                : ("LEGACY — Tour Staff Routes", summary, description);
+            return ("LEGACY — Tour Staff Route Reads", summary, description);
         if (controller == "RouteRevisions")
         {
             if (path == "/api/routes")
@@ -185,17 +164,8 @@ internal static class ApiOperationDocumentation
             return ("Route Revisions — Staff / Technical Staff", summary, description);
         }
         if (controller == "StaffTours")
-            return path.StartsWith("/api/admin/tours", StringComparison.Ordinal)
-                ? ("LEGACY — Admin Tours URL (Staff-only alias)", summary, description + " The old Admin URL is currently authorized for Staff only.")
-                : ("LEGACY — Tour Staff Tours", summary, description);
-        if (controller == "StaffRegistrations")
-        {
-            if (path.Contains("/roster/", StringComparison.Ordinal))
-                return ("LEGACY — Admin Registration Email Correction", summary, description);
-            return path.StartsWith("/api/admin/registrations", StringComparison.Ordinal)
-                ? ("LEGACY — Admin Registration Review URL (Staff-only alias)", summary, description + " This review URL currently requires Staff; the separate email-correction action still requires Admin.")
-                : ("LEGACY — Tour Staff Registration Review", summary, description);
-        }
+            return ("LEGACY — Tour Staff Tour Management", summary, description);
+        if (controller == "StaffRegistrations") return ("Tour Staff — Registration Review", summary, description);
         if (controller == "Auth") return ("Authentication", summary, description);
         if (controller == "FleetSync") return ("Robot — Fleet Sync (telemetry only)", summary, description);
         if (controller == "Invitations") return ("Invitations — Staff / Representative", summary, description);

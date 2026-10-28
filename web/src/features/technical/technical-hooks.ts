@@ -12,7 +12,11 @@ export function useMapVersions() {
 }
 
 export function usePoiProposals() {
-  return useQuery({ queryKey: keys.poiProposals, queryFn: technicalApi.listPoiProposals })
+  return useQuery({ queryKey: keys.poiProposals, queryFn: () => technicalApi.listPoiProposals() })
+}
+
+export function usePoiVerificationQueue() {
+  return useQuery({ queryKey: [...keys.poiProposals, 'verification-queue'], queryFn: () => technicalApi.listPoiVerificationQueue() })
 }
 
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */

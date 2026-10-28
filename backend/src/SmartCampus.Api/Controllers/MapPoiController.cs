@@ -104,8 +104,8 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
 
     [HttpGet("technical/poi-verifications")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
-    public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiRevisionView>>>> VerificationQueue([FromQuery] Guid? mapVersionId, CancellationToken ct) =>
-        Ok(new BaseResponse<IReadOnlyList<PoiRevisionView>> { Success = true, Message = "Verification queue retrieved.",
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PoiVerificationQueueItem>>>> VerificationQueue([FromQuery] Guid? mapVersionId, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<PoiVerificationQueueItem>> { Success = true, Message = "Verification queue retrieved.",
             Data = await sender.Send(new ListPoiVerificationQueueQuery(mapVersionId), ct) });
 
     [HttpPost("technical/poi-proposals/{id:guid}/revisions/{revisionNumber:int}/verification")]

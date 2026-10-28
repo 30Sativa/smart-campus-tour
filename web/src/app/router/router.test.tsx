@@ -219,10 +219,15 @@ describe('route table', () => {
       ['/staff/manage/tours/new', /Tạo Tour mới/],
       ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
       ['/staff/manage/registrations', /Tất cả đăng ký/],
-      ['/staff/manage/routes', /Danh mục tuyến/],
+      ['/staff/manage/routes', /Danh sách tuyến versioned/],
       ['/staff/manage', /Tổng quan chuẩn bị/],
     ])('serves %s to Staff', async (path, heading) => {
       signIn('Staff')
+      if (path === '/staff/manage/routes') {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+          success: true, data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      }
       const router = renderAt(path)
       await settled(router, path)
       expect(await screen.findByRole('heading', { name: heading, level: 1 }, { timeout: 10_000 })).toBeInTheDocument()

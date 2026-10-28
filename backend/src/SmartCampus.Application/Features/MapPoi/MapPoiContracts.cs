@@ -34,3 +34,10 @@ public sealed record PoiVerificationView(
 
 public sealed record PoiHistoryView(Guid ProposalId, IReadOnlyList<PoiRevisionView> Revisions,
     IReadOnlyList<PoiVerificationView> VerificationRecords);
+
+public sealed record PoiVerificationQueueItem(Guid ProposalId, int CurrentRevision, string RowVersion,
+    PoiRevisionView Revision)
+{
+    public string NavigationStatus => Revision.NavigationStatus;
+    public Guid? VerificationSourceRevisionId => Revision.VerificationSourceRevisionId;
+}

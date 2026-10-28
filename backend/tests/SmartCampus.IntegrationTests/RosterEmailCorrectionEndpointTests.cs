@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using SmartCampus.Application.Features.RosterEmailCorrection.Commands.CorrectRosterEmail;
 using SmartCampus.Infrastructure;
 using static SmartCampus.IntegrationTests.RepresentativeEndpointTests;
 
@@ -67,7 +66,7 @@ public sealed class RosterEmailCorrectionEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task RepresentativeRequestsEmailChange_StaffAcceptsForOneStableRow_AndLegacyAdminWriteIsDisabled()
+    public async Task RepresentativeRequestsEmailChange_StaffAcceptsForOneStableRow_AndLegacyAdminPathIsRemoved()
     {
         await using var fixture = await Fixture.CreateAsync();
         await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(
@@ -120,20 +119,19 @@ public sealed class RosterEmailCorrectionEndpointTests
             $"/api/staff/manage/roster-email-change-requests/{requestId}", token: staff))
             .Data.GetProperty("state").GetString());
 
-        // Direct Admin email mutation remains an explicitly disabled compatibility route.
+        // Direct Admin email mutation is removed; changes require the request/review workflow above.
         var legacy = await fixture.SendAsync(HttpMethod.Post, LegacyPath(registrationId, rowId), new
         {
             requestId = Guid.NewGuid(), email = "legacy@example.test", expectedRowVersion = Version(detail),
             expectedTourRowVersion = detail.GetProperty("tourRowVersion").GetString(),
             expectedRosterRowVersion = Version(changedRow)
         }, token: admin);
-        Assert.Equal(HttpStatusCode.Conflict, legacy.Status);
-        Assert.Equal("LEGACY_EMAIL_CORRECTION_DISABLED", legacy.Body.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, legacy.Status);
 
         await using var db = fixture.Context();
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "ROSTER_EMAIL_CHANGE_REQUESTED"));
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "ROSTER_EMAIL_CHANGE_ACCEPTED"));
-        Assert.Empty(await db.AuditLogs.Where(a => a.Action == CorrectRosterEmailCommandHandler.AuditAction).ToArrayAsync());
+        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "ROSTER_EMAIL_CORRECTED").ToArrayAsync());
     }
 
     [SchemaV11Fact]
