@@ -9,6 +9,10 @@ permissions.
 
 Use `GET /api/staff/manage/registrations` and
 `GET /api/staff/manage/registrations/{id}` to read rows and current rowversions.
+Filtering the list with `state=SUBMITTED` returns registrations with at least
+one active PENDING row, including a mixed registration whose aggregate state is
+APPROVED because another row was already accepted. The detail remains the
+source of per-row decision permissions and versions.
 Accept/reject a single row with:
 
 ```http

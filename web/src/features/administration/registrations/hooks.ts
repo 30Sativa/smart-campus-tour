@@ -23,7 +23,7 @@ export function useRegistrationReview(id: string) {
 export function useReviewDecision() {
   const owner = useAuthStore(s => s.user?.userId)
   const client = useQueryClient()
-  return useMutation({ mutationFn: ({ id, decision, input }: { id: string; decision: 'approve' | 'reject'; input: ReviewInput }) => api.review(id, decision, input),
+  return useMutation({ mutationFn: ({ registrationId, rowId, decision, input }: { registrationId: string; rowId: string; decision: 'accept' | 'reject'; input: ReviewInput }) => api.reviewRow(registrationId, rowId, decision, input),
     onSuccess: () => Promise.all([
       client.invalidateQueries({ queryKey: [...ownerKey(owner ?? ''), 'list'] }),
       client.invalidateQueries({ queryKey: ['representative'] }),

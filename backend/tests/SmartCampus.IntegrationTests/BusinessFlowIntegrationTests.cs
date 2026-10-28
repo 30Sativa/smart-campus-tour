@@ -220,6 +220,10 @@ public sealed class BusinessFlowIntegrationTests
             .GetProperty("participationState").GetString());
         Assert.Equal("PENDING", Assert.Single(rows, row => row.GetProperty("id").GetGuid() != acceptedRowId)
             .GetProperty("participationState").GetString());
+        Assert.Equal("APPROVED", after.GetProperty("summary").GetProperty("state").GetString());
+        var pendingQueue = await fixture.SendAsync(HttpMethod.Get,
+            "/api/staff/manage/registrations?state=SUBMITTED", token: staff);
+        Assert.Contains(pendingQueue.Data.EnumerateArray(), item => item.GetProperty("id").GetGuid() == registrationId);
         var invitationsAfter = (await fixture.SendAsync(HttpMethod.Get,
             $"/api/registrations/{registrationId}/invitations")).Data.GetProperty("items");
         var invitation = Assert.Single(invitationsAfter.EnumerateArray());

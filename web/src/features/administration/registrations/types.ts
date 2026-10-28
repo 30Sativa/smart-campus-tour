@@ -16,7 +16,8 @@ export type ReviewFilters = {
   search?: string; sort?: string; page: number; size: number; state?: RegistrationState
   tourId?: string; from?: string; to?: string
 }
-export type ReviewInput = { expectedRowVersion: string; expectedTourRowVersion: string; reason?: string }
-export type ReviewRosterRow = RosterRow & { id: string; rowVersion: string; invitationRowVersion: string | null }
+export type ReviewRosterRow = RosterRow & { id: string; participationState: 'PENDING' | 'ACCEPTED' | 'REJECTED'; rowVersion: string
+  invitationRowVersion: string | null; reviewReason?: string | null; canApprove: boolean; canReject: boolean }
+export type ReviewInput = { requestId: string; expectedRegistrationRowVersion: string; expectedTourRowVersion: string; expectedRowVersion: string; reason?: string }
 export type EmailCorrectionInput = { requestId: string; email: string; expectedRowVersion: string; expectedTourRowVersion: string
   expectedRosterRowVersion: string; expectedInvitationRowVersion: string | null }
