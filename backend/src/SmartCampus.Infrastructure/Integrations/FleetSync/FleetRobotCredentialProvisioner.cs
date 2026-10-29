@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Persistence;
 
@@ -29,24 +30,16 @@ public sealed class FleetRobotCredentialProvisioner
     {
         var current = await dbContext.Robots.AsNoTracking()
             .Where(robot => robot.RobotCode == robotCode && robot.SourceType == "PHYSICAL")
-            .Select(robot => new { robot.Id, robot.RowVersion, CredentialLength = robot.CredentialHash.Length })
+            .Select(robot => new { robot.CredentialHash, robot.RowVersion })
             .SingleOrDefaultAsync(cancellationToken);
-        if (current is null || current.CredentialLength == 32)
-            return null;
+        if (current is null) return null;
 
-        var credential = FleetRobotCredentialHash.Create();
-        var updated = await dbContext.Robots
-            .Where(robot => robot.Id == current.Id && robot.SourceType == "PHYSICAL" &&
-                robot.RowVersion == current.RowVersion && robot.CredentialHash.Length != 32)
-            .ExecuteUpdateAsync(update => update
-                    .SetProperty(robot => robot.CredentialHash, credential.Hash)
-                    .SetProperty(robot => robot.FirstAcceptedSyncAt, (DateTimeOffset?)null)
-                    .SetProperty(robot => robot.FirstAcceptedMapKey, (string?)null)
-                    .SetProperty(robot => robot.FirstAcceptedFrameId, (string?)null),
-                cancellationToken);
-
-        return updated == 1
-            ? new FleetRobotCredentialProvisionResult(robotCode, credential.Secret)
-            : null;
+        var operation = current.CredentialHash is null
+            ? RobotCredentialOperation.Issue
+            : RobotCredentialOperation.Rotate;
+        var result = await new EfPhysicalRobotCredentialManager(dbContext, TimeProvider.System)
+            .ChangeAsync(robotCode, operation, Guid.NewGuid(), null,
+                "CLI", Convert.ToBase64String(current.RowVersion), reason: null, cancellationToken);
+        return result.Secret is null ? null : new FleetRobotCredentialProvisionResult(robotCode, result.Secret);
     }
 }

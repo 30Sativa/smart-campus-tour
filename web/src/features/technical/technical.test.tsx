@@ -8,7 +8,7 @@ import TechnicalMapsPage from '../../routes/technical/TechnicalMapsPage'
 import TechnicalRobotsPage from '../../routes/technical/TechnicalRobotsPage'
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
-import type { PhysicalRobotOption } from './api/technical'
+import type { PhysicalRobotOption, RobotCredentialView } from './api/technical'
 
 const map = {
   id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1',
@@ -31,6 +31,7 @@ let failDeploymentOnce = false
 let failRobotLookup = false
 let failRobotRegistration = false
 let robotRegistrationDelayMs = 0
+let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
 function renderPage(page: React.ReactNode) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>{page}</MemoryRouter></QueryClientProvider>)
@@ -46,11 +47,17 @@ describe('Technical Staff API integration', () => {
     failRobotLookup = false
     failRobotRegistration = false
     robotRegistrationDelayMs = 0
+    credentialStatus = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost')
       requests.push({ url, init })
+      if (url.pathname === '/api/robots/amr-01/credential' && (!init?.method || init.method === 'GET')) return response(credentialStatus)
+      if (url.pathname === '/api/technical/robots/amr-01/credential' && init?.method === 'POST') {
+        credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'abcd', issuedAt: '2026-10-29T10:00:00Z', rowVersion: 'BBBBBBBBBBB=' }
+        return response({ secret: 'secret-value-once', hint: 'abcd', issuedAt: credentialStatus.issuedAt })
+      }
       if (url.pathname === '/api/maps/versions' && init?.method !== 'POST') return response([mapItem])
       if (url.pathname === '/api/technical/map-areas') return failMapAreaLookup
         ? new Response(JSON.stringify({ success: false, message: 'Area lookup unavailable.' }), { status: 503 })
@@ -228,6 +235,22 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
     const post = requests.find(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')!
     expect(JSON.parse(String(post.init?.body))).toEqual({ robotCode: 'amr-new', displayName: 'AMR mới' })
+  })
+
+  it('shows an issued robot secret once and clears it when the credential panel closes', async () => {
+    renderPage(<TechnicalRobotsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cấp khóa' }))
+    const secret = await screen.findByText('secret-value-once')
+    expect(secret).toBeInTheDocument()
+    const request = requests.find(item => item.url.pathname === '/api/technical/robots/amr-01/credential' && item.init?.method === 'POST')!
+    expect(request.init?.body).toBeTruthy()
+    const closeButtons = screen.getAllByRole('button', { name: 'Đóng' })
+    fireEvent.click(closeButtons[0])
+    expect(screen.queryByText('secret-value-once')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
+    expect(await screen.findByText(/Đang hoạt động/)).toBeInTheDocument()
+    expect(screen.queryByText('secret-value-once')).not.toBeInTheDocument()
   })
 
   it('renders a RobotCode pattern valid with the HTML v flag and matching server rules', async () => {

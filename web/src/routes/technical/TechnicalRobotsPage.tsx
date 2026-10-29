@@ -6,6 +6,7 @@ import { buttonClass, inputClass, labelClass, tdClass, thClass } from '../../com
 import { TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { usePhysicalRobots, useRegisterPhysicalRobot } from '../../features/technical/technical-hooks'
 import { errorText, stamp } from '../../features/technical/technical-format'
+import { RobotCredentialPanel } from './RobotCredentialPanel'
 
 const connectionStatus = {
   UNCONFIRMED: { label: 'Chưa xác nhận kết nối', tone: 'warn' as const },
@@ -17,6 +18,7 @@ const connectionStatus = {
 export default function TechnicalRobotsPage() {
   const robots = usePhysicalRobots()
   const [registering, setRegistering] = useState(false)
+  const [credentialRobotCode, setCredentialRobotCode] = useState<string | null>(null)
 
   return (
     <TechnicalPage>
@@ -27,15 +29,16 @@ export default function TechnicalRobotsPage() {
         <PanelHead title="Robot đã đăng ký" description="Robot xuất hiện trong danh sách chọn khi ghi kết quả kiểm tra map." />
         {robots.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" role="status" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải danh sách robot…</p> : robots.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div> : (
           <><div className="flex justify-end px-4 pt-3"><button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button></div><div className="overflow-x-auto"><table className="w-full min-w-[480px] text-left">
-            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã robot</th><th className={thClass}>Tên robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Xác nhận đầu tiên</th><th className={thClass}>Map / frame xác nhận</th><th className={thClass}>Nhận dữ liệu gần nhất</th></tr></thead>
+            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã robot</th><th className={thClass}>Tên robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Xác nhận đầu tiên</th><th className={thClass}>Map / frame xác nhận</th><th className={thClass}>Nhận dữ liệu gần nhất</th><th className={thClass}>Khóa</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
-              {robots.data?.map(robot => { const status = connectionStatus[robot.connectionStatus] ?? connectionStatus.UNCONFIRMED; return <tr key={robot.id}><td className={`${tdClass} font-mono`}>{robot.robotCode}</td><td className={tdClass}>{robot.displayName || '—'}</td><td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td><td className={tdClass}>{stamp(robot.firstAcceptedSyncAt)}</td><td className={`${tdClass} font-mono text-xs`}>{robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? `${robot.firstAcceptedMapKey} · ${robot.firstAcceptedFrameId}` : '—'}</td><td className={tdClass}>{stamp(robot.lastSyncReceivedAt)}</td></tr> })}
-              {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={6}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
+              {robots.data?.map(robot => { const status = connectionStatus[robot.connectionStatus] ?? connectionStatus.UNCONFIRMED; return <tr key={robot.id}><td className={`${tdClass} font-mono`}>{robot.robotCode}</td><td className={tdClass}>{robot.displayName || '—'}</td><td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td><td className={tdClass}>{stamp(robot.firstAcceptedSyncAt)}</td><td className={`${tdClass} font-mono text-xs`}>{robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? `${robot.firstAcceptedMapKey} · ${robot.firstAcceptedFrameId}` : '—'}</td><td className={tdClass}>{stamp(robot.lastSyncReceivedAt)}</td><td className={tdClass}><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setCredentialRobotCode(robot.robotCode)}>Quản lý khóa</button></td></tr> })}
+              {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={7}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
             </tbody>
           </table></div></>
         )}
       </section>
       <RegisterRobotDrawer open={registering} onClose={() => setRegistering(false)} />
+      {credentialRobotCode && <RobotCredentialPanel robotCode={credentialRobotCode} onClose={() => setCredentialRobotCode(null)} />}
     </TechnicalPage>
   )
 }

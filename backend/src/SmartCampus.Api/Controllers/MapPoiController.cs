@@ -6,6 +6,8 @@ using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.RobotCredentials;
+using SmartCampus.Application.Common.Exceptions;
 
 namespace SmartCampus.Api.Controllers;
 
@@ -14,6 +16,7 @@ namespace SmartCampus.Api.Controllers;
 public sealed class MapPoiController(ISender sender) : ControllerBase
 {
     private const string StaffAndTechnical = ApplicationRoles.Staff + "," + ApplicationRoles.TechnicalStaff;
+    private const string TechnicalAndAdmin = ApplicationRoles.TechnicalStaff + "," + ApplicationRoles.Admin;
 
     [HttpPost("technical/map-versions")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
@@ -42,7 +45,7 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
             Data = await sender.Send(new ListMapAreasQuery(), ct) });
 
     [HttpGet("technical/physical-robots")]
-    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    [Authorize(Roles = TechnicalAndAdmin)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotStatus>>>> ListPhysicalRobots(CancellationToken ct) =>
         Ok(new BaseResponse<IReadOnlyList<PhysicalRobotStatus>> { Success = true, Message = "Physical robots retrieved.",
             Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
@@ -56,24 +59,27 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
 
     [HttpPost("technical/physical-robots/{id:guid}/credential")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
-    public async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> IssuePhysicalRobotCredential(
-        Guid id, [FromBody] IssuePhysicalRobotCredentialRequest request, CancellationToken ct) =>
-        await ChangePhysicalRobotCredential(id, request, rotate: false, ct);
+    public Task<ActionResult<BaseResponse<RobotCredentialChangeResult>>> IssuePhysicalRobotCredential(
+        Guid id, [FromBody] ChangeRobotCredentialRequest request, CancellationToken ct) =>
+        ChangePhysicalRobotCredential(id, request, rotate: false, ct);
 
     [HttpPost("technical/physical-robots/{id:guid}/credential/rotate")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
-    public async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> RotatePhysicalRobotCredential(
-        Guid id, [FromBody] IssuePhysicalRobotCredentialRequest request, CancellationToken ct) =>
-        await ChangePhysicalRobotCredential(id, request, rotate: true, ct);
+    public Task<ActionResult<BaseResponse<RobotCredentialChangeResult>>> RotatePhysicalRobotCredential(
+        Guid id, [FromBody] ChangeRobotCredentialRequest request, CancellationToken ct) =>
+        ChangePhysicalRobotCredential(id, request, rotate: true, ct);
 
-    private async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> ChangePhysicalRobotCredential(
-        Guid id, IssuePhysicalRobotCredentialRequest request, bool rotate, CancellationToken ct)
+    private async Task<ActionResult<BaseResponse<RobotCredentialChangeResult>>> ChangePhysicalRobotCredential(
+        Guid id, ChangeRobotCredentialRequest request, bool rotate, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
-        var result = await sender.Send(new IssuePhysicalRobotCredentialCommand(
-            User.GetRequiredUserId(), id, request.ExpectedRowVersion, rotate), ct);
-        return Ok(new BaseResponse<PhysicalRobotCredentialIssue>
+        var robot = (await sender.Send(new ListPhysicalRobotsQuery(), ct)).SingleOrDefault(item => item.Id == id)
+            ?? throw new NotFoundException("Physical robot", id);
+        var result = await sender.Send(new ChangeRobotCredentialCommand(robot.RobotCode,
+            User.GetRequiredUserId(), request.RequestId, request.ExpectedRowVersion, request.Reason,
+            rotate ? RobotCredentialOperation.Rotate : RobotCredentialOperation.Issue), ct);
+        return Ok(new BaseResponse<RobotCredentialChangeResult>
         {
             Success = true,
             Message = rotate ? "Robot credential rotated. Store this credential now; it cannot be retrieved again."

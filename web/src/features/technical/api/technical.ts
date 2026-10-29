@@ -34,6 +34,17 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   connectionStatus: PhysicalRobotConnectionStatus
   lastSyncReceivedAt: string | null
 }
+export type RobotCredentialAudit = {
+  id: number; robotCode: string; action: string; actorUserId: string | null; actorName: string | null
+  hint: string | null; reason: string | null; source: 'WEB' | 'CLI'; occurredAt: string; resultCode: string | null
+}
+export type RobotCredentialView = {
+  robotCode: string; status: 'NOT_ISSUED' | 'ACTIVE' | 'REVOKED'; issuedAt: string | null
+  issuedByUserId: string | null; issuedByName: string | null; hint: string | null
+  revokedAt: string | null; revokedByUserId: string | null; revokedByName: string | null
+  rowVersion: string; history: RobotCredentialAudit[]
+}
+export type RobotCredentialSecret = { secret: string; hint: string; issuedAt: string }
 
 export type DeploymentCheck = {
   id: string
@@ -100,6 +111,18 @@ export const technicalApi = {
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
   registerPhysicalRobot: (input: { robotCode: string; displayName: string }) =>
     apiClient<Envelope<PhysicalRobotRegistration>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
+  getRobotCredential: (robotCode: string) => apiClient<Envelope<RobotCredentialView>>(`/api/robots/${encodeURIComponent(robotCode)}/credential`).then(response => response.data!),
+  issueRobotCredential: (robotCode: string, input: { requestId: string; expectedRowVersion: string; reason?: string }) =>
+    apiClient<Envelope<RobotCredentialSecret>>(`/api/technical/robots/${encodeURIComponent(robotCode)}/credential`, { method: 'POST', json: input }).then(response => response.data!),
+  rotateRobotCredential: (robotCode: string, input: { requestId: string; expectedRowVersion: string; reason?: string }) =>
+    apiClient<Envelope<RobotCredentialSecret>>(`/api/technical/robots/${encodeURIComponent(robotCode)}/credential/rotate`, { method: 'POST', json: input }).then(response => response.data!),
+  revokeRobotCredential: (robotCode: string, input: { requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Envelope<{ robotCode: string; status: string; hint: string | null }>>(`/api/robots/${encodeURIComponent(robotCode)}/credential/revoke`, { method: 'POST', json: input }),
+  listRobotCredentialAudit: (filter: { action?: string; robotCode?: string; actorUserId?: string; from?: string; to?: string; page: number }) => {
+    const query = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => { if (value) query.set(key, String(value)) })
+    return apiClient<Envelope<{ data: RobotCredentialAudit[]; page: number; pageSize: number; totalItems: number }>>(`/api/admin/audit-logs?${query}`).then(response => response.data!)
+  },
   getMapPackage: (id: string) => apiClient<Blob>(`/api/maps/versions/${id}/package`, { responseType: 'blob' }),
   uploadMap: (input: { areaKey: string; areaName: string; requestId: string; package: File }) => {
     const formData = new FormData()

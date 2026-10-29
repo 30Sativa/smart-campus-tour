@@ -27,12 +27,13 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
             })
             .SingleOrDefaultAsync(cancellationToken);
 
-        if (robot is null || !FleetRobotCredentialHash.Verify(credential, robot.CredentialHash))
+        if (robot?.CredentialHash is not { Length: 32 } hash ||
+            !FleetRobotCredentialHash.Verify(credential, hash))
             return null;
 
         return new FleetRobotAuthenticationProof(
             new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName, robot.NeedsInspection),
-            robot.CredentialHash.ToArray(),
+            hash.ToArray(),
             robot.FirstAcceptedSyncAt is not null);
     }
 }

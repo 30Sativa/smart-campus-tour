@@ -42,7 +42,7 @@ tool() {
 sql() { tool --entrypoint /opt/mssql-tools18/bin/sqlcmd "$db_init_image" -S sqlserver -U sa -C -b -l 30 -r 1 "$@"; }
 query() { sql -d SmartCampusTourV11 -h -1 -W -Q "SET NOCOUNT ON; $1" | tr -d '\r'; }
 # Exactly the invocation used by deploy/upgrade-db-schema-ec2.sh; extra docker args inject test faults.
-upgrade() { tool "$@" --entrypoint /bin/bash "$db_init_image" /deployment/upgrade-db.sh --upgrade-to-v1.5; }
+upgrade() { tool "$@" --entrypoint /bin/bash "$db_init_image" /deployment/upgrade-db.sh --upgrade-to-v1.6; }
 check_only() { tool --entrypoint /bin/bash "$db_init_image" /deployment/init-db.sh --check-only; }
 
 for attempt in $(seq 1 60); do
@@ -160,8 +160,8 @@ provisioner_robot_permissions() {
 before=$(baseline_data)
 [[ $(markers) == "|$v11_hash" ]] || fail 'Baseline markers were not created as expected.'
 
-# 1. Fault after the v1.5 marker: the final runtime grant step fails, as a dropped connection or grant error would.
-printf "THROW 51090, 'Injected runtime grant failure after the v1.5 marker.', 1;\nGO\n" > "$scratch/failing-runtime-permissions.sql"
+# 1. Fault after the v1.6 marker: the final runtime grant step fails, as a dropped connection or grant error would.
+printf "THROW 51090, 'Injected runtime grant failure after the v1.6 marker.', 1;\nGO\n" > "$scratch/failing-runtime-permissions.sql"
 chmod 0644 "$scratch/failing-runtime-permissions.sql"
 if upgrade -v "$scratch/failing-runtime-permissions.sql:/database/smart-campus-tour-runtime-permissions.sql:ro" > "$scratch/first.log" 2>&1; then
   cat "$scratch/first.log" >&2
@@ -169,8 +169,8 @@ if upgrade -v "$scratch/failing-runtime-permissions.sql:/database/smart-campus-t
 fi
 grep -q 'Injected runtime grant failure' "$scratch/first.log" || { cat "$scratch/first.log" >&2; fail 'Upgrade failed for an unexpected reason.'; }
 upgraded_markers=$(markers)
-[[ "$upgraded_markers" == "1.5|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43" ]] ||
-  fail "Expected v1.5 marker with the retained upgrade snapshot hash, got $upgraded_markers."
+[[ "$upgraded_markers" == "1.6|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43" ]] ||
+  fail "Expected v1.6 marker with the retained upgrade snapshot hash, got $upgraded_markers."
 [[ $(baseline_data) == "$before" ]] || fail 'Upgrade changed baseline business data.'
 [[ $(runtime_can_read_email_changes) == 000 ]] || fail 'Fault injection did not leave runtime grants incomplete.'
 after_failure=$(all_data)
@@ -212,9 +212,9 @@ grep -q 'Runtime Robot grants are incomplete' "$scratch/missing-robot-insert.log
   fail 'Failed read-only check changed business data or schema markers.'
 [[ $(runtime_robot_permissions) == 10111100 ]] || fail 'Failed read-only check changed runtime Robot grants.'
 
-# 5. The existing v1.5 upgrade/regrant path restores only the reviewed grants and preserves data.
+# 5. The existing v1.6 upgrade/regrant path restores only the reviewed grants and preserves data.
 upgrade > "$scratch/robot-regrant.log" 2>&1 || { cat "$scratch/robot-regrant.log" >&2; fail 'Controlled v1.5 runtime-grant recheck failed.'; }
-grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.5 database did not use the existing regrant path.'
+grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.6 database did not use the existing regrant path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/robot-regrant.log"; then fail 'v1.4 regrant unexpectedly applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/robot-regrant.log" || fail 'Runtime grants were not checked after regrant.'
 [[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Runtime Robot rights after regrant are not least privilege.'
@@ -251,19 +251,19 @@ SQL
 [[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
   fail 'Grant tests changed business data or schema markers.'
 
-# 6. Marker 1.5 never vouches for an unknown snapshot or incomplete structure.
+# 6. Marker 1.6 never vouches for an unknown snapshot or incomplete structure.
 query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';" >/dev/null
-if upgrade > "$scratch/unknown.log" 2>&1; then fail 'Marker 1.5 with an unknown snapshot hash was accepted.'; fi
+if upgrade > "$scratch/unknown.log" 2>&1; then fail 'Marker 1.6 with an unknown snapshot hash was accepted.'; fi
 grep -q 'snapshot marker is unknown or absent; refusing to complete grants' "$scratch/unknown.log" || { cat "$scratch/unknown.log" >&2; fail 'Unknown snapshot was not refused clearly.'; }
-query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'${upgraded_markers#1.5|}';" >/dev/null
+query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'${upgraded_markers#1.6|}';" >/dev/null
 query "DROP TABLE dbo.RosterEmailChangeRequests;" >/dev/null
-if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.5 with missing v1.5 structure was accepted.'; fi
-grep -q 'required v1.5 structure is incomplete; refusing to complete grants' "$scratch/incomplete.log" || { cat "$scratch/incomplete.log" >&2; fail 'Incomplete structure was not refused clearly.'; }
+if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.6 with missing v1.6 structure was accepted.'; fi
+grep -q 'required structure is incomplete; refusing to complete grants' "$scratch/incomplete.log" || { cat "$scratch/incomplete.log" >&2; fail 'Incomplete structure was not refused clearly.'; }
 if grep -q 'Applying additive database patch' "$scratch/incomplete.log"; then fail 'Grants ran against an incomplete structure.'; fi
 [[ $(markers) == "$upgraded_markers" ]] || fail 'Refused upgrade changed markers.'
 
 # 7. A complete v1.4 database with SELECT-only Robot grants is refused before
-# promotion, then the existing controlled upgrade adds the schema and regrants.
+# promotion, then the existing controlled upgrade applies the supported patches and regrants.
 v14_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.4.sql | sha256sum | cut -d ' ' -f 1")
 sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
 sql -d SmartCampusTourV11 <<SQL
@@ -284,7 +284,7 @@ legacy_data_before=$(all_data)
 if check_only > "$scratch/v14-select-only.log" 2>&1; then
   fail 'Read-only check accepted a v1.4 database with SELECT-only Robot permissions.'
 fi
-grep -q 'Database schema is older than v1.5' "$scratch/v14-select-only.log" || {
+grep -q 'Database schema is older than v1.6' "$scratch/v14-select-only.log" || {
   cat "$scratch/v14-select-only.log" >&2
   fail 'v1.4 database did not fail the deployment gate with an actionable upgrade requirement.'
 }
@@ -298,5 +298,5 @@ grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/v14-
 [[ $(runtime_robot_permissions) == 11111100 ]] || fail 'v1.4 regrant did not apply the reviewed runtime Robot grants.'
 [[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';") == "$legacy_robot" ]] ||
   fail 'v1.4 upgrade changed the registered robot business data.'
-check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.5 read-only check rejected the upgraded legacy database.'; }
-echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.5 marker, reruns idempotently, rejects missing Robot INSERT or CredentialHash UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.5 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.5 structure.'
+check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.6 read-only check rejected the upgraded legacy database.'; }
+echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.6 marker, reruns idempotently, rejects missing Robot INSERT or CredentialHash UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.6 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.6 structure.'

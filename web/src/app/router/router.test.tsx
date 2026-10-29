@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from './index'
@@ -211,6 +211,22 @@ describe('route table', () => {
       const router = renderAt('/admin/roles')
       await settled(router, '/admin/roles')
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
+    })
+
+    it('shows credential audit to Admin and redirects other roles away', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+        success: true,
+        data: { items: [], page: 1, pageSize: 50, totalItems: 0 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      signIn('Admin')
+      const adminRouter = renderAt('/admin/robot-credentials')
+      await settled(adminRouter, '/admin/robot-credentials')
+      expect(await screen.findByRole('heading', { name: 'Lịch sử khóa robot' })).toBeInTheDocument()
+
+      cleanup()
+      signIn('Staff')
+      const staffRouter = renderAt('/admin/robot-credentials')
+      await settled(staffRouter, '/staff')
     })
   })
 

@@ -13,9 +13,10 @@ if [[ "$mode" == --bootstrap && ! ${SQL_APP_PASSWORD:-} =~ ^[A-Za-z0-9!_-]{32,12
 fi
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
 sql=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -l 15 -r 1)
-schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d ' ' -f 1)
+schema_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.6.sql | sha256sum | cut -d ' ' -f 1)
+schema_hash_v15=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d ' ' -f 1)
 schema_hash_v14=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.4.sql | sha256sum | cut -d ' ' -f 1)
-export SchemaHash="$schema_hash" SchemaHashV14="$schema_hash_v14" AppPassword="${SQL_APP_PASSWORD:-}"
+export SchemaHash="$schema_hash" SchemaHashV15="$schema_hash_v15" SchemaHashV14="$schema_hash_v14" AppPassword="${SQL_APP_PASSWORD:-}"
 
 database_exists=$("${sql[@]}" -d master -h -1 -W -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'SmartCampusTourV11') IS NULL THEN 0 ELSE 1 END;" | tr -d '\r\n ')
 if [[ "$database_exists" == 0 ]]; then
@@ -36,18 +37,18 @@ if [[ "$state" == EMPTY ]]; then
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 GO
-  :r /database/smart-campus-tour-schema-v1.5.sql
+  :r /database/smart-campus-tour-schema-v1.6.sql
 :r /database/smart-campus-tour-permissions.sql
   :r /database/smart-campus-tour-map-poi-permissions.sql
   :r /database/smart-campus-tour-route-revision-permissions.sql
 EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(SchemaHash)';
-EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';
+EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.6';
 COMMIT TRANSACTION;
 GO
 SQL
 elif [[ "$state" != READY ]]; then
   if [[ "$state" == UPGRADE_REQUIRED ]]; then
-    echo 'Database schema is older than v1.5. Stop the deployment and follow the reviewed, backed-up Database First upgrade path; this initializer never migrates existing data.' >&2
+    echo 'Database schema is older than v1.6. Stop the deployment and follow the reviewed, backed-up Database First upgrade path; this initializer never migrates existing data.' >&2
     exit 1
   fi
   echo 'Unexpected database bootstrap state.' >&2
@@ -65,38 +66,67 @@ if [[ "$mode" == --check-only ]]; then
     IF HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHash',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialIssuedAt',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialIssuedByUserId',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHint',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialRevokedAt',N'COLUMN') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialRevokedByUserId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE') = 1
        OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE') = 1
-       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.5 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.6 upgrade/regrant before API deployment.', 1;
     REVERT;
     IF EXISTS (SELECT 1 FROM sys.database_permissions p
       WHERE p.grantee_principal_id IN (DATABASE_PRINCIPAL_ID(N'campus_tour_app'), DATABASE_PRINCIPAL_ID(N'smartcampus_api'))
         AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE'
         AND p.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId'),
+          COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedAt','ColumnId'),
+          COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedByUserId','ColumnId'),
+          COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHint','ColumnId'),
+          COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedAt','ColumnId'),
+          COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedByUserId','ColumnId'),
           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedSyncAt','ColumnId'),
           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedMapKey','ColumnId'),
           COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedFrameId','ColumnId')))
-       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.5 upgrade/regrant before API deployment.', 1;
+       THROW 51005, 'Runtime Robot grants are incomplete or too broad; update runtime grants through the controlled v1.6 upgrade/regrant before API deployment.', 1;
+    EXECUTE AS USER=N'smartcampus_api';
+    IF HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'SELECT') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'INSERT') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'UPDATE') = 1
+       OR HAS_PERMS_BY_NAME(N'dbo.AuditLogs',N'OBJECT',N'DELETE') = 1
+       THROW 51005, 'Runtime credential audit grants are incomplete or allow audit rewrites.', 1;
+    REVERT;
     IF DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') IS NULL
-       THROW 51006, 'Fleet credential provisioner role is missing; update provisioning grants through the controlled v1.5 upgrade/regrant before API deployment.', 1;
+       THROW 51006, 'Fleet credential provisioner role is missing; update provisioning grants through the controlled v1.6 upgrade/regrant before API deployment.', 1;
     IF NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'Id','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RobotCode','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'SourceType','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHint','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RowVersion','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedAt','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedByUserId','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHint','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedAt','ColumnId') AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedByUserId','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedSyncAt','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedMapKey','ColumnId') AND p.state IN ('G','W'))
        OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedFrameId','ColumnId') AND p.state IN ('G','W'))
-       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'Id','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RobotCode','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'SourceType','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RowVersion','ColumnId')))
-       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedSyncAt','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedMapKey','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedFrameId','ColumnId')))
+       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'SELECT' AND p.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'Id','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RobotCode','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'SourceType','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHint','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'RowVersion','ColumnId')))
+       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id NOT IN (COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedAt','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialIssuedByUserId','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHint','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedAt','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialRevokedByUserId','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedSyncAt','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedMapKey','ColumnId'),COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'FirstAcceptedFrameId','ColumnId')))
        OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name IN (N'UPDATE',N'DELETE') AND (p.minor_id=0 OR p.permission_name=N'DELETE'))
-       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.5 upgrade/regrant before API deployment.', 1;
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name=N'SELECT' AND p.minor_id=0 AND p.state IN ('G','W'))
+       OR NOT EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name=N'INSERT' AND p.minor_id=0 AND p.state IN ('G','W'))
+       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.AuditLogs') AND p.permission_name IN (N'UPDATE',N'DELETE') AND (p.minor_id=0 OR p.permission_name=N'DELETE') AND p.state IN ('G','W'))
+       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.6 upgrade/regrant before API deployment.', 1;
+    IF EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'UPDATE' AND p.minor_id=0)
+       OR EXISTS (SELECT 1 FROM sys.database_permissions p WHERE p.grantee_principal_id=DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') AND p.class=1 AND p.major_id=OBJECT_ID(N'dbo.Robots') AND p.permission_name=N'DELETE')
+       THROW 51007, 'Fleet credential provisioner grants are incomplete or too broad; update provisioning grants through the controlled v1.6 upgrade/regrant before API deployment.', 1;
     SELECT 'COMPATIBLE';" | tr -d '\r\n '); then
-    echo 'FAIL: runtime/provisioner grants are incomplete. For an existing database, run the controlled v1.5 Database First upgrade/regrant before API deployment.' >&2
+    echo 'FAIL: runtime/provisioner grants are incomplete. For an existing database, run the controlled v1.6 Database First upgrade/regrant before API deployment.' >&2
     exit 1
   fi
   [[ "$permissions" == COMPATIBLE ]] || { echo 'Runtime database grants are not compatible.' >&2; exit 1; }

@@ -40,7 +40,7 @@ public sealed class PhysicalRobotRegistrationTests
         Assert.Equal("amr_01", result.RobotCode);
         Assert.Equal("Main Robot", result.DisplayName);
         Assert.Equal("PHYSICAL", repository.Robot.SourceType);
-        Assert.Empty(repository.Robot.CredentialHash);
+        Assert.Null(repository.Robot.CredentialHash);
         Assert.False(repository.Robot.IsDispatchEnabled);
         Assert.False(repository.Robot.NeedsInspection);
         Assert.Null(repository.Robot.CurrentTourId);

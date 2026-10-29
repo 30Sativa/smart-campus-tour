@@ -1,10 +1,11 @@
--- SQLCMD input: SchemaHash is the current v1.5 snapshot hash; SchemaHashV14 is the prior v1.4 hash.
+-- SQLCMD input: SchemaHash is the current v1.6 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
     SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourBootstrapHash');
 DECLARE @current nvarchar(64) = N'$(SchemaHash)';
+DECLARE @v15 nvarchar(64) = N'$(SchemaHashV15)';
 DECLARE @v14 nvarchar(64) = N'$(SchemaHashV14)';
 DECLARE @schemaVersion nvarchar(32) = (
     SELECT CONVERT(nvarchar(32), value) FROM sys.extended_properties
@@ -30,17 +31,35 @@ DECLARE @v15ObjectsPresent bit = CASE WHEN @v14ObjectsPresent = 1 AND
     EXISTS (SELECT 1 FROM sys.check_constraints
         WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_FirstAcceptedSync_Complete')
     THEN 1 ELSE 0 END;
+DECLARE @v16ObjectsPresent bit = CASE WHEN @v15ObjectsPresent = 1 AND
+    EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CredentialHash' AND is_nullable=1) AND
+    COL_LENGTH(N'dbo.Robots', N'CredentialIssuedAt') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'CredentialIssuedByUserId') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'CredentialHint') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'CredentialRevokedAt') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'CredentialRevokedByUserId') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_CredentialIssueMetadata') AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_CredentialRevocationMetadata') AND
+    EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_CredentialIssuedByUserId') AND
+    EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_CredentialRevokedByUserId') AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.AuditLogs') AND name=N'UX_AuditLogs_RobotCredentialRequest' AND is_unique=1)
+    THEN 1 ELSE 0 END;
 DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v14,
+    @v15,
     N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68',
     N'2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67',
     N'b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43')
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.5' AND @v15ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+IF @schemaVersion = N'1.6' AND @v16ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.6'
+    THROW 51001, 'Database schema version marker is 1.6 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.5' AND @v15ObjectsPresent = 1 AND (@hash = @v15 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.5'
-    THROW 51001, 'Database schema version marker is 1.5 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+    THROW 51003, 'Database schema version marker is 1.5 but its snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.4' AND @v14ObjectsPresent = 1 AND @knownPriorHash = 1
     SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.4'

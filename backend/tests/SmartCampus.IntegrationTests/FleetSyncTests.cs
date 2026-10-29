@@ -424,7 +424,7 @@ public sealed class FleetSyncTests
         Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
     }
 
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task ConnectionConfirmation_IsWriteOnceConcurrentAndBoundToCurrentCredentialHash()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -462,13 +462,14 @@ public sealed class FleetSyncTests
         await using (var context = CreateContext(database.ConnectionString))
         {
             var robot = await context.Robots.AsNoTracking().SingleAsync(item => item.Id == robotId);
-            oldHash = robot.CredentialHash;
+            oldHash = robot.CredentialHash!;
             Assert.True(
                 robot.FirstAcceptedMapKey == "map-a" && robot.FirstAcceptedFrameId == "frame-a" ||
                 robot.FirstAcceptedMapKey == "map-b" && robot.FirstAcceptedFrameId == "frame-b");
             var rotated = await new EfPhysicalRobotCredentialManager(context, TimeProvider.System)
-                .IssueAsync(actor.Id, robot.Id, Convert.ToBase64String(robot.RowVersion), rotate: true, CancellationToken.None);
-            currentCredential = rotated.Credential;
+                .ChangeAsync(robot.RobotCode, RobotCredentialOperation.Rotate, Guid.NewGuid(), actor.Id,
+                    "WEB", Convert.ToBase64String(robot.RowVersion), reason: null, CancellationToken.None);
+            currentCredential = rotated.Secret!;
         }
 
         await using (var context = CreateContext(database.ConnectionString))
@@ -483,7 +484,7 @@ public sealed class FleetSyncTests
             var proof = await new FleetRobotAuthenticator(context).AuthenticateAsync(current.RobotCode,
                 currentCredential, CancellationToken.None);
             Assert.NotNull(proof);
-            Assert.True(await store.TryRecordFirstAcceptedAsync(current.RobotCode, proof.VerifiedCredentialHash,
+            Assert.True(await store.TryRecordFirstAcceptedAsync(current.RobotCode, proof!.VerifiedCredentialHash,
                 "current-map", "current-frame", DateTimeOffset.UtcNow, CancellationToken.None));
         }
     }

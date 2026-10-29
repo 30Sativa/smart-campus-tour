@@ -104,10 +104,12 @@ Before sending any R1 traffic to EC2, all of these gates must be satisfied:
 1. Confirm the Fleet Sync API revision is deployed and healthy at the exact
    HTTPS endpoint. The repository documents M0/B1 code, not proof of the
    current EC2 deployment.
-2. A `Robot` row must already exist. An operator must provision its credential
-   with the one-shot least-privilege backend command and securely transfer the
-   one-time token into a private MiniPC file. The probe/node never provisions
-   credentials.
+2. A PHYSICAL `Robot` row must already exist. Technical Staff issues or rotates
+   its key in the web robot management panel; an authorized operator may use
+   the existing one-shot CLI fallback with the separate provisioning role.
+   Securely transfer the one-time token into a private MiniPC file. The
+   probe/node never provisions credentials. Admin can revoke an exposed key but
+   cannot issue or rotate one.
 3. Operations must set the exact approved `RobotCode -> mapKey/frameId`
    context in Backend deployment configuration. Do not use the illustrative
    `test-campus-map-v1` value for the physical map unless operations approved

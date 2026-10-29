@@ -49,7 +49,7 @@ internal static class FleetRobotProvisionCommand
                 .ProvisionAsync(connectionString, robotCode);
             if (result is null)
             {
-                Console.Error.WriteLine("Physical robot was not found or already has a credential; no credential was changed. Rotate explicitly through the TechnicalStaff API.");
+                Console.Error.WriteLine("Physical robot was not found. No credential was changed.");
                 return 1;
             }
 
