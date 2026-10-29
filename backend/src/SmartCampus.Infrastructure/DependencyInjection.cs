@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<IUsernameNormalizer, InvariantUsernameNormalizer>();
         services.AddScoped<IFleetRobotAuthenticator, FleetRobotAuthenticator>();
         services.AddScoped<IFleetRobotConnectionConfirmationStore, EfFleetRobotConnectionConfirmationStore>();
+        services.AddScoped<IPhysicalRobotCredentialManager, EfPhysicalRobotCredentialManager>();
         services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();

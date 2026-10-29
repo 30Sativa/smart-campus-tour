@@ -27,9 +27,17 @@ public sealed class FleetRobotCredentialProvisioner
         string robotCode,
         CancellationToken cancellationToken = default)
     {
+        var current = await dbContext.Robots.AsNoTracking()
+            .Where(robot => robot.RobotCode == robotCode && robot.SourceType == "PHYSICAL")
+            .Select(robot => new { robot.Id, robot.RowVersion, CredentialLength = robot.CredentialHash.Length })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (current is null || current.CredentialLength == 32)
+            return null;
+
         var credential = FleetRobotCredentialHash.Create();
         var updated = await dbContext.Robots
-            .Where(robot => robot.RobotCode == robotCode)
+            .Where(robot => robot.Id == current.Id && robot.SourceType == "PHYSICAL" &&
+                robot.RowVersion == current.RowVersion && robot.CredentialHash.Length != 32)
             .ExecuteUpdateAsync(update => update
                     .SetProperty(robot => robot.CredentialHash, credential.Hash)
                     .SetProperty(robot => robot.FirstAcceptedSyncAt, (DateTimeOffset?)null)

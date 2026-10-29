@@ -15,7 +15,12 @@ public sealed record PhysicalRobotStatus(
     string? FirstAcceptedMapKey,
     string? FirstAcceptedFrameId,
     string ConnectionStatus,
-    DateTimeOffset? LastSyncReceivedAt);
+    DateTimeOffset? LastSyncReceivedAt,
+    bool CredentialProvisioned,
+    string RowVersion,
+    bool MapContextConfigured,
+    string? ConfiguredMapKey,
+    string? ConfiguredFrameId);
 
 public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
 
@@ -42,9 +47,13 @@ public sealed class ListPhysicalRobotsQueryHandler(
                     : latest.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
                         ? "CONNECTED"
                         : "DISCONNECTED";
+            var mapContextConfigured = fleetSyncSettings.TryGetRobotContext(robot.RobotCode, out var context);
             return new PhysicalRobotStatus(robot.Id, robot.RobotCode, robot.DisplayName,
                 robot.FirstAcceptedSyncAt, robot.FirstAcceptedMapKey, robot.FirstAcceptedFrameId,
-                connectionStatus, latest?.ReceivedAt);
+                connectionStatus, latest?.ReceivedAt, robot.CredentialHash.Length == 32,
+                Convert.ToBase64String(robot.RowVersion),
+                mapContextConfigured, mapContextConfigured ? context.MapKey : null,
+                mapContextConfigured ? context.FrameId : null);
         }).ToArray();
     }
 }
