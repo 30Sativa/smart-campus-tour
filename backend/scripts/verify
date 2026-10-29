@@ -50,6 +50,7 @@ bash -n deploy/prepare-release.sh deploy/ssh-deploy.sh deploy/receive-release.sh
 bash -n scripts/resolve-base-images scripts/test-docker-build-cache
 "$PYTHON" scripts/test-base-image-resolution.py
 "$PYTHON" scripts/test-ci-scope.py
+"$PYTHON" scripts/test-db-tool-files.py
 "$PYTHON" scripts/test-ssh-deployment.py
 "$PYTHON" scripts/test-jq-programs.py
 bash scripts/test-deploy-ec2.sh
