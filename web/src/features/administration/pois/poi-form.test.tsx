@@ -14,7 +14,7 @@ vi.mock('./map/versioned-package', () => ({
 vi.mock('./map/load-map-image', () => ({ loadMapImage: vi.fn(async () => ({ pixels: null })) }))
 
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
-const eligibleMap = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Simulated test evidence', checkedAt: '2026-10-27T10:00:00Z' } }
+const eligibleMap = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null, preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: map.packageSha256, localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Simulated test evidence', checkedAt: '2026-10-27T10:00:00Z' }, currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
 const NativeURL = URL
 const proposal = { id: 'proposal-1', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library entry', purpose: 'Entrance', description: null, x: 10.25, y: 20.75, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
@@ -54,6 +54,7 @@ describe('Staff versioned POI workflow', () => {
   it('loads the selected map package, converts a picked cell to world coordinates and creates/submits a proposal', async () => {
     renderAt('/staff/manage/pois/new')
     fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    expect(screen.getByText('Robot đang triển khai: amr-01')).toBeInTheDocument()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
     fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
@@ -69,6 +70,24 @@ describe('Staff versioned POI workflow', () => {
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion })
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
+  })
+
+  it('warns when no robot is currently on a passed map but keeps that map selectable', async () => {
+    const passedMapWithoutCurrentRobot = { ...eligibleMap, currentlyDeployedOn: [] }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
+      if (url.pathname === '/api/maps/versions') return response([passedMapWithoutCurrentRobot])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      return response(null)
+    }))
+
+    renderAt('/staff/manage/pois/new')
+    const picker = await screen.findByLabelText('Bản đồ') as HTMLSelectElement
+    fireEvent.change(picker, { target: { value: 'map-v1' } })
+
+    expect(await screen.findByText('Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.')).toBeInTheDocument()
+    expect(picker.selectedOptions[0].disabled).toBe(false)
+    expect(screen.getByRole('button', { name: 'Lưu revision nháp' })).toBeEnabled()
   })
 
   it('revises with the current revision and rowversion and shows rejection reason/history', async () => {

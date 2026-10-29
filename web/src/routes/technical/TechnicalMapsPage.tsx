@@ -57,8 +57,8 @@ export default function TechnicalMapsPage() {
         <PanelHead title="Danh sách phiên bản bản đồ" description="Trạng thái tệp, kết quả kỹ thuật và điều kiện tạo POI được tính theo cùng quy tắc." />
         {maps.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : maps.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left">
-              <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Khu vực</th><th className={thClass}>Mã khu vực</th><th className={thClass}>Phiên bản</th><th className={thClass}>Tệp</th><th className={thClass}>Tình trạng tệp</th><th className={thClass}>Kiểm tra kỹ thuật</th><th className={thClass}>Điều kiện tạo POI</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
+            <table className="w-full min-w-[1280px] text-left">
+              <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Khu vực</th><th className={thClass}>Mã khu vực</th><th className={thClass}>Phiên bản</th><th className={thClass}>Tệp</th><th className={thClass}>Tình trạng tệp</th><th className={thClass}>Kiểm tra kỹ thuật</th><th className={thClass}>Điều kiện tạo POI</th><th className={thClass}>Robot đang triển khai</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">
                 {items.map((item) => {
                   const { map, preparationEvidence } = item
@@ -71,11 +71,12 @@ export default function TechnicalMapsPage() {
                       <td className={tdClass}><ToneBadge tone={map.validationStatus === 'VALID' ? 'ok' : 'danger'}>{map.validationStatus === 'VALID' ? 'Tệp hợp lệ' : 'Tệp không hợp lệ'}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">{stamp(map.uploadedAt)}</p></td>
                       <td className={tdClass}>{preparationEvidence ? <><ToneBadge tone={item.technicalCheckStatus === 'PASSED' ? 'ok' : 'danger'}>{item.technicalCheckStatus === 'PASSED' ? 'Đạt' : 'Không đạt'}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">{preparationEvidence.robotCode} · {stamp(preparationEvidence.checkedAt)}</p></> : <ToneBadge tone="warn">Chưa có kết quả kiểm tra</ToneBadge>}</td>
                       <td className={tdClass}><ToneBadge tone={item.canUseForPoiPreparation ? 'ok' : 'warn'}>{item.canUseForPoiPreparation ? 'Đã có kiểm tra kỹ thuật đạt' : item.technicalCheckStatus === 'FAILED' ? 'Kiểm tra chưa đạt' : 'Chờ kỹ thuật kiểm tra'}</ToneBadge>{item.preparationBlockReason && <p className="mt-0.5 text-[11.5px] text-[#64748b]">{item.preparationBlockReason}</p>}</td>
+                      <td className={tdClass}>{item.currentlyDeployedOn.length ? <div className="flex flex-wrap gap-1">{item.currentlyDeployedOn.map(robot => <ToneBadge key={robot.robotCode} tone="ok">Robot đang triển khai: {robot.robotCode}</ToneBadge>)}</div> : <span className="text-xs text-[#64748b]">Chưa có robot đang triển khai</span>}</td>
                       <td className={`${tdClass} text-right`}><div className="flex justify-end gap-2"><button className={buttonClass('secondary', 'sm')} type="button" onClick={() => { setUploadArea({ areaKey: map.areaKey, displayName: map.areaName }); setUploading(true) }}>Tải phiên bản mới</button><button className={buttonClass('secondary', 'sm')} type="button" onClick={() => setChecking(item)}>Ghi kết quả kiểm tra</button></div></td>
                     </tr>
                   )
                 })}
-                {!items.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={8}>Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</td></tr>}
+                {!items.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={9}>Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</td></tr>}
               </tbody>
             </table>
           </div>
