@@ -428,6 +428,7 @@ public sealed class FleetSyncTests
     public async Task ConnectionConfirmation_IsWriteOnceConcurrentAndBoundToCurrentCredentialHash()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        var actor = await database.InsertUserAsync(true, username: "confirmation.rotate.actor", roles: ["ADMIN"]);
         var credential = FleetRobotCredentialHash.Create();
         var robotId = Guid.NewGuid();
         await using (var context = CreateContext(database.ConnectionString))
@@ -465,9 +466,9 @@ public sealed class FleetSyncTests
             Assert.True(
                 robot.FirstAcceptedMapKey == "map-a" && robot.FirstAcceptedFrameId == "frame-a" ||
                 robot.FirstAcceptedMapKey == "map-b" && robot.FirstAcceptedFrameId == "frame-b");
-            var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(context, robot.RobotCode);
-            Assert.NotNull(provisioned);
-            currentCredential = provisioned.Credential;
+            var rotated = await new EfPhysicalRobotCredentialManager(context, TimeProvider.System)
+                .IssueAsync(actor.Id, robot.Id, Convert.ToBase64String(robot.RowVersion), rotate: true, CancellationToken.None);
+            currentCredential = rotated.Credential;
         }
 
         await using (var context = CreateContext(database.ConnectionString))
