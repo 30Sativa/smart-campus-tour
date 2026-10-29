@@ -56,7 +56,10 @@ describe('Technical Staff API integration', () => {
         : response(mapAreas)
       if (url.pathname === '/api/technical/physical-robots' && init?.method === 'POST') {
         if (robotRegistrationDelayMs) await new Promise(resolve => setTimeout(resolve, robotRegistrationDelayMs))
-        if (failRobotRegistration) return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
+        if (failRobotRegistration) {
+          failRobotRegistration = false
+          return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
+        }
         const registered = { id: 'robot-2', ...JSON.parse(String(init.body)) }
         physicalRobots = [...physicalRobots, registered]
         return response(registered)
@@ -168,7 +171,9 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Đăng ký robot' }))
     const dialog = within(screen.getByRole('dialog'))
     expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS2 được thực hiện riêng.')
-    fireEvent.change(dialog.getByLabelText('Mã robot'), { target: { value: ' amr-new ' } })
+    const codeInput = dialog.getByLabelText('Mã robot')
+    fireEvent.change(codeInput, { target: { value: ' amr-new ' } })
+    fireEvent.blur(codeInput)
     fireEvent.change(dialog.getByLabelText('Tên robot'), { target: { value: ' AMR mới ' } })
     const submit = dialog.getByRole('button', { name: 'Đăng ký robot' })
     expect(submit).not.toBeDisabled()
@@ -178,6 +183,30 @@ describe('Technical Staff API integration', () => {
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
     const post = requests.find(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')!
     expect(JSON.parse(String(post.init?.body))).toEqual({ robotCode: 'amr-new', displayName: 'AMR mới' })
+  })
+
+  it('renders a RobotCode pattern valid with the HTML v flag and matching server rules', async () => {
+    renderPage(<TechnicalRobotsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Đăng ký robot' }))
+    const codeInput = screen.getByLabelText('Mã robot') as HTMLInputElement
+    const renderedPattern = codeInput.getAttribute('pattern') ?? ''
+    const codePattern = new RegExp(`^(?:${renderedPattern})$`, 'v')
+
+    expect(renderedPattern).toBe('[A-Za-z0-9][A-Za-z0-9_.\\-]{0,99}')
+    expect(codeInput.maxLength).toBe(100)
+    expect(codePattern.test('amr-01')).toBe(true)
+    expect(codePattern.test('A_1.example')).toBe(true)
+    expect(codePattern.test('a'.repeat(100))).toBe(true)
+    expect(codePattern.test('a'.repeat(101))).toBe(false)
+    expect(codePattern.test('-amr-01')).toBe(false)
+    expect(codePattern.test('amr 01')).toBe(false)
+    expect(codePattern.test('ámr-01')).toBe(false)
+
+    fireEvent.change(codeInput, { target: { value: ' amr-01 ' } })
+    expect(codeInput.checkValidity()).toBe(false)
+    fireEvent.blur(codeInput)
+    expect(codeInput).toHaveValue('amr-01')
+    expect(codeInput.checkValidity()).toBe(true)
   })
 
   it('shows registration conflicts in the form and lets the operator correct the code', async () => {
@@ -190,7 +219,14 @@ describe('Technical Staff API integration', () => {
     fireEvent.change(dialog.getByLabelText('Tên robot'), { target: { value: 'Robot mới' } })
     fireEvent.click(dialog.getByRole('button', { name: 'Đăng ký robot' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Robot code already registered.')
+    expect(dialog.getByLabelText('Mã robot')).toHaveValue('amr-existing')
+    expect(dialog.getByLabelText('Tên robot')).toHaveValue('Robot mới')
     expect(dialog.getByRole('button', { name: 'Đăng ký robot' })).toBeEnabled()
+    fireEvent.change(dialog.getByLabelText('Mã robot'), { target: { value: 'amr-corrected' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: 'Đăng ký robot' }))
+    expect(await screen.findByText('amr-corrected')).toBeInTheDocument()
+    expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')).toHaveLength(2)
   })
 
   it('disables submission while a registration is pending', async () => {
@@ -205,6 +241,8 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(submit)
     const pendingSubmit = await dialog.findByRole('button', { name: 'Đang đăng ký…' })
     expect(pendingSubmit).toBeDisabled()
+    expect(dialog.getByLabelText('Mã robot')).toBeDisabled()
+    expect(dialog.getByLabelText('Tên robot')).toBeDisabled()
     fireEvent.click(pendingSubmit)
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')).toHaveLength(1))
     expect(await screen.findByText('amr-pending')).toBeInTheDocument()

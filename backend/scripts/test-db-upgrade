@@ -126,6 +126,25 @@ runtime_can_read_email_changes() {
       HAS_PERMS_BY_NAME(N'dbo.RosterEmailChangeRequests',N'OBJECT',N'DELETE'));
     REVERT;"
 }
+runtime_robot_permissions() {
+  query "EXECUTE AS USER=N'smartcampus_api';
+    SELECT CONCAT(
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));
+    REVERT;"
+}
+provisioner_robot_permissions() {
+  query "EXECUTE AS USER=N'fleet_provisioner_test';
+    SELECT CONCAT(
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'RobotCode',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHash',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'IsDispatchEnabled',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));
+    REVERT;"
+}
 
 before=$(baseline_data)
 [[ $(markers) == "|$v11_hash" ]] || fail 'Baseline markers were not created as expected.'
@@ -165,7 +184,46 @@ upgrade > "$scratch/third.log" 2>&1 || { cat "$scratch/third.log" >&2; fail 'Rep
 [[ $(all_data) == "$after_failure" && $(markers) == "$upgraded_markers" ]] || fail 'Repeated upgrade changed data or markers.'
 check_only > "$scratch/check.log" 2>&1 || { cat "$scratch/check.log" >&2; fail 'Read-only check rejected the completed upgrade.'; }
 
-# 4. Marker 1.4 never vouches for an unknown snapshot or incomplete structure.
+# 4. An existing, complete v1.4 database with only Robot INSERT missing must fail the read-only deploy gate.
+[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Runtime Robot grants must be SELECT/INSERT only before the missing-INSERT check.'
+before_robot_grant_data=$(all_data)
+before_robot_grant_markers=$(markers)
+sql -d SmartCampusTourV11 -Q 'REVOKE INSERT ON OBJECT::dbo.Robots FROM campus_tour_app;' >/dev/null
+[[ $(runtime_robot_permissions) == 1000 ]] || fail 'Test setup did not remove only runtime Robot INSERT.'
+if check_only > "$scratch/missing-robot-insert.log" 2>&1; then
+  fail 'Read-only check accepted a complete v1.4 database without runtime Robot INSERT.'
+fi
+grep -q 'Runtime robot registration grants are incomplete' "$scratch/missing-robot-insert.log" || {
+  cat "$scratch/missing-robot-insert.log" >&2
+  fail 'Missing Robot INSERT was not reported clearly by check-only.'
+}
+[[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
+  fail 'Failed read-only check changed business data or schema markers.'
+[[ $(runtime_robot_permissions) == 1000 ]] || fail 'Failed read-only check changed runtime Robot grants.'
+
+# 5. The existing v1.4 upgrade/regrant path restores only the reviewed grants and preserves data.
+upgrade > "$scratch/robot-regrant.log" 2>&1 || { cat "$scratch/robot-regrant.log" >&2; fail 'Controlled v1.4 runtime-grant recheck failed.'; }
+grep -q 'completing runtime grants without DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.4 database did not use the existing regrant path.'
+if grep -q 'Applying additive database patch: patches/' "$scratch/robot-regrant.log"; then fail 'v1.4 regrant unexpectedly applied a schema patch.'; fi
+grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/robot-regrant.log" || fail 'Runtime grants were not checked after regrant.'
+[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Runtime Robot rights after regrant are not SELECT/INSERT only.'
+[[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
+  fail 'Controlled v1.4 regrant changed business data or schema markers.'
+check_only > "$scratch/robot-regrant-check.log" 2>&1 || { cat "$scratch/robot-regrant-check.log" >&2; fail 'Read-only check rejected the completed Robot regrant.'; }
+
+# Provisioning remains separate: only the provisioner role can read RobotCode and update CredentialHash columns.
+sql -d SmartCampusTourV11 -i /database/fleet-credential-provisioning-permissions.sql
+sql -d SmartCampusTourV11 <<'SQL'
+CREATE USER fleet_provisioner_test WITHOUT LOGIN;
+ALTER ROLE campus_fleet_provisioner ADD MEMBER fleet_provisioner_test;
+GO
+SQL
+[[ $(provisioner_robot_permissions) == 11000 ]] || fail 'Credential provisioning grants are not column-limited and separate from runtime registration.'
+[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Provisioner setup changed runtime Robot permissions.'
+[[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
+  fail 'Grant tests changed business data or schema markers.'
+
+# 6. Marker 1.4 never vouches for an unknown snapshot or incomplete structure.
 query "EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$(printf '0%.0s' {1..64})';" >/dev/null
 if upgrade > "$scratch/unknown.log" 2>&1; then fail 'Marker 1.4 with an unknown snapshot hash was accepted.'; fi
 grep -q 'snapshot marker is unknown or absent; refusing to complete grants' "$scratch/unknown.log" || { cat "$scratch/unknown.log" >&2; fail 'Unknown snapshot was not refused clearly.'; }
@@ -175,4 +233,4 @@ if upgrade > "$scratch/incomplete.log" 2>&1; then fail 'Marker 1.4 with missing 
 grep -q 'required v1.4 structure is incomplete; refusing to complete grants' "$scratch/incomplete.log" || { cat "$scratch/incomplete.log" >&2; fail 'Incomplete structure was not refused clearly.'; }
 if grep -q 'Applying additive database patch' "$scratch/incomplete.log"; then fail 'Grants ran against an incomplete structure.'; fi
 [[ $(markers) == "$upgraded_markers" ]] || fail 'Refused upgrade changed markers.'
-echo 'PASS: real DB tool upgrade from v1.1 keeps data and the snapshot marker, recovers from a grant failure after the v1.4 marker, reruns idempotently, keeps --check-only read-only, and refuses unknown snapshots or incomplete v1.4 structure.'
+echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.4 marker, reruns idempotently, rejects missing Robot INSERT in read-only check-only, restores Robot SELECT/INSERT through the existing v1.4 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.4 structure.'

@@ -1,5 +1,5 @@
 -- Business permissions for the implemented backend use cases; apply after the log role script.
--- Tours are prepared/cancelled, never hard-deleted. Runtime/branch/robot writers remain deferred.
+-- Robots are identity registration only; dispatch, assignment and branch writers remain deferred.
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Users TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.UserRoles TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RefreshTokens TO campus_tour_app;

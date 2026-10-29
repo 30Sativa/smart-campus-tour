@@ -57,8 +57,9 @@ the log role, map/POI grants, Route revision grants, then creates the runtime
 user and applies `backend/database/smart-campus-tour-runtime-permissions.sql`.
 That runtime script grants the v1.4 email request table only SELECT/INSERT/UPDATE
 and leaves DELETE denied; it does not skip missing objects. Route/RouteStops CRUD and Tour
-SELECT/INSERT/UPDATE are included; Tour DELETE and runtime robot/branch writes
-are absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
+SELECT/INSERT/UPDATE are included. Robots allow SELECT/INSERT for identity
+registration, with no runtime UPDATE/DELETE; branch writes and Tour DELETE
+remain absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
 the real Route/Tour preparation pipeline under an impersonated restricted user.
 
 Backend CI provisions disposable SQL Server and sets
@@ -143,9 +144,13 @@ production database from this branch. Integration tests use disposable SQL
 databases; the developer's local v1.1 database is intentionally untouched.
 
 Apply `smart-campus-tour-runtime-permissions.sql` after the existing runtime
-role setup to grant the email-request table access required by the API. The
-patch does not create a global seat-capacity setting, institutional calendar,
-or versioned scheduling/READY writer. Staff review ageing is observable from
+role setup to grant the email-request table access required by the API and
+SELECT/INSERT on Robots for physical identity registration. Existing v1.4
+databases must use the controlled Backend Database Schema Upgrade regrant before
+deploying an API version that requires Robot INSERT; this regrant applies the
+existing permission scripts without adding a schema version or changing
+business data. The patch does not create a global seat-capacity setting,
+institutional calendar, or versioned scheduling/READY writer. Staff review ageing is observable from
 submission/request timestamps; an automatic business-day due date/escalation
 requires a separately approved working-day calendar.
 
