@@ -1,6 +1,6 @@
 # Versioned map and POI workflow (ADR-0021, ADR-0028)
 
-**Status:** implemented in backend source/schema and merged to `main` by PR #85; not yet physically commissioned. Apply v1.2 only through the reviewed Database First process. Do not use `init-db` as an upgrade path.
+**Status:** The v1.2 map/POI slice is implemented in backend source/schema and merged by PR #85; it is not physically commissioned. The ADR-0029 robot-registration/connection-confirmation addition is on PR #107 and is not merged or deployed. Database schema v1.5 is separate from SRS/SDD document versions. Apply schema changes only through the reviewed Database First process; `init-db --check-only` never upgrades an existing database.
 
 ## Roles and contract
 
@@ -48,18 +48,43 @@ Map upload, deployment-check, and POI proposal/revision/submission/verification 
 
 ### Robot connection confirmation before map-check PASS (ADR-0029)
 
-Registration creates the PHYSICAL identity while a separate operator provisions
-the credential and matching `RobotContexts`, then configures and starts the MiniPC
-bridge. The first new Fleet Sync report accepted with the current credential and
-configured map/frame stores backend acceptance time plus that report's map/frame
-context. Pose may be null. This records authenticated backend contact, not proof
+Robot registration and map creation/upload may be prepared independently. For
+a new area, use this operator sequence: register the robot and create/upload
+the map; obtain the uploaded version's `mapKey`; have the responsible technical
+or deployment operator provision the key and configure backend `RobotContexts`
+and the MiniPC; send a valid sync; physically inspect the map; record a passing
+manual check; then Staff may create POIs. This is documentation sequencing, not
+an API dependency between upload and setup. Do not require map PASS before
+configuration or sync. The first new Fleet Sync report accepted with the
+current credential and configured map/frame stores backend acceptance time plus
+that report's map/frame context. Pose may be null. This records authenticated backend contact, not proof
 of map-file loading, localization, NTP synchronization, or safety. The context
 is historical for the current credential; it survives backend restart and
 offline state, and credential rotation resets all three confirmation fields.
 If storing the confirmation fails after telemetry acceptance, sync remains
 successful but PASS stays blocked until a later new report saves it. The manual
 map observation remains the source of localization/display evidence. No sync
-status is required to record FAIL.
+status is required to record FAIL. The first accepted context belongs to the
+current credential period; stored confirmation and latest in-memory online
+freshness are separate. The report timestamp passing age/skew validation does
+not prove NTP was independently checked. Confirmation does not prove that the
+robot loaded the named map file or is safe to move. Provisioning is a separate
+technical/deployment duty and does not grant a Staff Operator SQL access.
+
+**Diagram redraw notes — pending:** For the Report 4 Robot data/class view, show
+unique `RobotCode`, `SourceType=PHYSICAL`, dispatch-disabled/unassigned
+registration, and the three nullable first-accepted confirmation fields as one
+all-null-or-all-present constrained group. Show credential provisioning as a
+separate trust boundary: rotation updates `CredentialHash` and resets that
+group atomically; runtime registration inserts and Fleet Sync updates only the
+confirmation group. For the Fleet Sync / map-check sequence, show current-key
+authentication, accepted telemetry, conditional persistence of the first
+confirmation (skipped when already confirmed), and the failure path where
+telemetry remains accepted while confirmation remains absent and a later new
+report may retry. Show manual physical observation and the PASS guard separately
+from sync; FAIL remains recordable before confirmation. The status read should
+distinguish durable confirmation from latest in-memory online freshness. These
+diagrams are not yet redrawn or accepted.
 
 ## Frontend handoff
 

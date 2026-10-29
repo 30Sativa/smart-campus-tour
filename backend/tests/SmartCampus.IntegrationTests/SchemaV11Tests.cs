@@ -185,11 +185,11 @@ public sealed class SchemaV11Tests
         Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
     }
 
-    [SchemaV13Fact]
+    [SchemaV15Fact]
     public async Task FixedRouteLifecycle_FailThenNewRevisionPass_KeepsEveryVersionAndRun()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.3.sql");
-        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(1)}',N'TechnicalStaff'),('{Id(2)}',N'Staff');");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(1)}',N'TechnicalStaff'),('{Id(2)}',N'Staff');");
         var passwordHash = new IdentityPasswordHasher().Hash(RouteAdminPassword);
         await db.ExecuteAsync($"INSERT dbo.Users(Id,Username,NormalizedUsername,PasswordHash,FullName,IsActive,CreatedAt) VALUES('{Id(3)}',N'route.admin',N'ROUTE.ADMIN',N'{passwordHash}',N'Route Test Admin',1,SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(3)}',N'ADMIN');");
         await using var api = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(db.ConnectionString);
@@ -430,8 +430,8 @@ public sealed class SchemaV11Tests
         Assert.Equal("USER1", await db.ScalarAsync<string>($"SELECT NormalizedUsername FROM dbo.Users WHERE Id='{Id(1)}';"));
     }
 
-    [SchemaV14Fact]
-    public async Task V11ToV14DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
+    [SchemaV15Fact]
+    public async Task V11ToV15DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot.sql");
         await db.ExecuteAsync("""
@@ -451,7 +451,10 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("route-revision-permissions.sql");
         await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
         await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
+        await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
+        await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
+        await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
 
         Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Users;"));
@@ -475,11 +478,11 @@ public sealed class SchemaV11Tests
         finally { await ExecuteAsync(connection, "REVERT;"); }
     }
 
-    [SchemaV12Fact]
+    [SchemaV15Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
-        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
@@ -574,11 +577,11 @@ public sealed class SchemaV11Tests
         Assert.Equal(new[] { "FAIL", "PASS", "FAIL", "FAIL" }, history.VerificationRecords.Select(item => item.ResultCode).ToArray());
     }
 
-    [SchemaV12Fact]
+    [SchemaV15Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
-        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
@@ -610,11 +613,11 @@ public sealed class SchemaV11Tests
         Assert.Equal(mapA.Id, latestDeploymentMap);
     }
 
-    [SchemaV12Fact]
+    [SchemaV15Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.2.sql");
-        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,1,0,SYSDATETIMEOFFSET());");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
         var mapA = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package);

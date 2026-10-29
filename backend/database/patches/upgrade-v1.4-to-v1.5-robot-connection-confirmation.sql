@@ -20,9 +20,9 @@ IF COL_LENGTH(N'dbo.Robots', N'FirstAcceptedFrameId') IS NULL
     ALTER TABLE dbo.Robots ADD FirstAcceptedFrameId NVARCHAR(100) NULL;
 
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_FirstAcceptedSync_Complete')
-    ALTER TABLE dbo.Robots ADD CONSTRAINT CK_Robots_FirstAcceptedSync_Complete CHECK
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.Robots ADD CONSTRAINT CK_Robots_FirstAcceptedSync_Complete CHECK
         ((FirstAcceptedSyncAt IS NULL AND FirstAcceptedMapKey IS NULL AND FirstAcceptedFrameId IS NULL) OR
-         (FirstAcceptedSyncAt IS NOT NULL AND FirstAcceptedMapKey IS NOT NULL AND FirstAcceptedFrameId IS NOT NULL));
+         (FirstAcceptedSyncAt IS NOT NULL AND FirstAcceptedMapKey IS NOT NULL AND FirstAcceptedFrameId IS NOT NULL));';
 
 IF COL_LENGTH(N'dbo.Robots', N'FirstAcceptedSyncAt') IS NULL
     OR COL_LENGTH(N'dbo.Robots', N'FirstAcceptedMapKey') IS NULL

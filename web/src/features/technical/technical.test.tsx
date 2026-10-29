@@ -185,6 +185,29 @@ describe('Technical Staff API integration', () => {
       .toMatchObject({ localizationPassed: true, displayPassed: false, robotCode: 'amr-01' })
   })
 
+  it('refreshes connection confirmation and latest sync without clearing map-check inputs', async () => {
+    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }]
+    renderPage(<TechnicalMapsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }))
+    await screen.findByRole('option', { name: /AMR 01 · amr-01 · Chưa xác nhận kết nối/ })
+    fireEvent.change(await screen.findByLabelText('Robot kiểm tra'), { target: { value: 'amr-01' } })
+    expect(screen.getByLabelText('Robot kiểm tra')).toHaveValue('amr-01')
+    fireEvent.click(screen.getByLabelText('Localization đạt'))
+    fireEvent.click(screen.getByLabelText('Map hiển thị đúng'))
+    fireEvent.change(screen.getByLabelText('Bằng chứng kiểm tra'), { target: { value: 'Quan sát tại khu vực.' } })
+    expect(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' })).toBeDisabled()
+
+    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-29T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-29T10:01:00Z' }]
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái' }))
+
+    expect(await screen.findByRole('option', { name: /AMR 01 · amr-01 · Đã xác nhận · Đang kết nối/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Robot kiểm tra')).toHaveValue('amr-01')
+    expect(screen.getByLabelText('Localization đạt')).toBeChecked()
+    expect(screen.getByLabelText('Map hiển thị đúng')).toBeChecked()
+    expect(screen.getByLabelText('Bằng chứng kiểm tra')).toHaveValue('Quan sát tại khu vực.')
+    expect(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' })).toBeEnabled()
+  })
+
   it('registers a physical robot and refreshes the lookup used by map checks', async () => {
     physicalRobots = []
     renderPage(<TechnicalRobotsPage />)

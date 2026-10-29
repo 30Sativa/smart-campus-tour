@@ -1,6 +1,6 @@
 # PWA workflow target — SRS v0.2
 
-Updated 2026-10-28 from Report 3 SRS v0.2 aligned to Phiếu v1.9 and ADR-0028.
+Updated 2026-10-29 from Report 3 SRS v0.2 aligned to Phiếu v1.9, ADR-0028 and ADR-0029.
 [Detailed scope](campus-tour-scope.md) governs business rules; this is a workflow
 projection, not an implementation or diagram-completion claim. Historical
 Review 1 flow is preserved in Git at `e70fb52`. Repo business succession is
@@ -16,7 +16,7 @@ Use the SRS screen IDs exactly; components need not be separate routes.
 | SCR-PUBLIC | Public | Entry information; no registration or invitation/session authority from URL |
 | SCR-ADMIN | Admin | Manage accounts, configuration and administrative audit; one supported role/account |
 | SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose any registered physical robot for manual deployment/localization evidence. A new PASS requires first accepted Fleet Sync under its current credential; FAIL remains available before confirmation. Keep upload distinct from check result. |
-| SCR-TECH-ROBOT | Technical Staff | Register a physical robot identity using RobotCode and display name; an operator separately provisions/configures its key and RobotContexts, then starts the bridge. Show first accepted connection context and latest in-memory sync. Registration itself does not connect or provision the robot. |
+| SCR-TECH-ROBOT | Technical Staff | Register a PHYSICAL identity using RobotCode and display name. Registration can be prepared independently of map creation/upload and does not require an online robot. Show persisted first accepted connection context separately from the latest in-memory sync; refresh while keeping map-check inputs. Credential provisioning and bridge setup remain separate deployment duties. |
 | SCR-TECH-POI | Technical Staff | Import unverified POIs; verify exact POI/route revisions; project YAML/frame mapping pending |
 | SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation |
 | SCR-STAFF-REVIEW | Staff | Decide pending rows and requested email changes; tour SCHEDULED; ≤2-working-day target |
@@ -32,22 +32,32 @@ artifacts, not a new research workspace.
 
 ## 2. Preparation and tour lifecycle
 
-Technical registers the physical robot identity → operator provisions the key
-and matching RobotContexts and configures MiniPC bridge → a valid accepted Fleet
-Sync confirms backend contact → creates map externally → uploads immutable
-version → manually deploys and verifies localization/display on a selected
-registered physical robot → only then Staff proposes/submits POIs /
-Technical imports or verifies POIs
+Prepare independently: register the physical robot identity and create the map
+with robot tools → upload the immutable map version → obtain its `mapKey` → the
+responsible technical/deployment operator provisions the current credential and
+configures matching backend `RobotContexts` and MiniPC bridge → send a valid
+Fleet Sync report → physically check the map and record manual localization /
+display evidence → a new deployment-check PASS is allowed → Staff creates POIs.
+Robot registration and map upload can happen in either order; this guide does
+not add an API prerequisite to configuration or sync. Do not require the map to
+PASS before configuring or syncing. Confirmation records the first accepted
+sync in the current credential period; stored map/frame are historical
+context. A valid report timestamp does not verify NTP, and confirmation does
+not prove the robot loaded the named map file or is safe. Persisted confirmation
+and current online freshness are separate. Provisioning responsibility does
+not grant Staff Operator any SQL permission.
 (unverified) → Technical verifies POIs → Staff composes route/content →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves
 15min + longest permitted path +15min → review all row/email decisions →
 READY locks route/content/list → preflight at published time → Start while READY
 → validate guards/claim robot/commit RUNNING → dispatch first leg.
 
-**Diagram follow-up:** redraw the workflow diagram to include provisioning and
-accepted Fleet Sync before a new map-check PASS, and keep the manual map check
-before Staff POI proposal/submission. No editable diagram source is checked in
-to this repository; the external workflow illustration still needs redraw.
+**Diagram follow-up:** pending redraw. Add parallel preparation branches for
+robot registration and map creation/upload; after upload show `mapKey` passed
+to deployment provisioning; add current-key valid-sync guard before a new map
+check PASS; show physical map observation before PASS and Staff POI creation
+after PASS. Include separate persisted confirmation and live-sync freshness
+states. This is guidance, not an API dependency between upload and setup.
 
 Saving or activating catalog data is not physical confirmation. A new
 movement-affecting revision requires retest; retained tested configuration stays
@@ -111,8 +121,9 @@ preserve the decision issue rather than drawing one settled guard.
 
 Current backend contracts still expose Admin business endpoints and old
 whole-registration access rules. The gap register states migration dependencies.
-TechnicalStaff is now a canonical JSON/JWT value; frontend must add it to its
-role type, label, account creation/listing and role guards, with an honest
-workspace-unavailable state until the Technical feature slice ships.
-Keep it out of Admin/Staff/Representative guards and do not add Operator/Viewer
-account roles. No frontend implementation or diagram completion is asserted.
+TechnicalStaff is a canonical JSON/JWT value and the Technical robot/map pages
+are implemented, including physical robot registration and refreshing connection
+status during a map check. Other migration-dependent account administration and
+business endpoints remain as described by the gap register. Keep TechnicalStaff
+out of Admin/Staff/Representative guards and do not add Operator/Viewer account
+roles. This workflow projection does not claim diagram completion.

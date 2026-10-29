@@ -39,19 +39,25 @@ $env:FleetSync__RobotContexts__robot_test_01__FrameId = 'map'
 
 ## Registration-to-map-check walkthrough
 
-1. A Technical Staff member registers the PHYSICAL identity with RobotCode and
-   display name. The robot is immediately selectable, including while offline.
-2. An operator separately provisions the key, puts it in the MiniPC's protected
-   configuration, and configures matching RobotCode/mapKey/frameId values in
-   the backend and bridge.
-3. Start the configured Fleet Sync bridge or run the probe below. After a new
-   report is accepted, the Technical robot list shows the first confirmation
-   time and map/frame context. The probe is backend-contact evidence, not proof
-   of the physical robot loading or localizing the map.
-4. Technical Staff observes the actual map display and localization, then
-   records the manual exact-package map check. A new PASS is blocked until
-   connection confirmation is persisted; a FAIL may be recorded before then.
-5. Keep the separate downstream POI preparation and Tour readiness rules; this
+Robot registration and map preparation may start independently. For a new area,
+use this order as an operator guide, not an API prerequisite:
+
+1. Register the PHYSICAL identity with RobotCode and display name, and create
+   the map with robot tools. Registration does not require the robot online.
+2. Upload the immutable map version and obtain its `mapKey` and `frameId`.
+3. The responsible technical/deployment operator provisions the current key,
+   configures matching backend `RobotContexts`, and installs the credential and
+   map context in the MiniPC bridge. Provisioning responsibility does not grant
+   Staff Operator SQL access.
+4. Start Fleet Sync. A valid accepted report under the current key records the
+   first confirmation for that credential period. The saved map/frame are
+   historical context; an accepted timestamp does not prove NTP was checked.
+5. Observe the map physically and record the manual exact-package check. A new
+   PASS requires persisted connection confirmation; an observed FAIL remains
+   available before it. Sync does not prove the robot loaded the map file or is
+   safe to move.
+6. Continue to Staff POI creation only after map technical eligibility passes.
+   Keep POI verification, route testing and Tour readiness as separate rules;
    connection confirmation does not make a robot ready or dispatchable.
 
 Apply `backend/database/fleet-credential-provisioning-permissions.sql` with a

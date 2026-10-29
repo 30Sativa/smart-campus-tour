@@ -11,7 +11,8 @@ namespace SmartCampus.Application.Features.FleetSync.Commands.SyncFleetTelemetry
 public sealed record SyncFleetTelemetry(
     FleetRobotIdentity Robot,
     FleetTelemetryReport Report,
-    byte[] VerifiedCredentialHash) : IRequest<SyncFleetTelemetryResult>;
+    byte[] VerifiedCredentialHash,
+    bool IsConnectionConfirmedForCredential = false) : IRequest<SyncFleetTelemetryResult>;
 
 public sealed record SyncFleetTelemetryResult(
     bool Duplicate,
@@ -96,7 +97,7 @@ public sealed class SyncFleetTelemetryHandler(
         var now = clock.GetUtcNow();
         var state = new FleetTelemetrySnapshot(request.Robot, request.Report, now);
         var result = await store.ApplyAsync(state, cancellationToken);
-        if (result.Applied)
+        if (result.Applied && !request.IsConnectionConfirmedForCredential)
         {
             try
             {

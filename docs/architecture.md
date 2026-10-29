@@ -1985,7 +1985,13 @@ Backend SQL Maintenance workflow changes only the pinned SQL Server engine and
 resource settings. All three operations share the production host/deploy lock.
 Unknown schemas fail closed. Runtime permissions preserve append-only AuditLogs/TourEvents, grant writes for current
 implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
-and read access only to robot/variant/branch data.
+and `Robots` SELECT/INSERT plus UPDATE only on the three first-accepted
+confirmation columns. Runtime has no whole-table `Robots` UPDATE/DELETE or
+`CredentialHash` UPDATE; the separate credential provisioner updates the hash
+and resets confirmation atomically. Existing v1.4 databases require the
+controlled v1.4→v1.5 upgrade/regrant and read-only check-only gate before an API
+release that needs robot registration. The check-only gate does not change
+database state.
 The deployment adds two anonymous operational routes: `GET /health/live`
 returns 204 when the API process can serve a request; `GET /health/ready`
 performs a SQL connectivity check with a three-second timeout and returns 200

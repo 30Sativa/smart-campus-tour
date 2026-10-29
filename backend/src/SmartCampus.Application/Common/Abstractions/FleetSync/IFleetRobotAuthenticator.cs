@@ -7,7 +7,10 @@ public sealed record FleetRobotIdentity(
     bool NeedsInspection);
 
 // Authentication-only proof: never put the hash in claims, public DTOs, telemetry snapshots or hub projections.
-public sealed record FleetRobotAuthenticationProof(FleetRobotIdentity Identity, byte[] VerifiedCredentialHash);
+public sealed record FleetRobotAuthenticationProof(
+    FleetRobotIdentity Identity,
+    byte[] VerifiedCredentialHash,
+    bool IsConnectionConfirmedForCredential = false);
 
 public interface IFleetRobotAuthenticator
 {

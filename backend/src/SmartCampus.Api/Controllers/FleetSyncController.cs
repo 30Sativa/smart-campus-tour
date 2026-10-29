@@ -30,7 +30,8 @@ public sealed class FleetSyncController(
             throw new InvalidOperationException("Authenticated Fleet Robot proof was unavailable for this request.");
 
         var result = await sender.Send(new SyncFleetTelemetry(
-            proof.Identity, request.ToReport(), proof.VerifiedCredentialHash), cancellationToken);
+            proof.Identity, request.ToReport(), proof.VerifiedCredentialHash,
+            proof.IsConnectionConfirmedForCredential), cancellationToken);
         broadcaster.NotifyTelemetryUpdated();
 
         return Ok(new BaseResponse<FleetSyncResponse>

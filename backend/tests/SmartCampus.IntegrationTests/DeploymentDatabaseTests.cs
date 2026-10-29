@@ -52,18 +52,19 @@ public sealed class DeploymentDatabaseTests
             await insert.ExecuteNonQueryAsync();
             await using (var confirmation = new SqlCommand("UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'map-v1', FirstAcceptedFrameId=N'map' WHERE RobotCode=N'robot_registered_sql';", connection))
                 await confirmation.ExecuteNonQueryAsync();
+            await using (var permissions = new SqlCommand("SELECT CONCAT(COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));", connection))
+                Assert.Equal("1111100", await permissions.ExecuteScalarAsync());
             await using var code = new SqlCommand("SELECT RobotCode FROM dbo.Robots WHERE RobotCode=N'robot_registered_sql';", connection);
             Assert.Equal("robot_registered_sql", await code.ExecuteScalarAsync());
-            foreach (var statement in new[]
+            foreach (var (statement, expectedError) in new[]
             {
-                "UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'",
-                "UPDATE dbo.Robots SET FirstAcceptedSyncAt=NULL WHERE RobotCode=N'robot_registered_sql'",
-                "UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'",
-                "DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'"
+                ("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'", 230),
+                ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'", 230),
+                ("DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'", 229)
             })
             {
                 await using var denied = new SqlCommand(statement, connection);
-                Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
+                Assert.Equal(expectedError, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
             }
         }
         finally

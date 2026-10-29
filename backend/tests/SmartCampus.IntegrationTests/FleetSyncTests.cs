@@ -177,6 +177,12 @@ public sealed class FleetSyncTests
         Assert.False(retried.Duplicate);
         Assert.Equal(2, confirmation.Attempts);
         Assert.Equal(("test-map", "map", now), confirmation.Saved);
+
+        var third = second with { Seq = 3, ReportedAt = now.AddMilliseconds(2) };
+        var alreadyConfirmed = await handler.Handle(
+            new SyncFleetTelemetry(identity, third, new byte[32], IsConnectionConfirmedForCredential: true), CancellationToken.None);
+        Assert.False(alreadyConfirmed.Duplicate);
+        Assert.Equal(2, confirmation.Attempts);
     }
 
     [Fact]
@@ -337,6 +343,14 @@ public sealed class FleetSyncTests
         using (var response = await host.Client.SendAsync(mismatchedIdentity))
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
+        await using (var beforeAccepted = CreateContext(database.ConnectionString))
+        {
+            var stillUnconfirmed = await beforeAccepted.Robots.AsNoTracking().SingleAsync();
+            Assert.Null(stillUnconfirmed.FirstAcceptedSyncAt);
+            Assert.Null(stillUnconfirmed.FirstAcceptedMapKey);
+            Assert.Null(stillUnconfirmed.FirstAcceptedFrameId);
+        }
+
         var request = ValidRequest();
         using (var acceptedRequest = CreateSyncRequest(request, robot.Secret))
         using (var accepted = await host.Client.SendAsync(acceptedRequest))
@@ -392,14 +406,6 @@ public sealed class FleetSyncTests
         using (var response = await host.Client.SendAsync(staleReport))
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        await using (var beforeAccepted = CreateContext(database.ConnectionString))
-        {
-            var stillUnconfirmed = await beforeAccepted.Robots.AsNoTracking().SingleAsync();
-            Assert.Null(stillUnconfirmed.FirstAcceptedSyncAt);
-            Assert.Null(stillUnconfirmed.FirstAcceptedMapKey);
-            Assert.Null(stillUnconfirmed.FirstAcceptedFrameId);
-        }
-
         await using var verify = CreateContext(database.ConnectionString);
         var storedRobot = await verify.Robots.AsNoTracking().SingleAsync();
         Assert.Equal(robot.Hash, storedRobot.CredentialHash);
@@ -411,6 +417,11 @@ public sealed class FleetSyncTests
         Assert.True(storedRobot.NeedsInspection);
         Assert.Equal(0, await database.CountRowsAsync("dbo.TourEvents"));
         Assert.Equal(0, await database.CountRowsAsync("dbo.MapDeploymentChecks"));
+
+        // Duplicate, stale, wrong-context, and rejected reports do not replace the first accepted evidence.
+        Assert.InRange(storedRobot.FirstAcceptedSyncAt!.Value, request.ReportedAt.AddSeconds(-1), request.ReportedAt.AddSeconds(1));
+        Assert.Equal("test-campus-map-v1", storedRobot.FirstAcceptedMapKey);
+        Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
     }
 
     [SchemaV15Fact]

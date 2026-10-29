@@ -22,7 +22,8 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
                 candidate.SourceType,
                 candidate.DisplayName,
                 candidate.NeedsInspection,
-                candidate.CredentialHash
+                candidate.CredentialHash,
+                candidate.FirstAcceptedSyncAt
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -31,6 +32,7 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
 
         return new FleetRobotAuthenticationProof(
             new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName, robot.NeedsInspection),
-            robot.CredentialHash.ToArray());
+            robot.CredentialHash.ToArray(),
+            robot.FirstAcceptedSyncAt is not null);
     }
 }

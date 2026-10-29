@@ -379,11 +379,17 @@ public sealed class BusinessFlowIntegrationTests
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "flow.admin", roles: ["ADMIN"]);
         var robotId = Guid.NewGuid();
+        var robotCredential = FleetRobotCredentialHash.Create();
         await database.ExecuteAsync($"""
             INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
-            VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x02, 1, 0, SYSDATETIMEOFFSET());
+            VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x{Convert.ToHexString(robotCredential.Hash)}, 0, 1, SYSDATETIMEOFFSET());
             """);
-        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var syncSettings = new Dictionary<string, string>
+        {
+            ["FleetSync:RobotContexts:flow_physical:MapKey"] = "flow-area-v1",
+            ["FleetSync:RobotContexts:flow_physical:FrameId"] = "map"
+        };
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, syncSettings);
 
         var adminToken = await Login(host.Client, "flow.admin");
         var technicalId = await CreateAccount(host.Client, adminToken, "flow.technical", "TechnicalStaff");
@@ -409,6 +415,25 @@ public sealed class BusinessFlowIntegrationTests
         var mapId = map.GetProperty("id").GetGuid();
         Assert.Equal("VALID", map.GetProperty("validationStatus").GetString());
         var mapHash = map.GetProperty("packageSha256").GetString();
+
+        // This backend integration uses a simulated Fleet Sync client with a valid
+        // provisioned credential/context. It is not evidence from a physical robot.
+        using var syncRequest = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/v1/sync")
+        {
+            Content = JsonContent.Create(new
+            {
+                robotId = "flow_physical", streamId = Guid.NewGuid(), seq = 1,
+                reportedAt = DateTimeOffset.UtcNow, mapKey = map.GetProperty("mapKey").GetString(),
+                frameId = map.GetProperty("frameId").GetString(), pose = (object?)null,
+                status = "IDLE", legId = (Guid?)null, localized = (bool?)null,
+                motionReady = (bool?)null, faultCode = (string?)null, batteryPercent = (double?)null
+            })
+        };
+        syncRequest.Headers.Add("X-Robot-Code", "flow_physical");
+        syncRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", robotCredential.Secret);
+        using var sync = await host.Client.SendAsync(syncRequest);
+        Assert.Equal(HttpStatusCode.OK, sync.StatusCode);
+        Assert.True((await Body(sync)).GetProperty("data").GetProperty("accepted").GetBoolean());
 
         using var pendingMaps = await Get(host.Client, "/api/maps/versions?areaKey=flow-area", staffToken);
         Assert.Equal(HttpStatusCode.OK, pendingMaps.StatusCode);
