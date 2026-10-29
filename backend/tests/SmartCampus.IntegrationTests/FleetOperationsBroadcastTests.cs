@@ -42,6 +42,8 @@ public sealed class FleetOperationsBroadcastTests
                 }
             }
         };
+        controller.HttpContext.Items[FleetRobotAuthentication.RequestProofItemKey] = new FleetRobotAuthenticationProof(
+            new FleetRobotIdentity("robot_test_01", "PHYSICAL", null, false), new byte[32], false);
 
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         await controller.Sync(new FleetSyncRequest(

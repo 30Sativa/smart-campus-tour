@@ -25,13 +25,13 @@ public sealed class FleetSyncController(
         [FromBody] FleetSyncRequest request,
         CancellationToken cancellationToken)
     {
-        var identity = User;
-        var robot = new FleetRobotIdentity(
-            identity.FindFirst(FleetRobotAuthentication.RobotCodeClaim)!.Value,
-            identity.FindFirst(FleetRobotAuthentication.SourceTypeClaim)!.Value,
-            identity.FindFirst(FleetRobotAuthentication.DisplayNameClaim)?.Value,
-            bool.Parse(identity.FindFirst(FleetRobotAuthentication.NeedsInspectionClaim)!.Value));
-        var result = await sender.Send(new SyncFleetTelemetry(robot, request.ToReport()), cancellationToken);
+        if (!HttpContext.Items.TryGetValue(FleetRobotAuthentication.RequestProofItemKey, out var proofValue) ||
+            proofValue is not FleetRobotAuthenticationProof proof)
+            throw new InvalidOperationException("Authenticated Fleet Robot proof was unavailable for this request.");
+
+        var result = await sender.Send(new SyncFleetTelemetry(
+            proof.Identity, request.ToReport(), proof.VerifiedCredentialHash,
+            proof.IsConnectionConfirmedForCredential), cancellationToken);
         broadcaster.NotifyTelemetryUpdated();
 
         return Ok(new BaseResponse<FleetSyncResponse>

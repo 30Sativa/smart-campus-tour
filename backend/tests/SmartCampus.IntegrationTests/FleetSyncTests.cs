@@ -14,6 +14,7 @@ using SmartCampus.Api.Controllers;
 using SmartCampus.Api.Hubs;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.FleetSync.Commands.SyncFleetTelemetry;
 using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Infrastructure.Persistence;
@@ -149,6 +150,39 @@ public sealed class FleetSyncTests
         var steppedBack = await Assert.ThrowsAsync<SmartCampus.Application.Common.Exceptions.ConflictException>(() =>
             store.ApplyAsync(Snapshot(firstObserved.Current.Report.StreamId, 5, now.AddMilliseconds(-1), now), CancellationToken.None));
         Assert.Equal("OUT_OF_ORDER", steppedBack.Code);
+    }
+
+    [Fact]
+    public async Task AcceptedSyncSurvivesConfirmationWriteFailureAndRetriesOnNextNewReport()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var identity = new FleetRobotIdentity(RobotCode, "PHYSICAL", null, false);
+        var store = new InMemoryFleetTelemetryStore();
+        var confirmation = new FailingOnceConfirmationStore();
+        var settings = new FleetSyncSettings(
+            new Dictionary<string, FleetRobotMapContext> { [RobotCode] = new("test-map", "map") },
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        var handler = new SyncFleetTelemetryHandler(store, confirmation, settings,
+            new FixedTimeProvider(now), Microsoft.Extensions.Logging.Abstractions.NullLogger<SyncFleetTelemetryHandler>.Instance);
+        var first = new FleetTelemetryReport(RobotCode, Guid.NewGuid(), 1, now, "test-map", "map",
+            null, "IDLE", null, null, null, null, null);
+
+        var accepted = await handler.Handle(new SyncFleetTelemetry(identity, first, new byte[32]), CancellationToken.None);
+        Assert.False(accepted.Duplicate);
+        Assert.Equal(1, confirmation.Attempts);
+
+        var second = first with { Seq = 2, ReportedAt = now.AddMilliseconds(1) };
+        var retried = await handler.Handle(new SyncFleetTelemetry(identity, second, new byte[32]), CancellationToken.None);
+        Assert.False(retried.Duplicate);
+        Assert.Equal(2, confirmation.Attempts);
+        Assert.Equal(("test-map", "map", now), confirmation.Saved);
+
+        var third = second with { Seq = 3, ReportedAt = now.AddMilliseconds(2) };
+        var alreadyConfirmed = await handler.Handle(
+            new SyncFleetTelemetry(identity, third, new byte[32], IsConnectionConfirmedForCredential: true), CancellationToken.None);
+        Assert.False(alreadyConfirmed.Duplicate);
+        Assert.Equal(2, confirmation.Attempts);
     }
 
     [Fact]
@@ -309,6 +343,14 @@ public sealed class FleetSyncTests
         using (var response = await host.Client.SendAsync(mismatchedIdentity))
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
+        await using (var beforeAccepted = CreateContext(database.ConnectionString))
+        {
+            var stillUnconfirmed = await beforeAccepted.Robots.AsNoTracking().SingleAsync();
+            Assert.Null(stillUnconfirmed.FirstAcceptedSyncAt);
+            Assert.Null(stillUnconfirmed.FirstAcceptedMapKey);
+            Assert.Null(stillUnconfirmed.FirstAcceptedFrameId);
+        }
+
         var request = ValidRequest();
         using (var acceptedRequest = CreateSyncRequest(request, robot.Secret))
         using (var accepted = await host.Client.SendAsync(acceptedRequest))
@@ -367,9 +409,82 @@ public sealed class FleetSyncTests
         await using var verify = CreateContext(database.ConnectionString);
         var storedRobot = await verify.Robots.AsNoTracking().SingleAsync();
         Assert.Equal(robot.Hash, storedRobot.CredentialHash);
+        Assert.NotNull(storedRobot.FirstAcceptedSyncAt);
+        Assert.Equal("test-campus-map-v1", storedRobot.FirstAcceptedMapKey);
+        Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
+        Assert.InRange(storedRobot.FirstAcceptedSyncAt!.Value, request.ReportedAt.AddSeconds(-1), request.ReportedAt.AddSeconds(1));
         Assert.False(storedRobot.IsDispatchEnabled);
         Assert.True(storedRobot.NeedsInspection);
         Assert.Equal(0, await database.CountRowsAsync("dbo.TourEvents"));
+        Assert.Equal(0, await database.CountRowsAsync("dbo.MapDeploymentChecks"));
+
+        // Duplicate, stale, wrong-context, and rejected reports do not replace the first accepted evidence.
+        Assert.InRange(storedRobot.FirstAcceptedSyncAt!.Value, request.ReportedAt.AddSeconds(-1), request.ReportedAt.AddSeconds(1));
+        Assert.Equal("test-campus-map-v1", storedRobot.FirstAcceptedMapKey);
+        Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
+    }
+
+    [SchemaV15Fact]
+    public async Task ConnectionConfirmation_IsWriteOnceConcurrentAndBoundToCurrentCredentialHash()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        var credential = FleetRobotCredentialHash.Create();
+        var robotId = Guid.NewGuid();
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            context.Robots.Add(new SmartCampus.Domain.Entities.Robot
+            {
+                Id = robotId, RobotCode = "confirmation_race", SourceType = "PHYSICAL", DisplayName = "Race",
+                CredentialHash = credential.Hash, IsDispatchEnabled = false, NeedsInspection = false,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+            await context.SaveChangesAsync();
+        }
+
+        async Task<bool> RecordAsync(string mapKey, string frameId, DateTimeOffset acceptedAt)
+        {
+            await using var context = CreateContext(database.ConnectionString);
+            var store = new EfFleetRobotConnectionConfirmationStore(context);
+            return await store.TryRecordFirstAcceptedAsync("confirmation_race", credential.Hash,
+                mapKey, frameId, acceptedAt, CancellationToken.None);
+        }
+
+        var acceptedTimes = new[] { DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(1) };
+        var results = await Task.WhenAll(
+            RecordAsync("map-a", "frame-a", acceptedTimes[0]),
+            RecordAsync("map-b", "frame-b", acceptedTimes[1]));
+        Assert.Equal(1, results.Count(result => result));
+        Assert.Equal(1, results.Count(result => !result));
+
+        byte[] oldHash;
+        string currentCredential;
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            var robot = await context.Robots.AsNoTracking().SingleAsync(item => item.Id == robotId);
+            oldHash = robot.CredentialHash;
+            Assert.True(
+                robot.FirstAcceptedMapKey == "map-a" && robot.FirstAcceptedFrameId == "frame-a" ||
+                robot.FirstAcceptedMapKey == "map-b" && robot.FirstAcceptedFrameId == "frame-b");
+            var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(context, robot.RobotCode);
+            Assert.NotNull(provisioned);
+            currentCredential = provisioned.Credential;
+        }
+
+        await using (var context = CreateContext(database.ConnectionString))
+        {
+            var current = await context.Robots.AsNoTracking().SingleAsync(item => item.Id == robotId);
+            Assert.Null(current.FirstAcceptedSyncAt);
+            Assert.Null(current.FirstAcceptedMapKey);
+            Assert.Null(current.FirstAcceptedFrameId);
+            var store = new EfFleetRobotConnectionConfirmationStore(context);
+            Assert.False(await store.TryRecordFirstAcceptedAsync(current.RobotCode, oldHash,
+                "stale-map", "stale-frame", DateTimeOffset.UtcNow, CancellationToken.None));
+            var proof = await new FleetRobotAuthenticator(context).AuthenticateAsync(current.RobotCode,
+                currentCredential, CancellationToken.None);
+            Assert.NotNull(proof);
+            Assert.True(await store.TryRecordFirstAcceptedAsync(current.RobotCode, proof.VerifiedCredentialHash,
+                "current-map", "current-frame", DateTimeOffset.UtcNow, CancellationToken.None));
+        }
     }
 
     [SchemaV11Fact]
@@ -639,4 +754,24 @@ public sealed class FleetSyncTests
 
     private static ApplicationDbContext CreateContext(string connectionString) =>
         new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connectionString).Options);
+
+    private sealed class FailingOnceConfirmationStore : IFleetRobotConnectionConfirmationStore
+    {
+        public int Attempts { get; private set; }
+        public (string MapKey, string FrameId, DateTimeOffset AcceptedAt)? Saved { get; private set; }
+
+        public Task<bool> TryRecordFirstAcceptedAsync(string robotCode, byte[] verifiedCredentialHash,
+            string mapKey, string frameId, DateTimeOffset acceptedAt, CancellationToken cancellationToken)
+        {
+            Attempts++;
+            if (Attempts == 1) throw new InvalidOperationException("Injected confirmation persistence failure.");
+            Saved = (mapKey, frameId, acceptedAt);
+            return Task.FromResult(true);
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }

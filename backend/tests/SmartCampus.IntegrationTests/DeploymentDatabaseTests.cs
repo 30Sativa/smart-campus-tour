@@ -25,8 +25,8 @@ namespace SmartCampus.IntegrationTests;
 
 public sealed class DeploymentDatabaseTests
 {
-    [SchemaV14Fact]
-    public async Task RuntimeCanInsertRobotIdentityButOnlyProvisionerCanSetCredentialHash()
+    [SchemaV15Fact]
+    public async Task RuntimeCanInsertAndConfirmRobotButOnlyProvisionerCanRotateCredentialAndResetConfirmation()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await Apply(database, "permissions.sql");
@@ -50,17 +50,21 @@ public sealed class DeploymentDatabaseTests
                 VALUES(NEWID(),N'robot_registered_sql','PHYSICAL',N'Registered SQL Robot',0x,0,0,SYSDATETIMEOFFSET());
                 """, connection);
             await insert.ExecuteNonQueryAsync();
+            await using (var confirmation = new SqlCommand("UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'map-v1', FirstAcceptedFrameId=N'map' WHERE RobotCode=N'robot_registered_sql';", connection))
+                await confirmation.ExecuteNonQueryAsync();
+            await using (var permissions = new SqlCommand("SELECT CONCAT(COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));", connection))
+                Assert.Equal("1111100", await permissions.ExecuteScalarAsync());
             await using var code = new SqlCommand("SELECT RobotCode FROM dbo.Robots WHERE RobotCode=N'robot_registered_sql';", connection);
             Assert.Equal("robot_registered_sql", await code.ExecuteScalarAsync());
-            foreach (var statement in new[]
+            foreach (var (statement, expectedError) in new[]
             {
-                "UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'",
-                "UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'",
-                "DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'"
+                ("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'", 230),
+                ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'", 230),
+                ("DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'", 229)
             })
             {
                 await using var denied = new SqlCommand(statement, connection);
-                Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
+                Assert.Equal(expectedError, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
             }
         }
         finally
@@ -70,11 +74,13 @@ public sealed class DeploymentDatabaseTests
         }
 
         string credential;
+        byte[] oldCredentialHash;
         var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connection).Options;
         await using (var db = new ApplicationDbContext(options))
         {
             var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
             Assert.Empty(robot.CredentialHash);
+            Assert.NotNull(robot.FirstAcceptedSyncAt);
             Assert.Null(await new FleetRobotAuthenticator(db).AuthenticateAsync(robot.RobotCode,
                 FleetRobotCredentialHash.Create().Secret, CancellationToken.None));
         }
@@ -87,6 +93,15 @@ public sealed class DeploymentDatabaseTests
             var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
             Assert.NotNull(provisioned);
             credential = provisioned.Credential;
+            oldCredentialHash = FleetRobotCredentialHash.Hash(credential);
+            await db.Robots.Where(item => item.RobotCode == "robot_registered_sql")
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(item => item.FirstAcceptedSyncAt, (DateTimeOffset?)DateTimeOffset.UtcNow)
+                    .SetProperty(item => item.FirstAcceptedMapKey, (string?)"prior-map")
+                    .SetProperty(item => item.FirstAcceptedFrameId, (string?)"prior-frame"));
+            var reissued = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
+            Assert.NotNull(reissued);
+            credential = reissued.Credential;
             await using var deniedInsert = new SqlCommand("""
                 INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
                 VALUES(NEWID(),N'provisioner_cannot_register','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET());
@@ -106,6 +121,11 @@ public sealed class DeploymentDatabaseTests
             var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
             Assert.Equal(32, robot.CredentialHash.Length);
             Assert.True(FleetRobotCredentialHash.Verify(credential, robot.CredentialHash));
+            Assert.Null(robot.FirstAcceptedSyncAt);
+            Assert.Null(robot.FirstAcceptedMapKey);
+            Assert.Null(robot.FirstAcceptedFrameId);
+            Assert.False(await new EfFleetRobotConnectionConfirmationStore(db).TryRecordFirstAcceptedAsync(
+                robot.RobotCode, oldCredentialHash, "stale-map", "stale-frame", DateTimeOffset.UtcNow, CancellationToken.None));
             Assert.False(robot.IsDispatchEnabled);
             Assert.Null(robot.CurrentTourId);
             Assert.Null(robot.LastAssignedAt);
@@ -230,7 +250,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_RequiresV14AndDoesNotAdoptOrRewriteOlderMarkers()
+    public async Task Bootstrap_RequiresV15AndDoesNotAdoptOrRewriteOlderMarkers()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "preserved.user", roles: ["STAFF"]);
@@ -239,38 +259,40 @@ public sealed class DeploymentDatabaseTests
         await connection.OpenAsync();
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
-        var v14Guard = guard.Replace("$(SchemaHash)", v14Hash).Replace("$(SchemaHashV14)", v14Hash);
-        await using (var command = new SqlCommand(v14Guard, connection))
+        var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        await using (var command = new SqlCommand(currentGuard, connection))
             Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         Assert.Equal(1, await database.CountRowsAsync("dbo.Users"));
         await using (var marker = new SqlCommand("SELECT CONVERT(nvarchar(64), value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash'", connection))
             Assert.Equal(PreviousHash, await marker.ExecuteScalarAsync());
         await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{new string('0', 64)}';");
-        await using (var unknown = new SqlCommand(v14Guard, connection))
+        await using (var unknown = new SqlCommand(currentGuard, connection))
             Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unknown.ExecuteScalarAsync())).Number);
-        await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v14Hash}';");
-        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';");
-        await using (var current = new SqlCommand(v14Guard, connection))
+        await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v15Hash}';");
+        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';");
+        await using (var current = new SqlCommand(currentGuard, connection))
             Assert.Equal("READY", await current.ExecuteScalarAsync());
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourSchemaVersion';");
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';");
-        await using var unmarked = new SqlCommand(v14Guard, connection);
+        await using var unmarked = new SqlCommand(currentGuard, connection);
         Assert.Equal(51000, (await Assert.ThrowsAsync<SqlException>(() => unmarked.ExecuteScalarAsync())).Number);
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV14UpgradeMarkerWithoutReplacingBootstrapHash()
+    public async Task Bootstrap_AcceptsVerifiedV15UpgradeMarkerWithoutReplacingBootstrapHash()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         var originalHash = PreviousHash;
         await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{originalHash}';");
-        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';");
+        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';");
         await using var connection = new SqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
-        var v14Guard = guard.Replace("$(SchemaHash)", v14Hash).Replace("$(SchemaHashV14)", v14Hash);
-        await using var command = new SqlCommand(v14Guard, connection);
+        var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        await using var command = new SqlCommand(currentGuard, connection);
         Assert.Equal("READY", await command.ExecuteScalarAsync());
         await using var marker = new SqlCommand("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';", connection);
         Assert.Equal(originalHash, await marker.ExecuteScalarAsync());

@@ -1,18 +1,50 @@
 using MediatR;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Features.FleetSync;
 
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record PhysicalRobotOption(Guid Id, string RobotCode, string? DisplayName);
 
-public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotOption>>;
+public sealed record PhysicalRobotStatus(
+    Guid Id,
+    string RobotCode,
+    string? DisplayName,
+    DateTimeOffset? FirstAcceptedSyncAt,
+    string? FirstAcceptedMapKey,
+    string? FirstAcceptedFrameId,
+    string ConnectionStatus,
+    DateTimeOffset? LastSyncReceivedAt);
 
-public sealed class ListPhysicalRobotsQueryHandler(IPhysicalRobotRepository repository)
-    : IRequestHandler<ListPhysicalRobotsQuery, IReadOnlyList<PhysicalRobotOption>>
+public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
+
+public sealed class ListPhysicalRobotsQueryHandler(
+    IPhysicalRobotRepository repository,
+    IFleetTelemetryStore telemetryStore,
+    FleetSyncSettings fleetSyncSettings,
+    TimeProvider timeProvider)
+    : IRequestHandler<ListPhysicalRobotsQuery, IReadOnlyList<PhysicalRobotStatus>>
 {
-    public async Task<IReadOnlyList<PhysicalRobotOption>> Handle(ListPhysicalRobotsQuery query, CancellationToken ct)
+    public async Task<IReadOnlyList<PhysicalRobotStatus>> Handle(ListPhysicalRobotsQuery query, CancellationToken ct)
     {
         var robots = await repository.ListPhysicalRobotsAsync(ct);
-        return robots.Select(robot => new PhysicalRobotOption(robot.Id, robot.RobotCode, robot.DisplayName)).ToArray();
+        var latestByRobot = telemetryStore.GetLatest()
+            .ToDictionary(snapshot => snapshot.Robot.RobotCode, StringComparer.Ordinal);
+        var now = timeProvider.GetUtcNow();
+        return robots.Select(robot =>
+        {
+            latestByRobot.TryGetValue(robot.RobotCode, out var latest);
+            var connectionStatus = robot.FirstAcceptedSyncAt is null
+                ? "UNCONFIRMED"
+                : latest is null
+                    ? "AWAITING_DATA"
+                    : latest.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
+                        ? "CONNECTED"
+                        : "DISCONNECTED";
+            return new PhysicalRobotStatus(robot.Id, robot.RobotCode, robot.DisplayName,
+                robot.FirstAcceptedSyncAt, robot.FirstAcceptedMapKey, robot.FirstAcceptedFrameId,
+                connectionStatus, latest?.ReceivedAt);
+        }).ToArray();
     }
 }

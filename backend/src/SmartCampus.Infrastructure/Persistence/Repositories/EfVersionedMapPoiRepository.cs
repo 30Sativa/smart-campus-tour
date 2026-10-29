@@ -86,6 +86,13 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             """, cancellationToken);
     }
 
+    public Task<bool> LockAndReadConnectionConfirmationAsync(Guid robotId, CancellationToken cancellationToken) =>
+        dbContext.Robots
+            .FromSqlInterpolated($"SELECT * FROM dbo.Robots WITH (UPDLOCK, HOLDLOCK) WHERE Id = {robotId}")
+            .AsNoTracking()
+            .Select(robot => robot.FirstAcceptedSyncAt != null)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public Task LockMapPreparationStateAsync(Guid mapVersionId, CancellationToken cancellationToken)
     {
         var resource = $"map-poi:map-preparation:{mapVersionId:D}";

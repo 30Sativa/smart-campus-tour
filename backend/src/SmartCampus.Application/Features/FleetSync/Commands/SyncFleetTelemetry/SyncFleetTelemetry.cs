@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
@@ -9,7 +10,9 @@ namespace SmartCampus.Application.Features.FleetSync.Commands.SyncFleetTelemetry
 // does not implement ICommand, so UnitOfWorkBehavior never calls SQL SaveChanges.
 public sealed record SyncFleetTelemetry(
     FleetRobotIdentity Robot,
-    FleetTelemetryReport Report) : IRequest<SyncFleetTelemetryResult>;
+    FleetTelemetryReport Report,
+    byte[] VerifiedCredentialHash,
+    bool IsConnectionConfirmedForCredential = false) : IRequest<SyncFleetTelemetryResult>;
 
 public sealed record SyncFleetTelemetryResult(
     bool Duplicate,
@@ -25,6 +28,7 @@ public sealed class SyncFleetTelemetryValidator : AbstractValidator<SyncFleetTel
     {
         RuleFor(request => request.Robot).NotNull();
         RuleFor(request => request.Report).NotNull();
+        RuleFor(request => request.VerifiedCredentialHash).NotNull().Must(hash => hash is { Length: 32 });
 
         When(request => request.Robot is not null && request.Report is not null, () =>
         {
@@ -75,8 +79,10 @@ public sealed class SyncFleetTelemetryValidator : AbstractValidator<SyncFleetTel
 
 public sealed class SyncFleetTelemetryHandler(
     IFleetTelemetryStore store,
+    IFleetRobotConnectionConfirmationStore connectionConfirmationStore,
     FleetSyncSettings settings,
-    TimeProvider clock) : IRequestHandler<SyncFleetTelemetry, SyncFleetTelemetryResult>
+    TimeProvider clock,
+    Microsoft.Extensions.Logging.ILogger<SyncFleetTelemetryHandler> logger) : IRequestHandler<SyncFleetTelemetry, SyncFleetTelemetryResult>
 {
     public async Task<SyncFleetTelemetryResult> Handle(
         SyncFleetTelemetry request,
@@ -91,6 +97,21 @@ public sealed class SyncFleetTelemetryHandler(
         var now = clock.GetUtcNow();
         var state = new FleetTelemetrySnapshot(request.Robot, request.Report, now);
         var result = await store.ApplyAsync(state, cancellationToken);
+        if (result.Applied && !request.IsConnectionConfirmedForCredential)
+        {
+            try
+            {
+                await connectionConfirmationStore.TryRecordFirstAcceptedAsync(
+                    request.Robot.RobotCode, request.VerifiedCredentialHash,
+                    request.Report.MapKey, request.Report.FrameId, now, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception,
+                    "Accepted Fleet Sync report could not persist first connection confirmation for robot {RobotCode}; telemetry remains accepted.",
+                    request.Robot.RobotCode);
+            }
+        }
         return new SyncFleetTelemetryResult(!result.Applied, now, result.Current);
     }
 }

@@ -44,11 +44,13 @@ not implement navigation, cancellation, tour runtime, or the ROS Fleet Bridge.
   as unpadded Base64URL. Store `SHA-256(UTF-8(credential))` in the existing
   `Robot.CredentialHash` column and compare hashes in constant time. High
   credential entropy makes a separate pepper unnecessary for this v1 scheme.
-- The runtime API principal reads Robot identity/hash data only. One-shot
-  credential provisioning uses a separate SQL role with `SELECT(RobotCode)`
-  and `UPDATE(CredentialHash)`; it cannot update dispatch, tour, or other Robot
-  columns. Provisioning updates an existing row and does not create Robot
-  records. No SQL schema or EF migration changes are made.
+- The original implementation gave the runtime API read-only Robot access and
+  gave a separate one-shot provisioning role `SELECT(RobotCode)` plus
+  `UPDATE(CredentialHash)`. [ADR-0029](0029-robot-connection-confirmation-before-map-pass.md)
+  adds only three runtime confirmation-column updates and three matching
+  provisioner reset-column updates; neither principal can update/delete the
+  whole Robots table or change dispatch/tour state. Provisioning still updates
+  an existing row and does not create Robot records.
 - The credential is emitted once by operator provisioning, never returned by
   the API and never included in application logs. Existing Robot credentials
   must be reprovisioned if they do not use this hash format.
@@ -88,8 +90,10 @@ and response fixtures shared by .NET tests and the Python probe.
   after an ID is evicted, a delayed process could take ownership again with
   sequence 1 and a recent timestamp. It logs stream changes.
 - Latest telemetry lives in a thread-safe in-memory store. Robot credential
-  lookup reads SQL on sync requests, but pose/state reports are not written to
-  SQL. A backend restart clears the telemetry projection and tombstones; each
+  lookup reads SQL on sync requests, but high-frequency pose/state reports are
+  not written to SQL. ADR-0029 separately stores only first accepted
+  connection-confirmation context for the current credential. A backend restart
+  clears the telemetry projection and tombstones; each
   robot's first valid report then rebuilds its baseline at its current positive
   sequence. This is a single-process B1 baseline, not multi-instance shared
   state or durable replay.
@@ -144,12 +148,25 @@ Staff Hub.
 
 ## Consequences
 
+### Scoped implementation addition (ADR-0029)
+
+The accepted-report path now stores only the first accepted report context for
+the current robot credential (`FirstAcceptedSyncAt`, `FirstAcceptedMapKey`,
+`FirstAcceptedFrameId`). Report acceptance still requires configured
+RobotCode/mapKey/frameId and the existing report timestamp window; that window
+does not prove fleet-wide NTP. Pose remains optional and may be null. High-rate
+latest telemetry remains in process memory. The durable confirmation survives
+API restart/offline periods and resets atomically when the separate credential
+provisioner rotates the key. It is connection evidence only and does not prove
+map-file loading, localization, or safety. See [ADR-0029](0029-robot-connection-confirmation-before-map-pass.md).
+
 Positive:
 
 - Robot reporting uses a standard outbound HTTPS request and does not depend on
   Python SignalR library compatibility.
-- Authentication binds a report to a provisioned Robot row, and the ordinary
-  API runtime retains read-only Robot permissions.
+- Authentication binds a report to a provisioned Robot row. The runtime retains
+  SELECT/INSERT for registration and only column-level UPDATE for the three
+  first-connection confirmation fields.
 - The Staff Hub receives one safe projection with separate sync, pose,
   execution, localization, and motion-readiness information.
 - In-memory replacement means high-frequency pose updates do not write SQL.

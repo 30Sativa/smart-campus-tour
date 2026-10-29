@@ -213,9 +213,15 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(robotId, listedRobot.GetProperty("id").GetGuid());
         Assert.Equal("catalog-physical", listedRobot.GetProperty("robotCode").GetString());
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
-        Assert.Equal(new[] { "displayName", "id", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
+        Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
+        Assert.Equal(new[] { "connectionStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
 
         var mapSha = first.GetProperty("packageSha256").GetString();
+        using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; unconfirmed PASS must be blocked." });
+        Assert.Equal(HttpStatusCode.Conflict, blockedPass.StatusCode);
+        Assert.Equal("ROBOT_CONNECTION_UNCONFIRMED", (await Body(blockedPass)).GetProperty("errors").GetProperty("code").GetString());
         var checkRequestId = Guid.NewGuid();
         using var recorded = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
             new { requestId = checkRequestId, robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
@@ -274,6 +280,15 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposals"));
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalRevisions"));
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalSubmissions"));
+
+        // A stored confirmation remains usable without any current RAM telemetry,
+        // including after a backend process restart.
+        await database.ExecuteAsync($"UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'campus-v1', FirstAcceptedFrameId=N'map' WHERE Id='{robotId:D}';");
+        using (var robotStatus = await Get(host.Client, "/api/technical/physical-robots", technical))
+        {
+            var item = Assert.Single((await Body(robotStatus)).GetProperty("data").EnumerateArray());
+            Assert.Equal("AWAITING_DATA", item.GetProperty("connectionStatus").GetString());
+        }
 
         using var passingCheck = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
             new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
@@ -364,11 +379,17 @@ public sealed class BusinessFlowIntegrationTests
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "flow.admin", roles: ["ADMIN"]);
         var robotId = Guid.NewGuid();
+        var robotCredential = FleetRobotCredentialHash.Create();
         await database.ExecuteAsync($"""
             INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
-            VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x02, 1, 0, SYSDATETIMEOFFSET());
+            VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x{Convert.ToHexString(robotCredential.Hash)}, 0, 1, SYSDATETIMEOFFSET());
             """);
-        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var syncSettings = new Dictionary<string, string>
+        {
+            ["FleetSync:RobotContexts:flow_physical:MapKey"] = "flow-area-v1",
+            ["FleetSync:RobotContexts:flow_physical:FrameId"] = "map"
+        };
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, syncSettings);
 
         var adminToken = await Login(host.Client, "flow.admin");
         var technicalId = await CreateAccount(host.Client, adminToken, "flow.technical", "TechnicalStaff");
@@ -394,6 +415,25 @@ public sealed class BusinessFlowIntegrationTests
         var mapId = map.GetProperty("id").GetGuid();
         Assert.Equal("VALID", map.GetProperty("validationStatus").GetString());
         var mapHash = map.GetProperty("packageSha256").GetString();
+
+        // This backend integration uses a simulated Fleet Sync client with a valid
+        // provisioned credential/context. It is not evidence from a physical robot.
+        using var syncRequest = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/v1/sync")
+        {
+            Content = JsonContent.Create(new
+            {
+                robotId = "flow_physical", streamId = Guid.NewGuid(), seq = 1,
+                reportedAt = DateTimeOffset.UtcNow, mapKey = map.GetProperty("mapKey").GetString(),
+                frameId = map.GetProperty("frameId").GetString(), pose = (object?)null,
+                status = "IDLE", legId = (Guid?)null, localized = (bool?)null,
+                motionReady = (bool?)null, faultCode = (string?)null, batteryPercent = (double?)null
+            })
+        };
+        syncRequest.Headers.Add("X-Robot-Code", "flow_physical");
+        syncRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", robotCredential.Secret);
+        using var sync = await host.Client.SendAsync(syncRequest);
+        Assert.Equal(HttpStatusCode.OK, sync.StatusCode);
+        Assert.True((await Body(sync)).GetProperty("data").GetProperty("accepted").GetBoolean());
 
         using var pendingMaps = await Get(host.Client, "/api/maps/versions?areaKey=flow-area", staffToken);
         Assert.Equal(HttpStatusCode.OK, pendingMaps.StatusCode);

@@ -55,7 +55,7 @@ public sealed class UnitOfWorkBehaviorTests
         var snapshot = new FleetTelemetrySnapshot(robot, report, DateTimeOffset.UtcNow);
 
         var response = await behavior.Handle(
-            new SyncFleetTelemetry(robot, report),
+            new SyncFleetTelemetry(robot, report, new byte[32]),
             _ => Task.FromResult(new SyncFleetTelemetryResult(false, snapshot.ReceivedAt, snapshot)),
             CancellationToken.None);
 

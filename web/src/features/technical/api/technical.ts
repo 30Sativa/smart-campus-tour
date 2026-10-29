@@ -25,7 +25,15 @@ export type MapVersion = {
 }
 
 export type MapAreaOption = { areaKey: string; displayName: string }
-export type PhysicalRobotOption = { id: string; robotCode: string; displayName: string | null }
+export type PhysicalRobotRegistration = { id: string; robotCode: string; displayName: string | null }
+export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA'
+export type PhysicalRobotOption = PhysicalRobotRegistration & {
+  firstAcceptedSyncAt: string | null
+  firstAcceptedMapKey: string | null
+  firstAcceptedFrameId: string | null
+  connectionStatus: PhysicalRobotConnectionStatus
+  lastSyncReceivedAt: string | null
+}
 
 export type DeploymentCheck = {
   id: string
@@ -91,7 +99,7 @@ export const technicalApi = {
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
   registerPhysicalRobot: (input: { robotCode: string; displayName: string }) =>
-    apiClient<Envelope<PhysicalRobotOption>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
+    apiClient<Envelope<PhysicalRobotRegistration>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
   getMapPackage: (id: string) => apiClient<Blob>(`/api/maps/versions/${id}/package`, { responseType: 'blob' }),
   uploadMap: (input: { areaKey: string; areaName: string; requestId: string; package: File }) => {
     const formData = new FormData()

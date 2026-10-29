@@ -15,6 +15,12 @@ public partial class Robot
 
     public byte[] CredentialHash { get; set; } = null!;
 
+    public DateTimeOffset? FirstAcceptedSyncAt { get; set; }
+
+    public string? FirstAcceptedMapKey { get; set; }
+
+    public string? FirstAcceptedFrameId { get; set; }
+
     public bool IsDispatchEnabled { get; set; }
 
     public bool NeedsInspection { get; set; }
