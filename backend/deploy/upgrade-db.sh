@@ -46,7 +46,7 @@ if [[ "$schema_version" == 1.6 ]]; then
   structure=$(SchemaHash="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == READY ]] || { echo 'Schema version marker reports 1.6 but the required structure is incomplete; refusing to complete grants.' >&2; exit 1; }
-  echo 'Schema version marker reports 1.6 and the v1.6 structure is present; reapplying reviewed runtime and credential-provisioning grants.'
+  echo 'Schema version marker reports 1.6 and the v1.6 structure is present; completing runtime and credential-provisioning grants only, no DDL or backfill.'
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi

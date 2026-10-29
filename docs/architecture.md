@@ -625,7 +625,10 @@ the existing transaction-owned area lock and returns the assigned version.
 The physical-robot picker uses `/api/technical/physical-robots`, filtered only
 by the existing `SourceType=PHYSICAL` condition. GET returns ID/code/display
 name, persisted first accepted sync context, and a connection status derived
-from the in-memory latest report and existing freshness threshold. TechnicalStaff
+from the in-memory latest report and existing freshness threshold. It also
+returns credential lifecycle status, safe hint/issue/revocation metadata and a
+rowversion for credential changes, never the credential hash or plaintext.
+TechnicalStaff
 POST registers the same safe identity fields and appends actor/time audit in
 the robot save transaction. Registration remains available offline and the
 unique RobotCode constraint protects concurrent duplicates. The write command

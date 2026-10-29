@@ -446,6 +446,9 @@ public sealed class SchemaV11Tests
         await db.ExecuteAsync("""
             EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68';
             CREATE USER smartcampus_api WITHOUT LOGIN;
+            INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES
+                ('80000000-0000-0000-0000-000000000001',N'upgrade-unissued-empty-hash','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET()),
+                ('80000000-0000-0000-0000-000000000002',N'upgrade-provisioned-real-hash','PHYSICAL',0x0123456789ABCDEF,0,0,SYSDATETIMEOFFSET());
             """);
 
         // Production starts from the recognized v1.1 marker. This verifies the
@@ -477,6 +480,9 @@ public sealed class SchemaV11Tests
         Assert.Equal("1.6", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
             await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("NULL:NOT_ISSUED", await db.ScalarAsync<string>("SELECT CONCAT(COALESCE(CONVERT(varchar(64),CredentialHash,2),'NULL'),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots WHERE RobotCode=N'upgrade-unissued-empty-hash';"));
+        Assert.Equal("0123456789ABCDEF:ACTIVE", await db.ScalarAsync<string>("SELECT CONCAT(CONVERT(varchar(64),CredentialHash,2),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots WHERE RobotCode=N'upgrade-provisioned-real-hash';"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name IN (N'CK_Robots_CredentialIssueMetadata',N'CK_Robots_CredentialRevocationMetadata') AND is_disabled=0 AND is_not_trusted=0;"));
 
         await using var connection = await db.OpenAsync();
         await ExecuteAsync(connection, "EXECUTE AS USER='smartcampus_api';");

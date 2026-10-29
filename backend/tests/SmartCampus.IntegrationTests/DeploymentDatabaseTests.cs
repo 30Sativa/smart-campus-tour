@@ -255,7 +255,7 @@ public sealed class DeploymentDatabaseTests
     [SchemaV11Fact]
     public async Task Bootstrap_RequiresV15AndDoesNotAdoptOrRewriteOlderMarkers()
     {
-        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync("snapshot-v1.5.sql");
         await database.InsertUserAsync(true, username: "preserved.user", roles: ["STAFF"]);
         await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{PreviousHash}';");
         await using var connection = new SqlConnection(database.ConnectionString);
@@ -263,7 +263,7 @@ public sealed class DeploymentDatabaseTests
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
         var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
-        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
         await using (var command = new SqlCommand(currentGuard, connection))
             Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         Assert.Equal(1, await database.CountRowsAsync("dbo.Users"));
@@ -275,7 +275,7 @@ public sealed class DeploymentDatabaseTests
         await database.ExecuteAsync($"EXEC sys.sp_updateextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v15Hash}';");
         await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';");
         await using (var current = new SqlCommand(currentGuard, connection))
-            Assert.Equal("READY", await current.ExecuteScalarAsync());
+            Assert.Equal("UPGRADE_REQUIRED", await current.ExecuteScalarAsync());
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourSchemaVersion';");
         await database.ExecuteAsync("EXEC sys.sp_dropextendedproperty @name=N'CampusTourBootstrapHash';");
         await using var unmarked = new SqlCommand(currentGuard, connection);
@@ -285,7 +285,7 @@ public sealed class DeploymentDatabaseTests
     [SchemaV11Fact]
     public async Task Bootstrap_AcceptsVerifiedV15UpgradeMarkerWithoutReplacingBootstrapHash()
     {
-        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync("snapshot-v1.5.sql");
         var originalHash = PreviousHash;
         await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{originalHash}';");
         await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';");
@@ -294,9 +294,9 @@ public sealed class DeploymentDatabaseTests
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
         var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
-        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
         await using var command = new SqlCommand(currentGuard, connection);
-        Assert.Equal("READY", await command.ExecuteScalarAsync());
+        Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         await using var marker = new SqlCommand("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';", connection);
         Assert.Equal(originalHash, await marker.ExecuteScalarAsync());
     }

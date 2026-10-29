@@ -27,9 +27,9 @@ IF COL_LENGTH(N'dbo.Robots', N'CredentialRevokedByUserId') IS NULL
     ALTER TABLE dbo.Robots ADD CredentialRevokedByUserId UNIQUEIDENTIFIER NULL;
 
 -- Earlier registration stored an empty varbinary for an unissued key.
-UPDATE dbo.Robots SET CredentialHash = NULL WHERE DATALENGTH(CredentialHash) = 0;
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CredentialHash' AND is_nullable=0)
     ALTER TABLE dbo.Robots ALTER COLUMN CredentialHash VARBINARY(256) NULL;
+UPDATE dbo.Robots SET CredentialHash = NULL WHERE DATALENGTH(CredentialHash) = 0;
 
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_CredentialIssueMetadata')
     EXEC sys.sp_executesql N'ALTER TABLE dbo.Robots ADD CONSTRAINT CK_Robots_CredentialIssueMetadata CHECK

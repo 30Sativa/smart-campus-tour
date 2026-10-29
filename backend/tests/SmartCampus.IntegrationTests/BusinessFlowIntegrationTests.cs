@@ -384,7 +384,8 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
         Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
         Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
-        Assert.Equal(new[] { "configuredFrameId", "configuredMapKey", "connectionStatus", "credentialProvisioned", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "mapContextConfigured", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "configuredFrameId", "configuredMapKey", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "mapContextConfigured", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.DoesNotContain(listedRobot.EnumerateObject(), property => property.Name.Contains("secret", StringComparison.OrdinalIgnoreCase) || property.Name.Contains("hash", StringComparison.OrdinalIgnoreCase));
 
         var mapSha = first.GetProperty("packageSha256").GetString();
         using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,

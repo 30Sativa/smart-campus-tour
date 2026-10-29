@@ -154,7 +154,8 @@ public sealed class EfPhysicalRobotCredentialManager(
         if (robot is null) return null;
 
         var history = await dbContext.AuditLogs.AsNoTracking()
-            .Where(audit => audit.RobotId == robot.Id && IsCredentialAction(audit.Action))
+            .Where(audit => audit.RobotId == robot.Id &&
+                (audit.Action == Issued || audit.Action == Rotated || audit.Action == Revoked))
             .OrderByDescending(audit => audit.OccurredAt).ThenByDescending(audit => audit.Id)
             .Select(audit => new AuditProjection(audit.Id, robot.RobotCode, audit.Action,
                 audit.ActorUserId, audit.ActorUser == null ? null : audit.ActorUser.FullName,
@@ -215,8 +216,6 @@ public sealed class EfPhysicalRobotCredentialManager(
 
     private static string GetStatus(Robot robot) => robot.CredentialHash is not null
         ? "ACTIVE" : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
-
-    private static bool IsCredentialAction(string action) => action == Issued || action == Rotated || action == Revoked;
 
     private static byte[]? ParseExpectedRowVersion(string? expectedRowVersion)
     {

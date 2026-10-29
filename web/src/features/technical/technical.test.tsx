@@ -31,6 +31,7 @@ let failDeploymentOnce = false
 let failRobotLookup = false
 let failRobotRegistration = false
 let robotRegistrationDelayMs = 0
+let failCredentialMutation = false
 let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
 function renderPage(page: React.ReactNode) {
@@ -47,6 +48,7 @@ describe('Technical Staff API integration', () => {
     failRobotLookup = false
     failRobotRegistration = false
     robotRegistrationDelayMs = 0
+    failCredentialMutation = false
     credentialStatus = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
@@ -54,7 +56,11 @@ describe('Technical Staff API integration', () => {
       const url = new URL(String(input), 'http://localhost')
       requests.push({ url, init })
       if (url.pathname === '/api/robots/amr-01/credential' && (!init?.method || init.method === 'GET')) return response(credentialStatus)
-      if (url.pathname === '/api/technical/robots/amr-01/credential' && init?.method === 'POST') {
+      if (url.pathname.startsWith('/api/technical/robots/amr-01/credential') && init?.method === 'POST') {
+        if (failCredentialMutation) {
+          failCredentialMutation = false
+          return new Response(JSON.stringify({ success: false, message: 'Credential update failed.' }), { status: 503 })
+        }
         credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'abcd', issuedAt: '2026-10-29T10:00:00Z', rowVersion: 'BBBBBBBBBBB=' }
         return response({ secret: 'secret-value-once', hint: 'abcd', issuedAt: credentialStatus.issuedAt })
       }
@@ -85,7 +91,7 @@ describe('Technical Staff API integration', () => {
       return response(null)
     }))
   })
-  afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); useAuthStore.getState().logout() })
 
   it('lists real map versions and posts manual deployment evidence to the map-version endpoint', async () => {
     renderPage(<TechnicalMapsPage />)
@@ -251,6 +257,24 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
     expect(await screen.findByText(/Đang hoạt động/)).toBeInTheDocument()
     expect(screen.queryByText('secret-value-once')).not.toBeInTheDocument()
+  })
+
+  it('refreshes the robot list and deployment-check picker after credential success and failure', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPage(<TechnicalRobotsPage />)
+    await screen.findByText('AMR 01')
+    const robotListRequestCount = () => requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length
+    const initialListRequestCount = robotListRequestCount()
+    fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cấp khóa' }))
+    await screen.findByText('secret-value-once')
+    await waitFor(() => expect(robotListRequestCount()).toBeGreaterThan(initialListRequestCount))
+
+    failCredentialMutation = true
+    fireEvent.click(await screen.findByRole('button', { name: 'Cấp lại' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Credential update failed.')
+    await waitFor(() => expect(robotListRequestCount()).toBeGreaterThan(initialListRequestCount + 1))
+    expect(confirm).toHaveBeenCalled()
   })
 
   it('renders a RobotCode pattern valid with the HTML v flag and matching server rules', async () => {
