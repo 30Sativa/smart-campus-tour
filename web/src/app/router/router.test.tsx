@@ -124,6 +124,12 @@ describe('route table', () => {
   })
 
   describe('guards', () => {
+    it('loads physical robot registration inside the Technical Staff protected area', async () => {
+      signIn('TechnicalStaff')
+      renderAt('/technical/robots')
+      expect(await screen.findByRole('heading', { name: 'Robot vật lý', level: 1 })).toBeInTheDocument()
+    })
+
     it('sends a signed-out visitor from /staff to sign in', async () => {
       const router = renderAt('/staff')
       await settled(router, '/login')

@@ -7,7 +7,7 @@ public sealed record PhysicalRobotOption(Guid Id, string RobotCode, string? Disp
 
 public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotOption>>;
 
-public sealed class ListPhysicalRobotsQueryHandler(IMapVersionRepository repository)
+public sealed class ListPhysicalRobotsQueryHandler(IPhysicalRobotRepository repository)
     : IRequestHandler<ListPhysicalRobotsQuery, IReadOnlyList<PhysicalRobotOption>>
 {
     public async Task<IReadOnlyList<PhysicalRobotOption>> Handle(ListPhysicalRobotsQuery query, CancellationToken ct)

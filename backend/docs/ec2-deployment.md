@@ -17,6 +17,15 @@ Existing data uses Backend Database Schema Upgrade, not Backend SQL Maintenance.
 The former takes a verified full backup under the host operation lock, applies
 the ordered v1.1→v1.4 additive patches, then verifies structure and runtime
 permissions. The latter continues to handle SQL Server engine/resource changes.
+An already-v1.4 database may still need the runtime-grant reapplication for
+physical robot registration. Before deploying an API version that requires
+Robot INSERT, run the existing, approved Backend Database Schema Upgrade
+regrant path against that v1.4 database. It validates the snapshot marker and
+complete v1.4 structure, reapplies the existing permission scripts without
+schema patches or data backfill, then runs read-only `--check-only`. API deploy
+itself never grants permissions and will refuse promotion while the required
+Robot SELECT/INSERT grants are missing. Do not run this regrant manually on
+EC2 or a shared database outside the controlled workflow and backup process.
 
 Backend Verify uses a path classifier. Web/robot/digital-twin/AI-only commits do
 not start backend verification, image builds or deployment. Backend verification

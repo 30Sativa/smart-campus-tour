@@ -22,6 +22,10 @@ public sealed class GlobalExceptionHandler(
                 StatusCodes.Status409Conflict,
                 "Dòng này đã có yêu cầu đổi email đang chờ Staff xử lý.",
                 (object?)new { code = "EMAIL_CHANGE_PENDING" }),
+            _ when IsRobotCodeUniqueViolation(exception) => (
+                StatusCodes.Status409Conflict,
+                "Mã robot đã được đăng ký. Kiểm tra lại mã robot trước khi thử lại.",
+                (object?)new { code = "ROBOT_CODE_CONFLICT" }),
             ValidationException validationException => (
                 StatusCodes.Status400BadRequest,
                 "One or more validation errors occurred.",
@@ -100,6 +104,11 @@ public sealed class GlobalExceptionHandler(
         (error is SqlException { Number: 2601 or 2627 } sql &&
          sql.Message.Contains("UX_RosterEmailChangeRequests_OnePending", StringComparison.Ordinal)) ||
         (error.InnerException is not null && IsPendingEmailChangeUniqueViolation(error.InnerException));
+
+    private static bool IsRobotCodeUniqueViolation(Exception error) =>
+        (error is SqlException { Number: 2601 or 2627 } sql &&
+         sql.Message.Contains("UQ_Robots_RobotCode", StringComparison.Ordinal)) ||
+        (error.InnerException is not null && IsRobotCodeUniqueViolation(error.InnerException));
 
     private static IReadOnlyDictionary<string, string[]> CreateValidationErrors(
         ValidationException exception)

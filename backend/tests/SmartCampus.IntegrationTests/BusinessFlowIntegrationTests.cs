@@ -6,6 +6,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Domain.Entities;
+using SmartCampus.Infrastructure.Authentication;
+using SmartCampus.Infrastructure.Integrations.FleetSync;
+using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using static SmartCampus.IntegrationTests.RepresentativeEndpointTests;
 
@@ -19,6 +22,136 @@ namespace SmartCampus.IntegrationTests;
 public sealed class BusinessFlowIntegrationTests
 {
     private const string Password = "integration-test-password";
+
+    [SchemaV14Fact]
+    public async Task PhysicalRobotRegistration_IsTechnicalOnlySafeAtomicAndRaceProtected()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "robot-register.admin", roles: ["ADMIN"]);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var admin = await Login(host.Client, "robot-register.admin");
+        var robotRegisterActorId = await CreateAccount(host.Client, admin, "robot-register.technical", "TechnicalStaff");
+        _ = await CreateAccount(host.Client, admin, "robot-register.staff", "Staff");
+        var technical = await Login(host.Client, "robot-register.technical");
+        var staff = await Login(host.Client, "robot-register.staff");
+
+        using var adminDenied = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", admin,
+            new { robotCode = "forbidden_admin", displayName = "Forbidden" });
+        using var staffDenied = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", staff,
+            new { robotCode = "forbidden_staff", displayName = "Forbidden" });
+        Assert.Equal(HttpStatusCode.Forbidden, adminDenied.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, staffDenied.StatusCode);
+
+        using var invalidCode = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "bad code", displayName = "Invalid code" });
+        using var invalidName = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "valid_code", displayName = "   " });
+        using var longName = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "valid_name", displayName = new string('N', 151) });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidCode.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidName.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, longName.StatusCode);
+
+        using var registered = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "  robot_web_01  ", displayName = "  Robot Web 01  " });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+        var response = (await Body(registered)).GetProperty("data");
+        var robotId = response.GetProperty("id").GetGuid();
+        Assert.Equal("robot_web_01", response.GetProperty("robotCode").GetString());
+        Assert.Equal("Robot Web 01", response.GetProperty("displayName").GetString());
+        Assert.Equal(new[] { "displayName", "id", "robotCode" }, response.EnumerateObject().Select(property => property.Name).Order().ToArray());
+
+        using var duplicate = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "robot_web_01", displayName = "Duplicate" });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal("ROBOT_CODE_CONFLICT", (await Body(duplicate)).GetProperty("errors").GetProperty("code").GetString());
+        Assert.Contains("đã được đăng ký", (await Body(duplicate)).GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        using (var db = new SmartCampus.Infrastructure.Persistence.ApplicationDbContext(
+            new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<SmartCampus.Infrastructure.Persistence.ApplicationDbContext>()
+                .UseSqlServer(database.ConnectionString).Options))
+        {
+            var robot = await db.Robots.SingleAsync(row => row.Id == robotId);
+            Assert.Equal("PHYSICAL", robot.SourceType);
+            Assert.Equal("robot_web_01", robot.RobotCode);
+            Assert.Equal("Robot Web 01", robot.DisplayName);
+            Assert.Empty(robot.CredentialHash);
+            Assert.False(robot.IsDispatchEnabled);
+            Assert.False(robot.NeedsInspection);
+            Assert.Null(robot.CurrentTourId);
+            Assert.Null(robot.LastAssignedAt);
+            Assert.Null(robot.UpdatedAt);
+            var authenticator = new FleetRobotAuthenticator(db);
+            Assert.Null(await authenticator.AuthenticateAsync(robot.RobotCode,
+                FleetRobotCredentialHash.Create().Secret, CancellationToken.None));
+            var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, robot.RobotCode);
+            Assert.NotNull(provisioned);
+            Assert.NotNull(await authenticator.AuthenticateAsync(robot.RobotCode,
+                provisioned.Credential, CancellationToken.None));
+
+            var audit = await db.AuditLogs.SingleAsync(row => row.Action == "PHYSICAL_ROBOT_REGISTERED");
+            Assert.Equal(robotRegisterActorId, audit.ActorUserId);
+            Assert.Equal(robotId, audit.RobotId);
+            Assert.Equal(robot.CreatedAt, audit.OccurredAt);
+        }
+
+        using var listed = await Get(host.Client, "/api/technical/physical-robots", technical);
+        Assert.Equal(HttpStatusCode.OK, listed.StatusCode);
+        Assert.Contains((await Body(listed)).GetProperty("data").EnumerateArray(), row =>
+            row.GetProperty("robotCode").GetString() == "robot_web_01");
+
+        int beforeRace;
+        await using (var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseSqlServer(database.ConnectionString).Options))
+            beforeRace = await db.Robots.CountAsync();
+        var raceOne = Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "same-race-code", displayName = "Race A" });
+        var raceTwo = Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "same-race-code", displayName = "Race B" });
+        await Task.WhenAll(raceOne, raceTwo);
+        using var raceResponseOne = await raceOne;
+        using var raceResponseTwo = await raceTwo;
+        Assert.Equal(1, new[] { raceResponseOne.StatusCode, raceResponseTwo.StatusCode }.Count(status => status == HttpStatusCode.OK));
+        Assert.Equal(1, new[] { raceResponseOne.StatusCode, raceResponseTwo.StatusCode }.Count(status => status == HttpStatusCode.Conflict));
+        await using (var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseSqlServer(database.ConnectionString).Options))
+        {
+            Assert.Equal(1, await db.Robots.CountAsync(row => row.RobotCode == "same-race-code"));
+            Assert.Equal(beforeRace + 1, await db.Robots.CountAsync());
+        }
+
+        await database.ExecuteAsync("""
+            CREATE TRIGGER dbo.TR_TestRejectPhysicalRobotAudit ON dbo.AuditLogs AFTER INSERT AS
+            BEGIN
+                IF EXISTS (SELECT 1 FROM inserted WHERE Action=N'PHYSICAL_ROBOT_REGISTERED')
+                    THROW 51998, 'Injected robot registration audit failure.', 1;
+            END;
+            """);
+        try
+        {
+            int robotsBeforeFailure;
+            int auditsBeforeFailure;
+            await using (var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                    .UseSqlServer(database.ConnectionString).Options))
+            {
+                robotsBeforeFailure = await db.Robots.CountAsync();
+                auditsBeforeFailure = await db.AuditLogs.CountAsync(row => row.Action == "PHYSICAL_ROBOT_REGISTERED");
+            }
+            using var failedAudit = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+                new { robotCode = "rollback_robot", displayName = "Rollback robot" });
+            Assert.Equal(HttpStatusCode.InternalServerError, failedAudit.StatusCode);
+            await using (var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                    .UseSqlServer(database.ConnectionString).Options))
+            {
+                Assert.Equal(robotsBeforeFailure, await db.Robots.CountAsync());
+                Assert.Equal(auditsBeforeFailure, await db.AuditLogs.CountAsync(row => row.Action == "PHYSICAL_ROBOT_REGISTERED"));
+            }
+        }
+        finally
+        {
+            await database.ExecuteAsync("DROP TRIGGER IF EXISTS dbo.TR_TestRejectPhysicalRobotAudit;");
+        }
+    }
 
     [SchemaV14Fact]
     public async Task MapAreaAndPhysicalRobotLookups_AreCompleteSafeAndMapUploadRetriesReplayServerVersion()

@@ -54,15 +54,21 @@ elif [[ "$state" != READY ]]; then
 fi
 
 if [[ "$mode" == --check-only ]]; then
-  permissions=$("${sql[@]}" -d SmartCampusTourV11 -h -1 -W -Q "SET NOCOUNT ON;
+  if ! permissions=$("${sql[@]}" -d SmartCampusTourV11 -h -1 -W -Q "SET NOCOUNT ON;
     IF DATABASE_PRINCIPAL_ID(N'smartcampus_api') IS NULL THROW 51003, 'Runtime database user is missing.', 1;
     EXECUTE AS USER=N'smartcampus_api';
     IF HAS_PERMS_BY_NAME(N'dbo.MapVersions',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.RouteRevisions',N'OBJECT',N'SELECT') <> 1
        OR HAS_PERMS_BY_NAME(N'dbo.RosterEmailChangeRequests',N'OBJECT',N'SELECT') <> 1
        THROW 51004, 'Runtime database grants are incomplete.', 1;
+    IF HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT') <> 1
+       OR HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT') <> 1
+       THROW 51005, 'Runtime robot registration grants are incomplete; update runtime grants through the controlled v1.4 regrant before API deployment.', 1;
     REVERT;
-    SELECT 'COMPATIBLE';" | tr -d '\r\n ')
+    SELECT 'COMPATIBLE';" | tr -d '\r\n '); then
+    echo 'FAIL: runtime grants are incomplete. For an existing v1.4 database, update runtime grants through the controlled regrant before API deployment.' >&2
+    exit 1
+  fi
   [[ "$permissions" == COMPATIBLE ]] || { echo 'Runtime database grants are not compatible.' >&2; exit 1; }
   echo 'PASS: database schema and runtime grants are compatible; no database or login state was changed.'
   exit 0

@@ -46,6 +46,13 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         Ok(new BaseResponse<IReadOnlyList<PhysicalRobotOption>> { Success = true, Message = "Physical robots retrieved.",
             Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
 
+    [HttpPost("technical/physical-robots")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<PhysicalRobotOption>>> RegisterPhysicalRobot(
+        [FromBody] RegisterPhysicalRobotRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<PhysicalRobotOption> { Success = true, Message = "Physical robot identity registered.",
+            Data = await sender.Send(new RegisterPhysicalRobotCommand(User.GetRequiredUserId(), request), ct) });
+
     [HttpGet("maps/versions")]
     [Authorize(Roles = StaffAndTechnical)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapVersionListItem>>>> ListMaps(
