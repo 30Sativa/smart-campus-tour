@@ -90,6 +90,8 @@ export const technicalApi = {
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
+  registerPhysicalRobot: (input: { robotCode: string; displayName: string }) =>
+    apiClient<Envelope<PhysicalRobotOption>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
   getMapPackage: (id: string) => apiClient<Blob>(`/api/maps/versions/${id}/package`, { responseType: 'blob' }),
   uploadMap: (input: { areaKey: string; areaName: string; requestId: string; package: File }) => {
     const formData = new FormData()

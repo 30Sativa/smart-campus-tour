@@ -4,6 +4,7 @@ import { technicalApi } from './api/technical'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
+  physicalRobots: ['technical', 'physical-robots'] as const,
   poiProposals: ['technical', 'poi-proposals'] as const,
 }
 
@@ -16,7 +17,7 @@ export function useMapAreas(enabled = true) {
 }
 
 export function usePhysicalRobots(enabled = true) {
-  return useQuery({ queryKey: ['technical', 'physical-robots'], queryFn: technicalApi.listPhysicalRobots, enabled })
+  return useQuery({ queryKey: keys.physicalRobots, queryFn: technicalApi.listPhysicalRobots, enabled })
 }
 
 export function usePoiProposals() {
@@ -47,6 +48,11 @@ export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, k
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed
   ? { title: `Đã ghi kiểm tra trên ${input.robotCode}: đạt`, detail: 'Localization và hiển thị map đều đạt.' }
   : { tone: 'info', title: `Đã ghi kiểm tra trên ${input.robotCode}: chưa đạt`, detail: 'Version này chưa dùng được cho tới khi kiểm tra lại đạt.' })
+
+export const useRegisterPhysicalRobot = () => useTechnicalMutation(technicalApi.registerPhysicalRobot, keys.physicalRobots, (_input, robot) => ({
+  title: `Đã đăng ký ${robot.robotCode}`,
+  detail: 'Đăng ký tạo danh tính robot trong hệ thống. Thiết lập kết nối ROS2 được thực hiện riêng.',
+}))
 
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
   ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với revision ${input.revisionNumber}.` }

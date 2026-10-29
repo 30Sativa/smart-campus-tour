@@ -13,7 +13,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.Routes TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RouteStops TO campus_tour_app;
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.Tours TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
-GRANT SELECT ON OBJECT::dbo.Robots TO campus_tour_app;
+GRANT SELECT, INSERT ON OBJECT::dbo.Robots TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.TourAllowedBranches TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.BranchRequests TO campus_tour_app;
 GO

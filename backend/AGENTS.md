@@ -473,9 +473,11 @@ User JWT and role authorization for those APIs are present. Authorization for
 future READY/Staff runtime, dispatch, and fleet business APIs remains
 unimplemented. Robot machine authentication is implemented for Fleet Sync v1
 using `Robot.CredentialHash`, with a separate Staff JWT policy for the
-Operations Hub. The API runtime must retain read-only Robot permissions;
-credential provisioning uses its own SQL role. Browser/user credentials cannot
-submit robot state. No command path or physical readiness policy is implemented.
+Operations Hub. The API runtime may SELECT and INSERT Robots for Technical
+Staff physical-identity registration, but has no UPDATE or DELETE permission;
+credential provisioning uses its own SQL role and updates only `CredentialHash`.
+Browser/user credentials cannot submit robot state. No command path or physical
+readiness policy is implemented.
 
 SignalR Hubs belong in `backend/src/SmartCampus.Api/Hubs/`. Application must
 not depend on SignalR types; the Operations Hub projects Application fleet

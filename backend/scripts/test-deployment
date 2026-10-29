@@ -278,6 +278,11 @@ IF HAS_PERMS_BY_NAME('dbo.RosterEmailChangeRequests', 'OBJECT', 'SELECT') <> 1
     OR HAS_PERMS_BY_NAME('dbo.RosterEmailChangeRequests', 'OBJECT', 'UPDATE') <> 1
     OR HAS_PERMS_BY_NAME('dbo.RosterEmailChangeRequests', 'OBJECT', 'DELETE') <> 0
     THROW 51008, 'Runtime email-change permissions do not match the v1.4 use case.', 1;
+IF HAS_PERMS_BY_NAME('dbo.Robots', 'OBJECT', 'SELECT') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Robots', 'OBJECT', 'INSERT') <> 1
+    OR HAS_PERMS_BY_NAME('dbo.Robots', 'OBJECT', 'UPDATE') <> 0
+    OR HAS_PERMS_BY_NAME('dbo.Robots', 'OBJECT', 'DELETE') <> 0
+    THROW 51010, 'Runtime robot permissions must allow identity registration only.', 1;
 IF HAS_PERMS_BY_NAME('dbo.MapVersions', 'OBJECT', 'SELECT') <> 1
     OR HAS_PERMS_BY_NAME('dbo.MapVersions', 'OBJECT', 'INSERT') <> 1
     OR HAS_PERMS_BY_NAME('dbo.MapVersions', 'OBJECT', 'UPDATE') <> 0

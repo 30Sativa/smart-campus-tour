@@ -48,6 +48,11 @@ slice; current business APIs still have the old ownership shown in the gap regis
 Technical Staff creates maps outside the web, uploads immutable versions with
 source/checksum/metadata, manually deploys the exact version to the robot and
 records localization/display evidence. Upload is not robot deployment.
+Technical Staff registers the physical robot identity by `RobotCode` and name
+before selecting it for a map check. Registration creates an unassigned
+identity only; one-shot credential provisioning and `RobotContexts` remain
+outside the web, and registration is not connection, readiness, or check-pass
+evidence. The bridge and database must use the same `RobotCode`.
 The upload form chooses either a new area (key and name) or an existing area
 from the full persisted catalog; the server allocates the next version. The
 deployment-check form chooses a database robot whose persisted source type is

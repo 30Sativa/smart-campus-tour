@@ -618,12 +618,18 @@ contents do not depend on the capped map-version list. Existing-area mode shows
 and locks the stored key/name; a duplicate key in new-area mode directs the
 operator to select the existing area. The server allocates each version inside
 the existing transaction-owned area lock and returns the assigned version.
-The physical-robot picker uses a read-only `/api/technical/physical-robots`
-database lookup filtered only by the existing `SourceType=PHYSICAL` condition.
-It returns ID/code/display name only; the write command revalidates the robot
-and exact checksum. It neither depends on online telemetry nor causes map
-deployment or robot control. Retries of an unchanged upload or deployment-check
-payload reuse the same request ID; a changed payload starts a new request ID.
+The physical-robot picker uses `/api/technical/physical-robots`, filtered only
+by the existing `SourceType=PHYSICAL` condition. GET returns ID/code/display
+name only; TechnicalStaff POST registers the same safe identity fields and
+appends actor/time audit in the robot save transaction. Runtime SQL can SELECT
+and INSERT Robots, but cannot UPDATE or DELETE; the write command relies on the
+existing unique RobotCode constraint for concurrent duplicate protection. The
+write command revalidates the robot and exact checksum. Registration neither
+depends on online telemetry nor provisions credentials, connects ROS 2, enables
+dispatch, or records map evidence. The one-shot provisioner and RobotContexts
+configuration remain outside the web; bridge and database RobotCode must
+match. Retries of an unchanged upload or deployment-check payload reuse the
+same request ID; a changed payload starts a new request ID.
 
 When a current POI map version falls outside the normal version-list page, the
 Staff screen fetches that exact version by ID for preview. If backend eligibility
@@ -716,9 +722,12 @@ The backend exposes `POST /api/fleet/v1/sync` over HTTPS. Each request uses a
 per-robot bearer credential plus `X-Robot-Code`; the code is resolved from
 `dbo.Robots` and JSON `robotId` must match that authenticated identity.
 `Robot.CredentialHash` stores SHA-256 of a 32-byte random Base64URL secret. API
-runtime access is read-only for Robots; the one-shot credential command uses a
-separate, column-limited provisioning SQL role and only updates existing Robot
-rows. No SQL schema change or migration is introduced.
+runtime can SELECT and INSERT Robots for Technical Staff identity registration,
+but cannot UPDATE or DELETE them. The one-shot credential command uses a
+separate, column-limited provisioning SQL role and only updates the
+`CredentialHash` of an existing row. Registration starts with an empty hash,
+which the Fleet Sync authenticator rejects until one-shot provisioning assigns
+a valid 32-byte SHA-256 hash. No SQL schema change or migration is introduced.
 
 Request fields, response/error examples and shared fixtures are in
 [`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/). Reports carry

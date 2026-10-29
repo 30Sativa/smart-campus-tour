@@ -7,6 +7,13 @@ always returns `commands: []`.
 
 ## Configure and provision a robot
 
+Technical Staff first registers the physical robot identity in the web console
+using the same `RobotCode` that its bridge will send. Registration creates only
+an unassigned database identity; it does not connect to ROS 2, mark the robot
+online/ready, pass a map check, or enable dispatch. The manual deployment-check
+record remains human-entered evidence and does not require online telemetry or
+a matching `RobotContexts` entry.
+
 For each provisioned `RobotCode`, configure its approved map/frame context in
 deployment secrets/configuration. Example environment variables for a local
 test robot:
@@ -33,9 +40,12 @@ dotnet .\src\SmartCampus.Api\bin\Debug\net10.0\SmartCampus.Api.dll --provision-f
 The command requires an existing Robot row, rotates its credential, updates no
 other column, prints the generated credential once as JSON, and exits without
 starting the API. Keep the output out of logs and place the secret directly in
-the robot's protected configuration. The application runtime credential stays
-on the normal read-only Robot permission and never receives a provisioning
-connection string. The SQL snapshot and EF model remain unchanged.
+the robot's protected configuration. The application runtime credential has
+SELECT and INSERT on Robots for the Technical Staff registration flow, but no
+UPDATE or DELETE. The separate provisioner retains `RobotCode` SELECT and
+`CredentialHash`-only UPDATE. Runtime never receives a provisioning connection
+string. The SQL snapshot and EF model remain unchanged. `PackageSha256` in map
+checks is the checksum of the uploaded ZIP, not an individual YAML or PGM file.
 
 ## Run the probe
 

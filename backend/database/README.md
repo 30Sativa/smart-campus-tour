@@ -24,6 +24,7 @@ SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
 - The local DB was created empty. v1.1 is not an ALTER migration and did not migrate v1.0 or production data.
 - `backend/database/smart-campus-tour-permissions.sql` creates the `campus_tour_app` database role and grants SELECT/INSERT, denies UPDATE/DELETE on TourEvents/AuditLogs. Apply after the schema in the intended database. A deployment administrator provisions the runtime user and adds it to this role; the script does not create a login or change existing user memberships. Business-table permissions remain feature-specific.
+- `backend/database/smart-campus-tour-runtime-permissions.sql` grants the runtime role SELECT/INSERT on `Robots` for Technical Staff identity registration; it does not grant UPDATE/DELETE. The separate Fleet credential provisioner can SELECT `RobotCode` and UPDATE only `CredentialHash` through `fleet-credential-provisioning-permissions.sql`.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 

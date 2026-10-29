@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import TechnicalConfirmationsPage from '../../routes/technical/TechnicalConfirmationsPage'
 import TechnicalPoiImportPage from '../../routes/technical/TechnicalPoiImportPage'
 import TechnicalMapsPage from '../../routes/technical/TechnicalMapsPage'
+import TechnicalRobotsPage from '../../routes/technical/TechnicalRobotsPage'
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
 
@@ -26,9 +28,11 @@ let mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
 let failMapAreaLookup = false
 let failDeploymentOnce = false
 let failRobotLookup = false
+let failRobotRegistration = false
+let robotRegistrationDelayMs = 0
 
 function renderPage(page: React.ReactNode) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{page}</QueryClientProvider>)
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>{page}</MemoryRouter></QueryClientProvider>)
 }
 
 describe('Technical Staff API integration', () => {
@@ -39,6 +43,8 @@ describe('Technical Staff API integration', () => {
     failMapAreaLookup = false
     failDeploymentOnce = false
     failRobotLookup = false
+    failRobotRegistration = false
+    robotRegistrationDelayMs = 0
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -48,6 +54,13 @@ describe('Technical Staff API integration', () => {
       if (url.pathname === '/api/technical/map-areas') return failMapAreaLookup
         ? new Response(JSON.stringify({ success: false, message: 'Area lookup unavailable.' }), { status: 503 })
         : response(mapAreas)
+      if (url.pathname === '/api/technical/physical-robots' && init?.method === 'POST') {
+        if (robotRegistrationDelayMs) await new Promise(resolve => setTimeout(resolve, robotRegistrationDelayMs))
+        if (failRobotRegistration) return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
+        const registered = { id: 'robot-2', ...JSON.parse(String(init.body)) }
+        physicalRobots = [...physicalRobots, registered]
+        return response(registered)
+      }
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
         ? new Response(JSON.stringify({ success: false, message: 'Robot lookup unavailable.' }), { status: 503 })
         : response(physicalRobots)
@@ -146,6 +159,55 @@ describe('Technical Staff API integration', () => {
     failRobotLookup = false
     fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách robot' }))
     expect(await screen.findByRole('option', { name: /AMR 01 · amr-01/ })).toBeInTheDocument()
+  })
+
+  it('registers a physical robot and refreshes the lookup used by map checks', async () => {
+    physicalRobots = []
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Chưa có robot vật lý được đăng ký.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng ký robot' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS2 được thực hiện riêng.')
+    fireEvent.change(dialog.getByLabelText('Mã robot'), { target: { value: ' amr-new ' } })
+    fireEvent.change(dialog.getByLabelText('Tên robot'), { target: { value: ' AMR mới ' } })
+    const submit = dialog.getByRole('button', { name: 'Đăng ký robot' })
+    expect(submit).not.toBeDisabled()
+    fireEvent.click(submit)
+    expect(await screen.findByText('amr-new')).toBeInTheDocument()
+    expect(screen.getByText('AMR mới')).toBeInTheDocument()
+    await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
+    const post = requests.find(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')!
+    expect(JSON.parse(String(post.init?.body))).toEqual({ robotCode: 'amr-new', displayName: 'AMR mới' })
+  })
+
+  it('shows registration conflicts in the form and lets the operator correct the code', async () => {
+    physicalRobots = []
+    failRobotRegistration = true
+    renderPage(<TechnicalRobotsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Đăng ký robot' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText('Mã robot'), { target: { value: 'amr-existing' } })
+    fireEvent.change(dialog.getByLabelText('Tên robot'), { target: { value: 'Robot mới' } })
+    fireEvent.click(dialog.getByRole('button', { name: 'Đăng ký robot' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Robot code already registered.')
+    expect(dialog.getByRole('button', { name: 'Đăng ký robot' })).toBeEnabled()
+  })
+
+  it('disables submission while a registration is pending', async () => {
+    physicalRobots = []
+    robotRegistrationDelayMs = 500
+    renderPage(<TechnicalRobotsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Đăng ký robot' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(dialog.getByLabelText('Mã robot'), { target: { value: 'amr-pending' } })
+    fireEvent.change(dialog.getByLabelText('Tên robot'), { target: { value: 'Pending robot' } })
+    const submit = dialog.getByRole('button', { name: 'Đăng ký robot' })
+    fireEvent.click(submit)
+    const pendingSubmit = await dialog.findByRole('button', { name: 'Đang đăng ký…' })
+    expect(pendingSubmit).toBeDisabled()
+    fireEvent.click(pendingSubmit)
+    await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')).toHaveLength(1))
+    expect(await screen.findByText('amr-pending')).toBeInTheDocument()
   })
 
   it('records a POI check against its submitted revision and row version', async () => {

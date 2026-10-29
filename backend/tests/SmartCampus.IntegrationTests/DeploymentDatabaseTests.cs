@@ -25,6 +25,95 @@ namespace SmartCampus.IntegrationTests;
 
 public sealed class DeploymentDatabaseTests
 {
+    [SchemaV14Fact]
+    public async Task RuntimeCanInsertRobotIdentityButOnlyProvisionerCanSetCredentialHash()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await Apply(database, "permissions.sql");
+        await Apply(database, "runtime-permissions.sql");
+        await Apply(database, "fleet-credential-provisioning-permissions.sql");
+        await database.ExecuteAsync("""
+            CREATE USER runtime_robot_test WITHOUT LOGIN;
+            ALTER ROLE campus_tour_app ADD MEMBER runtime_robot_test;
+            CREATE USER fleet_provisioner_robot_test WITHOUT LOGIN;
+            ALTER ROLE campus_fleet_provisioner ADD MEMBER fleet_provisioner_robot_test;
+            """);
+
+        await using var connection = new SqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using (var impersonate = new SqlCommand("EXECUTE AS USER='runtime_robot_test';", connection))
+            await impersonate.ExecuteNonQueryAsync();
+        try
+        {
+            await using var insert = new SqlCommand("""
+                INSERT dbo.Robots(Id,RobotCode,SourceType,DisplayName,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
+                VALUES(NEWID(),N'robot_registered_sql','PHYSICAL',N'Registered SQL Robot',0x,0,0,SYSDATETIMEOFFSET());
+                """, connection);
+            await insert.ExecuteNonQueryAsync();
+            await using var code = new SqlCommand("SELECT RobotCode FROM dbo.Robots WHERE RobotCode=N'robot_registered_sql';", connection);
+            Assert.Equal("robot_registered_sql", await code.ExecuteScalarAsync());
+            foreach (var statement in new[]
+            {
+                "UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'",
+                "UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'",
+                "DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'"
+            })
+            {
+                await using var denied = new SqlCommand(statement, connection);
+                Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
+            }
+        }
+        finally
+        {
+            await using var revert = new SqlCommand("REVERT;", connection);
+            await revert.ExecuteNonQueryAsync();
+        }
+
+        string credential;
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(connection).Options;
+        await using (var db = new ApplicationDbContext(options))
+        {
+            var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
+            Assert.Empty(robot.CredentialHash);
+            Assert.Null(await new FleetRobotAuthenticator(db).AuthenticateAsync(robot.RobotCode,
+                FleetRobotCredentialHash.Create().Secret, CancellationToken.None));
+        }
+
+        await using (var impersonate = new SqlCommand("EXECUTE AS USER='fleet_provisioner_robot_test';", connection))
+            await impersonate.ExecuteNonQueryAsync();
+        try
+        {
+            await using var db = new ApplicationDbContext(options);
+            var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
+            Assert.NotNull(provisioned);
+            credential = provisioned.Credential;
+            await using var deniedInsert = new SqlCommand("""
+                INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
+                VALUES(NEWID(),N'provisioner_cannot_register','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET());
+                """, connection);
+            Assert.Equal(229, (await Assert.ThrowsAsync<SqlException>(() => deniedInsert.ExecuteNonQueryAsync())).Number);
+            await using var deniedDispatch = new SqlCommand("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql';", connection);
+            Assert.Equal(230, (await Assert.ThrowsAsync<SqlException>(() => deniedDispatch.ExecuteNonQueryAsync())).Number);
+        }
+        finally
+        {
+            await using var revert = new SqlCommand("REVERT;", connection);
+            await revert.ExecuteNonQueryAsync();
+        }
+
+        await using (var db = new ApplicationDbContext(options))
+        {
+            var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
+            Assert.Equal(32, robot.CredentialHash.Length);
+            Assert.True(FleetRobotCredentialHash.Verify(credential, robot.CredentialHash));
+            Assert.False(robot.IsDispatchEnabled);
+            Assert.Null(robot.CurrentTourId);
+            Assert.Null(robot.LastAssignedAt);
+            Assert.NotNull(await new FleetRobotAuthenticator(db).AuthenticateAsync(robot.RobotCode,
+                credential, CancellationToken.None));
+        }
+    }
+
     [SchemaV11Fact]
     public async Task FleetCredentialProvisioner_CanUpdateOnlyCredentialHashForAnExistingRobot()
     {

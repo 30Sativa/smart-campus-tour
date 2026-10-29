@@ -112,8 +112,11 @@ about unrecoverable tokens must be reconciled with NFR-SEC-01 recoverably protec
 invitation resend before changing credential storage; this account slice does
 not alter invitation cryptography.
 
-The Map→POI follow-up adds read-only area/physical-robot lookups and updates the
-Technical Staff upload/check and Staff POI web screens. It changes no robot
+The Map→POI follow-up adds read-only area/physical-robot lookups, full persisted
+area selection and updates the Technical Staff upload/check and Staff POI web
+screens. Technical Staff can register a physical identity by code and name;
+runtime Robot permission is SELECT/INSERT only, while the existing one-shot
+provisioner still updates only the credential hash. It changes no robot
 transport or ai-assistant behavior. Scoped Google Docs text updates are
 performed separately; diagrams stay pending and are not redrawn. TechnicalStaff
 login and human-entered check records are not physical AC-01/06 evidence or full AC-08.
