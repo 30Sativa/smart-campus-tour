@@ -17,6 +17,7 @@ using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
 using SmartCampus.Infrastructure.Authentication.PasswordHashing;
+using SmartCampus.Domain.Entities;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -192,6 +193,46 @@ public sealed class SchemaV11Tests
         Assert.True(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
         await db.ExecuteAsync($"UPDATE dbo.RosterEmailChangeRequests SET State='REJECTED', ReviewedAt=SYSDATETIMEOFFSET(), ReviewedByUserId='{Id(2)}' WHERE Id='{Id(98)}';");
         Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
+    }
+
+    [SchemaV16Fact]
+    public async Task LatestPhysicalRobotDeploymentChecks_AreAcrossMapsAndExcludeEmulators()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
+        const string shaA = "0x1111111111111111111111111111111111111111111111111111111111111111";
+        const string shaB = "0x2222222222222222222222222222222222222222222222222222222222222222";
+        await db.ExecuteAsync($"""
+            INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
+            VALUES('{Id(501)}',N'amr-a','PHYSICAL',NULL,0,0,SYSDATETIMEOFFSET()),
+                  ('{Id(502)}',N'amr-b','PHYSICAL',NULL,0,0,SYSDATETIMEOFFSET());
+            INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt)
+            VALUES(N'area',N'Area','{Id(1)}',SYSDATETIMEOFFSET());
+            INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,
+                ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,FreeThreshold,
+                FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            VALUES('{Id(601)}',N'area',1,N'area-v1',N'v1.zip',{shaA},{shaA},0x01,N'map.pgm',1,1,0.05,0,0,0,0,0.65,0.25,N'map','VALID','{Id(1)}','{Id(701)}',SYSDATETIMEOFFSET()),
+                  ('{Id(602)}',N'area',2,N'area-v2',N'v2.zip',{shaB},{shaB},0x02,N'map.pgm',1,1,0.05,0,0,0,0,0.65,0.25,N'map','VALID','{Id(1)}','{Id(702)}',SYSDATETIMEOFFSET());
+            INSERT dbo.MapDeploymentChecks(Id,MapVersionId,RobotId,PackageSha256,LocalizationPassed,DisplayPassed,EvidenceNote,
+                CheckedByUserId,RequestId,RequestHash,CheckedAt)
+            VALUES('{Id(801)}','{Id(601)}','{Id(501)}',{shaA},1,1,N'earlier pass','{Id(1)}','{Id(811)}',{shaA},'2026-10-29T09:00:00+00:00'),
+                  ('{Id(802)}','{Id(602)}','{Id(501)}',{shaB},0,1,N'latest fail','{Id(1)}','{Id(812)}',{shaB},'2026-10-29T10:00:00+00:00'),
+                  ('{Id(803)}','{Id(602)}','{Id(502)}',{shaB},1,1,N'robot b pass','{Id(1)}','{Id(813)}',{shaB},'2026-10-29T10:00:00+00:00'),
+                  ('{Id(804)}','{Id(601)}','{Id(81)}',{shaA},1,1,N'emulator pass','{Id(1)}','{Id(814)}',{shaA},'2026-10-29T11:00:00+00:00');
+            """);
+
+        await using var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(db.ConnectionString).Options);
+        var repository = new EfVersionedMapPoiRepository(context);
+        var latest = await repository.ListLatestDeploymentChecksForPhysicalRobotsAsync(default);
+
+        Assert.Equal(2, latest.Count);
+        Assert.Equal(Id(802), latest.Single(check => check.Robot.RobotCode == "amr-a").Id.ToString("D"));
+        Assert.Equal("area-v2", latest.Single(check => check.Robot.RobotCode == "amr-a").MapVersion.MapKey);
+        Assert.Equal("amr-b", latest.Single(check => check.Robot.RobotCode == "amr-b").Robot.RobotCode);
+        Assert.DoesNotContain(latest, check => check.Robot.SourceType != "PHYSICAL");
+        Assert.Empty(MapCurrentlyDeployedOn.ForMap(new MapVersion { Id = Guid.Parse(Id(601)), PackageSha256 = Convert.FromHexString(shaA[2..]) }, latest));
+        Assert.Equal("amr-b", Assert.Single(MapCurrentlyDeployedOn.ForMap(
+            new MapVersion { Id = Guid.Parse(Id(602)), PackageSha256 = Convert.FromHexString(shaB[2..]) }, latest)).RobotCode);
     }
 
     [SchemaV16Fact]

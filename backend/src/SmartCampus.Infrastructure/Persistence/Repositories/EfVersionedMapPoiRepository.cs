@@ -68,6 +68,9 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         return await query.OrderByDescending(map => map.UploadedAt).ThenBy(map => map.Id).Take(take).ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken) =>
+        await LatestPhysicalRobotDeploymentChecks.Query(dbContext).ToArrayAsync(cancellationToken);
+
     public Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) =>
         dbContext.MapDeploymentChecks.Include(check => check.Robot)
             .SingleOrDefaultAsync(check => check.CheckedByUserId == actorUserId && check.RequestId == requestId, cancellationToken);

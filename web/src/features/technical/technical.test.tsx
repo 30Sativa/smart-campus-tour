@@ -16,7 +16,8 @@ const map = {
   imageWidth: 100, imageHeight: 80, resolution: 0.05, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z',
 }
 const mapItem = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null,
-  preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: 'a'.repeat(64), localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Fixture evidence', checkedAt: '2026-10-27T10:00:00Z' } }
+  preparationEvidence: { id: 'check-1', mapVersionId: map.id, robotCode: 'amr-01', packageSha256: 'a'.repeat(64), localizationPassed: true, displayPassed: true, passed: true, evidenceNote: 'Fixture evidence', checkedAt: '2026-10-27T10:00:00Z' },
+  currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
 const proposal = {
   id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=',
   revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
@@ -24,7 +25,12 @@ const proposal = {
 const queueItem = { proposalId: proposal.id, currentRevision: proposal.currentRevision, rowVersion: proposal.rowVersion, revision: proposal.revision }
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
-let physicalRobots: PhysicalRobotOption[] = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z' }]
+const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): PhysicalRobotOption => ({
+  id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map',
+  connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map',
+  ...overrides,
+})
+let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
 let mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
 let failMapAreaLookup = false
 let failDeploymentOnce = false
@@ -41,7 +47,7 @@ function renderPage(page: React.ReactNode) {
 describe('Technical Staff API integration', () => {
   beforeEach(() => {
     requests = []
-    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z' }]
+    physicalRobots = [makePhysicalRobot()]
     mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
     failMapAreaLookup = false
     failDeploymentOnce = false
@@ -74,7 +80,7 @@ describe('Technical Staff API integration', () => {
           failRobotRegistration = false
           return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
         }
-        const registered = { id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }
+        const registered = makePhysicalRobot({ id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null, configuredMapKey: null, configuredFrameId: null, latestDeployedMapKey: null, latestDeployedFrameId: null })
         physicalRobots = [...physicalRobots, registered]
         return response(registered)
       }
@@ -100,6 +106,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByRole('columnheader', { name: 'Khu vực' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'Mã khu vực' })).toBeInTheDocument()
     expect(screen.getByText('Đã có kiểm tra kỹ thuật đạt')).toBeInTheDocument()
+    expect(screen.getByText('Robot đang triển khai: amr-01')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
     fireEvent.change(await screen.findByLabelText('Robot kiểm tra'), { target: { value: 'amr-01' } })
@@ -178,8 +185,28 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByRole('option', { name: /AMR 01 · amr-01/ })).toBeInTheDocument()
   })
 
+  it('shows a non-blocking backend map-context warning when configured context differs from the latest deployment', async () => {
+    physicalRobots = [makePhysicalRobot({ configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText(/Cấu hình BE đang dùng map library-v1 · map nhưng robot được triển khai map library-v2 · map_v2 gần nhất/)).toBeInTheDocument()
+    expect(screen.getAllByText('library-v1 · map')).toHaveLength(2)
+    expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
+  })
+
+  it('shows the unconfigured-context notice and no mismatch notice when the context matches', async () => {
+    physicalRobots = [makePhysicalRobot({ configuredMapKey: null, configuredFrameId: null })]
+    const unconfigured = renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('BE chưa cấu hình ngữ cảnh map cho robot này')).toBeInTheDocument()
+    unconfigured.unmount()
+
+    physicalRobots = [makePhysicalRobot()]
+    renderPage(<TechnicalRobotsPage />)
+    expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText(/Cấu hình BE đang dùng map/)).not.toBeInTheDocument()
+  })
+
   it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {
-    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }]
+    physicalRobots = [makePhysicalRobot({ firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null })]
     renderPage(<TechnicalMapsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     await screen.findByRole('option', { name: /amr-01 · Chưa xác nhận kết nối/ })
@@ -199,7 +226,7 @@ describe('Technical Staff API integration', () => {
   })
 
   it('refreshes connection confirmation and latest sync without clearing map-check inputs', async () => {
-    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }]
+    physicalRobots = [makePhysicalRobot({ firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null })]
     renderPage(<TechnicalMapsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     await screen.findByRole('option', { name: /AMR 01 · amr-01 · Chưa xác nhận kết nối/ })
@@ -210,7 +237,7 @@ describe('Technical Staff API integration', () => {
     fireEvent.change(screen.getByLabelText('Bằng chứng kiểm tra'), { target: { value: 'Quan sát tại khu vực.' } })
     expect(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' })).toBeDisabled()
 
-    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-29T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-29T10:01:00Z' }]
+    physicalRobots = [makePhysicalRobot({ firstAcceptedSyncAt: '2026-10-29T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-29T10:01:00Z' })]
     fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái' }))
 
     expect(await screen.findByRole('option', { name: /AMR 01 · amr-01 · Đã xác nhận · Đang kết nối/ })).toBeInTheDocument()

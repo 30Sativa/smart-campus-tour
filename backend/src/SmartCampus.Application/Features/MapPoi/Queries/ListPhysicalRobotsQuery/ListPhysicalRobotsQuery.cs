@@ -27,7 +27,9 @@ public sealed record PhysicalRobotStatus(
     string RowVersion,
     bool MapContextConfigured,
     string? ConfiguredMapKey,
-    string? ConfiguredFrameId);
+    string? ConfiguredFrameId,
+    string? LatestDeployedMapKey,
+    string? LatestDeployedFrameId);
 
 public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
 
@@ -41,6 +43,8 @@ public sealed class ListPhysicalRobotsQueryHandler(
     public async Task<IReadOnlyList<PhysicalRobotStatus>> Handle(ListPhysicalRobotsQuery query, CancellationToken ct)
     {
         var robots = await repository.ListPhysicalRobotsAsync(ct);
+        var latestDeploymentByRobot = (await repository.ListLatestDeploymentChecksAsync(ct))
+            .ToDictionary(check => check.RobotId);
         var latestByRobot = telemetryStore.GetLatest()
             .ToDictionary(snapshot => snapshot.Robot.RobotCode, StringComparer.Ordinal);
         var now = timeProvider.GetUtcNow();
@@ -55,6 +59,7 @@ public sealed class ListPhysicalRobotsQueryHandler(
                         ? "CONNECTED"
                         : "DISCONNECTED";
             var mapContextConfigured = fleetSyncSettings.TryGetRobotContext(robot.RobotCode, out var context);
+            latestDeploymentByRobot.TryGetValue(robot.Id, out var latestDeployment);
             var credentialStatus = robot.CredentialHash is not null ? "ACTIVE"
                 : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
             return new PhysicalRobotStatus(robot.Id, robot.RobotCode, robot.DisplayName,
@@ -66,7 +71,8 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 robot.CredentialRevokedByUser?.FullName,
                 Convert.ToBase64String(robot.RowVersion),
                 mapContextConfigured, mapContextConfigured ? context.MapKey : null,
-                mapContextConfigured ? context.FrameId : null);
+                mapContextConfigured ? context.FrameId : null,
+                latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId);
         }).ToArray();
     }
 }

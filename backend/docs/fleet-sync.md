@@ -39,6 +39,14 @@ $env:FleetSync__RobotContexts__robot_test_01__MapKey = 'test-campus-map-v1'
 $env:FleetSync__RobotContexts__robot_test_01__FrameId = 'map'
 ```
 
+When deploying a new map version to a robot, update that robot's
+`FleetSync:RobotContexts` `MapKey` and `FrameId` to the deployed version and
+restart the backend so it loads the new settings. Then rerun the Fleet Sync
+probe with the same RobotCode, mapKey and frameId before recording the manual
+deployment check. The read-only robot page compares the current backend context
+with the robot's latest recorded deployment check; it does not change check
+eligibility or prove that the robot loaded the map file.
+
 ## Registration-to-map-check walkthrough
 
 Robot registration and map preparation may start independently. For a new area,

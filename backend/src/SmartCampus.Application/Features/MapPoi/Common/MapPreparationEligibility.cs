@@ -50,3 +50,22 @@ public sealed record MapPreparationEligibility(
                 BlockReasonCode ?? "MAP_NOT_READY_FOR_POI");
     }
 }
+
+public static class MapCurrentlyDeployedOn
+{
+    public static IReadOnlyList<CurrentlyDeployedRobot> ForMap(
+        MapVersion map, IReadOnlyCollection<MapDeploymentCheck> latestChecks)
+    {
+        return latestChecks
+            .Where(check => check.Robot.SourceType == "PHYSICAL")
+            .GroupBy(check => check.RobotId)
+            .Select(group => group.OrderByDescending(check => check.CheckedAt)
+                .ThenByDescending(check => check.Id).First())
+            .Where(check => check.MapVersionId == map.Id &&
+                CryptographicOperations.FixedTimeEquals(check.PackageSha256, map.PackageSha256) &&
+                check.LocalizationPassed && check.DisplayPassed)
+            .OrderBy(check => check.Robot.RobotCode, StringComparer.Ordinal)
+            .Select(check => new CurrentlyDeployedRobot(check.Robot.RobotCode, check.CheckedAt))
+            .ToArray();
+    }
+}
