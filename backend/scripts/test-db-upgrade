@@ -291,7 +291,7 @@ grep -q 'Database schema is older than v1.5' "$scratch/v14-select-only.log" || {
 [[ $(all_data) == "$legacy_data_before" && $(runtime_robot_permissions) == 10000000 ]] ||
   fail 'Failed v1.4 read-only check changed data or Robot grants.'
 upgrade > "$scratch/v14-upgrade.log" 2>&1 || { cat "$scratch/v14-upgrade.log" >&2; fail 'Controlled v1.4-to-v1.5 upgrade/regrant failed.'; }
-grep -q 'Applying the additive v1.4-to-v1.5 robot confirmation patch' "$scratch/v14-upgrade.log" ||
+grep -q 'applying the additive v1.4-to-v1.5 robot confirmation patch' "$scratch/v14-upgrade.log" ||
   fail 'v1.4 database did not use the existing ordered upgrade/regrant mechanism.'
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/v14-upgrade.log" ||
   fail 'v1.4 upgrade did not pass the final read-only deployment gate.'
