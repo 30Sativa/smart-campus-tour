@@ -213,9 +213,15 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(robotId, listedRobot.GetProperty("id").GetGuid());
         Assert.Equal("catalog-physical", listedRobot.GetProperty("robotCode").GetString());
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
-        Assert.Equal(new[] { "displayName", "id", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
+        Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
+        Assert.Equal(new[] { "connectionStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
 
         var mapSha = first.GetProperty("packageSha256").GetString();
+        using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
+            new { requestId = Guid.NewGuid(), robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; unconfirmed PASS must be blocked." });
+        Assert.Equal(HttpStatusCode.Conflict, blockedPass.StatusCode);
+        Assert.Equal("ROBOT_CONNECTION_UNCONFIRMED", (await Body(blockedPass)).GetProperty("errors").GetProperty("code").GetString());
         var checkRequestId = Guid.NewGuid();
         using var recorded = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
             new { requestId = checkRequestId, robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
@@ -274,6 +280,15 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposals"));
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalRevisions"));
         Assert.Equal(0, await database.CountRowsAsync("dbo.PoiProposalSubmissions"));
+
+        // A stored confirmation remains usable without any current RAM telemetry,
+        // including after a backend process restart.
+        await database.ExecuteAsync($"UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'campus-v1', FirstAcceptedFrameId=N'map' WHERE Id='{robotId:D}';");
+        using (var robotStatus = await Get(host.Client, "/api/technical/physical-robots", technical))
+        {
+            var item = Assert.Single((await Body(robotStatus)).GetProperty("data").EnumerateArray());
+            Assert.Equal("AWAITING_DATA", item.GetProperty("connectionStatus").GetString());
+        }
 
         using var passingCheck = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{mapId}/deployment-checks", technical,
             new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,

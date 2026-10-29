@@ -6,7 +6,7 @@ namespace SmartCampus.Infrastructure.Authentication;
 
 public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IFleetRobotAuthenticator
 {
-    public async Task<FleetRobotIdentity?> AuthenticateAsync(
+    public async Task<FleetRobotAuthenticationProof?> AuthenticateAsync(
         string robotCode,
         string credential,
         CancellationToken cancellationToken)
@@ -29,7 +29,8 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
         if (robot is null || !FleetRobotCredentialHash.Verify(credential, robot.CredentialHash))
             return null;
 
-        return new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName,
-            robot.NeedsInspection);
+        return new FleetRobotAuthenticationProof(
+            new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName, robot.NeedsInspection),
+            robot.CredentialHash.ToArray());
     }
 }

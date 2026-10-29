@@ -12,5 +12,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'campus_fleet
     THROW 51001, 'campus_fleet_provisioner exists but is not a database role.', 1;
 
 GRANT SELECT (RobotCode) ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
-GRANT UPDATE (CredentialHash) ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
+GRANT UPDATE (CredentialHash, FirstAcceptedSyncAt, FirstAcceptedMapKey, FirstAcceptedFrameId)
+    ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
 GO

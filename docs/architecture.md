@@ -143,10 +143,12 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.4; this branch adds
-the row-registration/email-request schema in
-`backend/database/smart-campus-tour-schema-v1.4.sql` and
-[ADR-0026](decisions/0026-row-level-registration-and-email-change.md). The
+The backend persistence baseline has advanced through v1.5; the current snapshot
+includes row-registration/email-request schema in
+`backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
+connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`.
+See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md) and
+[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md). The
 developer's local `SmartCampusTourV11` remains an older database and is not
 altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
@@ -620,16 +622,30 @@ operator to select the existing area. The server allocates each version inside
 the existing transaction-owned area lock and returns the assigned version.
 The physical-robot picker uses `/api/technical/physical-robots`, filtered only
 by the existing `SourceType=PHYSICAL` condition. GET returns ID/code/display
-name only; TechnicalStaff POST registers the same safe identity fields and
-appends actor/time audit in the robot save transaction. Runtime SQL can SELECT
-and INSERT Robots, but cannot UPDATE or DELETE; the write command relies on the
-existing unique RobotCode constraint for concurrent duplicate protection. The
-write command revalidates the robot and exact checksum. Registration neither
-depends on online telemetry nor provisions credentials, connects ROS 2, enables
-dispatch, or records map evidence. The one-shot provisioner and RobotContexts
-configuration remain outside the web; bridge and database RobotCode must
-match. Retries of an unchanged upload or deployment-check payload reuse the
-same request ID; a changed payload starts a new request ID.
+name, persisted first accepted sync context, and a connection status derived
+from the in-memory latest report and existing freshness threshold. TechnicalStaff
+POST registers the same safe identity fields and appends actor/time audit in
+the robot save transaction. Registration remains available offline and the
+unique RobotCode constraint protects concurrent duplicates. The write command
+revalidates the robot and exact checksum. A new deployment-check PASS additionally
+requires a persisted first accepted Fleet Sync report for the current credential;
+FAIL remains allowed before confirmation. The check locks the Robot row in its
+transaction, so credential rotation cannot race through the gate. Replaying an
+already committed check returns it before this new-PASS condition. Offline state
+or backend restart does not erase confirmation; credential provisioning resets
+it. Runtime SQL can SELECT/INSERT Robots and UPDATE only the three confirmation
+columns, never DELETE or update the whole table. The separate one-shot provisioner
+can SELECT `RobotCode` and update only `CredentialHash` plus the three reset
+columns. It and RobotContexts remain outside the web; bridge and database
+RobotCode must match. This connection confirmation does not prove the named map
+was loaded, localization succeeded, or operation is safe; the manual check
+remains a human observation. Report timestamp age/skew validation does not
+prove fleet-wide NTP. The stored map/frame values are historical context. A
+confirmation-write failure leaves accepted sync successful but keeps PASS
+blocked until a later new report can persist confirmation. Upload and
+deployment-check requests that expose requestId keep that ID stable for retries;
+physical robot registration has no requestId or receipt and duplicate code is
+409 via the unique constraint.
 
 When a current POI map version falls outside the normal version-list page, the
 Staff screen fetches that exact version by ID for preview. If backend eligibility

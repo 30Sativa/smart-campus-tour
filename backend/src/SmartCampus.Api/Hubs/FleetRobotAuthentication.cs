@@ -13,6 +13,7 @@ public static class FleetRobotAuthentication
     public const string SourceTypeClaim = "robot_source_type";
     public const string DisplayNameClaim = "robot_display_name";
     public const string NeedsInspectionClaim = "robot_needs_inspection";
+    public static readonly object RequestProofItemKey = new();
 }
 
 public sealed class FleetRobotAuthenticationHandler(
@@ -35,9 +36,12 @@ public sealed class FleetRobotAuthenticationHandler(
             !System.Text.RegularExpressions.Regex.IsMatch(robotCode, "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"))
             return AuthenticateResult.Fail("Invalid fleet credentials.");
 
-        var robot = await authenticator.AuthenticateAsync(robotCode, authorization.Parameter, Context.RequestAborted);
-        if (robot is null)
+        var authentication = await authenticator.AuthenticateAsync(robotCode, authorization.Parameter, Context.RequestAborted);
+        if (authentication is null)
             return AuthenticateResult.Fail("Invalid fleet credentials.");
+
+        Context.Items[FleetRobotAuthentication.RequestProofItemKey] = authentication;
+        var robot = authentication.Identity;
 
         var claims = new List<Claim>
         {

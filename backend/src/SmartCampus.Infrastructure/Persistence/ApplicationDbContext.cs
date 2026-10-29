@@ -523,6 +523,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.CredentialHash).HasMaxLength(256);
             entity.Property(e => e.DisplayName).HasMaxLength(150);
+            entity.Property(e => e.FirstAcceptedSyncAt).HasPrecision(3);
+            entity.Property(e => e.FirstAcceptedMapKey).HasMaxLength(100);
+            entity.Property(e => e.FirstAcceptedFrameId).HasMaxLength(100);
             entity.Property(e => e.LastAssignedAt).HasPrecision(3);
             entity.Property(e => e.RobotCode).HasMaxLength(100);
             entity.Property(e => e.RowVersion)

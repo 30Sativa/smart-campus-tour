@@ -66,6 +66,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0026](0026-row-level-registration-and-email-change.md) | Stable per-row participation, review, email change and invitation/session access | owner-authorized Wave C backend slice; global capacity, workday calendar, READY integration and UI remain pending |
 | [0027](0027-versioned-map-poi-and-route-api-cutover.md) | Retire replaced Admin aliases and mutable POI/Route authoring APIs; use versioned Map–POI–Route contracts | owner-authorized API cutover; legacy Tour/registration and scheduling migration remain partial |
 | [0028](0028-map-technical-check-before-poi-preparation.md) | Require latest exact-version physical robot check evidence before Tour Staff creates/revises/submits POI proposals | owner-authorized business rule; backend/frontend enforcement and tests in this change |
+| [0029](0029-robot-connection-confirmation-before-map-pass.md) | Persist first accepted Fleet Sync context per credential and require it for a new map-check PASS | owner-authorized cross-system implementation; v1.5 schema and backend/web enforcement; no hardware acceptance claimed |
 
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:

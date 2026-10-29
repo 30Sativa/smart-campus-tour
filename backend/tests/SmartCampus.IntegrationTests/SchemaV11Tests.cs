@@ -61,6 +61,15 @@ public sealed class SchemaV14FactAttribute : FactAttribute, ITraitAttribute
     }
 }
 
+public sealed class SchemaV15FactAttribute : FactAttribute, ITraitAttribute
+{
+    public SchemaV15FactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 {
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
@@ -132,6 +141,24 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.BrowserSessions') AND name='DeviceTokenHash';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE name='CK_RosterRows_ParticipationState';"));
+    }
+
+    [SchemaV15Fact]
+    public async Task V14ToV15Patch_IsAdditiveIdempotentAndPreservesDataAndBootstrapHash()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.4.sql");
+        const string originalHash = "b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{originalHash}'; EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.4';");
+        await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(120)}',N'confirm-migration','PHYSICAL',0x0102,0,0,SYSDATETIMEOFFSET());");
+
+        await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
+        await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
+
+        Assert.Equal("1.5", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(originalHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("confirm-migration", await db.ScalarAsync<string>($"SELECT RobotCode FROM dbo.Robots WHERE Id='{Id(120)}';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name IN ('FirstAcceptedSyncAt','FirstAcceptedMapKey','FirstAcceptedFrameId');"));
+        await db.ExpectErrorAsync(547, $"UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET() WHERE Id='{Id(120)}';");
     }
 
     [SchemaV14Fact]
@@ -788,7 +815,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.4.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.5.sql")
         {
             var db = new TestDatabase();
             try

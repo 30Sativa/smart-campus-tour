@@ -8,6 +8,7 @@ import TechnicalMapsPage from '../../routes/technical/TechnicalMapsPage'
 import TechnicalRobotsPage from '../../routes/technical/TechnicalRobotsPage'
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
+import type { PhysicalRobotOption } from './api/technical'
 
 const map = {
   id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1',
@@ -23,7 +24,7 @@ const proposal = {
 const queueItem = { proposalId: proposal.id, currentRevision: proposal.currentRevision, rowVersion: proposal.rowVersion, revision: proposal.revision }
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
-let physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01' }]
+let physicalRobots: PhysicalRobotOption[] = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z' }]
 let mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
 let failMapAreaLookup = false
 let failDeploymentOnce = false
@@ -38,7 +39,7 @@ function renderPage(page: React.ReactNode) {
 describe('Technical Staff API integration', () => {
   beforeEach(() => {
     requests = []
-    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01' }]
+    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map', connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z' }]
     mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
     failMapAreaLookup = false
     failDeploymentOnce = false
@@ -60,7 +61,7 @@ describe('Technical Staff API integration', () => {
           failRobotRegistration = false
           return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
         }
-        const registered = { id: 'robot-2', ...JSON.parse(String(init.body)) }
+        const registered = { id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }
         physicalRobots = [...physicalRobots, registered]
         return response(registered)
       }
@@ -164,6 +165,26 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByRole('option', { name: /AMR 01 · amr-01/ })).toBeInTheDocument()
   })
 
+  it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {
+    physicalRobots = [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null }]
+    renderPage(<TechnicalMapsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }))
+    await screen.findByRole('option', { name: /amr-01 · Chưa xác nhận kết nối/ })
+    fireEvent.change(screen.getByLabelText('Robot kiểm tra'), { target: { value: 'amr-01' } })
+    fireEvent.click(screen.getByLabelText('Localization đạt'))
+    fireEvent.click(screen.getByLabelText('Map hiển thị đúng'))
+    fireEvent.change(screen.getByLabelText('Bằng chứng kiểm tra'), { target: { value: 'Đã kiểm tra trực tiếp.' } })
+    expect(await screen.findByRole('status')).toHaveTextContent('Robot chưa xác nhận kết nối.')
+    expect(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' })).toBeDisabled()
+
+    fireEvent.click(screen.getByLabelText('Map hiển thị đúng'))
+    expect(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả kiểm tra' }))
+    await waitFor(() => expect(requests.filter(item => item.url.pathname.endsWith('/deployment-checks') && item.init?.method === 'POST')).toHaveLength(1))
+    expect(JSON.parse(String(requests.find(item => item.url.pathname.endsWith('/deployment-checks') && item.init?.method === 'POST')?.init?.body)))
+      .toMatchObject({ localizationPassed: true, displayPassed: false, robotCode: 'amr-01' })
+  })
+
   it('registers a physical robot and refreshes the lookup used by map checks', async () => {
     physicalRobots = []
     renderPage(<TechnicalRobotsPage />)
@@ -180,6 +201,7 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(submit)
     expect(await screen.findByText('amr-new')).toBeInTheDocument()
     expect(screen.getByText('AMR mới')).toBeInTheDocument()
+    expect(screen.getByText('Chưa xác nhận kết nối')).toBeInTheDocument()
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
     const post = requests.find(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method === 'POST')!
     expect(JSON.parse(String(post.init?.body))).toEqual({ robotCode: 'amr-new', displayName: 'AMR mới' })

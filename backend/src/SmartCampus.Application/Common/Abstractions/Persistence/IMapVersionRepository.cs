@@ -15,6 +15,7 @@ public interface IMapVersionRepository
     Task<MapDeploymentCheck?> FindDeploymentRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken cancellationToken);
     Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken cancellationToken);
+    Task<bool> LockAndReadConnectionConfirmationAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckForRobotAsync(Guid robotId, CancellationToken cancellationToken);
     Task<MapDeploymentCheck?> GetLatestDeploymentCheckAsync(Guid mapVersionId, Guid? robotId, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListDeploymentChecksForMapAsync(Guid mapVersionId, CancellationToken cancellationToken);

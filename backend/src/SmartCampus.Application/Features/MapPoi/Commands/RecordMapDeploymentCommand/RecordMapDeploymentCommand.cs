@@ -59,6 +59,11 @@ public sealed class RecordMapDeploymentCommandHandler(
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());
         await repository.LockMapPreparationStateAsync(map.Id, cancellationToken);
         await repository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
+        var connectionConfirmed = await repository.LockAndReadConnectionConfirmationAsync(robot.Id, cancellationToken);
+        if (request.LocalizationPassed && request.DisplayPassed && !connectionConfirmed)
+            throw new ConflictException(
+                "Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại rồi thử ghi PASS lại.",
+                "ROBOT_CONNECTION_UNCONFIRMED");
         var latestDeployment = await repository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var now = timeProvider.GetUtcNow();
         if (latestDeployment is not null && now < latestDeployment.CheckedAt.AddMilliseconds(1))

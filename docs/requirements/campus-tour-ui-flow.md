@@ -15,8 +15,8 @@ Use the SRS screen IDs exactly; components need not be separate routes.
 |---|---|---|
 | SCR-PUBLIC | Public | Entry information; no registration or invitation/session authority from URL |
 | SCR-ADMIN | Admin | Manage accounts, configuration and administrative audit; one supported role/account |
-| SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose a registered physical robot for manual deployment/localization evidence; keep upload distinct from check result |
-| SCR-TECH-ROBOT | Technical Staff | Register a physical robot identity using RobotCode and display name; setup does not connect the robot or provision its credential |
+| SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose any registered physical robot for manual deployment/localization evidence. A new PASS requires first accepted Fleet Sync under its current credential; FAIL remains available before confirmation. Keep upload distinct from check result. |
+| SCR-TECH-ROBOT | Technical Staff | Register a physical robot identity using RobotCode and display name; an operator separately provisions/configures its key and RobotContexts, then starts the bridge. Show first accepted connection context and latest in-memory sync. Registration itself does not connect or provision the robot. |
 | SCR-TECH-POI | Technical Staff | Import unverified POIs; verify exact POI/route revisions; project YAML/frame mapping pending |
 | SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation |
 | SCR-STAFF-REVIEW | Staff | Decide pending rows and requested email changes; tour SCHEDULED; ≤2-working-day target |
@@ -32,9 +32,11 @@ artifacts, not a new research workspace.
 
 ## 2. Preparation and tour lifecycle
 
-Technical registers the physical robot identity (credential and RobotContexts
-remain separately provisioned) → creates map externally → upload immutable version → manually deploy
-and verify localization/display on a selected registered physical robot → only then Staff proposes/submits POIs /
+Technical registers the physical robot identity → operator provisions the key
+and matching RobotContexts and configures MiniPC bridge → a valid accepted Fleet
+Sync confirms backend contact → creates map externally → uploads immutable
+version → manually deploys and verifies localization/display on a selected
+registered physical robot → only then Staff proposes/submits POIs /
 Technical imports or verifies POIs
 (unverified) → Technical verifies POIs → Staff composes route/content →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves
@@ -42,9 +44,10 @@ Technical + assigned Operator test exact tuple → Staff schedules and reserves
 READY locks route/content/list → preflight at published time → Start while READY
 → validate guards/claim robot/commit RUNNING → dispatch first leg.
 
-**Diagram follow-up:** redraw the workflow diagram so successful map technical
-check is explicitly before the Tour Staff POI proposal/submission step. This
-document update does not redraw it.
+**Diagram follow-up:** redraw the workflow diagram to include provisioning and
+accepted Fleet Sync before a new map-check PASS, and keep the manual map check
+before Staff POI proposal/submission. No editable diagram source is checked in
+to this repository; the external workflow illustration still needs redraw.
 
 Saving or activating catalog data is not physical confirmation. A new
 movement-affecting revision requires retest; retained tested configuration stays

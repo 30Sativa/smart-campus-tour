@@ -57,6 +57,14 @@ The upload form chooses either a new area (key and name) or an existing area
 from the full persisted catalog; the server allocates the next version. The
 deployment-check form chooses a database robot whose persisted source type is
 PHYSICAL; online telemetry is not the robot catalog.
+Before a new deployment-check PASS, the current credential must have produced
+one valid, accepted Fleet Sync report for the configured RobotCode/mapKey/frameId.
+That report proves authenticated backend contact only; Technical Staff still
+records localization and display by direct manual inspection. A FAIL remains
+recordable before contact is confirmed. Provisioning a replacement credential
+clears the connection confirmation, while backend restart or later offline
+state does not clear it. This is an implementation rule added after the SRS
+baseline, not a claim that sync proves map loading, localization, or safety.
 After a map version has a successful exact-checksum localization and display
 check recorded for at least one physical robot, Staff may click-propose POIs or
 Technical Staff may import a project YAML template; both create unverified POI

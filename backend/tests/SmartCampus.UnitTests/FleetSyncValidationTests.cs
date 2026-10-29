@@ -25,7 +25,7 @@ public sealed class FleetSyncValidationTests
             MotionReady = null
         };
 
-        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), report));
+        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), report, new byte[32]));
 
         Assert.True(result.IsValid);
     }
@@ -36,7 +36,7 @@ public sealed class FleetSyncValidationTests
     public async Task Validate_RejectsSequencesOutsideBrowserSafePositiveRange(long sequence)
     {
         var validator = new SyncFleetTelemetryValidator(Settings, new FixedTimeProvider(Now));
-        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), ValidReport() with { Seq = sequence }));
+        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), ValidReport() with { Seq = sequence }, new byte[32]));
 
         Assert.Contains(result.Errors, error => error.PropertyName == "Report.Seq");
     }
@@ -46,7 +46,7 @@ public sealed class FleetSyncValidationTests
     {
         var validator = new SyncFleetTelemetryValidator(Settings, new FixedTimeProvider(Now));
         var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(),
-            ValidReport() with { ReportedAt = Now.AddMinutes(-2) }));
+            ValidReport() with { ReportedAt = Now.AddMinutes(-2) }, new byte[32]));
 
         Assert.Contains(result.Errors, error => error.PropertyName == "Report.ReportedAt");
     }
@@ -57,7 +57,7 @@ public sealed class FleetSyncValidationTests
         var validator = new SyncFleetTelemetryValidator(Settings, new FixedTimeProvider(Now));
         var report = ValidReport(new FleetPose(1, 2, 0, DateTimeOffset.MinValue));
 
-        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), report));
+        var result = await validator.ValidateAsync(new SyncFleetTelemetry(Identity(), report, new byte[32]));
 
         Assert.Contains(result.Errors, error => error.PropertyName == "Report.Pose");
     }

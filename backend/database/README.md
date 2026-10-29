@@ -24,7 +24,7 @@ SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
 - The local DB was created empty. v1.1 is not an ALTER migration and did not migrate v1.0 or production data.
 - `backend/database/smart-campus-tour-permissions.sql` creates the `campus_tour_app` database role and grants SELECT/INSERT, denies UPDATE/DELETE on TourEvents/AuditLogs. Apply after the schema in the intended database. A deployment administrator provisions the runtime user and adds it to this role; the script does not create a login or change existing user memberships. Business-table permissions remain feature-specific.
-- `backend/database/smart-campus-tour-runtime-permissions.sql` grants the runtime role SELECT/INSERT on `Robots` for Technical Staff identity registration; it does not grant UPDATE/DELETE. The separate Fleet credential provisioner can SELECT `RobotCode` and UPDATE only `CredentialHash` through `fleet-credential-provisioning-permissions.sql`.
+- Current schema is Database First v1.5. Runtime may SELECT/INSERT `Robots` for Technical Staff registration and UPDATE only `FirstAcceptedSyncAt`, `FirstAcceptedMapKey`, and `FirstAcceptedFrameId` after an accepted Fleet Sync report. It never gets whole-table UPDATE/DELETE or `CredentialHash` UPDATE. The separate provisioner may SELECT `RobotCode` and UPDATE `CredentialHash` plus those three fields so key rotation resets confirmation atomically.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 
@@ -34,12 +34,13 @@ Treat the deployed snapshot as immutable, including comments. Put changing
 business explanations in docs/ADRs; in particular ADR-0017 freezes Route
 configuration from any Tour reference even if an older SQL comment mentions READY.
 The Compose initializer creates an empty database from
-`smart-campus-tour-schema-v1.4.sql`; its bootstrap check requires the exact
-LF-normalized v1.4 hash marker before granting runtime permissions. The two
+`smart-campus-tour-schema-v1.5.sql`; its bootstrap check requires the current
+LF-normalized v1.5 hash marker or a recognized historical bootstrap marker plus
+the complete v1.5 structure before granting runtime permissions. The two
 historical v1.1 marker values (`96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
 and `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`)
 remain recognized as the accepted comment-only pair, but now return
-`UPGRADE_REQUIRED`: they do not prove the v1.4 tables/columns exist. The
+`UPGRADE_REQUIRED`: they do not prove the required tables/columns exist. The
 initializer refuses them without changing data or markers, and also refuses
 unknown or unmarked non-empty schemas. Normal API deployment runs this tool only
 in read-only `--check-only` mode; it cannot bootstrap, migrate, change login
@@ -47,18 +48,20 @@ credentials, or change the SQL Server engine. Empty-database bootstrap is an
 explicit `--bootstrap` operation. Existing data uses the separately locked
 Backend Database Schema Upgrade workflow, which takes and verifies a full
 backup before applying additive patches in order (v1.1→v1.2, v1.2→v1.3,
-v1.3→v1.4), then checks the resulting structure and runtime grants. It retains
-the original bootstrap hash and records `CampusTourSchemaVersion=1.4` only
+v1.3→v1.4, v1.4→v1.5), then checks the resulting structure and runtime grants. It retains
+the original bootstrap hash and records `CampusTourSchemaVersion=1.5` only
 after required structure checks. Unknown markers or incomplete upgrades fail
 closed. Any executable schema change needs its own ADR/database change process.
 
-For a fresh v1.4 database the initializer applies, in order, the full schema,
+For a fresh v1.5 database the initializer applies, in order, the full schema,
 the log role, map/POI grants, Route revision grants, then creates the runtime
 user and applies `backend/database/smart-campus-tour-runtime-permissions.sql`.
 That runtime script grants the v1.4 email request table only SELECT/INSERT/UPDATE
 and leaves DELETE denied; it does not skip missing objects. Route/RouteStops CRUD and Tour
 SELECT/INSERT/UPDATE are included. Robots allow SELECT/INSERT for identity
-registration, with no runtime UPDATE/DELETE; branch writes and Tour DELETE
+registration and column-level UPDATE of the three first-sync confirmation
+fields; full-table UPDATE/DELETE remain denied. The separate provisioner updates
+CredentialHash and resets the same three fields. Branch writes and Tour DELETE
 remain absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
 the real Route/Tour preparation pipeline under an impersonated restricted user.
 

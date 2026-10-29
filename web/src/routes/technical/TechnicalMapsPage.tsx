@@ -8,9 +8,15 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors, stamp } from '../../features/technical/technical-format'
-import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
+import type { MapAreaOption, MapVersionItem, PhysicalRobotConnectionStatus } from '../../features/technical/api/technical'
 
 const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
+const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
+  UNCONFIRMED: 'Chưa xác nhận kết nối',
+  CONNECTED: 'Đã xác nhận · Đang kết nối',
+  DISCONNECTED: 'Đã xác nhận · Mất kết nối',
+  AWAITING_DATA: 'Đã xác nhận · Chưa nhận dữ liệu',
+})[status]
 
 /**
  * Map versions: a figure strip, the version table, and two drawers (upload a
@@ -140,6 +146,10 @@ function DeploymentDrawer({ item, onClose }: { item: MapVersionItem | null; onCl
   const [displayPassed, setDisplayPassed] = useState(false)
   const [requestId, setRequestId] = useState(() => crypto.randomUUID())
   const map = item?.map
+  const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
+  const connectionUnconfirmed = selectedRobot?.connectionStatus === 'UNCONFIRMED'
+  const attemptedPass = localizationPassed && displayPassed
+  const passBlocked = attemptedPass && connectionUnconfirmed
   const changed = () => { deployment.reset(); setRequestId(crypto.randomUUID()) }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -152,9 +162,9 @@ function DeploymentDrawer({ item, onClose }: { item: MapVersionItem | null; onCl
   if (!map) return <Drawer open={false} title="Kiểm tra bản đồ" onClose={onClose}><div /></Drawer>
   return (
     <Drawer open title={`Kiểm tra ${map.mapKey} trên robot`} description={`Checksum ${shortSha(map.packageSha256)}. Chỉ ghi khi robot đã nạp đúng package này.`} onClose={onClose}
-      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || !robotCode || !note.trim()}>Lưu kết quả kiểm tra</button></div>}>
+      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || !robotCode || !note.trim() || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
       <form id="map-check-form" className="space-y-3.5" onSubmit={submit}>
-        <div><label className={labelClass} htmlFor="map-check-robot">Robot kiểm tra</label><select id="map-check-robot" className={`${inputClass} mt-1`} required value={robotCode} disabled={robots.isPending || robots.isError || !robots.data?.length} onChange={event => { setRobotCode(event.target.value); changed() }}><option value="">— Chọn robot vật lý —</option>{robots.data?.map(robot => <option key={robot.id} value={robot.robotCode}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}</option>)}</select>{robots.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách robot…</p>}{robots.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div>}{!robots.isPending && !robots.isError && robots.data?.length === 0 && <div role="status" className="mt-1 text-sm text-[#b23e18]"><p>Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra.</p><Link className="mt-1 inline-block font-semibold text-[#1d4ed8] underline" to="/technical/robots">Đăng ký robot</Link></div>}</div>
+        <div><label className={labelClass} htmlFor="map-check-robot">Robot kiểm tra</label><select id="map-check-robot" className={`${inputClass} mt-1`} required value={robotCode} disabled={robots.isPending || robots.isError || !robots.data?.length} onChange={event => { setRobotCode(event.target.value); changed() }}><option value="">— Chọn robot vật lý —</option>{robots.data?.map(robot => { const status = connectionStatusLabel(robot.connectionStatus); return <option key={robot.id} value={robot.robotCode}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · {status}</option> })}</select>{robots.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách robot…</p>}{robots.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div>}{!robots.isPending && !robots.isError && robots.data?.length === 0 && <div role="status" className="mt-1 text-sm text-[#b23e18]"><p>Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra.</p><Link className="mt-1 inline-block font-semibold text-[#1d4ed8] underline" to="/technical/robots">Đăng ký robot</Link></div>}{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại trước khi ghi PASS; bạn vẫn có thể ghi FAIL sau khi quan sát thực tế.</p>}</div>
         <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Localization đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Map hiển thị đúng</CheckRow></div>
         <div><label className={labelClass} htmlFor="map-check-note">Bằng chứng kiểm tra</label><textarea id="map-check-note" rows={4} className={`${inputClass} mt-1`} required maxLength={2000} value={note} onChange={event => { setNote(event.target.value); changed() }} placeholder="Ghi nhận quan sát thực tế, sai lệch, ảnh chụp màn hình đã lưu ở đâu…" /></div>
         {deployment.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(deployment.error)}</p>}

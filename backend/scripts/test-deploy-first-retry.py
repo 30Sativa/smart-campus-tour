@@ -237,7 +237,7 @@ if args[:2] == ["image", "inspect"]:
     fmt = args[args.index("--format") + 1]
     target = args[-1]
     if "org.smartcampus.database.schema-version" in fmt:
-        print("1.4")
+        print("1.5")
     elif "revision" in fmt and "backend-db-init@" in target:
         print(os.environ["FAKE_DB_INIT_SOURCE_SHA"])
     elif "revision" in fmt:
@@ -534,7 +534,7 @@ def run() -> None:
                 "BACKEND_IMAGE": api_digest,
                 "DB_INIT_IMAGE": init_digest,
                 "DB_INIT_SOURCE_SHA": "9" * 40,
-                "DB_SCHEMA_VERSION": "1.4",
+                "DB_SCHEMA_VERSION": "1.5",
                 "SQLSERVER_IMAGE": host_sql_image,
                 "SQL_SA_PASSWORD": "Aa1!" + "a" * 64,
                 "SQL_APP_PASSWORD": "b" * 64,

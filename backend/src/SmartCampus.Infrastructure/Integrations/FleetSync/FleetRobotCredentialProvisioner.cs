@@ -30,7 +30,11 @@ public sealed class FleetRobotCredentialProvisioner
         var credential = FleetRobotCredentialHash.Create();
         var updated = await dbContext.Robots
             .Where(robot => robot.RobotCode == robotCode)
-            .ExecuteUpdateAsync(update => update.SetProperty(robot => robot.CredentialHash, credential.Hash),
+            .ExecuteUpdateAsync(update => update
+                    .SetProperty(robot => robot.CredentialHash, credential.Hash)
+                    .SetProperty(robot => robot.FirstAcceptedSyncAt, (DateTimeOffset?)null)
+                    .SetProperty(robot => robot.FirstAcceptedMapKey, (string?)null)
+                    .SetProperty(robot => robot.FirstAcceptedFrameId, (string?)null),
                 cancellationToken);
 
         return updated == 1

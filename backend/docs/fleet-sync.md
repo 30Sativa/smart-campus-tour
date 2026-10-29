@@ -10,9 +10,23 @@ always returns `commands: []`.
 Technical Staff first registers the physical robot identity in the web console
 using the same `RobotCode` that its bridge will send. Registration creates only
 an unassigned database identity; it does not connect to ROS 2, mark the robot
-online/ready, pass a map check, or enable dispatch. The manual deployment-check
-record remains human-entered evidence and does not require online telemetry or
-a matching `RobotContexts` entry.
+online/ready, pass a map check, or enable dispatch. An operator separately
+provisions a credential and configures the same RobotCode/mapKey/frameId in
+`RobotContexts` and the MiniPC bridge. A first valid, new Fleet Sync report
+accepted under that credential stores its BE acceptance time and reported
+map/frame as the durable connection confirmation. Pose may be null. This is
+backend-contact evidence only: the timestamp age/skew window does not prove NTP,
+and the report does not prove map-file loading, localization or safety.
+
+A new manual deployment-check PASS requires that persisted confirmation; FAIL
+remains available before it. The check itself remains a human observation of
+exact package checksum, localization and display. Existing PASS/FAIL history is
+preserved on credential rotation, which atomically resets confirmation. A
+confirmation survives API restart and offline periods. Latest sync receipt
+continues to live in RAM only; after restart its status is `AWAITING_DATA`, and
+when no first confirmation exists it is `UNCONFIRMED`. A confirmation-write
+error does not fail an already accepted sync, but PASS remains blocked until a
+later new report persists it.
 
 For each provisioned `RobotCode`, configure its approved map/frame context in
 deployment secrets/configuration. Example environment variables for a local
@@ -23,10 +37,30 @@ $env:FleetSync__RobotContexts__robot_test_01__MapKey = 'test-campus-map-v1'
 $env:FleetSync__RobotContexts__robot_test_01__FrameId = 'map'
 ```
 
+## Registration-to-map-check walkthrough
+
+1. A Technical Staff member registers the PHYSICAL identity with RobotCode and
+   display name. The robot is immediately selectable, including while offline.
+2. An operator separately provisions the key, puts it in the MiniPC's protected
+   configuration, and configures matching RobotCode/mapKey/frameId values in
+   the backend and bridge.
+3. Start the configured Fleet Sync bridge or run the probe below. After a new
+   report is accepted, the Technical robot list shows the first confirmation
+   time and map/frame context. The probe is backend-contact evidence, not proof
+   of the physical robot loading or localizing the map.
+4. Technical Staff observes the actual map display and localization, then
+   records the manual exact-package map check. A new PASS is blocked until
+   connection confirmation is persisted; a FAIL may be recorded before then.
+5. Keep the separate downstream POI preparation and Tour readiness rules; this
+   connection confirmation does not make a robot ready or dispatchable.
+
 Apply `backend/database/fleet-credential-provisioning-permissions.sql` with a
 database administrator, then assign a separate provisioning login to
 `campus_fleet_provisioner`. Do not add the API runtime login to this role. The
-role reads `Robots.RobotCode` and updates only `Robots.CredentialHash`.
+role reads `Robots.RobotCode` and updates only `Robots.CredentialHash` and the
+three connection-confirmation fields, which it resets atomically with key
+rotation. The API runtime role may update only those three confirmation fields;
+it cannot update `CredentialHash` or update/delete the full Robots table.
 
 Run from `backend/` with a protected provisioning connection string in
 `FleetProvisioning:ConnectionString` (for example the environment variable
@@ -37,14 +71,16 @@ $env:FleetProvisioning__ConnectionString = '<least-privilege provisioning connec
 dotnet .\src\SmartCampus.Api\bin\Debug\net10.0\SmartCampus.Api.dll --provision-fleet-robot robot_test_01
 ```
 
-The command requires an existing Robot row, rotates its credential, updates no
-other column, prints the generated credential once as JSON, and exits without
-starting the API. Keep the output out of logs and place the secret directly in
+The command requires an existing Robot row, rotates its credential and clears
+the first-sync confirmation fields in the same SQL update, prints the generated
+credential once as JSON, and exits without starting the API. Keep the output out of logs and place the secret directly in
 the robot's protected configuration. The application runtime credential has
-SELECT and INSERT on Robots for the Technical Staff registration flow, but no
-UPDATE or DELETE. The separate provisioner retains `RobotCode` SELECT and
-`CredentialHash`-only UPDATE. Runtime never receives a provisioning connection
-string. The SQL snapshot and EF model remain unchanged. `PackageSha256` in map
+SELECT/INSERT on Robots and column-level UPDATE only for the three confirmation
+fields; it cannot update `CredentialHash`, whole-table UPDATE, or DELETE. The
+separate provisioner retains `RobotCode` SELECT and can update only
+`CredentialHash` plus the three reset fields. Runtime never receives a
+provisioning connection string. Database First schema v1.5 defines those
+confirmation columns. `PackageSha256` in map
 checks is the checksum of the uploaded ZIP, not an individual YAML or PGM file.
 
 ## Run the probe

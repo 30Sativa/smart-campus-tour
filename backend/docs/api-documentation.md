@@ -43,8 +43,14 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
 - Versioned map/POI operations are grouped under `Technical Staff — Maps`,
   `Tour Staff — POI Proposals`, and `Technical Staff — POI Verification`.
   Upload stores a validated package version but does not deploy it. Deployment
-  checks are manually entered evidence. POI submission is not PASS; a technical
+  checks are manually entered evidence; a new PASS requires the robot's durable
+  first accepted Fleet Sync confirmation for its current credential, while
+  FAIL remains available without confirmation. POI submission is not PASS; a technical
   result is scoped to the recorded revision/fingerprint and evidence.
+- `GET /api/technical/physical-robots` returns safe confirmation context and
+  connection status; `POST` registration remains `{robotCode, displayName}`
+  without requestId. Duplicate codes return 409 through the database unique
+  constraint. Neither response returns a credential/hash.
 - Remaining legacy reads and the partial Staff pre-execution Tour API are
   identified as legacy/pending in Swagger. The replaced Admin aliases, legacy
   POI catalog and mutable Route authoring operations are absent from routing
@@ -56,6 +62,7 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
 |---|---|---|---|
 | `/api/admin/accounts` | Admin | Admin | Implemented account management, including TechnicalStaff accounts |
 | `/api/technical/map-versions/*`, `/api/maps/versions/*` | Upload/check: TechnicalStaff; version reads: Staff or TechnicalStaff | Technical Staff for map setup; Staff may read versions | Implemented backend API; deployment check is manual evidence; physical commissioning pending |
+| `/api/technical/physical-robots` | TechnicalStaff | Technical robot registration and first-sync confirmation | Registration is identity-only; connection status is safe confirmation plus current RAM sync freshness; new map-check PASS requires persisted confirmation |
 | `/api/staff/poi-proposals/*` | Mutations: Staff; reads: Staff or TechnicalStaff | POI proposal: Tour Staff; verification: Technical Staff | Implemented versioned proposal and per-revision result API; route certification and frontend integration pending |
 | `/api/staff/poi-proposals/*`, `/api/technical/poi-*/*` | Staff proposal operations; Technical verification | Tour Staff proposals; Technical Staff verification | Versioned workflow implemented; project YAML import pending |
 | `GET /api/staff/manage/routes*` | Staff | Legacy Route projection for existing Tour readers | Retained legacy reads only; authoring uses versioned Route APIs |

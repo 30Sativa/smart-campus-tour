@@ -42,8 +42,8 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
 
     [HttpGet("technical/physical-robots")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
-    public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotOption>>>> ListPhysicalRobots(CancellationToken ct) =>
-        Ok(new BaseResponse<IReadOnlyList<PhysicalRobotOption>> { Success = true, Message = "Physical robots retrieved.",
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotStatus>>>> ListPhysicalRobots(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<PhysicalRobotStatus>> { Success = true, Message = "Physical robots retrieved.",
             Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
 
     [HttpPost("technical/physical-robots")]
