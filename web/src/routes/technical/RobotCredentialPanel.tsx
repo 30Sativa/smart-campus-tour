@@ -14,6 +14,11 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
   const [error, setError] = useState<string | null>(null)
   const [oneTimeSecret, setOneTimeSecret] = useState<RobotCredentialSecret | null>(null)
   const clearAndClose = () => { setOneTimeSecret(null); onClose() }
+  const refreshRobotViews = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['technical', 'robot-credential', robotCode] }),
+    // The deployment-check picker uses this same physical-robot query.
+    queryClient.invalidateQueries({ queryKey: ['technical', 'physical-robots'] }),
+  ])
 
   const change = async (operation: 'issue' | 'rotate' | 'revoke') => {
     const current = credential.data
@@ -26,17 +31,16 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
       const input = { requestId: crypto.randomUUID(), expectedRowVersion: current.rowVersion }
       if (operation === 'revoke') {
         await technicalApi.revokeRobotCredential(robotCode, { ...input, reason: reason.trim() })
-        await queryClient.invalidateQueries({ queryKey: ['technical', 'robot-credential', robotCode] })
       } else {
         const secret = operation === 'issue'
           ? await technicalApi.issueRobotCredential(robotCode, input)
           : await technicalApi.rotateRobotCredential(robotCode, input)
         setOneTimeSecret(secret)
-        await queryClient.invalidateQueries({ queryKey: ['technical', 'robot-credential', robotCode] })
       }
+      await refreshRobotViews()
     } catch (cause) {
       setError(errorText(cause))
-      await queryClient.invalidateQueries({ queryKey: ['technical', 'robot-credential', robotCode] })
+      await refreshRobotViews()
     } finally { setPending(false) }
   }
 

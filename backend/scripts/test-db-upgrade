@@ -182,7 +182,7 @@ fi
 
 # 2. Rerun completes the missing grants without DDL/backfill and without changing data or markers.
 upgrade > "$scratch/second.log" 2>&1 || { cat "$scratch/second.log" >&2; fail 'Rerun did not complete the runtime grants.'; }
-grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/second.log" || fail 'Rerun did not take the runtime/provisioner grant-completion path.'
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/second.log" || fail 'Rerun did not take the runtime/provisioner grant-completion path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/second.log"; then fail 'Rerun re-applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/second.log" || fail 'Rerun did not finish with the read-only compatibility check.'
 [[ $(runtime_can_read_email_changes) == 110 ]] || fail 'Runtime grants do not match the v1.4 email-change use case after rerun.'
@@ -214,7 +214,7 @@ grep -q 'Runtime Robot grants are incomplete' "$scratch/missing-robot-insert.log
 
 # 5. The existing v1.6 upgrade/regrant path restores only the reviewed grants and preserves data.
 upgrade > "$scratch/robot-regrant.log" 2>&1 || { cat "$scratch/robot-regrant.log" >&2; fail 'Controlled v1.5 runtime-grant recheck failed.'; }
-grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.6 database did not use the existing regrant path.'
+grep -q 'completing runtime and credential-provisioning grants only, no DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.6 database did not use the existing regrant path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/robot-regrant.log"; then fail 'v1.4 regrant unexpectedly applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/robot-regrant.log" || fail 'Runtime grants were not checked after regrant.'
 [[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Runtime Robot rights after regrant are not least privilege.'
@@ -299,4 +299,33 @@ grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/v14-
 [[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';") == "$legacy_robot" ]] ||
   fail 'v1.4 upgrade changed the registered robot business data.'
 check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.6 read-only check rejected the upgraded legacy database.'; }
+
+# 8. A v1.5 database can contain both legacy empty hashes and real credentials.
+# Exercise the actual controlled v1.5 -> v1.6 upgrade path with both rows present.
+v15_hash=$(tool --entrypoint /bin/bash "$db_init_image" -c "sed 's/\r$//' /database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d ' ' -f 1")
+sql -d master -Q 'DROP DATABASE SmartCampusTourV11; CREATE DATABASE SmartCampusTourV11;'
+sql -d SmartCampusTourV11 <<SQL
+:r /database/smart-campus-tour-schema-v1.5.sql
+:r /database/smart-campus-tour-permissions.sql
+CREATE USER smartcampus_api FOR LOGIN smartcampus_api;
+ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;
+EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'$v15_hash';
+EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.5';
+INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES
+  ('80000000-0000-0000-0000-000000000001',N'v15-unissued-empty-hash','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET()),
+  ('80000000-0000-0000-0000-000000000002',N'v15-provisioned-real-hash','PHYSICAL',0x0123456789ABCDEF,0,0,SYSDATETIMEOFFSET());
+GO
+SQL
+[[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2)) FROM dbo.Robots ORDER BY RobotCode;") == $'v15-provisioned-real-hash:0123456789ABCDEF\nv15-unissued-empty-hash:' ]] ||
+  fail 'v1.5 fixture did not contain the expected empty and real credential hashes.'
+upgrade > "$scratch/v15-upgrade.log" 2>&1 || { cat "$scratch/v15-upgrade.log" >&2; fail 'Controlled v1.5-to-v1.6 upgrade failed with empty and real credential hashes.'; }
+grep -q 'applying the additive v1.5-to-v1.6 credential lifecycle patch' "$scratch/v15-upgrade.log" ||
+  fail 'v1.5 database did not use the credential lifecycle patch.'
+check_only > "$scratch/v15-check.log" 2>&1 || { cat "$scratch/v15-check.log" >&2; fail 'Read-only check rejected the upgraded v1.5 database.'; }
+[[ $(query "SELECT CONCAT(RobotCode,':',COALESCE(CONVERT(varchar(64),CredentialHash,2),'NULL'),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots ORDER BY RobotCode;") == $'v15-provisioned-real-hash:0123456789ABCDEF:ACTIVE\nv15-unissued-empty-hash:NULL:NOT_ISSUED' ]] ||
+  fail 'v1.6 upgrade did not null the empty hash while preserving the real hash and active status.'
+[[ $(query "SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name IN (N'CK_Robots_CredentialIssueMetadata',N'CK_Robots_CredentialRevocationMetadata') AND is_disabled=0 AND is_not_trusted=0;") == 2 ]] ||
+  fail 'Credential lifecycle check constraints are missing, disabled, or untrusted after upgrade.'
+[[ $(query "DECLARE @violations TABLE (TableName sysname, ConstraintName sysname, WhereClause nvarchar(4000)); INSERT @violations EXEC('DBCC CHECKCONSTRAINTS (N''dbo.Robots'') WITH ALL_CONSTRAINTS'); SELECT COUNT(*) FROM @violations;") == 0 ]] ||
+  fail 'Credential lifecycle constraints report row violations after upgrade.'
 echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.6 marker, reruns idempotently, rejects missing Robot INSERT or CredentialHash UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.6 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.6 structure.'

@@ -16,7 +16,6 @@ public sealed record PhysicalRobotStatus(
     string? FirstAcceptedFrameId,
     string ConnectionStatus,
     DateTimeOffset? LastSyncReceivedAt,
-    bool CredentialProvisioned,
     string CredentialStatus,
     DateTimeOffset? CredentialIssuedAt,
     Guid? CredentialIssuedByUserId,
@@ -60,7 +59,7 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
             return new PhysicalRobotStatus(robot.Id, robot.RobotCode, robot.DisplayName,
                 robot.FirstAcceptedSyncAt, robot.FirstAcceptedMapKey, robot.FirstAcceptedFrameId,
-                connectionStatus, latest?.ReceivedAt, robot.CredentialHash is not null, credentialStatus,
+                connectionStatus, latest?.ReceivedAt, credentialStatus,
                 robot.CredentialIssuedAt, robot.CredentialIssuedByUserId,
                 robot.CredentialIssuedByUser?.FullName, robot.CredentialHint,
                 robot.CredentialRevokedAt, robot.CredentialRevokedByUserId,
