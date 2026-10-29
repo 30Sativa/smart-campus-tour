@@ -143,7 +143,7 @@ assert_login
 
 # A candidate schema rejection must not make Compose stop the current API.
 api_id_before=$("${dc[@]}" ps -q api)
-schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.5.sql | sha256sum | cut -d' ' -f1)
+schema_hash=$(sed 's/\r$//' backend/database/smart-campus-tour-schema-v1.6.sql | sha256sum | cut -d' ' -f1)
 stored_schema_hash=$(sql_as_sa -h -1 -W -Q "SET NOCOUNT ON; SELECT CONVERT(nvarchar(64), value) FROM SmartCampusTourV11.sys.extended_properties WHERE name=N'CampusTourBootstrapHash';" | tr -d '\r\n ')
 [[ "$stored_schema_hash" == "$schema_hash" ]] || {
   echo 'Unexpected initial schema hash in the disposable SQL database.' >&2
@@ -229,7 +229,7 @@ fi
 
 # Exercise an actual checked backup and restore into a disposable database name.
 sql_as_sa -Q "BACKUP DATABASE [SmartCampusTourV11] TO DISK=N'/var/opt/mssql/backup/campustour-smoke.bak' WITH CHECKSUM, INIT; RESTORE VERIFYONLY FROM DISK=N'/var/opt/mssql/backup/campustour-smoke.bak' WITH CHECKSUM;"
-sql_as_sa -Q "DECLARE @data sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=0 ORDER BY file_id); DECLARE @log sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=1 ORDER BY file_id); IF @data IS NULL OR @log IS NULL THROW 51020, 'Expected one data and one log file.', 1; DECLARE @sql nvarchar(max)=N'RESTORE DATABASE [CampustourRestoreDrill] FROM DISK=N''/var/opt/mssql/backup/campustour-smoke.bak'' WITH MOVE N''' + REPLACE(@data,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.mdf'', MOVE N''' + REPLACE(@log,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.ldf'', RECOVERY;'; EXEC sys.sp_executesql @sql; IF OBJECT_ID(N'CampustourRestoreDrill.dbo.RosterEmailChangeRequests', N'U') IS NULL OR COL_LENGTH(N'CampustourRestoreDrill.dbo.Robots',N'FirstAcceptedSyncAt') IS NULL THROW 51021, 'Restored v1.5 schema is incomplete.', 1; DBCC CHECKDB(N'CampustourRestoreDrill') WITH NO_INFOMSGS;"
+sql_as_sa -Q "DECLARE @data sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=0 ORDER BY file_id); DECLARE @log sysname=(SELECT TOP(1) name FROM SmartCampusTourV11.sys.database_files WHERE type=1 ORDER BY file_id); IF @data IS NULL OR @log IS NULL THROW 51020, 'Expected one data and one log file.', 1; DECLARE @sql nvarchar(max)=N'RESTORE DATABASE [CampustourRestoreDrill] FROM DISK=N''/var/opt/mssql/backup/campustour-smoke.bak'' WITH MOVE N''' + REPLACE(@data,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.mdf'', MOVE N''' + REPLACE(@log,'''','''''') + N''' TO N''/var/opt/mssql/data/CampustourRestoreDrill.ldf'', RECOVERY;'; EXEC sys.sp_executesql @sql; IF OBJECT_ID(N'CampustourRestoreDrill.dbo.RosterEmailChangeRequests', N'U') IS NULL OR COL_LENGTH(N'CampustourRestoreDrill.dbo.Robots',N'FirstAcceptedSyncAt') IS NULL OR COL_LENGTH(N'CampustourRestoreDrill.dbo.Robots',N'CredentialIssuedAt') IS NULL THROW 51021, 'Restored v1.6 schema is incomplete.', 1; DBCC CHECKDB(N'CampustourRestoreDrill') WITH NO_INFOMSGS;"
 
 # Verify the live/readiness distinction during an SQL outage and recover.
 "${dc[@]}" stop --timeout 10 sqlserver >/dev/null
@@ -270,7 +270,11 @@ IF OBJECT_ID(N'dbo.RosterEmailChangeRequests', N'U') IS NULL
     OR COL_LENGTH(N'dbo.Robots',N'FirstAcceptedSyncAt') IS NULL
     OR COL_LENGTH(N'dbo.Robots',N'FirstAcceptedMapKey') IS NULL
     OR COL_LENGTH(N'dbo.Robots',N'FirstAcceptedFrameId') IS NULL
-    THROW 51001, 'Expected v1.5 registration, map/POI, route and robot confirmation schema.', 1;
+    OR COL_LENGTH(N'dbo.Robots',N'CredentialIssuedAt') IS NULL
+    OR COL_LENGTH(N'dbo.Robots',N'CredentialHint') IS NULL
+    OR COL_LENGTH(N'dbo.Robots',N'CredentialRevokedAt') IS NULL
+    OR COLUMNPROPERTY(OBJECT_ID(N'dbo.Robots'),N'CredentialHash','AllowsNull') <> 1
+    THROW 51001, 'Expected v1.6 registration, map/POI, route, robot confirmation and credential lifecycle schema.', 1;
 IF (SELECT COUNT(*) FROM dbo.Users WHERE NormalizedUsername=N'DEPLOYMENT.ADMIN') <> 1
     THROW 51002, 'Seed must be idempotent.', 1;
 IF HAS_PERMS_BY_NAME('dbo.AuditLogs', 'OBJECT', 'INSERT') <> 1
