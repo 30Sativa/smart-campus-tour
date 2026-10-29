@@ -164,6 +164,7 @@ def main():
         (bundle / "ops/upgrade-db-schema-ec2.sh").write_text(
             '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_DB_INIT_COMPOSE" ]] || exit 81\n'
             'printf "%s\\n" "$@" > "$SCHEMA_UPGRADE_ARGS"\n'
+            '[[ ${FAIL_MODE:-} != upgrade-failure ]]\n'
         )
         env.update(FAIL_MODE="success", SCHEMA_UPGRADE_ARGS=str(root / "schema-upgrade-args"))
         result = subprocess.run(["bash", str(bundle / "ops/receive-release.sh"), "schema-upgrade", "actor"],
@@ -171,6 +172,22 @@ def main():
         assert result.returncode == 0, result.stderr
         assert (root / "schema-upgrade-args").read_text().splitlines() == [
             MANIFEST["db_init_image"], MANIFEST["db_init_source_sha"], MANIFEST["database_schema_version"]
+        ]
+
+        # Application delivery runs the conditional schema step first; its failure stops the API deploy.
+        for mode in ("upgrade-failure", "success"):
+            (root / "deploy-args").unlink(missing_ok=True)
+            env["FAIL_MODE"] = mode
+            result = subprocess.run(["bash", str(bundle / "ops/receive-release.sh"), "application", "actor"],
+                                    env=env, input="receiver-disposable-secret\n", text=True, capture_output=True)
+            assert (result.returncode == 0) == (mode == "success"), (mode, result.stderr)
+            assert (root / "schema-upgrade-args").read_text().splitlines() == [
+                "--if-needed", MANIFEST["db_init_image"], MANIFEST["db_init_source_sha"], MANIFEST["database_schema_version"]
+            ]
+            assert (root / "deploy-args").exists() == (mode == "success"), mode
+            assert not list(root.glob("campustour-registry.*")), "Receiver leaked temporary registry credentials"
+        assert (root / "deploy-args").read_text().splitlines() == [
+            SHA, MANIFEST["api_image"], MANIFEST["db_init_image"], MANIFEST["sqlserver_image"], OPS
         ]
 
         # A vanished SSH reader (cancelled runner, dropped connection) must not kill the deployment mid-step.
