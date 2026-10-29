@@ -27,7 +27,7 @@ const response = (data: unknown) => new Response(JSON.stringify({ success: true,
 let requests: Array<{ url: URL; init?: RequestInit }> = []
 const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): PhysicalRobotOption => ({
   id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map',
-  connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map',
+  connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map', latestDeploymentPassed: true,
   ...overrides,
 })
 let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
@@ -80,7 +80,7 @@ describe('Technical Staff API integration', () => {
           failRobotRegistration = false
           return new Response(JSON.stringify({ success: false, message: 'Robot code already registered.' }), { status: 409 })
         }
-        const registered = makePhysicalRobot({ id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null, configuredMapKey: null, configuredFrameId: null, latestDeployedMapKey: null, latestDeployedFrameId: null })
+        const registered = makePhysicalRobot({ id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null, configuredMapKey: null, configuredFrameId: null, latestDeployedMapKey: null, latestDeployedFrameId: null, latestDeploymentPassed: null })
         physicalRobots = [...physicalRobots, registered]
         return response(registered)
       }
@@ -186,11 +186,18 @@ describe('Technical Staff API integration', () => {
   })
 
   it('shows a non-blocking backend map-context warning when configured context differs from the latest deployment', async () => {
-    physicalRobots = [makePhysicalRobot({ configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2' })]
+    physicalRobots = [makePhysicalRobot({ configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2', latestDeploymentPassed: false })]
     renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByRole('columnheader', { name: 'Kiểm tra triển khai gần nhất' })).toBeInTheDocument()
+    expect(await screen.findByText('Chưa đạt')).toBeInTheDocument()
     expect(await screen.findByText(/Cấu hình BE đang dùng map library-v1 · map nhưng robot được triển khai map library-v2 · map_v2 gần nhất/)).toBeInTheDocument()
     expect(screen.getAllByText('library-v1 · map')).toHaveLength(2)
     expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
+  })
+
+  it('shows an achieved badge when the latest deployment check passed', async () => {
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Đạt')).toBeInTheDocument()
   })
 
   it('shows the unconfigured-context notice and no mismatch notice when the context matches', async () => {

@@ -29,7 +29,8 @@ public sealed record PhysicalRobotStatus(
     string? ConfiguredMapKey,
     string? ConfiguredFrameId,
     string? LatestDeployedMapKey,
-    string? LatestDeployedFrameId);
+    string? LatestDeployedFrameId,
+    bool? LatestDeploymentPassed);
 
 public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
 
@@ -72,7 +73,8 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 Convert.ToBase64String(robot.RowVersion),
                 mapContextConfigured, mapContextConfigured ? context.MapKey : null,
                 mapContextConfigured ? context.FrameId : null,
-                latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId);
+                latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId,
+                latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed);
         }).ToArray();
     }
 }
