@@ -17,10 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     outputs:
       backend_changed: ${{ steps.detect.outputs.backend_changed }}
       release_needed: ${{ steps.detect.outputs.release_needed }}
-      database_tool_changed: ${{ steps.detect.outputs.database_tool_changed }}
+      database_tool_changed: ${{ steps.dbtag.outputs.missing == 'true' && 'true' || steps.detect.outputs.database_tool_changed }}
       cache_test_needed: ${{ steps.detect.outputs.cache_test_needed }}
     steps:
       - name: Checkout comparison history
@@ -46,6 +47,26 @@ jobs:
             echo 'cache_test_needed=true' >> "$GITHUB_OUTPUT"
           else
             bash backend/scripts/detect-ci-changes.sh "$BASE_SHA" "$HEAD_SHA"
+          fi
+      # The versioned tag is promoted only after a full main gate; if that never happened,
+      # unchanged commits have nothing to reuse and must rebuild and re-test the DB tool.
+      - name: Log in to GitHub Container Registry for the versioned DB tool
+        if: steps.detect.outputs.backend_changed == 'true' && steps.detect.outputs.database_tool_changed != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Rebuild the DB tool when its versioned tag was never promoted
+        id: dbtag
+        if: steps.detect.outputs.backend_changed == 'true' && steps.detect.outputs.database_tool_changed != 'true'
+        shell: bash
+        run: |
+          if docker manifest inspect ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.6 > /dev/null; then
+            echo 'missing=false' >> "$GITHUB_OUTPUT"
+          else
+            echo '::notice::backend-db-init:schema-v1.6 is not published; treating the DB tool as changed.'
+            echo 'missing=true' >> "$GITHUB_OUTPUT"
           fi
 
   verify:
