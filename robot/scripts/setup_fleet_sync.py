@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import getpass
+import importlib.util
 import os
 import re
 import shlex
@@ -20,6 +21,19 @@ PROBE = Path(__file__).resolve().parents[2] / "backend" / "scripts" / "fleet_syn
 
 def _shell_value(value: str) -> str:
     return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def _load_probe_module():
+    """Load the shared probe from its repository-relative path, independent of cwd."""
+    try:
+        spec = importlib.util.spec_from_file_location("campustour_fleet_sync_probe", PROBE)
+        if spec is None or spec.loader is None:
+            raise ImportError
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except (ImportError, OSError):
+        raise RuntimeError("Fleet Sync probe is unavailable at the expected backend/scripts path.") from None
 
 
 def _write_private(path: Path, content: str) -> None:
@@ -90,7 +104,7 @@ def main(input_fn: Callable[[str], str] = input, password_fn: Callable[[str], st
          home: Path | None = None, environment: dict[str, str] | None = None,
          runner: Callable = subprocess.run) -> int:
     home = home or Path.home()
-    environment = environment or os.environ.copy()
+    environment = os.environ.copy() if environment is None else environment
     url = input_fn(f"Fleet Sync URL [{DEFAULT_URL}]: ").strip() or DEFAULT_URL
     robot_code = input_fn("RobotCode: ").strip()
     map_key = input_fn("Configured MapKey: ").strip()
@@ -107,10 +121,9 @@ def main(input_fn: Callable[[str], str] = input, password_fn: Callable[[str], st
         return 2
 
     try:
-        from fleet_sync_probe import validate_url
-        url = validate_url(url)
-    except (ValueError, ImportError) as error:
-        print(str(error) if isinstance(error, ValueError) else "Fleet Sync probe is unavailable.", file=sys.stderr)
+        url = _load_probe_module().validate_url(url)
+    except (ValueError, RuntimeError) as error:
+        print(str(error), file=sys.stderr)
         return 2
 
     config_dir = home / ".config" / "campustour"
@@ -132,7 +145,7 @@ def main(input_fn: Callable[[str], str] = input, password_fn: Callable[[str], st
     if action != "y":
         print("Configuration only. Source the env file before starting the Fleet Bridge.")
         return 0
-    return run_probe(env_path, environment, runner)
+    return run_probe(env_path, environment, runner, input_fn)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,12 @@
 import os
 import shlex
 import sys
+import contextlib
+import io
+import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
@@ -14,7 +18,6 @@ TOKEN = "A" * 43
 
 class SetupFleetSyncTests(unittest.TestCase):
     def setUp(self):
-        import tempfile
         self.temp = tempfile.TemporaryDirectory()
         self.home = Path(self.temp.name)
 
@@ -89,3 +92,78 @@ class SetupFleetSyncTests(unittest.TestCase):
         self.assertFalse(setup.ROBOT_CODE.fullmatch("-amr"))
         self.assertFalse(setup.ROBOT_CODE.fullmatch("éclair"))
         self.assertFalse(setup.ROBOT_CODE.fullmatch("A" * 101))
+
+    def test_main_saves_private_configuration_from_outside_repo_without_pythonpath(self):
+        answers = iter(["", "amr_01", "map-v1", "map", "n"])
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as outside:
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(outside)
+                with patch.dict(os.environ, {"PYTHONPATH": ""}, clear=False), \
+                        contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    result = setup.main(lambda _: next(answers), lambda _: TOKEN, self.home, environment={})
+            finally:
+                os.chdir(original_cwd)
+
+        env_path = self.home / ".config" / "campustour" / "fleet-sync.env"
+        credential_path = self.home / ".config" / "campustour" / "amr_01.credential"
+        self.assertEqual(result, 0)
+        self.assertTrue(env_path.is_file())
+        self.assertTrue(credential_path.is_file())
+        self.assertEqual(os.stat(env_path.parent).st_mode & 0o777, 0o700)
+        self.assertEqual(os.stat(env_path).st_mode & 0o777, 0o600)
+        self.assertEqual(os.stat(credential_path).st_mode & 0o777, 0o600)
+        self.assertNotIn(TOKEN, stdout.getvalue() + stderr.getvalue())
+
+    def test_main_probe_uses_repository_probe_with_exact_saved_configuration_and_no_production_request(self):
+        answers = iter(["https://sync.example.test/api/fleet/v1/sync", "amr_01", "map-v1", "map", "y", "y"])
+        calls = []
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        def runner(argv, env, check):
+            calls.append((argv, env, check))
+            return type("Result", (), {"returncode": 0})()
+
+        with tempfile.TemporaryDirectory() as outside:
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(outside)
+                with patch.dict(os.environ, {"PYTHONPATH": ""}, clear=False), \
+                        contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    result = setup.main(lambda _: next(answers), lambda _: TOKEN, self.home,
+                                        environment={}, runner=runner)
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(len(calls), 1)
+        argv, env, check = calls[0]
+        self.assertEqual(Path(argv[1]), setup.PROBE)
+        self.assertEqual(env["FLEET_SYNC_URL"], "https://sync.example.test/api/fleet/v1/sync")
+        self.assertEqual(env["FLEET_ROBOT_CODE"], "amr_01")
+        self.assertEqual(env["FLEET_ROBOT_MAP_KEY"], "map-v1")
+        self.assertEqual(env["FLEET_ROBOT_FRAME_ID"], "map")
+        self.assertEqual(env["FLEET_ROBOT_CREDENTIAL_FILE"],
+                         str(self.home / ".config" / "campustour" / "amr_01.credential"))
+        self.assertNotIn(TOKEN, argv)
+        self.assertNotIn(TOKEN, env.values())
+        self.assertNotIn(TOKEN, stdout.getvalue() + stderr.getvalue())
+        self.assertFalse(check)
+
+    def test_main_reports_missing_probe_without_traceback_or_secret(self):
+        answers = iter(["", "amr_01", "map-v1", "map", "n"])
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        missing_probe = self.home / "missing" / "fleet_sync_probe.py"
+        with patch.object(setup, "PROBE", missing_probe), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = setup.main(lambda _: next(answers), lambda _: TOKEN, self.home, environment={})
+
+        self.assertEqual(result, 2)
+        self.assertIn("Fleet Sync probe is unavailable", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+        self.assertNotIn(TOKEN, stdout.getvalue() + stderr.getvalue())
+        self.assertFalse((self.home / ".config" / "campustour").exists())
