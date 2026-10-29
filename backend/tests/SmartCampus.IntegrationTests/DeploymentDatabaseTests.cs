@@ -26,7 +26,7 @@ namespace SmartCampus.IntegrationTests;
 public sealed class DeploymentDatabaseTests
 {
     [SchemaV15Fact]
-    public async Task RuntimeCanInsertAndConfirmRobotButOnlyProvisionerCanRotateCredentialAndResetConfirmation()
+    public async Task RuntimeCanIssueCredentialWithColumnGrantsAndProvisionerRemainsSeparate()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await Apply(database, "permissions.sql");
@@ -52,13 +52,12 @@ public sealed class DeploymentDatabaseTests
             await insert.ExecuteNonQueryAsync();
             await using (var confirmation = new SqlCommand("UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'map-v1', FirstAcceptedFrameId=N'map' WHERE RobotCode=N'robot_registered_sql';", connection))
                 await confirmation.ExecuteNonQueryAsync();
-            await using (var permissions = new SqlCommand("SELECT CONCAT(COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));", connection))
-                Assert.Equal("1111100", await permissions.ExecuteScalarAsync());
+            await using (var permissions = new SqlCommand("SELECT CONCAT(COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHash',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0), COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));", connection))
+                Assert.Equal("11111100", await permissions.ExecuteScalarAsync());
             await using var code = new SqlCommand("SELECT RobotCode FROM dbo.Robots WHERE RobotCode=N'robot_registered_sql';", connection);
             Assert.Equal("robot_registered_sql", await code.ExecuteScalarAsync());
             foreach (var (statement, expectedError) in new[]
             {
-                ("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql'", 230),
                 ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_registered_sql'", 230),
                 ("DELETE dbo.Robots WHERE RobotCode=N'robot_registered_sql'", 229)
             })
@@ -66,6 +65,8 @@ public sealed class DeploymentDatabaseTests
                 await using var denied = new SqlCommand(statement, connection);
                 Assert.Equal(expectedError, (await Assert.ThrowsAsync<SqlException>(() => denied.ExecuteNonQueryAsync())).Number);
             }
+            await using (var credentialUpdate = new SqlCommand("UPDATE dbo.Robots SET CredentialHash=0x0102 WHERE RobotCode=N'robot_registered_sql';", connection))
+                Assert.Equal(1, await credentialUpdate.ExecuteNonQueryAsync());
         }
         finally
         {
@@ -79,7 +80,7 @@ public sealed class DeploymentDatabaseTests
         await using (var db = new ApplicationDbContext(options))
         {
             var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
-            Assert.Empty(robot.CredentialHash);
+            Assert.Equal(new byte[] { 1, 2 }, robot.CredentialHash);
             Assert.NotNull(robot.FirstAcceptedSyncAt);
             Assert.Null(await new FleetRobotAuthenticator(db).AuthenticateAsync(robot.RobotCode,
                 FleetRobotCredentialHash.Create().Secret, CancellationToken.None));
@@ -93,15 +94,8 @@ public sealed class DeploymentDatabaseTests
             var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
             Assert.NotNull(provisioned);
             credential = provisioned.Credential;
-            oldCredentialHash = FleetRobotCredentialHash.Hash(credential);
-            await db.Robots.Where(item => item.RobotCode == "robot_registered_sql")
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(item => item.FirstAcceptedSyncAt, (DateTimeOffset?)DateTimeOffset.UtcNow)
-                    .SetProperty(item => item.FirstAcceptedMapKey, (string?)"prior-map")
-                    .SetProperty(item => item.FirstAcceptedFrameId, (string?)"prior-frame"));
-            var reissued = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
-            Assert.NotNull(reissued);
-            credential = reissued.Credential;
+            oldCredentialHash = FleetRobotCredentialHash.Hash(FleetRobotCredentialHash.Create().Secret);
+            Assert.Null(await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql"));
             await using var deniedInsert = new SqlCommand("""
                 INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
                 VALUES(NEWID(),N'provisioner_cannot_register','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET());
@@ -140,7 +134,7 @@ public sealed class DeploymentDatabaseTests
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.ExecuteAsync($"""
             INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
-            VALUES('{Guid.NewGuid():D}',N'robot_provision_test','EMULATOR',0x01,0,0,SYSDATETIMEOFFSET());
+            VALUES('{Guid.NewGuid():D}',N'robot_provision_test','PHYSICAL',0x01,0,0,SYSDATETIMEOFFSET());
             """);
         await Apply(database, "fleet-credential-provisioning-permissions.sql");
         await database.ExecuteAsync("CREATE USER fleet_provisioner_test WITHOUT LOGIN; ALTER ROLE campus_fleet_provisioner ADD MEMBER fleet_provisioner_test;");
@@ -163,11 +157,13 @@ public sealed class DeploymentDatabaseTests
                 Assert.Equal("robot_provision_test", provisioned.RobotCode);
                 Assert.True(FleetRobotCredentialHash.IsValidFormat(provisioned.Credential));
                 provisionedCredential = provisioned.Credential;
+                Assert.Null(await new FleetRobotCredentialProvisioner()
+                    .ProvisionAsync(provisionerContext, "robot_provision_test"));
             }
             foreach (var (statement, errorNumber) in new[]
             {
                 ("UPDATE dbo.Robots SET IsDispatchEnabled=1 WHERE RobotCode=N'robot_provision_test'", 230),
-                ("SELECT CredentialHash FROM dbo.Robots", 230),
+                ("SELECT IsDispatchEnabled FROM dbo.Robots", 230),
                 ("INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES(NEWID(),N'other','EMULATOR',0x01,0,0,SYSDATETIMEOFFSET())", 229)
             })
             {

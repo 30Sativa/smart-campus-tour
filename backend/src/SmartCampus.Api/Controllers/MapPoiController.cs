@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 
 namespace SmartCampus.Api.Controllers;
@@ -52,6 +53,34 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         [FromBody] RegisterPhysicalRobotRequest request, CancellationToken ct) =>
         Ok(new BaseResponse<PhysicalRobotOption> { Success = true, Message = "Physical robot identity registered.",
             Data = await sender.Send(new RegisterPhysicalRobotCommand(User.GetRequiredUserId(), request), ct) });
+
+    [HttpPost("technical/physical-robots/{id:guid}/credential")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> IssuePhysicalRobotCredential(
+        Guid id, [FromBody] IssuePhysicalRobotCredentialRequest request, CancellationToken ct) =>
+        await ChangePhysicalRobotCredential(id, request, rotate: false, ct);
+
+    [HttpPost("technical/physical-robots/{id:guid}/credential/rotate")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> RotatePhysicalRobotCredential(
+        Guid id, [FromBody] IssuePhysicalRobotCredentialRequest request, CancellationToken ct) =>
+        await ChangePhysicalRobotCredential(id, request, rotate: true, ct);
+
+    private async Task<ActionResult<BaseResponse<PhysicalRobotCredentialIssue>>> ChangePhysicalRobotCredential(
+        Guid id, IssuePhysicalRobotCredentialRequest request, bool rotate, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.Pragma = "no-cache";
+        var result = await sender.Send(new IssuePhysicalRobotCredentialCommand(
+            User.GetRequiredUserId(), id, request.ExpectedRowVersion, rotate), ct);
+        return Ok(new BaseResponse<PhysicalRobotCredentialIssue>
+        {
+            Success = true,
+            Message = rotate ? "Robot credential rotated. Store this credential now; it cannot be retrieved again."
+                : "Robot credential issued. Store this credential now; it cannot be retrieved again.",
+            Data = result
+        });
+    }
 
     [HttpGet("maps/versions")]
     [Authorize(Roles = StaffAndTechnical)]

@@ -131,6 +131,10 @@ runtime_robot_permissions() {
     SELECT CONCAT(
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'INSERT'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHash',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedFrameId',N'COLUMN'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'DELETE'),0));
     REVERT;"
@@ -138,7 +142,11 @@ runtime_robot_permissions() {
 provisioner_robot_permissions() {
   query "EXECUTE AS USER=N'fleet_provisioner_test';
     SELECT CONCAT(
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'Id',N'COLUMN'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'RobotCode',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'SourceType',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'CredentialHash',N'COLUMN'),0),
+      COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'SELECT',N'RowVersion',N'COLUMN'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'CredentialHash',N'COLUMN'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedSyncAt',N'COLUMN'),0),
       COALESCE(HAS_PERMS_BY_NAME(N'dbo.Robots',N'OBJECT',N'UPDATE',N'FirstAcceptedMapKey',N'COLUMN'),0),
@@ -174,7 +182,7 @@ fi
 
 # 2. Rerun completes the missing grants without DDL/backfill and without changing data or markers.
 upgrade > "$scratch/second.log" 2>&1 || { cat "$scratch/second.log" >&2; fail 'Rerun did not complete the runtime grants.'; }
-grep -q 'completing runtime grants without DDL or backfill' "$scratch/second.log" || fail 'Rerun did not take the grant-completion path.'
+grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/second.log" || fail 'Rerun did not take the runtime/provisioner grant-completion path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/second.log"; then fail 'Rerun re-applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/second.log" || fail 'Rerun did not finish with the read-only compatibility check.'
 [[ $(runtime_can_read_email_changes) == 110 ]] || fail 'Runtime grants do not match the v1.4 email-change use case after rerun.'
@@ -188,11 +196,11 @@ upgrade > "$scratch/third.log" 2>&1 || { cat "$scratch/third.log" >&2; fail 'Rep
 check_only > "$scratch/check.log" 2>&1 || { cat "$scratch/check.log" >&2; fail 'Read-only check rejected the completed upgrade.'; }
 
 # 4. A complete current database with only Robot INSERT missing must fail the read-only deploy gate.
-[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Runtime Robot grants must be SELECT/INSERT only before the missing-INSERT check.'
+[[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Runtime Robot grants must be limited to SELECT/INSERT and four reviewed update columns before the missing-INSERT check.'
 before_robot_grant_data=$(all_data)
 before_robot_grant_markers=$(markers)
 sql -d SmartCampusTourV11 -Q 'REVOKE INSERT ON OBJECT::dbo.Robots FROM campus_tour_app;' >/dev/null
-[[ $(runtime_robot_permissions) == 1000 ]] || fail 'Test setup did not remove only runtime Robot INSERT.'
+[[ $(runtime_robot_permissions) == 10111100 ]] || fail 'Test setup did not remove only runtime Robot INSERT.'
 if check_only > "$scratch/missing-robot-insert.log" 2>&1; then
   fail 'Read-only check accepted a complete database without runtime Robot INSERT.'
 fi
@@ -202,17 +210,34 @@ grep -q 'Runtime Robot grants are incomplete' "$scratch/missing-robot-insert.log
 }
 [[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
   fail 'Failed read-only check changed business data or schema markers.'
-[[ $(runtime_robot_permissions) == 1000 ]] || fail 'Failed read-only check changed runtime Robot grants.'
+[[ $(runtime_robot_permissions) == 10111100 ]] || fail 'Failed read-only check changed runtime Robot grants.'
 
 # 5. The existing v1.5 upgrade/regrant path restores only the reviewed grants and preserves data.
 upgrade > "$scratch/robot-regrant.log" 2>&1 || { cat "$scratch/robot-regrant.log" >&2; fail 'Controlled v1.5 runtime-grant recheck failed.'; }
 grep -q 'completing runtime and credential-provisioning grants without DDL or backfill' "$scratch/robot-regrant.log" || fail 'v1.5 database did not use the existing regrant path.'
 if grep -q 'Applying additive database patch: patches/' "$scratch/robot-regrant.log"; then fail 'v1.4 regrant unexpectedly applied a schema patch.'; fi
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/robot-regrant.log" || fail 'Runtime grants were not checked after regrant.'
-[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Runtime Robot rights after regrant are not SELECT/INSERT only.'
+[[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Runtime Robot rights after regrant are not least privilege.'
 [[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
   fail 'Controlled v1.4 regrant changed business data or schema markers.'
 check_only > "$scratch/robot-regrant-check.log" 2>&1 || { cat "$scratch/robot-regrant-check.log" >&2; fail 'Read-only check rejected the completed Robot regrant.'; }
+
+# The deployment gate also requires the runtime CredentialHash column grant and
+# remains read-only while that one permission is absent.
+sql -d SmartCampusTourV11 -Q 'REVOKE UPDATE (CredentialHash) ON OBJECT::dbo.Robots FROM campus_tour_app;' >/dev/null
+if check_only > "$scratch/missing-credential-update.log" 2>&1; then
+  fail 'Read-only check accepted a database without runtime CredentialHash column UPDATE.'
+fi
+grep -q 'Runtime Robot grants are incomplete' "$scratch/missing-credential-update.log" || {
+  cat "$scratch/missing-credential-update.log" >&2
+  fail 'Missing CredentialHash UPDATE was not reported clearly by check-only.'
+}
+[[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
+  fail 'Failed missing-CredentialHash check changed business data or schema markers.'
+[[ $(runtime_robot_permissions) == 11011100 ]] || fail 'Failed missing-CredentialHash check changed other runtime Robot grants.'
+upgrade > "$scratch/credential-regrant.log" 2>&1 || { cat "$scratch/credential-regrant.log" >&2; fail 'Controlled regrant did not restore CredentialHash UPDATE.'; }
+[[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Existing regrant path did not restore the reviewed CredentialHash update.'
+check_only > "$scratch/credential-regrant-check.log" 2>&1 || { cat "$scratch/credential-regrant-check.log" >&2; fail 'Read-only check rejected the completed CredentialHash regrant.'; }
 
 # Provisioning remains separate: only the provisioner role can read RobotCode and update CredentialHash columns.
 sql -d SmartCampusTourV11 -i /database/fleet-credential-provisioning-permissions.sql
@@ -221,8 +246,8 @@ CREATE USER fleet_provisioner_test WITHOUT LOGIN;
 ALTER ROLE campus_fleet_provisioner ADD MEMBER fleet_provisioner_test;
 GO
 SQL
-[[ $(provisioner_robot_permissions) == 11111000 ]] || fail 'Credential provisioning grants are not column-limited and separate from runtime registration.'
-[[ $(runtime_robot_permissions) == 1100 ]] || fail 'Provisioner setup changed runtime Robot permissions.'
+[[ $(provisioner_robot_permissions) == 111111111000 ]] || fail 'Credential provisioning grants are not column-limited and separate from runtime registration.'
+[[ $(runtime_robot_permissions) == 11111100 ]] || fail 'Provisioner setup changed runtime Robot permissions.'
 [[ $(all_data) == "$before_robot_grant_data" && $(markers) == "$before_robot_grant_markers" ]] ||
   fail 'Grant tests changed business data or schema markers.'
 
@@ -254,7 +279,7 @@ VALUES(NEWID(),N'legacy-v14-robot','PHYSICAL',0x01,0,0,SYSDATETIMEOFFSET());
 GO
 SQL
 legacy_robot=$(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';")
-[[ $(runtime_robot_permissions) == 1000 ]] || fail 'v1.4 setup did not retain SELECT without Robot INSERT.'
+[[ $(runtime_robot_permissions) == 10000000 ]] || fail 'v1.4 setup did not retain SELECT-only Robot permissions.'
 legacy_data_before=$(all_data)
 if check_only > "$scratch/v14-select-only.log" 2>&1; then
   fail 'Read-only check accepted a v1.4 database with SELECT-only Robot permissions.'
@@ -263,15 +288,15 @@ grep -q 'Database schema is older than v1.5' "$scratch/v14-select-only.log" || {
   cat "$scratch/v14-select-only.log" >&2
   fail 'v1.4 database did not fail the deployment gate with an actionable upgrade requirement.'
 }
-[[ $(all_data) == "$legacy_data_before" && $(runtime_robot_permissions) == 1000 ]] ||
+[[ $(all_data) == "$legacy_data_before" && $(runtime_robot_permissions) == 10000000 ]] ||
   fail 'Failed v1.4 read-only check changed data or Robot grants.'
 upgrade > "$scratch/v14-upgrade.log" 2>&1 || { cat "$scratch/v14-upgrade.log" >&2; fail 'Controlled v1.4-to-v1.5 upgrade/regrant failed.'; }
-grep -q 'Applying the additive v1.4-to-v1.5 robot confirmation patch' "$scratch/v14-upgrade.log" ||
+grep -q 'applying the additive v1.4-to-v1.5 robot confirmation patch' "$scratch/v14-upgrade.log" ||
   fail 'v1.4 database did not use the existing ordered upgrade/regrant mechanism.'
 grep -q 'PASS: database schema and runtime grants are compatible' "$scratch/v14-upgrade.log" ||
   fail 'v1.4 upgrade did not pass the final read-only deployment gate.'
-[[ $(runtime_robot_permissions) == 1100 ]] || fail 'v1.4 regrant did not apply runtime Robot SELECT/INSERT.'
+[[ $(runtime_robot_permissions) == 11111100 ]] || fail 'v1.4 regrant did not apply the reviewed runtime Robot grants.'
 [[ $(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';") == "$legacy_robot" ]] ||
   fail 'v1.4 upgrade changed the registered robot business data.'
 check_only > "$scratch/v14-check.log" 2>&1 || { cat "$scratch/v14-check.log" >&2; fail 'v1.5 read-only check rejected the upgraded legacy database.'; }
-echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.5 marker, reruns idempotently, rejects missing Robot INSERT in read-only check-only, restores Robot SELECT/INSERT through the existing v1.5 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.5 structure.'
+echo 'PASS: real DB tool upgrade preserves data, recovers from a failed grant after the v1.5 marker, reruns idempotently, rejects missing Robot INSERT or CredentialHash UPDATE in read-only check-only, restores reviewed Robot grants through the existing v1.5 regrant, keeps credential provisioning column-limited, and refuses unknown snapshots or incomplete v1.5 structure.'

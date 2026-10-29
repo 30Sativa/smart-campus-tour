@@ -23,6 +23,147 @@ public sealed class BusinessFlowIntegrationTests
 {
     private const string Password = "integration-test-password";
 
+    [SchemaV15Fact]
+    public async Task PhysicalRobotCredentialIssueAndRotation_AreTechnicalOnlyOneShotAndAtomic()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "robot-credential.admin", roles: ["ADMIN"]);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var admin = await Login(host.Client, "robot-credential.admin");
+        _ = await CreateAccount(host.Client, admin, "robot-credential.technical", "TechnicalStaff");
+        _ = await CreateAccount(host.Client, admin, "robot-credential.staff", "Staff");
+        var technical = await Login(host.Client, "robot-credential.technical");
+        var staff = await Login(host.Client, "robot-credential.staff");
+        var emulatorId = Guid.NewGuid();
+        await database.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{emulatorId:D}',N'credential-emulator','EMULATOR',0x01,0,0,SYSDATETIMEOFFSET());");
+        using var registered = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "credential-test", displayName = "Credential Test" });
+        Assert.Equal(HttpStatusCode.OK, registered.StatusCode);
+        var robotId = (await Body(registered)).GetProperty("data").GetProperty("id").GetGuid();
+        using var status = await Get(host.Client, "/api/technical/physical-robots", technical);
+        var statusItem = Assert.Single((await Body(status)).GetProperty("data").EnumerateArray());
+        Assert.False(statusItem.GetProperty("credentialProvisioned").GetBoolean());
+        Assert.False(statusItem.GetProperty("mapContextConfigured").GetBoolean());
+        var initialVersion = statusItem.GetProperty("rowVersion").GetString()!;
+
+        using var missing = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{Guid.NewGuid():D}/credential", technical,
+            new { expectedRowVersion = initialVersion });
+        using var nonPhysical = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{emulatorId:D}/credential", technical,
+            new { expectedRowVersion = initialVersion });
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, nonPhysical.StatusCode);
+
+        using var staffDenied = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{robotId}/credential", staff,
+            new { expectedRowVersion = initialVersion });
+        Assert.Equal(HttpStatusCode.Forbidden, staffDenied.StatusCode);
+
+        var issueRequests = await Task.WhenAll(
+            Json(host.Client, HttpMethod.Post, $"/api/technical/physical-robots/{robotId}/credential", technical,
+                new { expectedRowVersion = initialVersion }),
+            Json(host.Client, HttpMethod.Post, $"/api/technical/physical-robots/{robotId}/credential", technical,
+                new { expectedRowVersion = initialVersion }));
+        var issue = Assert.Single(issueRequests, response => response.IsSuccessStatusCode);
+        var concurrentConflict = Assert.Single(issueRequests, response => response.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal(HttpStatusCode.OK, issue.StatusCode);
+        Assert.Equal("no-store", issue.Headers.CacheControl?.ToString());
+        Assert.Contains("ROBOT_CREDENTIAL_ALREADY_PROVISIONED", await concurrentConflict.Content.ReadAsStringAsync());
+        var first = (await Body(issue)).GetProperty("data");
+        var firstCredential = first.GetProperty("credential").GetString()!;
+        Assert.True(FleetRobotCredentialHash.IsValidFormat(firstCredential));
+        Assert.False((await issue.Content.ReadAsStringAsync()).Contains("credentialHash", StringComparison.OrdinalIgnoreCase));
+
+        using var duplicateIssue = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{robotId}/credential", technical,
+            new { expectedRowVersion = initialVersion });
+        Assert.Equal(HttpStatusCode.Conflict, duplicateIssue.StatusCode);
+        Assert.Contains("ROBOT_CREDENTIAL_ALREADY_PROVISIONED", await duplicateIssue.Content.ReadAsStringAsync());
+        issue.Dispose();
+        concurrentConflict.Dispose();
+
+        await database.ExecuteAsync($"UPDATE dbo.Robots SET FirstAcceptedSyncAt=SYSDATETIMEOFFSET(), FirstAcceptedMapKey=N'old-map', FirstAcceptedFrameId=N'map' WHERE Id='{robotId:D}';");
+        using var beforeRotate = await Get(host.Client, "/api/technical/physical-robots", technical);
+        var rotateVersion = Assert.Single((await Body(beforeRotate)).GetProperty("data").EnumerateArray())
+            .GetProperty("rowVersion").GetString()!;
+        using var rotate = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{robotId}/credential/rotate", technical,
+            new { expectedRowVersion = rotateVersion });
+        Assert.Equal(HttpStatusCode.OK, rotate.StatusCode);
+        var rotatedCredential = (await Body(rotate)).GetProperty("data").GetProperty("credential").GetString()!;
+        Assert.NotEqual(firstCredential, rotatedCredential);
+
+        await using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlServer(database.ConnectionString).Options);
+        var robot = await db.Robots.SingleAsync(item => item.Id == robotId);
+        Assert.True(FleetRobotCredentialHash.Verify(rotatedCredential, robot.CredentialHash));
+        Assert.False(FleetRobotCredentialHash.Verify(firstCredential, robot.CredentialHash));
+        var authenticator = new FleetRobotAuthenticator(db);
+        Assert.Null(await authenticator.AuthenticateAsync(robot.RobotCode, firstCredential, CancellationToken.None));
+        Assert.NotNull(await authenticator.AuthenticateAsync(robot.RobotCode, rotatedCredential, CancellationToken.None));
+        Assert.Null(robot.FirstAcceptedSyncAt);
+        Assert.Null(robot.FirstAcceptedMapKey);
+        Assert.Null(robot.FirstAcceptedFrameId);
+        Assert.False(robot.IsDispatchEnabled);
+        Assert.Null(robot.CurrentTourId);
+        var credentialAudits = await db.AuditLogs.Where(row => row.RobotId == robotId &&
+            row.Action.Contains("CREDENTIAL")).OrderBy(row => row.Action).ToListAsync();
+        Assert.Equal(2, credentialAudits.Count);
+        Assert.All(credentialAudits, row => Assert.Null(row.DataJson));
+        Assert.DoesNotContain(credentialAudits, row => row.EntityId.Contains(firstCredential, StringComparison.Ordinal) ||
+            row.EntityId.Contains(rotatedCredential, StringComparison.Ordinal));
+
+        using var staleRotate = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/physical-robots/{robotId}/credential/rotate", technical,
+            new { expectedRowVersion = rotateVersion });
+        Assert.Equal(HttpStatusCode.Conflict, staleRotate.StatusCode);
+        Assert.Contains("ROBOT_CONCURRENCY_CONFLICT", await staleRotate.Content.ReadAsStringAsync());
+    }
+
+    [SchemaV15Fact]
+    public async Task PhysicalRobotCredentialIssue_RollsBackWhenAuditInsertFails()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(true, username: "robot-credential-atomic.admin", roles: ["ADMIN"]);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var admin = await Login(host.Client, "robot-credential-atomic.admin");
+        _ = await CreateAccount(host.Client, admin, "robot-credential-atomic.technical", "TechnicalStaff");
+        var technical = await Login(host.Client, "robot-credential-atomic.technical");
+        using var registered = await Json(host.Client, HttpMethod.Post, "/api/technical/physical-robots", technical,
+            new { robotCode = "credential-atomic", displayName = "Credential Atomic" });
+        var robotId = (await Body(registered)).GetProperty("data").GetProperty("id").GetGuid();
+        using var status = await Get(host.Client, "/api/technical/physical-robots", technical);
+        var rowVersion = Assert.Single((await Body(status)).GetProperty("data").EnumerateArray())
+            .GetProperty("rowVersion").GetString();
+
+        await database.ExecuteAsync("""
+            CREATE TRIGGER dbo.TR_TestFailRobotCredentialAudit ON dbo.AuditLogs AFTER INSERT AS
+            BEGIN
+                IF EXISTS (SELECT 1 FROM inserted WHERE Action=N'PHYSICAL_ROBOT_CREDENTIAL_ISSUED')
+                    THROW 52001, 'Injected credential audit failure.', 1;
+            END;
+            """);
+        try
+        {
+            using var failed = await Json(host.Client, HttpMethod.Post,
+                $"/api/technical/physical-robots/{robotId}/credential", technical,
+                new { expectedRowVersion = rowVersion });
+            Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+            await using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseSqlServer(database.ConnectionString).Options);
+            var robot = await db.Robots.SingleAsync(item => item.Id == robotId);
+            Assert.Empty(robot.CredentialHash);
+            Assert.Null(robot.FirstAcceptedSyncAt);
+            Assert.Empty(await db.AuditLogs.Where(row => row.RobotId == robotId &&
+                row.Action == "PHYSICAL_ROBOT_CREDENTIAL_ISSUED").ToListAsync());
+        }
+        finally
+        {
+            await database.ExecuteAsync("DROP TRIGGER dbo.TR_TestFailRobotCredentialAudit;");
+        }
+    }
+
     [SchemaV14Fact]
     public async Task PhysicalRobotRegistration_IsTechnicalOnlySafeAtomicAndRaceProtected()
     {
@@ -215,7 +356,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
         Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
         Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
-        Assert.Equal(new[] { "connectionStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "robotCode" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "configuredFrameId", "configuredMapKey", "connectionStatus", "credentialProvisioned", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "mapContextConfigured", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
 
         var mapSha = first.GetProperty("packageSha256").GetString();
         using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
