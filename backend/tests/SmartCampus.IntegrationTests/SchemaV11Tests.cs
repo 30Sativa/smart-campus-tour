@@ -70,6 +70,15 @@ public sealed class SchemaV15FactAttribute : FactAttribute, ITraitAttribute
     }
 }
 
+public sealed class SchemaV16FactAttribute : FactAttribute, ITraitAttribute
+{
+    public SchemaV16FactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SMARTCAMPUS_SCHEMA_TEST_CONNECTION")))
+            Skip = "Set SMARTCAMPUS_SCHEMA_TEST_CONNECTION to a disposable local SQL Server instance (CREATE DATABASE permission).";
+    }
+}
+
 public sealed class SqlIntegrationTraitDiscoverer : ITraitDiscoverer
 {
     public IEnumerable<KeyValuePair<string, string>> GetTraits(IAttributeInfo traitAttribute)
@@ -185,10 +194,10 @@ public sealed class SchemaV11Tests
         Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
     }
 
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task FixedRouteLifecycle_FailThenNewRevisionPass_KeepsEveryVersionAndRun()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(1)}',N'TechnicalStaff'),('{Id(2)}',N'Staff');");
         var passwordHash = new IdentityPasswordHasher().Hash(RouteAdminPassword);
         await db.ExecuteAsync($"INSERT dbo.Users(Id,Username,NormalizedUsername,PasswordHash,FullName,IsActive,CreatedAt) VALUES('{Id(3)}',N'route.admin',N'ROUTE.ADMIN',N'{passwordHash}',N'Route Test Admin',1,SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(3)}',N'ADMIN');");
@@ -430,8 +439,8 @@ public sealed class SchemaV11Tests
         Assert.Equal("USER1", await db.ScalarAsync<string>($"SELECT NormalizedUsername FROM dbo.Users WHERE Id='{Id(1)}';"));
     }
 
-    [SchemaV15Fact]
-    public async Task V11ToV15DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
+    [SchemaV16Fact]
+    public async Task V11ToV16DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot.sql");
         await db.ExecuteAsync("""
@@ -453,6 +462,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.3-to-v1.4-row-registration.sql");
         await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
         await db.ApplyFileAsync("upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql");
+        await db.ApplyFileAsync("upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql");
+        await db.ApplyFileAsync("upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -463,6 +474,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
+        Assert.Equal("1.6", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
             await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
 
@@ -478,10 +490,10 @@ public sealed class SchemaV11Tests
         finally { await ExecuteAsync(connection, "REVERT;"); }
     }
 
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -577,10 +589,10 @@ public sealed class SchemaV11Tests
         Assert.Equal(new[] { "FAIL", "PASS", "FAIL", "FAIL" }, history.VerificationRecords.Select(item => item.ResultCode).ToArray());
     }
 
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -613,10 +625,10 @@ public sealed class SchemaV11Tests
         Assert.Equal(mapA.Id, latestDeploymentMap);
     }
 
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.5.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -818,7 +830,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.5.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.6.sql")
         {
             var db = new TestDatabase();
             try

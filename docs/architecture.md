@@ -143,12 +143,14 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.5; the current snapshot
+The backend persistence baseline has advanced through v1.6; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
-connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`.
-See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md) and
-[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md). The
+connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
+plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`.
+See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
+[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md), and
+[ADR-0030](decisions/0030-robot-credential-lifecycle.md). The
 developer's local `SmartCampusTourV11` remains an older database and is not
 altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
@@ -633,10 +635,13 @@ FAIL remains allowed before confirmation. The check locks the Robot row in its
 transaction, so credential rotation cannot race through the gate. Replaying an
 already committed check returns it before this new-PASS condition. Offline state
 or backend restart does not erase confirmation; credential provisioning resets
-it. Runtime SQL can SELECT/INSERT Robots and UPDATE only the three confirmation
-columns, never DELETE or update the whole table. The separate one-shot provisioner
-can SELECT `RobotCode` and update only `CredentialHash` plus the three reset
-columns. It and RobotContexts remain outside the web; bridge and database
+it. Runtime SQL can SELECT/INSERT Robots and update only credential lifecycle
+and confirmation columns, never DELETE or update the whole table. Technical
+Staff issues/rotates credentials through the web; Admin can revoke and inspect
+credential audit, while Staff sees only connection status. The separate CLI
+provisioner shares the lifecycle service, is attributed as `CLI`, and retains
+column-scoped Robot and append-only AuditLogs grants. RobotContexts remain
+deployment configuration; bridge and database
 RobotCode must match. This connection confirmation does not prove the named map
 was loaded, localization succeeded, or operation is safe; the manual check
 remains a human observation. Report timestamp age/skew validation does not
@@ -737,13 +742,20 @@ references; this MVP does not complete the full remote-tour feature set.
 The backend exposes `POST /api/fleet/v1/sync` over HTTPS. Each request uses a
 per-robot bearer credential plus `X-Robot-Code`; the code is resolved from
 `dbo.Robots` and JSON `robotId` must match that authenticated identity.
-`Robot.CredentialHash` stores SHA-256 of a 32-byte random Base64URL secret. API
-runtime can SELECT and INSERT Robots for Technical Staff identity registration,
-but cannot UPDATE or DELETE them. The one-shot credential command uses a
-separate, column-limited provisioning SQL role and only updates the
-`CredentialHash` of an existing row. Registration starts with an empty hash,
-which the Fleet Sync authenticator rejects until one-shot provisioning assigns
-a valid 32-byte SHA-256 hash. No SQL schema change or migration is introduced.
+`Robot.CredentialHash` stores SHA-256 of a 32-byte random Base64URL secret and
+is nullable: NULL means no active credential. Technical Staff can issue when
+none is active, rotate an active key, and revoke; Admin can revoke and read
+safe metadata/audit, while Staff has connection-status read access only. The
+secret is returned once with no-store headers, never included in a GET or audit
+data. Request IDs make mutations replay-safe: a duplicate returns 409 without
+returning the secret. A unique filtered AuditLogs index backs that boundary.
+The separate least-privilege CLI calls the same lifecycle service with a null
+actor and `source=CLI`; each invocation issues or explicitly rotates the
+existing PHYSICAL robot key. Issue, rotate and revoke reset the three
+confirmation fields in the same conditional update and write an audit entry in
+the same transaction. Rotation invalidates the previous key. Schema v1.6 adds
+nullable hash and lifecycle metadata; old non-empty hashes remain active with
+legacy/null metadata. No key expires, and no last-used DB write is performed.
 
 Request fields, response/error examples and shared fixtures are in
 [`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/). Reports carry
@@ -1531,11 +1543,13 @@ consensus supplied by HTTPS or SignalR.
 
 Fleet Sync v1 authenticates each request using the existing
 `Robot.CredentialHash` field and a distinct per-robot credential. Credential
-verification and endpoint behavior are implemented in backend; one-shot
-provisioning updates only that hash with a separate SQL principal. TLS is a
-deployment requirement. The API runtime reads Robot rows and does not receive
-the provisioning connection string. Full provisioning role instructions and
-the client probe are in [`backend/docs/fleet-sync.md`](../backend/docs/fleet-sync.md).
+verification and the web issue/rotate/revoke lifecycle are implemented in
+backend; the one-shot CLI fallback calls the same lifecycle service with a
+separate SQL principal. Only the hash is stored; the plaintext is returned once
+for issue/rotation, and credential audit records are append-only. TLS is a
+deployment requirement. The API runtime does not receive the provisioning
+connection string. Full lifecycle and provisioning role instructions and the
+client probe are in [`backend/docs/fleet-sync.md`](../backend/docs/fleet-sync.md).
 Fleet sync is currently rate-limited before authentication by connection IP.
 Before real R1 traffic, configure ASP.NET Core forwarded headers with only the
 actual trusted proxy addresses; otherwise robots may all share the proxy's
@@ -1985,13 +1999,13 @@ Backend SQL Maintenance workflow changes only the pinned SQL Server engine and
 resource settings. All three operations share the production host/deploy lock.
 Unknown schemas fail closed. Runtime permissions preserve append-only AuditLogs/TourEvents, grant writes for current
 implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
-and `Robots` SELECT/INSERT plus UPDATE only on the three first-accepted
-confirmation columns. Runtime has no whole-table `Robots` UPDATE/DELETE or
-`CredentialHash` UPDATE; the separate credential provisioner updates the hash
-and resets confirmation atomically. Existing v1.4 databases require the
-controlled v1.4→v1.5 upgrade/regrant and read-only check-only gate before an API
-release that needs robot registration. The check-only gate does not change
-database state.
+and `Robots` SELECT/INSERT plus column-level credential lifecycle and
+first-accepted confirmation UPDATE. Runtime has no whole-table `Robots`
+UPDATE/DELETE. The separate credential provisioner shares lifecycle logic,
+uses its own column-scoped grants, and appends audit rows without rewriting
+them. Existing v1.4/v1.5 databases require the controlled upgrade/regrant to
+v1.6 and read-only check-only gate before an API release that needs this schema.
+The check-only gate does not change database state.
 The deployment adds two anonymous operational routes: `GET /health/live`
 returns 204 when the API process can serve a request; `GET /health/ready`
 performs a SQL connectivity check with a three-second timeout and returns 200

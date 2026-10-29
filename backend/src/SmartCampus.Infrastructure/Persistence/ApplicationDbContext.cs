@@ -76,6 +76,10 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.HasIndex(e => new { e.CorrelationId, e.OccurredAt, e.Id }, "IX_AuditLogs_Correlation").HasFilter("([CorrelationId] IS NOT NULL)");
 
+            entity.HasIndex(e => new { e.RobotId, e.CorrelationId }, "UX_AuditLogs_RobotCredentialRequest")
+                .IsUnique()
+                .HasFilter("([RobotId] IS NOT NULL AND [CorrelationId] IS NOT NULL AND [Action] IN (N'ROBOT_CREDENTIAL_ISSUED', N'ROBOT_CREDENTIAL_ROTATED', N'ROBOT_CREDENTIAL_REVOKED'))");
+
             entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAt, e.Id }, "IX_AuditLogs_EntityTime");
 
             entity.Property(e => e.Action).HasMaxLength(80);
@@ -522,6 +526,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.CredentialHash).HasMaxLength(256);
+            entity.Property(e => e.CredentialIssuedAt).HasPrecision(3);
+            entity.Property(e => e.CredentialHint).HasMaxLength(4);
+            entity.Property(e => e.CredentialRevokedAt).HasPrecision(3);
             entity.Property(e => e.DisplayName).HasMaxLength(150);
             entity.Property(e => e.FirstAcceptedSyncAt).HasPrecision(3);
             entity.Property(e => e.FirstAcceptedMapKey).HasMaxLength(100);
@@ -535,6 +542,16 @@ public partial class ApplicationDbContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.CredentialIssuedByUser).WithMany()
+                .HasForeignKey(d => d.CredentialIssuedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_CredentialIssuedByUserId");
+
+            entity.HasOne(d => d.CredentialRevokedByUser).WithMany()
+                .HasForeignKey(d => d.CredentialRevokedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_CredentialRevokedByUserId");
 
             entity.HasOne(d => d.CurrentTour).WithOne(p => p.Robot)
                 .HasForeignKey<Robot>(d => d.CurrentTourId)

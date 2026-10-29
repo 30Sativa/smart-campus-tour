@@ -11,7 +11,10 @@ IF DATABASE_PRINCIPAL_ID(N'campus_fleet_provisioner') IS NULL
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'campus_fleet_provisioner' AND type = 'R')
     THROW 51001, 'campus_fleet_provisioner exists but is not a database role.', 1;
 
-GRANT SELECT (Id, RobotCode, SourceType, CredentialHash, RowVersion) ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
-GRANT UPDATE (CredentialHash, FirstAcceptedSyncAt, FirstAcceptedMapKey, FirstAcceptedFrameId)
+GRANT SELECT (Id, RobotCode, SourceType, CredentialHash, CredentialHint, RowVersion) ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
+GRANT UPDATE (CredentialHash, CredentialIssuedAt, CredentialIssuedByUserId, CredentialHint,
+    CredentialRevokedAt, CredentialRevokedByUserId, FirstAcceptedSyncAt, FirstAcceptedMapKey, FirstAcceptedFrameId)
     ON OBJECT::dbo.Robots TO campus_fleet_provisioner;
+GRANT SELECT, INSERT ON OBJECT::dbo.AuditLogs TO campus_fleet_provisioner;
+DENY UPDATE, DELETE ON OBJECT::dbo.AuditLogs TO campus_fleet_provisioner;
 GO

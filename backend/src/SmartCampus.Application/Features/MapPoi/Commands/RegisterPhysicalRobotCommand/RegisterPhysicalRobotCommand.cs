@@ -54,7 +54,7 @@ public sealed class RegisterPhysicalRobotCommandHandler(
             RobotCode = robotCode,
             DisplayName = command.Request.DisplayName.Trim(),
             SourceType = "PHYSICAL",
-            CredentialHash = [],
+            CredentialHash = null,
             IsDispatchEnabled = false,
             NeedsInspection = false,
             CurrentTourId = null,

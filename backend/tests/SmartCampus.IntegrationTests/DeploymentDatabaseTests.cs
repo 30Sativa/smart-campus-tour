@@ -25,7 +25,7 @@ namespace SmartCampus.IntegrationTests;
 
 public sealed class DeploymentDatabaseTests
 {
-    [SchemaV15Fact]
+    [SchemaV16Fact]
     public async Task RuntimeCanIssueCredentialWithColumnGrantsAndProvisionerRemainsSeparate()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -81,6 +81,7 @@ public sealed class DeploymentDatabaseTests
         {
             var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
             Assert.Equal(new byte[] { 1, 2 }, robot.CredentialHash);
+            oldCredentialHash = robot.CredentialHash!;
             Assert.NotNull(robot.FirstAcceptedSyncAt);
             Assert.Null(await new FleetRobotAuthenticator(db).AuthenticateAsync(robot.RobotCode,
                 FleetRobotCredentialHash.Create().Secret, CancellationToken.None));
@@ -93,9 +94,10 @@ public sealed class DeploymentDatabaseTests
             await using var db = new ApplicationDbContext(options);
             var provisioned = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
             Assert.NotNull(provisioned);
-            credential = provisioned.Credential;
-            oldCredentialHash = FleetRobotCredentialHash.Hash(FleetRobotCredentialHash.Create().Secret);
-            Assert.Null(await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql"));
+            var secondProvision = await new FleetRobotCredentialProvisioner().ProvisionAsync(db, "robot_registered_sql");
+            Assert.NotNull(secondProvision);
+            Assert.NotEqual(provisioned.Credential, secondProvision.Credential);
+            credential = secondProvision.Credential;
             await using var deniedInsert = new SqlCommand("""
                 INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
                 VALUES(NEWID(),N'provisioner_cannot_register','PHYSICAL',0x,0,0,SYSDATETIMEOFFSET());
@@ -113,7 +115,7 @@ public sealed class DeploymentDatabaseTests
         await using (var db = new ApplicationDbContext(options))
         {
             var robot = await db.Robots.SingleAsync(item => item.RobotCode == "robot_registered_sql");
-            Assert.Equal(32, robot.CredentialHash.Length);
+            Assert.Equal(32, robot.CredentialHash!.Length);
             Assert.True(FleetRobotCredentialHash.Verify(credential, robot.CredentialHash));
             Assert.Null(robot.FirstAcceptedSyncAt);
             Assert.Null(robot.FirstAcceptedMapKey);
@@ -128,8 +130,8 @@ public sealed class DeploymentDatabaseTests
         }
     }
 
-    [SchemaV11Fact]
-    public async Task FleetCredentialProvisioner_CanUpdateOnlyCredentialHashForAnExistingRobot()
+    [SchemaV16Fact]
+    public async Task FleetCredentialProvisioner_UsesSharedCredentialLifecycleAndRemainsColumnScoped()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.ExecuteAsync($"""
@@ -157,8 +159,11 @@ public sealed class DeploymentDatabaseTests
                 Assert.Equal("robot_provision_test", provisioned.RobotCode);
                 Assert.True(FleetRobotCredentialHash.IsValidFormat(provisioned.Credential));
                 provisionedCredential = provisioned.Credential;
-                Assert.Null(await new FleetRobotCredentialProvisioner()
-                    .ProvisionAsync(provisionerContext, "robot_provision_test"));
+                var rotated = await new FleetRobotCredentialProvisioner()
+                    .ProvisionAsync(provisionerContext, "robot_provision_test");
+                Assert.NotNull(rotated);
+                Assert.NotEqual(provisioned.Credential, rotated.Credential);
+                provisionedCredential = rotated.Credential;
             }
             foreach (var (statement, errorNumber) in new[]
             {
@@ -178,12 +183,14 @@ public sealed class DeploymentDatabaseTests
         }
 
         await using var verify = Context(database.ConnectionString);
-        var storedHash = await verify.Robots.AsNoTracking()
-            .Where(robot => robot.RobotCode == "robot_provision_test")
-            .Select(robot => robot.CredentialHash)
-            .SingleAsync();
-        Assert.Equal(32, storedHash.Length);
-        Assert.True(FleetRobotCredentialHash.Verify(provisionedCredential!, storedHash));
+        var robot = await verify.Robots.AsNoTracking().SingleAsync(robot => robot.RobotCode == "robot_provision_test");
+        Assert.Equal(32, robot.CredentialHash!.Length);
+        Assert.True(FleetRobotCredentialHash.Verify(provisionedCredential!, robot.CredentialHash));
+        Assert.Equal("robot_provision_test", robot.RobotCode);
+        Assert.Equal(2, await verify.AuditLogs.CountAsync(log => log.RobotId == robot.Id &&
+            log.Action == "ROBOT_CREDENTIAL_ROTATED" && log.DataJson!.Contains("\"source\":\"CLI\"")));
+        Assert.DoesNotContain(provisionedCredential!, string.Join("\n", await verify.AuditLogs
+            .Where(log => log.RobotId == robot.Id).Select(log => log.DataJson).ToArrayAsync()));
     }
 
     [SchemaV11Fact]

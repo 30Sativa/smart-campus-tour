@@ -50,9 +50,11 @@ source/checksum/metadata, manually deploys the exact version to the robot and
 records localization/display evidence. Upload is not robot deployment.
 Technical Staff registers the physical robot identity by `RobotCode` and name
 before selecting it for a map check. Registration creates an unassigned
-identity only; one-shot credential provisioning and `RobotContexts` remain
-outside the web, and registration is not connection, readiness, or check-pass
-evidence. The bridge and database must use the same `RobotCode`.
+identity only; credential issue/rotation/revocation is managed separately in
+the Technical Staff web console under [ADR-0030](../decisions/0030-robot-credential-lifecycle.md),
+while deployment-specific `RobotContexts` remain outside the web. Registration
+is not connection, readiness, or check-pass evidence. The bridge and database
+must use the same `RobotCode`.
 The upload form chooses either a new area (key and name) or an existing area
 from the full persisted catalog; the server allocates the next version. The
 deployment-check form chooses a database robot whose persisted source type is

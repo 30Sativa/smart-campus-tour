@@ -10,9 +10,11 @@ always returns `commands: []`.
 Technical Staff first registers the physical robot identity in the web console
 using the same `RobotCode` that its bridge will send. Registration creates only
 an unassigned database identity; it does not connect to ROS 2, mark the robot
-online/ready, pass a map check, or enable dispatch. An operator separately
-provisions a credential and configures the same RobotCode/mapKey/frameId in
-`RobotContexts` and the MiniPC bridge. A first valid, new Fleet Sync report
+online/ready, pass a map check, or enable dispatch. Technical Staff issues or
+rotates the Fleet Sync credential from the robot management panel. The existing
+one-shot CLI remains available to an operator with the separate provisioner
+role. Configure the same RobotCode/mapKey/frameId in `RobotContexts` and the
+MiniPC bridge. A first valid, new Fleet Sync report
 accepted under that credential stores its BE acceptance time and reported
 map/frame as the durable connection confirmation. Pose may be null. This is
 backend-contact evidence only: the timestamp age/skew window does not prove NTP,
@@ -60,13 +62,23 @@ use this order as an operator guide, not an API prerequisite:
    Keep POI verification, route testing and Tour readiness as separate rules;
    connection confirmation does not make a robot ready or dispatchable.
 
-Apply `backend/database/fleet-credential-provisioning-permissions.sql` with a
-database administrator, then assign a separate provisioning login to
-`campus_fleet_provisioner`. Do not add the API runtime login to this role. The
-role reads `Robots.RobotCode` and updates only `Robots.CredentialHash` and the
-three connection-confirmation fields, which it resets atomically with key
-rotation. The API runtime role may update only those three confirmation fields;
-it cannot update `CredentialHash` or update/delete the full Robots table.
+Issue and rotation are available only to Technical Staff. Admin can view safe
+metadata and append-only audit history and revoke as an emergency action;
+Staff sees connection status only. A secret is shown once in the issue/rotation
+response and is never available from GET or audit history. Rotation and
+revocation invalidate the previous credential and clear first accepted
+confirmation atomically. The MiniPC credential file remains an operator-managed
+deployment step; the web app does not install a secret on the robot.
+
+The v1.6 runtime role has column-scoped Robot UPDATE for credential metadata and
+the first-accepted fields, plus append-only credential audit access. It does not
+have whole-table Robot UPDATE/DELETE. The separate `campus_fleet_provisioner`
+role has only the Robot columns required by the shared CLI lifecycle service
+and append-only audit access. Do not add the API runtime login to that role.
+Existing v1.4/v1.5 databases must complete the controlled Database First
+upgrade/regrant and pass `init-db.sh --check-only` before promoting an API build
+that requires v1.6. Take the approved backup first; do not run this path casually
+against shared/production databases.
 
 Run from `backend/` with a protected provisioning connection string in
 `FleetProvisioning:ConnectionString` (for example the environment variable
@@ -77,16 +89,16 @@ $env:FleetProvisioning__ConnectionString = '<least-privilege provisioning connec
 dotnet .\src\SmartCampus.Api\bin\Debug\net10.0\SmartCampus.Api.dll --provision-fleet-robot robot_test_01
 ```
 
-The command requires an existing Robot row, rotates its credential and clears
-the first-sync confirmation fields in the same SQL update, prints the generated
-credential once as JSON, and exits without starting the API. Keep the output out of logs and place the secret directly in
-the robot's protected configuration. The application runtime credential has
-SELECT/INSERT on Robots and column-level UPDATE only for the three confirmation
-fields; it cannot update `CredentialHash`, whole-table UPDATE, or DELETE. The
-separate provisioner retains `RobotCode` SELECT and can update only
-`CredentialHash` plus the three reset fields. Runtime never receives a
-provisioning connection string. Database First schema v1.5 defines those
-confirmation columns. `PackageSha256` in map
+The command requires an existing PHYSICAL Robot row, issues a credential when
+none is active or rotates the active credential, and clears the first-sync
+confirmation fields in the same SQL update. It appends the same audit action
+with source `CLI`, prints the generated credential once as JSON, and exits
+without starting the API. Keep the output out of logs and place the secret
+directly in the robot's protected configuration. The application runtime has
+SELECT/INSERT on Robots and column-level UPDATE for lifecycle and confirmation
+fields; it cannot update the full table or DELETE. Runtime never receives a
+provisioning connection string. Database First schema v1.6 defines the nullable
+credential hash, lifecycle metadata and confirmation columns. `PackageSha256` in map
 checks is the checksum of the uploaded ZIP, not an individual YAML or PGM file.
 
 ## Run the probe

@@ -17,6 +17,14 @@ public sealed record PhysicalRobotStatus(
     string ConnectionStatus,
     DateTimeOffset? LastSyncReceivedAt,
     bool CredentialProvisioned,
+    string CredentialStatus,
+    DateTimeOffset? CredentialIssuedAt,
+    Guid? CredentialIssuedByUserId,
+    string? CredentialIssuedByName,
+    string? CredentialHint,
+    DateTimeOffset? CredentialRevokedAt,
+    Guid? CredentialRevokedByUserId,
+    string? CredentialRevokedByName,
     string RowVersion,
     bool MapContextConfigured,
     string? ConfiguredMapKey,
@@ -48,9 +56,15 @@ public sealed class ListPhysicalRobotsQueryHandler(
                         ? "CONNECTED"
                         : "DISCONNECTED";
             var mapContextConfigured = fleetSyncSettings.TryGetRobotContext(robot.RobotCode, out var context);
+            var credentialStatus = robot.CredentialHash is not null ? "ACTIVE"
+                : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
             return new PhysicalRobotStatus(robot.Id, robot.RobotCode, robot.DisplayName,
                 robot.FirstAcceptedSyncAt, robot.FirstAcceptedMapKey, robot.FirstAcceptedFrameId,
-                connectionStatus, latest?.ReceivedAt, robot.CredentialHash.Length == 32,
+                connectionStatus, latest?.ReceivedAt, robot.CredentialHash is not null, credentialStatus,
+                robot.CredentialIssuedAt, robot.CredentialIssuedByUserId,
+                robot.CredentialIssuedByUser?.FullName, robot.CredentialHint,
+                robot.CredentialRevokedAt, robot.CredentialRevokedByUserId,
+                robot.CredentialRevokedByUser?.FullName,
                 Convert.ToBase64String(robot.RowVersion),
                 mapContextConfigured, mapContextConfigured ? context.MapKey : null,
                 mapContextConfigured ? context.FrameId : null);

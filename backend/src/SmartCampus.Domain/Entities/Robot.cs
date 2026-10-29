@@ -13,7 +13,17 @@ public partial class Robot
 
     public string? DisplayName { get; set; }
 
-    public byte[] CredentialHash { get; set; } = null!;
+    public byte[]? CredentialHash { get; set; }
+
+    public DateTimeOffset? CredentialIssuedAt { get; set; }
+
+    public Guid? CredentialIssuedByUserId { get; set; }
+
+    public string? CredentialHint { get; set; }
+
+    public DateTimeOffset? CredentialRevokedAt { get; set; }
+
+    public Guid? CredentialRevokedByUserId { get; set; }
 
     public DateTimeOffset? FirstAcceptedSyncAt { get; set; }
 
@@ -38,6 +48,10 @@ public partial class Robot
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual Tour? CurrentTour { get; set; }
+
+    public virtual User? CredentialIssuedByUser { get; set; }
+
+    public virtual User? CredentialRevokedByUser { get; set; }
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 

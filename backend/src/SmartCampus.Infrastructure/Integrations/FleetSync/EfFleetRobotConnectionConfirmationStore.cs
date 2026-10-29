@@ -17,6 +17,7 @@ public sealed class EfFleetRobotConnectionConfirmationStore(ApplicationDbContext
     {
         var updated = await dbContext.Robots
             .Where(robot => robot.RobotCode == robotCode && robot.SourceType == "PHYSICAL" &&
+                robot.CredentialHash != null &&
                 robot.CredentialHash == verifiedCredentialHash &&
                 robot.FirstAcceptedSyncAt == null && robot.FirstAcceptedMapKey == null &&
                 robot.FirstAcceptedFrameId == null)

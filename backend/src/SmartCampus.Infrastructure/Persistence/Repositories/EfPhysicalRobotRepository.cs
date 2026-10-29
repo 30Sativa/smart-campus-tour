@@ -9,6 +9,8 @@ public sealed class EfPhysicalRobotRepository(ApplicationDbContext dbContext) : 
     public async Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken) =>
         await dbContext.Robots.AsNoTracking()
             .Where(robot => robot.SourceType == "PHYSICAL")
+            .Include(robot => robot.CredentialIssuedByUser)
+            .Include(robot => robot.CredentialRevokedByUser)
             .OrderBy(robot => robot.DisplayName).ThenBy(robot => robot.RobotCode)
             .ToArrayAsync(cancellationToken);
 

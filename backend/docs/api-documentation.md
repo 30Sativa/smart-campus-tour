@@ -50,7 +50,15 @@ CORS policy and rate limits as before. Nothing else in the pipeline changed.
 - `GET /api/technical/physical-robots` returns safe confirmation context and
   connection status; `POST` registration remains `{robotCode, displayName}`
   without requestId. Duplicate codes return 409 through the database unique
-  constraint. Neither response returns a credential/hash.
+  constraint. Registration creates an unassigned PHYSICAL identity without an
+  active credential. Technical Staff can issue, rotate and revoke through the
+  `/api/technical/robots/{robotCode}/credential*` endpoints; Admin can only
+  revoke as an emergency action and view safe status/audit. Issue/rotate secrets
+  are returned once with `Cache-Control: no-store`; status and audit reads never
+  return the secret or hash. Credential operations use requestId and rowVersion
+  guards, and write their append-only audit entry with the credential/confirmation
+  change in one transaction. Staff receives connection status only. Provisioning
+  CLI calls the same lifecycle service with a distinct least-privilege SQL role.
 - Remaining legacy reads and the partial Staff pre-execution Tour API are
   identified as legacy/pending in Swagger. The replaced Admin aliases, legacy
   POI catalog and mutable Route authoring operations are absent from routing
