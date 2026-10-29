@@ -18,14 +18,23 @@ The former takes a verified full backup under the host operation lock, applies
 the ordered v1.1→v1.4 additive patches, then verifies structure and runtime
 permissions. The latter continues to handle SQL Server engine/resource changes.
 An already-v1.4 database may still need the runtime-grant reapplication for
-physical robot registration. Before deploying an API version that requires
-Robot INSERT, run the existing, approved Backend Database Schema Upgrade
-regrant path against that v1.4 database. It validates the snapshot marker and
+physical robot registration. The regrant path validates the snapshot marker and
 complete v1.4 structure, reapplies the existing permission scripts without
-schema patches or data backfill, then runs read-only `--check-only`. API deploy
-itself never grants permissions and will refuse promotion while the required
-Robot SELECT/INSERT grants are missing. Do not run this regrant manually on
-EC2 or a shared database outside the controlled workflow and backup process.
+schema patches or data backfill, then runs read-only `--check-only`. Do not run
+this regrant manually on EC2 or a shared database outside the controlled
+workflow and backup process.
+
+Since 2026-10-29 Backend Deploy runs this schema step automatically
+(`upgrade-db-schema-ec2.sh --if-needed`) before `deploy-ec2.sh`, under the
+same host lock. It first runs the release DB tool's read-only `--check-only`
+against the live database; when that passes it stops with no backup or change.
+Only when the check rejects the database does it take the verified backup, run
+the upgrade/regrant path above and check again; a failure stops the delivery
+before the API changes. It skips a first deploy (no current release) and a
+pending deployment recovery. `deploy-ec2.sh` itself still never changes the
+schema or grants. The manual Backend Database Schema Upgrade workflow remains
+for running the step on its own. A new schema version still needs its patch
+and upgrade branch added to `upgrade-db.sh` before it can be applied.
 
 Backend Verify uses a path classifier. Web/robot/digital-twin/AI-only commits do
 not start backend verification, image builds or deployment. Backend verification

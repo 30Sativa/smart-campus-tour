@@ -146,8 +146,9 @@ databases; the developer's local v1.1 database is intentionally untouched.
 Apply `smart-campus-tour-runtime-permissions.sql` after the existing runtime
 role setup to grant the email-request table access required by the API and
 SELECT/INSERT on Robots for physical identity registration. Existing v1.4
-databases must use the controlled Backend Database Schema Upgrade regrant before
-deploying an API version that requires Robot INSERT; this regrant applies the
+databases receive the controlled Backend Database Schema Upgrade regrant, which
+Backend Deploy now runs automatically (after a backup) when the release's
+read-only check reports missing grants; this regrant applies the
 existing permission scripts without adding a schema version or changing
 business data. The patch does not create a global seat-capacity setting,
 institutional calendar, or versioned scheduling/READY writer. Staff review ageing is observable from

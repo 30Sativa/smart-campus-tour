@@ -46,4 +46,8 @@ if [[ "$mode" == schema-upgrade ]]; then
 fi
 options=()
 [[ "$mode" != sql-maintenance ]] || options+=(--sql-maintenance)
+if [[ "$mode" == application ]]; then
+  # Upgrade/regrant first only when the read-only check rejects this release's DB tool.
+  bash "$bundle/ops/upgrade-db-schema-ec2.sh" --if-needed "$initializer" "$DB_INIT_SOURCE_SHA" "$DB_SCHEMA_VERSION"
+fi
 bash "$bundle/ops/deploy-ec2.sh" "${options[@]}" "$release" "$api" "$initializer" "$sql" "$ops"

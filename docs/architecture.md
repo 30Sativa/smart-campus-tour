@@ -1961,7 +1961,10 @@ mode before promoting only the API container. Fresh bootstrap uses an explicit
 the separately locked Backend Database Schema Upgrade workflow: it takes and
 verifies a full backup, applies ordered additive Database First patches, checks
 the resulting v1.4 structure and runtime grants, and retains the original
-bootstrap hash while recording the application schema version. The distinct
+bootstrap hash while recording the application schema version. Backend Deploy
+runs that same step first in `--if-needed` mode: it backs up and upgrades or
+regrants only when the release DB tool's read-only check rejects the live
+database, and is a no-op otherwise. The distinct
 Backend SQL Maintenance workflow changes only the pinned SQL Server engine and
 resource settings. All three operations share the production host/deploy lock.
 Unknown schemas fail closed. Runtime permissions preserve append-only AuditLogs/TourEvents, grant writes for current
