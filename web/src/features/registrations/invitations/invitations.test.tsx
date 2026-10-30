@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useToastStore } from '../../../components/ui/toast-store'
 import { InvitationPanel } from './InvitationPanel'
 import { StudentInvitationPage } from '../../student/invitation/StudentInvitationPage'
 import type { InvitationDetails } from './api'
@@ -46,7 +47,7 @@ it('shows truthful email status and keeps the request ID when retrying an uncert
   expect(writes[0]).toEqual(writes[1])
   expect(writes[0].expectedRowVersion).toBe('AAAAAAAAAAE=')
   expect(JSON.stringify(writes)).not.toContain('room@example.test')
-  expect(await screen.findByRole('status')).toHaveTextContent('Đã lưu thao tác')
+  await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã lưu thao tác'))
 })
 
 it('confirms that reissue closes old sessions and never restores the code after email failure', async () => {

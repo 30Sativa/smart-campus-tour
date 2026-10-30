@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageRegistrationsPage from '../../../routes/staff/manage/StaffManageRegistrationsPage'
 import StaffShell from '../../staff/StaffShell'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useToastStore } from '../../../components/ui/toast-store'
 import { dateBoundary } from './presentation'
 import type { ReviewDetails, ReviewInput } from './types'
 
@@ -36,6 +37,7 @@ function renderAt(path = '/staff/manage/registrations/pending?review=registratio
   return client
 }
 beforeEach(() => {
+  useToastStore.setState({ toasts: [] })
   clients = []; requests = []; decisions = []; unexpectedMutations = []; registration = structuredClone(initial); failure = null
   useAuthStore.getState().setAuth('staff-token', { userId: 'sql-staff', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
@@ -113,7 +115,7 @@ describe('Staff registration review boundary', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })
     expect(within(dialog).getByText(/chỉ dòng này được chấp nhận/i)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận dòng' }))
-    expect(await screen.findByText(/Quyết định cho dòng đã được lưu/)).toBeInTheDocument()
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
     await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })
     expect(decisions).toHaveLength(1)
     expect(decisions[0]).toMatchObject({ action: 'accept', rowId: 'row', input: { requestId: expect.any(String), expectedRegistrationRowVersion: firstVersion, expectedTourRowVersion: secondVersion, expectedRowVersion: firstVersion } })
@@ -136,7 +138,7 @@ describe('Staff registration review boundary', () => {
     expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Thiết bị B' }))
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Thiết bị B?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
-    await screen.findByText(/Quyết định cho dòng đã được lưu/)
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
     expect(decisions).toHaveLength(1)
     expect(decisions[0].rowId).toBe('pending-row')
     expect(registration.roster.find(row => row.id === 'accepted-row')?.participationState).toBe('ACCEPTED')
@@ -202,7 +204,7 @@ describe('Staff registration review boundary', () => {
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
     expect(await within(screen.getByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).findByRole('alert')).toHaveTextContent('Không thực hiện được.')
     expect(registration.summary.state).toBe('SUBMITTED')
-    expect(screen.queryByText(/Quyết định cho dòng đã được lưu/)).not.toBeInTheDocument()
+    expect(useToastStore.getState().toasts).toHaveLength(0)
   })
 
   it('explains an inverted Tour date range instead of sending a request that can only fail', async () => {

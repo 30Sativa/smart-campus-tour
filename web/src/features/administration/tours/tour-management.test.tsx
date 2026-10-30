@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useToastStore } from '../../../components/ui/toast-store'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageTourCreatePage from '../../../routes/staff/manage/StaffManageTourCreatePage'
@@ -116,7 +117,7 @@ describe('live Tour management', () => {
     expect(confirm).toBeDisabled()
     fireEvent.change(within(dialog).getByLabelText(/Lý do hủy/), { target: { value: 'Trường đổi lịch' } })
     fireEvent.click(confirm)
-    expect(await screen.findByText(/Đã hủy Tour/)).toBeInTheDocument()
+    await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toContain('Đã hủy Tour'))
     expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours/tour-1/cancel', body: { expectedRowVersion: ROW_VERSION, reason: 'Trường đổi lịch' } })
   })
 

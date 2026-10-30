@@ -42,6 +42,7 @@ let mapCheckStatus: 'PENDING' | 'FAILED' | 'PASSED' = 'PASSED'
 let poiProposals: unknown[] = []
 let poiHistory: unknown = null
 let verifyRefusal: { status: number; body: unknown } | null = null
+let poiQueue: unknown[] = [queueItem]
 let routeQueue: unknown[] = []
 let routeCatalog: unknown[] = []
 let routeDetail: unknown = null
@@ -71,6 +72,7 @@ describe('Technical Staff API integration', () => {
     poiProposals = []
     poiHistory = null
     verifyRefusal = null
+    poiQueue = [queueItem]
     routeQueue = []
     routeCatalog = []
     routeDetail = null
@@ -119,7 +121,7 @@ describe('Technical Staff API integration', () => {
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
         ? new Response(JSON.stringify({ success: false, message: 'Robot lookup unavailable.' }), { status: 503 })
         : response(physicalRobots)
-      if (url.pathname === '/api/technical/poi-verifications') return response([queueItem])
+      if (url.pathname === '/api/technical/poi-verifications') return response(poiQueue)
       if (url.pathname === '/api/technical/map-versions' && init?.method === 'POST') return response({ ...map, versionNumber: 2, mapKey: 'library-v2' })
       if (url.pathname === '/api/technical/map-versions/map-v1/deployment-checks' && init?.method === 'POST') {
         if (failDeploymentOnce) { failDeploymentOnce = false; return new Response(JSON.stringify({ success: false, message: 'Temporary server error.' }), { status: 503 }) }
@@ -646,6 +648,28 @@ describe('Technical Staff API integration', () => {
     expect(body.routeName).toBeUndefined()
     expect(body.routeId).toBeUndefined()
     await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
+  })
+
+  it('closes the dialog and keeps it closed when the saved route moves to the recorded list', async () => {
+    await openRouteTest()
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Localization đạt']) fireEvent.click(screen.getByLabelText(label))
+    routeQueue = []
+    routeCatalog = [{ ...routeFixture, verificationStatus: 'PASS' }]
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('closes the POI dialog when the saved revision leaves the queue', async () => {
+    poiQueue = [queueItem]
+    await openPoiCheck()
+    poiQueue = []
+    poiProposals = [{ ...proposal, revision: { ...proposal.revision, navigationStatus: 'PASS' } }]
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('button', { name: /Đã đạt\s*1/ })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('requires a reason and a failed observation for a failed run', async () => {

@@ -24,7 +24,6 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
   const [confirm, setConfirm] = useState<Decision | null>(null)
   const [needsReload, setNeedsReload] = useState(false)
   const [snapshotRefreshing, setSnapshotRefreshing] = useState(false)
-  const [savedRowId, setSavedRowId] = useState<string | null>(null)
   const reg = query.data
   const error = mutation.isError ? reviewError(mutation.error) : null
   const canWrite = !needsReload && !snapshotRefreshing && !query.isFetching && !query.isError && !mutation.isPending
@@ -32,7 +31,7 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
     setSnapshotRefreshing(true)
     try {
       const result = await query.refetch()
-      if (!result.isError) { setNeedsReload(false); setSavedRowId(null); mutation.reset() }
+      if (!result.isError) { setNeedsReload(false); mutation.reset() }
     } finally { setSnapshotRefreshing(false) }
   }
   const decide = async (reason: string) => {
@@ -45,7 +44,6 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
         ...(selected.action === 'reject' ? { reason } : {}),
       } })
       setConfirm(null)
-      setSavedRowId(selected.row.id)
       notify(selected.action === 'reject'
         ? { tone: 'info', title: `Đã từ chối ${selected.row.displayName}`, detail: `${reg.summary.groupName} · lý do đã được ghi lại.` }
         : { title: `Đã chấp nhận ${selected.row.displayName}`, detail: `${reg.summary.groupName} · ${reg.summary.tourName}` })
@@ -64,7 +62,6 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       onClose={close} footer={reg && needsReload && <div className="flex justify-end"><p className="text-sm text-slate-600">Tải lại dữ liệu và xem snapshot mới trước khi xét duyệt tiếp.</p></div>}>
       {query.isLoading && <p aria-busy="true">Đang tải đăng ký…</p>}
       {query.isError && <Notice tone="danger" action={<button className={buttonClass('secondary', 'sm')} onClick={() => void reload()}>Thử lại</button>}>Không tải được đăng ký này.</Notice>}
-      {savedRowId && <Notice tone="success">Quyết định cho dòng đã được lưu. Kết quả gửi email (nếu có) được theo dõi riêng.</Notice>}
       {needsReload && <Notice tone="warn" action={<button className={buttonClass('secondary', 'sm')} disabled={query.isFetching} onClick={() => void reload()}>Tải lại</button>}>Dữ liệu đã thay đổi hoặc Tour đã khóa. Quyết định chưa được gửi lại. Tải lại và xem snapshot mới trước khi tiếp tục.</Notice>}
       {error && <Notice tone="danger">{error.message}{error.fields.length > 0 && <ul className="mt-2 list-disc pl-5">{[...new Set(error.fields)].map(value => <li key={value}>{value}</li>)}</ul>}</Notice>}
       {reg && !query.isError && <div className="mt-4 space-y-5">

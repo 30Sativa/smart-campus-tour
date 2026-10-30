@@ -367,6 +367,16 @@ backend binding; never use them as fallback after a failed HTTP request.
     comes from the backend
     ([backend/AGENTS.md Section 3](../backend/AGENTS.md#3-current-model-and-fleet-boundary)).
 
+- **One notification pattern.** A successful action closes its dialog and says so
+  once through `notify()` (`components/ui/toast-store.ts`); the Toaster is mounted
+  in `RouteView`, so no screen renders its own success banner. A refusal stays
+  inside the form, beside the field when it has one, so nothing typed is lost. A
+  failed load uses the page's error panel with a retry. Confirm risky actions with
+  `ConfirmationDialog`, never `window.confirm`. Dialogs whose row can move between
+  lists while saving hold the row itself in state, not a lookup by id, or the save
+  unmounts them.
+- **One select.** Use `<select>` with `inputClass`; the open list is styled once in
+  `index.css` and falls back to the native list where unsupported.
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for
   API access, state ownership, component responsibility, effects, error

@@ -12,7 +12,8 @@ import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestPa
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
 type RouteRow = { route: VersionedRoute; filter: RouteFilter }
-type Dialog = { view: 'record' | 'result'; revisionId: string }
+/** Holds the route itself: saving moves it between lists, and the dialog must not unmount mid-save. */
+type Dialog = { view: 'record' | 'result'; route: VersionedRoute }
 
 const filterText: Record<RouteFilter, { title: string; empty: string }> = {
   pending: { title: 'Tuyến chờ chạy thử', empty: 'Không có tuyến nào đang chờ chạy thử.' },
@@ -41,7 +42,6 @@ export default function TechnicalConfirmationsPage() {
 
   const rows = useMemo(() => toRows(queue.data ?? [], routes.data?.data ?? []), [queue.data, routes.data])
   const visible = rows.filter(row => row.filter === filter)
-  const selected = rows.find(row => row.route.revisionId === dialog?.revisionId)?.route
   const count = (value: RouteFilter) => rows.filter(row => row.filter === value).length
   const recordedCount = (value: RouteFilter) => routes.isPending ? '…' : routes.isError ? '-' : count(value)
 
@@ -73,8 +73,8 @@ export default function TechnicalConfirmationsPage() {
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{route.stops.length} điểm · dừng {route.dwellDurationSeconds} giây</td>
                   <td className={tdClass}><ToneBadge tone={rowFilter === 'passed' ? 'ok' : rowFilter === 'failed' ? 'danger' : 'warn'}>{revisionTone(true, route.verificationStatus).label}</ToneBadge></td>
                   <td className={`${tdClass} text-right`}>{rowFilter === 'pending'
-                    ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', revisionId: route.revisionId })}>Ghi kết quả</button>
-                    : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Xem kết quả ${route.name}`} onClick={() => setDialog({ view: 'result', revisionId: route.revisionId })}>Xem kết quả</button>}</td>
+                    ? <button type="button" className={buttonClass('primary', 'sm')} aria-label={`Ghi kết quả ${route.name}`} onClick={() => setDialog({ view: 'record', route })}>Ghi kết quả</button>
+                    : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Xem kết quả ${route.name}`} onClick={() => setDialog({ view: 'result', route })}>Xem kết quả</button>}</td>
                 </tr>)}
                 {!visible.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}>{filterText[filter].empty}</td></tr>}
               </tbody>
@@ -88,8 +88,8 @@ export default function TechnicalConfirmationsPage() {
         <Note tone="ok"><b>Chỉ sửa thuyết minh</b> thì giữ xác nhận, không cần chạy lại navigation.</Note>
       </div>
 
-      {selected && dialog?.view === 'record' && <RecordRouteTestModal key={selected.revisionId} route={selected} onClose={() => setDialog(null)} />}
-      {selected && dialog?.view === 'result' && <RouteResultModal key={selected.revisionId} route={selected} onRecord={() => setDialog({ view: 'record', revisionId: selected.revisionId })} onClose={() => setDialog(null)} />}
+      {dialog?.view === 'record' && <RecordRouteTestModal key={dialog.route.revisionId} route={dialog.route} onClose={() => setDialog(null)} />}
+      {dialog?.view === 'result' && <RouteResultModal key={dialog.route.revisionId} route={dialog.route} onRecord={() => setDialog({ view: 'record', route: dialog.route })} onClose={() => setDialog(null)} />}
     </TechnicalPage>
   )
 }

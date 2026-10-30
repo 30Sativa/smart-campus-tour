@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { invitationsApi, type InvitationItem, type InvitationWrite } from './api'
 
@@ -24,15 +25,14 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion }: 
   const mutation = useMutation({ mutationFn: (write: InvitationWrite) => invitationsApi.write(registrationId, write),
     onSuccess: () => client.invalidateQueries({ queryKey: key }) })
   const [choice, setChoice] = useState<InvitationWrite | null>(null)
-  const [saved, setSaved] = useState(false)
   const choose = (operation: InvitationWrite['operation'], item?: InvitationItem) => {
-    mutation.reset(); setSaved(false)
+    mutation.reset()
     setChoice({ operation, invitationId: item?.id, requestId: crypto.randomUUID(),
       expectedRowVersion: item?.rowVersion ?? rowVersion, ...(item ? {} : { expectedTourRowVersion: tourRowVersion }) })
   }
   const submit = () => {
     if (!choice) return
-    mutation.mutate(choice, { onSuccess: () => { setChoice(null); setSaved(true) },
+    mutation.mutate(choice, { onSuccess: () => { setChoice(null); notify({ title: 'Đã lưu thao tác', detail: 'Kết quả gửi email sẽ cập nhật ở danh sách.' }) },
       onError: failure => { if (failure instanceof ApiError && failure.status === 409) { setChoice(null); void query.refetch() } } })
   }
   return <section aria-label="Hỗ trợ lời mời" className="rounded-xl border border-slate-200 bg-white p-4">
@@ -43,7 +43,6 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion }: 
     {query.isPending && <p aria-busy="true">Đang tải lời mời…</p>}
     {query.isError && <p role="alert">Không tải được lời mời. Vui lòng thử tải lại.</p>}
     {mutation.isError && <p role="alert" className="mb-3 text-sm text-red-700">{message(mutation.error)}</p>}
-    {saved && <p role="status" className="mb-3 text-sm text-emerald-700">Đã lưu thao tác. Kết quả gửi email sẽ cập nhật ở danh sách.</p>}
     {query.data && !query.isError && <>
       {!query.data.enabled && <p>Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.</p>}
       {query.data.canIssue && <button className={buttonClass('primary', 'sm')} disabled={mutation.isPending} onClick={() => choose('issue')}>Cấp và gửi lời mời</button>}
