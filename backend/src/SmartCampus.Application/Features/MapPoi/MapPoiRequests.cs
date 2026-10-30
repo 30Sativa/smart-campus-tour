@@ -8,7 +8,8 @@ public sealed record RecordMapDeploymentRequest(
 
 public sealed record PoiProposalDraft(
     Guid MapVersionId, string Name, string Purpose, string? Description,
-    decimal X, decimal Y, decimal Yaw, string CameraPreset);
+    decimal X, decimal Y, decimal Yaw, string CameraPreset,
+    string? NarrationText = null, string? FallbackVideoUrl = null);
 
 public sealed record CreatePoiProposalRequest(Guid RequestId, PoiProposalDraft Draft);
 

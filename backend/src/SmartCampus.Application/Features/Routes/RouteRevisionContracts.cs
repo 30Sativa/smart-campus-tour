@@ -17,7 +17,8 @@ public sealed record RouteRunRequest(
 
 public sealed record RouteRevisionStopView(Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
     int StopOrder, int DwellSeconds, IReadOnlyList<RouteHeadStep> HeadSteps,
-    string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset);
+    string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset,
+    string? NarrationText = null, string? FallbackVideoUrl = null);
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,

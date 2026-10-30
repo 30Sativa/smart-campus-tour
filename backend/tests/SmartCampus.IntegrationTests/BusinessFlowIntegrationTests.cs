@@ -23,7 +23,7 @@ public sealed class BusinessFlowIntegrationTests
 {
     private const string Password = "integration-test-password";
 
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task PhysicalRobotCredentialLifecycle_EnforcesRolesIsOneShotAtomicAndAudited()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -149,7 +149,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.All(storedAudit, row => Assert.DoesNotContain(rotatedCredential, row.DataJson ?? string.Empty));
         Assert.Equal(2, storedAudit.Count(row => row.Action is "ROBOT_CREDENTIAL_ISSUED" or "ROBOT_CREDENTIAL_ROTATED"));
     }
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task PhysicalRobotCredentialIssue_RollsBackWhenAuditInsertFails()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -441,7 +441,7 @@ public sealed class BusinessFlowIntegrationTests
                 localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; concurrent failed map evidence." });
         var proposalRace = Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff,
             new { requestId = raceCreateId, draft = new { mapVersionId = mapId, name = "Race POI", purpose = "Entry",
-                description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         await Task.WhenAll(deploymentRace, proposalRace);
         using var racedCheck = await deploymentRace;
         using var racedCreate = await proposalRace;
@@ -467,7 +467,7 @@ public sealed class BusinessFlowIntegrationTests
 
         var createRequestId = Guid.NewGuid();
         var createBody = new { requestId = createRequestId, draft = new { mapVersionId = mapId, name = "Library", purpose = "Entry",
-            description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+            description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } };
         using var created = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, createBody);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var proposal = (await Body(created)).GetProperty("data");
@@ -478,7 +478,7 @@ public sealed class BusinessFlowIntegrationTests
 
         var revisionRequestId = Guid.NewGuid();
         var revisedDraft = new { mapVersionId = mapId, name = "Library revised", purpose = "Entry", description = (string?)null,
-            x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" };
+            x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null };
         var revisionBody = new { requestId = revisionRequestId, expectedCurrentRevision = 1,
             expectedRowVersion = proposal.GetProperty("rowVersion").GetString(), draft = revisedDraft };
         using var revised = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{proposalId}/draft", staff, revisionBody);
@@ -513,7 +513,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Single(historyData.GetProperty("verificationRecords").EnumerateArray());
 
         var secondProposalBody = new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Second POI", purpose = "Exit",
-            description = (string?)null, x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+            description = (string?)null, x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } };
         using var secondCreated = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, secondProposalBody);
         Assert.Equal(HttpStatusCode.OK, secondCreated.StatusCode);
         var secondProposal = (await Body(secondCreated)).GetProperty("data");
@@ -531,7 +531,7 @@ public sealed class BusinessFlowIntegrationTests
             new { requestId = Guid.NewGuid(), expectedCurrentRevision = 2,
                 expectedRowVersion = (await Body(await Get(host.Client, $"/api/staff/poi-proposals/{proposalId}", staff))).GetProperty("data").GetProperty("rowVersion").GetString(),
                 draft = new { mapVersionId = mapId, name = "Should not persist", purpose = "Entry", description = (string?)null,
-                    x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                    x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.Conflict, blockedRevision.StatusCode);
         Assert.Equal("TECHNICAL_CHECK_NOT_PASSED", (await Body(blockedRevision)).GetProperty("errors").GetProperty("code").GetString());
         using var blockedSubmit = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{secondProposalId}/submit", staff,
@@ -615,7 +615,7 @@ public sealed class BusinessFlowIntegrationTests
         var auditsBeforeBlockedProposal = await database.CountRowsAsync("dbo.AuditLogs");
         using var blockedProposal = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
             new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",
-                description = "Should remain unpersisted", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = "Should remain unpersisted", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.Conflict, blockedProposal.StatusCode);
         var blockedBody = await Body(blockedProposal);
         Assert.Equal("TECHNICAL_CHECK_PENDING", blockedBody.GetProperty("errors").GetProperty("code").GetString());
@@ -639,7 +639,7 @@ public sealed class BusinessFlowIntegrationTests
 
         using var createPoi = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
             new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",
-                description = "Integration test", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = "Integration test", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.OK, createPoi.StatusCode);
         var proposal = (await Body(createPoi)).GetProperty("data");
         var proposalId = proposal.GetProperty("id").GetGuid();

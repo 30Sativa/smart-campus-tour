@@ -23,6 +23,7 @@ public sealed record PoiRevisionView(
     string? Description, decimal X, decimal Y, decimal Yaw, string CameraPreset,
     string NavigationFingerprint, Guid CreatedByUserId, DateTimeOffset CreatedAt,
     bool IsSubmitted, DateTimeOffset? SubmittedAt, string NavigationStatus,
+    string? NarrationText, string? FallbackVideoUrl,
     Guid? VerificationSourceRevisionId);
 
 public sealed record PoiProposalView(Guid Id, int CurrentRevision, string RowVersion, DateTimeOffset CreatedAt,

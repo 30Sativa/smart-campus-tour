@@ -33,6 +33,10 @@ public partial class RouteRevisionStop
 
     public string CameraPreset { get; set; } = null!;
 
+    public string? NarrationText { get; set; }
+
+    public string? FallbackVideoUrl { get; set; }
+
     public virtual PoiProposalRevision PoiProposalRevision { get; set; } = null!;
 
     public virtual PoiVerificationRecord PoiVerificationRecord { get; set; } = null!;

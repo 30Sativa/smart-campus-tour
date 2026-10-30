@@ -12,12 +12,12 @@ import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../featur
 import { parseVersionedMapPackage, rasterPngBlob } from '../../../features/administration/pois/map/versioned-package'
 import type { OccupancyMap } from '../../../features/administration/pois/map/catalog'
 
-type Draft = { mapVersionId: string; name: string; purpose: string; description: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
-const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
+type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
+const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', narrationText: '', fallbackVideoUrl: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
 
 function asDraft(item: PoiProposal): Draft {
   const { revision } = item
-  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
+  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', narrationText: revision.narrationText ?? '', fallbackVideoUrl: revision.fallbackVideoUrl ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
 }
 
 export default function StaffManagePoiFormPage() {
@@ -71,11 +71,11 @@ export default function StaffManagePoiFormPage() {
   const history = useQuery({ queryKey: ['technical', 'poi-history', poiId], queryFn: () => technicalApi.getPoiHistory(poiId!), enabled: Boolean(poiId) })
   const update = (values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
   const mutate = async (action: 'save' | 'submit') => {
-    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
-      setError('Chọn map, nhập tên/mục đích và đặt đủ vị trí/hướng trên bản đồ.')
+    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
+      setError('Chọn map, nhập tên, mục đích, nội dung thuyết minh và đặt đủ vị trí/hướng trên bản đồ.')
       return
     }
-    const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null }
+    const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null, narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null }
     setBusy(true); setError(null)
     try {
       let result = current
@@ -116,6 +116,8 @@ export default function StaffManagePoiFormPage() {
         {selectedItem && <p className="text-xs text-[#64748b]">{selectedItem.map.areaName} · {selectedItem.map.imageWidth}×{selectedItem.map.imageHeight} · {selectedItem.map.resolution} m/ô · {selectedItem.map.frameId}</p>}
         <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Tên POI<input className={`${inputClass} mt-1`} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} /></label><label className="text-sm">Mục đích<input className={`${inputClass} mt-1`} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} /></label></div>
         <label className="block text-sm">Mô tả<textarea className={`${inputClass} mt-1`} rows={2} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} /></label>
+        <label className="block text-sm">Nội dung thuyết minh<textarea className={`${inputClass} mt-1`} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} /></label>
+        <label className="block text-sm">Video dự phòng (HTTPS, không bắt buộc)<input className={`${inputClass} mt-1`} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} /></label>
         <label className="block text-sm">Camera preset<select className={`${inputClass} mt-1`} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}><option value="FRONT">FRONT</option><option value="LEFT">LEFT</option><option value="RIGHT">RIGHT</option></select></label>
       </section>
       {mapError && <p role="alert" className="text-sm text-red-700">{mapError}</p>}

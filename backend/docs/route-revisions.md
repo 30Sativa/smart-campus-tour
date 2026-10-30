@@ -91,7 +91,7 @@ Submit revision 2 and record the same observations as PASS: all stops reached, l
 
 `GET /api/routes/{routeId}/revisions?revisionId={revision2Id}&includeHistory=true`
 
-Each stop includes the exact POI revision, map and source PASS evidence IDs. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, measured duration, evidence, and timestamp. The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and recalculated `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. A reused navigation TestRun is the source of evidence only; its measured duration is not presented as the duration of the new dwell configuration.
+Each stop includes the exact POI revision, map and source PASS evidence IDs, plus the narration text and optional HTTPS fallback video URL snapshotted when this route revision was saved. Later POI content revisions do not rewrite existing stops. Test records include the exact route revision, map checksum, robot, Technical checker, participating Staff, observations, measured duration, evidence, and timestamp. The view reports `durationStatus: INCOMPLETE_CONTENT_AUDIO_DATA` and recalculated `dwellDurationSeconds` separately because the approved narration/audio duration source is not implemented. A reused navigation TestRun is the source of evidence only; its measured duration is not presented as the duration of the new dwell configuration.
 
 ## Common responses and retry rules
 
