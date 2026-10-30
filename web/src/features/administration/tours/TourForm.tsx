@@ -56,11 +56,11 @@ export function TourForm({ initial, currentRoute, scheduleLocked = false, submit
       <label className="block text-sm">Thời gian dự kiến<input required type="datetime-local" disabled={scheduleLocked} className={inputClass} value={schedule} onChange={e => setSchedule(e.target.value)} />
         <span className="mt-1 block text-xs text-[#64748b]">Giờ theo máy đang dùng. Tới giờ robot không tự chạy; Staff bắt đầu thủ công.</span></label>
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
-      <label className="block text-sm">Tuyến<select required aria-label="Tuyến" disabled={scheduleLocked} className={inputClass} value={routeId} onChange={e => setRouteId(e.target.value)}>
+      <label className="block text-sm">Tuyến<select title="" required aria-label="Tuyến" disabled={scheduleLocked} className={inputClass} value={routeId} onChange={e => setRouteId(e.target.value)}>
         <option value="">— Chọn tuyến khả dụng —</option>
         {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
-        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Chỉ hiện tuyến đã “Cho phép sử dụng” ở Danh mục tuyến.'}</span></label>
+        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : 'Danh sách này chỉ có tuyến kiểu cũ. Tuyến ở Danh mục tuyến chưa dùng được cho Tour.'}</span></label>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       {scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">

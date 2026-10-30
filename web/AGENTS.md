@@ -376,7 +376,8 @@ backend binding; never use them as fallback after a failed HTTP request.
   lists while saving hold the row itself in state, not a lookup by id, or the save
   unmounts them.
 - **One select.** Use `<select>` with `inputClass`; the open list is styled once in
-  `index.css` and falls back to the native list where unsupported.
+  `index.css` and falls back to the native list where unsupported. A required
+  select sets `title=""`, otherwise Chrome hovers its English validation tooltip.
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for
   API access, state ownership, component responsibility, effects, error

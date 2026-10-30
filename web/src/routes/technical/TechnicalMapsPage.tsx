@@ -117,7 +117,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
         {!areas.isPending && !areas.isError && mode === 'existing' && areas.data?.length === 0 && <p role="status" className="text-sm text-[#64748b]">Chưa có khu vực. Chọn “Khu vực mới” để tạo khu vực đầu tiên.</p>}
         {mode === 'existing' ? <div>
           <label className={labelClass} htmlFor="map-existing-area">Chọn khu vực</label>
-          <select id="map-existing-area" className={`${inputClass} mt-1`} required value={areaKey} disabled={areas.isPending || areas.isError || !areas.data?.length} onChange={event => { const selected = areas.data?.find(area => area.areaKey === event.target.value); setAreaKey(selected?.areaKey ?? ''); setAreaName(selected?.displayName ?? ''); fieldChanged() }}>
+          <select title="" id="map-existing-area" className={`${inputClass} mt-1`} required value={areaKey} disabled={areas.isPending || areas.isError || !areas.data?.length} onChange={event => { const selected = areas.data?.find(area => area.areaKey === event.target.value); setAreaKey(selected?.areaKey ?? ''); setAreaName(selected?.displayName ?? ''); fieldChanged() }}>
             <option value="">— Chọn khu vực —</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
           </select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Mã và tên khu vực đã lưu được giữ nguyên.</p>}
         </div> : <>
