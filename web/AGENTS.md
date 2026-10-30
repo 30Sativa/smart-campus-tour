@@ -44,9 +44,10 @@ shared rules; this file only covers what is specific to `web/`.
   - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. Tour reads still use the legacy Staff projection; scheduling/READY is blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
-    existing `/api/technical/*` and `/api/maps/*` contracts. Project POI YAML
-    import and route-level certification remain pending; no mock success state
-    is shown for either.
+    existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
+    `/api/technical/route-verifications/*` and the test-run endpoint; they are
+    human-entered evidence, not proof of a physical run or READY. Project POI
+    YAML import remains pending; no mock success state is shown for it.
   - `/admin/*`: administration, `Admin` only: Accounts and Roles. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.

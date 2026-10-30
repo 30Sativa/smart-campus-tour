@@ -42,6 +42,11 @@ let mapCheckStatus: 'PENDING' | 'FAILED' | 'PASSED' = 'PASSED'
 let poiProposals: unknown[] = []
 let poiHistory: unknown = null
 let verifyRefusal: { status: number; body: unknown } | null = null
+let routeQueue: unknown[] = []
+let routeCatalog: unknown[] = []
+let routeDetail: unknown = null
+let routeRefusal: { status: number; body: unknown } | null = null
+const routeFixture = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 2, name: 'Tuyến thư viện', mapKey: 'library-v1', stops: [{}, {}], dwellDurationSeconds: 60, verificationStatus: 'NOT_TESTED', isSubmitted: true, testRuns: [], effectiveTestRunId: null, revisionHistory: [] }
 let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
 const openRobotDetail = async () => fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết amr-01' }))
@@ -66,6 +71,10 @@ describe('Technical Staff API integration', () => {
     poiProposals = []
     poiHistory = null
     verifyRefusal = null
+    routeQueue = []
+    routeCatalog = []
+    routeDetail = null
+    routeRefusal = null
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -120,6 +129,13 @@ describe('Technical Staff API integration', () => {
         ? new Response(JSON.stringify({ success: false, ...(verifyRefusal.body as object) }), { status: verifyRefusal.status })
         : response({ id: 'verification-1' })
       if (url.pathname === '/api/staff/poi-proposals') return response(poiProposals)
+      if (url.pathname === '/api/technical/route-verifications/queue') return response(routeQueue)
+      if (url.pathname === '/api/technical/route-verifications/participants') return response([{ userId: 'staff-1', fullName: 'Lan Staff', username: 'lan' }])
+      if (url.pathname === '/api/routes') return response(routeCatalog)
+      if (url.pathname === '/api/routes/route-1/revisions') return response(routeDetail)
+      if (url.pathname.endsWith('/test-runs')) return routeRefusal
+        ? new Response(JSON.stringify({ success: false, ...(routeRefusal.body as object) }), { status: routeRefusal.status })
+        : response(routeFixture)
       if (url.pathname.endsWith('/history')) return response(poiHistory)
       return response(null)
     }))
@@ -592,12 +608,82 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByRole('dialog', { name: 'AMR 01' })).toBeInTheDocument()
   })
 
-  it('distinguishes the backend test-run contract from the unwired workspace and physical proof', () => {
+  const openRouteTest = async () => {
+    routeQueue = [routeFixture]
     renderPage(<TechnicalConfirmationsPage />)
-    expect(screen.getByText(/Backend đã có API queue và test-run/)).toBeInTheDocument()
-    expect(screen.getByText(/màn hình này chưa được nối đầy đủ/)).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả Tuyến thư viện' }))
+    await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
+    await screen.findByRole('option', { name: 'Lan Staff · lan' })
+    fireEvent.change(screen.getByLabelText('Robot vật lý'), { target: { value: 'amr-01' } })
+    fireEvent.change(screen.getByLabelText('Staff đi cùng'), { target: { value: 'staff-1' } })
+    fireEvent.change(screen.getByLabelText('Thời gian đo được (giây)'), { target: { value: '420' } })
+    fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã chạy thử.' } })
+  }
+  const testRunCalls = () => requests.filter(item => item.url.pathname.endsWith('/test-runs'))
+
+  it('states that a route record is human evidence and shows no result without a queue item', async () => {
+    renderPage(<TechnicalConfirmationsPage />)
     expect(screen.getByText(/không chứng minh robot đã chạy thật/)).toBeInTheDocument()
     expect(screen.getByText(/không tự làm tuyến READY/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Xác nhận' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Không có tuyến nào đang chờ chạy thử.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Ghi kết quả/ })).not.toBeInTheDocument()
+  })
+
+  it('records a whole-route PASS against the exact submitted revision', async () => {
+    await openRouteTest()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    expect(screen.getByRole('alert')).toHaveTextContent('còn thiếu: Robot đi đủ các điểm dừng')
+    fireEvent.click(screen.getByLabelText('Robot dừng an toàn'))
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Localization đạt']) fireEvent.click(screen.getByLabelText(label))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(testRunCalls()).toHaveLength(1))
+    expect(testRunCalls()[0].url.pathname).toBe('/api/technical/routes/route-1/revisions/rev-1/test-runs')
+    const body = JSON.parse(String(testRunCalls()[0].init?.body))
+    expect(body).toMatchObject({ robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'PASS', allStopsReached: true, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 420, failureReason: null, evidenceNote: 'Đã chạy thử.' })
+    expect(body.requestId).toBeTruthy()
+    expect(body.routeName).toBeUndefined()
+    expect(body.routeId).toBeUndefined()
+    await waitFor(() => expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã ghi chạy thử đạt: Tuyến thư viện'))
+  })
+
+  it('requires a reason and a failed observation for a failed run', async () => {
+    await openRouteTest()
+    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAIL' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch điểm 2.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(testRunCalls()).toHaveLength(1))
+    expect(JSON.parse(String(testRunCalls()[0].init?.body))).toMatchObject({ resultCode: 'FAIL', failureReason: 'Lệch điểm 2.', allStopsReached: false })
+  })
+
+  it('shows a refused robot beside its field and retries with the same request id', async () => {
+    routeRefusal = { status: 409, body: { message: 'x', errors: { code: 'MAP_NOT_CURRENTLY_DEPLOYED', fields: null } } }
+    await openRouteTest()
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Localization đạt']) fireEvent.click(screen.getByLabelText(label))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    expect(await screen.findByText(/phải đạt trên đúng bản đồ và checksum/)).toBeInTheDocument()
+    routeRefusal = null
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))
+    await waitFor(() => expect(testRunCalls()).toHaveLength(2))
+    expect(JSON.parse(String(testRunCalls()[1].init?.body)).requestId).toBe(JSON.parse(String(testRunCalls()[0].init?.body)).requestId)
+  })
+
+  it('lists recorded runs read-only and lets a new run be added', async () => {
+    const run = { id: 'run-1', robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 300, failureReason: 'Lệch điểm 2.', evidenceNote: 'Lần một.', checkedAt: '2026-10-30T10:00:00Z' }
+    routeCatalog = [{ ...routeFixture, verificationStatus: 'FAIL' }]
+    routeDetail = { ...routeFixture, verificationStatus: 'FAIL', testRuns: [run], effectiveTestRunId: 'run-1' }
+    renderPage(<TechnicalConfirmationsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Không đạt\s*1/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem kết quả Tuyến thư viện' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(await dialog.findByText(/Lần một/)).toBeInTheDocument()
+    expect(dialog.getByText(/Lệch điểm 2/)).toBeInTheDocument()
+    expect(dialog.getByText('Đang áp dụng')).toBeInTheDocument()
+    expect(await dialog.findByText(/Lan Staff/)).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: 'Ghi lần chạy mới' }))
+    expect(await screen.findByLabelText('Staff đi cùng')).toBeInTheDocument()
   })
 })

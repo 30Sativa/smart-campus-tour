@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
-import { technicalApi } from './api/technical'
+import { versionedRoutesApi } from '../administration/routes/versioned-api'
+import { technicalApi, type RouteTestRunInput } from './api/technical'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
   physicalRobots: ['technical', 'physical-robots'] as const,
   poiProposals: ['technical', 'poi-proposals'] as const,
+  routeTests: ['technical', 'route-tests'] as const,
 }
 
 export function useMapVersions() {
@@ -31,6 +33,30 @@ export function usePoiVerificationQueue() {
 export function usePoiHistory(proposalId: string) {
   return useQuery({ queryKey: [...keys.poiProposals, 'history', proposalId], queryFn: () => technicalApi.getPoiHistory(proposalId) })
 }
+
+export function useRouteTestQueue() {
+  return useQuery({ queryKey: [...keys.routeTests, 'queue'], queryFn: technicalApi.listRouteTestQueue })
+}
+
+/** Current revisions, the only place recorded route results can be listed from. */
+export function useSubmittedRoutes() {
+  return useQuery({ queryKey: [...keys.routeTests, 'routes'], queryFn: () => versionedRoutesApi.list() })
+}
+
+export function useRouteRevision(routeId: string, revisionId: string) {
+  return useQuery({ queryKey: [...keys.routeTests, 'detail', revisionId], queryFn: () => versionedRoutesApi.get(routeId, revisionId) })
+}
+
+export function useRouteTestParticipants() {
+  return useQuery({ queryKey: [...keys.routeTests, 'participants'], queryFn: technicalApi.listRouteTestParticipants })
+}
+
+export const useRecordRouteTest = () => useTechnicalMutation(
+  ({ run }: { routeName: string; run: RouteTestRunInput }) => technicalApi.recordRouteTest(run),
+  keys.routeTests,
+  ({ routeName, run }) => run.resultCode === 'PASS'
+    ? { title: `Đã ghi chạy thử đạt: ${routeName}`, detail: 'Đây là bằng chứng thủ công, chưa làm tuyến READY.' }
+    : { tone: 'info', title: `Đã ghi chạy thử không đạt: ${routeName}`, detail: 'Staff cần tạo phiên bản mới nếu phải đổi tuyến.' })
 
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */
 function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput) {

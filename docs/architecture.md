@@ -120,7 +120,9 @@ The former Route catalog create/update/availability/delete operations under
 `/api/staff/manage/routes` and its `/api/admin/routes` alias are retired. New
 authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
 submission and Technical Staff manual test evidence described in
-`backend/docs/route-revisions.md` and ADR-0023. Route stops carry exact
+`backend/docs/route-revisions.md` and ADR-0023. Technical Staff picks the
+participating Staff account from the read-only
+`GET /api/technical/route-verifications/participants`. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
 not pass legacy `PoiId` values. Saving or submitting a revision requires the
 exact map version to have current technical evidence, otherwise 409

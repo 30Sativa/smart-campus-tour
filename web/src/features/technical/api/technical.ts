@@ -1,5 +1,6 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
+import type { VersionedRoute } from '../../administration/routes/versioned-api'
 
 export type MapVersion = {
   id: string
@@ -119,6 +120,13 @@ export type PoiVerification = {
   checkedByUserId: string; checkedAt: string
 }
 
+export type RouteTestParticipant = { userId: string; fullName: string; username: string }
+export type RouteTestRunInput = {
+  routeId: string; revisionId: string; requestId: string; robotCode: string; participatingStaffUserId: string
+  resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
+  measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string
+}
+
 type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
@@ -168,6 +176,10 @@ export const technicalApi = {
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),
+  listRouteTestParticipants: () => apiClient<Envelope<RouteTestParticipant[]>>('/api/technical/route-verifications/participants').then(response => response.data ?? []),
+  recordRouteTest: ({ routeId, revisionId, ...input }: RouteTestRunInput) =>
+    apiClient<Envelope<VersionedRoute>>(`/api/technical/routes/${routeId}/revisions/${revisionId}/test-runs`, { method: 'POST', json: input }).then(response => response.data!),
   verifyPoi: (input: {
     proposalId: string
     revisionNumber: number

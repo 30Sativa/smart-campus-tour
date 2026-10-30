@@ -77,4 +77,26 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
   return Object.keys(mapped).length ? mapped : { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả bốn mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
 }
 
+export type RouteTestErrors = { robotCode?: string; staff?: string; form?: string }
+
+const routeTestConflicts: Record<string, RouteTestErrors> = {
+  MAP_NOT_CURRENTLY_DEPLOYED: { robotCode: 'Lần kiểm tra triển khai mới nhất của robot này phải đạt trên đúng bản đồ và checksum của phiên bản tuyến.' },
+  STAFF_PARTICIPANT_REQUIRED: { staff: 'Người đi cùng phải là tài khoản Staff đang hoạt động. Chọn lại Staff.' },
+  SEPARATE_TEST_ROLES_REQUIRED: { staff: 'Người kiểm tra và Staff đi cùng phải là hai tài khoản khác nhau.' },
+  ROUTE_NOT_SUBMITTED: { form: 'Phiên bản tuyến này chưa được gửi kiểm chứng.' },
+  POI_VERIFICATION_STALE: { form: 'Có POI trong tuyến không còn kết quả đạt. Staff cần tạo phiên bản tuyến mới.' },
+  IDEMPOTENCY_CONFLICT: { form: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.' },
+}
+
+export function routeTestErrors(error: unknown): RouteTestErrors {
+  if (!(error instanceof ApiError)) return { form: errorText(error) }
+  let payload: { errors?: unknown; message?: unknown } = {}
+  try { payload = JSON.parse(error.body) as typeof payload } catch { /* Non-JSON responses use the text below. */ }
+  const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as { code?: unknown } : {}
+  if (typeof errors.code === 'string' && routeTestConflicts[errors.code]) return routeTestConflicts[errors.code]
+  if (error.status === 404 && typeof payload.message === 'string' && payload.message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
+  if (error.status === 400) return { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả ba mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
+  return { form: errorText(error) }
+}
+
 export const stamp =(iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'
