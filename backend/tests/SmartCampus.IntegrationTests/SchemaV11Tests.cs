@@ -272,7 +272,7 @@ public sealed class SchemaV11Tests
 
     public async Task FixedRouteLifecycle_FailThenNewRevisionPass_KeepsEveryVersionAndRun()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.7.sql");
+        await using var db = await TestDatabase.CreateAsync();
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(1)}',N'TechnicalStaff'),('{Id(2)}',N'Staff');");
         var passwordHash = new IdentityPasswordHasher().Hash(RouteAdminPassword);
         await db.ExecuteAsync($"INSERT dbo.Users(Id,Username,NormalizedUsername,PasswordHash,FullName,IsActive,CreatedAt) VALUES('{Id(3)}',N'route.admin',N'ROUTE.ADMIN',N'{passwordHash}',N'Route Test Admin',1,SYSDATETIMEOFFSET()); INSERT dbo.UserRoles(UserId,Role) VALUES('{Id(3)}',N'ADMIN');");
@@ -517,7 +517,7 @@ public sealed class SchemaV11Tests
     }
 
     [SchemaV17Fact]
-    public async Task V11ToV17DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
+    public async Task V11ToV18DatabaseFirstUpgrade_PreservesRowsAndAppliesRuntimeGrants()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot.sql");
         await db.ExecuteAsync("""
@@ -546,6 +546,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql");
         await db.ApplyFileAsync("upgrade-v1.6-to-v1.7-poi-narration.sql");
         await db.ApplyFileAsync("upgrade-v1.6-to-v1.7-poi-narration.sql");
+        await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
+        await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -556,7 +558,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.7", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.8", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
             await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
         Assert.Equal("NULL:NOT_ISSUED", await db.ScalarAsync<string>("SELECT CONCAT(COALESCE(CONVERT(varchar(64),CredentialHash,2),'NULL'),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots WHERE RobotCode=N'upgrade-unissued-empty-hash';"));
