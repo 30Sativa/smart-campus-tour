@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass, labelClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { AdminPage, EmptyState, Notice, SkeletonRows } from '../../features/administration/AdminUi'
@@ -20,6 +21,7 @@ export default function AdminRobotCredentialsPage() {
   const [reason, setReason] = useState('')
   const [selectedRobot, setSelectedRobot] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false)
   const audit = useQuery({
     queryKey: ['admin', 'robot-credential-audit', filters, page],
     queryFn: () => {
@@ -65,11 +67,12 @@ export default function AdminRobotCredentialsPage() {
       {credential.isError && <p role="alert" className="px-4 pb-3 text-sm text-red-700">{errorText(credential.error)}</p>}
       {credential.data?.status === 'ACTIVE' && <div className="flex flex-wrap items-end gap-3 px-4 pb-4">
         <div className="min-w-64 flex-1"><label className={labelClass} htmlFor="admin-revoke-reason">Lý do thu hồi (bắt buộc)</label><input id="admin-revoke-reason" className={`${inputClass} mt-1`} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></div>
-        <button type="button" className={buttonClass('danger')} disabled={revoke.isPending || !reason.trim()} onClick={() => { if (window.confirm('Thu hồi ngay khóa của robot này? MiniPC sẽ mất kết nối.')) revoke.mutate() }}>Thu hồi khóa</button>
+        <button type="button" className={buttonClass('danger')} disabled={revoke.isPending || !reason.trim()} onClick={() => setConfirmingRevoke(true)}>Thu hồi khóa</button>
       </div>}
       {revoke.isPending && <p role="status" className="px-4 pb-3 text-sm">Đang thu hồi…</p>}
       {actionError && <p role="alert" className="px-4 pb-3 text-sm text-red-700">{actionError}</p>}
     </section>
+    {confirmingRevoke && <ConfirmationDialog open withReason={false} tone="danger" title={`Thu hồi khóa của ${selectedRobot}?`} description="MiniPC sẽ mất kết nối ngay. Technical Staff cần cấp khóa mới riêng." confirmLabel="Thu hồi khóa" onConfirm={() => { setConfirmingRevoke(false); revoke.mutate() }} onCancel={() => setConfirmingRevoke(false)} />}
     <section className={panelClass} aria-label="Bộ lọc nhật ký khóa robot">
       <div className="grid gap-3 border-b border-[#eef1f4] p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div><label className={labelClass} htmlFor="audit-action">Thao tác</label><select id="audit-action" className={`${inputClass} mt-1`} value={filters.action} onChange={event => { setFilters(value => ({ ...value, action: event.target.value })); setPage(1) }}><option value="">Tất cả</option><option value="ROBOT_CREDENTIAL_ISSUED">Cấp khóa</option><option value="ROBOT_CREDENTIAL_ROTATED">Cấp lại</option><option value="ROBOT_CREDENTIAL_REVOKED">Thu hồi</option></select></div>
