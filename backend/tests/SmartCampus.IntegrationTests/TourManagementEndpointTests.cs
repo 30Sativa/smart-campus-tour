@@ -333,7 +333,8 @@ public sealed class TourManagementEndpointTests
         public DateTimeOffset Now { get; } = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
         public TourInput Input() => new("SQL Tour", null, Route.Id, Now.AddDays(10), null);
-        public CreateTourInput CreateInput() => new("SQL Tour", null, Guid.NewGuid(), "no-such-robot", AdminId, Now.AddDays(10), null);
+        public CreateTourInput CreateInput() => new("SQL Tour", null, Guid.NewGuid(), "no-such-robot", AdminId,
+            TourSchedule.SlotStart(DateOnly.FromDateTime(Now.UtcDateTime).AddDays(10), new TimeOnly(9, 0)), null);
         public CreateTourRequest CreateRequest() => new(Guid.NewGuid(), CreateInput());
         public static async Task<Fixture> Create()
         {

@@ -85,7 +85,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
             ParticipatingStaffUserId = q.ParticipatingStaffUserId, ResultCode = result, AllStopsReached = q.AllStopsReached,
             SafelyStopped = q.SafelyStopped, LocalizationPassed = q.LocalizationPassed, MeasuredDurationSeconds = q.MeasuredDurationSeconds,
             FailureReason = string.IsNullOrWhiteSpace(q.FailureReason) ? null : q.FailureReason.Trim(), EvidenceNote = q.EvidenceNote.Trim(),
-            RequestId = q.RequestId, RequestHash = hash, CheckedAt = now };
+            RequestId = q.RequestId, RequestHash = hash, CheckedAt = now, MeasurementBasis = RouteMeasurementBasis.TotalWithDwell };
         repo.Add(run);
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, RobotId = robot.Id, Action = result == "PASS" ? "ROUTE_TEST_PASSED" : "ROUTE_TEST_FAILED",
             EntityType = "RouteRevision", EntityId = revision.Id.ToString("D"), ResultCode = result, OccurredAt = now,
@@ -94,7 +94,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
         var testView = new RouteTestRunView(run.Id, run.RouteRevisionId, run.MapVersionId,
             Convert.ToHexString(run.MapPackageSha256).ToLowerInvariant(), robot.RobotCode, run.CheckedByUserId,
             run.ParticipatingStaffUserId, run.ResultCode, run.AllStopsReached, run.SafelyStopped,
-            run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt);
+            run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt, run.MeasurementBasis);
         return view with { VerificationStatus = result, EffectiveTestRunId = run.Id, TestRuns = [.. view.TestRuns, testView] };
     }
 }

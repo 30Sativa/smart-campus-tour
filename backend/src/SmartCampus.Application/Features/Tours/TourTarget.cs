@@ -7,13 +7,11 @@ using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours;
 
-/// <summary>Resolves what a new Tour runs on and reserves (ADR-0034).</summary>
+/// <summary>Resolves what a new Tour runs on and reserves (ADR-0034, ADR-0035).</summary>
 internal static class TourTarget
 {
-    public static readonly TimeSpan ReservationBuffer = TimeSpan.FromMinutes(15);
-
     public static async Task<(RouteRevision Revision, RouteTestRunView Run)> RequireTestedRevisionAsync(
-        IRouteRevisionRepository revisions, IMapVersionRepository maps, Guid revisionId, CancellationToken ct)
+        IRouteRevisionRepository revisions, IMapVersionRepository maps, Guid revisionId, bool lockMap, CancellationToken ct)
     {
         var revision = await revisions.FindRevisionAsync(revisionId, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
@@ -27,9 +25,21 @@ internal static class TourTarget
             throw new ConflictException("Có POI trong tuyến không còn kết quả đạt.", "POI_VERIFICATION_STALE");
         var map = await maps.FindMapVersionAsync(revision.MapVersionId, includePackage: false, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
-        await maps.LockMapPreparationStateAsync(map.Id, ct);
+        if (lockMap) await maps.LockMapPreparationStateAsync(map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(maps, map, ct)).EnsureCanUse();
         return (revision, run);
+    }
+
+    /// <summary>Null when the effective run predates the measurement definition, so it cannot size a reservation.</summary>
+    public static async Task<TourReservationPlan?> PlanReservationAsync(IRouteRevisionRepository revisions, Guid revisionId,
+        RouteTestRunView run, CancellationToken ct)
+    {
+        if (run.MeasurementBasis != RouteMeasurementBasis.TotalWithDwell) return null;
+        // The run may belong to an earlier revision with the same navigation and different dwell.
+        var tested = await revisions.GetStopsAsync(run.RouteRevisionId, ct);
+        var target = await revisions.GetStopsAsync(revisionId, ct);
+        return new(run.MeasuredDurationSeconds, TourSchedule.ExpectedDurationSeconds(run.MeasuredDurationSeconds,
+            tested.Select(stop => (stop.StopOrder, stop.DwellSeconds)), target.Select(stop => (stop.StopOrder, stop.DwellSeconds))));
     }
 
     public static async Task RequireOperatorAsync(IRouteRevisionRepository revisions, Guid userId, CancellationToken ct)

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { routeKeys } from '../routes/hooks'
 import { versionedRoutesApi } from '../routes/versioned-api'
 import { toursApi } from './api/tours'
+import { dayEnd, dayStart } from './tour-calendar'
 import type { CreateTourInput, TourInput, TourListQuery } from './types'
 
 // Separate from the labelled Tour demo's ['admin', 'tours'] cache; never used as its fallback.
@@ -9,6 +10,7 @@ export const tourKeys = {
   all: ['admin', 'tour-management'] as const,
   list: (query: TourListQuery) => ['admin', 'tour-management', 'list', query] as const,
   detail: (id: string) => ['admin', 'tour-management', 'detail', id] as const,
+  slots: ['admin', 'tour-management', 'slots'] as const,
 }
 
 export function newRequestId(): string {
@@ -17,6 +19,16 @@ export function newRequestId(): string {
 
 export function useTours(query: TourListQuery) {
   return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query) })
+}
+const CALENDAR_SIZE = 100
+/** The live Tours of a campus date range, with their robot holds. */
+export function useTourCalendar(from: string, to: string) {
+  return useTours({ from: dayStart(from), to: dayEnd(to), sort: 'scheduledStartAt', page: 1, size: CALENDAR_SIZE })
+}
+/** Availability of one campus date. Refreshed when a create is refused, because a slot was taken meanwhile. */
+export function useTourSlots(routeRevisionId: string, robotCode: string, date: string) {
+  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date),
+    enabled: Boolean(routeRevisionId && robotCode && date), retry: false })
 }
 export function useTour(id: string | undefined) {
   return useQuery({ queryKey: tourKeys.detail(id ?? ''), queryFn: () => toursApi.get(id!), enabled: Boolean(id), refetchOnWindowFocus: false })
@@ -36,8 +48,9 @@ function useInvalidateTours() {
 }
 export function useCreateTour() {
   const onSuccess = useInvalidateTours()
+  const client = useQueryClient()
   return useMutation({ mutationFn: ({ requestId, input }: { requestId: string; input: CreateTourInput }) =>
-    toursApi.create(requestId, input), onSuccess })
+    toursApi.create(requestId, input), onSuccess, onError: () => client.invalidateQueries({ queryKey: tourKeys.slots }) })
 }
 export function useUpdateTour() {
   const onSuccess = useInvalidateTours()

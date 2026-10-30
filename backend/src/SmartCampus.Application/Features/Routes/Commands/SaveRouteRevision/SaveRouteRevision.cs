@@ -159,7 +159,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             await repo.GetRobotCodeAsync(inheritedRun.RobotId, ct) ?? "", inheritedRun.CheckedByUserId,
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
-            inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt)];
+            inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis)];
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,

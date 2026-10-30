@@ -48,10 +48,11 @@ source exists and row/email decisions can be rechecked.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
+| GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days). Per day and configured slot: `available`, or `reasonCode` (`LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
-| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
+| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be a configured slot (409 `TOUR_SLOT_NOT_ALLOWED`) at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
 
@@ -146,14 +147,16 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.9; the current snapshot
+The backend persistence baseline has advanced through v1.10; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
 plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
 and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
-`backend/database/smart-campus-tour-schema-v1.9.sql`.
+`backend/database/smart-campus-tour-schema-v1.8.sql`, Tours on a tested revision in
+`backend/database/smart-campus-tour-schema-v1.9.sql`, and scheduling inputs in
+`backend/database/smart-campus-tour-schema-v1.10.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and

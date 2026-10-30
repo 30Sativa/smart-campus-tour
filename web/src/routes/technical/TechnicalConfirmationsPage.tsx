@@ -156,7 +156,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className={labelClass} htmlFor="route-test-result">Kết quả</label><select id="route-test-result" className={`${inputClass} mt-1`} value={resultCode} onChange={event => { setResultCode(event.target.value as 'PASS' | 'FAIL'); changed() }}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
-          <div><label className={labelClass} htmlFor="route-test-duration">Thời gian đo được (giây)</label><input id="route-test-duration" className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /></div>
+          <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm.</p></div>
         </div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
@@ -185,7 +185,7 @@ function RouteResultModal({ route, onRecord, onClose }: { route: VersionedRoute;
         {detail.isError && <div role="alert" className="space-y-2 text-sm text-[#b23e31]"><p>{errorText(detail.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void detail.refetch()}>Tải lại kết quả</button></div>}
         {runs.map(run => <section key={run.id} aria-label={`Lần chạy ${stamp(run.checkedAt)}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
           <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={run.resultCode === 'PASS' ? 'ok' : 'danger'}>{run.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="text-xs text-[#64748b]">{stamp(run.checkedAt)}</span>{run.id === detail.data?.effectiveTestRunId && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
-          <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)} · đo được {run.measuredDurationSeconds} giây</p>
+          <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{run.robotCode}</span> · Staff đi cùng: {staffName(run.participatingStaffUserId)} · đo được {run.measuredDurationSeconds} giây{run.measurementBasis ? '' : ' (đo theo định nghĩa cũ, cần chạy thử lại trước khi tạo Tour)'}</p>
           <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-3">{[['Đi đủ các điểm dừng', run.allStopsReached], ['Dừng an toàn', run.safelyStopped], ['Localization', run.localizationPassed]].map(([label, passed]) => <li key={String(label)}>{passed ? 'Đạt' : 'Chưa đạt'}: {label}</li>)}</ul>
           {run.failureReason && <p className="mt-2"><span className="font-medium">Lý do:</span> {run.failureReason}</p>}
           <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {run.evidenceNote}</p>

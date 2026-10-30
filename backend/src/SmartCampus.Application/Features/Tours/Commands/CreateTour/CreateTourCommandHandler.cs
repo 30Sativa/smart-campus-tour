@@ -7,7 +7,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Tours.Commands.CreateTour;
 
 public sealed class CreateTourCommandHandler(ITourManagementRepository repository, IRouteRevisionRepository revisions,
-    IMapVersionRepository maps, TimeProvider clock) : IRequestHandler<CreateTourCommand, TourMutationResult>
+    IMapVersionRepository maps, TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<CreateTourCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(CreateTourCommand command, CancellationToken ct)
     {
@@ -16,17 +16,19 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId, "TOUR_CREATED", null, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
         TourPreparation.RequireFuture(input.ScheduledStartAt, clock.GetUtcNow());
-        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, ct);
+        if (!TourSchedule.IsConfiguredSlot(settings, input.ScheduledStartAt))
+            throw new ConflictException("Giờ bắt đầu không nằm trong các khung giờ được phép.", "TOUR_SLOT_NOT_ALLOWED");
+        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockMap: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var robot = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         await repository.LockRobotReservationsAsync(robot.Id, ct);
-        var startsAt = input.ScheduledStartAt - TourTarget.ReservationBuffer;
-        var endsAt = input.ScheduledStartAt + TimeSpan.FromSeconds(run.MeasuredDurationSeconds) + TourTarget.ReservationBuffer;
-        if (await repository.HasActiveReservationOverlapAsync(robot.Id, startsAt, endsAt, ct))
-            throw new ConflictException("Robot đã có Tour khác trong khung giờ này.", "ROBOT_RESERVATION_CONFLICT");
+        var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
+        var (startsAt, endsAt) = TourSchedule.Window(input.ScheduledStartAt, plan?.ExpectedDurationSeconds ?? run.MeasuredDurationSeconds);
+        // Decided after the robot lock, on a fresh clock, so a slot taken while waiting is seen.
         var now = clock.GetUtcNow();
-        TourPreparation.RequireFuture(input.ScheduledStartAt, now);
+        TourSchedule.EnsureUsable(TourSchedule.Evaluate(input.ScheduledStartAt, now, plan,
+            await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct)));
         var tour = new Tour
         {
             Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, RouteId = revision.RouteId,
@@ -38,7 +40,8 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         repository.Add(new TourRobotReservation
         {
             Id = Guid.NewGuid(), TourId = tour.Id, RobotId = robot.Id, RouteTestRunId = run.Id,
-            MeasuredDurationSeconds = run.MeasuredDurationSeconds, StartsAt = startsAt, EndsAt = endsAt,
+            MeasuredDurationSeconds = plan!.MeasuredDurationSeconds, ExpectedDurationSeconds = plan.ExpectedDurationSeconds,
+            StartsAt = startsAt, EndsAt = endsAt,
             ReservedByUserId = command.Actor, ReservedAt = now
         });
         TourRequestReceipt.Append(repository, tour, command.Actor, command.Request.RequestId, "TOUR_CREATED", fingerprint, now,

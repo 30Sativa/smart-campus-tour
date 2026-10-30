@@ -11,11 +11,13 @@ export type CreateTourInput = {
   operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
-export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; releasedAt: string | null }
+export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
   id: string; name: string; description: string | null; routeId: string; routeName: string; activeRouteId: string
   scheduledStartAt: string; state: TourState; createdByUserId: string; createdAt: string; updatedAt: string | null
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
+  /** The active robot hold. Null for a legacy Tour and once a Tour is cancelled. */
+  reservation?: TourReservation | null
 }
 export type TourDetails = {
   tour: TourSummary
@@ -26,4 +28,13 @@ export type TourDetails = {
   usage: { hasRegistrations: boolean; hasAllowedBranches: boolean; hasOperationalHistory: boolean; hasRobotOwnership: boolean }
   permissions: { canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean }
 }
-export type TourListQuery = { search?: string; state?: TourState; page: number; size: number }
+export type TourListQuery = { search?: string; state?: TourState; from?: string; to?: string; sort?: string; page: number; size: number }
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+export type TourSlot = {
+  time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null
+  reservationStartsAt: string | null; reservationEndsAt: string | null; registrationClosesAt: string
+}
+export type TourSlots = {
+  routeRevisionId: string; robotCode: string; measuredDurationSeconds: number | null; expectedDurationSeconds: number | null
+  days: { date: string; slots: TourSlot[] }[]
+}

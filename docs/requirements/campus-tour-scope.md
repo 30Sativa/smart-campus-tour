@@ -124,7 +124,10 @@ tested path duration + 15 minutes after. Overlaps are rejected; route/time
 changes rerun reservation and exact-version checks.
 Assign a Staff Operator explicitly. READY is not physical safety proof.
 Until an approved content/audio duration exists, the tested path duration is the
-effective PASS run of the exact route revision (ADR-0034, interim). Time, route
+effective PASS run of the exact route revision (ADR-0034, interim), counted as the
+whole run including dwell, plus any dwell the revision adds. A Tour starts on a
+configured slot, at least 72 hours ahead; registration still closes 48 hours
+before the start (ADR-0035). Time, route
 and robot changes on a created Tour mean cancelling and recreating it.
 Start is requested while READY at/after published time, validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the

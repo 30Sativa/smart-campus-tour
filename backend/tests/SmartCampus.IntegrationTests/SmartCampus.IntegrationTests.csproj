@@ -34,6 +34,7 @@
     <None Include="..\..\database\smart-campus-tour-schema-v1.7.sql" Link="Schema\snapshot-v1.7.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.8.sql" Link="Schema\snapshot-v1.8.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.9.sql" Link="Schema\snapshot-v1.9.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.10.sql" Link="Schema\snapshot-v1.10.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.2-to-v1.3-route-revisions.sql" Link="Schema\upgrade-v1.2-to-v1.3-route-revisions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.3-to-v1.4-row-registration.sql" Link="Schema\upgrade-v1.3-to-v1.4-row-registration.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" Link="Schema\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" CopyToOutputDirectory="PreserveNewest" />
@@ -41,6 +42,7 @@
     <None Include="..\..\database\patches\upgrade-v1.6-to-v1.7-poi-narration.sql" Link="Schema\upgrade-v1.6-to-v1.7-poi-narration.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.7-to-v1.8-robot-map-assignment.sql" Link="Schema\upgrade-v1.7-to-v1.8-robot-map-assignment.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.8-to-v1.9-tour-route-revision.sql" Link="Schema\upgrade-v1.8-to-v1.9-tour-route-revision.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.9-to-v1.10-tour-scheduling.sql" Link="Schema\upgrade-v1.9-to-v1.10-tour-scheduling.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-route-revision-permissions.sql" Link="Schema\route-revision-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.1-to-v1.2-map-poi.sql" Link="Schema\upgrade-v1.1-to-v1.2-map-poi.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\add-poi-rowversion-v1.1.sql" Link="Schema\add-poi-rowversion-v1.1.sql" CopyToOutputDirectory="PreserveNewest" />

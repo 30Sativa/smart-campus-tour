@@ -17,7 +17,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         t.Id, t.Name, t.Description, t.RouteId, t.Route.Name, t.ActiveRouteId, t.ScheduledStartAt,
         t.State, t.CreatedByUserId, t.CreatedAt, t.UpdatedAt, Convert.ToBase64String(t.RowVersion),
         t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.Invitation != null),
-        t.RouteRevisionId);
+        t.RouteRevisionId, t.TourRobotReservations.Where(r => r.ReleasedAt == null)
+            .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
+                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds)).FirstOrDefault());
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {
@@ -84,9 +86,10 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             """, ct);
     }
 
-    public Task<bool> HasActiveReservationOverlapAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct) =>
-        db.TourRobotReservations.AsNoTracking().AnyAsync(r => r.RobotId == robotId && r.ReleasedAt == null &&
-            r.StartsAt < endsAt && r.EndsAt > startsAt, ct);
+    public async Task<IReadOnlyList<TourReservationHold>> GetActiveReservationsAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct) =>
+        await db.TourRobotReservations.AsNoTracking().Where(r => r.RobotId == robotId && r.ReleasedAt == null &&
+            r.StartsAt < endsAt && r.EndsAt > startsAt).OrderBy(r => r.StartsAt)
+            .Select(r => new TourReservationHold(r.Tour.Name, r.StartsAt, r.EndsAt)).ToArrayAsync(ct);
 
     public Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct) =>
         db.TourRobotReservations.SingleOrDefaultAsync(r => r.TourId == id && r.ReleasedAt == null, ct);
@@ -99,7 +102,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         // A cancelled Tour shows the reservation it released, the newest row by time.
         var reservation = await db.TourRobotReservations.AsNoTracking().Where(r => r.TourId == id)
             .OrderByDescending(r => r.ReservedAt).ThenBy(r => r.Id)
-            .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt))
+            .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
+                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds))
             .FirstOrDefaultAsync(ct);
         return new(operatorUser, reservation);
     }

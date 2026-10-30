@@ -85,7 +85,8 @@ public sealed class AccountConcurrencyTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:DefaultConnection"] = connection,
-            ["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey
+            ["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey,
+            ["Tours:StartSlots:0"] = "09:00"
         }).Build();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddInfrastructure(configuration);

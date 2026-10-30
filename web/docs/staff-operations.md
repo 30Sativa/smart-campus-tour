@@ -68,7 +68,7 @@ reason). A disabled button always prints its reason. The screen never decides.
 |---|---|---|
 | `/staff` | Tổng quan vận hành — counts, the running session (state, step, POI, data age, pending command), "Cần xử lý", today's sessions, the robot | §11.1 Dashboard |
 | `/staff/tours` | Buổi hôm nay — sessions with groups and one next step each | §11 "xem các đoàn đăng ký" |
-| `/staff/schedule` | Lịch buổi — any day | S-01 |
+| `/staff/schedule` | Lịch buổi — any day, live Tours and robot holds from `/api/staff/manage/tours`, not the mock | S-01 |
 | `/staff/tours/:id` | Chi tiết & nhật ký — info, groups & rosters, route progress, full log | §11.1 "Chi tiết/log phiên", §12.7 |
 | `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu — server device checks, 3 on-site confirmations, preview, Start | §5.3 |
 | `/staff/live[/:id]` | Điều hành trực tiếp — Operational Twin, trạng thái phiên, điều khiển & phục hồi, lộ trình và nhật ký. Telemetry chi tiết nằm ở `/staff/robot`; preview nằm trong bước kiểm tra trước khi bắt đầu. | §4.2, §11, §12 |

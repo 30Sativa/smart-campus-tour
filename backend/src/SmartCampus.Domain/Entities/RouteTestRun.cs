@@ -43,6 +43,8 @@ public partial class RouteTestRun
 
     public DateTimeOffset CheckedAt { get; set; }
 
+    public string? MeasurementBasis { get; set; }
+
     public virtual User CheckedByUser { get; set; } = null!;
 
     public virtual MapDeploymentCheck MapDeploymentCheck { get; set; } = null!;
