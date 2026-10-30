@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, KeyRound, RotateCcw, ShieldAlert } from 'lucide-react'
 import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
-import { Drawer } from '../../components/ui/Drawer'
+import { Modal } from '../../components/ui/Drawer'
 import { errorText, stamp } from '../../features/technical/technical-format'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
 
@@ -44,7 +44,7 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
     } finally { setPending(false) }
   }
 
-  return <Drawer open title={`Khóa Fleet Sync · ${robotCode}`} description="Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại." onClose={clearAndClose}
+  return <Modal open title={`Khóa Fleet Sync · ${robotCode}`} description="Quản lý khóa của robot. Bí mật chỉ xuất hiện trong phản hồi cấp hoặc cấp lại." onClose={clearAndClose}
     footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={clearAndClose}>Đóng</button></div>}>
     {credential.isPending ? <p role="status" className="p-4">Đang tải trạng thái khóa…</p> : credential.isError ? <div role="alert" className="p-4 text-sm text-red-700">{errorText(credential.error)} <button className="underline" onClick={() => void credential.refetch()}>Thử lại</button></div> : credential.data && <div className="space-y-4">
       <section className="rounded-lg border border-slate-200 p-3 text-sm">
@@ -67,5 +67,5 @@ export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string
         <button type="button" className={`${buttonClass('secondary', 'sm')} ml-2 mt-2`} onClick={() => setOneTimeSecret(null)}>Đã lưu, xóa khỏi màn hình</button>
       </div>}
     </div>}
-  </Drawer>
+  </Modal>
 }

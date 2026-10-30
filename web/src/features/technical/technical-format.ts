@@ -1,4 +1,12 @@
 import { ApiError } from '../../api/client'
+import type { PhysicalRobotConnectionStatus } from './api/technical'
+
+export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
+  UNCONFIRMED: 'Chưa xác nhận kết nối',
+  CONNECTED: 'Đã xác nhận · Đang kết nối',
+  DISCONNECTED: 'Đã xác nhận · Mất kết nối',
+  AWAITING_DATA: 'Đã xác nhận · Chưa nhận dữ liệu',
+})[status]
 
 export function errorText(error: unknown) {
   if (error instanceof ApiError && error.body) {
@@ -35,4 +43,38 @@ export function mapUploadFieldErrors(error: unknown): { areaKey?: string; areaNa
   }
 }
 
-export const stamp = (iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'
+export type PoiVerifyErrors = { robotCode?: string; reason?: string; evidenceNote?: string; form?: string }
+
+const poiVerifyConflicts: Record<string, PoiVerifyErrors> = {
+  MAP_NOT_DEPLOYED: { robotCode: 'Robot này chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản map của POI. Ghi kết quả kiểm tra map cho robot trước rồi thử lại.' },
+  STALE_VERSION: { form: 'POI vừa được Staff thay đổi. Đóng cửa sổ này và mở lại để kiểm tra revision mới nhất.' },
+  IDEMPOTENCY_CONFLICT: { form: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.' },
+}
+
+/**
+ * Vietnamese, field-level text for a refused POI result. The handler's own
+ * PASS/FAIL rule refusals reach the wire as the generic 400 with an empty
+ * `errors` map, so that case can only be explained by restating the rule.
+ */
+export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
+  if (!(error instanceof ApiError)) return { form: errorText(error) }
+  let payload: { message?: unknown; errors?: unknown } = {}
+  try { payload = JSON.parse(error.body) as typeof payload } catch { /* Non-JSON responses use the status below. */ }
+  const message = typeof payload.message === 'string' ? payload.message : ''
+  const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as Record<string, unknown> : {}
+  if (error.status === 409) {
+    if (typeof errors.code === 'string' && poiVerifyConflicts[errors.code]) return poiVerifyConflicts[errors.code]
+    if (message.includes('already exists')) return { form: 'Revision này đã có kết quả kiểm chứng. Đóng cửa sổ này để tải lại danh sách.' }
+  }
+  if (error.status === 404 && message.toLowerCase().includes('robot')) return { robotCode: 'Robot này không còn trong danh sách đã đăng ký. Chọn robot khác.' }
+  if (error.status !== 400) return { form: errorText(error) }
+  const mapped: PoiVerifyErrors = {}
+  for (const field of Object.keys(errors).map(name => name.toLowerCase())) {
+    if (field.includes('robotcode')) mapped.robotCode = 'Chọn robot vật lý đã kiểm tra.'
+    else if (field.includes('evidencenote')) mapped.evidenceNote = 'Nhập ghi chú bằng chứng, tối đa 2000 ký tự.'
+    else if (field.includes('reason')) mapped.reason = 'Lý do không đạt tối đa 1000 ký tự.'
+  }
+  return Object.keys(mapped).length ? mapped : { form: 'Máy chủ từ chối kết quả này. Đạt cần đủ cả bốn mục; Không đạt cần lý do và ít nhất một mục chưa đạt.' }
+}
+
+export const stamp =(iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'

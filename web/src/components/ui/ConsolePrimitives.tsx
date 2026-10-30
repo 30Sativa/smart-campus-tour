@@ -230,7 +230,7 @@ const STAT_TONE = { info: 'text-[#2563eb]', danger: 'text-[#b23e31]', warn: 'tex
  * card per number: the eye reads across one row, and the page keeps its cards
  * for content. `tone` only colours the figure when it asks for work (>0).
  */
-export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: string; icon: LucideIcon; label: string; value: ReactNode; hint?: string; tone?: keyof typeof STAT_TONE }) {
+export function StatTile({ to, onClick, pressed, icon: Icon, label, value, hint, tone }: { to?: string; onClick?: () => void; pressed?: boolean; icon: LucideIcon; label: string; value: ReactNode; hint?: string; tone?: keyof typeof STAT_TONE }) {
   const active = tone && typeof value === 'number' && value > 0
   const body = (
     <>
@@ -240,6 +240,7 @@ export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: st
     </>
   )
   const shape = 'block min-w-0 bg-white px-3.5 py-2.5'
+  if (onClick) return <button type="button" onClick={onClick} aria-pressed={pressed} className={`${shape} w-full cursor-pointer text-left transition-[background-color,box-shadow] duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${pressed ? 'shadow-[inset_0_-2px_0_#2d719e]' : ''}`}>{body}</button>
   if (!to) return <div className={shape}>{body}</div>
   return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9]`}>{body}</Link>
 }
