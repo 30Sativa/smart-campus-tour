@@ -13,7 +13,7 @@ const clients: QueryClient[] = []
 const requests: URL[] = []
 let failRegistrations = false
 const proposal = (id: string, mapVersionId: string, mapKey: string, name: string): PoiProposal => ({
-  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null,
+  id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null, narrationText: null, fallbackVideoUrl: null,
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 const proposals = [proposal('poi-a', 'map-a', OCCUPANCY_MAPS[0].mapKey, 'Điểm A'), proposal('poi-b', 'map-b', OCCUPANCY_MAPS[1].mapKey, 'Điểm B')]
