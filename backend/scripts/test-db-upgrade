@@ -313,7 +313,7 @@ grep -q 'Database schema is older than v1.8' "$scratch/v14-select-only.log" || {
   cat "$scratch/v14-select-only.log" >&2
   fail 'v1.4 database did not fail the deployment gate with an actionable upgrade requirement.'
 }
-[[ $(all_data) == "$legacy_data_before" && $(runtime_robot_permissions) == 10000000 ]] ||
+[[ $(all_data) == "$legacy_data_before" && $(runtime_robot_permissions) == 10000000000 ]] ||
   fail 'Failed v1.4 read-only check changed data or Robot grants.'
 upgrade > "$scratch/v14-upgrade.log" 2>&1 || { cat "$scratch/v14-upgrade.log" >&2; fail 'Controlled v1.4-to-v1.5 upgrade/regrant failed.'; }
 grep -q 'applying the additive v1.4-to-v1.5 robot confirmation patch' "$scratch/v14-upgrade.log" ||
