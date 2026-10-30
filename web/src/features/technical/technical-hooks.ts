@@ -28,6 +28,10 @@ export function usePoiVerificationQueue() {
   return useQuery({ queryKey: [...keys.poiProposals, 'verification-queue'], queryFn: () => technicalApi.listPoiVerificationQueue() })
 }
 
+export function usePoiHistory(proposalId: string) {
+  return useQuery({ queryKey: [...keys.poiProposals, 'history', proposalId], queryFn: () => technicalApi.getPoiHistory(proposalId) })
+}
+
 /** Every technical record ends with a notification saying what was written; refusals stay on the form. */
 function useTechnicalMutation<T, R>(run: (input: T) => Promise<R>, invalidate: readonly unknown[], done: (input: T, result: R) => ToastInput) {
   const client = useQueryClient()
