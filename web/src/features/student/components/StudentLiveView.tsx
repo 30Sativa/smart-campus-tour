@@ -6,7 +6,6 @@ import { POI_PROGRESS_LABEL, poiMinutes, poiProgress } from '../student-route'
 import { StudentVideoPlayer } from './StudentVideoPlayer'
 import { Student2DMap } from './Student2DMap'
 import { StudentNarrationBar } from './StudentNarrationBar'
-import { StudentAiAssistant } from './StudentAiAssistant'
 import { useStudentStore, type StudentLiveTab } from '../student-store'
 import '../student.css'
 import '../student-live.css'
@@ -142,7 +141,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
           )}
 
           <div {...panel('ai')}>
-            {ai ?? <StudentAiAssistant poiContext={snapshot.currentPoi?.title} />}
+            {ai}
           </div>
 
           <div {...panel('route')}>

@@ -88,11 +88,6 @@ export function useTourCommand() {
   return useMutation({ mutationFn: ({ tourId, command, reason }: { tourId: string; command: TourCommand; reason?: string }) => api.commandTour(tourId, command, reason), onSuccess })
 }
 
-export function useConfirmRobotReady() {
-  const onSuccess = useStaffInvalidation()
-  return useMutation({ mutationFn: ({ robotId, note }: { robotId: string; note?: string }) => api.confirmRobotReady(robotId, note), onSuccess })
-}
-
 /* ── Realtime ─────────────────────────────────────────────────────────────── */
 
 export type AssistanceNotice = Extract<StaffRealtimeEvent, { type: 'AssistanceRequired' }>

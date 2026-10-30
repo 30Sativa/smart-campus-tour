@@ -72,8 +72,8 @@ reason). A disabled button always prints its reason. The screen never decides.
 | `/staff/tours/:id` | Chi tiết & nhật ký — info, groups & rosters, route progress, full log | §11.1 "Chi tiết/log phiên", §12.7 |
 | `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu — server device checks, 3 on-site confirmations, preview, Start | §5.3 |
 | `/staff/live[/:id]` | Điều hành trực tiếp — Operational Twin, trạng thái phiên, điều khiển & phục hồi, lộ trình và nhật ký. Telemetry chi tiết nằm ở `/staff/robot`; preview nằm trong bước kiểm tra trước khi bắt đầu. | §4.2, §11, §12 |
-| `/staff/robot` | Robot & thiết bị — connection, localization, head, pose age, source label, "confirm ready" after End Early | §8.4, §11.4, §5.4 |
-| `/staff/history` | Lịch sử phiên | S-05 |
+| `/staff/robot` | Robot & thiết bị — physical robots and their connection from `/api/staff/physical-robots` | S-04 |
+| `/staff/history` | Lịch sử phiên — finished and cancelled Tours from `/api/staff/manage/tours` | S-05 |
 | `/staff/digital-twin` | Local six-robot workbench, Physical Twin preparation and separate simulator preview (no sidebar entry) | — |
 
 The physical preparation surface has no production telemetry binding yet.
@@ -128,7 +128,7 @@ src/features/staff/components/        OperationControls, RunStatus, TourTimeline
   POI → once the stream is back, **Chạy lại POI**.
 - Around 110 s a FRONT command fails → **Thử lại FRONT**.
 - T-02 is Ready but the robot is busy: Start stays disabled with the reason.
-  End T-01 early, confirm the robot on `/staff/robot`, then start T-02.
+  End T-01 early, then start T-02.
 - T-03 is Scheduled (1 group waiting for Admin approval). Approve it and Chốt Tour
   as `admin/admin` (`/admin/tours/tour-03`), or Chốt T-05, and Staff can start it.
 

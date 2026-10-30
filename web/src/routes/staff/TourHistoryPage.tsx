@@ -1,102 +1,61 @@
-import { useState, useMemo } from 'react'
-import { useTours } from '../../features/staff/staff-hooks'
+import { useState } from 'react'
+import { Link } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { FilterChips, LoadingPanel, PageHeader, Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
+import { KpiRow, KpiTile } from '../../components/ui/Charts'
+import { rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
+import { formatSlot } from '../../features/administration/admin-format'
+import { toursApi } from '../../features/administration/tours/api/tours'
+import { tourKeys, useTours } from '../../features/administration/tours/hooks'
+import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
+import { useDebouncedValue } from '../../features/administration/use-debounced-value'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { LoadingPanel, PageHeader, Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
-import { Donut, HBars, KpiRow, KpiTile } from '../../components/ui/Charts'
-import { groupSummary } from '../../features/staff/attention'
-import { usePagination } from '../../components/ui/use-pagination'
 
-/** Case- and diacritic-insensitive, so "le quy don" finds "Lê Quý Đôn". */
-const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/[đĐ]/g, 'd').toLowerCase()
-import { TourTable } from '../../features/staff/components/TourParts'
-import { useNow } from '../../features/staff/use-now'
+const PAGE_SIZE = 20
+type Finished = 'COMPLETED' | 'CANCELLED'
 
-/** Tour History: tours from previous days, newest first. Read-only. */
+/** Tours that have finished or were cancelled, from the live Tour list. Read-only. */
 export default function TourHistoryPage() {
-  const tours = useTours({ history: true })
-  const now = useNow(60_000)
+  const [state, setState] = useState<Finished>('COMPLETED')
   const [search, setSearch] = useState('')
-  const list = useMemo(() => tours.data ?? [], [tours.data])
-  const completed = list.filter((t) => t.state === 'Completed').length
-  const cancelled = list.filter((t) => t.state === 'Cancelled').length
-  const students = list.reduce((sum, t) => sum + groupSummary(t).students, 0)
-  const byRoute = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const t of list) counts.set(t.routeName, (counts.get(t.routeName) ?? 0) + 1)
-    const max = Math.max(1, ...counts.values())
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value]) => ({ label, value, max }))
-  }, [list])
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return list
-    const q = fold(search.trim())
-    return list.filter((t) => fold(`${t.name} ${t.code} ${t.routeName} ${t.registrations.map((r) => r.schoolName).join(' ')}`).includes(q))
-  }, [list, search])
-  const paged = usePagination(filtered, 10, search)
+  const [page, setPage] = useState(1)
+  const term = useDebouncedValue(search, 300)
+  const tours = useTours({ search: term, state, sort: '-scheduledStartAt', page, size: PAGE_SIZE })
+  const total = (finished: Finished) => ({ queryKey: [...tourKeys.all, 'history-total', finished], queryFn: () => toursApi.list({ state: finished, page: 1, size: 1 }) })
+  const completed = useQuery(total('COMPLETED')).data?.pagination.totalItems
+  const cancelled = useQuery(total('CANCELLED')).data?.pagination.totalItems
 
   return (
     <StaffPage>
-      <PageHeader
-        eyebrow="Lịch sử"
-        title="Lịch sử tour"
-        description="Lịch sử các buổi tham quan từ xa trước đây. Xem lộ trình thực tế, các mốc thời gian và nhật ký can thiệp kỹ thuật."
-      />
+      <PageHeader eyebrow="Lịch sử" title="Lịch sử tour" description="Các buổi đã kết thúc hoặc đã hủy. Mở một buổi để xem chi tiết." />
 
       <KpiRow label="Tổng hợp lịch sử">
-        <KpiTile label="Buổi trong lịch sử" value={tours.data ? list.length : '-'} />
-        <KpiTile label="Tỉ lệ hoàn thành" value={tours.data && list.length ? `${Math.round((completed / list.length) * 100)}%` : '—'} note={tours.data ? `${completed}/${list.length} buổi` : undefined} />
-        <KpiTile label="Kết thúc sớm / hủy" value={tours.data ? cancelled : '-'} tone={cancelled ? 'danger' : 'plain'} />
-        <KpiTile label="Học sinh đã tham gia" value={tours.data ? students : '-'} note={list.length ? `~${Math.round(students / list.length)} / buổi` : undefined} />
+        <KpiTile label="Đã kết thúc" value={completed ?? '-'} />
+        <KpiTile label="Đã hủy" value={cancelled ?? '-'} tone={cancelled ? 'danger' : 'plain'} />
       </KpiRow>
-
 
       <section className={`${panelClass} mt-4`} aria-label="Lịch sử tour">
         <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách tour lưu trữ</h2>
-          <SearchField value={search} onChange={setSearch} label="Tìm kiếm lịch sử" placeholder="Tìm theo buổi, mã, tuyến hoặc trường…" className="w-full sm:w-72" />
+          <FilterChips label="Kết quả buổi" value={state} onChange={value => { setState(value as Finished); setPage(1) }}
+            options={[{ value: 'COMPLETED', label: TOUR_STATE_LABEL.COMPLETED }, { value: 'CANCELLED', label: TOUR_STATE_LABEL.CANCELLED }]} />
+          <SearchField value={search} onChange={value => { setSearch(value); setPage(1) }} label="Tìm kiếm lịch sử" placeholder="Tìm theo tên buổi hoặc tuyến" />
         </div>
-
-        {tours.isPending ? (
-          <div className="p-4">
-            <LoadingPanel />
-          </div>
-        ) : tours.isError ? (
-          <div className="p-4">
-            <ErrorPanel error={tours.error} onRetry={tours.refetch} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-4">
-            <EmptyPanel>
-              {search.trim() ? 'Không tìm thấy tour nào phù hợp với từ khóa.' : 'Chưa có tour nào trong lịch sử.'}
-            </EmptyPanel>
-          </div>
-        ) : (
-          <>
-            <TourTable tours={paged.rows} now={now} showDate label="Lịch sử tour" />
-            <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang lịch sử tour" />
-          </>
-        )}
+        {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
+          : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
+          : tours.data.data.length === 0 ? <div className="p-4"><EmptyPanel>{term.trim() ? 'Không tìm thấy tour nào phù hợp với từ khóa.' : 'Chưa có tour nào trong lịch sử.'}</EmptyPanel></div>
+          : <>
+            <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left" aria-label="Lịch sử tour">
+              <thead className="border-b border-[#e2e8f0]"><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[#eef1f4]">{tours.data.data.map(tour => <tr key={tour.id} className={rowClass}>
+                <td className={tdClass}><Link to={`/staff/manage/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline">{tour.name}</Link></td>
+                <td className={`${tdClass} whitespace-nowrap`}>{formatSlot(tour.scheduledStartAt)}</td>
+                <td className={tdClass}>{tour.routeName}</td>
+                <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
+              </tr>)}</tbody>
+            </table></div>
+            <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Phân trang lịch sử" />
+          </>}
       </section>
-      {list.length > 0 && !tours.isError && (
-        <details className="mt-5 rounded-xl border border-[#e2e8f0] bg-white p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-[#173b59]">Xem biểu đồ tổng hợp</summary>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <section className={panelClass} aria-label="Kết quả các buổi">
-            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Các buổi kết thúc thế nào</h2>
-            <Donut label="Kết quả các buổi" unit="buổi" parts={[
-              { label: 'Hoàn thành', value: completed, color: '#1f7a55' },
-              { label: 'Kết thúc sớm / hủy', value: cancelled, color: '#b23e31' },
-              { label: 'Khác', value: list.length - completed - cancelled, color: '#cbd5e1' },
-            ]} />
-          </section>
-          <section className={panelClass} aria-label="Buổi theo tuyến">
-            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Buổi theo tuyến</h2>
-            <HBars rows={byRoute} />
-          </section>
-        </div>
-        </details>
-      )}
-
     </StaffPage>
   )
 }

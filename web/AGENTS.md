@@ -24,8 +24,7 @@ shared rules; this file only covers what is specific to `web/`.
   - `/` and public routes: visitor-facing, no login required.
   - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
     SQL GUID Tour links use a personal access code exchanged for a browser
-    session (ADR-0010/0015); non-GUID fixtures retain the labelled group-code
-    mock. There is one shared-viewing row for a
+    session (ADR-0010/0015); any other `/tour` address asks for the email link. There is one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
     Registration submission/pre-approval management is API-backed; see
@@ -147,7 +146,7 @@ web/
     │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
     │   │                  reason, attention, query/realtime hooks and
     │   │                  operation, route, robot and twin components
-    │   └── student/       legacy fixture flow/status plus invitation/ SQL Tour
+    │   └── student/       status plus invitation/ SQL Tour
     │                      cookie entry, session recovery and leave
     ├── components/ui/    multi-feature neutral primitives and shared console
     │                     chrome; tests remain next to their owner
@@ -214,8 +213,7 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
 The current frontend contains a mock Student page at `/tour` and live Representative submission pages at
-`/dai-dien/*`. Student fixture Tours match a group code/name/class; SQL GUID
-Tour links use real code/cookie entry. Representative registration and
+`/dai-dien/*`. SQL GUID Tour links use real code/cookie entry. Representative registration and
 invitation support use SQL and the contract in docs/architecture.md Section 3.2.3.
 The Review 1 target (ADR-0010) instead emails a Tour page link and personal
 access code; entering the code creates a session, and a valid existing session
