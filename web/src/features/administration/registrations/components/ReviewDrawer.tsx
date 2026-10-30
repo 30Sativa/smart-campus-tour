@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../../components/ui/toast-store'
 import { Field } from '../../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../../components/ui/ui-classes'
 import { RosterPreview } from '../../../registrations/RosterPreview'
@@ -45,6 +46,9 @@ export function ReviewDrawer({ id, onClose }: { id: string; onClose: () => void 
       } })
       setConfirm(null)
       setSavedRowId(selected.row.id)
+      notify(selected.action === 'reject'
+        ? { tone: 'info', title: `Đã từ chối ${selected.row.displayName}`, detail: `${reg.summary.groupName} · lý do đã được ghi lại.` }
+        : { title: `Đã chấp nhận ${selected.row.displayName}`, detail: `${reg.summary.groupName} · ${reg.summary.tourName}` })
       setSnapshotRefreshing(true)
       try {
         const refreshed = await query.refetch()

@@ -27,8 +27,10 @@ describe('StaffShell', () => {
   it('lists every page under always-open sections in the order of a working day', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
-    expect(['Trong ngày', 'Điều hành', 'Chuẩn bị Tour', 'Lịch sử'].map((heading) => within(nav).getByText(heading))).toHaveLength(4)
+    expect(['Vận hành', 'Chuẩn bị Tour', 'Lịch sử'].map((heading) => within(nav).getByText(heading))).toHaveLength(3)
     for (const page of STAFF_NAV) expect(within(nav).getByRole('link', { name: new RegExp(page.label) })).toHaveAttribute('href', page.path)
+    expect(within(nav).queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Đăng ký chờ duyệt' })).not.toBeInTheDocument()
     // Nothing folds: no group toggles inside the page list.
     expect(within(nav).queryAllByRole('button', { expanded: false })).toHaveLength(0)
   })

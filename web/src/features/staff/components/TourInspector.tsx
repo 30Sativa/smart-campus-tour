@@ -23,24 +23,25 @@ const STREAM_LABEL: Record<string, string> = { Live: 'Đang phát', Connecting: 
  * Escape, the close button or a click outside closes it (the page owns that,
  * through `useMobileNav`).
  */
-export function TourInspector({ tour, now, open, onClose, panelRef }: {
+export function TourInspector({ tour, now, open, onClose, panelRef, docked = false }: {
   tour?: TourOperation
   now: number
   open: boolean
   onClose: () => void
+  docked?: boolean
   panelRef?: Ref<HTMLElement>
 }) {
   if (!open || !tour) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
-      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none" />
+    <div className={docked ? 'sticky top-20 min-w-0' : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6'}>
+      {!docked && <div aria-hidden="true" onClick={onClose} className="fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none" />}
       <section
         ref={panelRef}
         tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
+        role={docked ? 'complementary' : 'dialog'}
+        aria-modal={docked ? undefined : true}
         aria-label="Chi tiết buổi"
-        className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] outline-none transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none sm:max-h-[calc(100dvh-3rem)]"
+        className={`relative flex w-full flex-col overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white outline-none transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none ${docked ? 'max-h-[calc(100dvh-7rem)] shadow-xs' : 'max-h-[calc(100dvh-1.5rem)] max-w-[880px] shadow-xl sm:max-h-[calc(100dvh-3rem)]'}`}
       >
         <InspectorBody key={tour.id} tour={tour} now={now} onClose={onClose} />
       </section>

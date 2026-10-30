@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import type { TourOperation } from '../../api/contracts/staff'
 import { useTours } from '../../features/staff/staff-hooks'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { FilterChips, LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { TourTable } from '../../features/staff/components/TourParts'
 import { DayGantt } from '../../features/staff/components/DayGantt'
@@ -49,6 +49,7 @@ export default function SchedulePage() {
   const navigate = useNavigate()
   const today = dayKey(new Date())
   const day = params.get('date') ?? today
+  const view = params.get('view') === 'day' || params.get('view') === 'list' ? params.get('view')! : 'week'
   const tours = useTours({ date: day })
   const now = useNow(30_000)
   const monday = weekStart(day)
@@ -71,7 +72,7 @@ export default function SchedulePage() {
       <PageHeader
         eyebrow="Trong ngày"
         title="Lịch tour"
-        description="Mỗi buổi giữ robot 15 phút trước và sau tuyến. Thanh dưới mỗi ngày cho biết robot đã kín lịch bao nhiêu."
+        description="Chọn lịch tuần, lịch theo giờ hoặc danh sách để theo dõi các buổi tham quan."
         action={
           <div className="flex items-center gap-1.5">
             <button type="button" onClick={() => setDay(shift(day, -7))} className={buttonClass('secondary', 'sm')} aria-label="Tuần trước"><ChevronLeft size={15} /></button>
@@ -82,19 +83,23 @@ export default function SchedulePage() {
         }
       />
 
-      <section className={`${panelClass} mb-3`} aria-label="Lịch tuần">
+      <div className="mb-4">
+        <FilterChips label="Chế độ xem lịch" value={view} onChange={value => setParams(current => { const next = new URLSearchParams(current); next.set('view', value); return next }, { replace: true })}
+          options={[{ value: 'week', label: 'Tuần' }, { value: 'day', label: 'Ngày' }, { value: 'list', label: 'Danh sách' }]} />
+      </div>
+      {view === 'week' && <section className={`${panelClass} mb-5`} aria-label="Lịch tuần">
         <div className="flex items-center justify-between border-b border-[#eef1f4] px-3.5 py-2.5">
           <h2 className="text-[13px] font-semibold text-[#0f172a]">Tuần {range(week[0])} – {range(week[6])}</h2>
           <span className="text-[11.5px] text-[#64748b]">bấm một ngày để xem theo giờ</span>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 lg:grid-cols-7">
-          {week.map((key) => <DayCell key={key} day={key} selected={key === day} today={key === today} onPick={() => setDay(key)} />)}
+          {week.map((key) => <DayCell key={key} day={key} selected={key === day} today={key === today} onPick={() => setParams(current => { const next = new URLSearchParams(current); next.set('date', key); next.set('view', 'day'); return next })} />)}
         </div>
-      </section>
+      </section>}
 
-      <section className={panelClass} aria-label={`Lịch tour ${heading}`}>
+      {view !== 'week' && <section className={panelClass} aria-label={`Lịch tour ${heading}`}>
         <div className="flex items-center justify-between gap-3 border-b border-[#eef1f4] px-3.5 py-2.5">
-          <h2 className="text-[13px] font-semibold text-[#0f172a] first-letter:uppercase">{heading} theo giờ{isToday ? ' · hôm nay' : ''}</h2>
+          <h2 className="text-[13px] font-semibold text-[#0f172a] first-letter:uppercase">{heading}{view === 'day' ? ' theo giờ' : ''}{isToday ? ' · hôm nay' : ''}</h2>
           {tours.data && <span className="text-xs text-[#64748b] tabular-nums">{tours.data.length} buổi</span>}
         </div>
         {tours.isPending ? (
@@ -105,13 +110,13 @@ export default function SchedulePage() {
           <div className="p-4"><EmptyPanel>Không có tour nào trong ngày này.</EmptyPanel></div>
         ) : (
           <>
-            <DayGantt tours={tours.data} now={isToday ? now : undefined} onSelect={open} />
-            <div className="border-t border-[#eef1f4]">
+            {view === 'day' && <DayGantt tours={tours.data} now={isToday ? now : undefined} onSelect={open} />}
+            {view === 'list' && <div>
               <TourTable tours={tours.data} now={now} label="Lịch tour" />
-            </div>
+            </div>}
           </>
         )}
-      </section>
+      </section>}
     </StaffPage>
   )
 }
@@ -124,13 +129,13 @@ function DayCell({ day, selected, today, onPick }: { day: string; selected: bool
   const busy = list.filter((tour) => tour.state !== 'Cancelled').reduce((sum, tour) => { const span = tourSpan(tour); return sum + (span.end - span.start) + 30 }, 0)
   const full = Math.min(100, Math.round((busy / DAY_MINUTES) * 100))
   return (
-    <button type="button" onClick={onPick} aria-pressed={selected} aria-label={`${WEEKDAY[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}: ${list.length} buổi, robot kín ${full}%`}
+    <button type="button" onClick={onPick} aria-pressed={selected} aria-label={`${WEEKDAY[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}: ${list.length} buổi, ${tours.isError ? 'không tải được dữ liệu' : tours.isPending ? 'đang tải dữ liệu' : `robot kín ${full}%`}`}
       className={`flex min-h-28 flex-col gap-1 rounded-[10px] border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${selected ? 'border-[#2d719e] bg-[#f1f8fe]' : 'border-[#e2e8f0] bg-white hover:border-[#c9dcec]'}`}>
       <span className="flex items-baseline justify-between">
         <b className={`text-[13px] ${today ? 'text-[#2d719e]' : 'text-[#0f172a]'}`}>{WEEKDAY[date.getDay()]} {date.getDate()}</b>
-        <small className="text-[11px] text-[#64748b]">{tours.isPending ? '…' : `${list.length} buổi`}</small>
+        <small className="text-[11px] text-[#64748b]">{tours.isError ? 'Lỗi tải' : tours.isPending ? '…' : `${list.length} buổi`}</small>
       </span>
-      <span className="h-[5px] overflow-hidden rounded-full bg-[#eef1f4]" aria-hidden="true"><i className="block h-full rounded-full bg-[#7db9db]" style={{ width: `${full}%` }} /></span>
+      <span className="h-[5px] overflow-hidden rounded-full bg-[#eef1f4]" aria-hidden="true" hidden={!tours.data}><i className="block h-full rounded-full bg-[#7db9db]" style={{ width: `${full}%` }} /></span>
       {list.slice(0, 4).map((tour) => {
         const tone = tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance' ? 'assist' : tour.state
         return <span key={tour.id} className={`truncate rounded-[5px] border px-1.5 text-[11px] font-semibold ${CHIP[tone]}`}>{formatTime(tour.scheduledAt)} {tour.code}</span>

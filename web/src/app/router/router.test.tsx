@@ -219,7 +219,7 @@ describe('route table', () => {
       ['/staff/manage/tours/new', /Tạo Tour mới/],
       ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
       ['/staff/manage/registrations', /Tất cả đăng ký/],
-      ['/staff/manage/routes', /Danh sách tuyến versioned/],
+      ['/staff/manage/routes', /Danh mục tuyến/],
       ['/staff/manage', /Tổng quan chuẩn bị/],
     ])('serves %s to Staff', async (path, heading) => {
       signIn('Staff')

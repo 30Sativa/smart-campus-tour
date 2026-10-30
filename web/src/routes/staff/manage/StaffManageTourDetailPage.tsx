@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { formatSlot, formatStamp } from '../../../features/administration/admin-format'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
@@ -32,6 +33,7 @@ export default function StaffManageTourDetailPage() {
       setConfirming(false)
       setRequestId(newRequestId())
       setSuccess('Đã hủy Tour. Lời mời của các đoàn đã bị thu hồi; danh sách đăng ký được giữ lại.')
+      notify({ tone: 'info', title: `Đã hủy Tour “${tour.name}”`, detail: 'Lời mời của các đoàn đã bị thu hồi.' })
     } catch { /* The dialog shows the error and keeps the reason. */ }
   }
 

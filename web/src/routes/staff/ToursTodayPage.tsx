@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
+import { buttonClass } from '../../components/ui/ui-classes'
 import type { TourOperation, TourState } from '../../api/contracts/staff'
 import { useTours } from '../../features/staff/staff-hooks'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { LoadingPanel, PageHeader, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
-import { routeProgress } from '../../features/staff/attention'
 import { formatCountdown, formatTime } from '../../features/staff/formatters'
+import { useMediaQuery } from '../../features/staff/use-media-query'
 import { useNow } from '../../features/staff/use-now'
 import { TODAY_STAGES, byStart, matchesSearch, studentsToday, type TodayFilter } from '../../features/staff/today-board'
 import { TourAgenda } from '../../features/staff/components/TourAgenda'
@@ -37,6 +38,7 @@ export default function ToursTodayPage() {
   const chosen = all.find((tour) => tour.id === askedTour)
   const selected = chosen
   const drawerOpen = Boolean(chosen)
+  const docked = useMediaQuery('(min-width: 1536px)')
 
   const update = useCallback(
     (change: (next: URLSearchParams) => void) =>
@@ -60,8 +62,8 @@ export default function ToursTodayPage() {
       <PageHeader
         eyebrow="Trong ngày"
         title="Buổi hôm nay"
-        description="Bấm một buổi để mở chi tiết ngay giữa màn hình: đoàn, lộ trình, nhật ký và bước tiếp theo."
-        action={tours.data ? <Glance tours={all} now={now} onSelect={select} /> : undefined}
+        description="Chọn một buổi để xem đoàn, lộ trình và thao tác tiếp theo."
+        action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}>Tạo Tour</Link>}
       />
 
       {tours.data && <TodayFigures tours={all} now={now} />}
@@ -71,7 +73,7 @@ export default function ToursTodayPage() {
       ) : tours.isError ? (
         <ErrorPanel error={tours.error} onRetry={tours.refetch} />
       ) : (
-        <div>
+        <div className={docked && drawerOpen ? 'grid items-start gap-5 grid-cols-[minmax(0,1fr)_420px]' : ''}>
           <section className={panelClass} aria-label="Danh sách buổi hôm nay">
             <div className="flex flex-col gap-2 border-b border-[#eef1f4] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
               <StateFilter<TodayFilter>
@@ -100,7 +102,7 @@ export default function ToursTodayPage() {
             )}
           </section>
 
-          <TourInspector tour={selected} now={now} open={drawerOpen} onClose={close} panelRef={panelRef} />
+          <TourInspector tour={selected} now={now} open={drawerOpen} onClose={close} panelRef={panelRef} docked={docked} />
         </div>
       )}
     </StaffPage>
@@ -119,44 +121,5 @@ function TodayFigures({ tours, now }: { tours: TourOperation[]; now: number }) {
       <KpiTile label="Sắp tới" value={next ? formatTime(next.scheduledAt) : '—'} note={next ? `${next.code} · ${formatCountdown(next.scheduledAt, now)}` : 'hết buổi hôm nay'} />
       <KpiTile label="Chưa chốt" value={unready.length} note={unready.map((tour) => tour.code).join(', ') || 'tất cả đã chốt'} tone={unready.length ? 'warn' : 'plain'} />
     </KpiRow>
-  )
-}
-
-/** Running now, next up, and the day in numbers; each opens its session. */
-function Glance({ tours, now, onSelect }: { tours: TourOperation[]; now: number; onSelect: (id: string) => void }) {
-  const running = tours.find((tour) => tour.state === 'Running')
-  const next = tours.find((tour) => (tour.state === 'Ready' || tour.state === 'Scheduled') && new Date(tour.scheduledAt).getTime() >= now)
-  const card = 'min-w-[132px] rounded-xl bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_rgba(16,24,40,0.05)]'
-  const caption = 'block text-[11.5px] font-medium text-[#94a3b8]'
-  const progress = running ? routeProgress(running) : null
-  return (
-    <div className="flex flex-wrap gap-2.5" aria-label="Tóm tắt trong ngày">
-      {running && (
-        <button type="button" onClick={() => onSelect(running.id)} className={`${card} transition-shadow hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_#cbd5e1]`}>
-          <span className={caption}>Đang chạy</span>
-          <span className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold text-[#0f172a]">
-            <span aria-hidden="true" className="size-2 rounded-full bg-[#2563eb]" />
-            {running.code}
-            {progress && <span className="text-xs font-medium text-[#64748b]">· POI {Math.min(progress.done + 1, progress.total)}/{progress.total}</span>}
-          </span>
-        </button>
-      )}
-      {next && (
-        <button type="button" onClick={() => onSelect(next.id)} className={`${card} transition-shadow hover:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_0_0_1px_#cbd5e1]`}>
-          <span className={caption}>Kế tiếp</span>
-          <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-bold text-[#0f172a]">
-            {next.code} · {formatTime(next.scheduledAt)}
-            <span className="text-xs font-medium text-[#64748b]">{formatCountdown(next.scheduledAt, now)}</span>
-          </span>
-        </button>
-      )}
-      <div className={card}>
-        <span className={caption}>Trong ngày</span>
-        <span className="mt-0.5 flex items-baseline gap-1.5 text-[15px] font-bold text-[#0f172a]">
-          {tours.length} buổi
-          <span className="text-xs font-medium text-[#64748b]">· {studentsToday(tours)} học sinh đã duyệt</span>
-        </span>
-      </div>
-    </div>
   )
 }

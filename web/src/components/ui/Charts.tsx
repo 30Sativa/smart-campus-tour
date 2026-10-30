@@ -100,19 +100,19 @@ export function KpiTile({ label, value, note, tone = 'plain', trend, trendColor,
 }) {
   const body = (
     <>
-      <small className="block text-[11.5px] text-[#64748b]">{label}</small>
-      <span className="flex items-baseline gap-1.5">
+      <small className="block text-xs font-medium text-[#475569]">{label}</small>
+      <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <b className="text-[22px] leading-tight font-bold tracking-[-0.02em] text-[#0f172a] tabular-nums">{value}</b>
-        {note && <span className="truncate text-xs text-[#64748b]">{note}</span>}
+        {note && <span className="min-w-0 break-words text-xs text-[#64748b]">{note}</span>}
       </span>
       {trend && <Sparkline values={trend} color={trendColor} />}
     </>
   )
-  const shape = `flex min-w-0 flex-col gap-0.5 rounded-xl border px-3 py-2.5 ${TILE_TONE[tone]}`
+  const shape = `flex min-w-0 flex-col gap-2 rounded-xl border p-4 ${TILE_TONE[tone]}`
   if (!to) return <div className={shape}>{body}</div>
   return <Link to={to} className={`${shape} transition-colors hover:border-[#c9dcec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]`}>{body}</Link>
 }
 
 export function KpiRow({ label, children }: { label: string; children: ReactNode }) {
-  return <section aria-label={label} className="mb-3 grid grid-cols-2 gap-2.5 xl:grid-cols-4">{children}</section>
+  return <section aria-label={label} className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">{children}</section>
 }

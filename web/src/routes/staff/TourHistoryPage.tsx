@@ -43,28 +43,12 @@ export default function TourHistoryPage() {
       />
 
       <KpiRow label="Tổng hợp lịch sử">
-        <KpiTile label="Buổi trong lịch sử" value={list.length} />
-        <KpiTile label="Tỉ lệ hoàn thành" value={list.length ? `${Math.round((completed / list.length) * 100)}%` : '—'} note={`${completed}/${list.length} buổi`} />
-        <KpiTile label="Kết thúc sớm / hủy" value={cancelled} tone={cancelled ? 'danger' : 'plain'} />
-        <KpiTile label="Học sinh đã tham gia" value={students} note={list.length ? `~${Math.round(students / list.length)} / buổi` : undefined} />
+        <KpiTile label="Buổi trong lịch sử" value={tours.data ? list.length : '-'} />
+        <KpiTile label="Tỉ lệ hoàn thành" value={tours.data && list.length ? `${Math.round((completed / list.length) * 100)}%` : '—'} note={tours.data ? `${completed}/${list.length} buổi` : undefined} />
+        <KpiTile label="Kết thúc sớm / hủy" value={tours.data ? cancelled : '-'} tone={cancelled ? 'danger' : 'plain'} />
+        <KpiTile label="Học sinh đã tham gia" value={tours.data ? students : '-'} note={list.length ? `~${Math.round(students / list.length)} / buổi` : undefined} />
       </KpiRow>
 
-      {list.length > 0 && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <section className={panelClass} aria-label="Kết quả các buổi">
-            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Các buổi kết thúc thế nào</h2>
-            <Donut label="Kết quả các buổi" unit="buổi" parts={[
-              { label: 'Hoàn thành', value: completed, color: '#1f7a55' },
-              { label: 'Kết thúc sớm / hủy', value: cancelled, color: '#b23e31' },
-              { label: 'Khác', value: list.length - completed - cancelled, color: '#cbd5e1' },
-            ]} />
-          </section>
-          <section className={panelClass} aria-label="Buổi theo tuyến">
-            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Buổi theo tuyến</h2>
-            <HBars rows={byRoute} />
-          </section>
-        </div>
-      )}
 
       <section className={`${panelClass} mt-4`} aria-label="Lịch sử tour">
         <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -93,6 +77,26 @@ export default function TourHistoryPage() {
           </>
         )}
       </section>
+      {list.length > 0 && !tours.isError && (
+        <details className="mt-5 rounded-xl border border-[#e2e8f0] bg-white p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[#173b59]">Xem biểu đồ tổng hợp</summary>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <section className={panelClass} aria-label="Kết quả các buổi">
+            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Các buổi kết thúc thế nào</h2>
+            <Donut label="Kết quả các buổi" unit="buổi" parts={[
+              { label: 'Hoàn thành', value: completed, color: '#1f7a55' },
+              { label: 'Kết thúc sớm / hủy', value: cancelled, color: '#b23e31' },
+              { label: 'Khác', value: list.length - completed - cancelled, color: '#cbd5e1' },
+            ]} />
+          </section>
+          <section className={panelClass} aria-label="Buổi theo tuyến">
+            <h2 className="border-b border-[#eef1f4] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a]">Buổi theo tuyến</h2>
+            <HBars rows={byRoute} />
+          </section>
+        </div>
+        </details>
+      )}
+
     </StaffPage>
   )
 }

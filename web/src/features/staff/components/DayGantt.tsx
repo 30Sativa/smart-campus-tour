@@ -29,9 +29,11 @@ export function DayGantt({ tours, now, onSelect, selectedId }: { tours: TourOper
     from = Math.min(from, Math.floor((span.start - HOLD_MINUTES) / 60) * 60)
     to = Math.max(to, Math.ceil((span.end + HOLD_MINUTES) / 60) * 60)
   }
+  const stepMinutes = to - from > 10 * 60 ? 120 : 60
+  if ((to - from) % stepMinutes) to += stepMinutes - ((to - from) % stepMinutes)
   const pct = (minute: number) => ((minute - from) / (to - from)) * 100
   const hours: number[] = []
-  for (let minute = from; minute <= to; minute += 60) hours.push(minute)
+  for (let minute = from; minute <= to; minute += stepMinutes) hours.push(minute)
   const nowMinute = now == null ? -1 : minuteOfDay(now)
   const showNow = now != null && nowMinute >= from && nowMinute <= to
   const n = hours.length - 1
@@ -41,7 +43,7 @@ export function DayGantt({ tours, now, onSelect, selectedId }: { tours: TourOper
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[640px] px-3.5 pt-2 pb-3">
+      <div className="min-w-[520px] pt-2 pr-7 pb-3 pl-3.5">
         <div className="relative ml-[132px] h-5 text-[11px] text-[#64748b]" aria-hidden="true">
           {hours.map((minute) => <span key={minute} className="absolute -translate-x-1/2 tabular-nums" style={{ left: `${pct(minute)}%` }}>{clockLabel(minute)}</span>)}
         </div>
@@ -70,9 +72,11 @@ export function DayGantt({ tours, now, onSelect, selectedId }: { tours: TourOper
                     style={{ left: `${left}%`, width: `${width}%` }}
                   >
                     <span aria-hidden="true" className={`h-full shrink-0 ${STRIPES}`} style={{ width: `${hold}%` }} />
-                    <span className="flex min-w-0 flex-1 items-center justify-center overflow-hidden whitespace-nowrap tabular-nums">{formatTime(tour.scheduledAt)}</span>
+                    <span className="flex-1" />
                     <span aria-hidden="true" className={`h-full shrink-0 ${STRIPES}`} style={{ width: `${hold}%` }} />
                   </button>
+                  {/* The start time beside the bar, where it never gets cut. */}
+                  <span aria-hidden="true" className="pointer-events-none absolute top-[11px] text-[11px] font-semibold whitespace-nowrap text-[#334155] tabular-nums" style={left + width > 82 ? { right: `${100 - left + 0.6}%` } : { left: `calc(${left + width}% + 5px)` }}>{formatTime(tour.scheduledAt)}</span>
                 </span>
               </li>
             )

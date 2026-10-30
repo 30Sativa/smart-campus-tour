@@ -55,3 +55,34 @@ body {
   .console-sweep, .console-enter { animation: none; }
   .console-sweep { opacity: 0; }
 }
+
+/* ── Milestone celebration (components/ui/Celebration.tsx) ───────────────────
+   The card pops in, a ring draws round, then the tick; paper pieces fly out
+   from behind the ring and fall a little as they fade. */
+@keyframes celebrate-pop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.92); }
+  60% { opacity: 1; transform: translateY(0) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes celebrate-draw { to { stroke-dashoffset: 0; } }
+@keyframes celebrate-ring {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes celebrate-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
+  12% { opacity: 1; }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 54px)) scale(1) rotate(var(--rot)); }
+}
+.celebrate-card { animation: celebrate-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.celebrate-draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: celebrate-draw 0.5s ease-out 0.12s forwards; }
+.celebrate-draw-late { animation-delay: 0.5s; }
+.celebrate-ring { animation: celebrate-ring 0.9s ease-out 0.45s backwards; opacity: 0; }
+.celebrate-piece { position: absolute; left: 50%; top: 50%; opacity: 0; animation: celebrate-burst 1.15s cubic-bezier(0.2, 0.7, 0.3, 1) 0.4s backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-card { animation: none; }
+  .celebrate-draw { animation: none; stroke-dashoffset: 0; }
+  .celebrate-piece, .celebrate-ring { display: none; }
+}

@@ -6,6 +6,7 @@ import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { versionedRoutesApi } from '../../../features/administration/routes/versioned-api'
 import { ApiError } from '../../../api/client'
+import { notify } from '../../../components/ui/toast-store'
 
 function submitMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không gửi được revision. Kiểm tra kết nối rồi thử lại.'
@@ -23,7 +24,10 @@ export default function StaffManageRouteDetailsPage() {
   const route = useQuery({ queryKey: ['versioned-routes', routeId, revisionId], queryFn: () => versionedRoutesApi.get(routeId!, revisionId), enabled: Boolean(routeId) })
   const value = route.data
   const submitMutation = useMutation({ mutationFn: versionedRoutesApi.submit,
-    onSuccess: () => client.invalidateQueries({ queryKey: ['versioned-routes'], refetchType: 'all' }) })
+    onSuccess: (_, submitted) => {
+      notify({ title: `Đã gửi kiểm chứng tuyến “${submitted.name}”`, detail: 'Chờ kỹ thuật chạy thử. Đây chưa phải kết quả kiểm chứng hay trạng thái READY.' })
+      return client.invalidateQueries({ queryKey: ['versioned-routes'], refetchType: 'all' })
+    } })
   if (route.isPending) return <AdminPage><p className="p-8">Đang tải revision tuyến…</p></AdminPage>
   if (route.error || !value) return <AdminPage><p role="alert" className="p-4 text-sm text-red-700">Không tải được revision tuyến.</p></AdminPage>
   const latestRevisionNumber = Math.max(...value.revisionHistory.map(revision => revision.revisionNumber), value.revisionNumber)

@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff · so sánh bố cục</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#173b59;--primary:#2d719e;--accent-text:#2d719e;--wash:#e5f3ff;--bg:#f3f6f9;--surface:#fff;--text:#1d2a36;--muted:#5f6f7e;--line:#e3e9ef;--line-strong:#cfd8e1;
+  --bad:#b23e31;--bad-bg:#fff1ef;--bad-line:#f6cdc7;--ok:#1f7a55;--ok-bg:#effbf5;--ok-line:#bfe6d2;--warn:#8a5a06;--warn-bg:#fff8e6;--warn-line:#f1d9a3;--info-bg:#eaf4fc;--info-line:#c4dff2;--mute-bg:#f1f4f7;
+  --r:12px;--r-sm:8px;--shadow:0 1px 2px rgba(23,59,89,.06),0 0 0 1px rgba(23,59,89,.06);--gap:14px}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"Be Vietnam Pro",system-ui,sans-serif;font-size:13px;line-height:1.45;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}h1,h2,h3,p{margin:0}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* thanh chọn (chỉ có trong bản xem trước) */
+.picker{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 16px;background:#0f172a;color:#e2e8f0;font-size:12.5px}
+.picker .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.picker b{color:#fff;margin-right:2px}
+.picker button{border:1px solid #334155;background:#1e293b;color:#cbd5e1;border-radius:8px;padding:4px 11px;font-weight:600;cursor:pointer}
+.picker button[aria-pressed=true]{background:#fff;color:#0f172a;border-color:#fff}
+.about{background:#1e293b;color:#cbd5e1;font-size:12.5px;padding:7px 16px;border-bottom:1px solid #0f172a}
+.about b{color:#fff}
+
+/* khung chung */
+.ic{flex:none}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:30px;height:30px;border-radius:8px;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 1px rgba(0,0,0,.06);flex:none}
+.mark img{width:22px;height:22px}
+.brand b{display:block;font-size:14px;letter-spacing:-.02em}.brand small{display:block;font-size:11px;opacity:.7}
+.av{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:700;font-size:11px;flex:none}
+.livepill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--ok-bg);color:var(--ok)}
+.livepill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.n{min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;display:inline-grid;place-items:center;padding:0 5px}
+main{padding:20px 24px 40px;min-width:0}
+.wrap{max-width:1360px;margin:0 auto}
+
+/* Khung 1: sidebar */
+.s-side{display:flex;min-height:calc(100vh - 80px)}
+.s-side aside{width:236px;flex:none;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column}
+.s-side .brand{height:56px;padding:0 14px}
+.s-side nav{padding:4px 10px 12px}
+.grp{font-size:11.5px;font-weight:600;color:var(--muted);padding:10px 10px 4px}
+.it{display:flex;align-items:center;gap:10px;width:100%;min-height:32px;padding:0 10px;border:none;background:none;border-radius:var(--r-sm);cursor:pointer;text-align:left}
+.it:hover{background:var(--mute-bg)}
+.it[aria-current]{background:var(--wash);color:var(--navy);font-weight:600}
+.it .n{margin-left:auto}
+.s-side .col{flex:1;min-width:0;display:flex;flex-direction:column}
+.bar-top{height:56px;display:flex;align-items:center;gap:12px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line)}
+.bar-top .crumb{font-size:12.5px;color:var(--muted)}.bar-top .crumb b{color:var(--text)}
+.me{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px}
+
+/* Khung 2: thanh trên */
+.s-top header{background:var(--navy);color:#fff}
+.s-top .row1{display:flex;align-items:center;gap:20px;height:52px;padding:0 24px}
+.s-top .tabs1{display:flex;gap:2px;overflow-x:auto;min-width:0}
+.s-top .tabs1 button{border:none;background:none;color:#c9dbea;padding:6px 12px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.s-top .tabs1 button[aria-current]{background:rgba(255,255,255,.14);color:#fff}
+.s-top .row2{display:flex;gap:4px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
+.s-top .row2 button{border:none;background:none;padding:10px 12px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;box-shadow:inset 0 -2px 0 transparent}
+.s-top .row2 button[aria-current]{color:var(--navy);box-shadow:inset 0 -2px 0 var(--primary)}
+.s-top .me{color:#fff}.s-top .me .av{background:#fff;color:var(--navy)}
+
+/* Khung 3: rail + menu con */
+.s-rail{display:flex;min-height:calc(100vh - 80px)}
+.rail{width:72px;flex:none;background:var(--navy);color:#c9dbea;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0}
+.rail .mark{margin-bottom:10px}
+.rail button{width:60px;border:none;background:none;color:inherit;border-radius:10px;padding:7px 0 5px;display:grid;justify-items:center;gap:3px;font-size:10.5px;font-weight:600;cursor:pointer;position:relative}
+.rail button[aria-current]{background:rgba(255,255,255,.14);color:#fff}
+.rail button .n{position:absolute;top:2px;right:8px;min-width:16px;height:16px;font-size:10px}
+.rail .sp{flex:1}
+.sub{width:208px;flex:none;background:#fff;border-right:1px solid var(--line);padding:16px 10px}
+.sub h2{font-size:15px;padding:0 10px 10px}
+.s-rail .col{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* nội dung chung */
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:var(--gap)}
+.head .g{flex:1 1 360px;min-width:0}
+.eyebrow{font-size:12px;font-weight:600;color:var(--accent-text)}
+.head h1{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.25;margin-top:2px}
+.head p{color:var(--muted);margin-top:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--line-strong);background:#fff;font-weight:600;cursor:pointer}
+.btn.p{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.d{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.s{min-height:28px;padding:0 10px;font-size:12px}
+.card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);min-width:0;overflow:hidden}
+.ch{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px 6px}
+.ch h2{font-size:13.5px;font-weight:600}.ch a{font-size:12px;font-weight:600;color:var(--accent-text);text-decoration:none}
+.ch small{color:var(--muted);font-size:12px}
+.muted{color:var(--muted)}
+
+.attn{list-style:none;margin:0 0 var(--gap);padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.attn li{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 12px;background:#fff;border-radius:var(--r-sm);box-shadow:var(--shadow);min-width:0}
+.sev{width:8px;height:8px;border-radius:50%;flex:none}
+.attn .g{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.attn small{color:var(--muted);margin-left:6px;font-size:12px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--gap);margin-bottom:var(--gap)}
+.kpi{background:#fff;border-radius:var(--r);box-shadow:var(--shadow);padding:12px 14px 8px;min-width:0}
+.kpi small{display:block;font-size:12px;color:var(--muted)}
+.kpi .v{display:flex;align-items:baseline;gap:6px;margin-top:2px;flex-wrap:wrap}.kpi .v b{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.kpi .v span{font-size:12px;color:var(--muted)}
+.kpi svg{display:block;width:100%;height:28px;margin-top:4px}
+.kpi.warn .v b{color:#b07a0a}
+
+.g21{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:var(--gap);margin-bottom:var(--gap);align-items:start}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap);align-items:start}
+.mt{margin-top:var(--gap)}
+
+.gantt{padding:4px 14px 12px}
+.axis{position:relative;height:18px;margin-left:116px;font-size:11px;color:var(--muted)}.axis span{position:absolute;transform:translateX(-50%)}
+.lane{display:grid;grid-template-columns:116px minmax(0,1fr);align-items:center;min-height:34px;border-top:1px solid var(--line)}
+.lane b{display:block;font-size:12.5px}.lane small{font-size:11px;color:var(--muted)}
+.track{position:relative;height:34px}
+.gb{position:absolute;top:7px;height:20px;border-radius:5px;border:none;padding:0;cursor:pointer;display:flex;overflow:hidden}
+.gb i{width:22%;background:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 4px,transparent 4px 8px)}.gb span{flex:1}
+.tag{position:absolute;top:9px;font-size:11px;font-weight:600}
+.now{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--bad);z-index:2}
+
+.donut{display:flex;align-items:center;gap:16px;padding:10px 14px 14px}
+.donut svg{width:112px;height:112px;flex:none}
+.donut ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;flex:1;min-width:0}
+.donut li{display:flex;align-items:center;gap:8px;font-size:12.5px}.donut li i{width:10px;height:10px;border-radius:3px;flex:none}.donut li b{margin-left:auto}
+
+.livebox{display:grid;gap:10px;padding:6px 14px 14px}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:700;color:var(--accent-text);background:var(--info-bg);padding:1px 6px;border-radius:5px}
+.chip{display:inline-flex;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid;white-space:nowrap}
+.chip.bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-line)}
+.chip.ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-line)}
+.chip.info{color:var(--accent-text);background:var(--info-bg);border-color:var(--info-line)}
+.chip.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
+.chip.mute{color:var(--muted);background:var(--mute-bg);border-color:var(--line)}
+.prog{display:flex;gap:4px}.prog span{flex:1;height:6px;border-radius:3px;background:var(--line)}.prog .d{background:#7db9db}.prog .c{background:var(--bad)}
+.progl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px}
+.chart{padding:6px 14px 12px}.chart svg{display:block;width:100%;height:auto}
+.ax{font-size:10.5px;fill:var(--muted)}.gl{stroke:var(--line)}
+
+.table{width:100%;border-collapse:collapse}
+.table th{font-size:11.5px;font-weight:600;color:var(--muted);text-align:left;padding:8px 14px;background:#f8fafc;border-bottom:1px solid var(--line);border-top:1px solid var(--line)}
+.table td{padding:9px 14px;border-bottom:1px solid var(--line)}
+.table tr:last-child td{border-bottom:none}
+.table tr[data-open]{cursor:pointer}.table tr[data-open]:hover td{background:#f8fafc}
+.table small{display:block;font-size:11.5px;color:var(--muted)}
+
+/* Bento */
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-flow:dense;gap:var(--gap)}
+.bento .hero{grid-column:span 2;grid-row:span 2;background:linear-gradient(160deg,#173b59,#2d719e);color:#fff;border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.hero .code{background:rgba(255,255,255,.16);color:#fff}
+.hero h2{font-size:22px;letter-spacing:-.02em}
+.hero .big{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hero .big div{background:rgba(255,255,255,.1);border-radius:10px;padding:8px 10px}.hero .big small{display:block;font-size:11px;opacity:.75}.hero .big b{font-size:18px}
+.hero .prog span{background:rgba(255,255,255,.2)}.hero .prog .d{background:#9fd0ee}.hero .prog .c{background:#ff8a7a}
+.hero .progl{color:#c9dbea}
+.hero .alert{background:rgba(255,138,122,.18);border:1px solid rgba(255,138,122,.45);border-radius:10px;padding:8px 10px}
+.hero .acts{display:flex;gap:8px;margin-top:auto;flex-wrap:wrap}.hero .btn{border-color:transparent;color:var(--text)}.hero .btn.d{color:#fff}
+.bento .donut{flex-direction:column;align-items:stretch}.bento .donut svg{align-self:center}
+.bento .w2{grid-column:span 2}.bento .w3{grid-column:span 3}.bento .w4{grid-column:span 4}
+.bento .kpi{display:flex;flex-direction:column;justify-content:space-between}
+
+/* Kanban */
+.strip{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:var(--gap);padding:10px 14px;background:#fff;border-radius:var(--r);box-shadow:var(--shadow)}
+.strip span{color:var(--muted)}.strip b{color:var(--text);font-size:15px;margin-right:4px}
+.board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
+.colk{background:#e9eef3;border-radius:var(--r);padding:8px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.colk h3{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 4px 2px}
+.colk h3 em{font-style:normal;color:var(--muted);font-weight:600;margin-left:auto}
+.kc{background:#fff;border-radius:10px;box-shadow:var(--shadow);padding:10px;display:grid;gap:6px;border:none;text-align:left;cursor:pointer;border-left:3px solid var(--kc,transparent)}
+.kc:hover{box-shadow:0 4px 12px rgba(23,59,89,.12),0 0 0 1px rgba(23,59,89,.08)}
+.kc .t{display:flex;align-items:center;gap:6px}.kc .t time{margin-left:auto;font-weight:700}
+.kc small{color:var(--muted);font-size:11.5px}
+.kc .ft{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)}.kc .ft .av{width:20px;height:20px;font-size:9px}
+.colk .empty{border:1px dashed var(--line-strong);border-radius:10px;padding:14px;text-align:center;color:var(--muted);font-size:12px}
+
+/* Feed việc cần làm */
+.feed{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;max-width:1120px;margin:0 auto}
+.hello h1{font-size:24px;letter-spacing:-.02em}.hello p{color:var(--muted);margin-top:2px}
+.task{display:flex;gap:12px;padding:14px;border-bottom:1px solid var(--line);align-items:flex-start}
+.task:last-child{border-bottom:none}
+.task .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none}
+.task .g{flex:1;min-width:0}.task b{display:block}.task p{color:var(--muted);font-size:12.5px;margin-top:2px}
+.task .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.agenda{list-style:none;margin:0;padding:4px 14px 12px}
+.agenda li{display:grid;grid-template-columns:48px 14px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.agenda li:last-child{border-bottom:none}
+.agenda time{font-weight:700}.agenda .dot{width:10px;height:10px;border-radius:50%}
+.agenda .nowl{display:flex;align-items:center;gap:8px;color:var(--bad);font-size:11px;font-weight:700;cursor:default;grid-template-columns:none;padding:2px 0;border:none}
+.agenda .nowl::after{content:"";flex:1;height:2px;background:var(--bad)}
+.agenda small{display:block;color:var(--muted);font-size:11.5px}
+.mini{display:grid;gap:10px;align-content:start}
+.mini .kpi{padding:10px 12px}
+.mini .kpi svg{height:22px}
+
+/* Phòng điều hành */
+.status{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--navy);color:#fff;border-radius:var(--r);margin-bottom:var(--gap);overflow:hidden}
+.status div{padding:10px 14px;border-right:1px solid rgba(255,255,255,.1);min-width:0}.status div:last-child{border-right:none}
+.status small{display:block;font-size:11px;color:#a9c3d8}.status b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.status .bad{background:rgba(178,62,49,.45)}
+.cmd{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--gap);align-items:start}
+.cmd .stack{display:grid;gap:var(--gap)}
+.map{position:relative;padding:0 14px 14px}
+.map svg{display:block;width:100%;height:auto;background:#eef4f9;border-radius:10px}
+.map .note{position:absolute;right:24px;top:8px;font-size:11px;background:#fff;border-radius:6px;padding:2px 8px;box-shadow:var(--shadow);color:var(--muted)}
+.bigacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.log{list-style:none;margin:0;padding:2px 14px 12px}
+.log li{display:grid;grid-template-columns:42px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.log li:last-child{border-bottom:none}.log time{color:var(--muted);font-weight:600}
+.queue{list-style:none;margin:0;padding:2px 14px 12px}
+.queue li{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer}.queue li:last-child{border-bottom:none}
+.queue li .g{flex:1;min-width:0}.queue small{display:block;color:var(--muted);font-size:11.5px}
+
+/* hộp chi tiết giữa màn hình */
+#ov{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px}
+#ov.on{display:flex}
+#ov .scrim{position:absolute;inset:0;background:rgba(15,30,45,.45);backdrop-filter:blur(2px)}
+.modal{position:relative;width:min(880px,100%);max-height:calc(100vh - 40px);display:flex;flex-direction:column;background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(15,30,45,.3);overflow:hidden;animation:pop .22s cubic-bezier(.22,1,.36,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.mh{display:flex;gap:12px;align-items:flex-start;padding:16px 20px 10px}
+.mh .g{flex:1;min-width:0}.mh h2{font-size:18px;letter-spacing:-.02em;margin-top:6px}.mh p{color:var(--muted)}
+.x{width:32px;height:32px;border-radius:8px;border:none;background:var(--mute-bg);cursor:pointer;color:var(--muted)}
+.mtabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.mtabs button{border:none;background:none;padding:8px 10px;font-weight:600;color:var(--muted);cursor:pointer;box-shadow:inset 0 -2px 0 transparent;white-space:nowrap}
+.mtabs button[aria-selected=true]{color:var(--text);box-shadow:inset 0 -2px 0 var(--primary)}
+.mb{flex:1;overflow:auto;padding:16px 20px;background:#fafcfd}
+.cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(240px,1fr);gap:14px}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}
+.cells div{background:#fff;padding:8px 12px}.cells small{display:block;font-size:11px;color:var(--muted)}.cells b{font-weight:600}
+.todo{border:1px solid var(--bad-line);background:var(--bad-bg);border-radius:var(--r-sm);padding:12px}.todo b{color:var(--bad)}.todo p{margin-top:3px;font-size:12.5px}
+.mf{display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--line);flex-wrap:wrap}.mf .sp{flex:1}
+
+@media (max-width:1180px){.bento{grid-template-columns:repeat(2,minmax(0,1fr))}.bento .w3,.bento .w4{grid-column:span 2}.cmd{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:1000px){.g21,.g3,.cols,.feed{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.status{grid-template-columns:repeat(2,minmax(0,1fr))}.sub{display:none}}
+@media (max-width:760px){
+  .s-side,.s-rail{flex-direction:column}.s-side aside{width:auto}.s-side nav{display:flex;overflow-x:auto;gap:4px}.grp{display:none}.it{width:auto;white-space:nowrap}.s-side .brand{height:48px}
+  .rail{width:auto;flex-direction:row;padding:6px 10px;overflow-x:auto}.rail .mark{margin:0 8px 0 0}.rail .sp{display:none}
+  .me div{display:none}main{padding:12px}.bar-top,.s-top .row1,.s-top .row2{padding:0 12px}
+  .bento{grid-template-columns:minmax(0,1fr)}.bento .hero,.bento .w2,.bento .w3,.bento .w4{grid-column:auto;grid-row:auto}
+  .lane{grid-template-columns:76px minmax(0,1fr)}.axis{margin-left:76px}.cells{grid-template-columns:repeat(2,minmax(0,1fr))}.hero .big{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .s-top .brand small,.s-top .brand b{display:none}
+}
+@media (prefers-reduced-motion:reduce){.modal{animation:none}}
+</style>
+</head>
+<body>
+<div class="picker">
+  <div class="row" role="group" aria-label="Khung điều hướng"><b>Khung:</b>
+    <button data-shell="side">1 · Sidebar</button><button data-shell="top">2 · Thanh trên</button><button data-shell="rail">3 · Rail + menu con</button></div>
+  <div class="row" role="group" aria-label="Bố cục trang"><b>Bố cục trang:</b>
+    <button data-lay="grid">Lưới (hiện tại)</button><button data-lay="bento">A · Bento</button><button data-lay="kanban">B · Bảng Kanban</button><button data-lay="feed">C · Việc cần làm</button><button data-lay="cmd">D · Phòng điều hành</button></div>
+</div>
+<div class="about" id="about"></div>
+<div id="app"></div>
+
+<div id="ov" role="presentation"><div class="scrim" data-close></div>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+    <div class="mh"><div class="g"><span class="code">T-01</span> <span class="chip bad">Cần hỗ trợ</span><h2 id="mt">THCS Hòa Bình · 09:00</h2><p>Thư viện – AI Lab v3 · 2 đoàn, 18 học sinh</p></div><button class="x" data-close aria-label="Đóng">✕</button></div>
+    <div class="mtabs" role="tablist"><button role="tab" aria-selected="true">Tổng quan</button><button role="tab" aria-selected="false">Đoàn</button><button role="tab" aria-selected="false">Lộ trình</button><button role="tab" aria-selected="false">Nhật ký</button></div>
+    <div class="mb"><div class="cols"><div class="cells"><div><small>Giờ</small><b>09:00 · 40 phút</b></div><div><small>Robot</small><b>AMR-01</b></div><div><small>Người vận hành</small><b>Nguyễn Văn An</b></div><div><small>Bước hiện tại</small><b>Đang tới POI 3</b></div><div><small>Đã chạy</small><b>21:40</b></div><div><small>Người xem</small><b>18 / 18</b></div></div>
+      <div class="todo"><b>Robot tạm dừng trên đường tới Phòng Robotics</b><p>Nav2 báo vật cản kéo dài. Kiểm tra tại chỗ rồi chọn một thao tác phục hồi.</p></div></div></div>
+    <div class="mf"><button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn">Nhật ký đầy đủ</button><button class="btn p">Mở điều hành trực tiếp</button></div>
+  </section>
+</div>
+
+<script>
+const LOGO = 'data:image/png;base64,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';
+const SHELL_ABOUT = {
+  side: '<b>Sidebar</b> (đang dùng): menu nhóm luôn hiện bên trái. Dễ tìm, nhưng chiếm ~240px bề ngang.',
+  top: '<b>Thanh trên</b> (GitHub, Vercel, Azure DevOps): nhóm menu thành tab trên cùng, trang con là tab thứ hai. Nội dung dùng hết bề ngang, hợp màn laptop 13–14".',
+  rail: '<b>Rail + menu con</b> (Slack, Linear, Material 3): cột biểu tượng hẹp cho 4 nhóm, cột thứ hai chỉ hiện trang của nhóm đang chọn. Menu ngắn, ít rối mắt.',
+};
+const LAY_ABOUT = {
+  grid: '<b>Lưới</b>: bố cục hiện tại. Việc cần xử lý → 4 chỉ số → trục thời gian robot + biểu đồ → 3 thẻ → bảng.',
+  bento: '<b>A · Bento</b> (Apple, Vercel, Notion): ô to nhỏ xen kẽ, buổi đang chạy là ô lớn nhất. Nhìn một lần thấy ngay điều quan trọng nhất.',
+  kanban: '<b>B · Bảng Kanban</b> (Jira, Linear, Trello): mỗi cột là một trạng thái buổi, mỗi thẻ là một buổi. Hợp trang "Buổi hôm nay" và "Quản lý Tour": thấy ngay buổi nào kẹt ở bước nào.',
+  feed: '<b>C · Việc cần làm</b> (trang chủ Stripe, Shopify Home): một cột chính đọc từ trên xuống — việc phải làm trước, rồi lịch trong ngày; số liệu thu gọn ở cột phải. Hợp người mới, ít phải suy nghĩ.',
+  cmd: '<b>D · Phòng điều hành</b> (Tesla Fleet, Grafana, trung tâm giám sát): dải trạng thái robot trên cùng, bản đồ + trục thời gian bên trái, buổi đang chạy và nhật ký bên phải. Hợp "Điều hành trực tiếp" và "Robot & thiết bị" (giữ bản đồ 3D).',
+};
+const I = { dash: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>', list: '<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', play: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="m10 8 4 2.5-4 2.5zM8 21h8"/>', bot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4"/>', clip: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/>', pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/>', route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H17a3.5 3.5 0 0 0 0-7H7a3.5 3.5 0 0 1 0-7h8.5"/>', check: '<path d="M9 11l3 3 8-8"/>', hist: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>' };
+const ic = (n, s = 16) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+const NAV = [['Trong ngày', 'dash', [['Tổng quan vận hành', 'dash', 1], ['Buổi hôm nay', 'list'], ['Lịch buổi', 'cal']]], ['Điều hành', 'play', [['Điều hành trực tiếp', 'play', 0, 1], ['Robot & thiết bị', 'bot']], 1], ['Chuẩn bị', 'clip', [['Tổng quan chuẩn bị', 'clip'], ['Quản lý POI', 'pin'], ['Danh mục tuyến', 'route'], ['Đăng ký chờ duyệt', 'check', 0, 3]]], ['Lịch sử', 'hist', [['Lịch sử phiên', 'hist']]]];
+const navItem = ([n, i, cur, b]) => `<button class="it"${cur ? ' aria-current="page"' : ''}>${ic(i)}<span>${n}</span>${b ? `<span class="n">${b}</span>` : ''}</button>`;
+const mark = `<span class="mark"><img src="${LOGO}" alt=""></span>`;
+const me = (dark) => `<div class="me"><span class="av">ST</span><div><b>staff01</b><div style="font-size:11px;opacity:.7">Nhân viên vận hành</div></div></div>`;
+
+const SHELLS = {
+  side: (c) => `<div class="s-side"><aside><div class="brand">${mark}<span><b>CampusTour</b><small>DT-AMR · Vận hành</small></span></div><nav aria-label="Điều hướng">${NAV.map(([g, , items]) => `<div class="grp">${g}</div>${items.map(navItem).join('')}`).join('')}</nav></aside><div class="col"><header class="bar-top"><span class="crumb">CampusTour / <b>Tổng quan vận hành</b></span><span class="livepill"><i></i>Thời gian thực</span>${me()}</header><main><div class="wrap">${c}</div></main></div></div>`,
+  top: (c) => `<div class="s-top"><header><div class="row1"><div class="brand">${mark}<span><b>CampusTour</b><small>DT-AMR · Vận hành</small></span></div><nav class="tabs1" aria-label="Nhóm">${NAV.map(([g, i, , b], k) => `<button${k === 0 ? ' aria-current="page"' : ''}>${ic(i, 15)}${g}${b ? `<span class="n">${b}</span>` : ''}</button>`).join('')}</nav>${me()}</div></header><nav class="row2" aria-label="Trang">${NAV[0][2].map(([n, , cur]) => `<button${cur ? ' aria-current="page"' : ''}>${n}</button>`).join('')}</nav><main><div class="wrap">${c}</div></main></div>`,
+  rail: (c) => `<div class="s-rail"><nav class="rail" aria-label="Nhóm">${mark}${NAV.map(([g, i, , b], k) => `<button${k === 0 ? ' aria-current="page"' : ''}>${ic(i, 18)}<span>${g}</span>${b ? `<span class="n">${b}</span>` : ''}</button>`).join('')}<span class="sp"></span><span class="av" style="background:#fff;color:#173b59">ST</span></nav><nav class="sub" aria-label="Trang trong nhóm"><h2>Trong ngày</h2>${NAV[0][2].map(navItem).join('')}</nav><div class="col"><header class="bar-top"><span class="crumb">Trong ngày / <b>Tổng quan vận hành</b></span><span class="livepill"><i></i>Thời gian thực</span>${me()}</header><main><div class="wrap">${c}</div></main></div></div>`,
+};
+
+/* dữ liệu mẫu */
+const S = [['T-00', 'THPT Tân Bình', 8, 40, '#cfe9dc', 'ok', 'Hoàn thành', 24, 'An'], ['T-01', 'THCS Hòa Bình', 9, 40, '#b23e31', 'bad', 'Cần hỗ trợ', 18, 'An'], ['T-02', 'THPT Hòa Hiệp', 10.5, 40, '#b9dcf2', 'info', 'Sẵn sàng', 9, 'Bình'], ['T-03', 'THCS Tân Phú', 14, 50, '#f0d89f', 'warn', 'Chờ chốt', 22, 'Bình'], ['T-04', 'THPT Long Thạnh', 15.5, 20, '#e2e8f0', 'mute', 'Đã lên lịch', 12, '']];
+const pct = (h) => ((h - 7.5) / 9.5) * 100;
+const hhmm = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${h % 1 ? '30' : '00'}`;
+const spark = (v, c) => { const w = 120, h = 28, m = Math.max(...v), s = w / (v.length - 1), p = v.map((x, i) => `${i * s},${h - 3 - (x / m) * (h - 6)}`).join(' '); return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${h} ${p} ${w},${h}" fill="${c}" opacity=".14"/><polyline points="${p}" fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`; };
+const K = [['Buổi đã chạy · 7 ngày', '12', '9 hoàn thành', [1, 2, 1, 3, 2, 1, 2], '#2d719e'], ['Tỉ lệ hoàn thành', '75%', '9/12 buổi', [100, 50, 100, 100, 100, 67, 100], '#1f7a55'], ['Học sinh hôm nay', '27', '/ 51 đã đăng ký', [0, 9, 9, 27, 27], '#2d719e'], ['Đoàn chờ duyệt', '3', '26 học sinh', [1, 2, 2, 3, 2, 3, 3], '#d69412', 'warn']];
+const kpi = ([l, v, n, sp, c, t]) => `<div class="kpi ${t || ''}"><small>${l}</small><div class="v"><b>${v}</b><span>${n}</span></div>${spark(sp, c)}</div>`;
+const kpis = `<div class="kpis">${K.map(kpi).join('')}</div>`;
+const attn = `<ul class="attn"><li><span class="sev" style="background:#b23e31"></span><span class="g"><b>T-01 cần hỗ trợ</b><small>Robot tạm dừng vì vật cản, 3 phút trước</small></span><button class="btn s p" data-open>Xử lý</button></li><li><span class="sev" style="background:#d69412"></span><span class="g"><b>T-03 lúc 14:00 chưa chốt</b><small>Tuyến v4 chưa được kỹ thuật xác nhận</small></span><button class="btn s">Xem</button></li></ul>`;
+const head = (actions = true) => `<div class="head"><div class="g"><div class="eyebrow">Thứ Tư, 28/10</div><h1>Tổng quan vận hành</h1><p>5 buổi hôm nay, 1 đang chạy. Robot AMR-01 bận tới 16:05.</p></div>${actions ? '<button class="btn">Lịch buổi</button><button class="btn p">Điều hành trực tiếp</button>' : ''}</div>`;
+const gantt = `<div class="gantt"><div class="axis">${[8, 10, 12, 14, 16].map((h) => `<span style="left:${pct(h)}%">${h}:00</span>`).join('')}</div>${S.map(([c, w, h, l, col]) => { const a = pct(h - .25), b = pct(h + l / 60 + .25); return `<div class="lane"><span><b>${c}</b><small>${w}</small></span><span class="track">${c === 'T-01' ? `<span class="now" style="left:${pct(9.35)}%"></span>` : ''}<button class="gb" data-open style="left:${a}%;width:${b - a}%;background:${col}" aria-label="${c}"><i></i><span></span><i></i></button><span class="tag" style="left:calc(${b}% + 5px)">${hhmm(h)}</span></span></div>`; }).join('')}</div>`;
+const DP = [[1, '#1f7a55', 'Hoàn thành'], [1, '#2d719e', 'Đang chạy'], [1, '#8cc6ea', 'Sẵn sàng'], [1, '#d69412', 'Chờ chốt'], [1, '#cbd5e1', 'Đã lên lịch']];
+const donut = () => { const r = 42, C = 2 * Math.PI * r; let o = 0; return `<div class="donut"><svg viewBox="0 0 120 120" role="img" aria-label="5 buổi theo trạng thái"><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--line)" stroke-width="14"/>${DP.map(([v, c]) => { const len = (v / 5) * C; const s = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${c}" stroke-width="14" stroke-dasharray="${len - 2} ${C}" stroke-dashoffset="${-o}" transform="rotate(-90 60 60)"/>`; o += len; return s; }).join('')}<text x="60" y="58" text-anchor="middle" font-size="22" font-weight="700" fill="currentColor">5</text><text x="60" y="76" text-anchor="middle" class="ax">buổi</text></svg><ul>${DP.map(([v, c, l]) => `<li><i style="background:${c}"></i>${l}<b>${v}</b></li>`).join('')}</ul></div>`; };
+const area = `<div class="chart"><svg viewBox="0 0 360 138" role="img" aria-label="Học sinh theo giờ"><line class="gl" x1="22" x2="360" y1="120" y2="120"/><line class="gl" x1="22" x2="360" y1="65" y2="65"/><line class="gl" x1="22" x2="360" y1="10" y2="10"/><text class="ax" x="0" y="123">0</text><text class="ax" x="0" y="68">25</text><text class="ax" x="0" y="13">50</text><polygon points="22,120 64,98 106,83 148,61 148,120" fill="#2d719e" opacity=".16"/><polyline points="22,120 64,98 106,83 148,61" fill="none" stroke="#2d719e" stroke-width="2.2"/><polyline points="22,120 64,98 106,83 148,61 190,61 232,45 274,32 316,20 358,20" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/><line x1="148" x2="148" y1="6" y2="120" stroke="#b23e31" stroke-width="1.5"/><text x="152" y="14" font-size="10.5" font-weight="700" fill="#b23e31">Bây giờ</text>${['08', '10', '12', '14', '16'].map((t, i) => `<text class="ax" x="${22 + i * 84}" y="134" text-anchor="middle">${t}</text>`).join('')}</svg></div>`;
+const bars = `<div class="chart"><svg viewBox="0 0 360 138" role="img" aria-label="Buổi 7 ngày qua">${[[3, 0], [2, 1], [1, 0], [0, 0], [3, 0], [2, 1], [1, 0]].map(([a, b], i) => { const x = 30 + i * 46, ha = a * 34, hb = b * 34; return `<rect x="${x}" y="${120 - ha}" width="26" height="${ha}" rx="3" fill="${i === 6 ? '#2d719e' : '#7db9db'}"/>${b ? `<rect x="${x}" y="${118 - ha - hb}" width="26" height="${hb}" rx="3" fill="#f2a59b"/>` : ''}<text class="ax" x="${x + 13}" y="134" text-anchor="middle">${['T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4'][i]}</text>`; }).join('')}<line class="gl" x1="22" x2="360" y1="120" y2="120"/></svg></div>`;
+const progress = `<div><div class="prog"><span class="d"></span><span class="d"></span><span class="c"></span><span></span></div><div class="progl"><span>Sảnh</span><span>Thư viện</span><span style="color:#ff8a7a;font-weight:700">Robotics</span><span>AI Lab</span></div></div>`;
+const live = `<div class="livebox"><span><span class="code">T-01</span> <span class="chip bad">Cần hỗ trợ</span></span><b>THCS Hòa Bình · 18 học sinh</b>${progress.replace('#ff8a7a', 'var(--bad)')}<button class="btn p" data-open>Mở chi tiết</button></div>`;
+const table = `<div style="overflow-x:auto"><table class="table"><thead><tr><th>Giờ</th><th>Buổi</th><th>Tuyến</th><th>Người vận hành</th><th>Trạng thái</th></tr></thead><tbody>${S.map(([c, w, h, l, , tone, label, , op]) => `<tr data-open><td><b>${hhmm(h)}</b><small>${l} phút</small></td><td><b>${c}</b><small>${w}</small></td><td>Thư viện – AI Lab v3</td><td>${op ? (op === 'An' ? 'Nguyễn Văn An' : 'Trần Thị Bình') : '<span style="color:var(--bad)">Chưa giao</span>'}</td><td><span class="chip ${tone}">${label}</span></td></tr>`).join('')}</tbody></table></div>`;
+const card = (t, body, link) => `<section class="card"><div class="ch"><h2>${t}</h2>${link ? `<a href="#">${link}</a>` : ''}</div>${body}</section>`;
+
+const LAYS = {
+  grid: () => `${head()}${attn}${kpis}<div class="g21">${card('Robot hôm nay', gantt, 'Lịch buổi')}${card('Buổi hôm nay theo trạng thái', donut())}</div><div class="g3">${card('Đang chạy', live)}${card('Học sinh trong ngày', area)}${card('Kết quả 7 ngày', bars)}</div><section class="card mt"><div class="ch"><h2>Buổi hôm nay</h2><a href="#">Tất cả</a></div>${table}</section>`,
+
+  bento: () => `${head()}${attn}<div class="bento">
+    <section class="hero" aria-label="Buổi đang chạy"><span><span class="code">T-01</span> <span class="chip bad">Cần hỗ trợ</span></span><div><h2>THCS Hòa Bình</h2><span style="opacity:.8">Thư viện – AI Lab v3 · Nguyễn Văn An</span></div>
+      <div class="big"><div><small>Đã chạy</small><b>21:40</b></div><div><small>Học sinh</small><b>18</b></div><div><small>Robot</small><b>AMR-01</b></div></div>${progress}
+      <div class="alert"><b>Robot tạm dừng</b> · vật cản trên đường tới Phòng Robotics</div>
+      <div class="acts"><button class="btn" data-open>Mở chi tiết</button><button class="btn d">Xử lý ngay</button></div></section>
+    ${K.map(kpi).join('')}
+    <section class="card w3"><div class="ch"><h2>Robot hôm nay</h2><a href="#">Lịch buổi</a></div>${gantt}</section>
+    <section class="card"><div class="ch"><h2>Theo trạng thái</h2></div>${donut()}</section>
+    <section class="card w2"><div class="ch"><h2>Học sinh trong ngày</h2></div>${area}</section>
+    <section class="card w2"><div class="ch"><h2>Kết quả 7 ngày</h2></div>${bars}</section></div>`,
+
+  kanban: () => {
+    const cols = [['Đã lên lịch', '#94a3b8', 'mute'], ['Chờ chốt', '#d69412', 'warn'], ['Sẵn sàng', '#2d719e', 'info'], ['Đang chạy', '#b23e31', 'bad'], ['Hoàn thành', '#1f7a55', 'ok']];
+    const kc = ([c, w, h, l, , tone, label, n, op]) => `<button class="kc" data-open style="--kc:${tone === 'bad' ? '#b23e31' : 'transparent'}"><span class="t"><span class="code">${c}</span>${tone === 'bad' ? '<span class="chip bad">Cần hỗ trợ</span>' : ''}<time>${hhmm(h)}</time></span><b>${w}</b><small>Thư viện – AI Lab v3 · ${l} phút</small><span class="ft">${ic('user', 13)}${n} học sinh<span style="margin-left:auto;display:flex;align-items:center;gap:5px">${op ? `<span class="av">${op[0]}</span>${op}` : '<span style="color:var(--bad);font-weight:600">Chưa giao</span>'}</span></span></button>`;
+    const by = { mute: [S[4]], warn: [S[3]], info: [S[2]], bad: [S[1]], ok: [S[0]] };
+    return `<div class="head"><div class="g"><div class="eyebrow">Thứ Tư, 28/10</div><h1>Buổi hôm nay</h1><p>Kéo mắt từ trái sang phải: buổi đi từ lên lịch tới hoàn thành.</p></div><button class="btn">Danh sách</button><button class="btn p">Tạo Tour</button></div>
+    <div class="strip"><span><b>5</b>buổi</span><span><b>85</b>học sinh</span><span><b style="color:var(--bad)">1</b>cần hỗ trợ</span><span><b style="color:#b07a0a">1</b>chưa chốt</span><span><b>1</b>chưa giao người vận hành</span></div>${attn}
+    <div class="board">${cols.map(([t, c, k]) => `<section class="colk" aria-label="${t}"><h3><span class="sev" style="background:${c}"></span>${t}<em>${by[k].length}</em></h3>${by[k].map(kc).join('')}${k === 'info' ? '<div class="empty">Kéo buổi đã chốt vào đây</div>' : ''}</section>`).join('')}</div>`;
+  },
+
+  feed: () => `<div class="feed"><div style="min-width:0;display:grid;gap:var(--gap);align-content:start">
+    <div class="hello"><div class="eyebrow">Thứ Tư, 28/10 · 09:21</div><h1>Chào An, hôm nay có 2 việc cần bạn</h1><p>5 buổi, 1 đang chạy. Robot AMR-01 bận tới 16:05.</p></div>
+    <section class="card"><div class="ch"><h2>Cần bạn xử lý</h2><small>2 việc</small></div>
+      <div class="task"><span class="ico" style="background:var(--bad-bg);color:var(--bad)">${ic('alert', 18)}</span><div class="g"><b>T-01 · Robot tạm dừng vì vật cản</b><p>THCS Hòa Bình, 18 học sinh đang chờ ở Thư viện. Báo lúc 09:18.</p><div class="acts"><button class="btn s d" data-open>Xử lý ngay</button><button class="btn s">Gọi người vận hành</button></div></div></div>
+      <div class="task"><span class="ico" style="background:var(--warn-bg);color:var(--warn)">${ic('clock', 18)}</span><div class="g"><b>T-03 lúc 14:00 chưa chốt</b><p>Tuyến v4 chưa được kỹ thuật xác nhận. Còn 4 giờ 39 phút.</p><div class="acts"><button class="btn s">Đổi sang tuyến v3</button><button class="btn s">Nhắc kỹ thuật</button></div></div></div>
+      <div class="task"><span class="ico" style="background:var(--info-bg);color:var(--primary)">${ic('check', 18)}</span><div class="g"><b>3 đoàn chờ duyệt</b><p>26 học sinh, đoàn lâu nhất đã chờ 2 ngày.</p><div class="acts"><button class="btn s">Mở danh sách duyệt</button></div></div></div></section>
+    <section class="card"><div class="ch"><h2>Lịch hôm nay</h2><a href="#">Lịch tuần</a></div><ul class="agenda">${S.map(([c, w, h, l, col, tone, label, n], i) => `${i === 2 ? '<li class="nowl">Bây giờ 09:21</li>' : ''}<li data-open><time>${hhmm(h)}</time><span class="dot" style="background:${col}"></span><span><b>${c} · ${w}</b><small>${n} học sinh · ${l} phút</small></span><span class="chip ${tone}">${label}</span></li>`).join('')}</ul></section></div>
+    <aside class="mini" aria-label="Số liệu">${K.map(kpi).join('')}<section class="card"><div class="ch"><h2>Theo trạng thái</h2></div>${donut()}</section></aside></div>`,
+
+  cmd: () => `<div class="head"><div class="g"><div class="eyebrow">Điều hành · 09:21</div><h1>Phòng điều hành</h1></div><button class="btn">Bộ đàm</button><button class="btn d" data-open>Xử lý T-01</button></div>
+    <div class="status"><div class="bad"><small>Robot AMR-01</small><b>Tạm dừng · vật cản</b></div><div><small>Pin</small><b>64% · ~3 giờ</b></div><div><small>Buổi hiện tại</small><b>T-01 · POI 3/4</b></div><div><small>Tiếp theo</small><b>T-02 · 10:30 (1:09)</b></div><div><small>Kết nối</small><b>ROS ổn · 42 ms</b></div></div>
+    <div class="cmd"><div class="stack">
+      <section class="card"><div class="ch"><h2>Bản đồ</h2><small>Tầng 1 · Khu A</small></div><div class="map"><span class="note">Bản đồ 3D hiện tại đặt ở đây</span><svg viewBox="0 0 640 260" role="img" aria-label="Bản đồ khu vực"><g fill="#fff" stroke="#c4d6e4" stroke-width="2"><rect x="20" y="20" width="150" height="100" rx="6"/><rect x="190" y="20" width="200" height="100" rx="6"/><rect x="410" y="20" width="210" height="100" rx="6"/><rect x="20" y="140" width="290" height="100" rx="6"/><rect x="330" y="140" width="290" height="100" rx="6"/></g><g font-size="12" font-weight="600" fill="#5f6f7e"><text x="34" y="42">Sảnh</text><text x="204" y="42">Thư viện</text><text x="424" y="42">Phòng Robotics</text><text x="34" y="162">Hành lang</text><text x="560" y="162">AI Lab</text></g><polyline points="95,90 290,90 290,130 515,130 515,90" fill="none" stroke="#2d719e" stroke-width="3" stroke-dasharray="7 6"/><polyline points="515,90 515,130 475,130 475,200" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="7 6"/><g><circle cx="95" cy="90" r="7" fill="#1f7a55"/><circle cx="290" cy="90" r="7" fill="#1f7a55"/><circle cx="515" cy="90" r="7" fill="#fff" stroke="#b23e31" stroke-width="3"/><circle cx="475" cy="200" r="7" fill="#fff" stroke="#94a3b8" stroke-width="3"/></g><circle cx="400" cy="130" r="16" fill="#b23e31" opacity=".2"/><circle cx="400" cy="130" r="9" fill="#b23e31" stroke="#fff" stroke-width="3"/><rect x="424" y="120" width="18" height="20" rx="3" fill="#5f6f7e" opacity=".55"/><text x="372" y="160" font-size="11" font-weight="700" fill="#b23e31">AMR-01</text></svg></div></section>
+      <section class="card"><div class="ch"><h2>Robot hôm nay</h2><a href="#">Lịch buổi</a></div>${gantt}</section></div>
+      <div class="stack">
+      <section class="card"><div class="ch"><h2>Đang chạy</h2><span class="chip bad">Cần hỗ trợ</span></div><div class="livebox"><b>T-01 · THCS Hòa Bình · 18 học sinh</b>${progress.replace('#ff8a7a', 'var(--bad)')}<div class="bigacts"><button class="btn">Tiếp tục</button><button class="btn">Bỏ qua POI</button><button class="btn">Về Sảnh</button><button class="btn d">Dừng khẩn</button></div></div></section>
+      <section class="card"><div class="ch"><h2>Hàng đợi</h2></div><ul class="queue">${S.slice(2).map(([c, w, h, , , tone, label]) => `<li data-open><span class="code">${c}</span><span class="g"><b>${w}</b><small>${hhmm(h)}</small></span><span class="chip ${tone}">${label}</span></li>`).join('')}</ul></section>
+      <section class="card"><div class="ch"><h2>Nhật ký</h2><a href="#">Tất cả</a></div><ul class="log"><li><time>09:21</time><span style="color:var(--bad)"><b>Nav2:</b> vật cản kéo dài &gt; 60 giây</span></li><li><time>09:18</time><span>T-01 tới POI 2 · Thư viện</span></li><li><time>09:02</time><span>T-01 bắt đầu, 18/18 học sinh</span></li><li><time>08:41</time><span>T-00 hoàn thành</span></li></ul></section></div></div>`,
+};
+
+let shell = 'side', lay = 'grid';
+try { const s = JSON.parse(localStorage.getItem('lay-pick') || '{}'); if (SHELLS[s.shell]) shell = s.shell; if (LAYS[s.lay]) lay = s.lay; } catch (e) {}
+function render() {
+  document.getElementById('app').innerHTML = SHELLS[shell](LAYS[lay]());
+  document.querySelectorAll('[data-shell]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.shell === shell));
+  document.querySelectorAll('[data-lay]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.lay === lay));
+  document.getElementById('about').innerHTML = `${SHELL_ABOUT[shell]}<br>${LAY_ABOUT[lay]}`;
+  try { localStorage.setItem('lay-pick', JSON.stringify({ shell, lay })); } catch (e) {}
+}
+render();
+document.addEventListener('click', (e) => {
+  const sh = e.target.closest('[data-shell]'); if (sh) { shell = sh.dataset.shell; return render(); }
+  const ly = e.target.closest('[data-lay]'); if (ly) { lay = ly.dataset.lay; return render(); }
+  if (e.target.closest('[data-close]')) return document.getElementById('ov').classList.remove('on');
+  if (e.target.closest('[data-open]')) { document.getElementById('ov').classList.add('on'); document.querySelector('#ov .x').focus(); return; }
+  const t = e.target.closest('[role=tab]'); if (t) t.parentElement.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', b === t));
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('ov').classList.remove('on'); });
+</script>
+</body>
+</html>

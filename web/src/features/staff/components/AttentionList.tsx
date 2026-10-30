@@ -19,11 +19,11 @@ export function AttentionList({ items, max = 4 }: { items: AttentionItem[]; max?
     <section aria-label="Cần chú ý ngay" className="mb-3">
       <ul className="grid gap-1.5">
         {items.slice(0, max).map((item) => (
-          <li key={item.id} className="flex items-center gap-3 rounded-[10px] border border-[#e2e8f0] bg-white py-2 pr-2 pl-3">
+          <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-[#e2e8f0] bg-white p-3 sm:px-4">
             <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${DOT[item.tone]}`} />
-            <p className="min-w-0 flex-1 truncate text-[13px]">
+            <p className="min-w-[160px] flex-1 text-sm">
               <b className="font-semibold text-[#0f172a]">{item.subject}</b>
-              <span className="ml-2 text-[#64748b]">{item.headline}{item.detail ? ` · ${item.detail}` : ''}</span>
+              <span className="mt-0.5 block text-[#64748b]">{item.headline}{item.detail ? ` · ${item.detail}` : ''}</span>
             </p>
             <Link to={item.to} className={buttonClass(item.tone === 'danger' ? 'primary' : 'secondary', 'sm')}>{item.toLabel}</Link>
           </li>

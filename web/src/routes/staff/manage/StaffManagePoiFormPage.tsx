@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
+import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
@@ -68,6 +69,7 @@ export default function StaffManagePoiFormPage() {
     setBusy(true); setError(null)
     try {
       let result = current
+      const created = !result
       if (result) result = await technicalApi.revisePoiProposal(result.id, result, body)
       else result = await technicalApi.createPoiProposal(body)
       setSaved(result)
@@ -77,6 +79,11 @@ export default function StaffManagePoiFormPage() {
         setSaved(result)
         await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
       }
+      const submitted = action === 'submit'
+      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận PASS.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận PASS trước khi dùng cho tuyến.' })
+      else notify(submitted
+        ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa tạo kết quả PASS.' }
+        : { title: `Đã lưu revision POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
       if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true })
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không lưu được đề xuất.') }
     finally { setBusy(false) }
