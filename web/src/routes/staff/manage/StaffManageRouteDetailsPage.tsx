@@ -13,6 +13,7 @@ import { notify } from '../../../components/ui/toast-store'
 function submitMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không gửi được tuyến. Kiểm tra kết nối rồi thử lại.'
   if (error.status === 400) return 'Tuyến chưa hợp lệ hoặc còn thiếu điều kiện để gửi kiểm chứng.'
+  if (error.status === 409 && error.body.includes('TECHNICAL_CHECK_')) return 'Bản đồ của tuyến không còn kiểm tra kỹ thuật đạt nên chưa gửi được. Nhờ Kỹ thuật kiểm tra lại bản đồ rồi thử lại.'
   if (error.status === 409) return 'Phiên bản hoặc dữ liệu nguồn đã thay đổi. Tải lại và xem nội dung mới trước khi gửi lại.'
   if (error.status >= 500) return 'Máy chủ chưa xử lý được yêu cầu. Chưa xác nhận tuyến đã được gửi.'
   return 'Không gửi được tuyến. Kiểm tra quyền và dữ liệu rồi thử lại.'

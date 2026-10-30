@@ -20,6 +20,7 @@ let requests: Array<{ url: URL; init?: RequestInit }> = []
 let submissionFailure: 409 | 500 | null = null
 let mapEligible = true
 let extraProposals: unknown[] = []
+let submissionFailureBody: unknown = null
 let currentRoute = structuredClone(route)
 
 function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
@@ -37,6 +38,7 @@ describe('Staff versioned Route workflow', () => {
     submissionFailure = null
     mapEligible = true
     extraProposals = []
+    submissionFailureBody = null
     currentRoute = structuredClone(route)
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -48,7 +50,7 @@ describe('Staff versioned Route workflow', () => {
       if (url.pathname === '/api/routes/route-1/revisions') return response(currentRoute)
       if (url.pathname === '/api/staff/routes/route-1/revisions/route-rev-1/submit') {
         await new Promise(resolve => setTimeout(resolve, 40))
-        if (submissionFailure) return new Response(JSON.stringify({ message: submissionFailure === 409 ? 'Revision đã cũ.' : 'Lỗi máy chủ.' }), { status: submissionFailure })
+        if (submissionFailure) return new Response(JSON.stringify(submissionFailureBody ?? { message: submissionFailure === 409 ? 'Revision đã cũ.' : 'Lỗi máy chủ.' }), { status: submissionFailure })
         currentRoute = { ...currentRoute, isSubmitted: true, verificationStatus: 'NOT_TESTED', revisionHistory: currentRoute.revisionHistory.map(item => ({ ...item, isSubmitted: true })) }
         return response(currentRoute)
       }
@@ -90,11 +92,25 @@ describe('Staff versioned Route workflow', () => {
     expect(otherMap).toHaveTextContent('chưa có POI đạt')
   })
 
-  it('warns when the chosen map no longer has a passing technical check', async () => {
+  it('blocks a map that lost its passing technical check even when its POIs passed', async () => {
     mapEligible = false
     renderAt('/staff/manage/routes/new')
-    fireEvent.change(await screen.findByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
-    expect(await screen.findByText(/không còn kiểm tra kỹ thuật đạt/)).toBeInTheDocument()
+    const select = await screen.findByLabelText('Phiên bản bản đồ')
+    const option = within(select).getByRole('option', { name: /library-v1/ })
+    expect(option).toBeDisabled()
+    expect(option).toHaveTextContent('chưa đạt kiểm tra kỹ thuật')
+    fireEvent.change(select, { target: { value: 'map-v1' } })
+    expect(await screen.findByText(/không lưu được tuyến/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeDisabled()
+  })
+
+  it('explains a submit refused because the map lost its technical check', async () => {
+    submissionFailure = 409
+    submissionFailureBody = { success: false, message: 'Không có robot nào đạt.', errors: { code: 'TECHNICAL_CHECK_NOT_PASSED', fields: null } }
+    renderAt('/staff/manage/routes/route-1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
+    expect(await screen.findByText(/Nhờ Kỹ thuật kiểm tra lại bản đồ/)).toBeInTheDocument()
+    expect(currentRoute.isSubmitted).toBe(false)
   })
 
   it('saves stops in the order shown after moving one up', async () => {

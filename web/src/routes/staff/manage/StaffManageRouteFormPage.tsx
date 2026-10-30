@@ -7,7 +7,8 @@ import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { celebrate, notify } from '../../../components/ui/toast-store'
-import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
+import { technicalApi, type MapVersionItem, type PoiProposal } from '../../../features/technical/api/technical'
+import { errorText } from '../../../features/technical/technical-format'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
 
@@ -44,11 +45,12 @@ export default function StaffManageRouteFormPage() {
     ...stops.flatMap(stop => available.filter(proposal => proposal.revision.id === stop.poiRevisionId)),
     ...available.filter(proposal => !stops.some(stop => stop.poiRevisionId === proposal.revision.id)),
   ]
-  // The server only accepts stops with PASS evidence on the exact map, so a map without any cannot make a route.
+  // Mirrors the server: a route needs PASS POIs on the exact map (ADR-0023) and current map evidence (ADR-0033).
   const poiMapIds = new Set(verifiedPois.map(proposal => proposal.revision.mapVersionId))
-  const canPickMap = (mapVersionId: string) => poiMapIds.has(mapVersionId) || mapVersionId === source.data?.mapVersionId
-  const mapOptions = [...(maps.data ?? [])].sort((a, b) => Number(canPickMap(b.map.id)) - Number(canPickMap(a.map.id)))
+  const mapBlock = ({ map, canUseForPoiPreparation }: MapVersionItem) => !canUseForPoiPreparation ? 'chưa đạt kiểm tra kỹ thuật' : poiMapIds.has(map.id) ? null : 'chưa có POI đạt'
+  const mapOptions = [...(maps.data ?? [])].sort((a, b) => Number(mapBlock(a) !== null) - Number(mapBlock(b) !== null))
   const chosenMap = maps.data?.find(item => item.map.id === draft.mapVersionId)
+  const mapNotReady = Boolean(chosenMap && !chosenMap.canUseForPoiPreparation)
   const moveStop = (index: number, offset: number) => setStopsOverride(current => {
     const next = [...(current ?? stops)]
     ;[next[index], next[index + offset]] = [next[index + offset], next[index]]
@@ -67,7 +69,7 @@ export default function StaffManageRouteFormPage() {
       if (routeId) notify({ title: `Đã tạo phiên bản mới cho “${body.name}”`, detail: 'Phiên bản mới là bản nháp; gửi kiểm chứng lại trước khi dùng cho Tour.' })
       else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
       navigate(`/staff/manage/routes/${route.routeId}`, { replace: true })
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không lưu được tuyến.') }
+    } catch (cause) { setError(errorText(cause)) }
     finally { setBusy(false) }
   }
   if ((routeId && source.isPending) || proposals.isPending || maps.isPending) return <AdminPage><p className="p-8">Đang tải dữ liệu…</p></AdminPage>
@@ -80,7 +82,7 @@ export default function StaffManageRouteFormPage() {
     <form onSubmit={event => void save(event)} className="space-y-4">
       <section className={`${panelClass} grid gap-3 p-4 sm:grid-cols-2`}>
         <label className="text-sm">Tên tuyến<input className={`${inputClass} mt-1`} required maxLength={150} value={draft.name} onChange={e => updateDraft({ name: e.target.value })} /></label>
-        <div className="text-sm"><label htmlFor="route-map">Phiên bản bản đồ</label><select id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => { updateDraft({ mapVersionId: e.target.value }); setStopsOverride([]) }}><option value="">— Chọn bản đồ —</option>{mapOptions.map(({ map }) => <option key={map.id} value={map.id} disabled={!canPickMap(map.id)}>{map.areaName} v{map.versionNumber} · {map.mapKey}{canPickMap(map.id) ? '' : ' (chưa có POI đạt)'}</option>)}</select>{chosenMap && !chosenMap.canUseForPoiPreparation ? <p className="mt-1 text-xs text-amber-800">Bản đồ này hiện không còn kiểm tra kỹ thuật đạt. Máy chủ vẫn nhận tuyến nhưng nên hỏi Kỹ thuật trước khi dùng.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đã có POI đạt kiểm chứng.</p>}</div>
+        <div className="text-sm"><label htmlFor="route-map">Phiên bản bản đồ</label><select id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => { updateDraft({ mapVersionId: e.target.value }); setStopsOverride([]) }}><option value="">— Chọn bản đồ —</option>{mapOptions.map(item => <option key={item.map.id} value={item.map.id} disabled={mapBlock(item) !== null}>{item.map.areaName} v{item.map.versionNumber} · {item.map.mapKey}{mapBlock(item) ? ` (${mapBlock(item)})` : ''}</option>)}</select>{mapNotReady ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">Bản đồ này không còn kiểm tra kỹ thuật đạt nên không lưu được tuyến. Nhờ Kỹ thuật kiểm tra lại hoặc chọn bản đồ khác.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đạt kiểm tra kỹ thuật và đã có POI đạt kiểm chứng.</p>}</div>
         <label className="text-sm sm:col-span-2">Mô tả<textarea className={`${inputClass} mt-1`} rows={2} maxLength={1000} value={draft.description} onChange={e => updateDraft({ description: e.target.value })} /></label>
         <h2 className="font-semibold sm:col-span-2">Điểm bắt đầu (m, rad)</h2>
         {(['startX', 'startY', 'startYaw'] as const).map(field => <label key={field} className="text-sm">{startFields[field]}<input className={`${inputClass} mt-1`} type="number" step="any" value={draft[field]} onChange={e => updateDraft({ [field]: Number(e.target.value) })} /></label>)}
@@ -107,7 +109,7 @@ export default function StaffManageRouteFormPage() {
         })}</ol> : <p className="py-4 text-sm text-[#64748b]">Chưa có POI đạt kiểm chứng trên bản đồ này.</p>}
       </section>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      <div className="flex justify-end"><button disabled={busy} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button></div>
+      <div className="flex justify-end"><button disabled={busy || mapNotReady} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button></div>
     </form>
   </AdminPage>
 }
