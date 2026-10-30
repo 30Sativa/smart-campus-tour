@@ -1,3 +1,5 @@
+import { ApiError } from '../../../api/client'
+import { tourError } from './tour-messages'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useToastStore } from '../../../components/ui/toast-store'
@@ -61,6 +63,17 @@ beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: tru
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 describe('live Tour management', () => {
+  it('warns on the create form that the server refuses new Tours for now', () => {
+    api()
+    renderAt('/staff/manage/tours/new')
+    expect(screen.getByText(/Hiện chưa tạo được Tour mới/)).toBeInTheDocument()
+  })
+
+  it('explains the duration refusal instead of a concurrency message', () => {
+    const refusal = new ApiError(409, JSON.stringify({ message: 'x', errors: { code: 'TOUR_DURATION_UNAVAILABLE' } }))
+    expect(tourError(refusal)).toContain('thời lượng nội dung/audio đã duyệt')
+  })
+
   it('creates a SCHEDULED Tour from an active Route with its revision and an idempotency key', async () => {
     const writes = api()
     renderAt('/staff/manage/tours/new')

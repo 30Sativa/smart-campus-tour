@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '../../../components/ui/ConsolePrimitives'
-import { AdminPage } from '../../../features/administration/AdminUi'
+import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { newRequestId, useCreateTour } from '../../../features/administration/tours/hooks'
 import { tourError } from '../../../features/administration/tours/tour-messages'
 import { TourForm } from '../../../features/administration/tours/TourForm'
@@ -28,6 +28,7 @@ export default function StaffManageTourCreatePage() {
   return <AdminPage>
     <Link to="/staff/manage/tours" className="mb-4 inline-block text-sm text-[#2d719e]">← Danh sách Tour</Link>
     <PageHeader eyebrow="Chuẩn bị Tour" title="Tạo Tour mới" description="Tour mới ở trạng thái Đang nhận đăng ký: chưa gán robot và không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn." />
+    <div className="mb-4"><Notice tone="warn">Hiện chưa tạo được Tour mới: hệ thống chưa có thời lượng nội dung/audio đã duyệt nên máy chủ sẽ từ chối. Tuyến đã kiểm chứng ở Danh mục tuyến cũng chưa chọn được tại đây. Tour đã có vẫn xem và sửa thông tin được.</Notice></div>
     <TourForm submitLabel="Tạo Tour" busy={create.isPending} error={create.isError ? tourError(create.error) : null} cancelTo="/staff/manage/tours" onSubmit={submit} />
   </AdminPage>
 }
