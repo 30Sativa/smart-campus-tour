@@ -304,21 +304,38 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV16SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV18SnapshotAndMarker()
     {
-        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync("snapshot-v1.6.sql");
-        var v16Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.6.sql"))).Replace("\r\n", "\n"));
-        await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{v16Hash}';");
-        await database.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.6';");
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.8.sql", "1.8"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_VerifiedV16SnapshotAndMarkerRequiresUpgrade()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.6.sql", "1.6"));
+    }
+
+    // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
+    // variable bound exactly as init-db.sh binds it for the current v1.8 release.
+    private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version)
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
+        await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{await SnapshotHashAsync(snapshot)}';");
+        await database.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'{version}';");
         await using var connection = new SqlConnection(database.ConnectionString);
         await connection.OpenAsync();
-        var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
-        var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
-        var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
-        var currentGuard = guard.Replace("$(SchemaHash)", v16Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
-        await using var command = new SqlCommand(currentGuard, connection);
-        Assert.Equal("READY", await command.ExecuteScalarAsync());
+        var guard = (await File.ReadAllTextAsync(Schema("bootstrap-check.sql")))
+            .Replace("$(SchemaHashV17)", await SnapshotHashAsync("snapshot-v1.7.sql"))
+            .Replace("$(SchemaHashV16)", await SnapshotHashAsync("snapshot-v1.6.sql"))
+            .Replace("$(SchemaHashV15)", await SnapshotHashAsync("snapshot-v1.5.sql"))
+            .Replace("$(SchemaHashV14)", await SnapshotHashAsync("snapshot-v1.4.sql"))
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.8.sql"));
+        await using var command = new SqlCommand(guard, connection);
+        return await command.ExecuteScalarAsync();
     }
+
+    private static async Task<string> SnapshotHashAsync(string snapshot) =>
+        Hash((await File.ReadAllTextAsync(Schema(snapshot))).Replace("\r\n", "\n"));
 
     private const string CurrentHash = "96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68";
     private const string PreviousHash = "2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67";
