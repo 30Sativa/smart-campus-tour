@@ -24,7 +24,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_MapAssignedByUserId')
     EXEC sys.sp_executesql N'ALTER TABLE dbo.Robots WITH CHECK ADD CONSTRAINT FK_Robots_MapAssignedByUserId FOREIGN KEY (MapAssignedByUserId) REFERENCES dbo.Users(Id);';
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name=N'IX_Robots_AssignedMapVersionId')
-    CREATE INDEX IX_Robots_AssignedMapVersionId ON dbo.Robots(AssignedMapVersionId) WHERE AssignedMapVersionId IS NOT NULL;
+    EXEC sys.sp_executesql N'CREATE INDEX IX_Robots_AssignedMapVersionId ON dbo.Robots(AssignedMapVersionId) WHERE AssignedMapVersionId IS NOT NULL;';
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.AuditLogs') AND name=N'UX_AuditLogs_RobotMapAssignmentRequest')
     CREATE UNIQUE INDEX UX_AuditLogs_RobotMapAssignmentRequest ON dbo.AuditLogs(ActorUserId, CorrelationId)
         WHERE ActorUserId IS NOT NULL AND CorrelationId IS NOT NULL AND [Action] IN (N'ROBOT_MAP_ASSIGNED', N'ROBOT_MAP_CLEARED');
