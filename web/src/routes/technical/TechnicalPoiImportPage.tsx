@@ -37,13 +37,13 @@ function toRows(queue: PoiVerificationQueueItem[], proposals: PoiProposal[]): Po
 export default function TechnicalPoiImportPage() {
   const proposals = usePoiVerificationQueue()
   const allProposals = usePoiProposals()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
+  const [selected, setSelected] = useState<PoiRow | null>(null)
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
   const rows = useMemo(() => toRows(proposals.data ?? [], allProposals.data ?? []), [proposals.data, allProposals.data])
   const visible = rows.filter(row => row.filter === filter)
   const count = (value: PoiFilter) => rows.filter(row => row.filter === value).length
-  const selected = rows.find(row => row.proposalId === selectedId)
   // The queue alone is enough for the first two figures; only recorded results need the full list.
   const recordedCount = (value: PoiFilter) => allProposals.isPending ? '…' : allProposals.isError ? '-' : count(value)
 
@@ -75,7 +75,7 @@ export default function TechnicalPoiImportPage() {
                   <td className={`${tdClass} font-mono text-xs text-[#64748b]`}>{item.revision.x}, {item.revision.y}, {item.revision.yaw}</td>
                   <td className={tdClass}><PoiStatus row={item} /></td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{stamp(item.revision.submittedAt)}</td>
-                  <td className={`${tdClass} text-right`}><button className={buttonClass(item.recordable ? 'primary' : 'secondary', 'sm')} type="button" onClick={() => setSelectedId(item.proposalId)}>{item.recordable ? 'Ghi kết quả' : 'Xem kết quả'}</button></td>
+                  <td className={`${tdClass} text-right`}><button className={buttonClass(item.recordable ? 'primary' : 'secondary', 'sm')} type="button" onClick={() => setSelected(item)}>{item.recordable ? 'Ghi kết quả' : 'Xem kết quả'}</button></td>
                 </tr>)}
                 {!visible.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={6}>{filterText[filter].empty}</td></tr>}
               </tbody>
@@ -84,8 +84,8 @@ export default function TechnicalPoiImportPage() {
         )}
       </section>
 
-      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} onClose={() => setSelectedId(null)} />}
-      {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} onClose={() => setSelectedId(null)} />}
+      {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} onClose={() => setSelected(null)} />}
+      {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} onClose={() => setSelected(null)} />}
     </TechnicalPage>
   )
 }

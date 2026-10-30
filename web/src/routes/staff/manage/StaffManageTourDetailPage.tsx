@@ -21,7 +21,6 @@ export default function StaffManageTourDetailPage() {
   const cancel = useCancelTour()
   const [confirming, setConfirming] = useState(false)
   const [requestId, setRequestId] = useState(newRequestId)
-  const [success, setSuccess] = useState('')
   const data = detail.data
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
@@ -32,8 +31,7 @@ export default function StaffManageTourDetailPage() {
       await cancel.mutateAsync({ id: tour.id, requestId, rowVersion: tour.rowVersion, reason: reason.trim() })
       setConfirming(false)
       setRequestId(newRequestId())
-      setSuccess('Đã hủy Tour. Lời mời của các đoàn đã bị thu hồi; danh sách đăng ký được giữ lại.')
-      notify({ tone: 'info', title: `Đã hủy Tour “${tour.name}”`, detail: 'Lời mời của các đoàn đã bị thu hồi.' })
+      notify({ tone: 'info', title: `Đã hủy Tour “${tour.name}”`, detail: 'Lời mời của các đoàn đã bị thu hồi; danh sách đăng ký được giữ lại.' })
     } catch { /* The dialog shows the error and keeps the reason. */ }
   }
 
@@ -43,7 +41,6 @@ export default function StaffManageTourDetailPage() {
       {permissions.canEditMetadata && <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('primary')}>Sửa</Link>}
       {permissions.canCancel && <button type="button" className={buttonClass('danger')} onClick={() => { cancel.reset(); setConfirming(true) }}>Hủy Tour</button>}
     </div>} />
-    {success && <div className="mb-4"><Notice tone="success">{success}</Notice></div>}
     {tour.state === 'SCHEDULED' && <div className="mb-4"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn. Chốt Tour (READY) chưa có trên hệ thống thật.</Notice></div>}
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
