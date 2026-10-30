@@ -122,7 +122,9 @@ authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
 submission and Technical Staff manual test evidence described in
 `backend/docs/route-revisions.md` and ADR-0023. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
-not pass legacy `PoiId` values. The two remaining Staff Route GET operations
+not pass legacy `PoiId` values. Saving or submitting a revision requires the
+exact map version to have current technical evidence, otherwise 409
+`TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
 serve existing Tour records only. Versioned Route to Tour selection,
 scheduling, reservations and READY remain blocked by ADR-0024; these APIs do
 not imply a schedulable Tour or hardware acceptance.

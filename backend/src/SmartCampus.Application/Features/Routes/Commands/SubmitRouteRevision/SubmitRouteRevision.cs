@@ -21,7 +21,7 @@ public sealed class SubmitRouteRevisionValidator : AbstractValidator<SubmitRoute
     }
 }
 
-public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, TimeProvider clock)
+public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, TimeProvider clock)
     : IRequestHandler<SubmitRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SubmitRouteRevisionCommand c, CancellationToken ct)
@@ -40,6 +40,10 @@ public sealed class SubmitRouteRevisionHandler(IRouteRevisionRepository repo, Ti
         if (current is null || current.Id != c.RevisionId || current.RevisionNumber != request.ExpectedCurrentRevision)
             throw new ConflictException("Only the exact current route revision can be submitted.", "STALE_ROUTE_REVISION");
         if (await repo.GetSubmissionsAsync(current.Id, ct) is { Count: > 0 }) throw new ConflictException("This immutable route revision was already submitted.");
+        var map = await mapRepository.FindMapVersionAsync(current.MapVersionId, includePackage: false, ct)
+            ?? throw new NotFoundException("Map version", current.MapVersionId);
+        await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
+        (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
         await EnsurePoisStillPass(repo, current.Id, ct);
         var now = clock.GetUtcNow();
         repo.Add(new RouteRevisionSubmission { Id = Guid.NewGuid(), RouteRevisionId = current.Id,

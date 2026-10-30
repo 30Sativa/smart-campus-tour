@@ -71,6 +71,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0031](0031-versioned-poi-narration-content.md) | Narration and optional HTTPS fallback video on immutable POI revisions, with route-stop snapshots | owner-authorized Part 1; v1.7 schema/API/UI; content-only revisions reuse navigation verification |
 | [0032](0032-robot-map-context-assignment.md) | Store physical robot Fleet Sync map context as a Technical Staff-managed MapVersion assignment | owner-authorized; v1.8 schema/API/UI rollout required; no hardware acceptance claimed |
 
+| [0033](0033-map-technical-check-before-route-authoring.md) | Require current ADR-0028 map evidence before saving or submitting a versioned Route revision | owner-authorized; no schema change; physical behavior unverified |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

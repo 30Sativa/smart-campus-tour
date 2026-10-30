@@ -1,6 +1,14 @@
 import { ApiError } from '../../../api/client'
 import type { StopDraft } from './RouteStopsEditor'
 
+/** A revision's state as words and colour: draft, submitted and waiting, passed, failed. */
+export function revisionTone(submitted: boolean, status: string) {
+  if (!submitted) return { label: 'Bản nháp', chip: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]' }
+  if (status === 'PASS') return { label: 'Đã kiểm chứng', chip: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]' }
+  if (status === 'FAIL') return { label: 'Không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
+  return { label: 'Chờ kiểm chứng', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
+}
+
 const ISSUES: Record<string, string> = {
   MAP_REQUIRED: 'Chưa có map và frame.', START_POSE_INVALID: 'Pose bắt đầu không hợp lệ.',
   END_POSE_REQUIRED: 'Điểm kết thúc cần đủ x, y và yaw hợp lệ.', END_MODE_INVALID: 'Cách kết thúc và pose kết thúc không khớp.',

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw } from 'lucide-react'
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
@@ -134,20 +135,22 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
   const clear = useClearRobotMap()
   const [areaKey, setAreaKey] = useState('')
   const [mapVersionId, setMapVersionId] = useState('')
+  const [confirming, setConfirming] = useState<'assign' | 'clear' | null>(null)
   const areaMaps = useMemo(() => (maps.data ?? []).filter(item => item.map.areaKey === areaKey), [maps.data, areaKey])
-  const close = () => { if (!assign.isPending && !clear.isPending) onClose() }
+  const selected = areaMaps.find(item => item.map.id === mapVersionId)
+  // Escape reaches both overlays; while the confirmation is up it only closes that.
+  const close = () => { if (!assign.isPending && !clear.isPending && !confirming) onClose() }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const selected = areaMaps.find(item => item.map.id === mapVersionId)
-    if (!selected || assign.isPending || clear.isPending) return
-    if (!window.confirm(`Gán ${selected.map.mapKey} · ${selected.map.frameId} cho ${robot.robotCode}? MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.`)) return
-    assign.mutate({ id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion, mapVersionId }, { onSuccess: onClose })
+    if (selected && !assign.isPending && !clear.isPending) setConfirming('assign')
   }
-  const clearAssignment = () => {
-    if (clear.isPending || assign.isPending || !window.confirm(`Gỡ gán bản đồ cho ${robot.robotCode}? Fleet Sync sẽ từ chối báo cáo cho đến khi gán lại ngữ cảnh.`)) return
-    clear.mutate({ id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion }, { onSuccess: onClose })
+  const confirm = () => {
+    const input = { id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion }
+    if (confirming === 'assign') assign.mutate({ ...input, mapVersionId }, { onSuccess: onClose })
+    else clear.mutate(input, { onSuccess: onClose })
+    setConfirming(null)
   }
-  return <Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn một phiên bản map đã tải lên. Không yêu cầu map phải PASS." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={clearAssignment} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn một phiên bản map đã tải lên. Không yêu cầu map phải PASS." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
       <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => { setAreaKey(event.target.value); setMapVersionId('') }}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}</select></div>
       <div><label className={labelClass} htmlFor="robot-map-version">Phiên bản bản đồ</label><select id="robot-map-version" className={`${inputClass} mt-1`} value={mapVersionId} onChange={event => setMapVersionId(event.target.value)} disabled={!areaKey}><option value="">Chọn phiên bản</option>{areaMaps.map(item => <option key={item.map.id} value={item.map.id}>{item.map.mapKey} · {item.map.frameId} · {item.technicalCheckStatus === 'PASSED' ? 'Đã đạt' : item.technicalCheckStatus === 'FAILED' ? 'Chưa đạt' : 'Chưa kiểm tra'}</option>)}</select></div>
@@ -155,6 +158,11 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
       {(maps.isError || areas.isError || assign.isError || clear.isError) && <p role="alert" className="text-sm text-[#b23e31]">{errorText(assign.error ?? clear.error ?? maps.error ?? areas.error)}</p>}
     </form>
   </Modal>
+  {confirming && <ConfirmationDialog open withReason={false} tone={confirming === 'clear' ? 'danger' : 'default'}
+    title={confirming === 'clear' ? `Gỡ bản đồ khỏi ${robot.robotCode}?` : `Gán bản đồ cho ${robot.robotCode}?`}
+    description={confirming === 'clear' ? 'Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.' : `Gán ${selected?.map.mapKey} · ${selected?.map.frameId}. MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.`}
+    confirmLabel={confirming === 'clear' ? 'Gỡ gán' : 'Gán bản đồ'} onConfirm={confirm} onCancel={() => setConfirming(null)} />}
+  </>
 }
 
 function RegisterRobotModal({ open, onClose }: { open: boolean; onClose: () => void }) {

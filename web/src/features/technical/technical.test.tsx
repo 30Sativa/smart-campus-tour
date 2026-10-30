@@ -244,7 +244,6 @@ describe('Technical Staff API integration', () => {
   })
 
   it('assigns a non-PASSED map, confirms the MiniPC context, and refreshes robot/map views', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     mapCheckStatus = 'PENDING'
     physicalRobots = [makePhysicalRobot({ assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null })]
     renderPage(<TechnicalRobotsPage />)
@@ -257,10 +256,13 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByText('MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu bản đồ' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồ' }))
+    expect(requests.some(item => item.url.pathname.endsWith('/map-assignment'))).toBe(false)
+    const confirmation = within(screen.getByRole('dialog', { name: 'Gán bản đồ cho amr-01?' }))
+    expect(confirmation.getByText(/MiniPC phải dùng đúng MapKey\/FrameId này/)).toBeInTheDocument()
+    fireEvent.click(confirmation.getByRole('button', { name: 'Gán bản đồ' }))
     await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')).toBe(true))
     const request = requests.find(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')!
     expect(JSON.parse(String(request.init?.body))).toMatchObject({ mapVersionId: map.id, expectedRowVersion: 'AAAAAAAAAAA=' })
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('MiniPC phải dùng đúng MapKey/FrameId này'))
     expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
@@ -349,7 +351,6 @@ describe('Technical Staff API integration', () => {
   })
 
   it('refreshes the robot list and deployment-check picker after credential success and failure', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderPage(<TechnicalRobotsPage />)
     await screen.findByText('AMR 01')
     const robotListRequestCount = () => requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length
@@ -362,9 +363,9 @@ describe('Technical Staff API integration', () => {
 
     failCredentialMutation = true
     fireEvent.click(await screen.findByRole('button', { name: 'Cấp lại' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Cấp lại khóa của amr-01?' })).getByRole('button', { name: 'Cấp lại khóa' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Credential update failed.')
     await waitFor(() => expect(robotListRequestCount()).toBeGreaterThan(initialListRequestCount + 1))
-    expect(confirm).toHaveBeenCalled()
   })
 
   it('renders a RobotCode pattern valid with the HTML v flag and matching server rules', async () => {
@@ -561,6 +562,24 @@ describe('Technical Staff API integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép FrameId' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('map'))
     expect(useToastStore.getState().toasts.at(-1)?.title).toBe('Đã sao chép FrameId')
+  })
+
+  it('uses the app dialog for risky robot actions and keeps Escape inside it', async () => {
+    const nativeConfirm = vi.spyOn(window, 'confirm')
+    credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'abcd' }
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thu hồi' }))
+    const confirmation = within(screen.getByRole('dialog', { name: 'Thu hồi khóa của amr-01?' }))
+    expect(confirmation.getByRole('button', { name: 'Thu hồi khóa' })).toBeDisabled()
+    fireEvent.change(confirmation.getByLabelText(/Lý do thu hồi/), { target: { value: 'Mất MiniPC' } })
+    expect(confirmation.getByRole('button', { name: 'Thu hồi khóa' })).toBeEnabled()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Thu hồi khóa của amr-01?' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Khóa Fleet Sync · amr-01' })).toBeInTheDocument()
+    expect(nativeConfirm).not.toHaveBeenCalled()
   })
 
   it('returns to the robot detail after closing the key dialog', async () => {

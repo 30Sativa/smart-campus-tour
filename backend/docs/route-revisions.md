@@ -59,6 +59,8 @@ Response is the normal `BaseResponse<RouteRevisionView>` envelope. `data.routeId
 
 Submission is a separate receipt; it is not a test result, activation, scheduling, or READY state. Stale revision and changed effective POI result return 409.
 
+**ADR-0033 map gate:** saving a draft and submitting a revision both require the exact map version to have current technical evidence under ADR-0028. Otherwise they return 409 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` and write nothing. A committed idempotent retry still replays its result. Saved or submitted revisions are not rewritten, and route test runs keep their own deployment rule.
+
 ### 3. Technical Staff records a failed manual run
 
 Read the queue, then call:

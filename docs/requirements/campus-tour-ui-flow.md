@@ -17,8 +17,8 @@ Use the SRS screen IDs exactly; components need not be separate routes.
 | SCR-ADMIN | Admin | Manage accounts, configuration and administrative audit; one supported role/account |
 | SCR-TECH-MAP | Technical Staff | Upload a new or existing area version; use the complete area catalog, then choose any registered physical robot for manual deployment/localization evidence. A new PASS requires first accepted Fleet Sync under its current credential; FAIL remains available before confirmation. Keep upload distinct from check result. |
 | SCR-TECH-ROBOT | Technical Staff | Register a PHYSICAL identity using RobotCode and display name. Registration can be prepared independently of map creation/upload and does not require an online robot. Show persisted first accepted connection context separately from the latest in-memory sync; refresh while keeping map-check inputs. Credential provisioning and bridge setup remain separate deployment duties. |
-| SCR-TECH-POI | Technical Staff | Import unverified POIs; verify exact POI/route revisions; project YAML/frame mapping pending |
-| SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation |
+| SCR-TECH-POI | Technical Staff | Import unverified POIs; verify exact POI/route revisions; project YAML/frame mapping pending. Filter POIs by pending, recheck and passed; a recorded result opens read-only with its history and offers no second result or withdrawal. A rejected revision shows it is waiting for Staff |
+| SCR-STAFF-CONTENT | Staff | Propose POIs, compose route revisions, approve Q&A/narration/fallback; no technical confirmation. Route authoring offers only maps with current technical evidence and at least one passed POI (ADR-0033); stop order is explicit and the saved revision states its next step |
 | SCR-STAFF-REVIEW | Staff | Decide pending rows and requested email changes; tour SCHEDULED; ≤2-working-day target |
 | SCR-REP | Representative | Own registration/rows, status, email-change/branch requests; server ownership/cutoff checks |
 | SCR-INVITATION | Representative / Staff | Own rows / managed tours; accepted row; resend/reissue/revoke semantics differ |
@@ -47,7 +47,8 @@ context. A valid report timestamp does not verify NTP, and confirmation does
 not prove the robot loaded the named map file or is safe. Persisted confirmation
 and current online freshness are separate. Provisioning responsibility does
 not grant Staff Operator any SQL permission.
-(unverified) → Technical verifies POIs → Staff composes route/content →
+(unverified) → Technical verifies POIs → Staff composes route/content while the
+map keeps current technical evidence (ADR-0033) →
 Technical + assigned Operator test exact tuple → Staff schedules and reserves
 15min + longest permitted path +15min → review all row/email decisions →
 READY locks route/content/list → preflight at published time → Start while READY

@@ -55,7 +55,7 @@ public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRev
     }
 }
 
-public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, TimeProvider clock)
+public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, TimeProvider clock)
     : IRequestHandler<SaveRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SaveRouteRevisionCommand c, CancellationToken ct)
@@ -86,6 +86,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
         }
 
         var map = await repo.GetMapAsync(i.MapVersionId, ct) ?? throw new NotFoundException("Map version", i.MapVersionId);
+        await mapRepository.LockMapPreparationStateAsync(map.Id, ct);
+        (await MapPreparationEligibility.LoadAsync(mapRepository, map, ct)).EnsureCanUse();
         var poiIds = i.Stops.Select(s => s.PoiRevisionId).ToArray();
         var evidence = await repo.GetPoiEvidenceAsync(poiIds, ct);
         if (evidence.Count != poiIds.Length) throw new ConflictException("Every selected POI revision must have effective technical verification evidence.", "POI_VERIFICATION_REQUIRED");
