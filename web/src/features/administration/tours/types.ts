@@ -37,4 +37,5 @@ export type TourSlot = {
 export type TourSlots = {
   routeRevisionId: string; robotCode: string; measuredDurationSeconds: number | null; expectedDurationSeconds: number | null
   days: { date: string; slots: TourSlot[] }[]
+  customStartEarliest: string; customStartLatest: string
 }

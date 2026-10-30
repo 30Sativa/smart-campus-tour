@@ -6,7 +6,7 @@ namespace SmartCampus.UnitTests;
 
 public sealed class TourScheduleTests
 {
-    private static readonly TourScheduleSettings Settings = new(["14:00", "09:00", "10:00", "15:00"]);
+    private static readonly TourScheduleSettings Settings = new(["14:00", "09:00", "10:00", "15:00"], "08:00", "17:00");
     private static readonly TourReservationPlan Plan = new(1200, 1200);
     private static readonly DateOnly Day = new(2026, 12, 1);
     private static readonly DateTimeOffset Start = TourSchedule.SlotStart(Day, new TimeOnly(9, 0));
@@ -16,9 +16,51 @@ public sealed class TourScheduleTests
     public void Settings_SortSlots_AndRefuseNoneOrBadTimes()
     {
         Assert.Equal([new(9, 0), new(10, 0), new(14, 0), new(15, 0)], Settings.StartSlots);
-        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings([]));
-        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(null));
-        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(["9am"]));
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings([], "08:00", "17:00"));
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(null, "08:00", "17:00"));
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(["9am"], "08:00", "17:00"));
+    }
+
+    [Theory]
+    [InlineData(null, "17:00")]
+    [InlineData("8am", "17:00")]
+    [InlineData("17:00", "08:00")]  // Backwards.
+    [InlineData("08:00", "08:00")]  // Empty.
+    public void Settings_RefuseUnusableCustomHours(string? earliest, string? latest) =>
+        Assert.Throws<InvalidOperationException>(() => new TourScheduleSettings(["09:00"], earliest, latest));
+
+    [Theory]
+    [InlineData(8, 0)]      // Both edges are inside.
+    [InlineData(13, 37)]
+    [InlineData(17, 0)]
+    public void CustomHours_AllowAnyWholeMinute(int hour, int minute) =>
+        Assert.Null(TourSchedule.StartRule(Settings, TourSchedule.SlotStart(Day, new TimeOnly(hour, minute))));
+
+    [Theory]
+    [InlineData(7, 59)]
+    [InlineData(17, 1)]
+    [InlineData(1, 0)]
+    public void CustomHours_RefuseStartsOutside(int hour, int minute)
+    {
+        var block = TourSchedule.StartRule(Settings, TourSchedule.SlotStart(Day, new TimeOnly(hour, minute)));
+        Assert.Equal(TourSchedule.OutsideStartHours, block?.Code);
+        Assert.Equal("Ngoài giờ cho phép, chọn từ 08:00 đến 17:00", block?.Message);
+    }
+
+    [Fact]
+    public void CustomHours_ReadVietnamTime_AndRefusePartMinutes()
+    {
+        // 03:30 UTC is 10:30 in Vietnam, and 12:00 UTC, inside the hours on a UTC clock, is 19:00 in Vietnam.
+        Assert.Null(TourSchedule.StartRule(Settings, new DateTimeOffset(2026, 12, 1, 3, 30, 0, TimeSpan.Zero)));
+        Assert.NotNull(TourSchedule.StartRule(Settings, new DateTimeOffset(2026, 12, 1, 12, 0, 0, TimeSpan.Zero)));
+        Assert.NotNull(TourSchedule.StartRule(Settings, TourSchedule.SlotStart(Day, new TimeOnly(13, 37, 30))));
+    }
+
+    [Fact]
+    public void ConfiguredSlot_StaysAllowedOutsideTheCustomHours()
+    {
+        var evening = new TourScheduleSettings(["19:00"], "08:00", "17:00");
+        Assert.Null(TourSchedule.StartRule(evening, TourSchedule.SlotStart(Day, new TimeOnly(19, 0))));
     }
 
     [Fact]

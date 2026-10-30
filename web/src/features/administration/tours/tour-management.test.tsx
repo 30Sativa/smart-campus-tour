@@ -53,16 +53,21 @@ const pickDate = () => fireEvent.change(screen.getByLabelText(/Ngày tổ chức
 const freeSlot = { time: '09:00', startsAt: '2099-01-03T02:00:00Z', available: true, reasonCode: null, reason: null,
   reservationStartsAt: '2099-01-03T01:45:00Z', reservationEndsAt: '2099-01-03T02:37:00Z', registrationClosesAt: '2099-01-01T02:00:00Z' }
 const lockedSlot = { ...freeSlot, time: '10:00', startsAt: '2099-01-03T03:00:00Z', available: false, reasonCode: 'RESERVATION_OVERLAP', reason: 'Trùng khung giữ robot của Tour Tour chiều' }
+const customFree = { ...freeSlot, time: '13:30', startsAt: '2099-01-03T06:30:00Z', reservationStartsAt: '2099-01-03T06:15:00Z', reservationEndsAt: '2099-01-03T07:07:00Z' }
+const tooEarly = { ...freeSlot, time: '07:30', startsAt: '2099-01-03T00:30:00Z', available: false, reasonCode: 'OUTSIDE_START_HOURS', reason: 'Ngoài giờ cho phép, chọn từ 08:00 đến 17:00' }
 let slotDay = [freeSlot, lockedSlot]
 let refuseCreate: string | null = null
 
 function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { ...TESTED, revisionId: 'revision-untested', name: 'Chưa đạt', verificationStatus: 'NOT_TESTED' }]) {
   const writes: { method: string; path: string; body: Record<string, unknown> }[] = []
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const path = new URL(String(input), 'http://localhost').pathname
+    const url = new URL(String(input), 'http://localhost')
+    const path = url.pathname
     const method = init?.method ?? 'GET'
+    const typed = url.searchParams.get('time')
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
-      measuredDurationSeconds: 1200, expectedDurationSeconds: 1320, days: [{ date: '2099-01-03', slots: slotDay }] } }))
+      measuredDurationSeconds: 1200, expectedDurationSeconds: 1320, customStartEarliest: '08:00', customStartLatest: '17:00',
+      days: [{ date: '2099-01-03', slots: typed ? [...slotDay, typed === '07:30' ? tooEarly : customFree] : slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
       if (refuseCreate) return Promise.resolve(json({ success: false, message: 'x', errors: { code: refuseCreate } }, 409))
@@ -141,6 +146,28 @@ describe('live Tour management', () => {
       configuration: { name: 'Tour sáng thứ Bảy', description: null, routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', scheduledStartAt: '2099-01-03T02:00:00Z', fallbackVideoUrl: null },
     } })
     expect(writes[0].body.requestId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
+  })
+
+  it('creates a Tour at a typed time, judged by the server like a slot', async () => {
+    const writes = api()
+    renderAt('/staff/manage/tours/new')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour giờ riêng' } })
+    await chooseTarget()
+    pickDate()
+    fireEvent.click(await screen.findByRole('button', { name: /09:00/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Giờ khác/ }))
+    // The picked slot no longer stands: nothing can be saved until the typed time is judged.
+    expect(screen.queryByRole('region', { name: 'Xem lại trước khi tạo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Giờ bắt đầu/), { target: { value: '07:30' } })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ngoài giờ cho phép, chọn từ 08:00 đến 17:00')
+    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Giờ bắt đầu/), { target: { value: '13:30' } })
+    const review = await screen.findByRole('region', { name: 'Xem lại trước khi tạo' })
+    expect(within(review).getByText('13:15 - 14:07')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].body).toMatchObject({ configuration: { scheduledStartAt: '2099-01-03T06:30:00Z' } })
   })
 
   it('locks a taken slot with its reason, so it cannot be chosen', async () => {

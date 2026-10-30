@@ -9,7 +9,7 @@ import { campusDay, campusStamp, campusTime, formatDuration } from './tour-calen
 import { tourError } from './tour-messages'
 import type { CreateTourInput, TourSlot } from './types'
 
-/** A new Tour names one tested route revision, one physical robot, one Operator and one free slot (ADR-0034, ADR-0035). */
+/** A new Tour names one tested route revision, one physical robot, one Operator and one free slot or typed time (ADR-0034, ADR-0035, ADR-0036). */
 export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error: string | null; onSubmit: (input: CreateTourInput) => void }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -18,6 +18,8 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [operatorUserId, setOperatorUserId] = useState('')
   const [date, setDate] = useState('')
   const [startsAt, setStartsAt] = useState('')
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customTime, setCustomTime] = useState('')
   const [video, setVideo] = useState('')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
@@ -25,17 +27,21 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date)
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
+  const custom = useTourSlots(routeRevisionId, robotCode, customOpen ? date : '', customTime)
   const day = slots.data?.days[0]
+  const customSlot = custom.data?.days[0]?.slots.find(item => item.time === customTime)
+  const timing = customOpen ? custom.data : slots.data
   // Derived, so a slot that stops being free after a refresh drops out of the review by itself.
-  const slot = day?.slots.find(item => item.startsAt === startsAt && item.available)
-  const ready = Boolean(selected && robotCode && operatorUserId && slot)
+  const picked = customOpen ? customSlot : day?.slots.find(item => item.startsAt === startsAt)
+  const usable = picked?.available ? picked : undefined
+  const ready = Boolean(selected && robotCode && operatorUserId && usable)
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (busy || !ready || !slot) return
+    if (busy || !ready || !usable) return
     if (!name.trim()) return setClientError('Nhập tên Tour.')
     setClientError('')
-    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: slot.startsAt, fallbackVideoUrl: video.trim() || null })
+    onSubmit({ name: name.trim(), description: description.trim() || null, routeRevisionId, robotCode, operatorUserId, scheduledStartAt: usable.startsAt, fallbackVideoUrl: video.trim() || null })
   }
 
   return <form onSubmit={submit} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -68,7 +74,17 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         {!date ? <p className="mt-1 text-xs text-[#64748b]">Chọn ngày để xem khung giờ.</p>
           : slots.isPending ? <p aria-busy="true" className="mt-1 text-xs text-[#64748b]">Đang tải khung giờ…</p>
           : slots.isError ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">{tourError(slots.error)}</p>
-          : <div className="mt-1.5 grid gap-2 sm:grid-cols-2">{day?.slots.map(item => <SlotButton key={item.startsAt} slot={item} chosen={item === slot} onPick={() => setStartsAt(item.startsAt)} />)}</div>}
+          : <>
+            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+              {day?.slots.map(item => <SlotButton key={item.startsAt} slot={item} chosen={!customOpen && item.startsAt === startsAt} onPick={() => { setCustomOpen(false); setStartsAt(item.startsAt) }} />)}
+              <button type="button" aria-pressed={customOpen} onClick={() => setCustomOpen(true)} className={slotClass(customOpen, true)}>
+                <span className="block font-semibold">Giờ khác</span>
+                <span className="block text-xs">Từ {slots.data?.customStartEarliest} đến {slots.data?.customStartLatest}</span>
+              </button>
+            </div>
+            {customOpen && <label className="mt-3 block text-sm">Giờ bắt đầu<input required type="time" className={inputClass} min={slots.data?.customStartEarliest} max={slots.data?.customStartLatest} value={customTime} onChange={e => setCustomTime(e.target.value)} />
+              <CustomTimeStatus time={customTime} pending={custom.isFetching} error={custom.isError ? tourError(custom.error) : null} slot={customSlot} /></label>}
+          </>}
       </div>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
@@ -78,14 +94,14 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
     </fieldset>
 
     <div className="space-y-3">
-      {slot && <section className={`${panelClass} p-4`} aria-label="Xem lại trước khi tạo">
+      {usable && timing && <section className={`${panelClass} p-4`} aria-label="Xem lại trước khi tạo">
         <h2 className="text-[15px] font-semibold">Xem lại trước khi tạo</h2>
         <dl className="mt-3 space-y-2 text-sm">
-          <Review label="Bắt đầu">{campusStamp(slot.startsAt)}</Review>
-          <Review label="Thời lượng dự kiến">{formatDuration(slots.data!.expectedDurationSeconds!)}
-            {slots.data!.expectedDurationSeconds !== slots.data!.measuredDurationSeconds && <span className="block text-xs text-[#64748b]">Chạy thử đo {formatDuration(slots.data!.measuredDurationSeconds!)}, cộng thêm thời gian dừng đã tăng.</span>}</Review>
-          <Review label="Giữ robot">{campusTime(slot.reservationStartsAt!)} - {campusTime(slot.reservationEndsAt!)}</Review>
-          <Review label="Đóng đăng ký">{campusStamp(slot.registrationClosesAt)}</Review>
+          <Review label="Bắt đầu">{campusStamp(usable.startsAt)}</Review>
+          <Review label="Thời lượng dự kiến">{formatDuration(timing.expectedDurationSeconds!)}
+            {timing.expectedDurationSeconds !== timing.measuredDurationSeconds && <span className="block text-xs text-[#64748b]">Chạy thử đo {formatDuration(timing.measuredDurationSeconds!)}, cộng thêm thời gian dừng đã tăng.</span>}</Review>
+          <Review label="Giữ robot">{campusTime(usable.reservationStartsAt!)} - {campusTime(usable.reservationEndsAt!)}</Review>
+          <Review label="Đóng đăng ký">{campusStamp(usable.registrationClosesAt)}</Review>
         </dl>
       </section>}
       <section className={`${panelClass} p-4`} aria-label="Xem trước tuyến">
@@ -103,9 +119,19 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   </form>
 }
 
+const slotClass = (chosen: boolean, available: boolean) =>
+  `rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] disabled:cursor-not-allowed ${chosen ? 'border-[#2563eb] bg-[#eff6ff]' : available ? 'border-[#e2e8f0] bg-white hover:border-[#93b4ef]' : 'border-[#eef1f4] bg-[#f8fafc] text-[#64748b]'}`
+
+function CustomTimeStatus({ time, pending, error, slot }: { time: string; pending: boolean; error: string | null; slot?: TourSlot }) {
+  if (!time) return <span className="mt-1 block text-xs text-[#64748b]">Giờ Việt Nam. Nhập giờ để kiểm tra robot còn trống.</span>
+  if (pending) return <span aria-busy="true" className="mt-1 block text-xs text-[#64748b]">Đang kiểm tra giờ…</span>
+  if (error) return <span role="alert" className="mt-1 block text-xs text-[#b23e31]">{error}</span>
+  return slot?.available ? <span role="status" className="mt-1 block text-xs text-[#64748b]">Còn trống</span>
+    : <span role="alert" className="mt-1 block text-xs text-[#b23e31]">{slot?.reason}</span>
+}
+
 function SlotButton({ slot, chosen, onPick }: { slot: TourSlot; chosen: boolean; onPick: () => void }) {
-  return <button type="button" disabled={!slot.available} aria-pressed={chosen} onClick={onPick}
-    className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] disabled:cursor-not-allowed ${chosen ? 'border-[#2563eb] bg-[#eff6ff]' : slot.available ? 'border-[#e2e8f0] bg-white hover:border-[#93b4ef]' : 'border-[#eef1f4] bg-[#f8fafc] text-[#64748b]'}`}>
+  return <button type="button" disabled={!slot.available} aria-pressed={chosen} onClick={onPick} className={slotClass(chosen, slot.available)}>
     <span className="block font-semibold tabular-nums">{slot.time}</span>
     <span className="block text-xs">{slot.available ? 'Còn trống' : slot.reason}</span>
   </button>

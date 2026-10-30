@@ -61,7 +61,8 @@ public static class DependencyInjection
         services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
-        services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>()));
+        services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>(),
+            configuration["Tours:CustomStartEarliest"], configuration["Tours:CustomStartLatest"]));
 
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();

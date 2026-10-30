@@ -23,7 +23,7 @@ public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Ava
     DateTimeOffset? ReservationStartsAt, DateTimeOffset? ReservationEndsAt, DateTimeOffset RegistrationClosesAt);
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
-    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days);
+    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, string CustomStartEarliest, string CustomStartLatest);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,
