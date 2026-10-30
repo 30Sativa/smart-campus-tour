@@ -42,6 +42,7 @@ export default function StaffManageTourEditPage() {
       : <TourForm key={data.tour.rowVersion}
         initial={{ name: data.tour.name, description: data.tour.description, routeId: data.tour.routeId, scheduledStartAt: data.tour.scheduledStartAt, fallbackVideoUrl: data.fallbackVideoUrl }}
         currentRoute={{ id: data.tour.routeId, name: data.tour.routeName }}
+        fixedStops={data.routeRevision?.stops.map(stop => ({ order: stop.stopOrder, name: stop.name, dwellSeconds: stop.dwellSeconds }))}
         scheduleLocked={!data.permissions.canChangeScheduleAndRoute}
         submitLabel="Lưu thay đổi" busy={update.isPending} error={update.isError ? tourError(update.error) : null} cancelTo={back} onSubmit={submit} />}
   </AdminPage>

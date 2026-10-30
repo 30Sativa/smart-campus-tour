@@ -26,6 +26,7 @@ READY, reopen, reservation of branch paths, Start, RUNNING, robot dispatch and p
 
 - A measurement describes one manual run, so a long narration can make a real Tour run longer than the reservation. The 15-minute buffers are the only allowance.
 - A later FAIL or lost map evidence does not change a Tour already scheduled. READY must recheck them.
+- A dwell-only revision reuses the PASS of its unchanged navigation, so its measurement may not include the new dwell.
 
 ## Consequences
 

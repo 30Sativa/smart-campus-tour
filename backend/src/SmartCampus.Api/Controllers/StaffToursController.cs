@@ -7,6 +7,7 @@ using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
@@ -33,6 +34,11 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
         return Ok(new PagedResponse<TourSummary> { Success = true, Message = "Tours retrieved.", Data = page.Items,
             Pagination = new PaginationMetadata(page.Page, page.PageSize, page.TotalItems, page.TotalPages) });
     }
+
+    [HttpGet("operators")]
+    public async Task<IActionResult> Operators(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RouteTestParticipantView>> { Success = true, Message = "Tour operators retrieved.",
+            Data = await sender.Send(new ListRouteTestParticipantsQuery(), ct) });
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

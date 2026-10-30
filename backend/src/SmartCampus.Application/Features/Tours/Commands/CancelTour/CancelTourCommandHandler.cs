@@ -45,6 +45,12 @@ public sealed class CancelTourCommandHandler(ITourManagementRepository repositor
                 ResultCode = "SUCCESS", OccurredAt = now
             });
         }
+        var reservation = await repository.FindActiveReservationAsync(tour.Id, ct);
+        if (reservation is not null)
+        {
+            reservation.ReleasedAt = now;
+            reservation.ReleasedByUserId = command.Actor;
+        }
         tour.State = "CANCELLED";
         tour.EndedAt = now;
         tour.EndReason = reason;

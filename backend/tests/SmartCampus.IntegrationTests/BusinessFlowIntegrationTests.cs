@@ -566,7 +566,7 @@ public sealed class BusinessFlowIntegrationTests
     }
 
     [SchemaV14Fact]
-    public async Task VersionedMapPoiRouteChain_RecordsSimulatedEvidence_AndStopsAtSchedulingDependency()
+    public async Task VersionedMapPoiRouteChain_RecordsSimulatedEvidence_AndSchedulesATour()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "flow.admin", roles: ["ADMIN"]);
@@ -748,19 +748,24 @@ public sealed class BusinessFlowIntegrationTests
         var priorRevision = Assert.Single(history.EnumerateArray(), item => item.GetProperty("revisionId").GetGuid() == routeRevisionId);
         Assert.Equal("PASS", priorRevision.GetProperty("verificationStatus").GetString());
 
-        // Scheduling has no integration from versioned route/revision to the legacy Tour model.
-        // Confirm the legacy aliases fail closed and don't persist a Tour or reservation.
-        var beforeTours = await database.CountRowsAsync("dbo.Tours");
-        var beforeEvents = await database.CountRowsAsync("dbo.TourEvents");
+        // ADR-0034: the tested revision can be scheduled, and the reservation follows the PASS run.
+        using var operators = await Get(host.Client, "/api/staff/manage/tours/operators", staffToken);
+        Assert.Equal(HttpStatusCode.OK, operators.StatusCode);
+        var operatorId = (await Body(operators)).GetProperty("data")[0].GetProperty("userId").GetGuid();
         using var schedule = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
-            new { requestId = Guid.NewGuid(), expectedRouteVersion = new string('0', 64), configuration = new
-                { name = "Must not schedule", description = (string?)null, routeId,
+            new { requestId = Guid.NewGuid(), configuration = new
+                { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,
+                    robotCode = "flow_physical", operatorUserId = operatorId,
                     scheduledStartAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds()),
                     fallbackVideoUrl = (string?)null } });
-        Assert.Equal(HttpStatusCode.NotFound, schedule.StatusCode);
-        Assert.Equal(beforeTours, await database.CountRowsAsync("dbo.Tours"));
-        Assert.Equal(beforeEvents, await database.CountRowsAsync("dbo.TourEvents"));
-        // The current schema has no reservation/booking entity or table.
+        Assert.Equal(HttpStatusCode.OK, schedule.StatusCode);
+        var tourId = (await Body(schedule)).GetProperty("data").GetProperty("id").GetGuid();
+        using var tourDetail = await Get(host.Client, $"/api/staff/manage/tours/{tourId}", staffToken);
+        var tourData = (await Body(tourDetail)).GetProperty("data");
+        Assert.Equal(JsonValueKind.Null, tourData.GetProperty("route").ValueKind);
+        Assert.Equal(routeRevisionId, tourData.GetProperty("routeRevision").GetProperty("revisionId").GetGuid());
+        Assert.Equal("flow_physical", tourData.GetProperty("reservation").GetProperty("robotCode").GetString());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.TourRobotReservations"));
     }
 
     [SchemaV14Fact]

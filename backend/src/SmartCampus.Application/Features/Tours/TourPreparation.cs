@@ -15,6 +15,12 @@ internal static class TourPreparation
         FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime()
     };
 
+    public static CreateTourInput Normalize(CreateTourInput input) => input with
+    {
+        Name = input.Name.Trim(), Description = Optional(input.Description), RobotCode = input.RobotCode.Trim(),
+        FallbackVideoUrl = Optional(input.FallbackVideoUrl), ScheduledStartAt = input.ScheduledStartAt.ToUniversalTime()
+    };
+
     private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     public static void RequireFuture(DateTimeOffset schedule, DateTimeOffset now)

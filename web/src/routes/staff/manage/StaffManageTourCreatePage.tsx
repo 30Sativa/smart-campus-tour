@@ -1,11 +1,11 @@
 import { useRef } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '../../../components/ui/ConsolePrimitives'
-import { AdminPage, Notice } from '../../../features/administration/AdminUi'
+import { AdminPage } from '../../../features/administration/AdminUi'
 import { newRequestId, useCreateTour } from '../../../features/administration/tours/hooks'
 import { tourError } from '../../../features/administration/tours/tour-messages'
-import { TourForm } from '../../../features/administration/tours/TourForm'
-import type { TourInput } from '../../../features/administration/tours/types'
+import { CreateTourForm } from '../../../features/administration/tours/CreateTourForm'
+import type { CreateTourInput } from '../../../features/administration/tours/types'
 import { celebrate } from '../../../components/ui/toast-store'
 
 /**
@@ -17,18 +17,17 @@ export default function StaffManageTourCreatePage() {
   const navigate = useNavigate()
   const create = useCreateTour()
   const attempt = useRef<{ key: string; id: string } | null>(null)
-  const submit = (input: TourInput, routeVersion: string) => {
-    const key = JSON.stringify([input, routeVersion])
+  const submit = (input: CreateTourInput) => {
+    const key = JSON.stringify(input)
     if (attempt.current?.key !== key) attempt.current = { key, id: newRequestId() }
-    create.mutate({ requestId: attempt.current.id, routeVersion, input }, { onSuccess: id => {
+    create.mutate({ requestId: attempt.current.id, input }, { onSuccess: id => {
       celebrate({ title: `Đã tạo Tour “${input.name}”`, detail: 'Tour đang nhận đăng ký. Đại diện trường đã thấy Tour và có thể đăng ký đoàn.', action: { label: 'Danh sách Tour', to: '/staff/manage/tours' } })
       navigate(`/staff/manage/tours/${id}`, { replace: true })
     } })
   }
   return <AdminPage>
     <Link to="/staff/manage/tours" className="mb-4 inline-block text-sm text-[#2d719e]">← Danh sách Tour</Link>
-    <PageHeader eyebrow="Chuẩn bị Tour" title="Tạo Tour mới" description="Tour mới ở trạng thái Đang nhận đăng ký: chưa gán robot và không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn." />
-    <div className="mb-4"><Notice tone="warn">Hiện chưa tạo được Tour mới: hệ thống chưa có thời lượng nội dung/audio đã duyệt nên máy chủ sẽ từ chối. Tuyến đã kiểm chứng ở Danh mục tuyến cũng chưa chọn được tại đây. Tour đã có vẫn xem và sửa thông tin được.</Notice></div>
-    <TourForm submitLabel="Tạo Tour" busy={create.isPending} error={create.isError ? tourError(create.error) : null} cancelTo="/staff/manage/tours" onSubmit={submit} />
+    <PageHeader eyebrow="Chuẩn bị Tour" title="Tạo Tour mới" description="Tour mới ở trạng thái Đang nhận đăng ký: giữ chỗ robot nhưng không tự chạy khi tới giờ. Sau khi tạo, đại diện trường thấy Tour và có thể đăng ký đoàn." />
+    <CreateTourForm busy={create.isPending} error={create.isError ? tourError(create.error) : null} onSubmit={submit} />
   </AdminPage>
 }

@@ -136,8 +136,8 @@ public sealed class ApiDocumentationEndpointTests
             Assert.DoesNotContain("/api/admin", operation.GetProperty("description").GetString(), StringComparison.OrdinalIgnoreCase);
         }
         var tourCreateDescription = paths.GetProperty("/api/staff/manage/tours").GetProperty("post").GetProperty("description").GetString();
-        Assert.Contains("TOUR_DURATION_UNAVAILABLE", tourCreateDescription, StringComparison.Ordinal);
-        Assert.Contains("does not create a Tour", tourCreateDescription, StringComparison.Ordinal);
+        Assert.Contains("ROBOT_RESERVATION_CONFLICT", tourCreateDescription, StringComparison.Ordinal);
+        Assert.Contains("effective PASS run", tourCreateDescription, StringComparison.Ordinal);
         var tourUpdateDescription = paths.GetProperty("/api/staff/manage/tours/{id}").GetProperty("put").GetProperty("description").GetString();
         Assert.Contains("Metadata-only edits are allowed", tourUpdateDescription, StringComparison.Ordinal);
         Assert.Contains("Changing the scheduled time or Route is blocked with `TOUR_DURATION_UNAVAILABLE`", tourUpdateDescription, StringComparison.Ordinal);
