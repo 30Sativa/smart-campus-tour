@@ -1,4 +1,4 @@
-import { KeyRound, Radio, ShieldAlert, UsersRound } from 'lucide-react'
+import { KeyRound, Radio, ScrollText, ShieldAlert, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -15,6 +15,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
   { label: 'Tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
   { label: 'Phân quyền', items: [{ label: 'Vai trò & quyền', path: '/admin/roles', icon: KeyRound }] },
   { label: 'Bảo mật robot', items: [{ label: 'Lịch sử khóa robot', path: '/admin/robot-credentials', icon: ShieldAlert }] },
+  { label: 'Giám sát', items: [{ label: 'Nhật ký hệ thống', path: '/admin/audit-logs', icon: ScrollText }] },
   { label: 'Khu vực khác', items: [{ label: 'Khu vực vận hành', path: '/staff', icon: Radio }] },
 ]
 

@@ -48,7 +48,7 @@ shared rules; this file only covers what is specific to `web/`.
     `/api/technical/route-verifications/*` and the test-run endpoint; they are
     human-entered evidence, not proof of a physical run or READY. Project POI
     YAML import remains pending; no mock success state is shown for it.
-  - `/admin/*`: administration, `Admin` only: Accounts and Roles. `/admin`
+  - `/admin/*`: administration, `Admin` only: Accounts, Roles, robot key history and the read-only system audit log. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
