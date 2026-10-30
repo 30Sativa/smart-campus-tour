@@ -1,0 +1,2373 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#173b59">
+<title>Vận hành Tour · CampusTour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+@layer properties;
+@layer theme, base, components, utilities;
+@layer theme {
+  :root, :host {
+    --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    --color-emerald-200: oklch(90.5% 0.093 164.15);
+    --color-emerald-300: oklch(84.5% 0.143 164.978);
+    --color-emerald-500: oklch(69.6% 0.17 162.48);
+    --color-emerald-900: oklch(37.8% 0.077 168.94);
+    --color-slate-50: oklch(98.4% 0.003 247.858);
+    --color-slate-100: oklch(96.8% 0.007 247.896);
+    --color-slate-200: oklch(92.9% 0.013 255.508);
+    --color-slate-300: oklch(86.9% 0.022 252.894);
+    --color-slate-400: oklch(70.4% 0.04 256.788);
+    --color-slate-500: oklch(55.4% 0.046 257.417);
+    --color-slate-600: oklch(44.6% 0.043 257.281);
+    --color-slate-700: oklch(37.2% 0.044 257.287);
+    --color-slate-800: oklch(27.9% 0.041 260.031);
+    --color-slate-900: oklch(20.8% 0.042 265.755);
+    --color-black: #000;
+    --color-white: #fff;
+    --spacing: 0.25rem;
+    --container-3xl: 48rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: calc(1 / 0.75);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --font-weight-normal: 400;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --animate-ping: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    --default-transition-duration: 150ms;
+    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+    --color-navy: #173b59;
+    --color-brand: #2d719e;
+    --color-brand-700: #245d83;
+    --color-wash: #e5f3ff;
+    --color-ink: #1d2a36;
+    --color-muted: #5f6f7e;
+    --color-line: #e3e9ef;
+    --color-canvas: #f3f6f9;
+    --color-ok: #1f7a55;
+    --color-ok-bg: #effbf5;
+    --color-ok-line: #bfe6d2;
+    --color-warn: #8a5a06;
+    --color-warn-solid: #d69412;
+    --color-warn-bg: #fff8e6;
+    --color-warn-line: #f1d9a3;
+    --color-bad: #b23e31;
+    --color-bad-bg: #fff1ef;
+    --color-branch: #1f9d73;
+  }
+}
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  html, :host {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(--default-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+  hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+  b, strong {
+    font-weight: bolder;
+  }
+  code, kbd, samp, pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+  small {
+    font-size: 80%;
+  }
+  sub, sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  sub {
+    bottom: -0.25em;
+  }
+  sup {
+    top: -0.5em;
+  }
+  table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  :-moz-focusring:where(:not(iframe)) {
+    outline: auto;
+  }
+  progress {
+    vertical-align: baseline;
+  }
+  summary {
+    display: list-item;
+  }
+  ol, ul, menu {
+    list-style: none;
+  }
+  img, svg, video, canvas, audio, iframe, embed, object {
+    display: block;
+    vertical-align: middle;
+  }
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+  button, input, select, optgroup, textarea, ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+  :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+  ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+  ::placeholder {
+    opacity: 1;
+  }
+  @supports (not (-webkit-appearance: -apple-pay-button))  or (contain-intrinsic-size: 1px) {
+    ::placeholder {
+      color: currentcolor;
+      @supports (color: color-mix(in lab, red, red)) {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+  textarea {
+    resize: vertical;
+  }
+  ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+  ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+  ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+  :-moz-ui-invalid {
+    box-shadow: none;
+  }
+  button, input:where([type="button"], [type="reset"], [type="submit"]), ::file-selector-button {
+    appearance: button;
+  }
+  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {
+    height: auto;
+  }
+  [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}
+@layer utilities {
+  .pointer-events-auto {
+    pointer-events: auto;
+  }
+  .pointer-events-none {
+    pointer-events: none;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  .absolute {
+    position: absolute;
+  }
+  .fixed {
+    position: fixed;
+  }
+  .relative {
+    position: relative;
+  }
+  .sticky {
+    position: sticky;
+  }
+  .inset-0 {
+    inset: 0px;
+  }
+  .inset-x-3 {
+    inset-inline: calc(var(--spacing) * 3);
+  }
+  .top-1 {
+    top: var(--spacing);
+  }
+  .top-3 {
+    top: calc(var(--spacing) * 3);
+  }
+  .top-14 {
+    top: calc(var(--spacing) * 14);
+  }
+  .right-2\.5 {
+    right: calc(var(--spacing) * 2.5);
+  }
+  .right-3 {
+    right: calc(var(--spacing) * 3);
+  }
+  .right-4 {
+    right: calc(var(--spacing) * 4);
+  }
+  .bottom-0 {
+    bottom: 0px;
+  }
+  .bottom-3 {
+    bottom: calc(var(--spacing) * 3);
+  }
+  .bottom-4 {
+    bottom: calc(var(--spacing) * 4);
+  }
+  .bottom-20 {
+    bottom: calc(var(--spacing) * 20);
+  }
+  .left-0 {
+    left: 0px;
+  }
+  .left-1\/2 {
+    left: calc(1 / 2 * 100%);
+  }
+  .left-3 {
+    left: calc(var(--spacing) * 3);
+  }
+  .z-50 {
+    z-index: 50;
+  }
+  .z-\[60\] {
+    z-index: 60;
+  }
+  .col-start-2 {
+    grid-column-start: 2;
+  }
+  .mx-auto {
+    margin-inline: auto;
+  }
+  .-mt-0\.5 {
+    margin-top: calc(var(--spacing) * -0.5);
+  }
+  .-mt-1 {
+    margin-top: calc(var(--spacing) * -1);
+  }
+  .-mt-2 {
+    margin-top: calc(var(--spacing) * -2);
+  }
+  .mt-0\.5 {
+    margin-top: calc(var(--spacing) * 0.5);
+  }
+  .mt-1 {
+    margin-top: var(--spacing);
+  }
+  .mt-1\.5 {
+    margin-top: calc(var(--spacing) * 1.5);
+  }
+  .mt-2 {
+    margin-top: calc(var(--spacing) * 2);
+  }
+  .mt-2\.5 {
+    margin-top: calc(var(--spacing) * 2.5);
+  }
+  .mt-px {
+    margin-top: 1px;
+  }
+  .mr-1 {
+    margin-right: var(--spacing);
+  }
+  .mb-1 {
+    margin-bottom: var(--spacing);
+  }
+  .mb-2 {
+    margin-bottom: calc(var(--spacing) * 2);
+  }
+  .mb-3 {
+    margin-bottom: calc(var(--spacing) * 3);
+  }
+  .ml-1 {
+    margin-left: var(--spacing);
+  }
+  .ml-3 {
+    margin-left: calc(var(--spacing) * 3);
+  }
+  .ml-8 {
+    margin-left: calc(var(--spacing) * 8);
+  }
+  .ml-auto {
+    margin-left: auto;
+  }
+  .block {
+    display: block;
+  }
+  .flex {
+    display: flex;
+  }
+  .grid {
+    display: grid;
+  }
+  .hidden {
+    display: none;
+  }
+  .inline {
+    display: inline;
+  }
+  .inline-flex {
+    display: inline-flex;
+  }
+  .table {
+    display: table;
+  }
+  .size-2 {
+    width: calc(var(--spacing) * 2);
+    height: calc(var(--spacing) * 2);
+  }
+  .size-2\.5 {
+    width: calc(var(--spacing) * 2.5);
+    height: calc(var(--spacing) * 2.5);
+  }
+  .size-3\.5 {
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
+  }
+  .size-4 {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+  }
+  .size-5 {
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+  }
+  .size-6 {
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+  }
+  .size-7 {
+    width: calc(var(--spacing) * 7);
+    height: calc(var(--spacing) * 7);
+  }
+  .size-8 {
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+  }
+  .size-9 {
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+  }
+  .size-10 {
+    width: calc(var(--spacing) * 10);
+    height: calc(var(--spacing) * 10);
+  }
+  .size-14 {
+    width: calc(var(--spacing) * 14);
+    height: calc(var(--spacing) * 14);
+  }
+  .size-\[15px\] {
+    width: 15px;
+    height: 15px;
+  }
+  .size-\[18px\] {
+    width: 18px;
+    height: 18px;
+  }
+  .size-full {
+    width: 100%;
+    height: 100%;
+  }
+  .h-0\.5 {
+    height: calc(var(--spacing) * 0.5);
+  }
+  .h-\[3px\] {
+    height: 3px;
+  }
+  .h-\[52vh\] {
+    height: 52vh;
+  }
+  .h-fit {
+    height: fit-content;
+  }
+  .max-h-\[calc\(100dvh-2rem\)\] {
+    max-height: calc(100dvh - 2rem);
+  }
+  .min-h-0 {
+    min-height: 0px;
+  }
+  .min-h-4 {
+    min-height: calc(var(--spacing) * 4);
+  }
+  .min-h-12 {
+    min-height: calc(var(--spacing) * 12);
+  }
+  .min-h-14 {
+    min-height: calc(var(--spacing) * 14);
+  }
+  .min-h-\[320px\] {
+    min-height: 320px;
+  }
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+  .w-5 {
+    width: calc(var(--spacing) * 5);
+  }
+  .w-6 {
+    width: calc(var(--spacing) * 6);
+  }
+  .w-14 {
+    width: calc(var(--spacing) * 14);
+  }
+  .w-16 {
+    width: calc(var(--spacing) * 16);
+  }
+  .w-\[min\(380px\,calc\(100vw-2rem\)\)\] {
+    width: min(380px, calc(100vw - 2rem));
+  }
+  .w-full {
+    width: 100%;
+  }
+  .max-w-3xl {
+    max-width: var(--container-3xl);
+  }
+  .max-w-\[560px\] {
+    max-width: 560px;
+  }
+  .max-w-\[1180px\] {
+    max-width: 1180px;
+  }
+  .max-w-\[calc\(100\%-1\.5rem\)\] {
+    max-width: calc(100% - 1.5rem);
+  }
+  .min-w-0 {
+    min-width: 0px;
+  }
+  .min-w-\[640px\] {
+    min-width: 640px;
+  }
+  .min-w-max {
+    min-width: max-content;
+  }
+  .flex-1 {
+    flex: 1;
+  }
+  .shrink-0 {
+    flex-shrink: 0;
+  }
+  .basis-56 {
+    flex-basis: calc(var(--spacing) * 56);
+  }
+  .anim-toastbar {
+    animation: toastbar 4s linear forwards;
+    transform-origin: left;
+  }
+  .origin-left {
+    transform-origin: 0;
+  }
+  .-translate-x-1\/2 {
+    --tw-translate-x: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .-translate-y-full {
+    --tw-translate-y: -100%;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .scale-x-0 {
+    --tw-scale-x: 0%;
+    scale: var(--tw-scale-x) var(--tw-scale-y);
+  }
+  .-rotate-90 {
+    rotate: calc(90deg * -1);
+  }
+  .transform {
+    transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,) var(--tw-skew-y,);
+  }
+  .anim-rise {
+    animation: rise .24s cubic-bezier(.22, 1, .36, 1);
+  }
+  .anim-vignette {
+    animation: vignette 1.6s ease-in-out infinite;
+  }
+  .animate-ping {
+    animation: var(--animate-ping);
+  }
+  .cursor-not-allowed {
+    cursor: not-allowed;
+  }
+  .cursor-pointer {
+    cursor: pointer;
+  }
+  .resize {
+    resize: both;
+  }
+  .list-disc {
+    list-style-type: disc;
+  }
+  .list-none {
+    list-style-type: none;
+  }
+  .grid-cols-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-cols-\[52px_minmax\(0\,1fr\)\] {
+    grid-template-columns: 52px minmax(0,1fr);
+  }
+  .grid-cols-\[56px_minmax\(0\,1fr\)\] {
+    grid-template-columns: 56px minmax(0,1fr);
+  }
+  .flex-col {
+    flex-direction: column;
+  }
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+  .place-items-center {
+    place-items: center;
+  }
+  .items-center {
+    align-items: center;
+  }
+  .items-start {
+    align-items: flex-start;
+  }
+  .justify-between {
+    justify-content: space-between;
+  }
+  .justify-center {
+    justify-content: center;
+  }
+  .justify-items-center {
+    justify-items: center;
+  }
+  .gap-0\.5 {
+    gap: calc(var(--spacing) * 0.5);
+  }
+  .gap-1 {
+    gap: var(--spacing);
+  }
+  .gap-1\.5 {
+    gap: calc(var(--spacing) * 1.5);
+  }
+  .gap-2 {
+    gap: calc(var(--spacing) * 2);
+  }
+  .gap-2\.5 {
+    gap: calc(var(--spacing) * 2.5);
+  }
+  .gap-3 {
+    gap: calc(var(--spacing) * 3);
+  }
+  .gap-5 {
+    gap: calc(var(--spacing) * 5);
+  }
+  :where(.space-y-0\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 0.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 0.5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-1\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 1.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 1.5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-2 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 2) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 2) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-2\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 2.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 2.5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-3 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 3) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 3) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-4 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 4) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 4) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  :where(.space-y-5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 5) * calc(1 - var(--tw-space-y-reverse)));
+  }
+  .gap-x-3 {
+    column-gap: calc(var(--spacing) * 3);
+  }
+  .gap-x-4 {
+    column-gap: calc(var(--spacing) * 4);
+  }
+  .gap-y-1 {
+    row-gap: var(--spacing);
+  }
+  .gap-y-1\.5 {
+    row-gap: calc(var(--spacing) * 1.5);
+  }
+  .gap-y-2 {
+    row-gap: calc(var(--spacing) * 2);
+  }
+  :where(.divide-y > :not(:last-child)) {
+    --tw-divide-y-reverse: 0;
+    border-bottom-style: var(--tw-border-style);
+    border-top-style: var(--tw-border-style);
+    border-top-width: calc(1px * var(--tw-divide-y-reverse));
+    border-bottom-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
+  }
+  :where(.divide-line > :not(:last-child)) {
+    border-color: var(--color-line);
+  }
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .overflow-hidden {
+    overflow: hidden;
+  }
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
+  .overflow-y-auto {
+    overflow-y: auto;
+  }
+  .rounded {
+    border-radius: 0.25rem;
+  }
+  .rounded-2xl {
+    border-radius: var(--radius-2xl);
+  }
+  .rounded-full {
+    border-radius: calc(infinity * 1px);
+  }
+  .rounded-lg {
+    border-radius: var(--radius-lg);
+  }
+  .rounded-md {
+    border-radius: var(--radius-md);
+  }
+  .rounded-xl {
+    border-radius: var(--radius-xl);
+  }
+  .border {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+  }
+  .border-2 {
+    border-style: var(--tw-border-style);
+    border-width: 2px;
+  }
+  .border-t {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+  }
+  .border-t-2 {
+    border-top-style: var(--tw-border-style);
+    border-top-width: 2px;
+  }
+  .border-b {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+  }
+  .border-l {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 1px;
+  }
+  .border-l-4 {
+    border-left-style: var(--tw-border-style);
+    border-left-width: 4px;
+  }
+  .border-dashed {
+    --tw-border-style: dashed;
+    border-style: dashed;
+  }
+  .border-\[\#e2e8f0\] {
+    border-color: #e2e8f0;
+  }
+  .border-bad {
+    border-color: var(--color-bad);
+  }
+  .border-bad\/60 {
+    border-color: color-mix(in srgb, #b23e31 60%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-bad) 60%, transparent);
+    }
+  }
+  .border-branch {
+    border-color: var(--color-branch);
+  }
+  .border-brand\/40 {
+    border-color: color-mix(in srgb, #2d719e 40%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-brand) 40%, transparent);
+    }
+  }
+  .border-current\/30 {
+    border-color: currentcolor;
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, currentcolor 30%, transparent);
+    }
+  }
+  .border-emerald-500\/60 {
+    border-color: color-mix(in srgb, oklch(69.6% 0.17 162.48) 60%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-emerald-500) 60%, transparent);
+    }
+  }
+  .border-line {
+    border-color: var(--color-line);
+  }
+  .border-navy {
+    border-color: var(--color-navy);
+  }
+  .border-ok-line {
+    border-color: var(--color-ok-line);
+  }
+  .border-slate-200 {
+    border-color: var(--color-slate-200);
+  }
+  .border-slate-300 {
+    border-color: var(--color-slate-300);
+  }
+  .border-slate-400 {
+    border-color: var(--color-slate-400);
+  }
+  .border-slate-700 {
+    border-color: var(--color-slate-700);
+  }
+  .border-warn-line {
+    border-color: var(--color-warn-line);
+  }
+  .border-white\/20 {
+    border-color: color-mix(in srgb, #fff 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-white) 20%, transparent);
+    }
+  }
+  .border-white\/40 {
+    border-color: color-mix(in srgb, #fff 40%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in oklab, var(--color-white) 40%, transparent);
+    }
+  }
+  .border-l-navy {
+    border-left-color: var(--color-navy);
+  }
+  .bg-\[\#0f1e2d\]\/50 {
+    background-color: color-mix(in oklab, #0f1e2d 50%, transparent);
+  }
+  .bg-\[\#eef4f9\] {
+    background-color: #eef4f9;
+  }
+  .bg-bad {
+    background-color: var(--color-bad);
+  }
+  .bg-bad-bg {
+    background-color: var(--color-bad-bg);
+  }
+  .bg-black\/25 {
+    background-color: color-mix(in srgb, #000 25%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);
+    }
+  }
+  .bg-branch {
+    background-color: var(--color-branch);
+  }
+  .bg-branch\/10 {
+    background-color: color-mix(in srgb, #1f9d73 10%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-branch) 10%, transparent);
+    }
+  }
+  .bg-brand {
+    background-color: var(--color-brand);
+  }
+  .bg-canvas {
+    background-color: var(--color-canvas);
+  }
+  .bg-emerald-300 {
+    background-color: var(--color-emerald-300);
+  }
+  .bg-emerald-900\/40 {
+    background-color: color-mix(in srgb, oklch(37.8% 0.077 168.94) 40%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-emerald-900) 40%, transparent);
+    }
+  }
+  .bg-navy {
+    background-color: var(--color-navy);
+  }
+  .bg-ok {
+    background-color: var(--color-ok);
+  }
+  .bg-ok-bg {
+    background-color: var(--color-ok-bg);
+  }
+  .bg-slate-50 {
+    background-color: var(--color-slate-50);
+  }
+  .bg-slate-100 {
+    background-color: var(--color-slate-100);
+  }
+  .bg-slate-200 {
+    background-color: var(--color-slate-200);
+  }
+  .bg-slate-700 {
+    background-color: var(--color-slate-700);
+  }
+  .bg-slate-800 {
+    background-color: var(--color-slate-800);
+  }
+  .bg-slate-900 {
+    background-color: var(--color-slate-900);
+  }
+  .bg-transparent {
+    background-color: transparent;
+  }
+  .bg-warn-bg {
+    background-color: var(--color-warn-bg);
+  }
+  .bg-warn-solid {
+    background-color: var(--color-warn-solid);
+  }
+  .bg-wash {
+    background-color: var(--color-wash);
+  }
+  .bg-wash\/50 {
+    background-color: color-mix(in srgb, #e5f3ff 50%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-wash) 50%, transparent);
+    }
+  }
+  .bg-white {
+    background-color: var(--color-white);
+  }
+  .bg-white\/15 {
+    background-color: color-mix(in srgb, #fff 15%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 15%, transparent);
+    }
+  }
+  .bg-white\/20 {
+    background-color: color-mix(in srgb, #fff 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 20%, transparent);
+    }
+  }
+  .bg-white\/90 {
+    background-color: color-mix(in srgb, #fff 90%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 90%, transparent);
+    }
+  }
+  .bg-white\/92 {
+    background-color: color-mix(in srgb, #fff 92%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 92%, transparent);
+    }
+  }
+  .bg-white\/95 {
+    background-color: color-mix(in srgb, #fff 95%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 95%, transparent);
+    }
+  }
+  .p-3 {
+    padding: calc(var(--spacing) * 3);
+  }
+  .p-4 {
+    padding: calc(var(--spacing) * 4);
+  }
+  .p-5 {
+    padding: calc(var(--spacing) * 5);
+  }
+  .px-1 {
+    padding-inline: var(--spacing);
+  }
+  .px-1\.5 {
+    padding-inline: calc(var(--spacing) * 1.5);
+  }
+  .px-2 {
+    padding-inline: calc(var(--spacing) * 2);
+  }
+  .px-2\.5 {
+    padding-inline: calc(var(--spacing) * 2.5);
+  }
+  .px-3 {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+  .px-3\.5 {
+    padding-inline: calc(var(--spacing) * 3.5);
+  }
+  .px-4 {
+    padding-inline: calc(var(--spacing) * 4);
+  }
+  .px-5 {
+    padding-inline: calc(var(--spacing) * 5);
+  }
+  .py-0\.5 {
+    padding-block: calc(var(--spacing) * 0.5);
+  }
+  .py-1 {
+    padding-block: var(--spacing);
+  }
+  .py-1\.5 {
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+  .py-2 {
+    padding-block: calc(var(--spacing) * 2);
+  }
+  .py-2\.5 {
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+  .py-3 {
+    padding-block: calc(var(--spacing) * 3);
+  }
+  .py-4 {
+    padding-block: calc(var(--spacing) * 4);
+  }
+  .pt-2\.5 {
+    padding-top: calc(var(--spacing) * 2.5);
+  }
+  .pt-5 {
+    padding-top: calc(var(--spacing) * 5);
+  }
+  .pb-3 {
+    padding-bottom: calc(var(--spacing) * 3);
+  }
+  .pl-5 {
+    padding-left: calc(var(--spacing) * 5);
+  }
+  .text-center {
+    text-align: center;
+  }
+  .text-left {
+    text-align: left;
+  }
+  .text-right {
+    text-align: right;
+  }
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+  .text-lg {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+  .text-xs {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+  .text-\[10\.5px\] {
+    font-size: 10.5px;
+  }
+  .text-\[10px\] {
+    font-size: 10px;
+  }
+  .text-\[11\.5px\] {
+    font-size: 11.5px;
+  }
+  .text-\[11px\] {
+    font-size: 11px;
+  }
+  .text-\[12\.5px\] {
+    font-size: 12.5px;
+  }
+  .text-\[13px\] {
+    font-size: 13px;
+  }
+  .text-\[15px\] {
+    font-size: 15px;
+  }
+  .text-\[17px\] {
+    font-size: 17px;
+  }
+  .text-\[22px\] {
+    font-size: 22px;
+  }
+  .leading-5 {
+    --tw-leading: calc(var(--spacing) * 5);
+    line-height: calc(var(--spacing) * 5);
+  }
+  .leading-\[1\.45\] {
+    --tw-leading: 1.45;
+    line-height: 1.45;
+  }
+  .font-bold {
+    --tw-font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-bold);
+  }
+  .font-normal {
+    --tw-font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight-normal);
+  }
+  .font-semibold {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+  }
+  .tracking-\[-0\.02em\] {
+    --tw-tracking: -0.02em;
+    letter-spacing: -0.02em;
+  }
+  .whitespace-nowrap {
+    white-space: nowrap;
+  }
+  .text-\[\#1d1300\] {
+    color: #1d1300;
+  }
+  .text-\[\#c9dbea\] {
+    color: #c9dbea;
+  }
+  .text-bad {
+    color: var(--color-bad);
+  }
+  .text-branch {
+    color: var(--color-branch);
+  }
+  .text-brand {
+    color: var(--color-brand);
+  }
+  .text-brand-700 {
+    color: var(--color-brand-700);
+  }
+  .text-emerald-200 {
+    color: var(--color-emerald-200);
+  }
+  .text-ink {
+    color: var(--color-ink);
+  }
+  .text-muted {
+    color: var(--color-muted);
+  }
+  .text-navy {
+    color: var(--color-navy);
+  }
+  .text-ok {
+    color: var(--color-ok);
+  }
+  .text-slate-300 {
+    color: var(--color-slate-300);
+  }
+  .text-slate-400 {
+    color: var(--color-slate-400);
+  }
+  .text-slate-500 {
+    color: var(--color-slate-500);
+  }
+  .text-slate-600 {
+    color: var(--color-slate-600);
+  }
+  .text-warn {
+    color: var(--color-warn);
+  }
+  .text-white {
+    color: var(--color-white);
+  }
+  .text-white\/70 {
+    color: color-mix(in srgb, #fff 70%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 70%, transparent);
+    }
+  }
+  .text-white\/80 {
+    color: color-mix(in srgb, #fff 80%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 80%, transparent);
+    }
+  }
+  .text-white\/85 {
+    color: color-mix(in srgb, #fff 85%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 85%, transparent);
+    }
+  }
+  .text-white\/90 {
+    color: color-mix(in srgb, #fff 90%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      color: color-mix(in oklab, var(--color-white) 90%, transparent);
+    }
+  }
+  .tabular-nums {
+    --tw-numeric-spacing: tabular-nums;
+    font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,);
+  }
+  .line-through {
+    text-decoration-line: line-through;
+  }
+  .decoration-slate-400 {
+    text-decoration-color: var(--color-slate-400);
+  }
+  .antialiased {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .accent-\[\#2d719e\] {
+    accent-color: #2d719e;
+  }
+  .accent-\[\#b23e31\] {
+    accent-color: #b23e31;
+  }
+  .opacity-60 {
+    opacity: 60%;
+  }
+  .opacity-70 {
+    opacity: 70%;
+  }
+  .opacity-75 {
+    opacity: 75%;
+  }
+  .opacity-80 {
+    opacity: 80%;
+  }
+  .shadow {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-2xl {
+    --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, rgb(0 0 0 / 0.25));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-\[0_6px_16px_-6px_rgba\(45\,113\,158\,\.7\)\] {
+    --tw-shadow: 0 6px 16px -6px var(--tw-shadow-color, rgba(45,113,158,.7));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-\[0_14px_34px_-14px_rgba\(15\,23\,42\,0\.35\)\] {
+    --tw-shadow: 0 14px 34px -14px var(--tw-shadow-color, rgba(15,23,42,0.35));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-lg {
+    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 4px 6px -4px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-sm {
+    --tw-shadow: 0 1px 3px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 1px 2px -1px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-xs {
+    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.05));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-1 {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-2 {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-black\/5 {
+    --tw-ring-color: color-mix(in srgb, #000 5%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-ring-color: color-mix(in oklab, var(--color-black) 5%, transparent);
+    }
+  }
+  .ring-branch\/20 {
+    --tw-ring-color: color-mix(in srgb, #1f9d73 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-ring-color: color-mix(in oklab, var(--color-branch) 20%, transparent);
+    }
+  }
+  .ring-line {
+    --tw-ring-color: var(--color-line);
+  }
+  .ring-navy {
+    --tw-ring-color: var(--color-navy);
+  }
+  .ring-white\/40 {
+    --tw-ring-color: color-mix(in srgb, #fff 40%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-ring-color: color-mix(in oklab, var(--color-white) 40%, transparent);
+    }
+  }
+  .backdrop-blur {
+    --tw-backdrop-blur: blur(8px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  }
+  .backdrop-blur-\[2px\] {
+    --tw-backdrop-blur: blur(2px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+  }
+  .transition-colors {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to;
+    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+  .outline-none {
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+  .last\:border-b-0:last-child {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 0px;
+  }
+  @media (hover: hover) {
+    .hover\:bg-bad-bg:hover {
+      background-color: var(--color-bad-bg);
+    }
+    .hover\:bg-brand-700:hover {
+      background-color: var(--color-brand-700);
+    }
+    .hover\:bg-slate-50:hover {
+      background-color: var(--color-slate-50);
+    }
+    .hover\:bg-slate-100:hover {
+      background-color: var(--color-slate-100);
+    }
+    .hover\:bg-white\/10:hover {
+      background-color: color-mix(in srgb, #fff 10%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:bg-white\/10:hover {
+        background-color: color-mix(in oklab, var(--color-white) 10%, transparent);
+      }
+    }
+    .hover\:brightness-95:hover {
+      --tw-brightness: brightness(95%);
+      filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
+    }
+  }
+  .focus\:border-brand:focus {
+    border-color: var(--color-brand);
+  }
+  .focus\:ring-2:focus {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .focus\:ring-brand\/20:focus {
+    --tw-ring-color: color-mix(in srgb, #2d719e 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-ring-color: color-mix(in oklab, var(--color-brand) 20%, transparent);
+    }
+  }
+  .disabled\:cursor-not-allowed:disabled {
+    cursor: not-allowed;
+  }
+  .disabled\:border-slate-200:disabled {
+    border-color: var(--color-slate-200);
+  }
+  .disabled\:bg-slate-100:disabled {
+    background-color: var(--color-slate-100);
+  }
+  .disabled\:bg-slate-200:disabled {
+    background-color: var(--color-slate-200);
+  }
+  .disabled\:text-slate-400:disabled {
+    color: var(--color-slate-400);
+  }
+  .disabled\:text-slate-500:disabled {
+    color: var(--color-slate-500);
+  }
+  .disabled\:opacity-40:disabled {
+    opacity: 40%;
+  }
+  .disabled\:shadow-none:disabled {
+    --tw-shadow: 0 0 #0000;
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .has-checked\:border-bad:has(:checked) {
+    border-color: var(--color-bad);
+  }
+  .has-checked\:border-brand:has(:checked) {
+    border-color: var(--color-brand);
+  }
+  .has-checked\:bg-bad-bg:has(:checked) {
+    background-color: var(--color-bad-bg);
+  }
+  .has-checked\:bg-wash\/60:has(:checked) {
+    background-color: color-mix(in srgb, #e5f3ff 60%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-wash) 60%, transparent);
+    }
+  }
+  .has-checked\:ring-2:has(:checked) {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .has-checked\:ring-brand\/20:has(:checked) {
+    --tw-ring-color: color-mix(in srgb, #2d719e 20%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-ring-color: color-mix(in oklab, var(--color-brand) 20%, transparent);
+    }
+  }
+  .aria-pressed\:border-white[aria-pressed="true"] {
+    border-color: var(--color-white);
+  }
+  .aria-pressed\:bg-navy[aria-pressed="true"] {
+    background-color: var(--color-navy);
+  }
+  .aria-pressed\:bg-white[aria-pressed="true"] {
+    background-color: var(--color-white);
+  }
+  .aria-pressed\:text-slate-900[aria-pressed="true"] {
+    color: var(--color-slate-900);
+  }
+  .aria-pressed\:text-white[aria-pressed="true"] {
+    color: var(--color-white);
+  }
+  @media (width >= 40rem) {
+    .sm\:col-start-auto {
+      grid-column-start: auto;
+    }
+    .sm\:block {
+      display: block;
+    }
+    .sm\:inline {
+      display: inline;
+    }
+    .sm\:inline-flex {
+      display: inline-flex;
+    }
+    .sm\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .sm\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .sm\:grid-cols-\[56px_64px_minmax\(0\,1fr\)_auto\] {
+      grid-template-columns: 56px 64px minmax(0,1fr) auto;
+    }
+    .sm\:p-6 {
+      padding: calc(var(--spacing) * 6);
+    }
+  }
+  @media (width >= 48rem) {
+    .md\:flex {
+      display: flex;
+    }
+  }
+  @media (width >= 64rem) {
+    .lg\:h-auto {
+      height: auto;
+    }
+    .lg\:h-dvh {
+      height: 100dvh;
+    }
+    .lg\:min-h-0 {
+      min-height: 0px;
+    }
+    .lg\:grid-cols-5 {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .lg\:grid-cols-\[minmax\(0\,1\.15fr\)_minmax\(0\,1fr\)\] {
+      grid-template-columns: minmax(0,1.15fr) minmax(0,1fr);
+    }
+    .lg\:grid-cols-\[minmax\(0\,1fr\)_388px\] {
+      grid-template-columns: minmax(0,1fr) 388px;
+    }
+    .lg\:overflow-hidden {
+      overflow: hidden;
+    }
+    .lg\:overflow-y-auto {
+      overflow-y: auto;
+    }
+  }
+  @media (width >= 80rem) {
+    .xl\:inline {
+      display: inline;
+    }
+    .xl\:grid-cols-6 {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+  }
+}
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes vignette {
+  0%, 100% {
+    box-shadow: inset 0 0 0 3px rgb(178 62 49 / .85), inset 0 0 60px rgb(178 62 49 / .25);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px rgb(178 62 49 / .45), inset 0 0 30px rgb(178 62 49 / .12);
+  }
+}
+@keyframes toastbar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-vignette, .anim-rise, .animate-ping, .animate-pulse {
+    animation: none !important;
+  }
+}
+@property --tw-translate-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-translate-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-scale-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+@property --tw-scale-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+@property --tw-scale-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+@property --tw-rotate-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-rotate-y {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-rotate-z {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-skew-x {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-skew-y {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-space-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-divide-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-leading {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-tracking {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ordinal {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-slashed-zero {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-numeric-figure {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-numeric-spacing {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-numeric-fraction {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-inset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-inset-ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-inset-ring-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-ring-inset {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-ring-offset-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --tw-ring-offset-color {
+  syntax: "*";
+  inherits: false;
+  initial-value: #fff;
+}
+@property --tw-ring-offset-shadow {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --tw-backdrop-blur {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-brightness {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-contrast {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-grayscale {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-hue-rotate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-invert {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-opacity {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-saturate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-backdrop-sepia {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-blur {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-brightness {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-contrast {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-grayscale {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-hue-rotate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-invert {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-opacity {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-saturate {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-sepia {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-drop-shadow-alpha {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 100%;
+}
+@property --tw-drop-shadow-size {
+  syntax: "*";
+  inherits: false;
+}
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+@layer properties {
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    *, ::before, ::after, ::backdrop {
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      --tw-translate-z: 0;
+      --tw-scale-x: 1;
+      --tw-scale-y: 1;
+      --tw-scale-z: 1;
+      --tw-rotate-x: initial;
+      --tw-rotate-y: initial;
+      --tw-rotate-z: initial;
+      --tw-skew-x: initial;
+      --tw-skew-y: initial;
+      --tw-space-y-reverse: 0;
+      --tw-divide-y-reverse: 0;
+      --tw-border-style: solid;
+      --tw-leading: initial;
+      --tw-font-weight: initial;
+      --tw-tracking: initial;
+      --tw-ordinal: initial;
+      --tw-slashed-zero: initial;
+      --tw-numeric-figure: initial;
+      --tw-numeric-spacing: initial;
+      --tw-numeric-fraction: initial;
+      --tw-shadow: 0 0 #0000;
+      --tw-shadow-color: initial;
+      --tw-shadow-alpha: 100%;
+      --tw-inset-shadow: 0 0 #0000;
+      --tw-inset-shadow-color: initial;
+      --tw-inset-shadow-alpha: 100%;
+      --tw-ring-color: initial;
+      --tw-ring-shadow: 0 0 #0000;
+      --tw-inset-ring-color: initial;
+      --tw-inset-ring-shadow: 0 0 #0000;
+      --tw-ring-inset: initial;
+      --tw-ring-offset-width: 0px;
+      --tw-ring-offset-color: #fff;
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-backdrop-blur: initial;
+      --tw-backdrop-brightness: initial;
+      --tw-backdrop-contrast: initial;
+      --tw-backdrop-grayscale: initial;
+      --tw-backdrop-hue-rotate: initial;
+      --tw-backdrop-invert: initial;
+      --tw-backdrop-opacity: initial;
+      --tw-backdrop-saturate: initial;
+      --tw-backdrop-sepia: initial;
+      --tw-blur: initial;
+      --tw-brightness: initial;
+      --tw-contrast: initial;
+      --tw-grayscale: initial;
+      --tw-hue-rotate: initial;
+      --tw-invert: initial;
+      --tw-opacity: initial;
+      --tw-saturate: initial;
+      --tw-sepia: initial;
+      --tw-drop-shadow: initial;
+      --tw-drop-shadow-color: initial;
+      --tw-drop-shadow-alpha: 100%;
+      --tw-drop-shadow-size: initial;
+    }
+  }
+}
+
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }</script>
+</head>
+<body class="flex min-h-dvh flex-col bg-canvas font-sans text-[13px] leading-[1.45] text-ink antialiased tabular-nums lg:h-dvh lg:overflow-hidden">
+
+<!-- ═══ Thanh chọn tình huống: CHỈ có trong bản xem trước, không đưa vào app ═══ -->
+<div class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 bg-slate-900 px-3 py-2 text-xs text-slate-300" role="group" aria-label="Bản xem trước">
+  <div class="flex flex-wrap items-center gap-1.5"><b class="mr-1 text-white">Màn:</b>
+    <button data-view="ops" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">Vận hành</button>
+    <button data-view="states" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">Hệ thống trạng thái</button>
+    <button data-view="prep" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">Chuẩn bị & lên lịch</button>
+  </div>
+  <div id="scenbar" class="flex flex-wrap items-center gap-1.5"><b class="mr-1 text-white">Tình huống:</b>
+    <button data-scen="ready" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">1 · READY, chờ bắt đầu</button>
+    <button data-scen="run" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">2 · Đang chạy</button>
+    <button data-scen="branch" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">3 · Yêu cầu đổi nhánh</button>
+    <button data-scen="hb" class="pv rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 font-semibold aria-pressed:border-white aria-pressed:bg-white aria-pressed:text-slate-900">4 · Mất heartbeat</button>
+    <button id="reconnect" class="hidden rounded-md border border-emerald-500/60 bg-emerald-900/40 px-2.5 py-1 font-semibold text-emerald-200">Mô phỏng: robot kết nối lại</button>
+  </div>
+  <span class="ml-auto hidden text-slate-400 xl:inline">Phím tắt: <kbd class="rounded bg-slate-700 px-1">H</kbd> giữ/tiếp tục · <kbd class="rounded bg-slate-700 px-1">N</kbd> POI kế · <kbd class="rounded bg-slate-700 px-1">A</kbd>/<kbd class="rounded bg-slate-700 px-1">D</kbd> chấp nhận/từ chối yêu cầu</span>
+</div>
+
+<div class="flex min-h-0 flex-1">
+  <!-- Thanh điều hướng thu gọn: màn vận hành cần chỗ cho bản đồ -->
+  <nav aria-label="Điều hướng" class="hidden w-16 shrink-0 flex-col items-center gap-1 bg-navy py-3 text-[10.5px] font-semibold text-[#c9dbea] md:flex">
+    <span class="mb-2 grid size-9 place-items-center rounded-lg bg-white"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEwAAABMCAYAAADHl1ErAAAGR0lEQVR42u2aX4gdVx3Hv98zZ2Y3kjXZZrGprpKm22y998zeLJeWgsg+iGiQvggLVqwIGrQKRVsIiAZEtEXxX6GCrdIiVkTUlyBSfduHFJtmyd69d+ZuNlGybQput1TTTXM3d2bOz4d798/dzN4GTMze7fk8XGaGuWd+8z2/c87v9zsDOBwOh8PhcDgcDofD4XA4HA6Hw+FwOBzedjSqXC77g4ODemlpKdtutqntZlChUHiw2Vw5rZU6XSwWH9pu9nE7GVMaHT2Q+f6sp9QACFhrGwDHq9XqWedhOSSe9z4SAyICsSJKqV3W2jvckNyaGIKTIACCYuV0f3//GTckuw3L0t0fsFnfywBoRe6LouhV52FdqFTOLQrkMkSuRFH0L7dKvvMqqQBQCI6MjCi3Sm549sTExDVx4NLSUr9HVoRQSZKO7d+/v7H5nqmpqQyAvBsEU2EYPkBgUoACRPoFELYsIUCIWEXwbhAQkXMkLVonACAkKcBVisT08MdKpXYCQLbjBBsdHX1/EOhnPM//FERgxS6KSKNlA7nuMSIEE7QuBKvXABDtX4K7SN5ORWSZfQHA0Wq1enHHCDYyct97+/uv/NXX+v7M2hMi8kQQBHXf95tJkhAAfN+XJEno+/7aUNt8vuF6kCTJPWLtMe3rT6dpekop7xOVSuU/OyJhNcYcHx8/LMaY5yYnb2j+qsIwfHp8/LCEYfjdHeFhw8PDu/bu3VshMSgCU6vVFm9k+4cOHRrq6+urEXjbD4Jwenr6Sk+HFfv27boNkIMQ/P1GiwUA8/Pzb8DaFwW4s9FoDN3s99E3q+FisXiXUuqjNrUHlae8LLOv590XhuGoUs2rlcrZC93aGxsbuzNJEl2v18/ldPuSaq2eR40x/0zT9OTc3Nx8z3jYxMSEJvC8Uuo5et5xgqCIbK55GWN+TmBGJJgZGzOPbNVeGIbHAKloz5sxpviTycnJznnQtl9Ge9/2lHrW87zflstlv2cEu3DhggY5JNZCrG0ppToftbKycq9S/CrIfpJ7AH7HGHN7jljDAI4THCD5HqXUN+bm5g5v1ksAiBWxYqHIQQB+j81hsiGYlHU3WJ8LSHasOcpay64rU/vAs1Zt9RIEIRCbF45sb8Gk/Xpc++l4gUTkZRH8ikATwDIF34/j+Jpku1qtXrQij0PkbQBXRfCLPUNDZ3JF5bpoPTfpb7SZOX0Tx3ETwNFSqfSzNE1Xoij6x1ZN1Wq1J8YLhT80ST+KovrW3U6QhEC4GhD3jmCy5mNdY75KpRJdT3Nn4vj8lo8SEgqgrD3bLi4u9tiQJNkxTnKqC2GxeMwY873rbTEsFh83xjyW1zsdBySGh4d7J3A90NJLK6rWzM5cDyPII76vv9VOa1S3MMUY8wMd+N9UwJFrlBQIBCCpQEJE/L6+PumZITm1sLAyZsyTYu2kQHaT6nCOhwnIr6Rp9met9fGxMCwL8NNGo3Hq/PnzbwFAqVTaKyL3v/nmG4/62v94lqRnkyx7OKfbpbXLJDMElkXkT1NTUys9mUsaY+5RZN2K/L5Wq30mLyPQSj1Fz/skIMiy7DUAr7XN+6BSvKM1T9kTSZI9Uq/XF3La+I3nqc+RylzvnLhtBSuXy3uazZWzEC6/tbwcLiws5PW8MsYcUUp9VkTuBbCvXU18XYCXMmt/F8fxC8gvaQdaq1kR7gNwqFqt/rvn62HGmF/6Wn+pmSRfj6Loye61s5E+rfXuVnKgltvhB7qkTV/T2nsqy9Jfz87WvrAjCoiFQmHE87yTAG4DcCwIgmenp6cv4X+r4A4EQfBFAj8U4BLJj8zOzs7vmBJ1GH74Y4R+3tPe/jTNXhGRGVKWYQEhLSkEFGGtbGGn2NZKakkMkCxpTx/IrF3MsuzzURT9bcdtgoRheJCURwE+AMGHqNTq5ka+NbL5UFq5Yus/rwjwlyzLfhx3CWp3xDZboVDY7ZE/Utr7stjOso+sutOaWuxQTilFa+WZLMsei+P4Mt4NG7lxHF8W8tKGVIBr+cHaOVd3k7B+vnbf5Vsh1s3NJd+Zi+0APbfIsKG+QcF6stAejrfse4tbJpi19mml1CkAqzlMR7ouItyQlq6PW0majUa6rb7ocTgcDofD4XA4HA6Hw+FwOBwOh+P/wH8BGz+ZScfrmFMAAAAASUVORK5CYII=" alt="CampusTour" class="size-7"></span>
+    <a href="#" class="grid w-14 justify-items-center gap-0.5 rounded-lg py-1.5 hover:bg-white/10"><svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Hôm nay</a>
+    <a href="#" aria-current="page" class="relative grid w-14 justify-items-center gap-0.5 rounded-lg bg-white/15 py-1.5 text-white"><svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="m10 8 4 2.5-4 2.5zM8 21h8"/></svg>Vận hành<span id="navdot" class="absolute top-1 right-2.5 hidden size-2.5 rounded-full bg-bad ring-2 ring-navy"></span></a>
+    <a href="#" class="grid w-14 justify-items-center gap-0.5 rounded-lg py-1.5 hover:bg-white/10"><svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/></svg>Chuẩn bị</a>
+    <a href="#" class="grid w-14 justify-items-center gap-0.5 rounded-lg py-1.5 hover:bg-white/10"><svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Lịch sử</a>
+    <span class="flex-1"></span>
+    <span class="grid size-8 place-items-center rounded-full bg-white text-[11px] font-bold text-navy">ST</span>
+  </nav>
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    <!-- ═══════════════ MÀN VẬN HÀNH ═══════════════ -->
+    <section id="v-ops" class="flex min-h-0 flex-1 flex-col" aria-label="Vận hành tour">
+      <!-- 1. Thanh trạng thái: luôn hiện, đổi màu khi có sự cố -->
+      <header id="status" class="shrink-0 border-b border-line bg-white transition-colors"></header>
+
+      <div class="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_388px]">
+        <!-- 2. Digital Twin -->
+        <div class="relative h-[52vh] min-h-[320px] overflow-hidden bg-[#eef4f9] lg:h-auto">
+          <div id="twin" class="absolute inset-0" aria-label="Bản đồ 3D vận hành" role="img"></div>
+          <div id="labels" class="pointer-events-none absolute inset-0" aria-hidden="true"></div>
+          <div id="vignette" class="pointer-events-none absolute inset-0 hidden anim-vignette"></div>
+          <!-- lớp phủ: bản đồ + chú giải -->
+          <div class="absolute top-3 left-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
+            <span class="rounded-lg bg-white/90 px-2.5 py-1 text-xs font-semibold shadow-xs ring-1 ring-black/5 backdrop-blur">Tầng 1 · Khu A</span>
+            <span class="hidden items-center gap-1 rounded-lg bg-white/90 px-2.5 py-1 text-xs font-semibold text-ok sm:inline-flex shadow-xs ring-1 ring-black/5 backdrop-blur"><svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Bản đồ v3 · đã xác nhận kỹ thuật</span>
+          </div>
+          <div class="absolute top-3 right-3 flex overflow-hidden rounded-lg bg-white/90 text-xs font-semibold shadow-xs ring-1 ring-black/5 backdrop-blur" role="group" aria-label="Góc nhìn">
+            <button data-cam="overview" class="cam px-2.5 py-1.5 aria-pressed:bg-navy aria-pressed:text-white">Toàn cảnh</button>
+            <button data-cam="follow" class="cam border-l border-line px-2.5 py-1.5 aria-pressed:bg-navy aria-pressed:text-white">Theo robot</button>
+            <button data-cam="top" class="cam border-l border-line px-2.5 py-1.5 aria-pressed:bg-navy aria-pressed:text-white">Từ trên</button>
+          </div>
+          <div id="incidentPill" class="absolute top-14 left-1/2 hidden -translate-x-1/2"></div>
+          <div id="previewPill" class="absolute top-14 left-1/2 hidden -translate-x-1/2"></div>
+          <!-- dải tiến trình tuyến -->
+          <div class="absolute inset-x-3 bottom-3"><div id="stepper" class="overflow-x-auto rounded-xl bg-white/92 px-3 py-2.5 shadow-sm ring-1 ring-black/5 backdrop-blur"></div></div>
+        </div>
+
+        <!-- 3. Cột điều khiển: thứ tự cố định, nút không đổi chỗ -->
+        <aside class="flex min-h-0 flex-col border-l border-line bg-white" aria-label="Bảng điều khiển">
+          <div id="rail" class="flex-1 space-y-3 p-3 lg:min-h-0 lg:overflow-y-auto"></div>
+          <div id="railFoot" class="sticky bottom-0 shrink-0 border-t border-line bg-white p-3"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ═══════════════ HỆ THỐNG TRẠNG THÁI ═══════════════ -->
+    <section id="v-states" class="hidden min-h-0 flex-1 overflow-y-auto" aria-label="Hệ thống trạng thái tour"></section>
+    <!-- ═══════════════ CHUẨN BỊ & LÊN LỊCH ═══════════════ -->
+    <section id="v-prep" class="hidden min-h-0 flex-1 overflow-y-auto" aria-label="Chuẩn bị và lên lịch"></section>
+  </div>
+</div>
+
+<!-- Hộp xác nhận ở giữa màn hình -->
+<div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="presentation">
+  <div class="absolute inset-0 bg-[#0f1e2d]/50 backdrop-blur-[2px]" data-close></div>
+  <section id="modalBox" role="dialog" aria-modal="true" aria-labelledby="mTitle" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl anim-rise"></section>
+</div>
+<!-- Thông báo nổi -->
+<section id="toasts" aria-live="polite" aria-label="Thông báo" class="pointer-events-none fixed right-4 bottom-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2"></section>
+
+<script>
+/* ════════ Biểu tượng ════════ */
+const PATHS = {
+  ok: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  pause: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
+  play: '<path d="M7 4.5v15l12-7.5z"/>', next: '<path d="M5 4.5v15l10-7.5zM19 5v14"/>', stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  branch: '<circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="6" cy="19" r="2.5"/><path d="M6 7.5v9M18 9.5a6 6 0 0 1-6 6H6"/>',
+  wifi: '<path d="M5 12.6a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01M2 8.8a15 15 0 0 1 20 0"/>',
+  wifioff: '<path d="M2 2l20 20M8.5 16a5 5 0 0 1 7 0M12 19.5h.01M5 12.6a10 10 0 0 1 5.2-2.7M16.7 10.9a10 10 0 0 1 2.3 1.7M2 8.8a15 15 0 0 1 4.2-2.6M10.7 5.1A15 15 0 0 1 22 8.8"/>',
+  bat: '<rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M6 10v4M9.5 10v4"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.8-1.2"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>', check: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  xc: '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>', retry: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', mute: '<path d="M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  flag: '<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>', robot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>',
+};
+const ic = (n, cls = 'size-4') => `<svg class="${cls} shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[n]}</svg>`;
+
+/* ════════ Hệ thống trạng thái Tour (dùng chung mọi màn) ════════
+   Mỗi trạng thái = màu + biểu tượng + kiểu viền + chữ. Không dựa vào màu đơn lẻ. */
+const STATE = {
+  Scheduled: { vn: 'Đã lên lịch', icon: 'cal', badge: 'border border-dashed border-slate-400 bg-white text-slate-600' },
+  Ready: { vn: 'Sẵn sàng · đã khóa', icon: 'lock', badge: 'border border-brand/40 bg-wash text-brand-700' },
+  Running: { vn: 'Đang chạy', icon: 'play', badge: 'border border-navy bg-navy text-white' },
+  Completed: { vn: 'Hoàn thành', icon: 'check', badge: 'border border-ok-line bg-ok-bg text-ok' },
+  Cancelled: { vn: 'Đã hủy', icon: 'xc', badge: 'border border-slate-200 bg-slate-100 text-slate-500 line-through decoration-slate-400' },
+};
+const stateBadge = (s, extra = '') => `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold whitespace-nowrap ${STATE[s].badge} ${extra}">${s === 'Running' ? '<span class="relative flex size-2"><span class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-300 opacity-75"></span><span class="relative inline-flex size-2 rounded-full bg-emerald-300"></span></span>' : ic(STATE[s].icon, 'size-3.5')}${STATE[s].vn}</span>`;
+const assistBadge = () => `<span class="inline-flex items-center gap-1 rounded-full border border-bad bg-bad px-2 py-0.5 text-[11.5px] font-bold whitespace-nowrap text-white">${ic('alert', 'size-3.5')}Cần hỗ trợ</span>`;
+const holdBadge = () => `<span class="inline-flex items-center gap-1 rounded-full border border-warn-line bg-warn-bg px-2 py-0.5 text-[11.5px] font-bold whitespace-nowrap text-warn">${ic('pause', 'size-3.5')}Đang giữ</span>`;
+
+/* ════════ Dữ liệu mẫu ════════ */
+const POI = {
+  start: { n: 'Xuất phát', x: -16, z: 8 }, sanh: { n: 'Sảnh A', x: -12, z: 2 }, tv: { n: 'Thư viện', x: -5, z: -6 },
+  rb: { n: 'Phòng Robotics', x: 3, z: -6, branch: true }, ai: { n: 'AI Lab', x: 10, z: 0 }, aix: { n: 'AI Lab mở rộng', x: 3, z: 5 },
+  xu: { n: 'Xưởng chế tạo', x: 15, z: -6 }, end: { n: 'Kết thúc', x: 16, z: 8 },
+};
+const ROUTES = { main: ['start', 'sanh', 'tv', 'rb', 'ai', 'xu', 'end'], b: ['start', 'sanh', 'tv', 'rb', 'aix', 'ai', 'xu', 'end'], c: ['start', 'sanh', 'tv', 'rb', 'end'] };
+const ROUTE_NAME = { main: 'Thư viện – AI Lab v3', b: 'Nhánh "AI Lab mở rộng"', c: 'Nhánh "Về sớm"' };
+const STEP_VN = { PreparingStart: 'Quay FRONT trước chặng đầu', Navigating: 'Đang tới', Observing: 'Đang thuyết minh tại', HeldAtPoi: 'Đã tới, chưa bắt đầu xem tại', ReturningToEnd: 'Đang về điểm kết thúc', AtEnd: 'Đã về điểm kết thúc' };
+
+const APP = window.APP = {}; window.APP_POI = POI; window.APP_ROUTES = ROUTES;
+const T0 = Date.now(); const BASE = 9 * 3600 + 21 * 60;
+const clock = (off = 0) => { const s = BASE + Math.floor((Date.now() - T0) / 1000) + off; return `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+const mmss = (s) => `${String(Math.floor(Math.max(s, 0) / 60)).padStart(2, '0')}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
+const cur = () => ROUTES[APP.route][APP.idx];
+
+function reset(scen) {
+  Object.assign(APP, { scen, state: 'Running', assist: null, hold: false, route: 'main', idx: 3, step: 'Observing', dwell: 45, dwellTotal: 60, anim: null, reqs: [], accepted: null, stale: false, staleSince: 0, reconnected: false, ack: false, log: [], endReason: null, preview: null, elapsed: 21 * 60 + 40, battery: 64 });
+  const at = POI.rb; APP.robot = { x: at.x, z: at.z, h: 0 };
+  APP.log = [['09:02', 'Buổi bắt đầu, 18/18 học sinh đã vào xem'], ['09:10', 'Tới POI 1 · Sảnh A'], ['09:16', 'Tới POI 2 · Thư viện'], ['09:20', 'Tới POI 3 · Phòng Robotics (điểm phân nhánh)']];
+  if (scen === 'ready') { Object.assign(APP, { state: 'Ready', idx: 0, step: null, elapsed: 0 }); APP.robot = { x: POI.start.x, z: POI.start.z, h: 0 }; APP.log = [['08:50', 'Khóa READY · staff01'], ['09:18', 'Robot AMR-01 đã ở điểm xuất phát']]; }
+  if (scen === 'branch') {
+    APP.dwell = 70; APP.dwellTotal = 90;
+    APP.reqs = [
+      { id: 'r1', who: 'Đoàn 8A', school: 'THCS Hòa Bình', variant: 'b', label: 'Thêm điểm "AI Lab mở rộng"', delta: 6, ago: 34, status: 'pending' },
+      { id: 'r2', who: 'Đoàn 8B', school: 'THCS Hòa Bình', variant: 'c', label: 'Rút ngắn: bỏ AI Lab, Xưởng, về luôn', delta: -9, ago: 12, status: 'pending' },
+    ];
+    APP.log.push(['09:21', 'Đoàn 8A gửi yêu cầu đổi nhánh'], ['09:21', 'Đoàn 8B gửi yêu cầu đổi nhánh']);
+  }
+  if (scen === 'hb') {
+    Object.assign(APP, { step: 'Navigating', stale: true, staleSince: Date.now() - 12000, assist: 'RobotDisconnected', dwell: 0 });
+    const a = POI.tv, b = POI.rb; APP.robot = { x: a.x + (b.x - a.x) * .62, z: a.z + (b.z - a.z) * .62, h: Math.atan2(b.x - a.x, b.z - a.z) };
+    APP.log = APP.log.slice(0, 3).concat([['09:19', 'Rời Thư viện, đang tới Phòng Robotics'], ['09:21', 'Mất heartbeat robot > 5 giây · tự giữ lịch'], ['09:21', '1 yêu cầu đổi nhánh đang chờ đã tự hết hạn']]);
+  }
+}
+
+/* ════════ Hành động (mỗi nút = một lệnh có sẵn: start / hold / next / endEarly / phục hồi) ════════ */
+const waitingAtBranch = () => APP.state === 'Running' && !APP.assist && ['Observing', 'HeldAtPoi'].includes(APP.step) && POI[cur()].branch;
+const log = (t) => APP.log.push([clock().slice(0, 5), t]);
+const actionable = () => APP.reqs.find((r) => r.status === 'pending');
+function gates() {
+  const run = APP.state === 'Running', a = !!APP.assist, moving = APP.step === 'Navigating' || APP.step === 'ReturningToEnd' || APP.step === 'PreparingStart';
+  return {
+    start: APP.state === 'Ready' ? { ok: true } : { ok: false, why: 'Chỉ bắt đầu khi tour ở READY' },
+    hold: !run ? { ok: false, why: 'Tour không chạy' } : a ? { ok: false, why: 'Đang có sự cố, dùng thao tác phục hồi' } : APP.step === 'AtEnd' ? { ok: false, why: 'Robot đã về điểm kết thúc' } : { ok: true },
+    next: !run ? { ok: false, why: 'Tour không chạy' } : a ? { ok: false, why: 'Đang có sự cố, dùng thao tác phục hồi' } : moving ? { ok: false, why: 'Robot đang di chuyển, chờ tới POI' } : APP.step === 'AtEnd' ? { ok: false, why: 'Không còn POI' } : { ok: true },
+    end: run ? { ok: true } : { ok: false, why: 'Tour không chạy' },
+  };
+}
+function act(k, arg) {
+  const g = gates();
+  if (k === 'start' && g.start.ok) { APP.state = 'Running'; APP.step = 'PreparingStart'; log('Bắt đầu buổi · staff01'); toast('ok', 'Đã bắt đầu T-01', 'Robot quay FRONT rồi đi tới Sảnh A.'); setTimeout(() => go(1), 1500); }
+  if (k === 'hold' && g.hold.ok) { APP.hold = !APP.hold; log(APP.hold ? 'Giữ tại POI (dừng tự chuyển bước)' : 'Tiếp tục lịch tự chuyển bước'); toast('info', APP.hold ? 'Đã giữ robot tại POI' : 'Đã tiếp tục', APP.hold ? 'Robot sẽ không tự đi tiếp cho tới khi bạn bấm Tiếp tục hoặc POI kế.' : `Còn ${mmss(APP.dwell)} rồi tự sang POI kế.`); }
+  if (k === 'next' && g.next.ok) leave('Chuyển POI kế · staff01');
+  if (k === 'accept') accept(arg);
+  if (k === 'decline') decline(arg);
+  if (k === 'ack') { APP.ack = true; log('staff01 đã nhận sự cố'); }
+  if (k === 'recover') { APP.assist = null; APP.stale = false; APP.reconnected = false; log('Thử lại chặng · staff01'); toast('ok', 'Đã gửi lại chặng', 'Robot tiếp tục tới Phòng Robotics.'); go(APP.idx, true); }
+  if (k === 'confirmEnd') { APP.state = 'Completed'; APP.step = null; log('Xác nhận hoàn tất · staff01'); toast('ok', 'Buổi đã hoàn thành', 'Live và AI của học sinh đã đóng.'); }
+  if (k === 'endEarly') openEnd();
+  render();
+}
+function leave(why) {
+  const pending = APP.reqs.filter((r) => r.status === 'pending');
+  if (pending.length && POI[cur()].branch) { pending.forEach((r) => (r.status = 'expired')); log(`${pending.length} yêu cầu đổi nhánh hết hạn (robot rời điểm phân nhánh)`); toast('warn', `${pending.length} yêu cầu đổi nhánh đã hết hạn`, 'Robot rời điểm phân nhánh trước khi có quyết định.'); }
+  APP.hold = false; log(why); go(APP.idx + 1);
+}
+function go(i, sameTarget) {
+  const r = ROUTES[APP.route]; if (i >= r.length) return;
+  APP.idx = i; const to = POI[r[i]];
+  APP.step = r[i] === 'end' ? 'ReturningToEnd' : 'Navigating';
+  const from = { ...APP.robot }; const d = Math.hypot(to.x - from.x, to.z - from.z);
+  APP.anim = { from, to, t0: performance.now(), dur: Math.max(1600, d * 260) };
+  APP.robot.h = Math.atan2(to.x - from.x, to.z - from.z);
+  render();
+}
+function arrive() {
+  APP.anim = null; const k = cur();
+  if (k === 'end') { APP.step = 'AtEnd'; log('Robot đã về điểm kết thúc'); toast('info', 'Robot đã về điểm kết thúc', 'Xác nhận hoàn tất để đóng buổi.'); }
+  else { APP.step = 'Observing'; APP.dwell = POI[k].branch ? 60 : 30; APP.dwellTotal = APP.dwell; log(`Tới POI ${APP.idx} · ${POI[k].n}`); }
+  render();
+}
+function accept(id) {
+  const r = APP.reqs.find((x) => x.id === id), first = actionable();
+  if (!r || r !== first || !waitingAtBranch() || APP.accepted) return;
+  r.status = 'accepted'; APP.accepted = r.id; APP.route = r.variant; APP.preview = null;
+  APP.reqs.filter((x) => x.status === 'pending').forEach((x) => (x.status = 'void'));
+  log(`Chấp nhận đổi nhánh của ${r.who}: ${ROUTE_NAME[r.variant]}`);
+  toast('ok', `Đã chấp nhận yêu cầu của ${r.who}`, `Tuyến đổi sang ${ROUTE_NAME[r.variant]} (${r.delta > 0 ? '+' : ''}${r.delta} phút). Các yêu cầu còn lại đã đóng.`);
+  render();
+}
+function decline(id) {
+  const r = APP.reqs.find((x) => x.id === id); if (!r || r !== actionable()) return;
+  r.status = 'declined'; APP.preview = null; log(`Từ chối yêu cầu của ${r.who}`); toast('info', `Đã từ chối yêu cầu của ${r.who}`, 'Người gửi nhận được thông báo kèm lý do.'); render();
+}
+
+/* ════════ Vẽ: thanh trạng thái ════════ */
+function renderStatus() {
+  const s = APP.state, a = APP.assist, k = cur(), hbAge = APP.stale ? Math.round((Date.now() - APP.staleSince) / 1000) : 0;
+  const red0 = !!APP.assist;
+  const hb = APP.stale ? `<span class="inline-flex items-center gap-1 font-bold ${red0 ? 'text-white' : 'text-bad'}">${ic('wifioff', 'size-4')}Mất tín hiệu <span data-live="hb">${hbAge}</span> giây</span>` : APP.reconnected ? `<span class="inline-flex items-center gap-1 font-semibold ${red0 ? 'text-white' : 'text-ok'}">${ic('wifi', 'size-4')}Đã kết nối lại</span>` : `<span class="inline-flex items-center gap-1 font-semibold text-ok">${ic('wifi', 'size-4')}Live · 0,4 giây</span>`;
+  const stepTxt = s === 'Ready' ? 'Chờ bắt đầu · robot ở điểm xuất phát' : s !== 'Running' ? (APP.endReason ? `Kết thúc sớm: ${APP.endReason}` : 'Buổi đã đóng') : APP.step === 'AtEnd' || APP.step === 'ReturningToEnd' || APP.step === 'PreparingStart' ? STEP_VN[APP.step] : `${STEP_VN[APP.step]} ${POI[k].n}`;
+  const red = !!a;
+  document.getElementById('status').className = `shrink-0 border-b transition-colors ${red ? 'border-bad bg-bad text-white' : 'border-line bg-white'}`;
+  document.getElementById('status').innerHTML = `
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
+    <span class="rounded-md px-1.5 py-0.5 font-mono text-xs font-bold ${red ? 'bg-white/15' : 'bg-wash text-brand'}">T-01</span>
+    <h1 class="min-w-0 text-[17px] font-bold tracking-[-0.02em] ${red ? '' : 'text-navy'}">THCS Hòa Bình · 09:00</h1>
+    ${stateBadge(s, red ? 'ring-2 ring-white/40' : '')}${a ? `<span class="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11.5px] font-bold text-bad">${ic('alert', 'size-3.5')}Cần hỗ trợ · Mất kết nối robot</span>` : ''}${APP.hold && !a ? holdBadge() : ''}
+    <span class="min-w-0 flex-1 basis-56 truncate ${red ? 'text-white/85' : 'text-muted'}">${stepTxt}</span>
+    <span class="font-mono text-xs ${red ? 'text-white/80' : 'text-muted'}" data-live="clock">${clock()}</span>
+  </div>
+  <dl class="grid grid-cols-2 border-t text-xs sm:grid-cols-3 xl:grid-cols-6 ${red ? 'border-white/20' : 'border-line'}">
+    ${[['Robot AMR-01', hb], ['Vị trí (pose)', APP.stale ? `<span class="font-bold">Cũ · <span data-live="hb2">${hbAge}</span> giây</span>` : '<span class="font-semibold">Mới · 0,3 giây</span>'], ['Tiến trình', `<b>POI ${Math.min(Math.max(APP.idx, 0), ROUTES[APP.route].length - 2)}/${ROUTES[APP.route].length - 2}</b> · ${ROUTE_NAME[APP.route]}`], ['Đã chạy', `<b data-live="elapsed">${mmss(APP.elapsed)}</b>`], ['Người xem', `${ic('users', 'size-3.5 inline -mt-0.5')} <b>${s === 'Ready' ? '0/18 · phòng chờ 15' : '18/18'}</b>`], ['Pin', `${ic('bat', 'size-3.5 inline -mt-0.5')} <b>${APP.battery}%</b> · ~3 giờ`]]
+      .map(([l, v], i) => `<div class="min-w-0 px-4 py-1.5 ${i ? `border-l ${red ? 'border-white/20' : 'border-line'}` : ''}"><dt class="${red ? 'text-white/70' : 'text-muted'}">${l}</dt><dd class="truncate">${v}</dd></div>`).join('')}
+  </dl>`;
+}
+
+/* ════════ Vẽ: dải tiến trình tuyến ════════ */
+function renderStepper() {
+  const r = ROUTES[APP.route].slice(1, -1);
+  document.getElementById('stepper').innerHTML = `<ol class="flex min-w-max items-center gap-1" aria-label="Tiến trình tuyến">${r.map((k, i) => {
+    const n = i + 1, here = n === APP.idx && APP.state === 'Running';
+    const done = n < APP.idx || (APP.state === 'Completed' && !APP.endReason);
+    const tone = here ? (APP.assist ? 'bg-bad text-white' : 'bg-navy text-white') : done ? 'bg-ok-bg text-ok' : 'bg-slate-100 text-slate-600';
+    return `${i ? `<li aria-hidden="true" class="h-0.5 w-5 rounded ${n <= APP.idx ? 'bg-ok' : 'bg-slate-200'}"></li>` : ''}<li class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold ${tone}">${done ? ic('ok', 'size-3.5') : `<span class="grid size-4 place-items-center rounded-full ${here ? 'bg-white/20' : 'bg-white'} text-[10px]">${n}</span>`}${POI[k].n}${POI[k].branch ? `<span title="Điểm phân nhánh" class="${here ? 'text-white/90' : 'text-branch'}">${ic('branch', 'size-3.5')}</span>` : ''}${here ? `<span class="font-normal opacity-80">· ${APP.step === 'Navigating' ? 'đang tới' : 'tại đây'}</span>` : ''}</li>`;
+  }).join('')}${APP.preview ? `<li class="ml-3 rounded-lg border border-dashed border-branch px-2 py-1 text-xs font-semibold text-branch">Xem trước: ${ROUTE_NAME[APP.preview]}</li>` : ''}</ol>`;
+}
+
+/* ════════ Vẽ: cột điều khiển ════════ */
+const btn = (k, label, icon, gate, style, kbd, sub = '') => `<div><button type="button" data-act="${k}" ${gate.ok ? '' : 'disabled'} aria-describedby="g-${k}" class="flex w-full items-center justify-center gap-2 rounded-xl px-3 font-bold transition-colors disabled:cursor-not-allowed ${style} disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none">${ic(icon, 'size-[18px]')}<span>${label}</span>${kbd ? `<kbd class="ml-1 hidden rounded border border-current/30 px-1 text-[10px] font-semibold opacity-70 sm:inline">${kbd}</kbd>` : ''}</button><p id="g-${k}" class="mt-1 min-h-4 text-[11.5px] ${gate.ok ? 'text-muted' : 'text-slate-500'}">${gate.ok ? sub : `Không khả dụng: ${gate.why}`}</p></div>`;
+function nowCard() {
+  const k = cur();
+  if (APP.state === 'Ready') return `<section class="rounded-xl border border-line p-3"><div class="flex items-center justify-between"><h2 class="font-bold">Kiểm tra trước khi bắt đầu</h2><span class="text-xs font-semibold text-ok">4/4 đạt</span></div><ul class="mt-2 space-y-1.5 text-[12.5px]">${['Robot AMR-01 ở điểm xuất phát, đứng yên', 'Pin 64% (cần ≥ 40%)', 'Luồng video đang phát', 'Tuyến v3 đã được kỹ thuật xác nhận'].map((t) => `<li class="flex items-center gap-2"><span class="grid size-5 place-items-center rounded-full bg-ok-bg text-ok">${ic('ok', 'size-3.5')}</span>${t}</li>`).join('')}</ul><p class="mt-2 rounded-lg bg-wash px-2.5 py-1.5 text-xs text-brand-700">Mở cửa bắt đầu: 08:55 – 09:15. 15 học sinh đang ở phòng chờ.</p></section>`;
+  if (APP.state !== 'Running') return `<section class="rounded-xl border border-line p-3">${stateBadge(APP.state)}<p class="mt-2 text-[12.5px] text-muted">${APP.endReason ? `Đã kết thúc sớm. Lý do: <b class="text-ink">${APP.endReason}</b>.` : 'Buổi đã đóng.'} Live và AI của học sinh đã đóng; nhật ký được lưu trong Lịch sử phiên.</p></section>`;
+  if (APP.step === 'AtEnd') return `<section class="rounded-xl border border-ok-line bg-ok-bg p-3"><h2 class="font-bold text-ok">Robot đã về điểm kết thúc</h2><p class="mt-1 text-[12.5px]">Kiểm tra robot dừng hẳn rồi xác nhận để đóng buổi ở trạng thái Hoàn thành.</p><button data-act="confirmEnd" class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-ok py-2.5 font-bold text-white">${ic('flag')}Xác nhận hoàn tất</button></section>`;
+  const moving = APP.step === 'Navigating' || APP.step === 'ReturningToEnd' || APP.step === 'PreparingStart';
+  const pct = moving ? 0 : Math.round((1 - APP.dwell / APP.dwellTotal) * 100);
+  return `<section class="rounded-xl border border-line p-3" aria-label="Bước hiện tại">
+    <div class="flex items-start gap-3">
+      <div class="relative grid size-14 shrink-0 place-items-center">
+        <svg viewBox="0 0 56 56" class="absolute inset-0 -rotate-90" aria-hidden="true"><circle cx="28" cy="28" r="24" fill="none" stroke="#e3e9ef" stroke-width="5"/><circle cx="28" cy="28" r="24" fill="none" stroke="${APP.hold ? '#d69412' : APP.assist ? '#b23e31' : '#2d719e'}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(moving ? 0 : 1 - APP.dwell / APP.dwellTotal) * 150.8} 150.8"/></svg>
+        <span class="font-mono text-[11px] font-bold" data-live="dwell">${moving ? '—' : mmss(APP.dwell)}</span>
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-xs text-muted">${APP.assist ? 'Lịch tự chuyển bước đã tạm dừng' : moving ? 'Đang di chuyển' : APP.hold ? 'Đang giữ, không tự đi tiếp' : 'Tự sang POI kế khi hết giờ'}</p>
+        <h2 class="truncate text-[15px] font-bold">${moving ? `→ ${POI[k].n}` : POI[k].n}</h2>
+        <p class="text-xs text-muted">${APP.step === 'Observing' && !moving ? 'Thuyết minh: đang phát · góc đầu 2/3' : `Kế tiếp: ${POI[ROUTES[APP.route][Math.min(APP.idx + 1, ROUTES[APP.route].length - 1)]].n}`}${POI[k].branch && !moving ? ' · <b class="text-branch">điểm phân nhánh</b>' : ''}</p>
+      </div>
+    </div>
+  </section>`;
+}
+function incidentCard() {
+  if (!APP.assist) return '';
+  const secs = Math.round((Date.now() - APP.staleSince) / 1000);
+  return `<section role="alert" class="overflow-hidden rounded-xl border-2 border-bad bg-bad-bg anim-rise" aria-label="Sự cố">
+    <div class="flex items-center gap-2 bg-bad px-3 py-2 text-white">${ic('wifioff', 'size-[18px]')}<h2 class="flex-1 font-bold">Mất kết nối robot</h2><span class="font-mono text-xs font-bold" data-live="inc">${mmss(secs)}</span></div>
+    <div class="space-y-2.5 p-3 text-[12.5px]">
+      <p>Heartbeat AMR-01 mất từ <b>09:21:04</b>. Hệ thống đã: <b>tạm dừng lịch tự chuyển bước</b>, đóng yêu cầu đổi nhánh đang chờ, báo người xem "Robot đang tạm dừng".</p>
+      ${APP.ack ? `<p class="flex items-center gap-1.5 text-xs font-semibold text-ok">${ic('ok', 'size-3.5')}staff01 đã nhận lúc ${APP.log.find((l) => l[1].includes('đã nhận'))?.[0] ?? ''}</p>` : `<button data-act="ack" class="flex w-full items-center justify-center gap-2 rounded-lg border border-bad bg-white py-2 font-bold text-bad">${ic('bell')}Đã nhận, đang xử lý <span class="font-normal">(tắt âm báo)</span></button>`}
+      <ol class="space-y-2" aria-label="Các bước xử lý">
+        <li class="flex gap-2"><span class="grid size-5 shrink-0 place-items-center rounded-full bg-bad text-[11px] font-bold text-white">1</span><span><b>Kiểm tra an toàn tại chỗ.</b> Gọi người đi cùng đoàn: robot đứng yên? lối đi thông? <a href="#" class="inline-flex items-center gap-1 font-semibold text-brand">${ic('phone', 'size-3.5')}Gọi 0909 xxx 123</a></span></li>
+        <li class="flex gap-2"><span class="grid size-5 shrink-0 place-items-center rounded-full ${APP.reconnected ? 'bg-ok' : 'bg-bad'} text-[11px] font-bold text-white">${APP.reconnected ? '✓' : '2'}</span><span><b>Chờ robot kết nối lại.</b> ${APP.reconnected ? '<span class="text-ok">Đã có heartbeat và vị trí mới (0,3 giây).</span>' : 'Không tự chạy tiếp khi có kết nối; bạn quyết định bước 3.'}</span></li>
+        <li class="flex gap-2"><span class="grid size-5 shrink-0 place-items-center rounded-full bg-bad text-[11px] font-bold text-white">3</span><span><b>Chọn cách phục hồi</b> hoặc <b>Kết thúc sớm</b> nếu không an toàn.</span></li>
+      </ol>
+      <div class="grid grid-cols-1 gap-2">
+        <button data-act="recover" ${APP.reconnected ? '' : 'disabled'} class="flex items-center justify-center gap-2 rounded-lg bg-brand py-2.5 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500">${ic('retry')}Thử lại chặng tới Phòng Robotics</button>
+        <p class="-mt-1 text-[11.5px] text-muted">${APP.reconnected ? 'Gửi lại mục tiêu chặng với mã chặng mới.' : 'Không khả dụng: cần robot kết nối lại và vị trí mới.'}</p>
+      </div>
+      ${secs > 120 ? `<p class="rounded-lg bg-white px-2.5 py-2 text-xs font-semibold text-bad">Mất kết nối hơn 2 phút: nên kết thúc sớm và hẹn lại buổi.</p>` : ''}
+    </div>
+  </section>`;
+}
+function branchQueue() {
+  const list = APP.reqs.filter((r) => r.status !== 'expired' || true);
+  const pend = APP.reqs.filter((r) => r.status === 'pending').length;
+  const can = waitingAtBranch();
+  const first = actionable();
+  if (!APP.reqs.length && !POI[cur()].branch) return `<section class="rounded-xl border border-line p-3"><h2 class="flex items-center gap-1.5 font-bold">${ic('branch', 'size-4 text-branch')}Yêu cầu đổi nhánh</h2><p class="mt-1 text-[12.5px] text-muted">Chưa có yêu cầu. Yêu cầu chỉ duyệt được khi robot đang chờ ở điểm phân nhánh (Phòng Robotics).</p></section>`;
+  return `<section class="rounded-xl border ${pend && can ? 'border-branch ring-2 ring-branch/20' : 'border-line'}" aria-label="Yêu cầu đổi nhánh">
+    <div class="flex items-center gap-2 border-b border-line px-3 py-2"><span class="text-branch">${ic('branch', 'size-[18px]')}</span><h2 class="flex-1 font-bold">Yêu cầu đổi nhánh</h2>${pend ? `<span class="rounded-full bg-branch px-2 py-0.5 text-[11px] font-bold text-white">${pend} chờ</span>` : ''}</div>
+    <p class="flex items-start gap-1.5 bg-slate-50 px-3 py-1.5 text-[11.5px] text-muted">${ic('info', 'size-3.5 mt-0.5')}<span>${APP.accepted ? 'Đã chấp nhận 1 yêu cầu cho lượt này. Các yêu cầu khác tự đóng.' : can ? `Robot đang chờ tại điểm phân nhánh. Xử lý theo thứ tự đến; chấp nhận tối đa 1. Hết hạn khi robot rời POI (còn <b data-live="dwell2">${mmss(APP.dwell)}</b>).` : 'Chỉ duyệt được khi robot đang chờ tại điểm phân nhánh.'}</span></p>
+    <ul class="divide-y divide-line">${list.map((r, i) => {
+      const isFirst = r === first, live = r.status === 'pending';
+      const tone = { pending: '', accepted: 'bg-ok-bg', declined: 'opacity-60', void: 'opacity-60', expired: 'opacity-60' }[r.status];
+      const tag = { accepted: `<span class="rounded-full bg-ok px-2 py-0.5 text-[11px] font-bold text-white">Đã chấp nhận</span>`, declined: `<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">Đã từ chối</span>`, void: `<span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-600">Đã đóng</span>`, expired: `<span class="rounded-full bg-warn-bg px-2 py-0.5 text-[11px] font-bold text-warn">Hết hạn</span>`, pending: isFirst ? `<span class="rounded-full bg-branch/10 px-2 py-0.5 text-[11px] font-bold text-branch">Lượt hiện tại</span>` : `<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">#${i + 1} · chờ tới lượt</span>` }[r.status];
+      return `<li class="p-3 ${tone}" data-preview="${live ? r.variant : ''}" tabindex="${live ? 0 : -1}">
+        <div class="flex items-start gap-2"><span class="grid size-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[11px] font-bold">${i + 1}</span><div class="min-w-0 flex-1"><p class="font-bold">${r.label}</p><p class="text-xs text-muted">${r.who} · ${r.school} · gửi <span data-ago="${r.id}">${r.ago}</span> giây trước</p></div>${tag}</div>
+        <div class="mt-2 ml-8 flex flex-wrap gap-1.5 text-[11.5px]"><span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold">${r.delta > 0 ? '+' : ''}${r.delta} phút</span><span class="rounded-md bg-slate-100 px-1.5 py-0.5">Kết thúc ~${r.delta > 0 ? '09:46' : '09:31'}</span>${r.delta > 0 ? '<span class="rounded-md bg-warn-bg px-1.5 py-0.5 font-semibold text-warn">Sát giờ T-02 (10:30): còn 44 phút</span>' : '<span class="rounded-md bg-slate-100 px-1.5 py-0.5">Bỏ 2 POI</span>'}<span class="hidden rounded-md px-1.5 py-0.5 text-branch sm:inline">Rê chuột để xem trên bản đồ</span></div>
+        ${live ? `<div class="mt-2.5 ml-8 grid grid-cols-2 gap-2"><button data-act="accept" data-id="${r.id}" ${isFirst && can && !APP.accepted ? '' : 'disabled'} class="flex items-center justify-center gap-1.5 rounded-lg bg-branch py-2 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">${ic('ok')}Chấp nhận${isFirst ? '<kbd class="ml-1 hidden rounded border border-white/40 px-1 text-[10px] sm:inline">A</kbd>' : ''}</button><button data-act="decline" data-id="${r.id}" ${isFirst ? '' : 'disabled'} class="flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white py-2 font-bold disabled:cursor-not-allowed disabled:text-slate-400">${ic('x')}Từ chối${isFirst ? '<kbd class="ml-1 hidden rounded border border-current/30 px-1 text-[10px] sm:inline">D</kbd>' : ''}</button></div>${isFirst ? '' : '<p class="mt-1.5 ml-8 text-[11.5px] text-muted">Xử lý yêu cầu #1 trước (theo thứ tự đến).</p>'}` : ''}
+      </li>`;
+    }).join('')}</ul>
+  </section>`;
+}
+function logCard() {
+  return `<details class="group rounded-xl border border-line" open><summary class="flex cursor-pointer list-none items-center justify-between px-3 py-2 font-bold">Nhật ký <span class="text-xs font-semibold text-brand">${APP.log.length} mục</span></summary><ol class="space-y-1.5 border-t border-line px-3 py-2 text-[12.5px]">${APP.log.slice(-5).reverse().map(([t, x]) => `<li class="grid grid-cols-[52px_minmax(0,1fr)] gap-2"><time class="font-mono text-xs text-muted">${t}</time><span class="${/Mất|hết hạn/.test(x) ? 'font-semibold text-bad' : ''}">${x}</span></li>`).join('')}</ol></details>`;
+}
+function renderRail() {
+  const g = gates();
+  let cmds = '';
+  if (APP.state === 'Ready') cmds = btn('start', 'Bắt đầu tour', 'play', g.start, 'min-h-14 bg-brand text-[15px] text-white shadow-[0_6px_16px_-6px_rgba(45,113,158,.7)] hover:bg-brand-700', '', 'Robot quay FRONT rồi đi chặng đầu.');
+  else if (APP.state === 'Running' && APP.step !== 'AtEnd') {
+    const holdLabel = APP.hold ? 'Tiếp tục (Resume)' : 'Giữ tại POI (Hold)';
+    cmds = `<div class="grid grid-cols-2 gap-2">${btn('hold', holdLabel, APP.hold ? 'play' : 'pause', g.hold, APP.hold ? 'min-h-12 bg-warn-solid text-[#1d1300] hover:brightness-95' : 'min-h-12 border border-line bg-white hover:bg-slate-50', 'H', APP.hold ? 'Bỏ giữ, đếm giờ tiếp.' : 'Dừng tự chuyển bước.')}${btn('next', 'POI kế (Next)', 'next', g.next, 'min-h-12 bg-brand text-white hover:bg-brand-700', 'N', 'Kết thúc POI này, đi tiếp.')}</div>`;
+  }
+  const order = APP.assist ? [incidentCard(), nowCard(), branchQueue(), logCard()] : [nowCard(), cmds ? `<section aria-label="Lệnh"><h2 class="sr-only">Lệnh vận hành</h2>${cmds}</section>` : '', branchQueue(), logCard()];
+  if (APP.assist) order.splice(2, 0, `<section aria-label="Lệnh">${cmds}</section>`);
+  document.getElementById('rail').innerHTML = order.join('');
+  document.getElementById('railFoot').innerHTML = APP.state === 'Running' ? `<button data-act="endEarly" class="flex w-full items-center justify-center gap-2 rounded-xl border-2 ${APP.assist ? 'border-bad bg-bad text-white' : 'border-bad/60 bg-white text-bad hover:bg-bad-bg'} py-2.5 font-bold">${ic('stop')}Kết thúc sớm (End Early)</button><p class="mt-1 text-center text-[11.5px] text-muted">Luôn hỏi lý do. Dùng khi không an toàn hoặc không thể tiếp tục.</p>` : APP.state === 'Ready' ? `<p class="text-center text-[11.5px] text-muted">Muốn đổi lịch hoặc hủy: mở khóa READY ở trang Chuẩn bị.</p>` : `<a href="#" class="block rounded-xl border border-line py-2.5 text-center font-bold text-brand">Xem lịch sử & thống kê buổi</a>`;
+}
+
+/* ════════ Vẽ: lớp phủ sự cố trên bản đồ ════════ */
+function renderOverlay() {
+  const pill = document.getElementById('incidentPill'), vg = document.getElementById('vignette');
+  if (APP.assist) {
+    vg.classList.remove('hidden'); pill.classList.remove('hidden');
+    pill.innerHTML = `<div class="flex items-center gap-2 rounded-full bg-bad px-3.5 py-1.5 text-xs font-bold whitespace-nowrap text-white shadow-lg">${ic('wifioff', 'size-4')}${APP.reconnected ? 'Đã kết nối lại · chờ bạn chọn phục hồi' : `Vị trí cuối lúc 09:21:04 · vùng mờ = vị trí có thể`}</div>`;
+  } else { vg.classList.add('hidden'); pill.classList.add('hidden'); }
+  const pp = document.getElementById('previewPill');
+  if (APP.preview && !APP.assist) { pp.classList.remove('hidden'); pp.innerHTML = `<div class="rounded-full bg-branch px-3.5 py-1.5 text-xs font-bold whitespace-nowrap text-white shadow-lg">Xem trước nhánh: ${ROUTE_NAME[APP.preview]}</div>`; } else pp.classList.add('hidden');
+  document.getElementById('navdot').classList.toggle('hidden', !APP.assist);
+  document.getElementById('reconnect').classList.toggle('hidden', !(APP.assist && !APP.reconnected));
+}
+
+/* ════════ Hộp Kết thúc sớm ════════ */
+const REASONS = ['Không an toàn cho học sinh / robot', 'Mất kết nối robot kéo dài', 'Robot hoặc thiết bị lỗi', 'Lý do khác'];
+function openEnd() {
+  const m = document.getElementById('modal'), box = document.getElementById('modalBox');
+  box.innerHTML = `<div class="flex items-start gap-3 px-5 pt-5"><span class="grid size-10 shrink-0 place-items-center rounded-xl bg-bad-bg text-bad">${ic('stop', 'size-5')}</span><div class="flex-1"><h2 id="mTitle" class="text-lg font-bold tracking-[-0.02em]">Kết thúc sớm T-01?</h2><p class="text-muted">THCS Hòa Bình · 18 học sinh đang xem</p></div><button data-close class="grid size-8 place-items-center rounded-lg bg-slate-100 text-muted" aria-label="Đóng">${ic('x')}</button></div>
+  <div class="space-y-4 overflow-y-auto px-5 py-4">
+    <fieldset><legend class="mb-2 font-bold">Lý do <span class="text-bad">*</span></legend><div class="grid gap-2">${REASONS.map((r, i) => `<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-line px-3 py-2 has-checked:border-bad has-checked:bg-bad-bg"><input type="radio" name="reason" value="${r}" class="accent-[#b23e31]" ${APP.assist && i === 1 ? 'checked' : ''}>${r}</label>`).join('')}</div>
+    <textarea id="note" rows="2" placeholder="Ghi chú thêm (không bắt buộc)" class="mt-2 w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"></textarea></fieldset>
+    <div class="rounded-lg bg-slate-50 p-3 text-[12.5px]"><b>Điều sẽ xảy ra</b><ul class="mt-1 list-disc space-y-0.5 pl-5 text-muted"><li>Live và AI của 18 học sinh đóng ngay; họ thấy thông báo kết thúc.</li><li>Robot nhận lệnh dừng; việc dừng vật lý do robot thực hiện.</li><li>Buổi đóng kèm lý do, lưu vào Lịch sử phiên. Không hoàn tác được.</li></ul></div>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3"><button data-close class="rounded-lg border border-line px-4 py-2.5 font-bold">Quay lại</button><span class="flex-1"></span>
+    <button id="holdBtn" disabled class="relative overflow-hidden rounded-lg bg-bad px-4 py-2.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"><span id="holdFill" class="absolute inset-0 origin-left scale-x-0 bg-black/25"></span><span class="relative">Giữ 1,5 giây để kết thúc</span></button></div>`;
+  m.classList.remove('hidden'); m.classList.add('flex');
+  const hb = document.getElementById('holdBtn'), fill = document.getElementById('holdFill');
+  const upd = () => (hb.disabled = !box.querySelector('input[name=reason]:checked'));
+  box.addEventListener('change', upd); upd();
+  let timer = null;
+  const startHold = (e) => { if (hb.disabled || timer) return; e.preventDefault(); fill.style.transition = 'transform 1.5s linear'; fill.style.transform = 'scaleX(1)'; timer = setTimeout(() => { const r = box.querySelector('input[name=reason]:checked').value; closeModal(); APP.state = 'Completed'; APP.endReason = r; APP.assist = null; APP.stale = false; APP.anim = null; APP.reqs.forEach((x) => x.status === 'pending' && (x.status = 'void')); log(`Kết thúc sớm · ${r} · staff01`); toast('ok', 'Đã kết thúc sớm T-01', `Lý do: ${r}. Học sinh đã nhận thông báo.`); render(); }, 1500); };
+  const stopHold = () => { clearTimeout(timer); timer = null; fill.style.transition = 'transform .2s'; fill.style.transform = 'scaleX(0)'; };
+  hb.addEventListener('pointerdown', startHold); ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => hb.addEventListener(ev, stopHold));
+  hb.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) startHold(e); });
+  hb.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') stopHold(); });
+  setTimeout(() => (box.querySelector('input[name=reason]:checked') || box.querySelector('input[name=reason]')).focus(), 30);
+}
+function closeModal() { const m = document.getElementById('modal'); m.classList.add('hidden'); m.classList.remove('flex'); }
+
+/* ════════ Thông báo nổi (giống Toaster hiện tại: thẻ trắng, chấm biểu tượng, thanh thời gian) ════════ */
+function toast(tone, title, detail) {
+  const dot = { ok: 'bg-ok', info: 'bg-brand', warn: 'bg-warn-solid', bad: 'bg-bad' }[tone], icn = { ok: 'ok', info: 'info', warn: 'alert', bad: 'x' }[tone];
+  const el = document.createElement('div');
+  el.className = 'pointer-events-auto relative flex items-start gap-2.5 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white px-3 pt-2.5 pb-3 shadow-[0_14px_34px_-14px_rgba(15,23,42,0.35)] anim-rise';
+  el.setAttribute('role', tone === 'bad' ? 'alert' : 'status');
+  el.innerHTML = `<span class="mt-px grid size-6 shrink-0 place-items-center rounded-full text-white ${dot}">${ic(icn, 'size-[15px]')}</span><div class="min-w-0 flex-1"><p class="text-[13px] leading-5 font-semibold">${title}</p><p class="mt-px text-xs text-muted">${detail}</p></div><button class="grid size-6 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100" aria-label="Đóng thông báo">${ic('x', 'size-4')}</button><span class="absolute bottom-0 left-0 h-[3px] w-full ${dot} anim-toastbar"></span>`;
+  const box = document.getElementById('toasts'); box.append(el); while (box.children.length > 3) box.firstElementChild.remove();
+  const close = () => el.remove(); el.querySelector('button').onclick = close; setTimeout(close, 4000);
+}
+
+/* ════════ Âm báo sự cố (PWA: thêm rung + Notification khi tab ẩn) ════════ */
+let actx = null, lastBeep = 0;
+function beep() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); [880, 660].forEach((f, i) => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = f; o.connect(g); g.connect(actx.destination); const t = actx.currentTime + i * .18; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.12, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .16); o.start(t); o.stop(t + .17); }); navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {} }
+
+/* ════════ Màn 2: hệ thống trạng thái ════════ */
+function renderStates() {
+  const rows = [
+    ['Running', 'T-01', '09:00', 'THCS Hòa Bình', 'POI 3/5 · 18 học sinh đang xem', '', true],
+    ['Ready', 'T-02', '10:30', 'THPT Hòa Hiệp', 'Đã khóa 08:50 · mở bắt đầu 10:25', ''],
+    ['Scheduled', 'T-03', '14:00', 'THCS Tân Phú', '3/4 điều kiện READY · thiếu: tuyến v4 chưa xác nhận kỹ thuật', 'warn'],
+    ['Completed', 'T-00', '08:00', 'THPT Tân Bình', 'Xong 08:41 · 24 học sinh', ''],
+    ['Cancelled', 'T-05', '16:00', 'THCS Long Thạnh', 'Hủy 07:30 · trường dời ngày', ''],
+  ];
+  const ACT = [['Sửa / dời lịch', 1, 0, 0, 0, 0], ['Khóa READY', 1, 0, 0, 0, 0], ['Mở khóa READY', 0, 1, 0, 0, 0], ['Hủy tour', 1, 1, 0, 0, 0], ['Bắt đầu (Start)', 0, 1, 0, 0, 0], ['Hold / Next / Resume', 0, 0, 1, 0, 0], ['Kết thúc sớm', 0, 0, 1, 0, 0], ['Xem lịch sử, thống kê', 0, 0, 0, 1, 1]];
+  const S = ['Scheduled', 'Ready', 'Running', 'Completed', 'Cancelled'];
+  const desc = { Scheduled: 'Viền nét đứt = chưa chốt. Hiện số điều kiện READY còn thiếu.', Ready: 'Ổ khóa = cấu hình đã đóng băng. Nền xanh nhạt.', Running: 'Nền navy đặc + chấm nhấp nháy. Nổi nhất trên trang, luôn ghim đầu danh sách.', Completed: 'Xanh lá nhạt, dấu tích. Dòng mờ bớt.', Cancelled: 'Xám, chữ gạch ngang, luôn kèm lý do hủy.' };
+  document.getElementById('v-states').innerHTML = `<div class="mx-auto max-w-[1180px] space-y-5 p-4 sm:p-6">
+    <header><p class="text-xs font-semibold text-brand">Hệ thống trạng thái</p><h1 class="text-[22px] font-bold tracking-[-0.02em] text-navy">5 trạng thái tour, 4 kênh phân biệt</h1><p class="mt-1 max-w-3xl text-muted">Màu + biểu tượng + kiểu viền + chữ. Người mù màu, màn máy chiếu hay bản in đều đọc được. <b>Cần hỗ trợ</b> và <b>Đang giữ</b> không phải trạng thái mà là cờ gắn thêm lên RUNNING.</p></header>
+    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">${S.map((s) => `<div class="rounded-xl bg-white p-3 shadow-xs ring-1 ring-line">${stateBadge(s)}<p class="mt-2 text-[12.5px] text-muted">${desc[s]}</p></div>`).join('')}</section>
+    <section class="rounded-xl bg-white p-3 shadow-xs ring-1 ring-line"><h2 class="mb-2 font-bold">Cờ gắn trên RUNNING</h2><div class="flex flex-wrap items-center gap-2">${stateBadge('Running')}${assistBadge()}<span class="text-muted">·</span>${stateBadge('Running')}${holdBadge()}</div></section>
+    <section class="overflow-hidden rounded-xl bg-white shadow-xs ring-1 ring-line"><div class="flex items-center justify-between border-b border-line px-4 py-2.5"><h2 class="font-bold">Buổi hôm nay (thứ tự: đang chạy → sẵn sàng → đã lên lịch → đã xong)</h2></div>
+      <ul>${rows.map(([s, c, t, w, sub, tone, pin]) => `<li class="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 sm:grid-cols-[56px_64px_minmax(0,1fr)_auto] ${pin ? 'border-l-4 border-l-navy bg-wash/50' : ''} ${s === 'Completed' || s === 'Cancelled' ? 'text-muted' : ''}">
+        <time class="font-mono font-bold ${s === 'Cancelled' ? 'line-through' : ''}">${t}</time><span class="hidden font-mono text-xs font-bold text-brand sm:block">${c}</span>
+        <span class="min-w-0"><b class="${s === 'Cancelled' ? 'line-through' : 'text-ink'}">${w}</b><span class="block truncate text-xs ${tone === 'warn' ? 'font-semibold text-warn' : ''}">${sub}</span></span>
+        <span class="col-start-2 sm:col-start-auto">${stateBadge(s)}</span></li>`).join('')}</ul></section>
+    <section class="overflow-hidden rounded-xl bg-white shadow-xs ring-1 ring-line"><h2 class="border-b border-line px-4 py-2.5 font-bold">Thao tác được phép theo trạng thái</h2><div class="overflow-x-auto"><table class="w-full min-w-[640px] text-[12.5px]"><thead><tr class="bg-slate-50 text-left text-xs text-muted"><th class="px-4 py-2 font-semibold">Thao tác</th>${S.map((s) => `<th class="px-2 py-2">${stateBadge(s)}</th>`).join('')}</tr></thead><tbody>${ACT.map(([a, ...v]) => `<tr class="border-t border-line"><td class="px-4 py-2 font-semibold">${a}</td>${v.map((x) => `<td class="px-2 py-2">${x ? `<span class="inline-flex items-center gap-1 font-semibold text-ok">${ic('ok', 'size-4')}Được</span>` : '<span class="text-slate-300">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="border-t border-line px-4 py-2 text-xs text-muted">Nút không được phép vẫn hiện nhưng mờ, kèm một dòng "Không khả dụng: lý do" (lấy từ ActionGate của máy chủ).</p></section>
+    <section class="rounded-xl bg-white p-4 shadow-xs ring-1 ring-line"><h2 class="mb-3 font-bold">Vòng đời trong hộp chi tiết buổi</h2><ol class="flex flex-wrap items-center gap-2 text-xs font-semibold">${[['Scheduled', 'done'], ['Ready', 'done'], ['Running', 'here'], ['Completed', ''], ['Cancelled', 'alt']].map(([s, st], i) => `${i ? `<li aria-hidden="true" class="h-0.5 w-6 ${st === 'alt' ? 'border-t-2 border-dashed border-slate-300 bg-transparent' : st === '' ? 'bg-slate-200' : 'bg-ok'}"></li>` : ''}<li class="flex items-center gap-1.5 rounded-full px-2.5 py-1 ${st === 'done' ? 'bg-ok-bg text-ok' : st === 'here' ? 'bg-navy text-white' : 'bg-slate-100 text-slate-500'}">${st === 'done' ? ic('ok', 'size-3.5') : ic(STATE[s].icon, 'size-3.5')}${STATE[s].vn}${st === 'alt' ? ' (nhánh phụ)' : ''}</li>`).join('')}</ol></section>
+  </div>`;
+}
+
+/* ════════ Màn 3: chuẩn bị & lên lịch ════════ */
+function renderPrep() {
+  const versions = [['v4', 'Thư viện – AI Lab v4', 'Chờ kỹ thuật xác nhận', 'pending', 'Gửi 27/10 · thêm POI Xưởng chế tạo'], ['v3', 'Thư viện – AI Lab v3', 'Đã xác nhận kỹ thuật', 'ok', 'kythuat01 · 20/10 · chạy thử 3 lần'], ['v2', 'Thư viện – AI Lab v2', 'Đã xác nhận kỹ thuật', 'ok', 'kythuat01 · 02/10']];
+  const queue = [['THCS Tân Phú', '22 học sinh · 2 đoàn', 'Danh sách đăng ký', 'Còn 1 ngày 4 giờ', 'ok'], ['THPT Long Thạnh', '12 học sinh', 'Đổi giờ 15:30 → 16:00', 'Còn 6 giờ', 'warn'], ['THCS Hòa Bình', 'Đoàn 8C · 9 học sinh', 'Thêm đoàn vào T-01', 'Quá hạn 3 giờ', 'bad']];
+  document.getElementById('v-prep').innerHTML = `<div class="mx-auto grid max-w-[1180px] gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    <section class="rounded-2xl bg-white shadow-xs ring-1 ring-line"><div class="border-b border-line px-5 py-4"><p class="text-xs font-semibold text-brand">Lên lịch tour</p><h1 class="text-lg font-bold text-navy">T-03 · THCS Tân Phú · 29/10 14:00</h1></div>
+      <div class="space-y-4 p-5">
+        <fieldset><legend class="mb-1 font-bold">Tuyến & phiên bản bản đồ</legend><p class="mb-2 text-xs text-muted">Chỉ chọn được phiên bản <b>đã được kỹ thuật xác nhận</b>. Staff không có nút xác nhận kỹ thuật.</p>
+          <div class="grid gap-2">${versions.map(([id, n, st, tone, meta], i) => `<label class="flex items-start gap-3 rounded-xl border px-3 py-2.5 ${tone === 'ok' ? 'cursor-pointer border-line has-checked:border-brand has-checked:bg-wash/60 has-checked:ring-2 has-checked:ring-brand/20' : 'cursor-not-allowed border-dashed border-slate-300 bg-slate-50'}"><input type="radio" name="ver" value="${id}" class="mt-1 accent-[#2d719e]" ${tone === 'ok' ? '' : 'disabled'} ${i === 1 ? 'checked' : ''}><span class="min-w-0 flex-1"><b class="${tone === 'ok' ? '' : 'text-slate-500'}">${n}</b><span class="block text-xs text-muted">${meta}</span></span><span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tone === 'ok' ? 'bg-ok-bg text-ok' : 'bg-slate-200 text-slate-600'}">${ic(tone === 'ok' ? 'ok' : 'lock', 'size-3.5')}${st}</span></label>`).join('')}</div>
+          <p class="mt-2 flex items-start gap-1.5 rounded-lg bg-wash px-3 py-2 text-xs text-brand-700">${ic('info', 'size-3.5 mt-0.5')}v4 chưa chọn được. Khi kỹ thuật xác nhận, bạn nhận thông báo và có thể đổi sang v4 trước khi khóa READY.</p></fieldset>
+        <div class="grid gap-3 sm:grid-cols-2"><label class="block"><span class="mb-1 block font-bold">Ngày giờ</span><input type="datetime-local" value="2026-10-29T14:00" class="w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"></label><label class="block"><span class="mb-1 block font-bold">Robot</span><select class="w-full rounded-lg border border-line bg-white px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"><option>AMR-01 · rảnh 13:30–15:00</option></select></label></div>
+        <div class="rounded-xl border border-line p-3"><b>Điều kiện để khóa READY</b><ul class="mt-2 space-y-1.5 text-[12.5px]">${[['Tuyến đã xác nhận kỹ thuật (v3)', 1], ['Danh sách đăng ký đã duyệt', 1], ['Audio mỗi POI ≤ thời gian dừng', 1], ['Robot không trùng giờ buổi khác', 0]].map(([t, ok]) => `<li class="flex items-center gap-2"><span class="grid size-5 place-items-center rounded-full ${ok ? 'bg-ok-bg text-ok' : 'bg-warn-bg text-warn'}">${ic(ok ? 'ok' : 'alert', 'size-3.5')}</span>${t}${ok ? '' : ' <span class="text-xs font-semibold text-warn">· trùng T-04 15:30, giữ robot tới 15:05</span>'}</li>`).join('')}</ul></div>
+      </div>
+      <div class="flex flex-wrap gap-2 border-t border-line px-5 py-3"><button class="rounded-lg border border-line px-4 py-2 font-bold">Lưu lịch</button><span class="flex-1"></span><button disabled class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 font-bold text-white disabled:opacity-40">${ic('lock')}Khóa READY</button></div><p class="-mt-2 px-5 pb-3 text-right text-[11.5px] text-muted">Không khả dụng: còn 1 điều kiện chưa đạt.</p>
+    </section>
+    <section class="h-fit overflow-hidden rounded-2xl bg-white shadow-xs ring-1 ring-line"><div class="border-b border-line px-5 py-4"><p class="text-xs font-semibold text-brand">Chờ duyệt</p><h2 class="text-lg font-bold text-navy">Hạn xử lý: 2 ngày làm việc</h2><p class="text-xs text-muted">Sắp theo hạn còn lại; quá hạn lên đầu.</p></div>
+      <ul class="divide-y divide-line">${queue.slice().reverse().map(([w, sub, what, due, tone]) => `<li class="flex items-start gap-3 px-5 py-3"><span class="mt-1 size-2.5 shrink-0 rounded-full ${tone === 'bad' ? 'bg-bad' : tone === 'warn' ? 'bg-warn-solid' : 'bg-ok'}"></span><span class="min-w-0 flex-1"><b>${what}</b><span class="block text-xs text-muted">${w} · ${sub}</span></span><span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${tone === 'bad' ? 'bg-bad text-white' : tone === 'warn' ? 'bg-warn-bg text-warn' : 'bg-slate-100 text-slate-600'}">${due}</span></li>`).join('')}</ul>
+      <div class="border-t border-line px-5 py-3 text-xs text-muted">Bấm một dòng để mở hộp duyệt ở giữa màn hình (giữ nguyên chức năng duyệt từng dòng hiện có).</div></section>
+  </div>`;
+}
+
+/* ════════ Điều phối ════════ */
+function render() { renderStatus(); renderStepper(); renderRail(); renderOverlay(); document.title = APP.assist && !APP.ack ? '(!) Mất kết nối · CampusTour' : 'Vận hành Tour · CampusTour'; }
+function setView(v) {
+  ['ops', 'states', 'prep'].forEach((k) => { document.getElementById(`v-${k}`).classList.toggle('hidden', k !== v); document.getElementById(`v-${k}`).classList.toggle('flex', k === 'ops' && v === 'ops'); });
+  document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === v));
+  document.getElementById('scenbar').classList.toggle('hidden', v !== 'ops');
+  if (v === 'states') renderStates(); if (v === 'prep') renderPrep();
+  window.dispatchEvent(new Event('resize'));
+}
+function setScen(s) { document.getElementById('toasts').innerHTML = ''; closeModal(); reset(s); document.querySelectorAll('[data-scen]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.scen === s)); render(); if (s === 'hb') beep(); }
+
+document.addEventListener('click', (e) => {
+  const v = e.target.closest('[data-view]'); if (v) return setView(v.dataset.view);
+  const s = e.target.closest('[data-scen]'); if (s) return setScen(s.dataset.scen);
+  if (e.target.closest('#reconnect')) { APP.stale = false; APP.reconnected = true; log('Robot kết nối lại · vị trí mới 0,3 giây'); toast('ok', 'Robot đã kết nối lại', 'Chọn cách phục hồi để chạy tiếp.'); return render(); }
+  if (e.target.closest('[data-close]')) return closeModal();
+  const c = e.target.closest('[data-cam]'); if (c) { window.TWIN && window.TWIN.cam(c.dataset.cam); document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', b === c)); return; }
+  const a = e.target.closest('[data-act]'); if (a && !a.disabled) { const id = a.dataset.act, focusKey = `[data-act="${id}"]${a.dataset.id ? `[data-id="${a.dataset.id}"]` : ''}`; act(id, a.dataset.id); const again = document.querySelector(focusKey); if (again && !again.disabled) again.focus(); }
+});
+const setPreview = (v) => { if (APP.preview === v) return; APP.preview = v || null; renderStepper(); renderOverlay(); };
+document.addEventListener('pointerover', (e) => { const li = e.target.closest('[data-preview]'); setPreview(li && li.dataset.preview); });
+document.addEventListener('focusin', (e) => { const li = e.target.closest('[data-preview]'); setPreview(li && li.dataset.preview); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') return closeModal();
+  if (e.target.closest('input,textarea,select,[role=dialog]') || e.metaKey || e.ctrlKey || e.altKey || document.getElementById('v-ops').classList.contains('hidden')) return;
+  const k = e.key.toLowerCase(), f = actionable();
+  if (k === 'h' && gates().hold.ok) act('hold');
+  if (k === 'n' && gates().next.ok) act('next');
+  if (k === 'a' && f) act('accept', f.id);
+  if (k === 'd' && f) act('decline', f.id);
+});
+
+/* nhịp 1 giây: chỉ cập nhật chữ, không vẽ lại cả cột (giữ con trỏ và focus) */
+setInterval(() => {
+  if (APP.state === 'Running' && !APP.assist) APP.elapsed++;
+  APP.reqs.forEach((r) => r.ago++);
+  if (APP.state === 'Running' && APP.step === 'Observing' && !APP.hold && !APP.assist) { APP.dwell--; if (APP.dwell <= 0) leave('Hết thời gian dừng, tự sang POI kế'); }
+  if (APP.assist && !APP.ack && Date.now() - lastBeep > 6000) { lastBeep = Date.now(); if (actx) beep(); }
+  const hbAge = Math.round((Date.now() - APP.staleSince) / 1000);
+  const set = (k, v) => document.querySelectorAll(`[data-live="${k}"]`).forEach((n) => (n.textContent = v));
+  set('clock', clock()); set('elapsed', mmss(APP.elapsed)); set('hb', hbAge); set('hb2', hbAge); set('inc', mmss(hbAge)); set('dwell', ['Navigating', 'ReturningToEnd', 'PreparingStart'].includes(APP.step) ? '—' : mmss(APP.dwell)); set('dwell2', mmss(APP.dwell));
+  APP.reqs.forEach((r) => document.querySelectorAll(`[data-ago="${r.id}"]`).forEach((n) => (n.textContent = r.ago)));
+  if (APP.state === 'Running' && APP.step === 'Observing') { const ring = document.querySelector('[aria-label="Bước hiện tại"] circle:nth-child(2)'); if (ring) ring.setAttribute('stroke-dasharray', `${(1 - APP.dwell / APP.dwellTotal) * 150.8} 150.8`); }
+}, 1000);
+/* chuyển động robot */
+(function loop(t) { if (APP.anim) { const { from, to, t0, dur } = APP.anim; const p = Math.min((t - t0) / dur, 1), e = p < .5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2; APP.robot.x = from.x + (to.x - from.x) * e; APP.robot.z = from.z + (to.z - from.z) * e; if (p >= 1) arrive(); } requestAnimationFrame(loop); })(performance.now());
+
+/* Bản đồ dự phòng (khi không tải được 3D): sơ đồ phẳng SVG */
+setTimeout(() => { if (window.TWIN) return; const host = document.getElementById('twin'); const sx = (x) => (x + 20) * 20, sz = (z) => (z + 12) * 20; host.innerHTML = `<svg viewBox="0 0 800 480" class="size-full"><rect width="800" height="480" fill="#eef4f9"/>${ROUTES.main.map((k, i, a) => (i ? `<line x1="${sx(POI[a[i - 1]].x)}" y1="${sz(POI[a[i - 1]].z)}" x2="${sx(POI[k].x)}" y2="${sz(POI[k].z)}" stroke="#2d719e" stroke-width="5"/>` : '')).join('')}${Object.entries(POI).map(([k, p]) => `<circle cx="${sx(p.x)}" cy="${sz(p.z)}" r="9" fill="#fff" stroke="#173b59" stroke-width="3"/><text x="${sx(p.x) + 12}" y="${sz(p.z) - 10}" font-size="13" font-weight="700" fill="#1d2a36">${p.n}</text>`).join('')}<circle id="fbRobot" r="12" fill="#b23e31" stroke="#fff" stroke-width="4"/></svg><p class="absolute bottom-20 left-3 rounded bg-white/90 px-2 py-1 text-xs">Không tải được 3D (cần mạng). Đây là sơ đồ phẳng thay thế.</p>`; (function f() { const r = document.getElementById('fbRobot'); if (r) { r.setAttribute('cx', sx(APP.robot.x)); r.setAttribute('cy', sz(APP.robot.z)); } requestAnimationFrame(f); })(); }, 4000);
+
+setView('ops'); setScen('run');
+</script>
+
+<!-- ════════ Digital Twin 3D (trong app: thay bằng component OperationalTwin hiện có) ════════ -->
+<script type="module">
+import * as THREE from 'three';
+const host = document.getElementById('twin'), labels = document.getElementById('labels'), APP = window.APP, P = window.APP_POI, ROUTES = window.APP_ROUTES;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); host.appendChild(renderer.domElement);
+renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;touch-action:none';
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, .1, 400);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xcfdbe6, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(12, 30, 16); scene.add(sun);
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(46, 30), new THREE.MeshStandardMaterial({ color: 0xf8fbfd, roughness: 1 }));
+floor.rotation.x = -Math.PI / 2; scene.add(floor);
+const grid = new THREE.GridHelper(46, 46, 0xdbe5ee, 0xe9eff4); grid.position.y = .01; scene.add(grid);
+/* phòng: hộp mờ + viền */
+const roomMat = new THREE.MeshStandardMaterial({ color: 0xcfe2f1, transparent: true, opacity: .22, depthWrite: false });
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x9db7cc });
+[['sanh', 7, 6], ['tv', 8, 6], ['rb', 7, 6], ['ai', 7, 7], ['aix', 6, 5], ['xu', 6, 6]].forEach(([k, w, d]) => { const g = new THREE.BoxGeometry(w, 1.1, d); const m = new THREE.Mesh(g, roomMat); m.position.set(P[k].x, .55, P[k].z); scene.add(m); const e = new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeMat); e.position.copy(m.position); scene.add(e); });
+
+const v3 = (k, y = .08) => new THREE.Vector3(P[k].x, y, P[k].z);
+function tube(keys, color, r = .16, opacity = 1) { const path = new THREE.CurvePath(); for (let i = 1; i < keys.length; i++) path.add(new THREE.LineCurve3(v3(keys[i - 1]), v3(keys[i]))); return new THREE.Mesh(new THREE.TubeGeometry(path, keys.length * 24, r, 8, false), new THREE.MeshStandardMaterial({ color, transparent: opacity < 1, opacity })); }
+function dots(keys, color) { const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color }); for (let i = 1; i < keys.length; i++) { const a = v3(keys[i - 1], .2), b = v3(keys[i], .2), n = Math.ceil(a.distanceTo(b) / .7); for (let j = 0; j <= n; j++) { const s = new THREE.Mesh(new THREE.SphereGeometry(.14, 10, 8), m); s.position.lerpVectors(a, b, j / n); g.add(s); } } return g; }
+let routeKey = '', routeObj = null, doneObj = null, prevKey = '', prevObj = null;
+const markers = {};
+Object.keys(P).forEach((k) => { const g = new THREE.Group(); const base = new THREE.Mesh(new THREE.CylinderGeometry(.62, .62, .18, 28), new THREE.MeshStandardMaterial({ color: 0xffffff })); base.position.y = .09; g.add(base); const ring = new THREE.Mesh(new THREE.TorusGeometry(.62, .09, 8, 32), new THREE.MeshStandardMaterial({ color: 0x2d719e })); ring.rotation.x = Math.PI / 2; ring.position.y = .2; g.add(ring); if (P[k].branch) { const d = new THREE.Mesh(new THREE.OctahedronGeometry(.42), new THREE.MeshStandardMaterial({ color: 0x1f9d73 })); d.position.y = 1.5; d.name = 'diamond'; g.add(d); } g.position.set(P[k].x, 0, P[k].z); scene.add(g); markers[k] = { g, ring, base };
+  const el = document.createElement('div'); el.className = 'absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-white/95 px-1.5 py-0.5 text-[11px] font-semibold text-ink shadow-xs ring-1 ring-black/5'; el.textContent = P[k].n; labels.appendChild(el); markers[k].el = el; });
+
+/* robot */
+const robot = new THREE.Group();
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .5, transparent: true }), navyMat = new THREE.MeshStandardMaterial({ color: 0x173b59, transparent: true }), accMat = new THREE.MeshStandardMaterial({ color: 0x2d719e, transparent: true });
+const body = new THREE.Mesh(new THREE.CylinderGeometry(.75, .85, 1, 32), bodyMat); body.position.y = .55; robot.add(body);
+const band = new THREE.Mesh(new THREE.CylinderGeometry(.77, .77, .16, 32), navyMat); band.position.y = .82; robot.add(band);
+const head = new THREE.Mesh(new THREE.SphereGeometry(.4, 24, 16), navyMat); head.position.y = 1.35; robot.add(head);
+const nose = new THREE.Mesh(new THREE.ConeGeometry(.22, .5, 16), accMat); nose.rotation.x = Math.PI / 2; nose.position.set(0, .6, .95); robot.add(nose);
+const pulse = new THREE.Mesh(new THREE.RingGeometry(.95, 1.15, 40), new THREE.MeshBasicMaterial({ color: 0x2d719e, transparent: true, side: THREE.DoubleSide })); pulse.rotation.x = -Math.PI / 2; pulse.position.y = .03; robot.add(pulse);
+const unc = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color: 0xb23e31, transparent: true, opacity: .16, depthWrite: false })); unc.rotation.x = -Math.PI / 2; unc.position.y = .04; scene.add(unc);
+scene.add(robot);
+const rLabel = document.createElement('div'); labels.appendChild(rLabel);
+
+/* camera: kéo để xoay, cuộn để thu phóng */
+const cam = { theta: .55, phi: .95, r: 40, tx: 0, tz: 1, mode: 'overview' };
+const PRESETS = { overview: { theta: .55, phi: .95, r: 40 }, top: { theta: 0, phi: .02, r: 44 }, follow: { theta: .7, phi: .85, r: 17 } };
+window.TWIN = { cam(m) { cam.mode = m; Object.assign(cam, PRESETS[m]); if (m !== 'follow') { cam.tx = 0; cam.tz = 1; } } };
+document.querySelector('[data-cam=overview]').setAttribute('aria-pressed', 'true');
+let drag = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, t: cam.theta, p: cam.phi }; renderer.domElement.setPointerCapture(e.pointerId); });
+renderer.domElement.addEventListener('pointermove', (e) => { if (!drag) return; cam.theta = drag.t - (e.clientX - drag.x) * .006; cam.phi = Math.min(1.45, Math.max(.02, drag.p - (e.clientY - drag.y) * .006)); });
+renderer.domElement.addEventListener('pointerup', () => (drag = null));
+renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); cam.r = Math.min(80, Math.max(9, cam.r * (1 + Math.sign(e.deltaY) * .08))); }, { passive: false });
+
+function resize() { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(host); addEventListener('resize', resize); resize();
+const tmp = new THREE.Vector3();
+function place(el, pos, yOff = 0) { tmp.copy(pos); tmp.y += yOff; tmp.project(camera); const vis = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1; el.style.display = vis ? '' : 'none'; el.style.left = `${(tmp.x * .5 + .5) * host.clientWidth}px`; el.style.top = `${(-tmp.y * .5 + .5) * host.clientHeight}px`; }
+
+function frame(t) {
+  /* tuyến đang chạy + phần đã đi */
+  const rk = APP.route + ':' + APP.idx + ':' + APP.state;
+  if (rk !== routeKey) { routeKey = rk; [routeObj, doneObj].forEach((o) => o && scene.remove(o)); const keys = ROUTES[APP.route]; routeObj = tube(keys, 0x7db9db, .15); scene.add(routeObj); const doneKeys = keys.slice(0, Math.max(APP.state === 'Completed' && !APP.endReason ? keys.length : APP.idx, 1)); doneObj = doneKeys.length > 1 ? tube(doneKeys, 0x1f7a55, .19) : null; doneObj && scene.add(doneObj);
+    Object.entries(markers).forEach(([k, m]) => { const on = keys.includes(k); m.g.visible = on || k === 'aix'; m.g.scale.setScalar(on ? 1 : .7); const i = keys.indexOf(k); const c = !on ? 0xb6c4d0 : i < APP.idx || (APP.state === 'Completed' && !APP.endReason) ? 0x1f7a55 : i === APP.idx ? (APP.assist ? 0xb23e31 : 0x173b59) : 0x2d719e; m.ring.material.color.setHex(c); m.el.style.opacity = on ? 1 : .55; }); }
+  const pk = APP.preview || ''; if (pk !== prevKey) { prevKey = pk; prevObj && scene.remove(prevObj); prevObj = pk ? dots(ROUTES[pk].slice(ROUTES[pk].indexOf('rb')), 0x1f9d73) : null; prevObj && scene.add(prevObj); }
+  /* robot */
+  robot.position.set(APP.robot.x, 0, APP.robot.z); robot.rotation.y += ((APP.robot.h || 0) - robot.rotation.y) * .12;
+  const stale = APP.stale; [bodyMat, navyMat, accMat].forEach((m) => (m.opacity = stale ? .38 : 1));
+  const s = 1 + ((t / 900) % 1) * .9; pulse.scale.setScalar(stale ? 1 : s); pulse.material.opacity = stale ? 0 : 1 - ((t / 900) % 1); pulse.material.color.setHex(APP.assist ? 0xb23e31 : 0x2d719e);
+  unc.visible = stale; if (stale) { const age = (Date.now() - APP.staleSince) / 1000; unc.scale.setScalar(Math.min(1.2 + age * .12, 6)); unc.position.set(APP.robot.x, .04, APP.robot.z); }
+  Object.values(markers).forEach((m) => { const d = m.g.getObjectByName('diamond'); if (d) { d.rotation.y = t / 700; d.position.y = 1.5 + Math.sin(t / 400) * .12; } });
+  if (cam.mode === 'follow') { cam.tx += (APP.robot.x - cam.tx) * .08; cam.tz += (APP.robot.z - cam.tz) * .08; }
+  camera.position.set(cam.tx + cam.r * Math.sin(cam.phi) * Math.sin(cam.theta), cam.r * Math.cos(cam.phi), cam.tz + cam.r * Math.sin(cam.phi) * Math.cos(cam.theta)); camera.lookAt(cam.tx, 0, cam.tz);
+  renderer.render(scene, camera);
+  Object.entries(markers).forEach(([k, m]) => { place(m.el, m.g.position, 1.1); if (Math.hypot(m.g.position.x - robot.position.x, m.g.position.z - robot.position.z) < 1.6) m.el.style.display = 'none'; });
+  rLabel.className = `absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold text-white shadow ${stale ? 'bg-bad' : 'bg-navy'}`;
+  rLabel.textContent = stale ? `AMR-01 · vị trí cũ ${Math.round((Date.now() - APP.staleSince) / 1000)} giây` : 'AMR-01';
+  place(rLabel, robot.position, 2.3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

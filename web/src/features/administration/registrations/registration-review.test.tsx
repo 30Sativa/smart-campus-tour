@@ -235,7 +235,7 @@ describe('Staff registration review boundary', () => {
     failure = 'list'
     await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-staff', 'list'] }) })
     await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
-    expect(screen.getByRole('link', { name: 'Đăng ký chờ duyệt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Đăng ký đoàn' })).toBeInTheDocument()
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

@@ -1,5 +1,36 @@
 # Staff console (`/staff/*`) — remote tours
 
+## Staff interface update (2026-10-30)
+
+- Navigation has three sections: operations, Tour preparation, and history.
+  Creating a Tour is a page action; pending/all registrations share one navigation
+  entry and retain both existing URLs with links between the views.
+- The operations overview uses the approved analytical layout and existing
+  light blue/navy palette: one interactive summary strip, a seven-day completion
+  line, a state ring, and a searchable session list. KPI/state filters, the
+  selected date and the open inspector are kept in query parameters. Critical
+  attention remains visible; preparation notices are expandable. Operations
+  remain simulation-backed and carry a visible source label.
+  The overview does not include the preview-only scenario controls or issue
+  operational commands; action links keep the existing preflight/live routes.
+- The preparation overview now reads the existing live Tour, registration-review
+  and POI APIs. Summary totals use pagination metadata, not the preview row count.
+  Loading/failure never becomes a zero total; sections fail independently.
+  This replaces only that overview's previous mock dashboard binding.
+- Today's session inspector is a non-modal side panel from 1536px; narrower
+  screens retain the dialog. Escape closes either view and restores focus.
+- Schedule views are exclusive: week, day timeline, or list (`?view=week|day|list`).
+  Selecting a week cell opens that day. History puts its searchable list before
+  optional charts. Live operations split map/controls from 1440px.
+- POI summaries, rows and map markers share an explicit map-version selection.
+  Empty filters and API errors are distinct. Route cards keep revision history
+  collapsed and support server pagination.
+- These are frontend presentation changes. Existing server-side permissions,
+  allowed actions and pending scheduling/READY integration remain authoritative.
+
+The older scope/ownership notes below are historical; current business ownership
+follows ADR-0020 and frontend preparation routes follow ADR-0025/0027.
+
 Aligned on 2026-09-21 with **"CampusTour DT-AMR — Đặc tả phạm vi, nghiệp vụ và
 tích hợp tham quan từ xa" (19/09/2026)**. That document is the source of truth;
 this file only maps it onto the web area. Section numbers (§) refer to it.

@@ -1,4 +1,4 @@
-import { Bot, CalendarDays, CalendarPlus, ClipboardCheck, ClipboardList, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, MonitorPlay, Route, ShieldCheck, Headset } from 'lucide-react'
+import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, ListChecks, MapPinned, MonitorPlay, Route, ShieldCheck, Headset } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -15,16 +15,11 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
  */
 export const STAFF_NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Trong ngày',
+    label: 'Vận hành',
     items: [
       { label: 'Tổng quan vận hành', path: '/staff', icon: LayoutDashboard },
       { label: 'Buổi hôm nay', path: '/staff/tours', icon: ListChecks },
       { label: 'Lịch buổi', path: '/staff/schedule', icon: CalendarDays },
-    ],
-  },
-  {
-    label: 'Điều hành',
-    items: [
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
       { label: 'Đàm thoại Quest', path: '/staff/intercom', icon: Headset },
@@ -34,15 +29,11 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
     // Tour preparation is Staff work (SRS v1.9 §3.2.c), moved here from `/admin/*`.
     label: 'Chuẩn bị Tour',
     items: [
-      // In the order a Tour is built: POIs, then a route over them, then the
-      // Tour itself, then the groups that register for it, then the Tour list
-      // where it is locked READY.
+      // Keep creation and registration subviews inside their owning pages.
       { label: 'Tổng quan chuẩn bị', path: '/staff/manage', icon: ClipboardList },
       { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
       { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
-      { label: 'Tạo Tour', path: '/staff/manage/tours/new', icon: CalendarPlus },
-      { label: 'Đăng ký chờ duyệt', path: '/staff/manage/registrations/pending', icon: ClipboardCheck },
-      { label: 'Tất cả đăng ký', path: '/staff/manage/registrations', icon: ListTodo },
+      { label: 'Đăng ký đoàn', path: '/staff/manage/registrations', icon: ClipboardCheck },
       { label: 'Danh sách Tour', path: '/staff/manage/tours', icon: ListChecks },
     ],
   },

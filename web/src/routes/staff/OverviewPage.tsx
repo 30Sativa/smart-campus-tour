@@ -1,217 +1,153 @@
-import type { ReactNode } from 'react'
-import { MonitorPlay } from 'lucide-react'
-import { Link } from 'react-router'
-import type { AmrStatus, TourOperation } from '../../api/contracts/staff'
+import { useCallback } from 'react'
+import { BatteryMedium, Bot, CalendarDays, MonitorPlay } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router'
 import { useStaffAmrs, useTours } from '../../features/staff/staff-hooks'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
+import { LoadingPanel, SearchField } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { groupSummary, tourAction } from '../../features/staff/attention'
-import { formatCountdown, formatTime } from '../../features/staff/formatters'
+import { buildAttentionQueue, tourAction } from '../../features/staff/attention'
+import { formatBattery, formatDate, formatTime } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
-import { RunStatus } from '../../features/staff/components/RunStatus'
+import { byStart, matchesSearch } from '../../features/staff/today-board'
 import { TourStateBadges } from '../../features/staff/components/TourParts'
-import { RobotHeader, RobotTelemetry } from '../../features/staff/components/RobotParts'
-import { RunningFunnel, StudentsByTour } from '../../features/staff/components/OverviewAnalytics'
-import { AttentionCard, RunResults, SparkCard, StudentsThroughDay, TodayByState } from '../../features/staff/components/StaffCharts'
-import { lastSevenDays, studentsThroughDay, tookPlace } from '../../features/staff/overview-data'
+import { TourInspector } from '../../features/staff/components/TourInspector'
+import { AttentionList } from '../../features/staff/components/AttentionList'
+import { OverviewCompletedChart, OverviewStateRing } from '../../features/staff/components/OverviewDashboardCharts'
+import { isOverviewFilter, matchesOverviewFilter, overviewDate, overviewDays, type OverviewFilter } from '../../features/staff/overview-dashboard'
+import { useMobileNav } from '../../components/ui/use-mobile-nav'
+import { statusLabel } from '../../features/staff/status'
 
-/** Flat white card, the same as the admin dashboard. */
-const CARD = 'rounded-xl border border-[#e2e8f0] bg-white'
+const panel = 'min-w-0 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white'
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
+const PRIORITY = { Running: 0, Ready: 1, Scheduled: 2, Completed: 3, Cancelled: 4 }
 
-/**
- * Staff Dashboard for Smart Campus Tour Operations Center.
- * Minimal Smart Operations Dashboard style: clean, light, data-focused.
- */
+/** Analytical overview using the existing operations queries and preflight flow. */
 export default function OverviewPage() {
-  const tours = useTours()
+  const [params, setParams] = useSearchParams()
+  const now = useNow(30_000)
+  const today = overviewDate(now)
+  const availableDays = overviewDays([], [], now)
+  const requestedDate = params.get('date')
+  const day = requestedDate && availableDays.some(item => item.date === requestedDate) ? requestedDate : today
+  const requestedFilter = params.get('view')
+  const filter: OverviewFilter = isOverviewFilter(requestedFilter) ? requestedFilter : 'all'
+  const search = params.get('q') ?? ''
+  const todayTours = useTours()
+  const tours = useTours(day === today ? {} : { date: day })
   const history = useTours({ history: true })
   const robots = useStaffAmrs()
-  const now = useNow(1000)
+  const list = tours.data ?? []
+  const selected = list.find(tour => tour.id === params.get('tour'))
 
-  const failed = [tours, robots].find((query) => query.isError)
-  if (failed) return <StaffPage><ErrorPanel error={failed.error} onRetry={failed.refetch} /></StaffPage>
-  if (!tours.data || !robots.data) return <StaffPage><Header /><LoadingPanel /></StaffPage>
+  const update = useCallback((changes: Record<string, string | null>) => setParams(current => {
+    const next = new URLSearchParams(current)
+    for (const [key, value] of Object.entries(changes)) { if (value) next.set(key, value); else next.delete(key) }
+    return next
+  }, { replace: true }), [setParams])
+  const close = useCallback(() => update({ tour: null }), [update])
+  const panelRef = useMobileNav(Boolean(selected), close)
+  const selectDay = (value: string) => update({ date: value === today ? null : value, view: null, tour: null, q: null })
+  const selectFilter = (value: OverviewFilter) => update({ view: value === 'all' || value === filter ? null : value })
+  const rows = list.filter(tour => matchesOverviewFilter(tour, filter) && matchesSearch(tour, search))
+    .sort((a, b) => PRIORITY[a.state] - PRIORITY[b.state] || byStart(a, b))
+  const completed = list.filter(tour => tour.state === 'Completed').length
+  const running = list.filter(tour => tour.state === 'Running')
+  const assistance = list.filter(tour => matchesOverviewFilter(tour, 'assistance')).length
+  const known = tours.isSuccess
+  const chartFailed = history.isError ? history : todayTours.isError ? todayTours : null
+  const chartReady = history.isSuccess && todayTours.isSuccess
+  const chartDays = overviewDays([...(todayTours.data ?? []), ...list], history.data ?? [], now)
+  const attention = buildAttentionQueue({ tours: todayTours.data ?? [], robots: robots.data ?? [] }, now)
+  const urgent = attention.filter(item => item.tone === 'danger')
+  const preparation = attention.filter(item => item.tone !== 'danger')
+  const robot = robots.data?.find(item => item.id === running[0]?.robotId) ?? robots.data?.find(item => item.assignable !== false)
+  const figures = [
+    { label: 'Buổi trong ngày', value: list.length, note: 'Trong lịch vận hành', filter: 'all' },
+    { label: 'Đã hoàn thành', value: completed, note: `${completed} / ${list.length} buổi`, filter: 'Completed' },
+    { label: 'Đang chạy', value: running.length, note: running[0]?.code ?? 'Không có buổi đang chạy', filter: 'Running' },
+    { label: 'Cần hỗ trợ', value: assistance, note: assistance ? 'Cần nhân viên kiểm tra' : 'Không có cảnh báo', filter: 'assistance' },
+  ] as const
 
-  const running = tours.data.find((tour) => tour.state === 'Running')
-  const physical = robots.data.find((robot) => robot.assignable) ?? robots.data[0]
-  const next = tours.data.find((tour) => tour.state === 'Ready')
-
-  // Only physical robots serve Tours (scope §11.6); Gazebo / emulator units are labelled elsewhere, never counted here.
-  const physicalRobots = robots.data.filter((robot) => robot.assignable !== false && robot.source !== 'Gazebo' && robot.source !== 'Emulator')
-  const readyRobots = physicalRobots.filter(
-    (robot) => robot.connectionState === 'Live' && !robot.needsCheck && !robot.headFault && !robot.currentSessionId,
-  ).length
-
-  const days = lastSevenDays(tours.data, history.data ?? [], now)
-  const ran = days.reduce((sum, day) => sum + day.total, 0)
-  const completed = days.reduce((sum, day) => sum + day.completed, 0)
-  const today = tours.data.filter(tookPlace)
-  const joined = today.filter((tour) => tour.state === 'Running' || tour.state === 'Completed' || tour.state === 'Cancelled')
-  const day = studentsThroughDay(tours.data, now)
-  const joinedSeries = day.points.flatMap((point) => (point.joined != null ? [point.joined] : []))
-
-  return (
-    <StaffPage>
-      <Header running={running} />
-
-      {/* ── Figures first, one row ─────────────────────────────────────────── */}
-      <section aria-label="Số liệu chính" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SparkCard to="/staff/history" title="Buổi đã chạy" label="7 ngày qua" value={ran} unit="buổi" note={`${completed} hoàn thành · ${ran - completed} kết thúc sớm / hủy`} series={days.map((day) => day.total)} />
-        <SparkCard to="/staff/history" title="Tỉ lệ hoàn thành" label="7 ngày qua" value={ran ? Math.round((completed / ran) * 100) : '–'} unit="%" note={`${completed} hoàn thành / ${ran} buổi`} series={days.map((day) => day.rate)} />
-        <SparkCard to="/staff/tours" title="Học sinh đã tham gia" label="Hôm nay" value={day.joined} unit={`/ ${day.planned} HS`} note={`${joined.length} buổi đã chạy · còn ${today.length - joined.length} buổi`} series={joinedSeries} />
-        <AttentionCard tours={tours.data} readyRobots={readyRobots} robotCount={physicalRobots.length} />
-      </section>
-
-      {/* ── The day's work: sessions on the left, what is running and the robot on the right ── */}
-      <div className="mt-3 grid items-start gap-3 min-[1200px]:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
-        <section className={`${CARD} min-w-0`} aria-label="Buổi hôm nay">
-          <PanelTitle
-            title="Danh sách buổi hôm nay"
-            action={<Link to="/staff/tours" className="text-xs font-semibold text-[#2d719e] hover:underline">Xem theo trạng thái</Link>}
-          />
-          <ul className="divide-y divide-[#eef1f4]">
-            {tours.data.map((tour) => (
-              <TourRow key={tour.id} tour={tour} now={now} />
-            ))}
-          </ul>
-        </section>
-
-        <div className="grid min-w-0 gap-3">
-          <section className="min-w-0" aria-label="Buổi đang chạy">
-            {running ? (
-              <RunningPanel tour={running} robot={robots.data.find((robot) => robot.id === running.robotId)} now={now} />
-            ) : (
-              <div className={CARD}>
-                <PanelTitle title="Vận hành trực tiếp" />
-                <div className="px-3.5 py-4 text-center">
-                  <p className="text-[13px] font-semibold text-[#64748b]">Hiện không có buổi nào đang chạy.</p>
-                  {next && (
-                    <Link to={`/staff/tours/${next.id}/start`} className={`${buttonClass('primary')} mt-3`}>
-                      Kiểm tra & bắt đầu {next.code} · {formatTime(next.scheduledAt)}
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-          </section>
-          {physical && (
-            <section className={CARD} aria-label="Robot">
-              <PanelTitle title="Đội robot" action={<Link to="/staff/robot" className="text-xs font-semibold text-[#2d719e] hover:underline">Robot & thiết bị</Link>} />
-              <div className="px-3.5 py-3">
-                <RobotHeader robot={physical} />
-                <div className="mt-2.5">
-                  <RobotTelemetry robot={physical} now={now} />
-                </div>
-              </div>
-            </section>
-          )}
-        </div>
+  return <StaffPage>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="mb-2 text-xs font-medium tracking-[0.07em] text-[#2d719e]">CAMPUSTOUR · VẬN HÀNH</p>
+        <h1 className="text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">Tổng quan vận hành</h1>
+        <p className="mt-2 text-sm text-[#64748b]">{formatDate(`${day}T12:00:00`)}{day === today ? ', hôm nay' : ''}</p>
       </div>
-
-      {/* ── Analysis: only counts the API returned (no seeded series, no ratings:
-          feedback is PENDING GVHD in the scope). ─────────────────────────── */}
-      <section aria-label="Biểu đồ vận hành" className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <StudentsThroughDay tours={tours.data} now={now} />
-        <TodayByState tours={tours.data} />
-        <RunResults days={days} />
-        <RunningFunnel tours={tours.data} robots={robots.data} now={now} />
-      </section>
-      <div className="mt-3">
-        <StudentsByTour tours={tours.data} />
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="date" aria-label="Chọn ngày tổng quan" min={availableDays[0].date} max={today} value={day}
+          onChange={event => { if (availableDays.some(item => item.date === event.target.value)) selectDay(event.target.value) }}
+          className={`min-h-10 min-w-0 rounded-xl border border-[#d9e9f5] bg-white px-3 text-sm text-[#173b59] ${focus}`} />
+        <Link to={`/staff/schedule${day === today ? '' : `?date=${day}`}`} className={buttonClass('secondary')}><CalendarDays size={15} aria-hidden="true" />Xem lịch</Link>
       </div>
-    </StaffPage>
-  )
-}
+    </header>
 
-function Header({ running }: { running?: TourOperation }) {
-  const today = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
-  return (
-    <PageHeader
-            eyebrow="Trong ngày"
-      title="Tổng quan vận hành"
-      description={`${today.charAt(0).toUpperCase()}${today.slice(1)}. Học sinh tham quan từ xa qua web; một robot thật chạy một buổi tại một thời điểm. Luồng bình thường tự chạy, Staff can thiệp khi cần.`}
-      action={
-        <Link to={running ? `/staff/live/${running.id}` : '/staff/live'} className={buttonClass('primary', 'md')}>
-          <MonitorPlay size={15} aria-hidden="true" />
-          Điều hành trực tiếp
-        </Link>
-      }
-    />
-  )
-}
+    {urgent.length > 0 && <section aria-label="Cảnh báo vận hành hiện tại">
+      {day !== today && <p className="mb-2 text-xs font-semibold text-[#b23e31]">Cảnh báo vận hành hôm nay</p>}
+      <AttentionList items={urgent} />
+    </section>}
 
-function PanelTitle({ title, action }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2 border-b border-[#eef1f4] px-3.5 py-2.5">
-      <h2 className="text-[13px] font-semibold text-[#0f172a]">{title}</h2>
-      {action}
+    <section aria-label="Tình hình trong ngày" className={`${panel} mb-5 grid grid-cols-2 gap-y-4 py-4 lg:grid-cols-4`}>
+      {figures.map((item, index) => <button key={item.filter} type="button" onClick={() => selectFilter(item.filter)} aria-pressed={filter === item.filter}
+        className={`flex min-w-0 flex-col gap-1.5 px-4 py-1 text-left transition-colors hover:bg-[#f1f8fe] sm:px-5 ${focus} ${index % 2 === 0 ? 'border-r border-[#e2e8f0]' : ''} ${index === 1 ? 'lg:border-r lg:border-[#e2e8f0]' : ''} ${filter === item.filter && filter !== 'all' ? 'bg-[#f1f8fe]' : ''}`}>
+        <span className="text-xs text-[#64748b]">{item.label}</span>
+        <strong className={`text-[30px] leading-tight font-semibold tracking-[-0.025em] tabular-nums ${item.filter === 'assistance' && assistance ? 'text-[#b23e31]' : 'text-[#173b59]'}`}>{known ? item.value : '-'}</strong>
+        <span className="text-xs text-[#64748b]">{known ? item.note : tours.isError ? 'Không tải được dữ liệu' : 'Đang tải dữ liệu…'}</span>
+      </button>)}
+    </section>
+
+    <div className="mb-5 grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <section className={panel} aria-label="Buổi hoàn thành trong bảy ngày">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-2 sm:px-5"><h2 className="text-[15px] font-semibold text-[#0f172a]">Buổi hoàn thành</h2><span className="text-xs text-[#64748b]">7 ngày gần nhất</span></div>
+        {chartFailed ? <div className="p-4"><ErrorPanel error={chartFailed.error} onRetry={chartFailed.refetch} /></div> : !chartReady ? <div className="p-4"><LoadingPanel label="Đang tải biểu đồ hoàn thành…" /></div> :
+          <OverviewCompletedChart days={chartDays} selectedDate={day} onDate={selectDay} />}
+      </section>
+      <section className={panel} aria-label="Trạng thái trong ngày">
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2 sm:px-5"><h2 className="text-[15px] font-semibold text-[#0f172a]">Trạng thái trong ngày</h2><span className="text-xs text-[#64748b]">{known ? `${list.length} buổi` : '-'}</span></div>
+        {tours.isError ? <div className="p-4"><ErrorPanel error={tours.error} onRetry={tours.refetch} /></div> : tours.isPending ? <div className="p-4"><LoadingPanel label="Đang tải trạng thái…" /></div> :
+          <OverviewStateRing tours={list} filter={filter} onFilter={selectFilter} />}
+      </section>
     </div>
-  )
-}
 
-/* ── Running now ──────────────────────────────────────────────────────────── */
-
-function RunningPanel({ tour, robot, now }: { tour: TourOperation; robot?: AmrStatus; now: number }) {
-  const groups = groupSummary(tour)
-  const assist = tour.operationalStatus === 'NeedsAssistance'
-  return (
-    <article
-      className={`rounded-xl border bg-white px-3.5 py-3 transition-colors duration-200 ${assist ? 'border-[#f87171]' : 'border-[#e2e8f0]'}`}
-    >
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="rounded-md bg-[#f1f8fe] px-2 py-0.5 font-mono text-xs font-bold text-[#2d719e]">
-              {tour.code}
-            </span>
-            <span className="size-1.5 rounded-full bg-[#10b981]" />
-            <span className="text-xs font-bold text-[#16a34a]">Đang chạy</span>
-          </div>
-          <h3 className="mt-1 text-[15px] font-bold tracking-tight text-[#0f172a]">{tour.name}</h3>
-          <p className="text-xs text-[#64748b]">
-            {tour.routeName} · {groups.groups} đoàn · {groups.students} học sinh · {tour.robotName}
-          </p>
+    <section className={panel} aria-label="Danh sách buổi tổng quan">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5"><h2 className="text-[15px] font-semibold text-[#0f172a]">Buổi trong ngày</h2><span className="text-xs text-[#64748b]">{known ? `${rows.length} / ${list.length} buổi` : 'Đang tải…'}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f4] px-4 pb-3 sm:px-5">
+        <div role="group" aria-label="Lọc buổi tổng quan" className="flex flex-wrap gap-1">
+          {(['all', 'Running', 'Ready', 'Scheduled', 'Completed', 'Cancelled', ...(assistance || filter === 'assistance' ? ['assistance'] : [])] as OverviewFilter[]).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => selectFilter(value)}
+            className={`min-h-8 rounded-lg border px-2.5 text-xs transition-colors ${focus} ${filter === value ? 'border-[#d9e9f5] bg-[#f1f8fe] font-semibold text-[#2d719e]' : 'border-transparent text-[#64748b] hover:bg-[#f8fafc]'}`}>
+            {value === 'all' ? 'Tất cả' : value === 'assistance' ? 'Cần hỗ trợ' : statusLabel(value)}
+          </button>)}
         </div>
-        <Link to={`/staff/live/${tour.id}`} className={buttonClass(assist ? 'danger' : 'primary', 'sm')}>
-          {assist ? 'Xử lý hỗ trợ' : 'Mở điều hành'}
-        </Link>
+        <SearchField value={search} onChange={value => update({ q: value || null })} placeholder="Tìm mã, tên, trường…" label="Tìm buổi tổng quan" className="w-full sm:w-64" />
       </div>
-      <RunStatus tour={tour} robot={robot} now={now} compact />
-    </article>
-  )
-}
+      {tours.isError ? <div className="p-4"><ErrorPanel error={tours.error} onRetry={tours.refetch} /></div> : tours.isPending ? <div className="p-4"><LoadingPanel /></div> : rows.length === 0 ?
+        <div className="px-5 py-10 text-center"><p className="text-sm text-[#64748b]">{search || filter !== 'all' ? 'Không có buổi khớp bộ lọc.' : 'Không có buổi tham quan trong ngày đã chọn.'}</p>{(search || filter !== 'all') && <button type="button" onClick={() => update({ view: null, q: null })} className={`${buttonClass('secondary', 'sm')} mt-3`}>Xóa bộ lọc</button>}</div> :
+        <ul className="divide-y divide-[#eef1f4]" aria-label="Buổi tổng quan">{rows.map(tour => {
+          const action = tourAction(tour)
+          return <li key={tour.id} className="grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-4 sm:px-5 lg:grid-cols-[56px_minmax(0,1fr)_auto_auto]">
+            <time className="self-start pt-0.5 text-sm font-semibold text-[#173b59] tabular-nums" dateTime={tour.scheduledAt}>{formatTime(tour.scheduledAt)}</time>
+            <div className="min-w-0"><button type="button" onClick={() => update({ tour: tour.id })} className={`rounded-md text-left text-sm font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline ${focus}`}>{tour.name}<span className="sr-only">, {tour.code}</span></button>
+              <p className="mt-1 text-xs text-[#64748b]"><span className="font-mono">{tour.code}</span> · {tour.registrations[0]?.schoolName || tour.routeName}</p>
+            </div>
+            <span className="col-start-2 lg:col-start-auto"><TourStateBadges tour={tour} showReason={false} /></span>
+            <Link to={action.to} aria-label={`${action.label} ${tour.code}`} className={`${buttonClass(tour.state === 'Running' ? 'primary' : 'secondary', 'sm')} col-start-2 justify-self-start lg:col-start-auto`}>{tour.state === 'Running' && <MonitorPlay size={14} aria-hidden="true" />}{action.label}</Link>
+          </li>
+        })}</ul>}
+      {known && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eef1f4] px-4 py-3 text-xs text-[#64748b] sm:px-5"><p>Hiển thị {rows.length} / {list.length} buổi{filter !== 'all' ? `, ${filter === 'assistance' ? 'cần hỗ trợ' : statusLabel(filter).toLowerCase()}` : ''}</p><Link to="/staff/tours" className="font-semibold text-[#2d719e] hover:underline">Mở buổi hôm nay</Link></div>}
+    </section>
 
-/* ── Today ────────────────────────────────────────────────────────────────── */
+    {preparation.length > 0 && <details className="mt-5">
+      <summary className={`w-fit cursor-pointer rounded-md text-sm font-semibold text-[#173b59] ${focus}`}>Việc cần chú ý ({preparation.length})</summary><div className="mt-3"><AttentionList items={preparation} /></div>
+    </details>}
 
-function TourRow({ tour, now }: { tour: TourOperation; now: number }) {
-  const action = tourAction(tour)
-  const groups = groupSummary(tour)
-  const countdown = tour.state === 'Scheduled' || tour.state === 'Ready' ? formatCountdown(tour.scheduledAt, now) : null
-  return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 transition-colors hover:bg-[#fafcfe]">
-      <span className="w-[72px] shrink-0">
-        <span className="block text-sm font-bold text-[#0f172a] tabular-nums leading-none">
-          {formatTime(tour.scheduledAt)}
-        </span>
-        {countdown && <span className="mt-1 block text-[11px] whitespace-nowrap text-[#94a3b8]">{countdown}</span>}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span>
-          <span className="shrink-0 font-mono text-[11px] font-semibold text-[#64748b] bg-[#f1f5f9] px-1.5 py-0.2 rounded">
-            {tour.code}
-          </span>
-        </span>
-        <span className="mt-0.5 block truncate text-xs text-[#64748b]">
-          {tour.routeName} · {groups.groups} đoàn · {groups.students} học sinh
-          {groups.pending ? ` · ${groups.pending} chờ duyệt` : ''}
-        </span>
-      </span>
-      <TourStateBadges tour={tour} />
-      <Link to={action.to} className={buttonClass(action.kind === 'primary' ? 'primary' : 'secondary', 'sm')}>
-        {action.label}
-      </Link>
-    </li>
-  )
+    <footer className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#e2e8f0] pt-4 text-xs text-[#64748b]" aria-label="Tình trạng robot">
+      {robots.isError ? <><span>Không tải được dữ liệu robot.</span><button type="button" onClick={() => void robots.refetch()} className="text-[#2d719e] hover:underline">Thử lại dữ liệu robot</button></> : robots.isPending ? <span>Đang tải dữ liệu robot…</span> : robot ? <>
+        <Link to="/staff/robot" className="inline-flex items-center gap-2 hover:text-[#173b59]"><Bot size={15} aria-hidden="true" /><b className="font-semibold text-[#173b59]">{robot.name}</b>{statusLabel(robot.connectionState)}</Link>
+        <span className="inline-flex items-center gap-2"><BatteryMedium size={15} aria-hidden="true" />Pin: {formatBattery(robot.batteryPercent)}</span>
+      </> : <span>Chưa có dữ liệu robot.</span>}
+    </footer>
+
+    <TourInspector tour={selected} now={now} open={Boolean(selected)} onClose={close} panelRef={panelRef} />
+  </StaffPage>
 }

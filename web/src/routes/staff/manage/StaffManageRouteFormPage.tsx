@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
+import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
@@ -43,6 +44,8 @@ export default function StaffManageRouteFormPage() {
     setBusy(true); setError(null)
     try {
       const route = routeId ? await versionedRoutesApi.revise(routeId, body) : await versionedRoutesApi.create(body)
+      if (routeId) notify({ title: `Đã tạo revision mới cho “${body.name}”`, detail: 'Revision mới là bản nháp; gửi kiểm chứng lại trước khi dùng cho Tour.' })
+      else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
       navigate(`/staff/manage/routes/${route.routeId}`, { replace: true })
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Không lưu được revision tuyến.') }
     finally { setBusy(false) }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CircleAlert, CircleCheck, Info, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { useToastStore, type Toast, type ToastTone } from './toast-store'
+import { Celebration } from './Celebration'
 
 const DURATION: Record<ToastTone, number> = { success: 5000, info: 5000, error: 8000 }
 const LEAVE_MS = 200
@@ -16,14 +17,19 @@ const TONE: Record<ToastTone, { icon: typeof Info; dot: string; bar: string }> =
  * The notification stack, bottom right (above the phone menu button below
  * `lg`). Each card says what finished and leaves after five seconds (errors
  * stay eight); pointing at it or focusing it holds it, and the bar along its
- * foot shows the time left.
+ * foot shows the time left. A milestone (`celebrate()`) shows in the middle of
+ * the screen instead.
  */
 export function Toaster() {
   const toasts = useToastStore((state) => state.toasts)
+  const milestone = toasts.find((toast) => toast.celebrate)
   return (
-    <section aria-label="Thông báo" className="pointer-events-none fixed right-4 bottom-20 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2 lg:right-5 lg:bottom-5">
-      {toasts.map((toast) => <ToastCard key={toast.id} toast={toast} />)}
-    </section>
+    <>
+      <section aria-label="Thông báo" className="pointer-events-none fixed right-4 bottom-20 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2 lg:right-5 lg:bottom-5">
+        {toasts.filter((toast) => !toast.celebrate).map((toast) => <ToastCard key={toast.id} toast={toast} />)}
+      </section>
+      {milestone && <Celebration key={milestone.id} toast={milestone} />}
+    </>
   )
 }
 

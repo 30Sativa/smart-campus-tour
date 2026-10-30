@@ -4,15 +4,14 @@ import { Link, Navigate, useParams } from 'react-router'
 import type { AmrStatus, RouteStop } from '../../api/contracts/staff'
 import { useStaffAmrs, useTour, useTours } from '../../features/staff/staff-hooks'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { Field, LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
-import { buttonClass } from '../../components/ui/ui-classes'
+import { Field, LoadingPanel, PageHeader } from '../../components/ui/ConsolePrimitives'
+import { buttonClass, cardClass } from '../../components/ui/ui-classes'
 import { eventTypeLabel, HEAD_LABEL, statusLabel } from '../../features/staff/status'
 import { REASON_SHORT } from '../../features/staff/reason'
 import { formatTime } from '../../features/staff/formatters'
 import { groupSummary, routeProgress } from '../../features/staff/attention'
 import { useNow } from '../../features/staff/use-now'
 import { OperationalTwin } from '../../features/staff/components/OperationalTwin'
-import { RouteSchematic } from '../../features/staff/components/RouteSchematic'
 import { TourTimeline } from '../../features/staff/components/TourTimeline'
 import { OperationControls } from '../../features/staff/components/OperationControls'
 import { LiveStatusStrip } from '../../features/staff/components/LiveStatusStrip'
@@ -20,6 +19,17 @@ import { TourStateBadges } from '../../features/staff/components/TourParts'
 
 /**
  * Live Operations: Staff Dashboard/Twin for the running Tour.
+ *
+ * Layout (laptop and up):
+ *   header   - code, name, state badges, link to the full record
+ *   alert    - only while the Tour needs assistance
+ *   ┌────────────────────────────┬──────────────┐
+ *   │ Digital Twin 3D (~2/3)     │ Controls     │  sticky side column:
+ *   │                            │ Telemetry    │  the buttons stay in reach
+ *   ├────────────────────────────┤ (branch      │  while the map keeps the
+ *   │ Route · Log (tabs)         │  requests)   │  width
+ *   └────────────────────────────┴──────────────┘
+ * Phones and tablets: twin, controls, telemetry, then route and log.
  */
 export default function LiveOperationsPage() {
   const { tourId } = useParams()
@@ -55,9 +65,7 @@ export default function LiveOperationsPage() {
             )
           }
         />
-        <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-xs">
-          <OperationalTwin robots={robots.data ?? []} className="h-[clamp(380px,62vh,720px)]" />
-        </div>
+        <OperationalTwin robots={robots.data ?? []} className="h-[clamp(380px,64vh,780px)] shadow-[0_10px_28px_-16px_rgba(23,59,89,0.3)]" />
       </StaffPage>
     )
   }
@@ -101,40 +109,51 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
       </header>
 
       {tour.state !== 'Running' && (
-        <div role="status" className="mb-3 rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-[13px] text-[#475569]">
+        <div role="status" className={`${cardClass} mb-4 px-4 py-2.5 text-[13px] text-[#475569]`}>
           Buổi đã {statusLabel(tour.state).toLowerCase()}{tour.endReason ? `: ${tour.endReason}` : ''}. Live và AI của học sinh đã đóng.
         </div>
       )}
       {assist && (
-        <div role="alert" className="mb-3 flex items-center gap-3 rounded-xl border border-[#fca5a5] bg-[#fef2f2] px-4 py-2.5">
+        <div role="alert" className="mb-4 flex items-center gap-3 rounded-2xl border border-[#fca5a5] bg-[#fef2f2] px-4 py-3 shadow-[0_10px_24px_-16px_rgba(220,38,38,0.5)]">
           <ShieldAlert size={18} className="shrink-0 text-[#dc2626]" aria-hidden="true" />
           <p className="min-w-0 flex-1 text-[13px] text-[#334155]">
             <strong className="font-bold text-[#dc2626]">Cần hỗ trợ · {tour.reason ? REASON_SHORT[tour.reason] ?? tour.reason : ''}.</strong>{' '}
-            {tour.reasonDetail} Lịch tự chuyển bước đã tạm dừng; chọn thao tác phục hồi ở bảng điều khiển bên phải.
+            {tour.reasonDetail} Lịch tự chuyển bước đã tạm dừng; chọn thao tác phục hồi ở bảng điều khiển.
           </p>
         </div>
       )}
 
-      <LiveStatusStrip tour={tour} robot={robot} now={now} />
-
-      <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* Controls first in reading order on small screens, a sticky column on wide ones. */}
-        <section className={`${panelClass} lg:sticky lg:top-3 lg:col-start-2 lg:row-span-2 lg:row-start-1`} aria-label="Điều khiển">
-          <PanelHead title="Điều khiển vận hành" action={<span className="font-mono text-xs text-[#64748b]">{done}/{total} POI · rev {tour.revision}</span>} />
-          <div className="p-4">
-            <OperationControls tour={tour} />
-          </div>
-        </section>
-
-        <div className="min-w-0 lg:col-start-1 lg:row-start-1">
-          <RouteSchematic tour={tour} robot={robot} selectedStopId={selectedStopId} onSelect={select} compact />
+      <div className="grid items-start gap-4 min-[1440px]:grid-cols-[minmax(0,1fr)_340px] min-[1800px]:grid-cols-[minmax(0,1fr)_380px]">
+        {/* 1. Digital Twin: the largest area, the reason this page exists. */}
+        <div className="min-w-0 min-[1440px]:col-start-1 min-[1440px]:row-start-1">
+          <OperationalTwin
+            robots={robots}
+            tour={tour}
+            selectedStopId={selectedStopId}
+            title={`Digital Twin · ${tour.code}`}
+            className="h-[clamp(340px,55vh,720px)] min-[1440px]:h-[clamp(440px,64vh,820px)] shadow-[0_10px_28px_-16px_rgba(23,59,89,0.3)]"
+          />
         </div>
 
-        <section className={`${panelClass} min-w-0 lg:col-start-1 lg:row-start-2`} aria-label="Lộ trình và nhật ký">
-          <div role="tablist" aria-label="Lộ trình và nhật ký" className="flex items-center gap-1 border-b border-[#f1f5f9] px-3">
+        {/* 2. Side column, sticky on wide screens: controls first (closest to reach), then telemetry. */}
+        <aside className="flex min-w-0 flex-col gap-4 min-[1440px]:sticky min-[1440px]:top-20 min-[1440px]:col-start-2 min-[1440px]:row-span-2 min-[1440px]:row-start-1" aria-label="Điều khiển và thông số">
+          <section className={`${cardClass} p-4`} aria-label="Điều khiển">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-[#0f172a]">Điều khiển vận hành</h2>
+              <span className="font-mono text-xs text-[#64748b]">{done}/{total} POI · rev {tour.revision}</span>
+            </div>
+            <OperationControls tour={tour} />
+          </section>
+          <LiveStatusStrip tour={tour} robot={robot} now={now} variant="panel" />
+          {/* Branch requests go here as one more card once the backend exposes BranchRequests. */}
+        </aside>
+
+        {/* 3. Route and log, under the twin so they never cover it. */}
+        <section className={`${cardClass} min-w-0 overflow-hidden min-[1440px]:col-start-1 min-[1440px]:row-start-2`} aria-label="Lộ trình và nhật ký">
+          <div role="tablist" aria-label="Lộ trình và nhật ký" className="flex items-center gap-1 border-b border-[#eef2f6] bg-[#fafbfc] px-3">
             {([['route', `Lộ trình · ${done}/${total} POI`], ['log', `Nhật ký · ${tour.events.length}`]] as const).map(([key, label]) => (
               <button key={key} type="button" role="tab" id={`live-tab-${key}`} aria-selected={tab === key} aria-controls={`live-panel-${key}`} onClick={() => setTab(key)}
-                className={`-mb-px min-h-10 border-b-2 px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${tab === key ? 'border-[#2d719e] text-[#173b59]' : 'border-transparent text-[#64748b] hover:text-[#0f172a]'}`}>
+                className={`-mb-px min-h-11 border-b-2 px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${tab === key ? 'border-[#2d719e] text-[#173b59]' : 'border-transparent text-[#64748b] hover:text-[#0f172a]'}`}>
                 {label}
               </button>
             ))}
@@ -143,7 +162,7 @@ function LiveTour({ tourId, robots }: { tourId: string; robots: AmrStatus[] }) {
           {tab === 'route' ? (
             <div role="tabpanel" id="live-panel-route" aria-labelledby="live-tab-route" className="grid max-h-[380px] gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <TourTimeline tour={tour} selectedId={selectedStopId} onSelect={select} />
-              {selectedStop ? <StopDetail stop={selectedStop} /> : <p className="self-start rounded-xl bg-[#f8fafc] p-4 text-[13px] text-[#64748b]">Chọn một POI trên sơ đồ hoặc trong lộ trình để xem thời gian dừng, góc quan sát và giờ tới.</p>}
+              {selectedStop ? <StopDetail stop={selectedStop} /> : <p className="self-start rounded-xl bg-[#f8fafc] p-4 text-[13px] text-[#64748b]">Chọn một POI trong lộ trình để xem thời gian dừng, góc quan sát và giờ tới; bản đồ sẽ đánh dấu POI đó.</p>}
             </div>
           ) : (
             <ol role="tabpanel" id="live-panel-log" aria-labelledby="live-tab-log" className="max-h-[380px] space-y-1.5 overflow-y-auto p-3">
