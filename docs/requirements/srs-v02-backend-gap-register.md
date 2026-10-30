@@ -105,6 +105,15 @@ not invented in this register. Capacity 40 requires declared load evidence.
 
 ## Pending / unimplemented disclosure
 
+**Route map gate (ADR-0033, owner decision 2026-10-30):** implemented on Route
+save and submit with existing 409 codes and no schema change; a target rule
+added after the SRS baseline. Physical behavior remains unverified.
+
+**Open, no decision yet:** a POI PASS cannot be withdrawn. If a POI stops working
+while its pose, camera and map are unchanged, Technical Staff cannot lower it
+and a content-only revision does not re-enter the queue. Do not add a withdrawal
+flow without an owner decision; route evidence depends on POI PASS being stable.
+
 F-14, branch cutoff, YAML schema/frame conversion and command transport remain
 blocked on decisions; no stub may make them appear enabled. Other open source
 items: invalid-code defaults, speech provider/terms, research delivery/freshness

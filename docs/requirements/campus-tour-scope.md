@@ -84,6 +84,24 @@ Technical Staff with the assigned Operator tests the whole route and permitted
 branches. A pass records exact map/POI/route/configuration, tester, Operator,
 time, evidence, measured duration and result. Staff cannot technically confirm.
 
+**POI result lifecycle.** Each immutable POI revision takes one technical result
+and that result cannot be edited or withdrawn. A rejected revision leaves the
+technical queue until Staff corrects and resubmits it. Content-only edits keep
+an existing PASS. A changed pose, camera preset or map version needs a fresh
+result, and a new map version inherits nothing. A later map check failure does
+not change results already recorded. There is no flow to withdraw a PASS when
+reality changes but the revision does not (open, see the gap register).
+
+**Route authoring map gate (ADR-0033, owner decision 2026-10-30).** Staff may
+save or submit a route revision only on a map version with current technical
+evidence: at least one physical robot's latest check for that exact version
+passes. This is stricter than POI evidence alone, so a map that lost its passing
+check stops accepting route work even if its POIs passed, and only a new passing
+check from Technical Staff or moving the route to another eligible map unblocks
+it. A draft saved earlier stays readable but cannot be submitted meanwhile.
+Revisions already submitted are not rewritten, and a route test run keeps its
+own rule on the testing robot's latest deployment.
+
 Scheduling and READY require the exact tested tuple. A movement-affecting new
 revision never inherits a pass; a retained, unrevoked old tested tuple remains
 eligible. READY/RUNNING references cannot be edited in place. Content-only
