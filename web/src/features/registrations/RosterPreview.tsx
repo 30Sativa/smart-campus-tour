@@ -9,7 +9,7 @@ const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').repl
  * The roster as a table: source row, type, display name, email and optional class (Review 1).
  * Scrolls inside its own box, sideways too on a narrow phone.
  */
-export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách lời mời', maxHeight = 'max-h-[360px]', variant = 'console', rowAction }: { rows: T[]; label?: string; maxHeight?: string; variant?: 'console' | 'representative'; rowAction?: (row: T) => ReactNode }) {
+export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách lời mời', maxHeight = 'max-h-[360px]', variant = 'console', rowSelect, rowAction }: { rows: T[]; label?: string; maxHeight?: string; variant?: 'console' | 'representative'; rowSelect?: (row: T) => ReactNode; rowAction?: (row: T) => ReactNode }) {
   const [q, setQ] = useState('')
   const representative = variant === 'representative'
   const searchable = rows.length > 12
@@ -32,6 +32,7 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
         <table className={representative ? 'rep-table' : 'w-full min-w-[680px] text-left text-sm'} aria-label={label}>
           <thead className={representative ? undefined : 'sticky top-0 bg-[#f8fafc]'}>
             <tr className={representative ? undefined : 'text-xs text-[#64748b]'}>
+              {rowSelect && <th scope="col" className="w-10 py-2.5 pl-4"><span className="sr-only">Chọn</span></th>}
               <th scope="col" className="w-16 px-4 py-2.5 font-medium">STT</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Họ tên</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Loại dòng</th><th scope="col" className="px-4 py-2.5 font-medium">Email</th>
@@ -42,6 +43,7 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
           <tbody className={representative ? undefined : 'divide-y divide-[#f1f5f9]'}>
             {shown.map(({ row, n }) => (
               <tr key={n} style={representative ? { '--i': n } as React.CSSProperties : undefined}>
+                {rowSelect && <td className="py-2.5 pl-4">{rowSelect(row)}</td>}
                 <td className={representative ? 'rep-muted num' : 'px-4 py-2.5 text-[#94a3b8] tabular-nums'}>{row.rowNumber}</td>
                 <td className={representative ? 'font-semibold' : 'px-4 py-2.5 font-medium text-[#0f172a]'}>{row.displayName}</td>
                 <td className={representative ? undefined : 'px-4 py-2.5'}><span className={representative ? `rep-row-type ${row.rowType === 'INDIVIDUAL' ? 'rep-row-type--ind' : 'rep-row-type--shared'}` : undefined}>{row.rowType === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung'}</span></td><td className={representative ? undefined : 'px-4 py-2.5'}>{row.email}</td>
@@ -50,7 +52,7 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
               </tr>
             ))}
             {shown.length === 0 && (
-              <tr><td colSpan={rowAction ? 6 : 5} className={`px-4 py-6 text-center ${representative ? 'rep-muted' : 'text-[#64748b]'}`}>Không có dòng khớp "{q}".</td></tr>
+              <tr><td colSpan={5 + (rowAction ? 1 : 0) + (rowSelect ? 1 : 0)} className={`px-4 py-6 text-center ${representative ? 'rep-muted' : 'text-[#64748b]'}`}>Không có dòng khớp "{q}".</td></tr>
             )}
           </tbody>
         </table>
