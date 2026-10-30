@@ -33,6 +33,11 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   firstAcceptedFrameId: string | null
   connectionStatus: PhysicalRobotConnectionStatus
   lastSyncReceivedAt: string | null
+  configuredMapKey: string | null
+  configuredFrameId: string | null
+  latestDeployedMapKey: string | null
+  latestDeployedFrameId: string | null
+  latestDeploymentPassed: boolean | null
 }
 export type RobotCredentialAudit = {
   id: number; robotCode: string; action: string; actorUserId: string | null; actorName: string | null
@@ -66,6 +71,7 @@ export type MapVersionItem = {
   preparationBlockReasonCode: string | null
   preparationBlockReason: string | null
   preparationEvidence: DeploymentCheck | null
+  currentlyDeployedOn: Array<{ robotCode: string; checkedAt: string }>
 }
 
 export type PoiRevision = {

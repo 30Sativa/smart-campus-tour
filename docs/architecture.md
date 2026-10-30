@@ -608,6 +608,11 @@ Eligibility remains historical to its map version when a robot later moves
 elsewhere; POI verification retains ADR-0021's stricter latest cross-map
 deployment check for the robot used to verify it. See
 [`ADR-0028`](decisions/0028-map-technical-check-before-poi-preparation.md).
+Map list/detail responses additionally expose read-only `currentlyDeployedOn`
+entries for physical robots whose latest cross-map deployment check points to
+that exact version with matching checksum and localization/display passing.
+This is operational context only: absence does not change eligibility or
+selection. The Staff POI picker warns when a PASSED version has no such robot.
 
 The supported upload is a bounded ZIP of root ROS trinary YAML and referenced
 8-bit PGM. Upload is not robot deployment; TechnicalStaff records exact package
@@ -657,6 +662,14 @@ blocked until a later new report can persist confirmation. Upload and
 deployment-check requests that expose requestId keep that ID stable for retries;
 physical robot registration has no requestId or receipt and duplicate code is
 409 via the unique constraint.
+
+The same TechnicalStaff robot list exposes only each robot's configured
+`RobotContexts` MapKey/FrameId and the latest recorded deployment-check map
+key/frame. It exposes no credential or other configuration values. The UI
+warns, without blocking work, when configuration is absent or differs from the
+latest check. Operators update RobotContexts and restart the backend after a
+map deployment, then rerun the Fleet Sync probe; this display is not a new
+deployment or readiness gate.
 
 When a current POI map version falls outside the normal version-list page, the
 Staff screen fetches that exact version by ID for preview. If backend eligibility

@@ -11,7 +11,10 @@ public sealed record MapVersionView(
 
 public sealed record MapVersionListItem(MapVersionView Map, MapDeploymentCheckView? LatestDeployment,
     string TechnicalCheckStatus, bool CanUseForPoiPreparation, string? PreparationBlockReasonCode,
-    string? PreparationBlockReason, MapDeploymentCheckView? PreparationEvidence);
+    string? PreparationBlockReason, MapDeploymentCheckView? PreparationEvidence,
+    IReadOnlyList<CurrentlyDeployedRobot> CurrentlyDeployedOn);
+
+public sealed record CurrentlyDeployedRobot(string RobotCode, DateTimeOffset CheckedAt);
 
 public sealed record MapDeploymentCheckView(
     Guid Id, Guid MapVersionId, string RobotCode, string PackageSha256,

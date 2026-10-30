@@ -14,6 +14,9 @@ public sealed class EfPhysicalRobotRepository(ApplicationDbContext dbContext) : 
             .OrderBy(robot => robot.DisplayName).ThenBy(robot => robot.RobotCode)
             .ToArrayAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksAsync(CancellationToken cancellationToken) =>
+        await LatestPhysicalRobotDeploymentChecks.Query(dbContext).ToArrayAsync(cancellationToken);
+
     public Task<bool> RobotCodeExistsAsync(string robotCode, CancellationToken cancellationToken) =>
         dbContext.Robots.AsNoTracking().AnyAsync(robot => robot.RobotCode == robotCode, cancellationToken);
 

@@ -28,11 +28,28 @@ export default function TechnicalRobotsPage() {
       <section className={panelClass} aria-label="Danh sách robot vật lý">
         <PanelHead title="Robot đã đăng ký" description="Robot xuất hiện trong danh sách chọn khi ghi kết quả kiểm tra map." />
         {robots.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" role="status" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải danh sách robot…</p> : robots.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div> : (
-          <><div className="flex justify-end px-4 pt-3"><button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button></div><div className="overflow-x-auto"><table className="w-full min-w-[480px] text-left">
-            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã robot</th><th className={thClass}>Tên robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Xác nhận đầu tiên</th><th className={thClass}>Map / frame xác nhận</th><th className={thClass}>Nhận dữ liệu gần nhất</th><th className={thClass}>Khóa</th></tr></thead>
+          <><div className="flex justify-end px-4 pt-3"><button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button></div><div className="overflow-x-auto"><table className="w-full min-w-[960px] text-left">
+            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã robot</th><th className={thClass}>Tên robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Xác nhận đầu tiên</th><th className={thClass}>Map / frame xác nhận</th><th className={thClass}>Cấu hình BE</th><th className={thClass}>Kiểm tra triển khai gần nhất</th><th className={thClass}>Nhận dữ liệu gần nhất</th><th className={thClass}>Khóa</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
-              {robots.data?.map(robot => { const status = connectionStatus[robot.connectionStatus] ?? connectionStatus.UNCONFIRMED; return <tr key={robot.id}><td className={`${tdClass} font-mono`}>{robot.robotCode}</td><td className={tdClass}>{robot.displayName || '—'}</td><td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td><td className={tdClass}>{stamp(robot.firstAcceptedSyncAt)}</td><td className={`${tdClass} font-mono text-xs`}>{robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? `${robot.firstAcceptedMapKey} · ${robot.firstAcceptedFrameId}` : '—'}</td><td className={tdClass}>{stamp(robot.lastSyncReceivedAt)}</td><td className={tdClass}><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setCredentialRobotCode(robot.robotCode)}>Quản lý khóa</button></td></tr> })}
-              {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={7}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
+              {robots.data?.map(robot => {
+                const status = connectionStatus[robot.connectionStatus] ?? connectionStatus.UNCONFIRMED
+                const configured = Boolean(robot.configuredMapKey && robot.configuredFrameId)
+                const hasLatestDeployment = Boolean(robot.latestDeployedMapKey && robot.latestDeployedFrameId)
+                const contextMismatch = configured && hasLatestDeployment &&
+                  (robot.configuredMapKey !== robot.latestDeployedMapKey || robot.configuredFrameId !== robot.latestDeployedFrameId)
+                return <tr key={robot.id}>
+                  <td className={`${tdClass} font-mono`}>{robot.robotCode}</td>
+                  <td className={tdClass}>{robot.displayName || '—'}</td>
+                  <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
+                  <td className={tdClass}>{stamp(robot.firstAcceptedSyncAt)}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{robot.firstAcceptedMapKey && robot.firstAcceptedFrameId ? `${robot.firstAcceptedMapKey} · ${robot.firstAcceptedFrameId}` : '—'}</td>
+                  <td className={`${tdClass} text-xs`}>{configured ? <span className="font-mono">{robot.configuredMapKey} · {robot.configuredFrameId}</span> : <span className="text-amber-800">BE chưa cấu hình ngữ cảnh map cho robot này</span>}</td>
+                  <td className={`${tdClass} text-xs`}>{hasLatestDeployment ? <><span className="font-mono">{robot.latestDeployedMapKey} · {robot.latestDeployedFrameId}</span>{robot.latestDeploymentPassed !== null && <span className="ml-2 inline-flex"><ToneBadge tone={robot.latestDeploymentPassed ? 'ok' : 'danger'}>{robot.latestDeploymentPassed ? 'Đạt' : 'Chưa đạt'}</ToneBadge></span>}{contextMismatch && <p className="mt-1 max-w-xs text-amber-800">Cấu hình BE đang dùng map {robot.configuredMapKey} · {robot.configuredFrameId} nhưng robot được triển khai map {robot.latestDeployedMapKey} · {robot.latestDeployedFrameId} gần nhất. Cập nhật FleetSync:RobotContexts và khởi động lại BE.</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
+                  <td className={tdClass}>{stamp(robot.lastSyncReceivedAt)}</td>
+                  <td className={tdClass}><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setCredentialRobotCode(robot.robotCode)}>Quản lý khóa</button></td>
+                </tr>
+              })}
+              {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={9}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
             </tbody>
           </table></div></>
         )}

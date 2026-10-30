@@ -12,6 +12,12 @@ Map eligibility is historical to the exact version. A robot's later deployment t
 
 The map list/detail API is the source of the calculated check state, eligibility, reason and supporting robot/time/check evidence. The same calculation protects reads and mutations. Mutations and deployment-check recording serialize on a transaction-owned per-map preparation lock; POI verification continues to use the existing per-robot deployment-state lock. A blocked mutation returns a business 409 and commits no proposal, revision, submission receipt or success audit. An already-committed idempotent retry returns its committed result.
 
+### Operations and scope clarification (2026-10-29)
+
+- The map is eligible when at least one physical robot's latest check for that exact map version has matching package SHA-256 and both localization and display passing. A failure on another robot does not revoke that eligibility; that robot cannot verify POIs or test routes on the map until its own latest cross-map deployment check points to the exact version and checksum.
+- The same Technical account may upload a map and record its deployment check. This is an accepted limitation for manual evidence. Route test runs retain their separate requirement for a Technical checker and a distinct active Staff participant.
+- A pre-tour readiness check requiring a robot to be deployed on the route's map and connected is deferred until a Tour start/run feature exists. Current map/route preparation rules remain unchanged.
+
 Technical Staff remains the only role that uploads map packages and records deployment evidence or POI verification. Tour Staff retains proposal/revision/submission rights. Admin and Staff cannot record technical evidence. A package's ZIP/YAML/PGM validation is only file validity; it never implies map technical PASS or POI PASS.
 
 ## User-visible states
