@@ -304,7 +304,7 @@ VALUES(NEWID(),N'legacy-v14-robot','PHYSICAL',0x01,0,0,SYSDATETIMEOFFSET());
 GO
 SQL
 legacy_robot=$(query "SELECT CONCAT(RobotCode,':',CONVERT(varchar(64),CredentialHash,2),':',IsDispatchEnabled,':',NeedsInspection) FROM dbo.Robots WHERE RobotCode=N'legacy-v14-robot';")
-[[ $(runtime_robot_permissions) == 10000000 ]] || fail 'v1.4 setup did not retain SELECT-only Robot permissions.'
+[[ $(runtime_robot_permissions) == 10000000000 ]] || fail 'v1.4 setup did not retain SELECT-only Robot permissions.'
 legacy_data_before=$(all_data)
 if check_only > "$scratch/v14-select-only.log" 2>&1; then
   fail 'Read-only check accepted a v1.4 database with SELECT-only Robot permissions.'
