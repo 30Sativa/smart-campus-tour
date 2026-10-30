@@ -4,7 +4,9 @@ public sealed record FleetRobotIdentity(
     string RobotCode,
     string SourceType,
     string? DisplayName,
-    bool NeedsInspection);
+    bool NeedsInspection,
+    string? AssignedMapKey = null,
+    string? AssignedFrameId = null);
 
 // Authentication-only proof: never put the hash in claims, public DTOs, telemetry snapshots or hub projections.
 public sealed record FleetRobotAuthenticationProof(

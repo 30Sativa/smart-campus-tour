@@ -5,6 +5,10 @@
   manual map deployment checks
 - Supersedes: no earlier transport or robot-readiness decision
 
+ADR-0032 supersedes only the deployment configuration source for Fleet Sync's
+current map context. The three `FirstAccepted*` fields remain historical
+confirmation for the current credential and are not reset by map assignment.
+
 ## Context
 
 Registration creates a PHYSICAL robot identity before its MiniPC is configured.

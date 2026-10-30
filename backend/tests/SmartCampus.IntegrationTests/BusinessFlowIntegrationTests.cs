@@ -384,11 +384,32 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
         Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
         Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
-        Assert.Equal(new[] { "configuredFrameId", "configuredMapKey", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "latestDeploymentPassed", "mapContextConfigured", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "assignedAreaName", "assignedFrameId", "assignedMapKey", "assignedMapVersionId", "assignedVersionNumber", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "latestDeploymentPassed", "mapAssignedAt", "mapAssignedByName", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Null(listedRobot.GetProperty("assignedMapKey").GetString());
         Assert.Equal(JsonValueKind.Null, listedRobot.GetProperty("latestDeploymentPassed").ValueKind);
         Assert.DoesNotContain(listedRobot.EnumerateObject(), property => property.Name.Contains("secret", StringComparison.OrdinalIgnoreCase) || property.Name.Contains("hash", StringComparison.OrdinalIgnoreCase));
 
-        var mapSha = first.GetProperty("packageSha256").GetString();
+        var beforeAssignmentRowVersion = listedRobot.GetProperty("rowVersion").GetString();
+        byte[] originalCredentialHash;
+        await using (var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options))
+            originalCredentialHash = (await context.Robots.AsNoTracking().SingleAsync(robot => robot.Id == robotId)).CredentialHash!;
+        var assignmentRequest = new { requestId = Guid.NewGuid(), expectedRowVersion = beforeAssignmentRowVersion, mapVersionId = first.GetProperty("id").GetGuid() };
+        using var assignedResponse = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical, assignmentRequest);
+        Assert.Equal(HttpStatusCode.OK, assignedResponse.StatusCode);
+        var assignedMap = (await Body(assignedResponse)).GetProperty("data");
+        Assert.Equal(first.GetProperty("mapKey").GetString(), assignedMap.GetProperty("assignedMapKey").GetString());
+        Assert.Equal(first.GetProperty("frameId").GetString(), assignedMap.GetProperty("assignedFrameId").GetString());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.AuditLogs WHERE [Action]='ROBOT_MAP_ASSIGNED'"));
+        await using (var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options))
+            Assert.Equal(originalCredentialHash, (await context.Robots.AsNoTracking().SingleAsync(robot => robot.Id == robotId)).CredentialHash);
+        using var assignmentReplay = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical, assignmentRequest);
+        Assert.Equal(HttpStatusCode.OK, assignmentReplay.StatusCode);
+        using var staleClear = await Json(host.Client, HttpMethod.Delete, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical,
+            new { requestId = Guid.NewGuid(), expectedRowVersion = beforeAssignmentRowVersion });
+        Assert.Equal(HttpStatusCode.Conflict, staleClear.StatusCode);
+        using var adminForbidden = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", admin,
+            new { requestId = Guid.NewGuid(), expectedRowVersion = assignedMap.GetProperty("rowVersion").GetString(), mapVersionId = first.GetProperty("id").GetGuid() });
+        Assert.Equal(HttpStatusCode.Forbidden, adminForbidden.StatusCode);        var mapSha = first.GetProperty("packageSha256").GetString();
         using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
             new { requestId = Guid.NewGuid(), robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; unconfirmed PASS must be blocked." });
         Assert.Equal(HttpStatusCode.Conflict, blockedPass.StatusCode);
@@ -555,12 +576,7 @@ public sealed class BusinessFlowIntegrationTests
             INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
             VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x{Convert.ToHexString(robotCredential.Hash)}, 0, 1, SYSDATETIMEOFFSET());
             """);
-        var syncSettings = new Dictionary<string, string>
-        {
-            ["FleetSync:RobotContexts:flow_physical:MapKey"] = "flow-area-v1",
-            ["FleetSync:RobotContexts:flow_physical:FrameId"] = "map"
-        };
-        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, syncSettings);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
 
         var adminToken = await Login(host.Client, "flow.admin");
         var technicalId = await CreateAccount(host.Client, adminToken, "flow.technical", "TechnicalStaff");
@@ -586,7 +602,15 @@ public sealed class BusinessFlowIntegrationTests
         var mapId = map.GetProperty("id").GetGuid();
         Assert.Equal("VALID", map.GetProperty("validationStatus").GetString());
         var mapHash = map.GetProperty("packageSha256").GetString();
-
+        using (var robotList = await Get(host.Client, "/api/technical/physical-robots", technicalToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, robotList.StatusCode);
+            var robot = Assert.Single((await Body(robotList)).GetProperty("data").EnumerateArray());
+            using var assignment = await Json(host.Client, HttpMethod.Put,
+                $"/api/technical/physical-robots/{robotId:D}/map-assignment", technicalToken,
+                new { requestId = Guid.NewGuid(), expectedRowVersion = robot.GetProperty("rowVersion").GetString(), mapVersionId = mapId });
+            Assert.Equal(HttpStatusCode.OK, assignment.StatusCode);
+        }
         // This backend integration uses a simulated Fleet Sync client with a valid
         // provisioned credential/context. It is not evidence from a physical robot.
         using var syncRequest = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/v1/sync")

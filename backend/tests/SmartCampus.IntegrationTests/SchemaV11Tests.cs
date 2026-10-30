@@ -203,10 +203,31 @@ public sealed class SchemaV11Tests
         await db.ExecuteAsync($"UPDATE dbo.RosterEmailChangeRequests SET State='REJECTED', ReviewedAt=SYSDATETIMEOFFSET(), ReviewedByUserId='{Id(2)}' WHERE Id='{Id(98)}';");
         Assert.False(await repository.HasPendingDecisionsAsync(Guid.Parse(Id(41)), default));
     }
-
-
     [SchemaV17Fact]
+    public async Task V17ToV18RobotMapAssignmentPatch_IsIdempotentAndPreservesRobotCredentialAndConfirmation()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.7.sql");
+        const string originalHash = "b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43";
+        await db.ExecuteAsync($"""
+            EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{originalHash}';
+            EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.7';
+            INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,
+                FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt)
+            VALUES('{Id(850)}',N'map-context-preservation','PHYSICAL',0x0123456789ABCDEF,0,0,
+                '2026-10-29T10:00:00+00:00',N'old-map-v1',N'map',SYSDATETIMEOFFSET());
+            """);
 
+        await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
+        await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
+
+        Assert.Equal("1.8", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(originalHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("0123456789ABCDEF", await db.ScalarAsync<string>($"SELECT CONVERT(varchar(64),CredentialHash,2) FROM dbo.Robots WHERE Id='{Id(850)}';"));
+        Assert.Equal("old-map-v1|map", await db.ScalarAsync<string>($"SELECT CONCAT(FirstAcceptedMapKey,N'|',FirstAcceptedFrameId) FROM dbo.Robots WHERE Id='{Id(850)}';"));
+        Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.Robots WHERE Id='{Id(850)}' AND AssignedMapVersionId IS NULL AND MapAssignedAt IS NULL AND MapAssignedByUserId IS NULL;"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_MapAssignment_Complete' AND is_disabled=0 AND is_not_trusted=0;"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_AssignedMapVersionId' AND is_disabled=0 AND is_not_trusted=0;"));
+    }
     [SchemaV16Fact]
     public async Task LatestPhysicalRobotDeploymentChecks_AreAcrossMapsAndExcludeEmulators()
     {
@@ -557,7 +578,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.7.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -664,7 +685,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.7.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -700,7 +721,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.7.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -902,7 +923,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.7.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.8.sql")
         {
             var db = new TestDatabase();
             try

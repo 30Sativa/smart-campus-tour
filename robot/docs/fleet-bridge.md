@@ -24,11 +24,12 @@ and the wire contract in
 | connectivity | Not included as a robot claim. The Backend derives `syncFresh` from receipt of accepted reports. The bridge logs connection/retry transitions without logging its bearer token or request headers. |
 
 `mapKey` is deployment configuration supplied by `FLEET_ROBOT_MAP_KEY`; it is
-not inferred from a map filename. `frameId` defaults to the currently used
-global frame `map` and can be set with `FLEET_ROBOT_FRAME_ID`. It must equal
-the configured TF `map_frame`; the node stops at startup if they differ. Both
-`mapKey` and `frameId` must exactly match the allowlisted Backend context for
-the provisioned RobotCode.
+copied from the map version assigned to this robot in the Technical Staff web
+console, not inferred from a map filename. `frameId` defaults to the currently
+used global frame `map` and can be set with `FLEET_ROBOT_FRAME_ID`. It must
+equal the configured TF `map_frame`; the node stops at startup if they differ.
+Both values must exactly match the robot's current database assignment or the
+Backend rejects Fleet Sync reports.
 
 ## Runtime and retry behavior
 
@@ -228,8 +229,8 @@ The private shell environment file contains only configuration such as:
 ```bash
 FLEET_SYNC_URL=https://<approved-host>/api/fleet/v1/sync
 FLEET_ROBOT_CODE=<provisioned-RobotCode>
-FLEET_ROBOT_MAP_KEY=<approved-mapKey>
-FLEET_ROBOT_FRAME_ID=map
+FLEET_ROBOT_MAP_KEY=<MapKey-copied-from-Technical-web>
+FLEET_ROBOT_FRAME_ID=<FrameId-copied-from-Technical-web>
 FLEET_ROBOT_CREDENTIAL_FILE=<absolute-private-file-path>
 ```
 
@@ -240,6 +241,12 @@ sequence numbers and accurate `pose.capturedAt`; a missing/stale TF must appear
 as a null/old pose, and unknown localization/battery/motion readiness must
 remain null. Do not send a navigation goal or velocity command as part of this
 test.
+
+Setup order: register the physical RobotCode, issue its Fleet Sync credential,
+assign the uploaded map version in the Technical Staff web console, copy its
+MapKey/FrameId into the MiniPC environment file, then run the probe. After the
+Backend release that stores assignments in SQL, remove old
+`FleetSync__RobotContexts__*` entries from `/etc/campustour/api.env`.
 
 ## Verification boundaries
 

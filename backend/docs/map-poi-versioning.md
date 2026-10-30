@@ -1,6 +1,6 @@
 # Versioned map and POI workflow (ADR-0021, ADR-0028)
 
-**Status:** The versioned map/POI API remains human-evidence workflow and is not physically commissioned. Physical robot registration/connection confirmation is implemented. ADR-0031 adds versioned POI narration content and Route stop snapshots on Database First schema v1.7. Database schema numbering is separate from SRS/SDD document versions. Apply schema changes only through the reviewed Database First process; `init-db --check-only` never upgrades an existing database.
+**Status:** The versioned map/POI API remains human-evidence workflow and is not physically commissioned. Physical robot registration/connection confirmation and database-owned robot map assignment are implemented. ADR-0031 adds versioned POI narration content and Route stop snapshots on Database First schema v1.7; ADR-0032 adds robot map assignment on schema v1.8. Database schema numbering is separate from SRS/SDD document versions. Apply schema changes only through the reviewed Database First process; `init-db --check-only` never upgrades an existing database.
 
 ## Roles and contract
 
@@ -52,9 +52,7 @@ Map upload, deployment-check, and POI proposal/revision/submission/verification 
 
 Robot registration and map creation/upload may be prepared independently. For
 a new area, use this operator sequence: register the robot and create/upload
-the map; obtain the uploaded version's `mapKey`; have the responsible technical
-or deployment operator provision the key and configure backend `RobotContexts`
-and the MiniPC; send a valid sync; physically inspect the map; record a passing
+the map; obtain the uploaded version's `mapKey`; have the responsible technical or deployment operator issue the key, assign the uploaded map in the Technical web console, and configure the MiniPC bridge with the copied mapKey/frameId; send a valid sync; physically inspect the map; record a passing
 manual check; then Staff may create POIs. This is documentation sequencing, not
 an API dependency between upload and setup. Do not require map PASS before
 configuration or sync. The first new Fleet Sync report accepted with the
@@ -93,7 +91,7 @@ diagrams are not yet redrawn or accepted.
 - Technical Staff upload supports new and existing areas. Existing-area options come from the full `MapAreas` lookup, show name plus key and lock stored values; duplicate new keys direct the operator to existing-area mode. The server allocates the next version under its area transaction lock and returns it in the success response.
 - The map-version table presents area, area key and version separately. A row action can open the existing-area upload mode for that area. File validity remains separate from deployment/localization/display evidence.
 - The deployment-check form uses the TechnicalStaff-only physical-robot database lookup, not online telemetry. Empty and failed lookups are visible; save stays disabled until a robot is selected. The command rechecks robot existence/type and exact checksum before writing. Saving records that an operator performed a check; it does not upload a map or control a robot.
-- Technical Staff can register a physical robot identity with its code and display name. Registration makes it available in the existing lookup/dropdown after query invalidation; it is not evidence of a connection, readiness, map check or permission to run. Technical Staff issues, rotates or revokes its credential in the web robot panel; the one-shot CLI remains an operator fallback that calls the same lifecycle service through its separate SQL role. Per-robot `RobotContexts` remain separately configured outside the web, using the same `RobotCode` as the bridge. A deployment check remains a human-recorded observation and does not require live telemetry or a matching `RobotContexts` entry.
+- Technical Staff can register a physical robot identity with its code and display name. Registration makes it available in the existing lookup/dropdown after query invalidation; it is not evidence of a connection, readiness, map check or permission to run. Technical Staff issues, rotates or revokes its credential in the web robot panel; the one-shot CLI remains an operator fallback that calls the same lifecycle service through its separate SQL role. The per-robot map context is assigned to an uploaded valid map version in the Technical web console. The bridge uses the assigned mapKey/frameId; a deployment check remains a human-recorded observation and does not require live telemetry or map assignment.
 - `PackageSha256` is the server-computed checksum of the uploaded ZIP package. Do not compare it directly with a checksum for only the YAML or PGM member.
 - Staff POI proposal screens disable versions without effective technical PASS. The exact current map version is fetched by ID if outside the version-list page. Existing POIs retain map, pose, revision and result history; an ineligible historical map stays visible in a non-editable pose preview with the backend block reason. It cannot save a revision or submit while ineligible. If eligibility changes during a write, the API's 409 refreshes map metadata while preserving local input and selection. Requests carry stable request IDs and the current revision/rowversion.
 - The Technical UI consumes the verification queue with proposal ID, current revision, rowversion and revision detail, then records per-revision reach/stop/localization/camera observations, evidence or failure reason through the versioned API.

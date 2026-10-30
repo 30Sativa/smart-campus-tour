@@ -55,6 +55,8 @@ public partial class MapVersion
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 
+    public virtual ICollection<Robot> AssignedRobots { get; set; } = new List<Robot>();
+
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();

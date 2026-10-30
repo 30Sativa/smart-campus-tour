@@ -13,8 +13,9 @@ an unassigned database identity; it does not connect to ROS 2, mark the robot
 online/ready, pass a map check, or enable dispatch. Technical Staff issues or
 rotates the Fleet Sync credential from the robot management panel. The existing
 one-shot CLI remains available to an operator with the separate provisioner
-role. Configure the same RobotCode/mapKey/frameId in `RobotContexts` and the
-MiniPC bridge. A first valid, new Fleet Sync report
+role. Technical Staff assigns an uploaded map version to the physical robot in
+the web console; MapKey and FrameId are taken from that version and are never
+typed independently. The MiniPC bridge must use those exact values. A first valid, new Fleet Sync report
 accepted under that credential stores its BE acceptance time and reported
 map/frame as the durable connection confirmation. Pose may be null. This is
 backend-contact evidence only: the timestamp age/skew window does not prove NTP,
@@ -30,22 +31,13 @@ when no first confirmation exists it is `UNCONFIRMED`. A confirmation-write
 error does not fail an already accepted sync, but PASS remains blocked until a
 later new report persists it.
 
-For each provisioned `RobotCode`, configure its approved map/frame context in
-deployment secrets/configuration. Example environment variables for a local
-test robot:
-
-```powershell
-$env:FleetSync__RobotContexts__robot_test_01__MapKey = 'test-campus-map-v1'
-$env:FleetSync__RobotContexts__robot_test_01__FrameId = 'map'
-```
-
-When deploying a new map version to a robot, update that robot's
-`FleetSync:RobotContexts` `MapKey` and `FrameId` to the deployed version and
-restart the backend so it loads the new settings. Then rerun the Fleet Sync
-probe with the same RobotCode, mapKey and frameId before recording the manual
-deployment check. The read-only robot page compares the current backend context
-with the robot's latest recorded deployment check; it does not change check
-eligibility or prove that the robot loaded the map file.
+When deploying a new map version to a robot, assign that version in the
+Technical Staff web console, copy its MapKey and FrameId to the MiniPC, restart
+or reconfigure the bridge as needed, and rerun the Fleet Sync probe. After
+deploying this release, remove any `FleetSync__RobotContexts__*` entries from
+`/etc/campustour/api.env`; they are deprecated and ignored. The robot page
+compares the database assignment with the latest recorded deployment check;
+it does not change check eligibility or prove that the robot loaded the map file.
 
 ## Registration-to-map-check walkthrough
 
@@ -55,10 +47,10 @@ use this order as an operator guide, not an API prerequisite:
 1. Register the PHYSICAL identity with RobotCode and display name, and create
    the map with robot tools. Registration does not require the robot online.
 2. Upload the immutable map version and obtain its `mapKey` and `frameId`.
-3. The responsible technical/deployment operator provisions the current key,
-   configures matching backend `RobotContexts`, and installs the credential and
-   map context in the MiniPC bridge. Provisioning responsibility does not grant
-   Staff Operator SQL access.
+3. The responsible technical/deployment operator issues the credential and
+   assigns the uploaded map version in the web console, then configures the
+   MiniPC with the credential and copied MapKey/FrameId. Provisioning
+   responsibility does not grant Staff Operator SQL access.
 4. Start Fleet Sync. A valid accepted report under the current key records the
    first confirmation for that credential period. The saved map/frame are
    historical context; an accepted timestamp does not prove NTP was checked.
@@ -78,14 +70,15 @@ revocation invalidate the previous credential and clear first accepted
 confirmation atomically. The MiniPC credential file remains an operator-managed
 deployment step; the web app does not install a secret on the robot.
 
-The v1.7 runtime role has column-scoped Robot UPDATE for credential metadata and
-the first-accepted fields, plus append-only credential audit access. It does not
+The v1.8 runtime role has column-scoped Robot UPDATE for credential metadata,
+first-accepted fields and the three map assignment columns, plus append-only
+audit access. It does not
 have whole-table Robot UPDATE/DELETE. The separate `campus_fleet_provisioner`
 role has only the Robot columns required by the shared CLI lifecycle service
 and append-only audit access. Do not add the API runtime login to that role.
-Existing v1.4/v1.5/v1.6 databases must complete the controlled Database First
+Existing v1.4-v1.7 databases must complete the controlled Database First
 upgrade/regrant and pass `init-db.sh --check-only` before promoting an API build
-that requires v1.7. Take the approved backup first; do not run this path casually
+that requires v1.8. Take the approved backup first; do not run this path casually
 against shared/production databases.
 
 Run from `backend/` with a protected provisioning connection string in

@@ -34,8 +34,9 @@ artifacts, not a new research workspace.
 
 Prepare independently: register the physical robot identity and create the map
 with robot tools → upload the immutable map version → obtain its `mapKey` → the
-responsible technical/deployment operator provisions the current credential and
-configures matching backend `RobotContexts` and MiniPC bridge → send a valid
+responsible technical/deployment operator provisions the current credential,
+assigns the map version to the robot in the Technical web console, and configures
+the MiniPC bridge from that assignment → send a valid
 Fleet Sync report → physically check the map and record manual localization /
 display evidence → a new deployment-check PASS is allowed → Staff creates POIs.
 Robot registration and map upload can happen in either order; this guide does

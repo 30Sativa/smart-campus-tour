@@ -2,6 +2,10 @@
 
 **Status: Selected by the task owner for M0/B1 implementation. Group/advisor confirmation of deployment map contexts and operational thresholds remains pending. Physical motion readiness and M2 command semantics are not approved by this ADR.**
 
+**Scoped supersession:** ADR-0032 replaces only the `FleetSync:RobotContexts`
+configuration source for each RobotCode's current map/frame context. Fleet Sync
+transport, credential, telemetry-only and readiness boundaries below remain.
+
 ## Context
 
 ADR-0005 makes the backend authoritative for POI targets, robot assignment, and

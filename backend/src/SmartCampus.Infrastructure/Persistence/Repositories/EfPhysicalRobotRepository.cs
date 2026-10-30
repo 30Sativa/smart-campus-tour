@@ -11,6 +11,8 @@ public sealed class EfPhysicalRobotRepository(ApplicationDbContext dbContext) : 
             .Where(robot => robot.SourceType == "PHYSICAL")
             .Include(robot => robot.CredentialIssuedByUser)
             .Include(robot => robot.CredentialRevokedByUser)
+            .Include(robot => robot.AssignedMapVersion).ThenInclude(map => map!.AreaKeyNavigation)
+            .Include(robot => robot.MapAssignedByUser)
             .OrderBy(robot => robot.DisplayName).ThenBy(robot => robot.RobotCode)
             .ToArrayAsync(cancellationToken);
 
