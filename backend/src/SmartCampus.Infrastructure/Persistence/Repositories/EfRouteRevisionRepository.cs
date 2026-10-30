@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
@@ -123,6 +124,11 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
 
     public Task<User?> FindUserAsync(Guid userId, CancellationToken ct) =>
         db.Users.AsNoTracking().Include(u => u.UserRoles).SingleOrDefaultAsync(u => u.Id == userId, ct);
+
+    public async Task<IReadOnlyList<User>> ListActiveStaffUsersAsync(CancellationToken ct) =>
+        await db.Users.AsNoTracking().Include(u => u.UserRoles)
+            .Where(u => u.IsActive && u.UserRoles.Any(r => r.Role == ApplicationRoles.StaffCode))
+            .OrderBy(u => u.FullName).ThenBy(u => u.Id).Take(200).ToArrayAsync(ct);
 
     public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken ct) =>
         db.Robots.AsNoTracking().SingleOrDefaultAsync(r => r.RobotCode == robotCode && r.SourceType == "PHYSICAL", ct);

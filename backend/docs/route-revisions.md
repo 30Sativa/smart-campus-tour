@@ -12,6 +12,7 @@ Implemented backend slice: Route identity and immutable fixed-route revisions, S
 | `GET /api/routes` | `Staff`, `TechnicalStaff` | Lists paged current VERSIONED revisions, including drafts; supports search, sort and optional exact `mapVersionId` filter |
 | `GET /api/routes/{routeId}/revisions?revisionId={id}&includeHistory=true` | `Staff`, `TechnicalStaff` | Reads exact selected/current revision, POI evidence links and test history |
 | `GET /api/technical/route-verifications/queue` | `TechnicalStaff` | Lists submitted revisions with no whole-route run yet |
+| `GET /api/technical/route-verifications/participants` | `TechnicalStaff` | Lists active single-role Staff accounts (`userId`, `fullName`, `username`, at most 200) that a test run can name as participant |
 | `POST /api/technical/routes/{routeId}/revisions/{revisionId}/test-runs` | `TechnicalStaff` | Appends a manual PASS/FAIL run for a submitted revision |
 
 The old mutable Route write operations and `/api/admin/routes` alias are retired under ADR-0027. Two Staff-only reads (`GET /api/staff/manage/routes` and `GET /api/staff/manage/routes/{id}`) remain for the legacy Tour projection and return only `AuthoringMode=LEGACY`. They cannot author or activate Routes. New revision endpoints use the shared `Routes` identity table but do not serialize or mutate legacy `RouteStops`.

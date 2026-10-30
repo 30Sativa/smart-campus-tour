@@ -309,6 +309,7 @@ public sealed class SchemaV11Tests
             new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -1.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
         Assert.Equal("NOT_TESTED", draft1.VerificationStatus);
+        Assert.Contains(await sender.Send(new ListRouteTestParticipantsQuery()), person => person.UserId == participatingStaffId);
         Assert.Equal(map.PackageSha256, draft1.MapPackageSha256);
         Assert.Equal("Nội dung thuyết minh", Assert.Single(draft1.Stops).NarrationText);
         Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}';"));

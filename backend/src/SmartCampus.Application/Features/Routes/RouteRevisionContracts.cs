@@ -23,6 +23,7 @@ public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVer
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,
     string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt);
+public sealed record RouteTestParticipantView(Guid UserId, string FullName, string Username);
 public sealed record RouteRevisionSummaryView(Guid RevisionId, int RevisionNumber, Guid MapVersionId,
     string MapPackageSha256, string ConfigurationFingerprint, bool IsSubmitted, string VerificationStatus,
     Guid? EffectiveTestRunId, DateTimeOffset CreatedAt);
@@ -66,6 +67,7 @@ public interface IRouteRevisionRepository
     Task<RouteRevisionSubmission?> FindSubmissionRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<RouteTestRun?> FindTestRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<User?> FindUserAsync(Guid userId, CancellationToken ct);
+    Task<IReadOnlyList<User>> ListActiveStaffUsersAsync(CancellationToken ct);
     Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken ct);
     Task LockRobotDeploymentStateAsync(Guid robotId, CancellationToken ct);
     Task<MapDeploymentCheck?> GetLatestDeploymentForRobotAsync(Guid robotId, CancellationToken ct);
