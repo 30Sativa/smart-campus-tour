@@ -140,7 +140,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByLabelText('Chọn khu vực')).toHaveValue('library')
     expect(screen.queryByLabelText('Mã khu vực')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Tên khu vực')).not.toBeInTheDocument()
-    const fileInput = screen.getByLabelText('Package map (.zip)') as HTMLInputElement
+    const fileInput = screen.getByLabelText('Tệp bản đồ (.zip)') as HTMLInputElement
     const file = new File(['zip'], 'new-map.zip', { type: 'application/zip' })
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] })
     fireEvent.change(fileInput)
@@ -188,7 +188,7 @@ describe('Technical Staff API integration', () => {
   it('shows a non-blocking backend map-context warning when configured context differs from the latest deployment', async () => {
     physicalRobots = [makePhysicalRobot({ configuredMapKey: 'library-v1', configuredFrameId: 'map', latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2' })]
     renderPage(<TechnicalRobotsPage />)
-    expect(await screen.findByText(/Cấu hình BE đang dùng map library-v1 · map nhưng robot được triển khai map library-v2 · map_v2 gần nhất/)).toBeInTheDocument()
+    expect(await screen.findByText(/Bản đồ trên robot khác với máy chủ. Cập nhật FleetSync:RobotContexts sang library-v2 · map_v2/)).toBeInTheDocument()
     expect(screen.getAllByText('library-v1 · map')).toHaveLength(2)
     expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
   })
@@ -196,13 +196,13 @@ describe('Technical Staff API integration', () => {
   it('shows the unconfigured-context notice and no mismatch notice when the context matches', async () => {
     physicalRobots = [makePhysicalRobot({ configuredMapKey: null, configuredFrameId: null })]
     const unconfigured = renderPage(<TechnicalRobotsPage />)
-    expect(await screen.findByText('BE chưa cấu hình ngữ cảnh map cho robot này')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa thiết lập')).toBeInTheDocument()
     unconfigured.unmount()
 
     physicalRobots = [makePhysicalRobot()]
     renderPage(<TechnicalRobotsPage />)
     expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
-    expect(screen.queryByText(/Cấu hình BE đang dùng map/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Bản đồ trên robot khác với máy chủ/)).not.toBeInTheDocument()
   })
 
   it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {
@@ -254,7 +254,7 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText('Chưa có robot vật lý được đăng ký.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Đăng ký robot' }))
     const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS2 được thực hiện riêng.')
+    expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS 2 được thực hiện riêng trên robot.')
     const codeInput = dialog.getByLabelText('Mã robot')
     fireEvent.change(codeInput, { target: { value: ' amr-new ' } })
     fireEvent.blur(codeInput)
@@ -272,7 +272,7 @@ describe('Technical Staff API integration', () => {
 
   it('shows an issued robot secret once and clears it when the credential panel closes', async () => {
     renderPage(<TechnicalRobotsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Khóa kết nối' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cấp khóa' }))
     const secret = await screen.findByText('secret-value-once')
     expect(secret).toBeInTheDocument()
@@ -281,7 +281,7 @@ describe('Technical Staff API integration', () => {
     const closeButtons = screen.getAllByRole('button', { name: 'Đóng' })
     fireEvent.click(closeButtons[0])
     expect(screen.queryByText('secret-value-once')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Khóa kết nối' }))
     expect(await screen.findByText(/Đang hoạt động/)).toBeInTheDocument()
     expect(screen.queryByText('secret-value-once')).not.toBeInTheDocument()
   })
@@ -292,7 +292,7 @@ describe('Technical Staff API integration', () => {
     await screen.findByText('AMR 01')
     const robotListRequestCount = () => requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length
     const initialListRequestCount = robotListRequestCount()
-    fireEvent.click(screen.getByRole('button', { name: 'Quản lý khóa' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Khóa kết nối' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Cấp khóa' }))
     await screen.findByText('secret-value-once')
     await waitFor(() => expect(robotListRequestCount()).toBeGreaterThan(initialListRequestCount))
