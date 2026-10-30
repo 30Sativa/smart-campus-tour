@@ -13,7 +13,7 @@ const CONFLICTS: Record<string, string> = {
   TOUR_DURATION_UNAVAILABLE: 'Chưa đổi được lịch hoặc tuyến của Tour đã tạo. Hãy hủy Tour rồi tạo lại.',
   ROBOT_RESERVATION_CONFLICT: 'Robot đã có Tour khác trong khung giờ này. Chọn giờ khác hoặc robot khác.',
   TOUR_LEAD_TIME_TOO_SHORT: 'Khung giờ này quá gần hiện tại, cần tạo trước ít nhất 72 giờ. Chọn khung giờ khác.',
-  TOUR_SLOT_NOT_ALLOWED: 'Giờ bắt đầu không nằm trong các khung giờ được phép. Chọn lại khung giờ.',
+  TOUR_SLOT_NOT_ALLOWED: 'Giờ bắt đầu nằm ngoài giờ cho phép. Chọn lại giờ.',
   ROUTE_TEST_REMEASURE_REQUIRED: 'Cần chạy thử lại tuyến để đo theo định nghĩa mới. Nhờ Kỹ thuật ghi lại kết quả chạy thử.',
   OPERATOR_REQUIRED: 'Người vận hành phải là tài khoản Staff đang hoạt động. Chọn lại người vận hành.',
   ROUTE_TEST_PASS_REQUIRED: 'Phiên bản tuyến này không còn kết quả chạy thử đạt. Tải lại trang rồi chọn tuyến khác.',

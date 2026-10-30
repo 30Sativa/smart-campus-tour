@@ -484,7 +484,21 @@ public sealed class SchemaV11Tests
         var tooClose = TourSlot(1, 9);
         Assert.Equal("LEAD_TIME_TOO_SHORT", (await SlotOf(tooClose)).ReasonCode);
         Assert.Equal("TOUR_LEAD_TIME_TOO_SHORT", await Refused(NewTour(tooClose, dwellOnly.RevisionId)));
-        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", await Refused(NewTour(TourSlot(6, 9).AddMinutes(20), dwellOnly.RevisionId)));
+
+        // ADR-0036: a time typed by Staff goes through the same calculation as a slot, inside the custom hours only.
+        var customDay = DateOnly.FromDateTime(TourSlot(10, 9).ToOffset(TimeSpan.FromHours(7)).DateTime);
+        async Task<TourSlotView> CustomSlot(int hour, int minute) =>
+            (await sender.Send(new GetTourSlotsQuery(dwellOnly.RevisionId, "physical_1", customDay, customDay, new TimeOnly(hour, minute)))).Days.Single().Slots.Single(slot => slot.Time == $"{hour:D2}:{minute:D2}");
+        var offSlot = await CustomSlot(11, 20);
+        Assert.True(offSlot.Available);
+        Assert.Equal(offSlot.StartsAt.AddMinutes(-15), offSlot.ReservationStartsAt);
+        Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(offSlot.StartsAt, dwellOnly.RevisionId)))).Id);
+        Assert.Equal("RESERVATION_OVERLAP", (await CustomSlot(11, 25)).ReasonCode);
+        Assert.Equal("ROBOT_RESERVATION_CONFLICT", await Refused(NewTour(offSlot.StartsAt.AddMinutes(5), dwellOnly.RevisionId)));
+        var tooEarly = await CustomSlot(7, 30);
+        Assert.Equal("OUTSIDE_START_HOURS", tooEarly.ReasonCode);
+        Assert.Equal("Ngoài giờ cho phép, chọn từ 08:00 đến 17:00", tooEarly.Reason);
+        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", await Refused(NewTour(tooEarly.StartsAt, dwellOnly.RevisionId)));
 
         // Create decides on the server clock at the moment of saving: 71h59m is refused, 72h is accepted.
         var boundary = TourSlot(9, 9);
@@ -1085,7 +1099,7 @@ public sealed class SchemaV11Tests
             services.AddScoped<IInvitationRepository, EfInvitationRepository>();
             services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
             services.AddSingleton<TimeProvider>(Clock);
-            services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"]));
+            services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
             return services.BuildServiceProvider(validateScopes: true);
         }
 

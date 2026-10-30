@@ -26,9 +26,10 @@ export function useTourCalendar(from: string, to: string) {
   return useTours({ from: dayStart(from), to: dayEnd(to), sort: 'scheduledStartAt', page: 1, size: CALENDAR_SIZE })
 }
 /** Availability of one campus date. Refreshed when a create is refused, because a slot was taken meanwhile. */
-export function useTourSlots(routeRevisionId: string, robotCode: string, date: string) {
-  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date),
-    enabled: Boolean(routeRevisionId && robotCode && date), retry: false })
+/** With `customTime`, the day also judges that one start, so a typed time and a slot get the same answer. */
+export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, customTime?: string) {
+  return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date, customTime ?? ''], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date, customTime),
+    enabled: Boolean(routeRevisionId && robotCode && date && customTime !== ''), retry: false })
 }
 export function useTour(id: string | undefined) {
   return useQuery({ queryKey: tourKeys.detail(id ?? ''), queryFn: () => toursApi.get(id!), enabled: Boolean(id), refetchOnWindowFocus: false })

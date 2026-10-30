@@ -7,19 +7,23 @@ namespace SmartCampus.Application.Features.Tours;
 public sealed class TourScheduleSettings
 {
     public IReadOnlyList<TimeOnly> StartSlots { get; }
+    public TimeOnly CustomStartEarliest { get; }
+    public TimeOnly CustomStartLatest { get; }
 
-    public TourScheduleSettings(IEnumerable<string>? startSlots)
+    public TourScheduleSettings(IEnumerable<string>? startSlots, string? customStartEarliest, string? customStartLatest)
     {
         var slots = new SortedSet<TimeOnly>();
-        foreach (var value in startSlots ?? [])
-        {
-            if (!TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var slot))
-                throw new InvalidOperationException($"Tours:StartSlots has an invalid time '{value}'; use HH:mm.");
-            slots.Add(slot);
-        }
+        foreach (var value in startSlots ?? []) slots.Add(Parse("StartSlots", value));
         if (slots.Count == 0) throw new InvalidOperationException("Tours:StartSlots must list at least one start time.");
         StartSlots = [.. slots];
+        CustomStartEarliest = Parse("CustomStartEarliest", customStartEarliest);
+        CustomStartLatest = Parse("CustomStartLatest", customStartLatest);
+        if (CustomStartEarliest >= CustomStartLatest) throw new InvalidOperationException("Tours:CustomStartEarliest must be before Tours:CustomStartLatest.");
     }
+
+    private static TimeOnly Parse(string key, string? value) =>
+        TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time
+            : throw new InvalidOperationException($"Tours:{key} has an invalid time '{value}'; use HH:mm.");
 }
 
 public sealed record TourReservationPlan(int MeasuredDurationSeconds, int ExpectedDurationSeconds);
@@ -31,6 +35,7 @@ public sealed record TourSlotBlock(string Code, string Message);
 /// </summary>
 public static class TourSchedule
 {
+    public const string OutsideStartHours = "OUTSIDE_START_HOURS";
     public const string LeadTimeTooShort = "LEAD_TIME_TOO_SHORT";
     public const string ReservationOverlap = "RESERVATION_OVERLAP";
     public const string RouteTooLongForGap = "ROUTE_TOO_LONG_FOR_GAP";
@@ -49,6 +54,15 @@ public static class TourSchedule
     {
         var local = start.ToOffset(CampusOffset);
         return settings.StartSlots.Any(slot => SlotStart(DateOnly.FromDateTime(local.DateTime), slot) == start);
+    }
+
+    /// <summary>Null for a configured slot or a whole minute inside the custom hours (ADR-0036).</summary>
+    public static TourSlotBlock? StartRule(TourScheduleSettings settings, DateTimeOffset start)
+    {
+        if (IsConfiguredSlot(settings, start)) return null;
+        var time = TimeOnly.FromDateTime(start.ToOffset(CampusOffset).DateTime);
+        return time.Ticks % TimeSpan.TicksPerMinute == 0 && time >= settings.CustomStartEarliest && time <= settings.CustomStartLatest ? null
+            : new(OutsideStartHours, $"Ngoài giờ cho phép, chọn từ {settings.CustomStartEarliest:HH\\:mm} đến {settings.CustomStartLatest:HH\\:mm}");
     }
 
     /// <summary>Added dwell lengthens the measured run; shortened dwell never shortens it.</summary>

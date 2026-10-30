@@ -16,8 +16,8 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId, "TOUR_CREATED", null, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
         TourPreparation.RequireFuture(input.ScheduledStartAt, clock.GetUtcNow());
-        if (!TourSchedule.IsConfiguredSlot(settings, input.ScheduledStartAt))
-            throw new ConflictException("Giờ bắt đầu không nằm trong các khung giờ được phép.", "TOUR_SLOT_NOT_ALLOWED");
+        if (TourSchedule.StartRule(settings, input.ScheduledStartAt) is { } outside)
+            throw new ConflictException(outside.Message, "TOUR_SLOT_NOT_ALLOWED");
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockMap: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var robot = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)

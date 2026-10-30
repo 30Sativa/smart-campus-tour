@@ -2,6 +2,7 @@
 
 - **Status:** Accepted by the repository owner, 2026-10-30. Physical behavior remains unverified.
 - **Amends:** ADR-0034 decision 1 (reservation length) and its known limitation about dwell-only revisions. Every other ADR-0034 decision stays in force.
+- **Amended by:** ADR-0036 (decision 2: a typed start inside configured hours).
 - **Related:** ADR-0023 (versioned routes), ADR-0024, ADR-0026 (registration).
 
 ## Context

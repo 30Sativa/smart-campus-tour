@@ -86,7 +86,9 @@ public sealed class AccountConcurrencyTests
         {
             ["ConnectionStrings:DefaultConnection"] = connection,
             ["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey,
-            ["Tours:StartSlots:0"] = "09:00"
+            ["Tours:StartSlots:0"] = "09:00",
+            ["Tours:CustomStartEarliest"] = "08:00",
+            ["Tours:CustomStartLatest"] = "17:00"
         }).Build();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddInfrastructure(configuration);
