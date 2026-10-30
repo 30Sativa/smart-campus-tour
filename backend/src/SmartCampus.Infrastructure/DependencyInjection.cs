@@ -17,6 +17,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Infrastructure;
 
@@ -60,6 +61,8 @@ public static class DependencyInjection
         services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
+        services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>()));
+
         services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();

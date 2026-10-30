@@ -618,7 +618,7 @@ describe('Technical Staff API integration', () => {
     await screen.findByRole('option', { name: 'Lan Staff · lan' })
     fireEvent.change(screen.getByLabelText('Robot vật lý'), { target: { value: 'amr-01' } })
     fireEvent.change(screen.getByLabelText('Staff đi cùng'), { target: { value: 'staff-1' } })
-    fireEvent.change(screen.getByLabelText('Thời gian đo được (giây)'), { target: { value: '420' } })
+    fireEvent.change(screen.getByLabelText('Tổng thời gian chạy toàn tuyến (giây)'), { target: { value: '420' } })
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã chạy thử.' } })
   }
   const testRunCalls = () => requests.filter(item => item.url.pathname.endsWith('/test-runs'))

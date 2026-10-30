@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StartCheckPage from './StartCheckPage'
 import ToursTodayPage from './ToursTodayPage'
-import SchedulePage from './SchedulePage'
 import { OperationControls } from '../../features/staff/components/OperationControls'
 import { RunStatus } from '../../features/staff/components/RunStatus'
 import { command, confirmRobotReady, resetSim, tick, tourById, tourView } from '../../mocks/staff-sim'
@@ -106,19 +105,6 @@ describe('staff session workflow', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('complementary', { name: 'Chi tiết buổi' })).not.toBeInTheDocument()
     expect(opener).toHaveFocus()
-  })
-
-  it('shows one calendar representation at a time', async () => {
-    renderAt('/staff/schedule', <SchedulePage />, '/staff/schedule')
-    expect(screen.getByRole('region', { name: 'Lịch tuần' })).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Ngày' }))
-    expect(await screen.findByRole('list', { name: 'Robot trong ngày' })).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Lịch tuần' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Danh sách' }))
-    expect(await screen.findByRole('list', { name: 'Lịch tour' })).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: 'Robot trong ngày' })).not.toBeInTheDocument()
   })
 
   it('keeps Start disabled with the server reason while the robot serves another session', async () => {

@@ -18,7 +18,7 @@ public interface ITourManagementRepository
     Task<IReadOnlyList<GroupRegistration>> LoadCancellationRegistrationsAsync(Guid id, CancellationToken ct);
     /// <summary>Serializes reservation changes for one robot; call after the Tour root lock.</summary>
     Task LockRobotReservationsAsync(Guid robotId, CancellationToken ct);
-    Task<bool> HasActiveReservationOverlapAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct);
+    Task<IReadOnlyList<TourReservationHold>> GetActiveReservationsAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct);
     /// <summary>Tracked; caller must hold the Tour root lock.</summary>
     Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct);
     Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct);

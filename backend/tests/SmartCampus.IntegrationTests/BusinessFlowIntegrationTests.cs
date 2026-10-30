@@ -748,7 +748,16 @@ public sealed class BusinessFlowIntegrationTests
         var priorRevision = Assert.Single(history.EnumerateArray(), item => item.GetProperty("revisionId").GetGuid() == routeRevisionId);
         Assert.Equal("PASS", priorRevision.GetProperty("verificationStatus").GetString());
 
-        // ADR-0034: the tested revision can be scheduled, and the reservation follows the PASS run.
+        // ADR-0034/0035: the tested revision can be scheduled on a free slot, and the reservation follows the PASS run.
+        var slotDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(5);
+        var slotPath = $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}";
+        using var slots = await Get(host.Client, slotPath, staffToken);
+        Assert.Equal(HttpStatusCode.OK, slots.StatusCode);
+        var firstSlot = (await Body(slots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[0];
+        Assert.Equal("09:00", firstSlot.GetProperty("time").GetString());
+        Assert.True(firstSlot.GetProperty("available").GetBoolean());
+        using var slotsTooWide = await Get(host.Client, $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(31):yyyy-MM-dd}", staffToken);
+        Assert.Equal(HttpStatusCode.BadRequest, slotsTooWide.StatusCode);
         using var operators = await Get(host.Client, "/api/staff/manage/tours/operators", staffToken);
         Assert.Equal(HttpStatusCode.OK, operators.StatusCode);
         var operatorId = (await Body(operators)).GetProperty("data")[0].GetProperty("userId").GetGuid();
@@ -756,7 +765,7 @@ public sealed class BusinessFlowIntegrationTests
             new { requestId = Guid.NewGuid(), configuration = new
                 { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,
                     robotCode = "flow_physical", operatorUserId = operatorId,
-                    scheduledStartAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds()),
+                    scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset(),
                     fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.OK, schedule.StatusCode);
         var tourId = (await Body(schedule)).GetProperty("data").GetProperty("id").GetGuid();

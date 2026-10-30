@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.9 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.10 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -10,6 +10,7 @@ DECLARE @v14 nvarchar(64) = N'$(SchemaHashV14)';
 DECLARE @v16 nvarchar(64) = N'$(SchemaHashV16)';
 DECLARE @v17 nvarchar(64) = N'$(SchemaHashV17)';
 DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
+DECLARE @v19 nvarchar(64) = N'$(SchemaHashV19)';
 DECLARE @schemaVersion nvarchar(32) = (
     SELECT CONVERT(nvarchar(32), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourSchemaVersion');
@@ -49,6 +50,7 @@ DECLARE @v16ObjectsPresent bit = CASE WHEN @v15ObjectsPresent = 1 AND
     THEN 1 ELSE 0 END;
 DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v18,
+    @v19,
     @v17,
     @v16,
     @v14,
@@ -88,10 +90,21 @@ DECLARE @v19ObjectsPresent bit = CASE WHEN @v18ObjectsPresent = 1 AND
     EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourRobotReservations') AND name=N'UX_TourRobotReservations_ActiveTour' AND is_unique=1)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.9' AND @v19ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+DECLARE @v110ObjectsPresent bit = CASE WHEN @v19ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.RouteTestRuns', N'MeasurementBasis') IS NOT NULL AND
+    COL_LENGTH(N'dbo.TourRobotReservations', N'ExpectedDurationSeconds') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RouteTestRuns') AND name=N'CK_RouteTestRuns_MeasurementBasis' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.TourRobotReservations') AND name=N'CK_TourRobotReservations_ExpectedDuration' AND is_disabled=0 AND is_not_trusted=0)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.10' AND @v110ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.10'
+    THROW 51001, 'Database schema version marker is 1.10 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.9' AND @v19ObjectsPresent = 1 AND (@hash = @v19 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.9'
-    THROW 51001, 'Database schema version marker is 1.9 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+    THROW 51006, 'Database schema version marker is 1.9 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.8' AND @v18ObjectsPresent = 1 AND (@hash = @v18 OR @knownPriorHash = 1)
     SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.8'

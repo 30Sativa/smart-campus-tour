@@ -39,7 +39,7 @@ public static class RegistrationCutoff
 {
     public static void EnsureNewRowsAllowed(SmartCampus.Domain.Entities.Tour tour, DateTimeOffset now)
     {
-        if (now >= tour.ScheduledStartAt.AddHours(-48))
+        if (now >= tour.ScheduledStartAt - Tours.TourSchedule.RegistrationClose)
             throw new SmartCampus.Application.Common.Exceptions.ConflictException(
                 "Không thể tạo đăng ký hoặc thêm điểm xem trong 48 giờ trước giờ Tour.", "REGISTRATION_CUTOFF");
     }

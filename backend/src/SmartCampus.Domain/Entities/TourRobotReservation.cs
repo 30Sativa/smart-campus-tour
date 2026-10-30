@@ -15,6 +15,8 @@ public partial class TourRobotReservation
 
     public int MeasuredDurationSeconds { get; set; }
 
+    public int? ExpectedDurationSeconds { get; set; }
+
     public DateTimeOffset StartsAt { get; set; }
 
     public DateTimeOffset EndsAt { get; set; }

@@ -22,7 +22,9 @@ public sealed record RouteRevisionStopView(Guid PoiRevisionId, Guid SourcePoiVer
 public sealed record RouteTestRunView(Guid Id, Guid RouteRevisionId, Guid MapVersionId, string MapPackageSha256,
     string RobotCode, Guid CheckedByUserId, Guid ParticipatingStaffUserId, string ResultCode,
     bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed, int MeasuredDurationSeconds,
-    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt);
+    string? FailureReason, string EvidenceNote, DateTimeOffset CheckedAt, string? MeasurementBasis);
+/// <summary>What a route test measured. A run without a basis predates ADR-0035 and cannot size a reservation.</summary>
+public static class RouteMeasurementBasis { public const string TotalWithDwell = "TOTAL_WITH_DWELL"; }
 public sealed record RouteTestParticipantView(Guid UserId, string FullName, string Username);
 public sealed record RouteRevisionSummaryView(Guid RevisionId, int RevisionNumber, Guid MapVersionId,
     string MapPackageSha256, string ConfigurationFingerprint, bool IsSubmitted, string VerificationStatus,

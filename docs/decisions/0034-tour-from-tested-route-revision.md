@@ -2,6 +2,7 @@
 
 - **Status:** Accepted by the repository owner, 2026-10-30, as an interim decision until an approved content/audio duration source exists. Physical behavior remains unverified.
 - **Partly supersedes:** ADR-0024's block on creating a new Tour and its rule that `RouteTestRun.MeasuredDurationSeconds` must not size a reservation. ADR-0024's READY block, and every other boundary it records, stays in force.
+- **Amended by:** ADR-0035 (slots, lead time, what a test measures, reservation length).
 - **Related:** ADR-0023 (versioned routes), ADR-0028 and ADR-0033 (map evidence), ADR-0018 (legacy Tour CRUD).
 
 ## Context

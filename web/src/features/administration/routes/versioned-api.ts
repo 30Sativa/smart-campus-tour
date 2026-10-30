@@ -5,6 +5,8 @@ export type RouteTestRun = {
   id: string; routeRevisionId: string; robotCode: string; checkedByUserId: string; participatingStaffUserId: string
   resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
   measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string; checkedAt: string
+  /** Null for a run from before the measurement definition; it cannot size a reservation. */
+  measurementBasis: string | null
 }
 export type VersionedRoute = {
   routeId: string; revisionId: string; revisionNumber: number; name: string; description: string | null

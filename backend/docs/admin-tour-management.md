@@ -5,7 +5,9 @@ Implemented scope: legacy pre-execution behavior in
 Every endpoint below currently requires the `Staff` JWT role (product label:
 Tour Staff); the former `/api/admin/tours` alias is retired under ADR-0027. New Tours are
 created from one exact tested RouteRevision with a robot reservation and an
-assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-route-revision.md).
+assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-route-revision.md). Start slots, the 72-hour
+lead time and the reservation formula are in [ADR-0035](../../docs/decisions/0035-tour-slots-lead-time-and-measured-reservation.md);
+slots are configured in `Tours:StartSlots`.
 Existing legacy Tours keep their legacy Route. READY snapshots stay blocked by
 [ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
 

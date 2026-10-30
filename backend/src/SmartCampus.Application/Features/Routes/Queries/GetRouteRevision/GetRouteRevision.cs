@@ -56,7 +56,7 @@ internal static class RouteRevisionMapper
                 Convert.ToHexString(r.MapPackageSha256).ToLowerInvariant(),
                 await repo.GetRobotCodeAsync(r.RobotId, ct) ?? "", r.CheckedByUserId,
                 r.ParticipatingStaffUserId, r.ResultCode, r.AllStopsReached, r.SafelyStopped, r.LocalizationPassed,
-                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt));
+                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis));
         var revisionRecords = await repo.GetRevisionsAsync(route.Id, submittedOnly: false, ct);
         var summaries = new List<RouteRevisionSummaryView>();
         foreach (var historical in revisionRecords.Where(r => history || r.Id == revision.Id).OrderBy(r => r.RevisionNumber))

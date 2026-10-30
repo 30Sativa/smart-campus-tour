@@ -794,6 +794,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
             entity.Property(e => e.FailureReason).HasMaxLength(1000);
+            entity.Property(e => e.MeasurementBasis).HasMaxLength(32);
             entity.Property(e => e.MapPackageSha256)
                 .HasMaxLength(32)
                 .IsFixedLength();

@@ -223,7 +223,7 @@ public sealed class DeploymentDatabaseTests
         route = await Send(new GetRouteQuery(routeId));
         await Send(new SetRouteAvailabilityCommand(routeId, actor.Id, route.Version, true));
         route = await Send(new GetRouteQuery(routeId));
-        var schedule = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds());
+        var schedule = TourSchedule.SlotStart(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10), new TimeOnly(9, 0));
         await Assert.ThrowsAsync<NotFoundException>(() => Send(new CreateTourCommand(actor.Id,
             new CreateTourRequest(Guid.NewGuid(), new CreateTourInput("Runtime Tour", null, Guid.NewGuid(), "no-such-robot", actor.Id, schedule, null)))));
         var unused = (await Send(new CreateRouteCommand(actor.Id, input))).Id;
@@ -306,9 +306,15 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV19SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV110SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.9.sql", "1.9"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.10.sql", "1.10"));
+    }
+
+    [SchemaV11Fact]
+    public async Task Bootstrap_VerifiedV19SnapshotAndMarkerRequiresUpgrade()
+    {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.9.sql", "1.9"));
     }
 
     [SchemaV11Fact]
@@ -318,7 +324,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.9 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.10 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -330,9 +336,10 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV17)", await SnapshotHashAsync("snapshot-v1.7.sql"))
             .Replace("$(SchemaHashV16)", await SnapshotHashAsync("snapshot-v1.6.sql"))
             .Replace("$(SchemaHashV18)", await SnapshotHashAsync("snapshot-v1.8.sql"))
+            .Replace("$(SchemaHashV19)", await SnapshotHashAsync("snapshot-v1.9.sql"))
             .Replace("$(SchemaHashV15)", await SnapshotHashAsync("snapshot-v1.5.sql"))
             .Replace("$(SchemaHashV14)", await SnapshotHashAsync("snapshot-v1.4.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.9.sql"));
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.10.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }

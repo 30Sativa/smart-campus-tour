@@ -106,6 +106,10 @@ Each stop includes the exact POI revision, map and source PASS evidence IDs, plu
 
 ## Not implemented in this API slice
 
+## Measuring a whole-route test
+
+`MeasuredDurationSeconds` is the total time for the whole route from departure to finish, including dwell at every stop (ADR-0035). New runs record `MeasurementBasis = TOTAL_WITH_DWELL`. A run from before that definition has NULL and cannot size a Tour reservation, so Tour create and the slot list report `ROUTE_TEST_REMEASURE_REQUIRED` until the route is run again. A revision that only raises dwell reuses the effective PASS, and the increase per stop is added to the reservation. Lower dwell is never subtracted.
+
 No branch variants or Viewer/Representative branch requests, Tour scheduling/reservation/READY/Start/End Early, command transport, map upload/deployment, project POI YAML import, approved narration/audio workflow, media, frontend, or autonomous physical verification. Branch cutoff, YAML/frame mapping and M2 transport remain pending decisions. A route `PASS` is manual evidence for the stored navigation fingerprint, never Tour readiness.
 
 ## Diagram handoff
