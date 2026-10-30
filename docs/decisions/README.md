@@ -72,6 +72,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0032](0032-robot-map-context-assignment.md) | Store physical robot Fleet Sync map context as a Technical Staff-managed MapVersion assignment | owner-authorized; v1.8 schema/API/UI rollout required; no hardware acceptance claimed |
 
 | [0033](0033-map-technical-check-before-route-authoring.md) | Require current ADR-0028 map evidence before saving or submitting a versioned Route revision | owner-authorized; no schema change; physical behavior unverified |
+| [0034](0034-tour-from-tested-route-revision.md) | Schedule new Tours from an exact tested Route revision; size the robot reservation from the effective PASS run (interim) | owner-authorized; partly supersedes ADR-0024; v1.9 schema |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

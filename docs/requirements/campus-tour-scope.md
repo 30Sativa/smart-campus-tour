@@ -123,6 +123,9 @@ Reserve the one robot atomically for 15 minutes before + the longest allowed
 tested path duration + 15 minutes after. Overlaps are rejected; route/time
 changes rerun reservation and exact-version checks.
 Assign a Staff Operator explicitly. READY is not physical safety proof.
+Until an approved content/audio duration exists, the tested path duration is the
+effective PASS run of the exact route revision (ADR-0034, interim). Time, route
+and robot changes on a created Tour mean cancelling and recreating it.
 Start is requested while READY at/after published time, validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the
 first leg. Deduplicate repeated Start/commands and record actor/time/reason.

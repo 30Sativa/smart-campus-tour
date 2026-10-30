@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { routeKeys } from '../routes/hooks'
+import { versionedRoutesApi } from '../routes/versioned-api'
 import { toursApi } from './api/tours'
-import type { TourInput, TourListQuery } from './types'
+import type { CreateTourInput, TourInput, TourListQuery } from './types'
 
 // Separate from the labelled Tour demo's ['admin', 'tours'] cache; never used as its fallback.
 export const tourKeys = {
@@ -20,6 +21,14 @@ export function useTours(query: TourListQuery) {
 export function useTour(id: string | undefined) {
   return useQuery({ queryKey: tourKeys.detail(id ?? ''), queryFn: () => toursApi.get(id!), enabled: Boolean(id), refetchOnWindowFocus: false })
 }
+export function useTourOperators() {
+  return useQuery({ queryKey: [...tourKeys.all, 'operators'], queryFn: toursApi.operators })
+}
+/** Revisions a new Tour can use; the server rechecks this when the Tour is created. */
+export function useTestedRoutes() {
+  return useQuery({ queryKey: [...tourKeys.all, 'tested-routes'], queryFn: () => versionedRoutesApi.list(),
+    select: page => page.data.filter(route => route.isSubmitted && route.verificationStatus === 'PASS') })
+}
 function useInvalidateTours() {
   const client = useQueryClient()
   // A Tour reference locks its Route, so Route usage changes too.
@@ -27,8 +36,8 @@ function useInvalidateTours() {
 }
 export function useCreateTour() {
   const onSuccess = useInvalidateTours()
-  return useMutation({ mutationFn: ({ requestId, routeVersion, input }: { requestId: string; routeVersion: string; input: TourInput }) =>
-    toursApi.create(requestId, routeVersion, input), onSuccess })
+  return useMutation({ mutationFn: ({ requestId, input }: { requestId: string; input: CreateTourInput }) =>
+    toursApi.create(requestId, input), onSuccess })
 }
 export function useUpdateTour() {
   const onSuccess = useInvalidateTours()

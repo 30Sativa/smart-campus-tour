@@ -1,6 +1,6 @@
 # ADR-0024: Fail-closed Tour scheduling and readiness boundary
 
-- Status: owner-authorized implementation boundary for the Tour scheduling follow-up, 2026-10-28
+- Status: owner-authorized implementation boundary for the Tour scheduling follow-up, 2026-10-28. Its block on creating a new Tour and on sizing a reservation from a measured run is superseded by ADR-0034; the READY block and other boundaries stay in force.
 - Authority: the requested SRS v0.2 scheduling/READY scope and the explicit instruction not to persist an unverifiable schedule or reservation
 - Related: ADR-0018 (legacy Tour CRUD), ADR-0020 (current business baseline), ADR-0023 (versioned Route and manual verification)
 

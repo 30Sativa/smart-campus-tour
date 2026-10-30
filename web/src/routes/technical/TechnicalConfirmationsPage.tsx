@@ -148,7 +148,7 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>
-          <select id="route-test-staff" className={`${inputClass} mt-1`} required value={staffUserId} disabled={participants.isPending || participants.isError || !participants.data?.length} onChange={event => { setStaffUserId(event.target.value); changed() }}><option value="">— Chọn Staff —</option>{participants.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}</select>
+          <select title="" id="route-test-staff" className={`${inputClass} mt-1`} required value={staffUserId} disabled={participants.isPending || participants.isError || !participants.data?.length} onChange={event => { setStaffUserId(event.target.value); changed() }}><option value="">— Chọn Staff —</option>{participants.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}</select>
           {participants.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách Staff…</p>}
           {participants.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(participants.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void participants.refetch()}>Tải lại danh sách Staff</button></div>}
           {participants.data?.length === 0 && <p role="status" className="mt-1 text-sm text-[#b23e18]">Chưa có tài khoản Staff đang hoạt động. Cần một Staff đi cùng để ghi kết quả.</p>}

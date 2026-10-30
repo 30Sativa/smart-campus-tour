@@ -81,7 +81,6 @@ Wave B has no versioned scheduling or READY writer. Wave C exposes an
 does not claim lifecycle integration. SRS does not define total seat capacity;
 no global capacity is invented. Staff's two-working-day review target is
 observable from timestamps, but automatic due dates/escalation require an
-approved institutional workday/holiday calendar. Tour creation and schedule or
-route changes remain blocked with `TOUR_DURATION_UNAVAILABLE` until an
-approved configured-duration source exists; manual route-test duration is not
-used for scheduling.
+approved institutional workday/holiday calendar. Tours are created from a tested Route
+revision (ADR-0034); schedule or route changes remain blocked with
+`TOUR_DURATION_UNAVAILABLE`.

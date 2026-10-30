@@ -16,7 +16,14 @@ public interface ITourManagementRepository
     Task<TourUsage> GetUsageAsync(Guid id, CancellationToken ct);
     /// <summary>Tracked registrations without roster history; caller must hold the shared Tour root lock.</summary>
     Task<IReadOnlyList<GroupRegistration>> LoadCancellationRegistrationsAsync(Guid id, CancellationToken ct);
+    /// <summary>Serializes reservation changes for one robot; call after the Tour root lock.</summary>
+    Task LockRobotReservationsAsync(Guid robotId, CancellationToken ct);
+    Task<bool> HasActiveReservationOverlapAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct);
+    /// <summary>Tracked; caller must hold the Tour root lock.</summary>
+    Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct);
+    Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct);
     void Add(Tour tour);
+    void Add(TourRobotReservation reservation);
     void AddAudit(AuditLog audit);
     void AddRouteChangeEvent(Tour tour, Guid previousRouteId, Guid actor, DateTimeOffset now);
 }

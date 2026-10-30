@@ -41,7 +41,7 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. Tour reads still use the legacy Staff projection; scheduling/READY is blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator (ADR-0034); legacy Tours keep their projection, and READY stays blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
     existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
@@ -376,7 +376,8 @@ backend binding; never use them as fallback after a failed HTTP request.
   lists while saving hold the row itself in state, not a lookup by id, or the save
   unmounts them.
 - **One select.** Use `<select>` with `inputClass`; the open list is styled once in
-  `index.css` and falls back to the native list where unsupported.
+  `index.css` and falls back to the native list where unsupported. A required
+  select sets `title=""`, otherwise Chrome hovers its English validation tooltip.
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for
   API access, state ownership, component responsibility, effects, error

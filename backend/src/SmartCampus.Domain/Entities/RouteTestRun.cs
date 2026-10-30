@@ -51,5 +51,7 @@ public partial class RouteTestRun
 
     public virtual Robot Robot { get; set; } = null!;
 
+    public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
+
     public virtual RouteRevision RouteRevision { get; set; } = null!;
 }

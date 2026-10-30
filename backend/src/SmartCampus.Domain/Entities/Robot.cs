@@ -71,5 +71,7 @@ public partial class Robot
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
 
+    public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
+
     public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();
 }

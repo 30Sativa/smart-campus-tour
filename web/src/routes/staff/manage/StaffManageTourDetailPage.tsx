@@ -24,7 +24,7 @@ export default function StaffManageTourDetailPage() {
   const data = detail.data
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
-  const { tour, route, permissions } = data
+  const { tour, route, routeRevision, operator, reservation, permissions } = data
 
   const confirmCancel = async (reason: string) => {
     try {
@@ -49,6 +49,9 @@ export default function StaffManageTourDetailPage() {
         <Item label="Trạng thái" value={TOUR_STATE_LABEL[tour.state]} />
         <Item label="Đăng ký / lời mời" value={`${tour.registrationCount} đoàn · ${tour.invitationCount} lời mời`} />
         <Item label="Tạo lúc" value={formatStamp(tour.createdAt)} />
+        {reservation && <Item label="Robot" value={reservation.robotCode} />}
+        {reservation && <Item label={reservation.releasedAt ? 'Đã trả chỗ robot' : 'Giữ chỗ robot'} value={`${formatStamp(reservation.startsAt)} tới ${formatStamp(reservation.endsAt)}`} />}
+        {operator && <Item label="Người vận hành" value={operator.fullName} />}
         {data.fallbackVideoUrl && <Item label="Video dự phòng" value={data.fallbackVideoUrl} />}
         {data.startedAt && <Item label="Bắt đầu" value={formatStamp(data.startedAt)} />}
         {data.endedAt && <Item label="Kết thúc" value={formatStamp(data.endedAt)} />}
@@ -56,7 +59,19 @@ export default function StaffManageTourDetailPage() {
       </dl>
     </section>
 
-    <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
+    {routeRevision && <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[15px] font-semibold">Tuyến: {routeRevision.name}</h2>
+        <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>
+      </div>
+      <p className="mt-1 text-sm text-[#64748b]">{routeRevision.mapKey} · phiên bản {routeRevision.revisionNumber} · {routeRevision.stops.length} điểm dừng</p>
+      <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
+        <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
+        <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s</span>
+      </li>)}</ol>
+    </section>}
+
+    {route && <section className={`${panelClass} mt-3 p-4`} aria-label="Tuyến của Tour">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[15px] font-semibold">Tuyến: {route.name}</h2>
         <Link to={`/staff/manage/routes/${route.id}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>
@@ -66,7 +81,7 @@ export default function StaffManageTourDetailPage() {
         <span className="font-medium">{stop.stopOrder}. {stop.poiName}</span>
         <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s · nhìn {stop.headSteps.map(h => `${HEAD_LABEL[h.preset]} ${h.holdSeconds}s`).join(', ')}</span>
       </li>)}</ol>
-    </section>
+    </section>}
 
     <ConfirmationDialog open={confirming} title="Hủy Tour?" tone="danger" confirmLabel="Hủy Tour" requireReason reasonLabel="Lý do hủy"
       description="Tour chuyển sang Đã hủy, lời mời của các đoàn bị thu hồi. Thao tác không hoàn tác được."

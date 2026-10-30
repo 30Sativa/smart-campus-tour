@@ -13,6 +13,9 @@ using SmartCampus.Application;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours.Commands.CancelTour;
+using SmartCampus.Application.Features.Tours.Commands.CreateTour;
+using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
@@ -408,6 +411,32 @@ public sealed class SchemaV11Tests
         Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", passed.DurationStatus);
         Assert.Equal(30, passed.DwellDurationSeconds);
 
+        var tourActor = Guid.Parse(Id(2));
+        var tourStart = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds());
+        CreateTourRequest NewTour(DateTimeOffset start, Guid? revision = null, Guid? operatorUser = null) => new(Guid.NewGuid(),
+            new("Pilot Tour", null, revision ?? draft2.RevisionId, "physical_1", operatorUser ?? participatingStaffId, start, null));
+        Assert.Equal("ROUTE_TEST_PASS_REQUIRED", (await Assert.ThrowsAsync<ConflictException>(() =>
+            sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart, draft1.RevisionId))))).Code);
+        Assert.Equal("OPERATOR_REQUIRED", (await Assert.ThrowsAsync<ConflictException>(() =>
+            sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart, operatorUser: lockedStaffId))))).Code);
+        var tour = await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart)));
+        // 260 s of PASS run plus 15 minutes on each side: 20 minutes later still overlaps, 40 minutes later does not.
+        Assert.Equal("ROBOT_RESERVATION_CONFLICT", (await Assert.ThrowsAsync<ConflictException>(() =>
+            sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart.AddMinutes(20)))))).Code);
+        var later = await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart.AddMinutes(40))));
+        var tourDetail = await sender.Send(new GetTourQuery(tour.Id));
+        Assert.Null(tourDetail.Route);
+        Assert.Equal(draft2.RevisionId, tourDetail.RouteRevision!.RevisionId);
+        Assert.Equal(participatingStaffId, tourDetail.Operator!.UserId);
+        Assert.Equal("physical_1", tourDetail.Reservation!.RobotCode);
+        Assert.Equal(tourStart.AddMinutes(-15), tourDetail.Reservation.StartsAt);
+        Assert.Equal(tourStart.AddSeconds(260).AddMinutes(15), tourDetail.Reservation.EndsAt);
+        Assert.Equal(new[] { "Library" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
+        await sender.Send(new CancelTourCommand(tour.Id, tourActor, new(Guid.NewGuid(), tourDetail.Tour.RowVersion, "Rescheduling")));
+        Assert.NotNull((await sender.Send(new GetTourQuery(tour.Id))).Reservation!.ReleasedAt);
+        Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart)))).Id);
+        Assert.NotEqual(tour.Id, later.Id);
+
         var dwellOnly = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
             new(Guid.NewGuid(), 2, "Pilot", "Dwell adjustment only", map.Id, -1m, -1m, 0m, "POSE", -0.5m, -0.5m, 0m,
                 [new(proposal.Revision.Id, 45, [new("FRONT", 30)])])));
@@ -549,6 +578,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.6-to-v1.7-poi-narration.sql");
         await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
         await db.ApplyFileAsync("upgrade-v1.7-to-v1.8-robot-map-assignment.sql");
+        await db.ApplyFileAsync("upgrade-v1.8-to-v1.9-tour-route-revision.sql");
+        await db.ApplyFileAsync("upgrade-v1.8-to-v1.9-tour-route-revision.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -559,7 +590,8 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.8", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.9", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourRobotReservations';"));
         Assert.Equal("b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43",
             await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE name=N'CampusTourBootstrapHash';"));
         Assert.Equal("NULL:NOT_ISSUED", await db.ScalarAsync<string>("SELECT CONCAT(COALESCE(CONVERT(varchar(64),CredentialHash,2),'NULL'),':',CASE WHEN CredentialHash IS NULL THEN 'NOT_ISSUED' ELSE 'ACTIVE' END) FROM dbo.Robots WHERE RobotCode=N'upgrade-unissued-empty-hash';"));
@@ -581,7 +613,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.9.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -688,7 +720,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.9.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -724,7 +756,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.8.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.9.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -926,7 +958,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.8.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.9.sql")
         {
             var db = new TestDatabase();
             try
@@ -960,6 +992,12 @@ public sealed class SchemaV11Tests
             services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
             services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
             services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
+            services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
+            services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
+            services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
+            services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
+            services.AddScoped<IInvitationRepository, EfInvitationRepository>();
+            services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
             services.AddSingleton(TimeProvider.System);
             return services.BuildServiceProvider(validateScopes: true);
         }

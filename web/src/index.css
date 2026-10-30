@@ -31,6 +31,7 @@ html.dark {
   ::picker(select) {
     margin-block: 4px;
     padding: 4px;
+    position-try-order: normal;
     width: anchor-size(width);
     max-height: 18rem;
     overflow-y: auto;

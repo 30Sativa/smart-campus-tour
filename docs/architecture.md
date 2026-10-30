@@ -50,18 +50,17 @@ source exists and row/email decisions can be rechecked.
 |---|---|---|
 | GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
-| POST | `/api/staff/manage/tours` | `{requestId, expectedRouteVersion, configuration}`; currently returns 409 `TOUR_DURATION_UNAVAILABLE` after validating the legacy route; no Tour or success receipt is written. |
-| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`. |
+| GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
+| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
+| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
 absolute HTTP(S) without embedded credentials. Schedule is a DateTimeOffset,
-normalized to UTC, with millisecond precision. Future-time and route checks run,
-but creating a Tour and changing its schedule/route fail closed because the
-approved configured-duration source is unavailable. `MeasuredDurationSeconds`
-from a manual route test is not a substitute (ADR-0024). Creating or changing
-Route requires its current opaque version,
+normalized to UTC, with millisecond precision. A new Tour names one tested Route
+revision, and changing a Tour's schedule/route fails closed (ADR-0034). Changing
+a legacy Tour's Route requires its current opaque version,
 active Route, active POIs and valid data/map/pose/stops/head configuration.
 Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
 
@@ -128,7 +127,7 @@ not pass legacy `PoiId` values. Saving or submitting a revision requires the
 exact map version to have current technical evidence, otherwise 409
 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
 serve existing Tour records only. Versioned Route to Tour selection,
-scheduling, reservations and READY remain blocked by ADR-0024; these APIs do
+creates and reserves under ADR-0034; READY remains blocked by ADR-0024; these APIs do
 not imply a schedulable Tour or hardware acceptance.
 
 How the pieces of CampusTour DT-AMR fit together. This file covers what
@@ -147,14 +146,14 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.8; the current snapshot
+The backend persistence baseline has advanced through v1.9; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
 plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
 and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
-`backend/database/smart-campus-tour-schema-v1.8.sql`.
+`backend/database/smart-campus-tour-schema-v1.9.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and

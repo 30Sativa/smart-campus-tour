@@ -10,7 +10,7 @@ if [[ ${1:-} == --if-needed ]]; then if_needed=1; shift; fi
 [[ $# == 3 ]] || fail 'usage: upgrade-db-schema-ec2.sh [--if-needed] DB_INIT_IMAGE DB_INIT_SOURCE_SHA SCHEMA_VERSION'
 db_init_image=$1 source_sha=$2 schema_version=$3
 [[ "$db_init_image" =~ ^ghcr\.io/30sativa/smart-campus-tour/backend-db-init@sha256:[0-9a-f]{64}$ ]] || fail 'DB tool must be an immutable approved digest.'
-[[ "$source_sha" =~ ^[0-9a-f]{40}$ && "$schema_version" == 1.8 ]] || fail 'DB tool provenance or schema version is invalid.'
+[[ "$source_sha" =~ ^[0-9a-f]{40}$ && "$schema_version" == 1.9 ]] || fail 'DB tool provenance or schema version is invalid.'
 
 ROOT=${CAMPUS_DEPLOY_ROOT:-/opt/campustour}
 CONFIG=${CAMPUS_CONFIG_DIR:-/etc/campustour}
@@ -52,6 +52,6 @@ fi
 # The pre-upgrade backup must be new and verified while the shared operation lock is held.
 "$BACKUP" --pre-deploy --deployment-lock-held
 # The image entrypoint is init-db.sh (bootstrap/check only); the upgrader is a separate script in the same tool.
-DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init /deployment/upgrade-db.sh --upgrade-to-v1.8
+DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps --entrypoint /bin/bash db-init /deployment/upgrade-db.sh --upgrade-to-v1.9
 DB_INIT_IMAGE=$db_init_image "${compose[@]}" run -T --rm --no-deps db-init --check-only
 echo "PASS: application database schema is compatible at v$schema_version; API image, SQL Server engine and persistent volume were not changed."

@@ -3,31 +3,30 @@
 Implemented scope: legacy pre-execution behavior in
 `docs/decisions/0018-admin-tour-management.md` and `docs/architecture.md`.
 Every endpoint below currently requires the `Staff` JWT role (product label:
-Tour Staff); the former `/api/admin/tours` alias is retired under ADR-0027. This API
-selects only `AuthoringMode=LEGACY` Routes and creates SCHEDULED Tours in the
-legacy model. It does not persist an exact RouteRevision, assigned Operator,
-robot reservation or READY snapshot. Do not use it to integrate the versioned
-Route scheduling target. The versioned scheduling writer is intentionally not
-enabled; see [ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
+Tour Staff); the former `/api/admin/tours` alias is retired under ADR-0027. New Tours are
+created from one exact tested RouteRevision with a robot reservation and an
+assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-route-revision.md).
+Existing legacy Tours keep their legacy Route. READY snapshots stay blocked by
+[ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
 
-## Create a Tour from an existing SQL Route
+## Create a Tour from a tested Route revision
 
 1. Authenticate with the existing `POST /api/auth/login` Staff account and use
    its accessToken in `Authorization: Bearer ...` for these calls.
-2. `GET /api/staff/manage/routes?isActive=true&page=1&size=20`, choose a Route, then
-   `GET /api/staff/manage/routes/{routeId}` to obtain its current `version`. Its POIs
-   must be active and its configuration/data/map context valid. Do not modify
-   POIs/Route just to bypass validation. Physical commissioning remains separate.
+2. `GET /api/routes` and pick a revision that is submitted with `verificationStatus` PASS.
+   `GET /api/technical/physical-robots` and `GET /api/staff/manage/tours/operators`
+   supply the robot and Operator. Physical commissioning remains separate.
 3. Generate a request UUID once and POST `/api/staff/manage/tours`:
 
 ```json
 {
   "requestId": "ce82b530-362e-4bc1-a2e6-7c84ae8297b1",
-  "expectedRouteVersion": "<version from Route detail>",
   "configuration": {
     "name": "Campus tour",
     "description": "Tour description",
-    "routeId": "<existing Route GUID>",
+    "routeRevisionId": "<revision with an effective PASS run>",
+    "robotCode": "<physical robot code>",
+    "operatorUserId": "<active Staff user from /operators>",
     "scheduledStartAt": "2026-12-01T09:00:00+07:00",
     "fallbackVideoUrl": null
   }

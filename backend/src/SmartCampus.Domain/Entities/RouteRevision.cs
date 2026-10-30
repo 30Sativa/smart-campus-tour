@@ -56,4 +56,6 @@ public partial class RouteRevision
     public virtual RouteRevisionSubmission? RouteRevisionSubmission { get; set; }
 
     public virtual ICollection<RouteTestRun> RouteTestRuns { get; set; } = new List<RouteTestRun>();
+
+    public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();
 }
