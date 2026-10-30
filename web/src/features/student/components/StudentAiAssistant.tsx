@@ -10,7 +10,6 @@ import {
   Users,
   Volume2,
 } from 'lucide-react'
-import { useStudentAiChat } from '../student-hooks'
 import type { AiChatMessage } from '../student-types'
 
 type SpeechRecognitionLike = {
@@ -219,24 +218,5 @@ export function AiChatPanel({
         </button>
       </div>
     </div>
-  )
-}
-
-interface StudentAiAssistantProps {
-  poiContext?: string
-}
-
-/** Labelled demo Tour (fixture data, simulated answers). The invited live page uses LiveStudentAiAssistant. */
-export function StudentAiAssistant({ poiContext }: StudentAiAssistantProps) {
-  const { messages, isTyping, askAi } = useStudentAiChat(poiContext)
-  return (
-    <AiChatPanel
-      messages={messages}
-      isTyping={isTyping}
-      askAi={askAi}
-      contextLabel={poiContext || 'Khuôn viên'}
-      suggestions={['Thư viện có mấy tầng?', 'Chính sách học bổng?', 'Robot AMR hoạt động thế nào?']}
-      allowVoice
-    />
   )
 }

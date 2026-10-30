@@ -4,8 +4,7 @@
  *
  * Same arrangement as `staff.ts`: the TYPES are live - every admin screen is
  * written against them - while the HTTP implementations at the bottom are NOT
- * wired. `/api/admin/*` does not exist yet, so `features/administration/
- * admin-hooks.ts` binds the labelled mock (`src/mocks/admin-mock.ts`) instead.
+ * wired. Live Tour and registration screens use their own feature APIs.
  * They stay here as the written record of the endpoints this frontend expects.
  *
  * Model: "CampusTour DT-AMR — Đặc tả phạm vi" (19/09/2026) §2, §3, §5.2, §5.5.

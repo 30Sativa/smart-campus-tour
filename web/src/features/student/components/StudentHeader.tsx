@@ -1,6 +1,5 @@
 import { LogOut, Moon, Sun } from 'lucide-react'
 import { useThemeStore } from '../../../stores/theme-store'
-import { USE_MOCK_API } from '../../../mocks/mock-mode'
 import type { StudentSession } from '../student-types'
 
 interface StudentHeaderProps {
@@ -11,7 +10,7 @@ interface StudentHeaderProps {
   /** Text of the leave button (default "Thoát"). */
   leaveLabel?: string
   leaveDisabled?: boolean
-  /** Badge beside the brand while live (default: "PHIÊN MẪU" in mock mode, else "LIVE"). */
+  /** Badge beside the brand while live. */
   liveLabel?: string
   /** Right-hand label when there is no named student session, e.g. the invitation type. */
   portalLabel?: string
@@ -29,7 +28,7 @@ export function StudentHeader({
   onLeave,
   leaveLabel = 'Thoát',
   leaveDisabled = false,
-  liveLabel = USE_MOCK_API ? 'PHIÊN MẪU' : 'LIVE',
+  liveLabel = 'LIVE',
   portalLabel = 'Cổng tham quan học sinh',
 }: StudentHeaderProps) {
   const theme = useThemeStore((state) => state.theme)
