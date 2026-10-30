@@ -231,7 +231,7 @@ public sealed class SchemaV11Tests
     [SchemaV16Fact]
     public async Task LatestPhysicalRobotDeploymentChecks_AreAcrossMapsAndExcludeEmulators()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.6.sql");
+        await using var db = await TestDatabase.CreateAsync();
         const string shaA = "0x1111111111111111111111111111111111111111111111111111111111111111";
         const string shaB = "0x2222222222222222222222222222222222222222222222222222222222222222";
         await db.ExecuteAsync($"""

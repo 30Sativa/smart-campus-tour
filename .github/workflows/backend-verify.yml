@@ -62,10 +62,10 @@ jobs:
         if: steps.detect.outputs.backend_changed == 'true' && steps.detect.outputs.database_tool_changed != 'true'
         shell: bash
         run: |
-          if docker manifest inspect ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.6 > /dev/null; then
+          if docker manifest inspect ghcr.io/30sativa/smart-campus-tour/backend-db-init:schema-v1.8 > /dev/null; then
             echo 'missing=false' >> "$GITHUB_OUTPUT"
           else
-            echo '::notice::backend-db-init:schema-v1.6 is not published; treating the DB tool as changed.'
+            echo '::notice::backend-db-init:schema-v1.8 is not published; treating the DB tool as changed.'
             echo 'missing=true' >> "$GITHUB_OUTPUT"
           fi
 
