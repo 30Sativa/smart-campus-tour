@@ -25,9 +25,13 @@ public sealed record PhysicalRobotStatus(
     Guid? CredentialRevokedByUserId,
     string? CredentialRevokedByName,
     string RowVersion,
-    bool MapContextConfigured,
-    string? ConfiguredMapKey,
-    string? ConfiguredFrameId,
+    Guid? AssignedMapVersionId,
+    string? AssignedAreaName,
+    int? AssignedVersionNumber,
+    string? AssignedMapKey,
+    string? AssignedFrameId,
+    DateTimeOffset? MapAssignedAt,
+    string? MapAssignedByName,
     string? LatestDeployedMapKey,
     string? LatestDeployedFrameId,
     bool? LatestDeploymentPassed);
@@ -59,7 +63,6 @@ public sealed class ListPhysicalRobotsQueryHandler(
                     : latest.ReceivedAt >= now - fleetSyncSettings.SyncFreshness
                         ? "CONNECTED"
                         : "DISCONNECTED";
-            var mapContextConfigured = fleetSyncSettings.TryGetRobotContext(robot.RobotCode, out var context);
             latestDeploymentByRobot.TryGetValue(robot.Id, out var latestDeployment);
             var credentialStatus = robot.CredentialHash is not null ? "ACTIVE"
                 : robot.CredentialRevokedAt is not null ? "REVOKED" : "NOT_ISSUED";
@@ -70,9 +73,10 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 robot.CredentialIssuedByUser?.FullName, robot.CredentialHint,
                 robot.CredentialRevokedAt, robot.CredentialRevokedByUserId,
                 robot.CredentialRevokedByUser?.FullName,
-                Convert.ToBase64String(robot.RowVersion),
-                mapContextConfigured, mapContextConfigured ? context.MapKey : null,
-                mapContextConfigured ? context.FrameId : null,
+                Convert.ToBase64String(robot.RowVersion), robot.AssignedMapVersionId,
+                robot.AssignedMapVersion?.AreaKeyNavigation.DisplayName,
+                robot.AssignedMapVersion?.VersionNumber, robot.AssignedMapVersion?.MapKey,
+                robot.AssignedMapVersion?.FrameId, robot.MapAssignedAt, robot.MapAssignedByUser?.FullName,
                 latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId,
                 latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed);
         }).ToArray();

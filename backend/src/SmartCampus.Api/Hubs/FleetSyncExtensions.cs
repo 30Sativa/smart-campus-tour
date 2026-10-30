@@ -12,7 +12,8 @@ public static class FleetSyncExtensions
     public static IServiceCollection AddFleetSync(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSignalR();
-        services.AddSingleton(CreateSettings(configuration));
+        services.AddSingleton(provider => CreateSettings(configuration,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FleetSyncSettings>>()));
         services.AddSingleton<FleetOperationsBroadcaster>();
         services.AddHostedService<FleetFreshnessMonitor>();
         services.AddAuthorization(options => options.AddPolicy(
@@ -29,17 +30,11 @@ public static class FleetSyncExtensions
             options.CloseOnAuthenticationExpiration = true)
             .RequireAuthorization(FleetOperationsAuthorization.StaffPolicy);
 
-    private static FleetSyncSettings CreateSettings(IConfiguration configuration)
+    private static FleetSyncSettings CreateSettings(IConfiguration configuration,
+        Microsoft.Extensions.Logging.ILogger<FleetSyncSettings> logger)
     {
-        var contexts = new Dictionary<string, FleetRobotMapContext>(StringComparer.Ordinal);
-        foreach (var robot in configuration.GetSection("FleetSync:RobotContexts").GetChildren())
-        {
-            var mapKey = robot["MapKey"];
-            var frameId = robot["FrameId"];
-            if (string.IsNullOrWhiteSpace(robot.Key) || string.IsNullOrWhiteSpace(mapKey) || string.IsNullOrWhiteSpace(frameId))
-                throw new InvalidOperationException("FleetSync robot contexts require a robot code, MapKey and FrameId.");
-            contexts.Add(robot.Key, new FleetRobotMapContext(mapKey, frameId));
-        }
+        if (configuration.GetSection("FleetSync:RobotContexts").Exists())
+            logger.LogWarning("FleetSync:RobotContexts is deprecated and ignored; assign robot map contexts in the Technical Staff web console.");
 
         static TimeSpan ReadDuration(IConfiguration config, string key, int fallback)
         {
@@ -49,7 +44,7 @@ public static class FleetSyncExtensions
             return TimeSpan.FromSeconds(value);
         }
 
-        return new FleetSyncSettings(contexts,
+        return new FleetSyncSettings(
             ReadDuration(configuration, "MaximumReportAgeSeconds", 30),
             ReadDuration(configuration, "MaximumFutureSkewSeconds", 5),
             ReadDuration(configuration, "SyncFreshnessSeconds", 30),

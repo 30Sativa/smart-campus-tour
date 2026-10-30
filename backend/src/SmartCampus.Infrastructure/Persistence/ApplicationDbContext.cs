@@ -80,6 +80,10 @@ public partial class ApplicationDbContext : DbContext
                 .IsUnique()
                 .HasFilter("([RobotId] IS NOT NULL AND [CorrelationId] IS NOT NULL AND [Action] IN (N'ROBOT_CREDENTIAL_ISSUED', N'ROBOT_CREDENTIAL_ROTATED', N'ROBOT_CREDENTIAL_REVOKED'))");
 
+            entity.HasIndex(e => new { e.ActorUserId, e.CorrelationId }, "UX_AuditLogs_RobotMapAssignmentRequest")
+                .IsUnique()
+                .HasFilter("([ActorUserId] IS NOT NULL AND [CorrelationId] IS NOT NULL AND [Action] IN (N'ROBOT_MAP_ASSIGNED', N'ROBOT_MAP_CLEARED'))");
+
             entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAt, e.Id }, "IX_AuditLogs_EntityTime");
 
             entity.Property(e => e.Action).HasMaxLength(80);
@@ -302,6 +306,10 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<MapVersion>(entity =>
         {
+            entity.HasMany(map => map.AssignedRobots).WithOne(robot => robot.AssignedMapVersion)
+                .HasForeignKey(robot => robot.AssignedMapVersionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_AssignedMapVersionId");
             entity.HasIndex(e => new { e.AreaKey, e.UploadedAt, e.Id }, "IX_MapVersions_AreaUploaded").IsDescending(false, true, false);
 
             entity.HasIndex(e => new { e.AreaKey, e.VersionNumber }, "UQ_MapVersions_AreaVersion").IsUnique();
@@ -519,6 +527,12 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Robot>(entity =>
         {
+            entity.HasIndex(e => e.AssignedMapVersionId, "IX_Robots_AssignedMapVersionId");
+            entity.Property(e => e.MapAssignedAt).HasPrecision(3);
+            entity.HasOne(d => d.MapAssignedByUser).WithMany(p => p.MapAssignedRobots)
+                .HasForeignKey(d => d.MapAssignedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_MapAssignedByUserId");
             entity.HasIndex(e => e.RobotCode, "UQ_Robots_RobotCode").IsUnique();
 
             entity.HasIndex(e => e.CurrentTourId, "UX_Robots_CurrentTour")

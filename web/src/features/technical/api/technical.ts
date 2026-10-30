@@ -33,12 +33,21 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   firstAcceptedFrameId: string | null
   connectionStatus: PhysicalRobotConnectionStatus
   lastSyncReceivedAt: string | null
-  configuredMapKey: string | null
-  configuredFrameId: string | null
+  rowVersion: string
+  assignedMapVersionId: string | null
+  assignedAreaName: string | null
+  assignedVersionNumber: number | null
+  assignedMapKey: string | null
+  assignedFrameId: string | null
+  mapAssignedAt: string | null
+  mapAssignedByName: string | null
   latestDeployedMapKey: string | null
   latestDeployedFrameId: string | null
   latestDeploymentPassed: boolean | null
 }
+export type RobotMapAssignment = Pick<PhysicalRobotOption,
+  'id' | 'robotCode' | 'assignedMapVersionId' | 'assignedAreaName' | 'assignedVersionNumber' |
+  'assignedMapKey' | 'assignedFrameId' | 'mapAssignedAt' | 'mapAssignedByName' | 'rowVersion'>
 export type RobotCredentialAudit = {
   id: number; robotCode: string; action: string; actorUserId: string | null; actorName: string | null
   hint: string | null; reason: string | null; source: 'WEB' | 'CLI'; occurredAt: string; resultCode: string | null
@@ -117,6 +126,10 @@ export const technicalApi = {
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
+  assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
+    apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
+  clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'DELETE', json: input }).then(response => response.data!),
   registerPhysicalRobot: (input: { robotCode: string; displayName: string }) =>
     apiClient<Envelope<PhysicalRobotRegistration>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
   getRobotCredential: (robotCode: string) => apiClient<Envelope<RobotCredentialView>>(`/api/robots/${encodeURIComponent(robotCode)}/credential`).then(response => response.data!),

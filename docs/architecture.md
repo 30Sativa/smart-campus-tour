@@ -143,13 +143,14 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.7; the current snapshot
+The backend persistence baseline has advanced through v1.8; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
 plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
 and versioned POI narration content/route-stop snapshots in
-`backend/database/smart-campus-tour-schema-v1.7.sql`.
+`backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
+`backend/database/smart-campus-tour-schema-v1.8.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -647,13 +648,11 @@ transaction, so credential rotation cannot race through the gate. Replaying an
 already committed check returns it before this new-PASS condition. Offline state
 or backend restart does not erase confirmation; credential provisioning resets
 it. Runtime SQL can SELECT/INSERT Robots and update only credential lifecycle
-and confirmation columns, never DELETE or update the whole table. Technical
+and confirmation columns plus the three map-assignment columns, never DELETE or update the whole table. Technical
 Staff issues/rotates credentials through the web; Admin can revoke and inspect
 credential audit, while Staff sees only connection status. The separate CLI
 provisioner shares the lifecycle service, is attributed as `CLI`, and retains
-column-scoped Robot and append-only AuditLogs grants. RobotContexts remain
-deployment configuration; bridge and database
-RobotCode must match. This connection confirmation does not prove the named map
+column-scoped Robot and append-only AuditLogs grants. TechnicalStaff assigns a valid uploaded MapVersion to a physical robot; Fleet Sync projects MapKey and FrameId from that row. The bridge and database RobotCode must match. This connection confirmation does not prove the named map
 was loaded, localization succeeded, or operation is safe; the manual check
 remains a human observation. Report timestamp age/skew validation does not
 prove fleet-wide NTP. The stored map/frame values are historical context. A
@@ -663,13 +662,7 @@ deployment-check requests that expose requestId keep that ID stable for retries;
 physical robot registration has no requestId or receipt and duplicate code is
 409 via the unique constraint.
 
-The same TechnicalStaff robot list exposes only each robot's configured
-`RobotContexts` MapKey/FrameId and the latest recorded deployment-check map
-key/frame. It exposes no credential or other configuration values. The UI
-warns, without blocking work, when configuration is absent or differs from the
-latest check. Operators update RobotContexts and restart the backend after a
-map deployment, then rerun the Fleet Sync probe; this display is not a new
-deployment or readiness gate.
+The TechnicalStaff robot list exposes the database-assigned MapKey/FrameId and the latest deployment-check map key/frame. It exposes no credential or other configuration values. The UI warns without blocking work when the assignment is absent or differs from the latest check. After reassignment, operators update the MiniPC bridge context and rerun the Fleet Sync probe; this is not a deployment or readiness gate.
 
 When a current POI map version falls outside the normal version-list page, the
 Staff screen fetches that exact version by ID for preview. If backend eligibility

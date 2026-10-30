@@ -169,7 +169,6 @@ public sealed class FleetOperationsBroadcastTests
         TimeSpan? broadcastInterval = null,
         TimeSpan? broadcastTimeout = null,
         TimeSpan? retryDelay = null) => new(
-            new Dictionary<string, FleetRobotMapContext> { ["robot_test_01"] = new("test-map", "map") },
             TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30),
             TimeSpan.FromSeconds(5), broadcastInterval ?? TimeSpan.FromSeconds(5),
             broadcastTimeout, retryDelay);

@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.7 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.8 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -8,6 +8,7 @@ DECLARE @current nvarchar(64) = N'$(SchemaHash)';
 DECLARE @v15 nvarchar(64) = N'$(SchemaHashV15)';
 DECLARE @v14 nvarchar(64) = N'$(SchemaHashV14)';
 DECLARE @v16 nvarchar(64) = N'$(SchemaHashV16)';
+DECLARE @v17 nvarchar(64) = N'$(SchemaHashV17)';
 DECLARE @schemaVersion nvarchar(32) = (
     SELECT CONVERT(nvarchar(32), value) FROM sys.extended_properties
     WHERE class = 0 AND name = N'CampusTourSchemaVersion');
@@ -46,6 +47,7 @@ DECLARE @v16ObjectsPresent bit = CASE WHEN @v15ObjectsPresent = 1 AND
     EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.AuditLogs') AND name=N'UX_AuditLogs_RobotCredentialRequest' AND is_unique=1)
     THEN 1 ELSE 0 END;
 DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
+    @v17,
     @v16,
     @v14,
     @v15,
@@ -63,10 +65,25 @@ DECLARE @v17ObjectsPresent bit = CASE WHEN @v16ObjectsPresent = 1 AND
     EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RouteRevisionStops') AND name=N'CK_RouteRevisionStops_FallbackVideoHttps' AND is_disabled=0 AND is_not_trusted=0)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.7' AND @v17ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+DECLARE @v18ObjectsPresent bit = CASE WHEN @v17ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.Robots', N'AssignedMapVersionId') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'MapAssignedAt') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'MapAssignedByUserId') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_MapAssignment_Complete' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_AssignedMapVersionId' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'FK_Robots_MapAssignedByUserId' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name=N'IX_Robots_AssignedMapVersionId')
+    AND EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.AuditLogs') AND name=N'UX_AuditLogs_RobotMapAssignmentRequest' AND is_unique=1)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.8' AND @v18ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.8'
+    THROW 51001, 'Database schema version marker is 1.8 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.7' AND @v17ObjectsPresent = 1 AND (@hash = @v17 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.7'
-    THROW 51001, 'Database schema version marker is 1.7 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+    THROW 51005, 'Database schema version marker is 1.7 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.6' AND @v16ObjectsPresent = 1 AND (@hash = @v16 OR @knownPriorHash = 1)
     SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.6'

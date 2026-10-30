@@ -23,7 +23,9 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
                 candidate.DisplayName,
                 candidate.NeedsInspection,
                 candidate.CredentialHash,
-                candidate.FirstAcceptedSyncAt
+                candidate.FirstAcceptedSyncAt,
+                AssignedMapKey = candidate.AssignedMapVersion == null ? null : candidate.AssignedMapVersion.MapKey,
+                AssignedFrameId = candidate.AssignedMapVersion == null ? null : candidate.AssignedMapVersion.FrameId
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -32,7 +34,8 @@ public sealed class FleetRobotAuthenticator(ApplicationDbContext dbContext) : IF
             return null;
 
         return new FleetRobotAuthenticationProof(
-            new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName, robot.NeedsInspection),
+            new FleetRobotIdentity(robot.RobotCode, robot.SourceType, robot.DisplayName, robot.NeedsInspection,
+                robot.AssignedMapKey, robot.AssignedFrameId),
             hash.ToArray(),
             robot.FirstAcceptedSyncAt is not null);
     }

@@ -52,7 +52,7 @@ Technical Staff registers the physical robot identity by `RobotCode` and name
 before selecting it for a map check. Registration creates an unassigned
 identity only; credential issue/rotation/revocation is managed separately in
 the Technical Staff web console under [ADR-0030](../decisions/0030-robot-credential-lifecycle.md),
-while deployment-specific `RobotContexts` remain outside the web. Registration
+while the map context is assigned to a valid uploaded map version in the Technical Staff web console under [ADR-0032](../decisions/0032-robot-map-context-assignment.md). Registration
 is not connection, readiness, or check-pass evidence. The bridge and database
 must use the same `RobotCode`.
 The upload form chooses either a new area (key and name) or an existing area

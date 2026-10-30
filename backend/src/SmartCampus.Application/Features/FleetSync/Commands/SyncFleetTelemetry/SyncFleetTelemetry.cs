@@ -80,7 +80,6 @@ public sealed class SyncFleetTelemetryValidator : AbstractValidator<SyncFleetTel
 public sealed class SyncFleetTelemetryHandler(
     IFleetTelemetryStore store,
     IFleetRobotConnectionConfirmationStore connectionConfirmationStore,
-    FleetSyncSettings settings,
     TimeProvider clock,
     Microsoft.Extensions.Logging.ILogger<SyncFleetTelemetryHandler> logger) : IRequestHandler<SyncFleetTelemetry, SyncFleetTelemetryResult>
 {
@@ -88,10 +87,10 @@ public sealed class SyncFleetTelemetryHandler(
         SyncFleetTelemetry request,
         CancellationToken cancellationToken)
     {
-        if (!settings.TryGetRobotContext(request.Robot.RobotCode, out var context))
+        if (request.Robot.AssignedMapKey is null || request.Robot.AssignedFrameId is null)
             throw new ServiceUnavailableException("Robot map context is not configured.", "MAP_CONTEXT_UNCONFIGURED");
-        if (!string.Equals(request.Report.MapKey, context.MapKey, StringComparison.Ordinal) ||
-            !string.Equals(request.Report.FrameId, context.FrameId, StringComparison.Ordinal))
+        if (!string.Equals(request.Report.MapKey, request.Robot.AssignedMapKey, StringComparison.Ordinal) ||
+            !string.Equals(request.Report.FrameId, request.Robot.AssignedFrameId, StringComparison.Ordinal))
             throw new ConflictException("Telemetry map/frame context does not match robot configuration.", "MAP_CONTEXT_MISMATCH");
 
         var now = clock.GetUtcNow();
