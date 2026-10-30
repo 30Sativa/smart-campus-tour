@@ -400,6 +400,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.NarrationText).HasMaxLength(4000);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(2048);
             entity.Property(e => e.NavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -698,6 +700,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CameraPreset).HasMaxLength(80);
             entity.Property(e => e.HeadStepsJson).HasMaxLength(4000);
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.NarrationText).HasMaxLength(4000);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(2048);
             entity.Property(e => e.PoiNavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();

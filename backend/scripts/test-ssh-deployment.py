@@ -17,7 +17,7 @@ MANIFEST = {
     "api_image": "ghcr.io/30sativa/smart-campus-tour/backend@sha256:" + "b" * 64,
     "db_init_image": "ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:" + "b" * 64,
     "db_init_source_sha": "9" * 40,
-    "database_schema_version": "1.6",
+    "database_schema_version": "1.7",
     "sqlserver_image": "mcr.microsoft.com/mssql/server@sha256:" + "b" * 64,
     "sdk_image": "mcr.microsoft.com/dotnet/sdk@sha256:" + "b" * 64,
     "runtime_image": "mcr.microsoft.com/dotnet/aspnet@sha256:" + "b" * 64,
@@ -137,7 +137,7 @@ def main():
         (bundle / "ops/install-host-tools.sh").write_text("#!/bin/bash\nexit 0\n")
         (bundle / "ops/deploy-ec2.sh").write_text(
             '#!/bin/bash\n[[ -s "$CAMPUS_RELEASE_COMPOSE" && -s "$CAMPUS_RELEASE_DB_INIT_COMPOSE" ]] || exit 81\n'
-            '[[ "$DB_INIT_SOURCE_SHA" == "' + MANIFEST["db_init_source_sha"] + '" && "$DB_SCHEMA_VERSION" == "1.6" ]] || exit 82\n'
+            '[[ "$DB_INIT_SOURCE_SHA" == "' + MANIFEST["db_init_source_sha"] + '" && "$DB_SCHEMA_VERSION" == "1.7" ]] || exit 82\n'
             'printf "%s\\n" "$@" > "$DEPLOY_ARGS"\n'
             'if [[ ${FAIL_MODE:-} == interrupted ]]; then touch "$INTERRUPT_READY"; sleep 30; fi\n'
             'if [[ ${FAIL_MODE:-} == reader-gone ]]; then\n'

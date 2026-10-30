@@ -46,7 +46,7 @@ export default function TechnicalPoiImportPage() {
               <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Map</th><th className={thClass}>Tọa độ</th><th className={thClass}>Trạng thái</th><th className={thClass}>Đã gửi</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">
                 {queue.map((item) => <tr key={`${item.proposalId}:${item.revision.revisionNumber}`} className={rowClass}>
-                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{item.revision.name}</span><p className="text-[11.5px] text-[#64748b]">{item.revision.purpose}</p></td>
+                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{item.revision.name}</span><p className="text-[11.5px] text-[#64748b]">{item.revision.purpose}</p><p className="mt-1 max-w-xl whitespace-pre-wrap text-xs text-[#475569]">{item.revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p></td>
                   <td className={`${tdClass} font-mono text-xs`}>{item.revision.mapKey} · r{item.revision.revisionNumber}</td>
                   <td className={`${tdClass} font-mono text-xs text-[#64748b]`}>{item.revision.x}, {item.revision.y}, {item.revision.yaw}</td>
                   <td className={tdClass}><ToneBadge tone={item.revision.navigationStatus === 'FAIL' ? 'danger' : 'warn'}>{item.revision.navigationStatus === 'FAIL' ? 'Cần kiểm tra lại' : 'Chờ kiểm chứng'}</ToneBadge></td>
@@ -102,6 +102,7 @@ function VerifyDrawer({ proposal, onClose }: { proposal: PoiVerificationQueueIte
           <div><label className={labelClass} htmlFor="verify-robot">Robot vật lý</label><input id="verify-robot" className={`${inputClass} mt-1`} required maxLength={100} value={robotCode} onChange={(event) => setRobotCode(event.target.value)} /></div>
           <div><label className={labelClass} htmlFor="verify-result">Kết quả</label><select id="verify-result" className={`${inputClass} mt-1`} value={resultCode} onChange={(event) => setResultCode(event.target.value as 'PASS' | 'FAIL')}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
         </div>
+        <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           <CheckRow checked={reached} onChange={setReached}>Robot tới đúng POI</CheckRow>
           <CheckRow checked={stopped} onChange={setStopped}>Robot dừng đúng vị trí</CheckRow>

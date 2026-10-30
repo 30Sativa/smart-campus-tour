@@ -68,6 +68,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0028](0028-map-technical-check-before-poi-preparation.md) | Require latest exact-version physical robot check evidence before Tour Staff creates/revises/submits POI proposals | owner-authorized business rule; backend/frontend enforcement and tests in this change |
 | [0029](0029-robot-connection-confirmation-before-map-pass.md) | Persist first accepted Fleet Sync context per credential and require it for a new map-check PASS | owner-authorized cross-system implementation; v1.5 schema and backend/web enforcement; no hardware acceptance claimed |
 | [0030](0030-robot-credential-lifecycle.md) | Web-managed physical robot credential issue, rotation, revoke and append-only audit | owner-authorized implementation; v1.6 schema/API/UI rollout required; no hardware acceptance claimed |
+| [0031](0031-versioned-poi-narration-content.md) | Narration and optional HTTPS fallback video on immutable POI revisions, with route-stop snapshots | owner-authorized Part 1; v1.7 schema/API/UI; content-only revisions reuse navigation verification |
 
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:

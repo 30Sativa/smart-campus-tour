@@ -31,10 +31,12 @@
     <None Include="..\..\database\smart-campus-tour-schema-v1.4.sql" Link="Schema\snapshot-v1.4.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.5.sql" Link="Schema\snapshot-v1.5.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.6.sql" Link="Schema\snapshot-v1.6.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.7.sql" Link="Schema\snapshot-v1.7.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.2-to-v1.3-route-revisions.sql" Link="Schema\upgrade-v1.2-to-v1.3-route-revisions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.3-to-v1.4-row-registration.sql" Link="Schema\upgrade-v1.3-to-v1.4-row-registration.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" Link="Schema\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql" Link="Schema\upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.6-to-v1.7-poi-narration.sql" Link="Schema\upgrade-v1.6-to-v1.7-poi-narration.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-route-revision-permissions.sql" Link="Schema\route-revision-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\upgrade-v1.1-to-v1.2-map-poi.sql" Link="Schema\upgrade-v1.1-to-v1.2-map-poi.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\patches\add-poi-rowversion-v1.1.sql" Link="Schema\add-poi-rowversion-v1.1.sql" CopyToOutputDirectory="PreserveNewest" />

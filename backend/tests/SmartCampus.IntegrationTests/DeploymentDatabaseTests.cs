@@ -25,7 +25,7 @@ namespace SmartCampus.IntegrationTests;
 
 public sealed class DeploymentDatabaseTests
 {
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task RuntimeCanIssueCredentialWithColumnGrantsAndProvisionerRemainsSeparate()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -130,7 +130,7 @@ public sealed class DeploymentDatabaseTests
         }
     }
 
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task FleetCredentialProvisioner_UsesSharedCredentialLifecycleAndRemainsColumnScoped()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -263,7 +263,8 @@ public sealed class DeploymentDatabaseTests
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
         var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
-        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        var v16Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.6.sql"))).Replace("\r\n", "\n"));
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV16)", v16Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
         await using (var command = new SqlCommand(currentGuard, connection))
             Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         Assert.Equal(1, await database.CountRowsAsync("dbo.Users"));
@@ -294,7 +295,8 @@ public sealed class DeploymentDatabaseTests
         var guard = await File.ReadAllTextAsync(Schema("bootstrap-check.sql"));
         var v14Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.4.sql"))).Replace("\r\n", "\n"));
         var v15Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.5.sql"))).Replace("\r\n", "\n"));
-        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
+        var v16Hash = Hash((await File.ReadAllTextAsync(Schema("snapshot-v1.6.sql"))).Replace("\r\n", "\n"));
+        var currentGuard = guard.Replace("$(SchemaHash)", v15Hash).Replace("$(SchemaHashV16)", v16Hash).Replace("$(SchemaHashV15)", v15Hash).Replace("$(SchemaHashV14)", v14Hash);
         await using var command = new SqlCommand(currentGuard, connection);
         Assert.Equal("UPGRADE_REQUIRED", await command.ExecuteScalarAsync());
         await using var marker = new SqlCommand("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';", connection);

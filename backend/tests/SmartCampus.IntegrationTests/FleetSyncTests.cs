@@ -424,7 +424,7 @@ public sealed class FleetSyncTests
         Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
     }
 
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task ConnectionConfirmation_IsWriteOnceConcurrentAndBoundToCurrentCredentialHash()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();

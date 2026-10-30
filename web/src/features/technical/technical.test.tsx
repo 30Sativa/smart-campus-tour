@@ -20,7 +20,7 @@ const mapItem = { map, latestDeployment: null, technicalCheckStatus: 'PASSED', c
   currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-27T10:00:00Z' }] }
 const proposal = {
   id: 'proposal-1', currentRevision: 1, rowVersion: 'AAAAAAAAAAA=',
-  revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
+  revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library', purpose: 'Entrance', description: null, narrationText: 'Giới thiệu thư viện.', fallbackVideoUrl: 'https://example.test/video', x: 1, y: 2, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: true, submittedAt: '2026-10-27T10:01:00Z', navigationStatus: 'NOT_CHECKED' },
 }
 const queueItem = { proposalId: proposal.id, currentRevision: proposal.currentRevision, rowVersion: proposal.rowVersion, revision: proposal.revision }
 const response = (data: unknown) => new Response(JSON.stringify({ success: true, message: 'OK', data, errors: null }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -377,7 +377,11 @@ describe('Technical Staff API integration', () => {
   it('records a POI check against its submitted revision and row version', async () => {
     renderPage(<TechnicalPoiImportPage />)
     expect(await screen.findByText('Library')).toBeInTheDocument()
+    expect(screen.getByText('Giới thiệu thư viện.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi kết quả' }))
+    expect(screen.getByText('Nội dung thuyết minh, chỉ đọc')).toBeInTheDocument()
+    expect(screen.getByText('https://example.test/video')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Nội dung thuyết minh' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Robot vật lý'), { target: { value: 'amr-01' } })
     fireEvent.change(screen.getByLabelText('Ghi chú bằng chứng'), { target: { value: 'Đã đi kiểm tra tại chỗ.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }))

@@ -70,6 +70,25 @@ public sealed class DatabaseScaffoldMappingTests
     }
 
     [Fact]
+    public void Model_MapsVersionedPoiContentAndRouteStopSnapshotsToBoundedNullableColumns()
+    {
+        using var context = new ApplicationDbContext(Options);
+        foreach (var (type, name, maxLength) in new[]
+                 {
+                     (typeof(PoiProposalRevision), nameof(PoiProposalRevision.NarrationText), 4000),
+                     (typeof(PoiProposalRevision), nameof(PoiProposalRevision.FallbackVideoUrl), 2048),
+                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.NarrationText), 4000),
+                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.FallbackVideoUrl), 2048)
+                 })
+        {
+            var property = context.Model.FindEntityType(type)!.FindProperty(name)!;
+            Assert.Equal(typeof(string), property.ClrType);
+            Assert.True(property.IsNullable);
+            Assert.Equal(maxLength, property.GetMaxLength());
+        }
+    }
+
+    [Fact]
     public void Model_PreservesRegistrationAndAssignmentRelationships()
     {
         using var context = new ApplicationDbContext(Options);

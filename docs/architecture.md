@@ -143,14 +143,17 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.6; the current snapshot
+The backend persistence baseline has advanced through v1.7; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
-plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`.
+plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
+and versioned POI narration content/route-stop snapshots in
+`backend/database/smart-campus-tour-schema-v1.7.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
-[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md), and
-[ADR-0030](decisions/0030-robot-credential-lifecycle.md). The
+[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
+[ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
+[ADR-0031](decisions/0031-versioned-poi-narration-content.md). The
 developer's local `SmartCampusTourV11` remains an older database and is not
 altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
@@ -2019,8 +2022,8 @@ and `Robots` SELECT/INSERT plus column-level credential lifecycle and
 first-accepted confirmation UPDATE. Runtime has no whole-table `Robots`
 UPDATE/DELETE. The separate credential provisioner shares lifecycle logic,
 uses its own column-scoped grants, and appends audit rows without rewriting
-them. Existing v1.4/v1.5 databases require the controlled upgrade/regrant to
-v1.6 and read-only check-only gate before an API release that needs this schema.
+them. Existing v1.4/v1.5/v1.6 databases require the controlled upgrade/regrant to
+v1.7 and read-only check-only gate before an API release that needs this schema.
 The check-only gate does not change database state.
 The deployment adds two anonymous operational routes: `GET /health/live`
 returns 204 when the API process can serve a request; `GET /health/ready`

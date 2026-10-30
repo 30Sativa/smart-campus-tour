@@ -79,6 +79,7 @@ internal static class RouteRevisionMapper
             Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(), submissions.Count > 0,
             effective?.ResultCode ?? "NOT_TESTED", effective?.Id, duration, dwell,
             stops.Select(s => new RouteRevisionStopView(s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
-                s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw, s.CameraPreset)).ToArray(), dtoRuns, summaries, eligibilityIssues);
+                s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
+                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl)).ToArray(), dtoRuns, summaries, eligibilityIssues);
     }
 }

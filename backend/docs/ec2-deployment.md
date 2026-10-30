@@ -15,14 +15,15 @@ database, change login credentials, apply a schema patch, or change the SQL
 Server image. Empty-database bootstrap is an explicit `--bootstrap` operation.
 Existing data uses Backend Database Schema Upgrade, not Backend SQL Maintenance.
 The former takes a verified full backup under the host operation lock, applies
-the ordered v1.1→v1.6 additive patches, then verifies structure and runtime
+the ordered v1.1→v1.7 additive patches, then verifies structure and runtime
 permissions. The latter continues to handle SQL Server engine/resource changes.
-An existing v1.4 database must receive the v1.4→v1.5 and v1.5→v1.6 patches and
-permission regrant before deploying code that requires durable robot
-confirmation and credential lifecycle metadata. A v1.5 database receives the
-v1.5→v1.6 patch. The controlled path validates the prior snapshot marker and
+An existing v1.4 database must receive the v1.4→v1.5, v1.5→v1.6 and
+v1.6→v1.7 patches and permission regrant before deploying code that requires
+durable robot confirmation, credential lifecycle metadata and versioned POI
+narration. A v1.5 database receives the v1.5→v1.6 and v1.6→v1.7 patches; a
+v1.6 database receives the v1.6→v1.7 patch. The controlled path validates the prior snapshot marker and
 complete structure, applies each additive patch, reapplies the existing
-permission scripts, then runs read-only `--check-only`. A v1.6 database can use
+permission scripts, then runs read-only `--check-only`. A v1.7 database can use
 the same path to reapply grants without DDL or data backfill. Do not run the
 upgrade or regrant manually on EC2 or a shared database outside the controlled
 workflow and verified-backup process.

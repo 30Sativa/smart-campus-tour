@@ -146,6 +146,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
                 MapVersionId = map.Id, PoiNavigationFingerprint = selected.Revision.NavigationFingerprint,
                 StopOrder = index + 1, DwellSeconds = i.Stops[index].DwellSeconds,
                 HeadStepsJson = Route.WriteHeadSteps(i.Stops[index].HeadSteps), Name = selected.Revision.Name,
+                NarrationText = selected.Revision.NarrationText, FallbackVideoUrl = selected.Revision.FallbackVideoUrl,
                 X = selected.Revision.X, Y = selected.Revision.Y, Yaw = selected.Revision.Yaw, CameraPreset = selected.Revision.CameraPreset });
         }
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, Action = "ROUTE_REVISION_CREATED", EntityType = "RouteRevision",
@@ -166,7 +167,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, Time
             {
                 var selected = byId[s.PoiRevisionId];
                 return new RouteRevisionStopView(selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
-                    s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw, selected.Revision.CameraPreset);
+                    s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
+                    selected.Revision.CameraPreset, selected.Revision.NarrationText, selected.Revision.FallbackVideoUrl);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], []);

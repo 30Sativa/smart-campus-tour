@@ -78,14 +78,14 @@ revocation invalidate the previous credential and clear first accepted
 confirmation atomically. The MiniPC credential file remains an operator-managed
 deployment step; the web app does not install a secret on the robot.
 
-The v1.6 runtime role has column-scoped Robot UPDATE for credential metadata and
+The v1.7 runtime role has column-scoped Robot UPDATE for credential metadata and
 the first-accepted fields, plus append-only credential audit access. It does not
 have whole-table Robot UPDATE/DELETE. The separate `campus_fleet_provisioner`
 role has only the Robot columns required by the shared CLI lifecycle service
 and append-only audit access. Do not add the API runtime login to that role.
-Existing v1.4/v1.5 databases must complete the controlled Database First
+Existing v1.4/v1.5/v1.6 databases must complete the controlled Database First
 upgrade/regrant and pass `init-db.sh --check-only` before promoting an API build
-that requires v1.6. Take the approved backup first; do not run this path casually
+that requires v1.7. Take the approved backup first; do not run this path casually
 against shared/production databases.
 
 Run from `backend/` with a protected provisioning connection string in
@@ -105,7 +105,7 @@ without starting the API. Keep the output out of logs and place the secret
 directly in the robot's protected configuration. The application runtime has
 SELECT/INSERT on Robots and column-level UPDATE for lifecycle and confirmation
 fields; it cannot update the full table or DELETE. Runtime never receives a
-provisioning connection string. Database First schema v1.6 defines the nullable
+provisioning connection string. Database First schema v1.6 introduced the nullable
 credential hash, lifecycle metadata and confirmation columns. `PackageSha256` in map
 checks is the checksum of the uploaded ZIP, not an individual YAML or PGM file.
 

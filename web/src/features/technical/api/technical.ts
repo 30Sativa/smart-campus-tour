@@ -82,6 +82,8 @@ export type PoiRevision = {
   name: string
   purpose: string
   description: string | null
+  narrationText: string | null
+  fallbackVideoUrl: string | null
   x: number
   y: number
   yaw: number
@@ -147,9 +149,9 @@ export const technicalApi = {
   getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
   getPoiHistory: (id: string) => apiClient<Envelope<{ proposalId: string; revisions: PoiRevision[]; verificationRecords: PoiVerification[] }>>(`/api/staff/poi-proposals/${id}/history`).then(response => response.data!),
   listPoiVerificationQueue: (mapVersionId?: string) => apiClient<Envelope<PoiVerificationQueueItem[]>>(`/api/technical/poi-verifications${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
-  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
     apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
-  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
