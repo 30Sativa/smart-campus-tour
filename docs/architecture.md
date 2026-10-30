@@ -50,6 +50,7 @@ source exists and row/email decisions can be rechecked.
 |---|---|---|
 | GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
+| GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
 | POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
