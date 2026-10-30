@@ -61,6 +61,10 @@ public partial class Tour
 
     public byte[] RowVersion { get; set; } = null!;
 
+    public Guid? RouteRevisionId { get; set; }
+
+    public Guid? OperatorUserId { get; set; }
+
     public virtual Route ActiveRoute { get; set; } = null!;
 
     public virtual Robot? AssignedRobot { get; set; }
@@ -70,6 +74,12 @@ public partial class Tour
     public virtual ICollection<BranchRequest> BranchRequests { get; set; } = new List<BranchRequest>();
 
     public virtual User CreatedByUser { get; set; } = null!;
+
+    public virtual User? OperatorUser { get; set; }
+
+    public virtual RouteRevision? RouteRevision { get; set; }
+
+    public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
 
     public virtual RouteStop? CurrentRouteStop { get; set; }
 

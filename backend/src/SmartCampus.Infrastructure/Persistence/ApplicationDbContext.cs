@@ -66,6 +66,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<TourEvent> TourEvents { get; set; }
 
+    public virtual DbSet<TourRobotReservation> TourRobotReservations { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
@@ -862,8 +864,57 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_RouteVariants_VariantRouteId");
         });
 
+        modelBuilder.Entity<TourRobotReservation>(entity =>
+        {
+            entity.HasIndex(e => new { e.RobotId, e.StartsAt, e.EndsAt }, "IX_TourRobotReservations_ActiveRobot").HasFilter("([ReleasedAt] IS NULL)");
+
+            entity.HasIndex(e => e.TourId, "UX_TourRobotReservations_ActiveTour")
+                .IsUnique()
+                .HasFilter("([ReleasedAt] IS NULL)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.EndsAt).HasPrecision(3);
+            entity.Property(e => e.ReleasedAt).HasPrecision(3);
+            entity.Property(e => e.ReservedAt).HasPrecision(3);
+            entity.Property(e => e.StartsAt).HasPrecision(3);
+
+            entity.HasOne(d => d.ReleasedByUser).WithMany(p => p.TourRobotReservationReleasedByUsers)
+                .HasForeignKey(d => d.ReleasedByUserId)
+                .HasConstraintName("FK_TourRobotReservations_ReleasedByUserId");
+
+            entity.HasOne(d => d.ReservedByUser).WithMany(p => p.TourRobotReservationReservedByUsers)
+                .HasForeignKey(d => d.ReservedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_ReservedByUserId");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.RobotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_RobotId");
+
+            entity.HasOne(d => d.RouteTestRun).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.RouteTestRunId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_RouteTestRunId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_TourId");
+        });
+
         modelBuilder.Entity<Tour>(entity =>
         {
+            entity.HasIndex(e => e.RouteRevisionId, "IX_Tours_RouteRevisionId").HasFilter("([RouteRevisionId] IS NOT NULL)");
+
+            entity.HasOne(d => d.OperatorUser).WithMany(p => p.TourOperatorUsers)
+                .HasForeignKey(d => d.OperatorUserId)
+                .HasConstraintName("FK_Tours_OperatorUserId");
+
+            entity.HasOne(d => d.RouteRevision).WithMany(p => p.Tours)
+                .HasForeignKey(d => d.RouteRevisionId)
+                .HasConstraintName("FK_Tours_RouteRevisionId");
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.AssistanceReason)
                 .HasMaxLength(100)
