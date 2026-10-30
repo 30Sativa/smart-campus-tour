@@ -47,12 +47,14 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion }: 
       {!query.data.enabled && <p>Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.</p>}
       {query.data.canIssue && <button className={buttonClass('primary', 'sm')} disabled={mutation.isPending} onClick={() => choose('issue')}>Cấp và gửi lời mời</button>}
       {query.data.enabled && query.data.items.length === 0 && !query.data.canIssue && <p>Đăng ký này chưa có lời mời được cấp.</p>}
-      <div className="mt-3 space-y-3">{query.data.items.map(item => <article key={item.id} className="rounded-lg border border-slate-200 p-3">
-        <p className="font-medium text-slate-900">{item.displayName} <span className="text-xs text-slate-500">· {item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</span></p>
-        <p className="break-all text-sm text-slate-600">{item.email}</p>
-        <p className="mt-1 text-sm">{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'} · Hạn: {time(item.expiresAt)}</p>
-        <p className="text-sm">{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200">{query.data.items.map(item => <article key={item.id} className="flex flex-col gap-2 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900">{item.displayName} <span className="text-xs text-slate-500">· {item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</span></p>
+          <p className="break-all text-sm text-slate-600">{item.email}</p>
+          <p className="text-[13px] text-slate-600">{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'} · Hạn: {time(item.expiresAt)}</p>
+          <p className="text-[13px] font-medium text-slate-700">{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
           <button className={buttonClass('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button>
           <button className={buttonClass('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button>
           <button className={buttonClass('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} onClick={() => choose('revoke', item)}>Thu hồi mã</button>

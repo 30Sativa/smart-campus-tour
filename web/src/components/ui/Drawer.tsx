@@ -23,7 +23,7 @@ const scrim = 'fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opac
 
 /** A task or a record opened in the middle of the page, the page dimmed behind it. */
 export function Drawer({ open, title, description, onClose, children, footer, wide = false }: {
-  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean
+  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean | 'xl'
 }) {
   const titleId = useId()
   const panelRef = useOverlay(open, onClose)
@@ -37,7 +37,7 @@ export function Drawer({ open, title, description, onClose, children, footer, wi
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none sm:max-h-[calc(100dvh-3rem)] ${wide ? 'max-w-3xl' : 'max-w-xl'}`}
+        className={`relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none sm:max-h-[calc(100dvh-3rem)] ${wide === 'xl' ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-xl'}`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[#eef1f4] px-5 py-3.5">
           <div>
