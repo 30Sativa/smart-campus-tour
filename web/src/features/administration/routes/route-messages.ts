@@ -1,5 +1,14 @@
 import { ApiError } from '../../../api/client'
+import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
+
+/** A revision's state as words and colour: draft, submitted and waiting, passed, failed. */
+export function revisionTone(submitted: boolean, status: string) {
+  if (!submitted) return { label: 'Bản nháp', chip: 'border-[#dbe6f4] bg-[#f6f9fd] text-[#5d7085]' }
+  if (status === 'PASS') return { label: 'Đã kiểm chứng', chip: 'border-[#cde9dc] bg-[#effbf5] text-[#1f7a55]' }
+  if (status === 'FAIL') return { label: 'Không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
+  return { label: 'Chờ kiểm chứng', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
+}
 
 const ISSUES: Record<string, string> = {
   MAP_REQUIRED: 'Chưa có map và frame.', START_POSE_INVALID: 'Pose bắt đầu không hợp lệ.',
@@ -30,6 +39,17 @@ export function routeError(error: unknown): string {
     const codes = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string' && v in ISSUES)
     return codes.length ? [...new Set(codes)].map(routeIssue).join(' ') : 'Dữ liệu chưa hợp lệ. Kiểm tra tên, map, pose, điểm dừng và thời gian giữ góc nhìn.'
   }
+  return 'Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.'
+}
+
+/** Deactivate and activate speak in the backend's words, which name the actual refusal. */
+export function routeAvailabilityError(error: unknown): string {
+  if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'
+  if (error.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
+  if (error.status === 403) return 'Tài khoản không có quyền quản lý tuyến.'
+  const message = backendMessage(error)
+  if (message) return message
+  if (error.status === 404) return error.body.trim() ? 'Không tìm thấy tuyến. Hãy tải lại danh sách.' : MISSING_ENDPOINT_MESSAGE
   return 'Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.'
 }
 

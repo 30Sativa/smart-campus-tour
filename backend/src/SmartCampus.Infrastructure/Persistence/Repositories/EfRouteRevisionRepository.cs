@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
+using SmartCampus.Application.Common.Authentication;
 using SmartCampus.Application.Common.Models;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
@@ -90,8 +91,18 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
             .Include(test => test.RouteRevision).ThenInclude(revision => revision.RouteRevisionStops)
             .OrderBy(test => test.CheckedAt).ThenBy(test => test.Id).ToArrayAsync(ct);
 
+    public async Task<IReadOnlyList<RouteScheduledTourView>> ListScheduledToursAsync(Guid routeId, CancellationToken ct) =>
+        await db.Tours.AsNoTracking().Where(t => (t.RouteId == routeId || t.ActiveRouteId == routeId) &&
+                (t.State == "SCHEDULED" || t.State == "READY"))
+            .OrderBy(t => t.ScheduledStartAt).ThenBy(t => t.Id)
+            .Select(t => new RouteScheduledTourView(t.Id, t.Name, t.ScheduledStartAt, t.State)).ToArrayAsync(ct);
+
+    public Task<AuditLog?> FindAvailabilityRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct) =>
+        db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actorUserId && a.CorrelationId == requestId &&
+            a.EntityType == "Route" && (a.Action == "ROUTE_ACTIVATED" || a.Action == "ROUTE_DEACTIVATED"), ct);
+
     public async Task<PagedResult<Guid>> ListCurrentRevisionIdsAsync(string? search, Guid? mapVersionId,
-        string sort, int page, int size, CancellationToken ct)
+        string sort, int page, int size, CancellationToken ct, bool? isActive = null)
     {
         var current = db.RouteRevisions.AsNoTracking().Where(revision =>
             db.Routes.Any(route => route.Id == revision.RouteId && route.AuthoringMode == "VERSIONED") &&
@@ -101,6 +112,10 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
             current = current.Where(revision => revision.Name.Contains(search) ||
                 (revision.Description != null && revision.Description.Contains(search)));
         if (mapVersionId.HasValue) current = current.Where(revision => revision.MapVersionId == mapVersionId.Value);
+        // Same rule as Route.IsOpenForNewTours, translated for SQL.
+        if (isActive.HasValue)
+            current = current.Where(revision => db.Routes.Any(route => route.Id == revision.RouteId &&
+                (route.IsActive || route.UpdatedAt == null) == isActive.Value));
 
         var total = await current.LongCountAsync(ct);
         var ordered = sort switch
@@ -123,6 +138,11 @@ public sealed class EfRouteRevisionRepository(ApplicationDbContext db) : IRouteR
 
     public Task<User?> FindUserAsync(Guid userId, CancellationToken ct) =>
         db.Users.AsNoTracking().Include(u => u.UserRoles).SingleOrDefaultAsync(u => u.Id == userId, ct);
+
+    public async Task<IReadOnlyList<User>> ListActiveStaffUsersAsync(CancellationToken ct) =>
+        await db.Users.AsNoTracking().Include(u => u.UserRoles)
+            .Where(u => u.IsActive && u.UserRoles.Any(r => r.Role == ApplicationRoles.StaffCode))
+            .OrderBy(u => u.FullName).ThenBy(u => u.Id).Take(200).ToArrayAsync(ct);
 
     public Task<Robot?> FindPhysicalRobotAsync(string robotCode, CancellationToken ct) =>
         db.Robots.AsNoTracking().SingleOrDefaultAsync(r => r.RobotCode == robotCode && r.SourceType == "PHYSICAL", ct);

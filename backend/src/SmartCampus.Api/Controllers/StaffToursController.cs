@@ -7,11 +7,13 @@ using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
+using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 
 namespace SmartCampus.Api.Controllers;
@@ -23,16 +25,27 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters,
-        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct)
+        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? phase, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(parameters.Expand))
             throw new ValidationException([new ValidationFailure("Expand", "Tour expansion is not supported.")]);
         var page = await sender.Send(new GetToursQuery(new(parameters.Search,
             string.IsNullOrWhiteSpace(parameters.Sort) ? "scheduledStartAt" : parameters.Sort.Trim(),
-            parameters.Page, parameters.Size, state, from, to)), ct);
+            parameters.Page, parameters.Size, state, from, to, phase)), ct);
         return Ok(new PagedResponse<TourSummary> { Success = true, Message = "Tours retrieved.", Data = page.Items,
             Pagination = new PaginationMetadata(page.Page, page.PageSize, page.TotalItems, page.TotalPages) });
     }
+
+    [HttpGet("operators")]
+    public async Task<IActionResult> Operators(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RouteTestParticipantView>> { Success = true, Message = "Tour operators retrieved.",
+            Data = await sender.Send(new ListRouteTestParticipantsQuery(), ct) });
+
+    [HttpGet("slots")]
+    public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] TimeOnly? time, CancellationToken ct) =>
+        Ok(new BaseResponse<TourSlotsView> { Success = true, Message = "Tour slots retrieved.",
+            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to, time), ct) });
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

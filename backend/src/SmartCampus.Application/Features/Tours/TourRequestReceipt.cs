@@ -8,7 +8,7 @@ namespace SmartCampus.Application.Features.Tours;
 
 internal static class TourRequestReceipt
 {
-    public static string Fingerprint(string action, Guid? tour, TourInput? input = null, string? routeVersion = null, string? reason = null) =>
+    public static string Fingerprint(string action, Guid? tour, object? input = null, string? routeVersion = null, string? reason = null) =>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { action, tour, input, routeVersion, reason })));
 
     public static async Task<Guid?> ReplayAsync(ITourManagementRepository repository, Guid actor, Guid requestId,

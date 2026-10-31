@@ -15,10 +15,10 @@ const BUTTON_KIND: Record<ButtonKind, string> = {
 export function buttonClass(kind: ButtonKind = 'secondary', size: 'sm' | 'md' | 'lg' = 'md') {
   const sizing =
     size === 'sm'
-      ? 'min-h-7 gap-1.5 rounded-lg px-2.5 text-xs'
+      ? 'min-h-8 gap-1.5 rounded-lg px-3 text-[13px]'
       : size === 'lg'
       ? 'min-h-10 gap-2 rounded-[10px] px-4 text-sm'
-      : 'min-h-8 gap-1.5 rounded-[9px] px-3 text-[12.5px]'
+      : 'min-h-10 gap-2 rounded-xl px-4 text-sm'
   return `inline-flex items-center justify-center whitespace-nowrap font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-150 disabled:cursor-not-allowed disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${sizing} ${BUTTON_KIND[kind]}`
 }
 
@@ -28,7 +28,7 @@ export function buttonClass(kind: ButtonKind = 'secondary', size: 'sm' | 'md' | 
 
 /** Text input, select and textarea. `aria-invalid` turns it red; no separate error variant. */
 export const inputClass =
-  'w-full min-h-8 rounded-[9px] border border-[#d9e9f5] bg-white px-2.5 py-1.5 text-[13px] text-[#0f172a] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[#94a8b8] hover:border-[#a8cde6] focus:border-[#5b9dc9] focus:ring-2 focus:ring-[#5b9dc9]/15 disabled:bg-[#f4f9fd] disabled:text-[#94a3b8] aria-[invalid=true]:border-[#dc2626] aria-[invalid=true]:ring-[#dc2626]/15'
+  'w-full min-h-10 rounded-xl border border-[#d9e9f5] bg-white px-3 py-2 text-sm text-[#0f172a] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[#64748b] hover:border-[#a8cde6] focus:border-[#5b9dc9] focus:ring-2 focus:ring-[#5b9dc9]/15 disabled:bg-[#f4f9fd] disabled:text-[#94a3b8] aria-[invalid=true]:border-[#dc2626] aria-[invalid=true]:ring-[#dc2626]/15'
 
 
 
@@ -37,11 +37,22 @@ export const labelClass = 'block text-xs font-medium text-[#334155]'
 
 
 /** Table header cell: sentence case and quiet; the rows carry the weight. */
-export const thClass = 'bg-[#f8fafc] px-3 py-[7px] text-[11.5px] font-medium whitespace-nowrap text-[#64748b]'
+export const thClass = 'bg-[#f8fafc] px-4 py-3 text-xs font-semibold whitespace-nowrap text-[#475569]'
 
 
-export const tdClass = 'px-3 py-2 text-[13px] align-middle'
+export const tdClass = 'px-4 py-3 text-sm align-middle'
 
 
 /** Row: a hover tint so a long row can be followed across the screen. */
 export const rowClass = 'transition-colors duration-150 hover:bg-[#fafcfe]'
+
+
+
+/* ── Light surfaces: an off-white page with white cards lifted by a soft shadow ── */
+
+/** White card on the off-white page; two soft shadows give depth without a hard border. */
+export const cardClass =
+  'rounded-2xl border border-[#e2e8f0] bg-white shadow-xs'
+
+/** A quieter tile inside a card: one reading (telemetry value, note). */
+export const tileClass = 'rounded-xl border border-[#edf2f7] bg-[#f8fafc]'

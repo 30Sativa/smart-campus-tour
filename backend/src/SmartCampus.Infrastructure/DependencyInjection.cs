@@ -17,6 +17,7 @@ using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours;
 
 namespace SmartCampus.Infrastructure;
 
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddSingleton<IUsernameNormalizer, InvariantUsernameNormalizer>();
         services.AddScoped<IFleetRobotAuthenticator, FleetRobotAuthenticator>();
         services.AddScoped<IFleetRobotConnectionConfirmationStore, EfFleetRobotConnectionConfirmationStore>();
+        services.AddScoped<IRobotMapAssignmentManager, EfRobotMapAssignmentManager>();
         services.AddScoped<IPhysicalRobotCredentialManager, EfPhysicalRobotCredentialManager>();
         services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
@@ -59,6 +61,10 @@ public static class DependencyInjection
         services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
+        services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>(),
+            configuration["Tours:CustomStartEarliest"], configuration["Tours:CustomStartLatest"]));
+
+        services.AddScoped<IAuditLogReader, EfAuditLogReader>();
         services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
         services.AddScoped<IRepresentativeRepository, EfRepresentativeRepository>();
         services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();

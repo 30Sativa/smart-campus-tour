@@ -1,35 +1,71 @@
 import { useState } from 'react'
-import { ChevronDown, CircleCheck, CircleX, Hand, Users } from 'lucide-react'
+import { Bot, CalendarClock, ChevronDown, CircleCheck, CircleX, Hand, Lock, Users } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import type { GroupRegistration, StartCheck, TourOperation } from '../../../api/contracts/staff'
+import type { GroupRegistration, StartCheck, TourOperation, TourState } from '../../../api/contracts/staff'
 import { StatusBadge } from '../StaffUi'
-import { buttonClass } from '../../../components/ui/ui-classes'
-import { START_CHECK_LABEL } from '../status'
+import { buttonClass, cardClass } from '../../../components/ui/ui-classes'
+import { START_CHECK_LABEL, statusInfo } from '../status'
 import { REASON_SHORT } from '../reason'
 import { formatCountdown, formatTime } from '../formatters'
 import { groupSummary, tourAction } from '../attention'
+
+/**
+ * One look per Tour state, readable without colour: an icon (or the live dot),
+ * the border style and the label all change. Scheduled is dashed (not locked
+ * yet), Ready carries a lock, Running is the only solid fill, Completed is
+ * green, Cancelled is grey.
+ */
+const STATE_LOOK: Record<TourState, { icon: LucideIcon | null; className: string }> = {
+  Scheduled: { icon: CalendarClock, className: 'border-dashed border-[#94a3b8] bg-white text-[#475569]' },
+  Ready: { icon: Lock, className: 'border-[#9cc7e4] bg-[#eaf4fc] text-[#1f5f8b]' },
+  Running: { icon: null, className: 'border-[#2d719e] bg-[#2d719e] text-white shadow-[0_2px_8px_-2px_rgba(45,113,158,0.55)]' },
+  Completed: { icon: CircleCheck, className: 'border-[#bfe6d2] bg-[#effbf5] text-[#1f7a55]' },
+  Cancelled: { icon: CircleX, className: 'border-[#e2e8f0] bg-[#f1f5f9] text-[#64748b]' },
+}
+
+export function TourStateBadge({ state, size = 'sm' }: { state: TourState; size?: 'sm' | 'md' }) {
+  const look = STATE_LOOK[state]
+  const Icon = look.icon
+  const md = size === 'md'
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border font-bold whitespace-nowrap ${md ? 'px-3 py-1 text-[13px]' : 'px-2.5 py-0.5 text-[11px]'} ${look.className}`}>
+      {Icon ? (
+        <Icon size={md ? 14 : 12} aria-hidden="true" />
+      ) : (
+        <span className="relative inline-flex size-2 shrink-0" aria-hidden="true">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-white opacity-60 [animation-duration:2.4s] motion-reduce:hidden" />
+          <span className="relative inline-flex size-2 rounded-full bg-white" />
+        </span>
+      )}
+      {statusInfo(state).label}
+    </span>
+  )
+}
 
 /** TourState, plus OperationalStatus and Hold while Running - never merged into one enum. */
 export function TourStateBadges({
   tour,
   size = 'sm',
+  showReason = true,
 }: {
   tour: Pick<TourOperation, 'state' | 'operationalStatus' | 'reason' | 'progress'>
   size?: 'sm' | 'md'
+  showReason?: boolean
 }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <StatusBadge value={tour.state} size={size} live={tour.state === 'Running' && tour.operationalStatus === 'Normal'} />
+      <TourStateBadge state={tour.state} size={size} />
       {tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance' && (
         <StatusBadge value="NeedsAssistance" size={size} />
       )}
-      {tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance' && tour.reason && (
-        <span className="text-[11px] font-bold text-[#dc2626] bg-[#fef2f2] px-2 py-0.5 rounded-full border border-[#fecaca]">
+      {showReason && tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance' && tour.reason && (
+        <span className="rounded-full border border-[#fecaca] bg-[#fef2f2] px-2 py-0.5 text-[11px] font-bold text-[#b91c1c]">
           {REASON_SHORT[tour.reason] ?? tour.reason}
         </span>
       )}
       {tour.progress?.hold && (
-        <span className="inline-flex items-center gap-1 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2 py-0.5 text-[11px] font-bold text-[#2563eb]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#fed7aa] bg-[#fff7ed] px-2 py-0.5 text-[11px] font-bold text-[#c2410c]">
           <Hand size={11} aria-hidden="true" />
           Đang giữ
         </span>
@@ -47,9 +83,19 @@ function TourActionLink({ tour }: { tour: TourOperation }) {
   )
 }
 
+/** Top edge of a Tour card, so the state reads before any text. */
+const STATE_EDGE: Record<TourState, string> = {
+  Scheduled: 'bg-[#cbd5e1]',
+  Ready: 'bg-[#7db9db]',
+  Running: 'bg-[#2d719e]',
+  Completed: 'bg-[#6cc49a]',
+  Cancelled: 'bg-[#e2e8f0]',
+}
+
 /**
- * Tours as a table (laptop) or cards (tablet and below). Every row carries
- * exactly one action, the one its state calls for.
+ * Tours as a list of cards (every width): time and state first, then who and
+ * which route, then registrations and robot. Every card carries exactly one
+ * action, the one its state calls for.
  */
 export function TourTable({
   tours,
@@ -63,109 +109,74 @@ export function TourTable({
   label: string
 }) {
   return (
-    <>
-      <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full text-left text-sm" aria-label={label}>
-          <thead className="bg-[#f8fafc] text-[11.5px] font-medium text-[#64748b] border-b border-[#e2e8f0]">
-            <tr>
-              <th className="px-3.5 py-3">Giờ</th>
-              <th className="px-3 py-3">Buổi tham quan</th>
-              <th className="px-3 py-3">Đoàn đăng ký</th>
-              <th className="px-3 py-3">Robot</th>
-              <th className="px-3 py-3">Trạng thái</th>
-              <th className="px-3.5 py-3 text-right">
-                <span className="sr-only">Thao tác</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#f1f5f9]">
-            {tours.map((tour) => {
-              const groups = groupSummary(tour)
-              const countdown = formatCountdown(tour.scheduledAt, now)
-              return (
-                <tr key={tour.id} className="transition-colors hover:bg-[#f8fafc]">
-                  <td className="px-3.5 py-3.5 align-top">
-                    <p className="font-bold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</p>
-                    <p className="mt-0.5 text-xs whitespace-nowrap text-[#94a3b8]">
-                      {showDate
-                        ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(
-                            new Date(tour.scheduledAt),
-                          )
-                        : tour.state === 'Scheduled' || tour.state === 'Ready'
-                        ? countdown ?? 'đã tới giờ'
-                        : tour.startedAt
-                        ? `bắt đầu ${formatTime(tour.startedAt)}`
-                        : ''}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3.5 align-top">
-                    <Link
-                      to={`/staff/tours/${tour.id}`}
-                      className="font-bold text-[#0f172a] hover:text-[#2563eb] transition-colors"
-                    >
-                      {tour.name}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-[#64748b]">
-                      <span className="font-mono font-semibold text-[#2563eb]">{tour.code}</span> · {tour.routeName} ·{' '}
-                      {tour.stops.length} POI
-                    </p>
-                  </td>
-                  <td className="px-3 py-3.5 align-top">
-                    <p className="font-semibold whitespace-nowrap text-[#334155]">
-                      {groups.groups} đoàn · {groups.students} học sinh
-                    </p>
-                    {groups.pending > 0 && (
-                      <p className="mt-0.5 text-xs font-semibold text-[#d97706]">{groups.pending} đăng ký chờ duyệt</p>
-                    )}
-                  </td>
-                  <td className="px-3 py-3.5 align-top font-mono text-xs text-[#334155]">
-                    {tour.robotName ?? <span className="font-sans text-xs text-[#94a3b8]">Nhận khi bắt đầu</span>}
-                  </td>
-                  <td className="px-3 py-3.5 align-top">
-                    <TourStateBadges tour={tour} />
-                    {tour.state === 'Scheduled' && tour.readyBlockers.length > 0 && (
-                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#94a3b8]">
-                        {tour.readyBlockers.join(' · ')}
-                      </p>
-                    )}
-                    {tour.state === 'Cancelled' && tour.endReason && (
-                      <p className="mt-1 max-w-56 text-[11px] leading-4 text-[#94a3b8]">{tour.endReason}</p>
-                    )}
-                  </td>
-                  <td className="px-3.5 py-3.5 text-right align-top">
-                    <TourActionLink tour={tour} />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <ul className="divide-y divide-[#f1f5f9] lg:hidden" aria-label={label}>
-        {tours.map((tour) => {
-          const groups = groupSummary(tour)
-          return (
-            <li key={tour.id} className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#0f172a]">
-                    <span className="tabular-nums">{formatTime(tour.scheduledAt)}</span> · {tour.name}
+    <ul aria-label={label} className="grid gap-3 bg-[#f8fafc] p-3 sm:grid-cols-2 2xl:grid-cols-3">
+      {tours.map((tour) => {
+        const groups = groupSummary(tour)
+        const countdown = formatCountdown(tour.scheduledAt, now)
+        const closed = tour.state === 'Completed' || tour.state === 'Cancelled'
+        const when = showDate
+          ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(tour.scheduledAt))
+          : tour.state === 'Scheduled' || tour.state === 'Ready'
+          ? countdown ?? 'đã tới giờ'
+          : tour.startedAt
+          ? `bắt đầu ${formatTime(tour.startedAt)}`
+          : ''
+        return (
+          <li
+            key={tour.id}
+            className={`${cardClass} relative flex min-w-0 flex-col overflow-hidden transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(15,23,42,0.05),0_16px_32px_-16px_rgba(23,59,89,0.3)] motion-reduce:hover:translate-y-0 ${closed ? 'opacity-85' : ''}`}
+          >
+            <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${STATE_EDGE[tour.state]}`} />
+            <div className="flex flex-1 flex-col gap-3 p-4 pt-5">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className={`text-xl leading-tight font-bold tabular-nums ${tour.state === 'Cancelled' ? 'text-[#94a3b8] line-through' : 'text-[#0f172a]'}`}>
+                    {formatTime(tour.scheduledAt)}
                   </p>
-                  <p className="mt-1 text-xs text-[#64748b]">
-                    {tour.code} · {tour.routeName} · {groups.groups} đoàn · {groups.students} học sinh
-                  </p>
+                  {when && <p className="mt-0.5 text-xs whitespace-nowrap text-[#64748b]">{when}</p>}
                 </div>
                 <TourStateBadges tour={tour} />
               </div>
-              <div className="mt-3">
-                <TourActionLink tour={tour} />
+
+              <div className="min-w-0">
+                <Link to={`/staff/tours/${tour.id}`} className="line-clamp-2 font-bold text-[#0f172a] transition-colors hover:text-[#2d719e]">
+                  {tour.name}
+                </Link>
+                <p className="mt-0.5 truncate text-xs text-[#64748b]">
+                  <span className="font-mono font-semibold text-[#2d719e]">{tour.code}</span> · {tour.routeName} · {tour.stops.length} POI
+                </p>
               </div>
-            </li>
-          )
-        })}
-      </ul>
-    </>
+
+              {tour.state === 'Scheduled' && tour.readyBlockers.length > 0 && (
+                <p className="rounded-lg border border-[#fde7c2] bg-[#fffbf2] px-2.5 py-1.5 text-[11.5px] leading-4 text-[#8a5a06]">
+                  Chưa sẵn sàng: {tour.readyBlockers.join(' · ')}
+                </p>
+              )}
+              {tour.state === 'Cancelled' && tour.endReason && (
+                <p className="text-[11.5px] leading-4 text-[#64748b]">Lý do: {tour.endReason}</p>
+              )}
+
+              <dl className="mt-auto grid grid-cols-2 gap-3 border-t border-[#eef2f6] pt-3 text-xs">
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1 text-[#64748b]"><Users size={12} aria-hidden="true" />Đoàn đăng ký</dt>
+                  <dd className="m-0 font-semibold text-[#334155]">{groups.groups} đoàn · {groups.students} học sinh</dd>
+                  {groups.pending > 0 && <dd className="m-0 font-semibold text-[#b45309]">{groups.pending} đăng ký chờ duyệt</dd>}
+                </div>
+                <div className="min-w-0">
+                  <dt className="flex items-center gap-1 text-[#64748b]"><Bot size={12} aria-hidden="true" />Robot</dt>
+                  <dd className="m-0 truncate font-mono font-semibold text-[#334155]">
+                    {tour.robotName ?? <span className="font-sans font-normal text-[#94a3b8]">Nhận khi bắt đầu</span>}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <div className="flex justify-end border-t border-[#eef2f6] bg-[#fafbfc] px-4 py-2.5">
+              <TourActionLink tour={tour} />
+            </div>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

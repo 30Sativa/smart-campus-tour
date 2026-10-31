@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
@@ -15,7 +16,10 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     private static readonly Expression<Func<Tour, TourSummary>> Summary = t => new(
         t.Id, t.Name, t.Description, t.RouteId, t.Route.Name, t.ActiveRouteId, t.ScheduledStartAt,
         t.State, t.CreatedByUserId, t.CreatedAt, t.UpdatedAt, Convert.ToBase64String(t.RowVersion),
-        t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.Invitation != null));
+        t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.Invitation != null),
+        t.RouteRevisionId, t.TourRobotReservations.Where(r => r.ReleasedAt == null)
+            .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
+                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds)).FirstOrDefault());
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {
@@ -41,6 +45,13 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             query = query.Where(t => t.Name.Contains(search) || (t.Description != null && t.Description.Contains(search)) || t.Route.Name.Contains(search));
         }
         if (request.State is not null) query = query.Where(t => t.State == request.State);
+        query = request.Phase switch
+        {
+            TourPhases.Upcoming => query.Where(t => (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt > request.Now),
+            TourPhases.Running => query.Where(t => t.State == "RUNNING"),
+            TourPhases.Finished => query.Where(t => t.State == "COMPLETED" || t.State == "ENDED" || t.State == "CANCELLED"),
+            _ => query
+        };
         if (request.From.HasValue) query = query.Where(t => t.ScheduledStartAt >= request.From.Value);
         if (request.To.HasValue) query = query.Where(t => t.ScheduledStartAt <= request.To.Value);
         var count = await query.LongCountAsync(ct);
@@ -71,7 +82,41 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<IReadOnlyList<GroupRegistration>> LoadCancellationRegistrationsAsync(Guid id, CancellationToken ct) =>
         await db.GroupRegistrations.Where(r => r.TourId == id).OrderBy(r => r.Id).ToArrayAsync(ct);
 
+    public Task LockRobotReservationsAsync(Guid robotId, CancellationToken ct)
+    {
+        var resource = $"tour-robot-reservation:{robotId:D}";
+        return db.Database.ExecuteSqlInterpolatedAsync($"""
+            DECLARE @result int;
+            EXEC @result = sys.sp_getapplock @Resource={resource}, @LockMode='Exclusive',
+                @LockOwner='Transaction', @LockTimeout=10000;
+            IF @result < 0 THROW 51103, 'Robot reservation lock unavailable.', 1;
+            """, ct);
+    }
+
+    public async Task<IReadOnlyList<TourReservationHold>> GetActiveReservationsAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct) =>
+        await db.TourRobotReservations.AsNoTracking().Where(r => r.RobotId == robotId && r.ReleasedAt == null &&
+            r.StartsAt < endsAt && r.EndsAt > startsAt).OrderBy(r => r.StartsAt)
+            .Select(r => new TourReservationHold(r.Tour.Name, r.StartsAt, r.EndsAt)).ToArrayAsync(ct);
+
+    public Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct) =>
+        db.TourRobotReservations.SingleOrDefaultAsync(r => r.TourId == id && r.ReleasedAt == null, ct);
+
+    public async Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct)
+    {
+        var operatorUser = await db.Tours.AsNoTracking().Where(t => t.Id == id && t.OperatorUserId != null)
+            .Select(t => new RouteTestParticipantView(t.OperatorUser!.Id, t.OperatorUser.FullName, t.OperatorUser.Username))
+            .SingleOrDefaultAsync(ct);
+        // A cancelled Tour shows the reservation it released, the newest row by time.
+        var reservation = await db.TourRobotReservations.AsNoTracking().Where(r => r.TourId == id)
+            .OrderByDescending(r => r.ReservedAt).ThenBy(r => r.Id)
+            .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
+                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds))
+            .FirstOrDefaultAsync(ct);
+        return new(operatorUser, reservation);
+    }
+
     public void Add(Tour tour) => db.Tours.Add(tour);
+    public void Add(TourRobotReservation reservation) => db.TourRobotReservations.Add(reservation);
     public void AddAudit(AuditLog audit) => db.AuditLogs.Add(audit);
     public void AddRouteChangeEvent(Tour tour, Guid previousRouteId, Guid actor, DateTimeOffset now) => db.TourEvents.Add(new TourEvent
     {

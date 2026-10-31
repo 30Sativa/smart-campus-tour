@@ -43,6 +43,8 @@ public partial class RouteTestRun
 
     public DateTimeOffset CheckedAt { get; set; }
 
+    public string? MeasurementBasis { get; set; }
+
     public virtual User CheckedByUser { get; set; } = null!;
 
     public virtual MapDeploymentCheck MapDeploymentCheck { get; set; } = null!;
@@ -50,6 +52,8 @@ public partial class RouteTestRun
     public virtual User ParticipatingStaffUser { get; set; } = null!;
 
     public virtual Robot Robot { get; set; } = null!;
+
+    public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
 
     public virtual RouteRevision RouteRevision { get; set; } = null!;
 }

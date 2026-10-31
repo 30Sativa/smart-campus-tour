@@ -56,7 +56,7 @@ internal static class RouteRevisionMapper
                 Convert.ToHexString(r.MapPackageSha256).ToLowerInvariant(),
                 await repo.GetRobotCodeAsync(r.RobotId, ct) ?? "", r.CheckedByUserId,
                 r.ParticipatingStaffUserId, r.ResultCode, r.AllStopsReached, r.SafelyStopped, r.LocalizationPassed,
-                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt));
+                r.MeasuredDurationSeconds, r.FailureReason, r.EvidenceNote, r.CheckedAt, r.MeasurementBasis));
         var revisionRecords = await repo.GetRevisionsAsync(route.Id, submittedOnly: false, ct);
         var summaries = new List<RouteRevisionSummaryView>();
         foreach (var historical in revisionRecords.Where(r => history || r.Id == revision.Id).OrderBy(r => r.RevisionNumber))
@@ -79,6 +79,8 @@ internal static class RouteRevisionMapper
             Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(), submissions.Count > 0,
             effective?.ResultCode ?? "NOT_TESTED", effective?.Id, duration, dwell,
             stops.Select(s => new RouteRevisionStopView(s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
-                s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw, s.CameraPreset)).ToArray(), dtoRuns, summaries, eligibilityIssues);
+                s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
+                s.CameraPreset, s.NarrationText, s.FallbackVideoUrl)).ToArray(), dtoRuns, summaries, eligibilityIssues,
+            route.IsOpenForNewTours, LegacyRouteRevision.For(route));
     }
 }

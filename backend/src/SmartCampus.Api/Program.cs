@@ -93,6 +93,7 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
     builder.Services.AddHttpClient<SmartCampus.Application.Common.Abstractions.Invitations.IInvitationEmailSender,
         SmartCampus.Infrastructure.Integrations.Invitations.ResendInvitationEmailSender>(client =>
         client.Timeout = TimeSpan.FromSeconds(20));
+    builder.Services.AddSingleton<SmartCampus.Api.Invitations.TourCancelNoticeDispatcher>();
     if (builder.Configuration.GetValue<bool?>("Invitations:EmailWorkerEnabled") != false)
         builder.Services.AddHostedService<SmartCampus.Api.Invitations.InvitationEmailWorker>();
 }

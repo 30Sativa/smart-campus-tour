@@ -27,6 +27,10 @@ public partial class PoiProposalRevision
 
     public string CameraPreset { get; set; } = null!;
 
+    public string? NarrationText { get; set; }
+
+    public string? FallbackVideoUrl { get; set; }
+
     public byte[] NavigationFingerprint { get; set; } = null!;
 
     public Guid RequestId { get; set; }

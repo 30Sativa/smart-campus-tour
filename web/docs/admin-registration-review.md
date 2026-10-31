@@ -34,6 +34,14 @@ API in docs/architecture.md Section 3.2.4; approval reversal and Tour lifecycle
 remain separate. Existing Tour/dashboard review and invitation simulation consumers
 remain intact with their own drawer and caches; they do not observe SQL data.
 
+The review drawer opens on the row list while any row is pending, otherwise on
+invitations once the registration is approved. Staff may tick several pending rows
+and accept or reject them in one confirmation. ADR-0026 still holds: the web sends
+each row through the one-row API in order, re-reading the registration between
+rows, so every row keeps its own decision and audit entry. The run stops at the
+first failure or at a row that changed since it was opened, and reports how many
+rows were saved. A bulk rejection applies one reason to every ticked row.
+
 Source ownership:
 
 - Backend Registrations (`backend/src/SmartCampus.Application/Features/Registrations/`) owns the invariants every

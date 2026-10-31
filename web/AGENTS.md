@@ -24,8 +24,7 @@ shared rules; this file only covers what is specific to `web/`.
   - `/` and public routes: visitor-facing, no login required.
   - `/tour` and `/tour/:tourId`: Student remote-Tour page, no account UI.
     SQL GUID Tour links use a personal access code exchanged for a browser
-    session (ADR-0010/0015); non-GUID fixtures retain the labelled group-code
-    mock. There is one shared-viewing row for a
+    session (ADR-0010/0015); any other `/tour` address asks for the email link. There is one shared-viewing row for a
     projector room. See `docs/requirements/campus-tour-scope.md` and the UI flow.
   - `/dai-dien/*`: school Representative registration and invitation support.
     Registration submission/pre-approval management is API-backed; see
@@ -41,13 +40,14 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. Tour reads still use the legacy Staff projection; scheduling/READY is blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator on a free slot or typed time judged by `/api/staff/manage/tours/slots` (ADR-0034, ADR-0035, ADR-0036); legacy Tours keep their projection, and READY stays blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
-    existing `/api/technical/*` and `/api/maps/*` contracts. Project POI YAML
-    import and route-level certification remain pending; no mock success state
-    is shown for either.
-  - `/admin/*`: administration, `Admin` only: Accounts and Roles. `/admin`
+    existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
+    `/api/technical/route-verifications/*` and the test-run endpoint; they are
+    human-entered evidence, not proof of a physical run or READY. Project POI
+    YAML import remains pending; no mock success state is shown for it.
+  - `/admin/*`: administration, `Admin` only: Accounts, Roles, robot key history and the read-only system audit log. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.
   - Signed-in areas are **lazy-loaded** (`React.lazy` + route-based code
@@ -146,7 +146,7 @@ web/
     │   ├── staff/         StaffShell/nav, status/type vocabulary, formatters,
     │   │                  reason, attention, query/realtime hooks and
     │   │                  operation, route, robot and twin components
-    │   └── student/       legacy fixture flow/status plus invitation/ SQL Tour
+    │   └── student/       status plus invitation/ SQL Tour
     │                      cookie entry, session recovery and leave
     ├── components/ui/    multi-feature neutral primitives and shared console
     │                     chrome; tests remain next to their owner
@@ -213,8 +213,7 @@ screen cannot drift from the guard. Change a rule there, not at a call site.
 `homePathForRole()`, which is what decides where a fresh sign-in lands.
 
 The current frontend contains a mock Student page at `/tour` and live Representative submission pages at
-`/dai-dien/*`. Student fixture Tours match a group code/name/class; SQL GUID
-Tour links use real code/cookie entry. Representative registration and
+`/dai-dien/*`. SQL GUID Tour links use real code/cookie entry. Representative registration and
 invitation support use SQL and the contract in docs/architecture.md Section 3.2.3.
 The Review 1 target (ADR-0010) instead emails a Tour page link and personal
 access code; entering the code creates a session, and a valid existing session
@@ -366,6 +365,17 @@ backend binding; never use them as fallback after a failed HTTP request.
     comes from the backend
     ([backend/AGENTS.md Section 3](../backend/AGENTS.md#3-current-model-and-fleet-boundary)).
 
+- **One notification pattern.** A successful action closes its dialog and says so
+  once through `notify()` (`components/ui/toast-store.ts`); the Toaster is mounted
+  in `RouteView`, so no screen renders its own success banner. A refusal stays
+  inside the form, beside the field when it has one, so nothing typed is lost. A
+  failed load uses the page's error panel with a retry. Confirm risky actions with
+  `ConfirmationDialog`, never `window.confirm`. Dialogs whose row can move between
+  lists while saving hold the row itself in state, not a lookup by id, or the save
+  unmounts them.
+- **One select.** Use `<select>` with `inputClass`; the open list is styled once in
+  `index.css` and falls back to the native list where unsupported. A required
+  select sets `title=""`, otherwise Chrome hovers its English validation tooltip.
 - Component structure is **folder-by-feature**: a feature owns its components,
   hooks and query hooks under `src/features/<feature>/`. The general rules for
   API access, state ownership, component responsibility, effects, error

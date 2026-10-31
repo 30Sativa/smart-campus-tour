@@ -1,5 +1,13 @@
 # CampusTour database snapshots
 
+## v1.10 Tour scheduling inputs (ADR-0035)
+
+`smart-campus-tour-schema-v1.10.sql` adds nullable `RouteTestRuns.MeasurementBasis` and `TourRobotReservations.ExpectedDurationSeconds`; `patches/upgrade-v1.9-to-v1.10-tour-scheduling.sql` applies them to a v1.9 database and is idempotent. Existing rows keep NULL: an old run must be measured again before it can size a reservation, and an old reservation keeps its window. Runtime grants do not change. The API build requires v1.10, so run the upgrade first.
+
+## v1.9 Tour on a tested Route revision (ADR-0034)
+
+`smart-campus-tour-schema-v1.9.sql` adds `Tours.RouteRevisionId`, `Tours.OperatorUserId` and `TourRobotReservations`; `patches/upgrade-v1.8-to-v1.9-tour-route-revision.sql` applies them to a v1.8 database and is idempotent. Legacy Tours keep NULL in the new columns. Runtime gets SELECT/INSERT on reservations and UPDATE only on the release columns, never DELETE. Overlap is refused by the application under a per-robot lock, not by a database constraint. The API build requires v1.9, so run the upgrade first.
+
 ## v1.2 versioned map/POI slice (ADR-0021)
 
 `smart-campus-tour-schema-v1.2.sql` is the full snapshot for a newly created
@@ -24,8 +32,8 @@ SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
 - The local DB was created empty. v1.1 is not an ALTER migration and did not migrate v1.0 or production data.
 - `backend/database/smart-campus-tour-permissions.sql` creates the `campus_tour_app` database role and grants SELECT/INSERT, denies UPDATE/DELETE on TourEvents/AuditLogs. Apply after the schema in the intended database. A deployment administrator provisions the runtime user and adds it to this role; the script does not create a login or change existing user memberships. Business-table permissions remain feature-specific.
-- Current schema is Database First v1.6. Runtime may SELECT/INSERT `Robots` for Technical Staff registration and UPDATE only credential lifecycle and `FirstAccepted*` columns. It never gets whole-table UPDATE/DELETE. The separate provisioner has column-scoped SELECT/UPDATE grants for credential lifecycle and confirmation fields, plus append-only audit access.
-- A v1.4/v1.5 database must run the controlled upgrade/regrant through v1.6 and pass the read-only `init-db.sh --check-only` gate before deploying an API build that requires the credential lifecycle schema. Do not run regrant against EC2/shared databases outside the verified-backup change process.
+- Current schema is Database First v1.10. Runtime may SELECT/INSERT `Robots` for Technical Staff registration and UPDATE only credential lifecycle, `FirstAccepted*`, and the three map-assignment columns. It never gets whole-table UPDATE/DELETE. The separate provisioner has column-scoped SELECT/UPDATE grants for credential lifecycle and confirmation fields, plus append-only audit access. Versioned POI revisions and route-stop snapshots add nullable `NarrationText` and `FallbackVideoUrl`; runtime retains only SELECT/INSERT access to these immutable records.
+- A v1.4/v1.5/v1.6/v1.7/v1.8/v1.9 database must run the controlled upgrade/regrant through v1.10 and pass the read-only `init-db.sh --check-only` gate before deploying an API build that requires map assignment in the database. Do not run regrant against EC2/shared databases outside the verified-backup change process.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
 
@@ -35,9 +43,9 @@ Treat the deployed snapshot as immutable, including comments. Put changing
 business explanations in docs/ADRs; in particular ADR-0017 freezes Route
 configuration from any Tour reference even if an older SQL comment mentions READY.
 The Compose initializer creates an empty database from
-`smart-campus-tour-schema-v1.6.sql`; its bootstrap check requires the current
-LF-normalized v1.6 hash marker or a recognized historical bootstrap marker plus
-the complete v1.6 structure before granting runtime permissions. The two
+`smart-campus-tour-schema-v1.10.sql`; its bootstrap check requires the current
+LF-normalized v1.10 hash marker or a recognized historical bootstrap marker plus
+the complete v1.10 structure before granting runtime permissions. The two
 historical v1.1 marker values (`96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
 and `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`)
 remain recognized as the accepted comment-only pair, but now return
@@ -49,12 +57,12 @@ credentials, or change the SQL Server engine. Empty-database bootstrap is an
 explicit `--bootstrap` operation. Existing data uses the separately locked
 Backend Database Schema Upgrade workflow, which takes and verifies a full
 backup before applying additive patches in order (v1.1→v1.2, v1.2→v1.3,
-v1.3→v1.4, v1.4→v1.5, v1.5→v1.6), then checks the resulting structure and runtime grants. It retains
-the original bootstrap hash and records `CampusTourSchemaVersion=1.6` only
+v1.3→v1.4, v1.4→v1.5, v1.5→v1.6, v1.6→v1.7, v1.7→v1.8, v1.8→v1.9, v1.9→v1.10), then checks the resulting structure and runtime grants. It retains
+the original bootstrap hash and records `CampusTourSchemaVersion=1.10` only
 after required structure checks. Unknown markers or incomplete upgrades fail
 closed. Any executable schema change needs its own ADR/database change process.
 
-For a fresh v1.6 database the initializer applies, in order, the full schema,
+For a fresh v1.10 database the initializer applies, in order, the full schema,
 the log role, map/POI grants, Route revision grants, then creates the runtime
 user and applies `backend/database/smart-campus-tour-runtime-permissions.sql`.
 That runtime script grants the v1.4 email request table only SELECT/INSERT/UPDATE

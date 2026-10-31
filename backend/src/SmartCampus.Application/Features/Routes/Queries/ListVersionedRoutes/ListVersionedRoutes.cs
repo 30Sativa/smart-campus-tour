@@ -7,7 +7,7 @@ using SmartCampus.Application.Common.Models;
 namespace SmartCampus.Application.Features.Routes;
 
 public sealed record ListVersionedRoutesQuery(string? Search, Guid? MapVersionId, int Page = 1,
-    int Size = 20, string Sort = "name") : IQuery<PagedResult<RouteRevisionView>>;
+    int Size = 20, string Sort = "name", bool? IsActive = null) : IQuery<PagedResult<RouteRevisionView>>;
 
 public sealed class ListVersionedRoutesValidator : AbstractValidator<ListVersionedRoutesQuery>
 {
@@ -27,7 +27,7 @@ public sealed class ListVersionedRoutesHandler(IRouteRevisionRepository reposito
     {
         var page = await repository.ListCurrentRevisionIdsAsync(
             string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim(), query.MapVersionId,
-            query.Sort, query.Page, query.Size, ct);
+            query.Sort, query.Page, query.Size, ct, query.IsActive);
         var items = new List<RouteRevisionView>(page.Items.Count);
         foreach (var revisionId in page.Items)
         {

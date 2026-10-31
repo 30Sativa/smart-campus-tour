@@ -8,10 +8,6 @@ public sealed class FleetSyncValidationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 22, 1, 0, 0, TimeSpan.Zero);
     private static readonly FleetSyncSettings Settings = new(
-        new Dictionary<string, FleetRobotMapContext>
-        {
-            ["robot_01"] = new("campus-v1", "map")
-        },
         TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5),
         TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
 

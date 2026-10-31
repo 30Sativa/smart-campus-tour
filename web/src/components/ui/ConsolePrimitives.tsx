@@ -29,11 +29,11 @@ export function PageHeader({
   scale?: 'default' | 'console'
 }) {
   return (
-    <header className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+    <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold text-[#2d719e]">{eyebrow}</p>
-        <h1 className="mt-0.5 text-[22px] leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-2xl">{title}</h1>
-        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-[#64748b]">{description}</p>
+        <h1 className="mt-1 text-2xl leading-tight font-bold tracking-[-0.025em] text-[#0f172a] sm:text-[28px]">{title}</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#64748b]">{description}</p>
       </div>
       {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
     </header>
@@ -191,7 +191,7 @@ export function PanelHead({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eef1f4] px-3.5 py-2.5">
       <div className="min-w-0">
-        <h2 className="text-[13px] font-semibold text-[#0f172a]">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-[#0f172a]">{title}</h2>
         {description && <p className="text-[11.5px] text-[#64748b]">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -230,7 +230,7 @@ const STAT_TONE = { info: 'text-[#2563eb]', danger: 'text-[#b23e31]', warn: 'tex
  * card per number: the eye reads across one row, and the page keeps its cards
  * for content. `tone` only colours the figure when it asks for work (>0).
  */
-export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: string; icon: LucideIcon; label: string; value: ReactNode; hint?: string; tone?: keyof typeof STAT_TONE }) {
+export function StatTile({ to, onClick, pressed, icon: Icon, label, value, hint, tone }: { to?: string; onClick?: () => void; pressed?: boolean; icon: LucideIcon; label: string; value: ReactNode; hint?: string; tone?: keyof typeof STAT_TONE }) {
   const active = tone && typeof value === 'number' && value > 0
   const body = (
     <>
@@ -240,6 +240,7 @@ export function StatTile({ to, icon: Icon, label, value, hint, tone }: { to?: st
     </>
   )
   const shape = 'block min-w-0 bg-white px-3.5 py-2.5'
+  if (onClick) return <button type="button" onClick={onClick} aria-pressed={pressed} className={`${shape} w-full cursor-pointer text-left transition-[background-color,box-shadow] duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${pressed ? 'shadow-[inset_0_-2px_0_#2d719e]' : ''}`}>{body}</button>
   if (!to) return <div className={shape}>{body}</div>
   return <Link to={to} className={`${shape} transition-colors duration-150 hover:bg-[#fafcfe] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9]`}>{body}</Link>
 }

@@ -60,7 +60,7 @@ public sealed class CreatePoiRevisionCommandHandler(
             var effectiveResult = await verificationRepository.FindLatestVerificationByFingerprintAsync(
                 proposal.Id, previous.NavigationFingerprint, cancellationToken);
             if (effectiveResult?.ResultCode != "PASS")
-                throw new ConflictException("A submitted POI revision must have a current passing result for its exact navigation fingerprint before it can be edited.");
+                throw new ConflictException("POI đã gửi chỉ được chỉnh sửa khi có kết quả kiểm chứng PASS còn hiệu lực cho đúng cấu hình điều hướng hiện tại.");
         }
 
         var map = await mapRepository.FindMapVersionAsync(draft.MapVersionId, includePackage: true, cancellationToken)

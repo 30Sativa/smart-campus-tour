@@ -15,10 +15,10 @@ public sealed class RouteRevisionsController(ISender sender) : ControllerBase
     [HttpGet("routes")]
     [Authorize(Roles = ApplicationRoles.Staff + "," + ApplicationRoles.TechnicalStaff)]
     public async Task<IActionResult> List([FromQuery] string? search, [FromQuery] Guid? mapVersionId,
-        [FromQuery] int page = 1, [FromQuery] int size = 20, [FromQuery] string sort = "name", CancellationToken ct = default)
+        [FromQuery] int page = 1, [FromQuery] int size = 20, [FromQuery] string sort = "name", [FromQuery] bool? isActive = null, CancellationToken ct = default)
     {
         var result = await sender.Send(new ListVersionedRoutesQuery(search, mapVersionId, page, size,
-            string.IsNullOrWhiteSpace(sort) ? "name" : sort.Trim()), ct);
+            string.IsNullOrWhiteSpace(sort) ? "name" : sort.Trim(), isActive), ct);
         return Ok(new PagedResponse<RouteRevisionView>
         {
             Success = true,
@@ -46,6 +46,24 @@ public sealed class RouteRevisionsController(ISender sender) : ControllerBase
         Ok(new BaseResponse<RouteRevisionView> { Success = true, Message = "Route revision submitted for manual technical testing.",
             Data = await sender.Send(new SubmitRouteRevisionCommand(User.GetRequiredUserId(), routeId, revisionId, request), ct) });
 
+    [HttpGet("staff/routes/{routeId:guid}/scheduled-tours")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<IActionResult> ScheduledTours(Guid routeId, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RouteScheduledTourView>> { Success = true, Message = "Scheduled Tours on this route retrieved.",
+            Data = await sender.Send(new ListRouteScheduledToursQuery(routeId), ct) });
+
+    [HttpPost("staff/routes/{routeId:guid}/deactivate")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<IActionResult> Deactivate(Guid routeId, [FromBody] RouteAvailabilityRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RouteAvailabilityResult> { Success = true, Message = "Route deactivated for new Tours.",
+            Data = await sender.Send(new SetVersionedRouteAvailabilityCommand(User.GetRequiredUserId(), routeId, false, request), ct) });
+
+    [HttpPost("staff/routes/{routeId:guid}/activate")]
+    [Authorize(Roles = ApplicationRoles.Staff)]
+    public async Task<IActionResult> Activate(Guid routeId, [FromBody] RouteAvailabilityRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RouteAvailabilityResult> { Success = true, Message = "Route activated for new Tours.",
+            Data = await sender.Send(new SetVersionedRouteAvailabilityCommand(User.GetRequiredUserId(), routeId, true, request), ct) });
+
     [HttpGet("routes/{routeId:guid}/revisions")]
     [Authorize(Roles = ApplicationRoles.Staff + "," + ApplicationRoles.TechnicalStaff)]
     public async Task<IActionResult> History(Guid routeId, [FromQuery] Guid? revisionId, [FromQuery] bool includeHistory = true, CancellationToken ct = default) =>
@@ -57,6 +75,12 @@ public sealed class RouteRevisionsController(ISender sender) : ControllerBase
     public async Task<IActionResult> Queue(CancellationToken ct) =>
         Ok(new BaseResponse<IReadOnlyList<RouteRevisionView>> { Success = true, Message = "Submitted route revisions retrieved.",
             Data = await sender.Send(new ListRouteRevisionQueueQuery(), ct) });
+
+    [HttpGet("technical/route-verifications/participants")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<IActionResult> Participants(CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RouteTestParticipantView>> { Success = true, Message = "Route test participants retrieved.",
+            Data = await sender.Send(new ListRouteTestParticipantsQuery(), ct) });
 
     [HttpPost("technical/routes/{routeId:guid}/revisions/{revisionId:guid}/test-runs")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]

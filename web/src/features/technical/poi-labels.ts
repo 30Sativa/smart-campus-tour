@@ -13,7 +13,4 @@ export function poiStatus(revision: { navigationStatus: string; isSubmitted: boo
 
 export const cameraPresetLabel: Record<string, string> = { FRONT: 'Phía trước', LEFT: 'Bên trái', RIGHT: 'Bên phải' }
 
-/** ROS yaw (radian) shown as a compass-free whole degree, -180..180. */
-export const yawDegrees = (yaw: number) => Math.round((yaw * 180) / Math.PI)
-
 export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đạt kiểm tra' : status === 'FAILED' ? 'Kiểm tra không đạt' : 'Chờ kỹ thuật kiểm tra'

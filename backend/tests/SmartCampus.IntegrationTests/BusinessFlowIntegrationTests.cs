@@ -23,7 +23,7 @@ public sealed class BusinessFlowIntegrationTests
 {
     private const string Password = "integration-test-password";
 
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task PhysicalRobotCredentialLifecycle_EnforcesRolesIsOneShotAtomicAndAudited()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -149,7 +149,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.All(storedAudit, row => Assert.DoesNotContain(rotatedCredential, row.DataJson ?? string.Empty));
         Assert.Equal(2, storedAudit.Count(row => row.Action is "ROBOT_CREDENTIAL_ISSUED" or "ROBOT_CREDENTIAL_ROTATED"));
     }
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task PhysicalRobotCredentialIssue_RollsBackWhenAuditInsertFails()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -384,10 +384,32 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("Physical test robot", listedRobot.GetProperty("displayName").GetString());
         Assert.Equal("UNCONFIRMED", listedRobot.GetProperty("connectionStatus").GetString());
         Assert.Null(listedRobot.GetProperty("firstAcceptedSyncAt").GetString());
-        Assert.Equal(new[] { "configuredFrameId", "configuredMapKey", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "mapContextConfigured", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "assignedAreaName", "assignedFrameId", "assignedMapKey", "assignedMapVersionId", "assignedVersionNumber", "connectionStatus", "credentialHint", "credentialIssuedAt", "credentialIssuedByName", "credentialIssuedByUserId", "credentialRevokedAt", "credentialRevokedByName", "credentialRevokedByUserId", "credentialStatus", "displayName", "firstAcceptedFrameId", "firstAcceptedMapKey", "firstAcceptedSyncAt", "id", "lastSyncReceivedAt", "latestDeployedFrameId", "latestDeployedMapKey", "latestDeploymentPassed", "mapAssignedAt", "mapAssignedByName", "robotCode", "rowVersion" }, listedRobot.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Null(listedRobot.GetProperty("assignedMapKey").GetString());
+        Assert.Equal(JsonValueKind.Null, listedRobot.GetProperty("latestDeploymentPassed").ValueKind);
         Assert.DoesNotContain(listedRobot.EnumerateObject(), property => property.Name.Contains("secret", StringComparison.OrdinalIgnoreCase) || property.Name.Contains("hash", StringComparison.OrdinalIgnoreCase));
 
-        var mapSha = first.GetProperty("packageSha256").GetString();
+        var beforeAssignmentRowVersion = listedRobot.GetProperty("rowVersion").GetString();
+        byte[] originalCredentialHash;
+        await using (var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options))
+            originalCredentialHash = (await context.Robots.AsNoTracking().SingleAsync(robot => robot.Id == robotId)).CredentialHash!;
+        var assignmentRequest = new { requestId = Guid.NewGuid(), expectedRowVersion = beforeAssignmentRowVersion, mapVersionId = first.GetProperty("id").GetGuid() };
+        using var assignedResponse = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical, assignmentRequest);
+        Assert.Equal(HttpStatusCode.OK, assignedResponse.StatusCode);
+        var assignedMap = (await Body(assignedResponse)).GetProperty("data");
+        Assert.Equal(first.GetProperty("mapKey").GetString(), assignedMap.GetProperty("assignedMapKey").GetString());
+        Assert.Equal(first.GetProperty("frameId").GetString(), assignedMap.GetProperty("assignedFrameId").GetString());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.AuditLogs WHERE [Action]='ROBOT_MAP_ASSIGNED'"));
+        await using (var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options))
+            Assert.Equal(originalCredentialHash, (await context.Robots.AsNoTracking().SingleAsync(robot => robot.Id == robotId)).CredentialHash);
+        using var assignmentReplay = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical, assignmentRequest);
+        Assert.Equal(HttpStatusCode.OK, assignmentReplay.StatusCode);
+        using var staleClear = await Json(host.Client, HttpMethod.Delete, $"/api/technical/physical-robots/{robotId:D}/map-assignment", technical,
+            new { requestId = Guid.NewGuid(), expectedRowVersion = beforeAssignmentRowVersion });
+        Assert.Equal(HttpStatusCode.Conflict, staleClear.StatusCode);
+        using var adminForbidden = await Json(host.Client, HttpMethod.Put, $"/api/technical/physical-robots/{robotId:D}/map-assignment", admin,
+            new { requestId = Guid.NewGuid(), expectedRowVersion = assignedMap.GetProperty("rowVersion").GetString(), mapVersionId = first.GetProperty("id").GetGuid() });
+        Assert.Equal(HttpStatusCode.Forbidden, adminForbidden.StatusCode);        var mapSha = first.GetProperty("packageSha256").GetString();
         using var blockedPass = await Json(host.Client, HttpMethod.Post, $"/api/technical/map-versions/{first.GetProperty("id").GetGuid()}/deployment-checks", technical,
             new { requestId = Guid.NewGuid(), robotCode = "catalog-physical", packageSha256 = mapSha, localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; unconfirmed PASS must be blocked." });
         Assert.Equal(HttpStatusCode.Conflict, blockedPass.StatusCode);
@@ -441,7 +463,7 @@ public sealed class BusinessFlowIntegrationTests
                 localizationPassed = false, displayPassed = false, evidenceNote = "SIMULATED BACKEND TEST; concurrent failed map evidence." });
         var proposalRace = Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff,
             new { requestId = raceCreateId, draft = new { mapVersionId = mapId, name = "Race POI", purpose = "Entry",
-                description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         await Task.WhenAll(deploymentRace, proposalRace);
         using var racedCheck = await deploymentRace;
         using var racedCreate = await proposalRace;
@@ -467,7 +489,7 @@ public sealed class BusinessFlowIntegrationTests
 
         var createRequestId = Guid.NewGuid();
         var createBody = new { requestId = createRequestId, draft = new { mapVersionId = mapId, name = "Library", purpose = "Entry",
-            description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+            description = (string?)null, x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } };
         using var created = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, createBody);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var proposal = (await Body(created)).GetProperty("data");
@@ -478,7 +500,7 @@ public sealed class BusinessFlowIntegrationTests
 
         var revisionRequestId = Guid.NewGuid();
         var revisedDraft = new { mapVersionId = mapId, name = "Library revised", purpose = "Entry", description = (string?)null,
-            x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" };
+            x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null };
         var revisionBody = new { requestId = revisionRequestId, expectedCurrentRevision = 1,
             expectedRowVersion = proposal.GetProperty("rowVersion").GetString(), draft = revisedDraft };
         using var revised = await Json(host.Client, HttpMethod.Put, $"/api/staff/poi-proposals/{proposalId}/draft", staff, revisionBody);
@@ -513,7 +535,7 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Single(historyData.GetProperty("verificationRecords").EnumerateArray());
 
         var secondProposalBody = new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Second POI", purpose = "Exit",
-            description = (string?)null, x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } };
+            description = (string?)null, x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } };
         using var secondCreated = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, secondProposalBody);
         Assert.Equal(HttpStatusCode.OK, secondCreated.StatusCode);
         var secondProposal = (await Body(secondCreated)).GetProperty("data");
@@ -531,7 +553,7 @@ public sealed class BusinessFlowIntegrationTests
             new { requestId = Guid.NewGuid(), expectedCurrentRevision = 2,
                 expectedRowVersion = (await Body(await Get(host.Client, $"/api/staff/poi-proposals/{proposalId}", staff))).GetProperty("data").GetProperty("rowVersion").GetString(),
                 draft = new { mapVersionId = mapId, name = "Should not persist", purpose = "Entry", description = (string?)null,
-                    x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                    x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.Conflict, blockedRevision.StatusCode);
         Assert.Equal("TECHNICAL_CHECK_NOT_PASSED", (await Body(blockedRevision)).GetProperty("errors").GetProperty("code").GetString());
         using var blockedSubmit = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{secondProposalId}/submit", staff,
@@ -544,7 +566,7 @@ public sealed class BusinessFlowIntegrationTests
     }
 
     [SchemaV14Fact]
-    public async Task VersionedMapPoiRouteChain_RecordsSimulatedEvidence_AndStopsAtSchedulingDependency()
+    public async Task VersionedMapPoiRouteChain_RecordsSimulatedEvidence_AndSchedulesATour()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         await database.InsertUserAsync(true, username: "flow.admin", roles: ["ADMIN"]);
@@ -554,12 +576,7 @@ public sealed class BusinessFlowIntegrationTests
             INSERT dbo.Robots(Id, RobotCode, SourceType, CredentialHash, IsDispatchEnabled, NeedsInspection, CreatedAt)
             VALUES ('{robotId:D}', N'flow_physical', 'PHYSICAL', 0x{Convert.ToHexString(robotCredential.Hash)}, 0, 1, SYSDATETIMEOFFSET());
             """);
-        var syncSettings = new Dictionary<string, string>
-        {
-            ["FleetSync:RobotContexts:flow_physical:MapKey"] = "flow-area-v1",
-            ["FleetSync:RobotContexts:flow_physical:FrameId"] = "map"
-        };
-        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, syncSettings);
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
 
         var adminToken = await Login(host.Client, "flow.admin");
         var technicalId = await CreateAccount(host.Client, adminToken, "flow.technical", "TechnicalStaff");
@@ -585,7 +602,15 @@ public sealed class BusinessFlowIntegrationTests
         var mapId = map.GetProperty("id").GetGuid();
         Assert.Equal("VALID", map.GetProperty("validationStatus").GetString());
         var mapHash = map.GetProperty("packageSha256").GetString();
-
+        using (var robotList = await Get(host.Client, "/api/technical/physical-robots", technicalToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, robotList.StatusCode);
+            var robot = Assert.Single((await Body(robotList)).GetProperty("data").EnumerateArray());
+            using var assignment = await Json(host.Client, HttpMethod.Put,
+                $"/api/technical/physical-robots/{robotId:D}/map-assignment", technicalToken,
+                new { requestId = Guid.NewGuid(), expectedRowVersion = robot.GetProperty("rowVersion").GetString(), mapVersionId = mapId });
+            Assert.Equal(HttpStatusCode.OK, assignment.StatusCode);
+        }
         // This backend integration uses a simulated Fleet Sync client with a valid
         // provisioned credential/context. It is not evidence from a physical robot.
         using var syncRequest = new HttpRequestMessage(HttpMethod.Post, "/api/fleet/v1/sync")
@@ -615,7 +640,7 @@ public sealed class BusinessFlowIntegrationTests
         var auditsBeforeBlockedProposal = await database.CountRowsAsync("dbo.AuditLogs");
         using var blockedProposal = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
             new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",
-                description = "Should remain unpersisted", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = "Should remain unpersisted", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.Conflict, blockedProposal.StatusCode);
         var blockedBody = await Body(blockedProposal);
         Assert.Equal("TECHNICAL_CHECK_PENDING", blockedBody.GetProperty("errors").GetProperty("code").GetString());
@@ -639,7 +664,7 @@ public sealed class BusinessFlowIntegrationTests
 
         using var createPoi = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
             new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entrance",
-                description = "Integration test", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT" } });
+                description = "Integration test", x = 0.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } });
         Assert.Equal(HttpStatusCode.OK, createPoi.StatusCode);
         var proposal = (await Body(createPoi)).GetProperty("data");
         var proposalId = proposal.GetProperty("id").GetGuid();
@@ -723,19 +748,110 @@ public sealed class BusinessFlowIntegrationTests
         var priorRevision = Assert.Single(history.EnumerateArray(), item => item.GetProperty("revisionId").GetGuid() == routeRevisionId);
         Assert.Equal("PASS", priorRevision.GetProperty("verificationStatus").GetString());
 
-        // Scheduling has no integration from versioned route/revision to the legacy Tour model.
-        // Confirm the legacy aliases fail closed and don't persist a Tour or reservation.
-        var beforeTours = await database.CountRowsAsync("dbo.Tours");
-        var beforeEvents = await database.CountRowsAsync("dbo.TourEvents");
+        // ADR-0034/0035: the tested revision can be scheduled on a free slot, and the reservation follows the PASS run.
+        var slotDate = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(5);
+        var slotPath = $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}";
+        using var slots = await Get(host.Client, slotPath, staffToken);
+        Assert.Equal(HttpStatusCode.OK, slots.StatusCode);
+        var firstSlot = (await Body(slots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[0];
+        Assert.Equal("09:00", firstSlot.GetProperty("time").GetString());
+        Assert.True(firstSlot.GetProperty("available").GetBoolean());
+        using var slotsTooWide = await Get(host.Client, $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(31):yyyy-MM-dd}", staffToken);
+        Assert.Equal(HttpStatusCode.BadRequest, slotsTooWide.StatusCode);
+        using var operators = await Get(host.Client, "/api/staff/manage/tours/operators", staffToken);
+        Assert.Equal(HttpStatusCode.OK, operators.StatusCode);
+        var operatorId = (await Body(operators)).GetProperty("data")[0].GetProperty("userId").GetGuid();
         using var schedule = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
-            new { requestId = Guid.NewGuid(), expectedRouteVersion = new string('0', 64), configuration = new
-                { name = "Must not schedule", description = (string?)null, routeId,
-                    scheduledStartAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds()),
+            new { requestId = Guid.NewGuid(), configuration = new
+                { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,
+                    robotCode = "flow_physical", operatorUserId = operatorId,
+                    scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset(),
                     fallbackVideoUrl = (string?)null } });
-        Assert.Equal(HttpStatusCode.NotFound, schedule.StatusCode);
-        Assert.Equal(beforeTours, await database.CountRowsAsync("dbo.Tours"));
-        Assert.Equal(beforeEvents, await database.CountRowsAsync("dbo.TourEvents"));
-        // The current schema has no reservation/booking entity or table.
+        Assert.Equal(HttpStatusCode.OK, schedule.StatusCode);
+        var tourId = (await Body(schedule)).GetProperty("data").GetProperty("id").GetGuid();
+        using var tourDetail = await Get(host.Client, $"/api/staff/manage/tours/{tourId}", staffToken);
+        var tourData = (await Body(tourDetail)).GetProperty("data");
+        Assert.Equal(JsonValueKind.Null, tourData.GetProperty("route").ValueKind);
+        Assert.Equal(routeRevisionId, tourData.GetProperty("routeRevision").GetProperty("revisionId").GetGuid());
+        Assert.Equal("flow_physical", tourData.GetProperty("reservation").GetProperty("robotCode").GetString());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.TourRobotReservations"));
+
+        // ADR-0037: deactivating stops new Tours only, and leaves history and existing Tours alone.
+        async Task<JsonElement> ListedRoute(string query)
+        {
+            using var list = await Get(host.Client, "/api/routes" + query, staffToken);
+            Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+            return (await Body(list)).GetProperty("data");
+        }
+        async Task ExpectConflict(HttpResponseMessage refused, string code)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            Assert.Equal(code, (await Body(refused)).GetProperty("errors").GetProperty("code").GetString());
+        }
+        var newTour = new { requestId = Guid.NewGuid(), configuration = new
+            { name = "On a stopped route", description = (string?)null, routeRevisionId = routeRevisionId, robotCode = "flow_physical", operatorUserId = operatorId,
+                scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddDays(1), fallbackVideoUrl = (string?)null } };
+        var routeVersion = Assert.Single((await ListedRoute("?isActive=true")).EnumerateArray()).GetProperty("rowVersion").GetString()!;
+        Assert.Empty((await ListedRoute("?isActive=false")).EnumerateArray());
+        var deactivate = new { requestId = Guid.NewGuid(), expectedRowVersion = routeVersion };
+        using (var forbidden = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", technicalToken, deactivate))
+            Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        using (var forbiddenRead = await Get(host.Client, $"/api/staff/routes/{routeId}/scheduled-tours", technicalToken))
+            Assert.Equal(HttpStatusCode.Forbidden, forbiddenRead.StatusCode);
+        using (var anonymous = await host.Client.PostAsJsonAsync($"/api/staff/routes/{routeId}/activate", deactivate))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using (var preview = await Get(host.Client, $"/api/staff/routes/{routeId}/scheduled-tours", staffToken))
+            Assert.Equal(tourId, Assert.Single((await Body(preview)).GetProperty("data").EnumerateArray()).GetProperty("id").GetGuid());
+        var routeAudits = "dbo.AuditLogs WHERE [Action] IN ('ROUTE_DEACTIVATED','ROUTE_ACTIVATED')";
+        var testRuns = await database.CountRowsAsync("dbo.RouteTestRuns");
+        var revisions = await database.CountRowsAsync("dbo.RouteRevisions");
+        using var deactivated = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", staffToken, deactivate);
+        Assert.Equal(HttpStatusCode.OK, deactivated.StatusCode);
+        var availability = (await Body(deactivated)).GetProperty("data");
+        Assert.False(availability.GetProperty("isActive").GetBoolean());
+        Assert.Equal(tourId, Assert.Single(availability.GetProperty("scheduledTours").EnumerateArray()).GetProperty("id").GetGuid());
+        Assert.Equal(1, await database.CountRowsAsync($"{routeAudits} AND DataJson LIKE '%\"affectedTourCount\":1%' AND DataJson LIKE '%{routeId}%' AND CorrelationId = '{deactivate.requestId}'"));
+        Assert.Equal((testRuns, revisions), (await database.CountRowsAsync("dbo.RouteTestRuns"), await database.CountRowsAsync("dbo.RouteRevisions")));
+
+        Assert.Empty((await ListedRoute("?isActive=true")).EnumerateArray());
+        Assert.Single((await ListedRoute("?isActive=false")).EnumerateArray());
+        Assert.Single((await ListedRoute("")).EnumerateArray());
+        using (var refusedSlots = await Get(host.Client, slotPath, staffToken)) await ExpectConflict(refusedSlots, "ROUTE_UNAVAILABLE");
+        using (var refusedCreate = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken, newTour)) await ExpectConflict(refusedCreate, "ROUTE_UNAVAILABLE");
+        using (var stillReadable = await Get(host.Client, $"/api/staff/manage/tours/{tourId}", staffToken))
+        {
+            var readable = (await Body(stillReadable)).GetProperty("data");
+            Assert.Equal("SCHEDULED", readable.GetProperty("tour").GetProperty("state").GetString());
+            Assert.Equal(routeRevisionId, readable.GetProperty("routeRevision").GetProperty("revisionId").GetGuid());
+        }
+        using (var stoppedHistory = await Get(host.Client, $"/api/routes/{routeId}/revisions?revisionId={routeRevisionId}", staffToken))
+        {
+            var stopped = (await Body(stoppedHistory)).GetProperty("data");
+            Assert.Equal("PASS", stopped.GetProperty("verificationStatus").GetString());
+            Assert.False(stopped.GetProperty("isActive").GetBoolean());
+        }
+
+        using (var replay = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", staffToken, deactivate))
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(1, await database.CountRowsAsync(routeAudits));
+        using (var reused = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, deactivate)) await ExpectConflict(reused, "IDEMPOTENCY_CONFLICT");
+        using (var stale = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, new { requestId = Guid.NewGuid(), expectedRowVersion = routeVersion }))
+            await ExpectConflict(stale, "STALE_ROUTE");
+        Assert.Equal(1, await database.CountRowsAsync(routeAudits));
+
+        var currentVersion = Assert.Single((await ListedRoute("?isActive=false")).EnumerateArray()).GetProperty("rowVersion").GetString();
+        using (var activated = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, new { requestId = Guid.NewGuid(), expectedRowVersion = currentVersion }))
+        {
+            Assert.Equal(HttpStatusCode.OK, activated.StatusCode);
+            Assert.True((await Body(activated)).GetProperty("data").GetProperty("isActive").GetBoolean());
+        }
+        Assert.Equal(1, await database.CountRowsAsync("dbo.AuditLogs WHERE [Action] = 'ROUTE_ACTIVATED'"));
+        using (var reopened = await Get(host.Client, slotPath, staffToken)) Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
+
+        // A row from before ADR-0037 was stored inactive though nobody turned it off: it stays open.
+        await database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive = 0, UpdatedAt = NULL WHERE Id = '{routeId}';");
+        Assert.Single((await ListedRoute("?isActive=true")).EnumerateArray());
+        using (var untouched = await Get(host.Client, slotPath, staffToken)) Assert.Equal(HttpStatusCode.OK, untouched.StatusCode);
     }
 
     [SchemaV14Fact]

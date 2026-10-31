@@ -66,6 +66,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<TourEvent> TourEvents { get; set; }
 
+    public virtual DbSet<TourRobotReservation> TourRobotReservations { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
@@ -79,6 +81,10 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => new { e.RobotId, e.CorrelationId }, "UX_AuditLogs_RobotCredentialRequest")
                 .IsUnique()
                 .HasFilter("([RobotId] IS NOT NULL AND [CorrelationId] IS NOT NULL AND [Action] IN (N'ROBOT_CREDENTIAL_ISSUED', N'ROBOT_CREDENTIAL_ROTATED', N'ROBOT_CREDENTIAL_REVOKED'))");
+
+            entity.HasIndex(e => new { e.ActorUserId, e.CorrelationId }, "UX_AuditLogs_RobotMapAssignmentRequest")
+                .IsUnique()
+                .HasFilter("([ActorUserId] IS NOT NULL AND [CorrelationId] IS NOT NULL AND [Action] IN (N'ROBOT_MAP_ASSIGNED', N'ROBOT_MAP_CLEARED'))");
 
             entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAt, e.Id }, "IX_AuditLogs_EntityTime");
 
@@ -302,6 +308,10 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<MapVersion>(entity =>
         {
+            entity.HasMany(map => map.AssignedRobots).WithOne(robot => robot.AssignedMapVersion)
+                .HasForeignKey(robot => robot.AssignedMapVersionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_AssignedMapVersionId");
             entity.HasIndex(e => new { e.AreaKey, e.UploadedAt, e.Id }, "IX_MapVersions_AreaUploaded").IsDescending(false, true, false);
 
             entity.HasIndex(e => new { e.AreaKey, e.VersionNumber }, "UQ_MapVersions_AreaVersion").IsUnique();
@@ -400,6 +410,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasPrecision(3);
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.NarrationText).HasMaxLength(4000);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(2048);
             entity.Property(e => e.NavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -517,6 +529,12 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Robot>(entity =>
         {
+            entity.HasIndex(e => e.AssignedMapVersionId, "IX_Robots_AssignedMapVersionId");
+            entity.Property(e => e.MapAssignedAt).HasPrecision(3);
+            entity.HasOne(d => d.MapAssignedByUser).WithMany(p => p.MapAssignedRobots)
+                .HasForeignKey(d => d.MapAssignedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_MapAssignedByUserId");
             entity.HasIndex(e => e.RobotCode, "UQ_Robots_RobotCode").IsUnique();
 
             entity.HasIndex(e => e.CurrentTourId, "UX_Robots_CurrentTour")
@@ -698,6 +716,8 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CameraPreset).HasMaxLength(80);
             entity.Property(e => e.HeadStepsJson).HasMaxLength(4000);
             entity.Property(e => e.Name).HasMaxLength(150);
+            entity.Property(e => e.NarrationText).HasMaxLength(4000);
+            entity.Property(e => e.FallbackVideoUrl).HasMaxLength(2048);
             entity.Property(e => e.PoiNavigationFingerprint)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -774,6 +794,7 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CheckedAt).HasPrecision(3);
             entity.Property(e => e.EvidenceNote).HasMaxLength(2000);
             entity.Property(e => e.FailureReason).HasMaxLength(1000);
+            entity.Property(e => e.MeasurementBasis).HasMaxLength(32);
             entity.Property(e => e.MapPackageSha256)
                 .HasMaxLength(32)
                 .IsFixedLength();
@@ -844,8 +865,57 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_RouteVariants_VariantRouteId");
         });
 
+        modelBuilder.Entity<TourRobotReservation>(entity =>
+        {
+            entity.HasIndex(e => new { e.RobotId, e.StartsAt, e.EndsAt }, "IX_TourRobotReservations_ActiveRobot").HasFilter("([ReleasedAt] IS NULL)");
+
+            entity.HasIndex(e => e.TourId, "UX_TourRobotReservations_ActiveTour")
+                .IsUnique()
+                .HasFilter("([ReleasedAt] IS NULL)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.EndsAt).HasPrecision(3);
+            entity.Property(e => e.ReleasedAt).HasPrecision(3);
+            entity.Property(e => e.ReservedAt).HasPrecision(3);
+            entity.Property(e => e.StartsAt).HasPrecision(3);
+
+            entity.HasOne(d => d.ReleasedByUser).WithMany(p => p.TourRobotReservationReleasedByUsers)
+                .HasForeignKey(d => d.ReleasedByUserId)
+                .HasConstraintName("FK_TourRobotReservations_ReleasedByUserId");
+
+            entity.HasOne(d => d.ReservedByUser).WithMany(p => p.TourRobotReservationReservedByUsers)
+                .HasForeignKey(d => d.ReservedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_ReservedByUserId");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.RobotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_RobotId");
+
+            entity.HasOne(d => d.RouteTestRun).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.RouteTestRunId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_RouteTestRunId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.TourRobotReservations)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourRobotReservations_TourId");
+        });
+
         modelBuilder.Entity<Tour>(entity =>
         {
+            entity.HasIndex(e => e.RouteRevisionId, "IX_Tours_RouteRevisionId").HasFilter("([RouteRevisionId] IS NOT NULL)");
+
+            entity.HasOne(d => d.OperatorUser).WithMany(p => p.TourOperatorUsers)
+                .HasForeignKey(d => d.OperatorUserId)
+                .HasConstraintName("FK_Tours_OperatorUserId");
+
+            entity.HasOne(d => d.RouteRevision).WithMany(p => p.Tours)
+                .HasForeignKey(d => d.RouteRevisionId)
+                .HasConstraintName("FK_Tours_RouteRevisionId");
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.AssistanceReason)
                 .HasMaxLength(100)

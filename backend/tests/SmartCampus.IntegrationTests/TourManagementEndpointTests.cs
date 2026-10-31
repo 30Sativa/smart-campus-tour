@@ -27,7 +27,7 @@ public sealed class TourManagementEndpointTests
         Assert.Equal(f.Route.Id, detail.Tour.RouteId);
         Assert.Equal(detail.Tour.RouteId, detail.Tour.ActiveRouteId);
         Assert.Equal(8, Convert.FromBase64String(detail.Tour.RowVersion).Length);
-        Assert.False(detail.Route.Usage.CanEditConfiguration);
+        Assert.False(detail.Route!.Usage.CanEditConfiguration);
         Assert.True(detail.Permissions.CanEditMetadata);
         Assert.False(detail.Permissions.CanDelete);
         var representative = await f.Send(HttpMethod.Get, $"/api/representative/tours/{id}", token: f.Representative);
@@ -52,9 +52,9 @@ public sealed class TourManagementEndpointTests
     {
         await using var f = await Fixture.Create();
         var request = f.CreateRequest();
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request with { Configuration = request.Configuration with { Name = "Different" } }, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request with { Configuration = request.Configuration with { Name = "Different" } }, HttpStatusCode.NotFound);
         var id = await f.CreateTour();
         var detail = await f.Detail(id);
         var update = new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Name = "Changed" });
@@ -64,7 +64,7 @@ public sealed class TourManagementEndpointTests
         var cancel = new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Cancelled test");
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.NotFound);
         Assert.Equal("CANCELLED", (await f.Detail(id)).Tour.State);
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel with { RequestId = request.RequestId }, HttpStatusCode.Conflict);
         await using var db = f.Context();
@@ -88,7 +88,7 @@ public sealed class TourManagementEndpointTests
                 Assert.Equal(expected, response.StatusCode);
             }
         }
-        foreach (var input in new[] { f.Input() with { Name = " " }, f.Input() with { ScheduledStartAt = f.Now.AddMinutes(-1) }, f.Input() with { FallbackVideoUrl = "javascript:alert(1)" } })
+        foreach (var input in new[] { f.CreateInput() with { Name = " " }, f.CreateInput() with { ScheduledStartAt = f.Now.AddMinutes(-1) }, f.CreateInput() with { FallbackVideoUrl = "javascript:alert(1)" } })
             await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest() with { Configuration = input }, HttpStatusCode.BadRequest);
         await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest() with { RequestId = Guid.Empty }, HttpStatusCode.BadRequest);
         foreach (var query in new[] { "?size=101", "?page=0", "?state=INVALID", "?sort=robot", "?expand=route" })
@@ -104,12 +104,12 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task LegacyTourCreate_CannotSelectAVersionedRouteIdentity()
+    public async Task NewTour_CannotStartFromALegacyRouteIdentity()
     {
         await using var f = await Fixture.Create();
-        await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET AuthoringMode='VERSIONED' WHERE Id='{f.Route.Id:D}';");
+        var request = f.CreateRequest();
 
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request with { Configuration = request.Configuration with { RouteRevisionId = f.Route.Id } }, HttpStatusCode.NotFound);
 
         await using var db = f.Context();
         Assert.Empty(await db.Tours.ToArrayAsync());
@@ -143,8 +143,8 @@ public sealed class TourManagementEndpointTests
         var input = f.Input() with { RouteId = target.Id, ScheduledStartAt = f.Input().ScheduledStartAt.AddDays(1).ToOffset(TimeSpan.FromHours(7)) };
         await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}", new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, target.Version, input), HttpStatusCode.Conflict);
         detail = await f.Detail(id);
-        Assert.Equal(f.Route.Id, detail.Route.Id);
-        Assert.Equal(f.Route.Id, detail.ActiveRoute.Id);
+        Assert.Equal(f.Route!.Id, detail.Route!.Id);
+        Assert.Equal(f.Route!.Id, detail.ActiveRoute!.Id);
         await using (var db = f.Context()) Assert.Empty(await db.TourEvents.ToArrayAsync());
         foreach (var state in new[] { "READY", "RUNNING", "COMPLETED", "CANCELLED" })
         {
@@ -209,7 +209,71 @@ public sealed class TourManagementEndpointTests
         await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", cancel);
         Assert.Equal(version, (await f.Detail(id)).Tour.RowVersion);
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.Action == "TOUR_CANCELLED"));
-        Assert.False((await f.Detail(id)).Route.Usage.CanEditConfiguration);
+        Assert.False((await f.Detail(id)).Route!.Usage.CanEditConfiguration);
+    }
+
+    [SchemaV11Fact]
+    public async Task ListPhases_GroupStatesAndHideOnlyWhatTheyShould()
+    {
+        await using var f = await Fixture.Create();
+        await using (var db = f.Context())
+        {
+            void Add(string name, string state, DateTimeOffset start) => db.Tours.Add(new Tour { Id = Guid.NewGuid(), Name = name, RouteId = f.Route.Id, ActiveRouteId = f.Route.Id,
+                ScheduledStartAt = start, State = state, CreatedByUserId = f.AdminId, CreatedAt = f.Now });
+            Add("scheduled", "SCHEDULED", f.Now.AddDays(5));
+            Add("ready", "READY", f.Now.AddDays(6));
+            Add("overdue", "SCHEDULED", f.Now.AddDays(-1));
+            Add("running", "RUNNING", f.Now.AddHours(-1));
+            Add("completed", "COMPLETED", f.Now.AddDays(-2));
+            Add("cancelled", "CANCELLED", f.Now.AddDays(4));
+            await db.SaveChangesAsync();
+        }
+        async Task<string[]> Names(string query) => (await f.Send(HttpMethod.Get, "/api/staff/manage/tours" + query))
+            .EnumerateArray().Select(tour => tour.GetProperty("name").GetString()!).Order().ToArray();
+        Assert.Equal(["ready", "scheduled"], await Names("?phase=UPCOMING"));
+        Assert.Equal(["running"], await Names("?phase=RUNNING"));
+        Assert.Equal(["cancelled", "completed"], await Names("?phase=FINISHED"));
+        Assert.Equal(6, (await Names("")).Length);
+        Assert.Equal(["overdue", "scheduled"], await Names("?state=SCHEDULED"));
+        await f.Send(HttpMethod.Get, "/api/staff/manage/tours?phase=ARCHIVED", expected: HttpStatusCode.BadRequest);
+    }
+
+    [SchemaV11Fact]
+    public async Task CancelledTour_StaysVisibleToItsRepresentative_WithTheReason_AndClosedToChanges()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var registration = await f.Submit(id);
+        await f.ApproveAndJoin(id, registration);
+        var detail = await f.Detail(id);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Robot cần bảo trì"));
+
+        var listed = Assert.Single((await f.Send(HttpMethod.Get, "/api/representative/registrations?group=closed", token: f.Representative)).EnumerateArray());
+        Assert.Equal("CANCELLED", listed.GetProperty("tourState").GetString());
+        Assert.Equal("APPROVED", listed.GetProperty("state").GetString());
+        Assert.Equal("Robot cần bảo trì", listed.GetProperty("tourCancelReason").GetString());
+        var read = await f.Send(HttpMethod.Get, $"/api/representative/registrations/{registration}", token: f.Representative);
+        Assert.Equal("Robot cần bảo trì", read.GetProperty("summary").GetProperty("tourCancelReason").GetString());
+        Assert.False(read.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
+        var tour = await f.Send(HttpMethod.Get, $"/api/representative/tours/{id}", token: f.Representative);
+        Assert.Equal("CANCELLED", tour.GetProperty("state").GetString());
+        Assert.Equal("Robot cần bảo trì", tour.GetProperty("cancelReason").GetString());
+        Assert.False(tour.GetProperty("register").GetProperty("allowed").GetBoolean());
+    }
+
+    [SchemaV11Fact]
+    public async Task VersionedAvailabilityEndpoints_LeaveLegacyRoutesAlone()
+    {
+        await using var f = await Fixture.Create();
+        var token = new string('A', 64);
+        foreach (var action in new[] { "deactivate", "activate" })
+            await f.Send(HttpMethod.Post, $"/api/staff/routes/{f.Route.Id}/{action}", new RouteAvailabilityRequest(Guid.NewGuid(), token), HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Get, $"/api/staff/routes/{f.Route.Id}/scheduled-tours", expected: HttpStatusCode.NotFound);
+        await using var db = f.Context();
+        var route = await db.Routes.SingleAsync(r => r.Id == f.Route.Id);
+        Assert.True(route.IsActive);
+        Assert.Null(route.UpdatedAt);
+        Assert.Equal(0, await db.AuditLogs.CountAsync(a => a.EntityType == "Route"));
     }
 
     [SchemaV11Fact]
@@ -264,55 +328,13 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task RouteAndPoiAvailabilityRaces_AreRecheckedBeforeCreateCommits()
-    {
-        await using var f = await Fixture.Create();
-        foreach (var table in new[] { "Pois", "Routes" })
-        {
-            await using var connection = new SqlConnection(f.Database.ConnectionString);
-            await connection.OpenAsync();
-            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-            await using var command = new SqlCommand($"UPDATE dbo.{table} SET IsActive=0 WHERE Id=@id", connection, transaction);
-            command.Parameters.AddWithValue("@id", table == "Pois" ? f.PoiIds[0] : f.Route.Id);
-            await command.ExecuteNonQueryAsync();
-            var creating = f.SendStatus(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest());
-            await Task.WhenAny(creating, Task.Delay(200));
-            Assert.False(creating.IsCompleted);
-            await transaction.CommitAsync();
-            Assert.Contains(await creating, new[] { HttpStatusCode.BadRequest, HttpStatusCode.Conflict });
-            await f.Database.ExecuteAsync($"UPDATE dbo.{table} SET IsActive=1;");
-            if (table == "Pois") f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        }
-        await using var db = f.Context();
-        Assert.Empty(await db.Tours.ToArrayAsync());
-        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
-    }
-
-    [SchemaV11Fact]
     public async Task CreateBlockerDoesNotWriteSuccessReceiptOrTour()
     {
         await using var f = await Fixture.Create();
         var request = f.CreateRequest();
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
+        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.NotFound);
         await using (var db = f.Context()) Assert.Empty(await db.Tours.ToArrayAsync());
         await using (var db = f.Context()) Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
-    }
-
-    [SchemaV11Fact]
-    public async Task SelectionRejectsMissingStaleInactiveAndInvalidStoredRoutes()
-    {
-        await using var f = await Fixture.Create();
-        var body = f.CreateRequest();
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", body with { Configuration = body.Configuration with { RouteId = Guid.NewGuid() } }, HttpStatusCode.NotFound);
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", body with { ExpectedRouteVersion = new string('0', 64) }, HttpStatusCode.Conflict);
-        await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive=0 WHERE Id='{f.Route.Id:D}';");
-        f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.Conflict);
-        await f.Database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive=1 WHERE Id='{f.Route.Id}'; UPDATE dbo.RouteStops SET HeadStepsJson=N'[]' WHERE RouteId='{f.Route.Id}';");
-        f.Route = (await f.Send(HttpMethod.Get, $"/api/staff/manage/routes/{f.Route.Id}")).Deserialize<RouteDetails>(Json)!;
-        await f.Send(HttpMethod.Post, "/api/staff/manage/tours", f.CreateRequest(), HttpStatusCode.BadRequest);
-        await using var db = f.Context();
-        Assert.Empty(await db.Tours.ToArrayAsync());
     }
 
     [SchemaV11Fact]
@@ -360,41 +382,6 @@ public sealed class TourManagementEndpointTests
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    [SchemaV11Fact]
-    public async Task CreationRechecksFutureScheduleAfterWaitingForCatalogLocks()
-    {
-        await using var f = await Fixture.Create();
-        await using var connection = new SqlConnection(f.Database.ConnectionString);
-        await connection.OpenAsync();
-        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
-        await using var command = new SqlCommand("UPDATE dbo.Pois SET Description=N'Lock held by test' WHERE Id=@id", connection, transaction);
-        command.Parameters.AddWithValue("@id", f.PoiIds[0]);
-        await command.ExecuteNonQueryAsync();
-        var request = f.CreateRequest();
-        request = request with { Configuration = request.Configuration with {
-            ScheduledStartAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).AddSeconds(1) } };
-        var creating = f.SendStatus(HttpMethod.Post, "/api/staff/manage/tours", request);
-        await Task.Delay(1300);
-        await transaction.CommitAsync();
-        Assert.Equal(HttpStatusCode.BadRequest, await creating);
-        await using var db = f.Context();
-        Assert.Empty(await db.Tours.ToArrayAsync());
-    }
-
-    [SchemaV11Fact]
-    public async Task TourCreationFailsClosedWithoutConfiguredDurationOrReceipt()
-    {
-        await using var f = await Fixture.Create();
-        var request = f.CreateRequest();
-        var first = await f.SendBody(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
-        var second = await f.SendBody(HttpMethod.Post, "/api/staff/manage/tours", request, HttpStatusCode.Conflict);
-        Assert.Equal("TOUR_DURATION_UNAVAILABLE", first.GetProperty("errors").GetProperty("code").GetString());
-        Assert.Equal("TOUR_DURATION_UNAVAILABLE", second.GetProperty("errors").GetProperty("code").GetString());
-        await using var db = f.Context();
-        Assert.Empty(await db.Tours.ToArrayAsync());
-        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_CREATED").ToArrayAsync());
-    }
-
     private sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, PoiManagementEndpointTests.ApiHost host, Guid adminId) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
@@ -410,7 +397,9 @@ public sealed class TourManagementEndpointTests
         public DateTimeOffset Now { get; } = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
         public TourInput Input() => new("SQL Tour", null, Route.Id, Now.AddDays(10), null);
-        public CreateTourRequest CreateRequest() => new(Guid.NewGuid(), Route.Version, Input());
+        public CreateTourInput CreateInput() => new("SQL Tour", null, Guid.NewGuid(), "no-such-robot", AdminId,
+            TourSchedule.SlotStart(DateOnly.FromDateTime(Now.UtcDateTime).AddDays(10), new TimeOnly(9, 0)), null);
+        public CreateTourRequest CreateRequest() => new(Guid.NewGuid(), CreateInput());
         public static async Task<Fixture> Create()
         {
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();

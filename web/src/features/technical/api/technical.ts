@@ -1,5 +1,6 @@
 import { apiClient } from '../../../api/client'
 import type { ApiResponse } from '../../../api/contracts/shared'
+import type { VersionedRoute } from '../../administration/routes/versioned-api'
 
 export type MapVersion = {
   id: string
@@ -33,11 +34,21 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   firstAcceptedFrameId: string | null
   connectionStatus: PhysicalRobotConnectionStatus
   lastSyncReceivedAt: string | null
-  configuredMapKey: string | null
-  configuredFrameId: string | null
+  rowVersion: string
+  assignedMapVersionId: string | null
+  assignedAreaName: string | null
+  assignedVersionNumber: number | null
+  assignedMapKey: string | null
+  assignedFrameId: string | null
+  mapAssignedAt: string | null
+  mapAssignedByName: string | null
   latestDeployedMapKey: string | null
   latestDeployedFrameId: string | null
+  latestDeploymentPassed: boolean | null
 }
+export type RobotMapAssignment = Pick<PhysicalRobotOption,
+  'id' | 'robotCode' | 'assignedMapVersionId' | 'assignedAreaName' | 'assignedVersionNumber' |
+  'assignedMapKey' | 'assignedFrameId' | 'mapAssignedAt' | 'mapAssignedByName' | 'rowVersion'>
 export type RobotCredentialAudit = {
   id: number; robotCode: string; action: string; actorUserId: string | null; actorName: string | null
   hint: string | null; reason: string | null; source: 'WEB' | 'CLI'; occurredAt: string; resultCode: string | null
@@ -81,6 +92,8 @@ export type PoiRevision = {
   name: string
   purpose: string
   description: string | null
+  narrationText: string | null
+  fallbackVideoUrl: string | null
   x: number
   y: number
   yaw: number
@@ -107,6 +120,13 @@ export type PoiVerification = {
   checkedByUserId: string; checkedAt: string
 }
 
+export type RouteTestParticipant = { userId: string; fullName: string; username: string }
+export type RouteTestRunInput = {
+  routeId: string; revisionId: string; requestId: string; robotCode: string; participatingStaffUserId: string
+  resultCode: 'PASS' | 'FAIL'; allStopsReached: boolean; safelyStopped: boolean; localizationPassed: boolean
+  measuredDurationSeconds: number; failureReason: string | null; evidenceNote: string
+}
+
 type Envelope<T> = ApiResponse<T>
 
 export const technicalApi = {
@@ -114,6 +134,10 @@ export const technicalApi = {
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
+  assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
+    apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
+  clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'DELETE', json: input }).then(response => response.data!),
   registerPhysicalRobot: (input: { robotCode: string; displayName: string }) =>
     apiClient<Envelope<PhysicalRobotRegistration>>('/api/technical/physical-robots', { method: 'POST', json: input }).then(response => response.data!),
   getRobotCredential: (robotCode: string) => apiClient<Envelope<RobotCredentialView>>(`/api/robots/${encodeURIComponent(robotCode)}/credential`).then(response => response.data!),
@@ -146,12 +170,16 @@ export const technicalApi = {
   getPoiProposal: (id: string) => apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}`).then(response => response.data!),
   getPoiHistory: (id: string) => apiClient<Envelope<{ proposalId: string; revisions: PoiRevision[]; verificationRecords: PoiVerification[] }>>(`/api/staff/poi-proposals/${id}/history`).then(response => response.data!),
   listPoiVerificationQueue: (mapVersionId?: string) => apiClient<Envelope<PoiVerificationQueueItem[]>>(`/api/technical/poi-verifications${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
-  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+  createPoiProposal: (draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
     apiClient<Envelope<PoiProposal>>('/api/staff/poi-proposals', { method: 'POST', json: { requestId: crypto.randomUUID(), draft } }).then(response => response.data!),
-  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string }) =>
+  revisePoiProposal: (id: string, current: PoiProposal, draft: { mapVersionId: string; name: string; purpose: string; description: string | null; x: number; y: number; yaw: number; cameraPreset: string; narrationText: string; fallbackVideoUrl: string | null }) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/draft`, { method: 'PUT', json: { requestId: crypto.randomUUID(), expectedCurrentRevision: current.currentRevision, expectedRowVersion: current.rowVersion, draft } }).then(response => response.data!),
   submitPoiProposal: (id: string, proposal: PoiProposal) =>
     apiClient<Envelope<PoiProposal>>(`/api/staff/poi-proposals/${id}/submit`, { method: 'POST', json: { requestId: crypto.randomUUID(), expectedRevisionNumber: proposal.currentRevision, expectedRowVersion: proposal.rowVersion } }).then(response => response.data!),
+  listRouteTestQueue: () => apiClient<Envelope<VersionedRoute[]>>('/api/technical/route-verifications/queue').then(response => response.data ?? []),
+  listRouteTestParticipants: () => apiClient<Envelope<RouteTestParticipant[]>>('/api/technical/route-verifications/participants').then(response => response.data ?? []),
+  recordRouteTest: ({ routeId, revisionId, ...input }: RouteTestRunInput) =>
+    apiClient<Envelope<VersionedRoute>>(`/api/technical/routes/${routeId}/revisions/${revisionId}/test-runs`, { method: 'POST', json: input }).then(response => response.data!),
   verifyPoi: (input: {
     proposalId: string
     revisionNumber: number

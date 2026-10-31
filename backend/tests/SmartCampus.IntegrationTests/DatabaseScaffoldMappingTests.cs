@@ -30,7 +30,7 @@ public sealed class DatabaseScaffoldMappingTests
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
                 "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
-                "TourEvents", "Tours", "UserRoles", "Users"
+                "TourEvents", "TourRobotReservations", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
             tables);
     }
@@ -66,6 +66,25 @@ public sealed class DatabaseScaffoldMappingTests
             Assert.Equal(typeof(byte[]), rowVersion.ClrType);
             Assert.True(rowVersion.IsConcurrencyToken);
             Assert.Equal(ValueGenerated.OnAddOrUpdate, rowVersion.ValueGenerated);
+        }
+    }
+
+    [Fact]
+    public void Model_MapsVersionedPoiContentAndRouteStopSnapshotsToBoundedNullableColumns()
+    {
+        using var context = new ApplicationDbContext(Options);
+        foreach (var (type, name, maxLength) in new[]
+                 {
+                     (typeof(PoiProposalRevision), nameof(PoiProposalRevision.NarrationText), 4000),
+                     (typeof(PoiProposalRevision), nameof(PoiProposalRevision.FallbackVideoUrl), 2048),
+                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.NarrationText), 4000),
+                     (typeof(RouteRevisionStop), nameof(RouteRevisionStop.FallbackVideoUrl), 2048)
+                 })
+        {
+            var property = context.Model.FindEntityType(type)!.FindProperty(name)!;
+            Assert.Equal(typeof(string), property.ClrType);
+            Assert.True(property.IsNullable);
+            Assert.Equal(maxLength, property.GetMaxLength());
         }
     }
 

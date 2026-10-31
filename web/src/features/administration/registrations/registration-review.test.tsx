@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageRegistrationsPage from '../../../routes/staff/manage/StaffManageRegistrationsPage'
 import StaffShell from '../../staff/StaffShell'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useToastStore } from '../../../components/ui/toast-store'
 import { dateBoundary } from './presentation'
 import type { ReviewDetails, ReviewInput } from './types'
 
@@ -36,6 +37,7 @@ function renderAt(path = '/staff/manage/registrations/pending?review=registratio
   return client
 }
 beforeEach(() => {
+  useToastStore.setState({ toasts: [] })
   clients = []; requests = []; decisions = []; unexpectedMutations = []; registration = structuredClone(initial); failure = null
   useAuthStore.getState().setAuth('staff-token', { userId: 'sql-staff', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
@@ -113,7 +115,7 @@ describe('Staff registration review boundary', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })
     expect(within(dialog).getByText(/chỉ dòng này được chấp nhận/i)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận dòng' }))
-    expect(await screen.findByText(/Quyết định cho dòng đã được lưu/)).toBeInTheDocument()
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
     await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })
     expect(decisions).toHaveLength(1)
     expect(decisions[0]).toMatchObject({ action: 'accept', rowId: 'row', input: { requestId: expect.any(String), expectedRegistrationRowVersion: firstVersion, expectedTourRowVersion: secondVersion, expectedRowVersion: firstVersion } })
@@ -136,10 +138,70 @@ describe('Staff registration review boundary', () => {
     expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Thiết bị B' }))
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Thiết bị B?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
-    await screen.findByText(/Quyết định cho dòng đã được lưu/)
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
     expect(decisions).toHaveLength(1)
     expect(decisions[0].rowId).toBe('pending-row')
     expect(registration.roster.find(row => row.id === 'accepted-row')?.participationState).toBe('ACCEPTED')
+  })
+
+  const twoPendingRows = () => {
+    registration.roster = [
+      { ...initial.roster[0], id: 'row-a', displayName: 'Lan' },
+      { ...initial.roster[0], id: 'row-b', rowNumber: 5, displayName: 'Minh', email: 'minh@example.com' },
+    ]
+  }
+
+  it('accepts the selected rows one at a time, each against a fresh registration version', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả 2 dòng chờ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận đã chọn (2)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận 2 dòng đã chọn?' })
+    expect(within(dialog).getByText(/Lan, Minh/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận 2 dòng' }))
+    await waitFor(() => expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã chấp nhận 2 dòng'))
+    expect(decisions.map(decision => [decision.action, decision.rowId, decision.input.expectedRegistrationRowVersion])).toEqual([
+      ['accept', 'row-a', firstVersion], ['accept', 'row-b', secondVersion],
+    ])
+    expect(new Set(decisions.map(decision => decision.input.requestId)).size).toBe(2)
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+  })
+
+  it('rejects only the ticked rows with one shared reason', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn Minh' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Từ chối đã chọn (1)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Từ chối dòng Minh?' })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Lý do từ chối/ }), { target: { value: 'Sai email' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Từ chối dòng' }))
+    await waitFor(() => expect(decisions).toHaveLength(1))
+    expect(decisions[0]).toMatchObject({ action: 'reject', rowId: 'row-b', input: { reason: 'Sai email' } })
+  })
+
+  it('stops the run and says how far it got when a later row changed underneath', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả 2 dòng chờ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận đã chọn (2)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận 2 dòng đã chọn?' })
+    // Another writer changes row B after the reviewer opened the snapshot.
+    registration.roster[1].rowVersion = secondVersion
+    registration.roster[1].displayName = 'Minh đã đổi'
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận 2 dòng' }))
+    expect(await screen.findByText(/Dữ liệu đã thay đổi hoặc Tour đã khóa/)).toBeInTheDocument()
+    expect(decisions.map(decision => decision.rowId)).toEqual(['row-a'])
+    expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã chấp nhận 1 trong 2 dòng')
+  })
+
+  it('opens an approved registration on invitations only when nothing is left to review', async () => {
+    registration.summary.state = 'APPROVED'
+    registration.roster[0] = { ...registration.roster[0], participationState: 'ACCEPTED', canApprove: false, canReject: false }
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Roster đăng ký' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách dòng (1)' }))
+    expect(await screen.findByRole('table', { name: 'Roster đăng ký' })).toBeInTheDocument()
   })
 
   it('requires a rejection reason and displays the saved reason', async () => {
@@ -202,7 +264,7 @@ describe('Staff registration review boundary', () => {
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
     expect(await within(screen.getByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).findByRole('alert')).toHaveTextContent('Không thực hiện được.')
     expect(registration.summary.state).toBe('SUBMITTED')
-    expect(screen.queryByText(/Quyết định cho dòng đã được lưu/)).not.toBeInTheDocument()
+    expect(useToastStore.getState().toasts).toHaveLength(0)
   })
 
   it('explains an inverted Tour date range instead of sending a request that can only fail', async () => {
@@ -235,7 +297,7 @@ describe('Staff registration review boundary', () => {
     failure = 'list'
     await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-staff', 'list'] }) })
     await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
-    expect(screen.getByRole('link', { name: 'Đăng ký chờ duyệt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Đăng ký đoàn' })).toBeInTheDocument()
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

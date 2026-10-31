@@ -53,6 +53,8 @@ public sealed class SubmitPoiProposalCommandHandler(
             ?? throw new ConflictException("The proposal's current revision is missing.");
         if (await proposalRepository.FindSubmissionAsync(revision.Id, cancellationToken) is not null)
             throw new ConflictException("This POI revision has already been submitted.");
+        if (string.IsNullOrWhiteSpace(revision.NarrationText))
+            throw new ConflictException("POI narration is required before submission.", "POI_NARRATION_REQUIRED");
 
         var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: false, cancellationToken)
             ?? throw new NotFoundException("Map version", revision.MapVersionId);

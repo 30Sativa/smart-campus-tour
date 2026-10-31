@@ -54,7 +54,7 @@ public sealed class FleetSyncTests
     public async Task OperationsProjection_KeepsSyncPoseExecutionLocalizationAndMotionReadinessSeparate()
     {
         var now = DateTimeOffset.UtcNow;
-        var identity = new FleetRobotIdentity(RobotCode, "PHYSICAL", null, false);
+        var identity = new FleetRobotIdentity(RobotCode, "PHYSICAL", null, false, "test-map", "map");
         var oldPose = new FleetPose(1, 2, 0, now.AddMinutes(-1));
         var report = new FleetTelemetryReport(RobotCode, Guid.NewGuid(), 1, now, "test-map", "map",
             oldPose, "NAVIGATING", Guid.NewGuid(), null, null, null, null);
@@ -156,14 +156,10 @@ public sealed class FleetSyncTests
     public async Task AcceptedSyncSurvivesConfirmationWriteFailureAndRetriesOnNextNewReport()
     {
         var now = DateTimeOffset.UtcNow;
-        var identity = new FleetRobotIdentity(RobotCode, "PHYSICAL", null, false);
+        var identity = new FleetRobotIdentity(RobotCode, "PHYSICAL", null, false, "test-map", "map");
         var store = new InMemoryFleetTelemetryStore();
         var confirmation = new FailingOnceConfirmationStore();
-        var settings = new FleetSyncSettings(
-            new Dictionary<string, FleetRobotMapContext> { [RobotCode] = new("test-map", "map") },
-            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30),
-            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-        var handler = new SyncFleetTelemetryHandler(store, confirmation, settings,
+        var handler = new SyncFleetTelemetryHandler(store, confirmation,
             new FixedTimeProvider(now), Microsoft.Extensions.Logging.Abstractions.NullLogger<SyncFleetTelemetryHandler>.Instance);
         var first = new FleetTelemetryReport(RobotCode, Guid.NewGuid(), 1, now, "test-map", "map",
             null, "IDLE", null, null, null, null, null);
@@ -297,19 +293,20 @@ public sealed class FleetSyncTests
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         var robot = FleetRobotCredentialHash.Create();
+        var robotId = Guid.NewGuid();
         await using (var context = CreateContext(database.ConnectionString))
         {
             context.Robots.Add(new SmartCampus.Domain.Entities.Robot
             {
-                Id = Guid.NewGuid(), RobotCode = RobotCode, SourceType = "PHYSICAL", DisplayName = "Test robot",
+                Id = robotId, RobotCode = RobotCode, SourceType = "PHYSICAL", DisplayName = "Test robot",
                 CredentialHash = robot.Hash, IsDispatchEnabled = false, NeedsInspection = true,
                 CreatedAt = DateTimeOffset.UtcNow
             });
             await context.SaveChangesAsync();
         }
         await database.InsertUserAsync(true, username: "fleet.staff", roles: ["STAFF"]);
-        var settings = RobotContextSettings();
-        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, settings);
+        await SeedAssignedMapAsync(database, RobotCode, "test-campus-map-v1");
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString);
 
         using (var noCredential = CreateSyncRequest(ValidRequest()))
         using (var response = await host.Client.SendAsync(noCredential))
@@ -424,7 +421,7 @@ public sealed class FleetSyncTests
         Assert.Equal("map", storedRobot.FirstAcceptedFrameId);
     }
 
-    [SchemaV16Fact]
+    [SchemaV17Fact]
     public async Task ConnectionConfirmation_IsWriteOnceConcurrentAndBoundToCurrentCredentialHash()
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
@@ -494,19 +491,19 @@ public sealed class FleetSyncTests
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
         var robot = FleetRobotCredentialHash.Create();
+        var robotId = Guid.NewGuid();
         await using (var context = CreateContext(database.ConnectionString))
         {
             context.Robots.Add(new SmartCampus.Domain.Entities.Robot
             {
-                Id = Guid.NewGuid(), RobotCode = RobotCode, SourceType = "PHYSICAL", DisplayName = "Test robot",
+                Id = robotId, RobotCode = RobotCode, SourceType = "PHYSICAL", DisplayName = "Test robot",
                 CredentialHash = robot.Hash, IsDispatchEnabled = false, NeedsInspection = true,
                 CreatedAt = DateTimeOffset.UtcNow
             });
             await context.SaveChangesAsync();
         }
-
+        await SeedAssignedMapAsync(database, RobotCode, "test-campus-map-v1");
         var streamId = Guid.NewGuid();
-        var settings = RobotContextSettings();
         var nextReportAt = DateTimeOffset.UtcNow.AddMilliseconds(-50);
 
         FleetSyncRequest Request(long seq, DateTimeOffset? reportedAt = null)
@@ -520,7 +517,7 @@ public sealed class FleetSyncTests
         }
 
         await using (var firstProcess = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(
-            database.ConnectionString, settings))
+            database.ConnectionString))
         {
             var invalid = Request(1, DateTimeOffset.UtcNow.AddDays(-1));
             invalid = invalid with { Pose = invalid.Pose! with { CapturedAt = invalid.ReportedAt } };
@@ -542,7 +539,7 @@ public sealed class FleetSyncTests
         }
 
         await using (var restartedProcess = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(
-            database.ConnectionString, settings))
+            database.ConnectionString))
         {
             // The caller loses the first response after the API has applied seq 4.
             // An exact retry must be acknowledged as a duplicate.
@@ -742,15 +739,26 @@ public sealed class FleetSyncTests
     }
 
     private static FleetSyncSettings TestSettings(TimeSpan syncFresh, TimeSpan poseFresh) => new(
-        new Dictionary<string, FleetRobotMapContext> { [RobotCode] = new("test-map", "map") },
         TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), syncFresh, poseFresh, TimeSpan.FromSeconds(5));
 
-    private static IReadOnlyDictionary<string, string> RobotContextSettings() => new Dictionary<string, string>
+    private static async Task SeedAssignedMapAsync(InitialAdminSeederTests.EmptySchemaDatabase database, string robotCode, string mapKey)
     {
-        [$"FleetSync:RobotContexts:{RobotCode}:MapKey"] = "test-campus-map-v1",
-        [$"FleetSync:RobotContexts:{RobotCode}:FrameId"] = "map"
-    };
-
+        var technical = await database.InsertUserAsync(true, username: "fleet.map.technical", roles: ["TECHNICAL_STAFF"]);
+        var mapId = Guid.NewGuid();
+        var uploadId = Guid.NewGuid();
+        await database.ExecuteAsync($"""
+            INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt)
+            VALUES(N'fleet-test-area',N'Fleet Test Area','{technical.Id:D}',SYSDATETIMEOFFSET());
+            INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,
+                ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,FreeThreshold,
+                FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            VALUES('{mapId:D}',N'fleet-test-area',1,N'{mapKey}',N'fleet.zip',0x1111111111111111111111111111111111111111111111111111111111111111,
+                0x1111111111111111111111111111111111111111111111111111111111111111,0x01,N'map.pgm',1,1,0.05,0,0,0,0,0.65,0.25,
+                N'map','VALID','{technical.Id:D}','{uploadId:D}',SYSDATETIMEOFFSET());
+            UPDATE dbo.Robots SET AssignedMapVersionId='{mapId:D}',MapAssignedAt=SYSDATETIMEOFFSET(),MapAssignedByUserId='{technical.Id:D}'
+            WHERE RobotCode=N'{robotCode}';
+            """);
+    }
     private static string Fixture(string name) => Path.Combine(
         AppContext.BaseDirectory, "ContractFixtures", "fleet-sync", "v1", name);
 

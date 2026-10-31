@@ -29,6 +29,7 @@ export default function RepTourDetailPage() {
             <div className="rep-badges"><TourStateBadge state={tour.state} /></div>
           </div>
         </div>
+        {tour.state === 'CANCELLED' && <p role="status" className="rep-lead" style={{ marginTop: 22 }}>Buổi tham quan đã bị hủy{tour.cancelReason?.trim() ? `. Lý do: ${tour.cancelReason.trim()}` : '.'}</p>}
         {tour.description && <p className="rep-lead" style={{ marginTop: 22 }}>{tour.description}</p>}
         <RouteMap tour={tour} />
         <section className="rep-section" style={{ marginTop: 40 }} aria-labelledby="rep-stops-title">

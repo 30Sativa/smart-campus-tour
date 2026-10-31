@@ -9,7 +9,7 @@ import { LiveDot } from './StaffUi'
 import { RouteView } from '../../components/ui/RouteView'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
-import { DevDataBadge, MobileNavToggle } from '../../components/ui/ConsoleSidebar'
+import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, activeNavPath } from './staff-nav'
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
@@ -21,7 +21,7 @@ const TOAST_MS = 9_000
 
 const CONNECTION_LABEL = {
   connecting: 'Đang kết nối',
-  connected: 'Thời gian thực',
+  connected: 'Mô phỏng trực tiếp',
   reconnecting: 'Đang kết nối lại',
   disconnected: 'Mất kết nối',
 } as const
@@ -50,8 +50,8 @@ export default function StaffShell() {
   const running = today.data?.find((tour) => tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance') ?? today.data?.find((tour) => tour.state === 'Running')
 
   const currentPath = activeNavPath(location.pathname)
-  // Registrations, Routes and POIs already read the live SQL backend; everything else here is labelled sample data.
-  const onLiveSqlPage = ['/staff/manage/registrations', '/staff/manage/routes', '/staff/manage/pois'].some((path) => location.pathname.startsWith(path))
+  // Preparation pages use live APIs; operational pages still use labelled simulations.
+  const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/intercom' || location.pathname === '/staff/profile'
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
   const pendingCount = usePendingReviewCount() ?? 0
   const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
@@ -69,7 +69,7 @@ export default function StaffShell() {
   }, [toast])
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
+    <div className="flex h-[100dvh] overflow-hidden bg-[#f6f7f9] text-[#173b59]">
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
       <GroupedSidebar
@@ -82,7 +82,7 @@ export default function StaffShell() {
         currentPath={currentPath}
         badges={{
           '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ`, tone: 'danger' },
-          '/staff/manage/registrations/pending': { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
+          '/staff/manage/registrations': { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
         }}
         // Only an Admin sees a way across, and only because that account
         // genuinely has the other area. An operator is not shown a door it cannot open.
@@ -92,14 +92,14 @@ export default function StaffShell() {
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
-        highlight={running ? (rail) => <RunningCard tour={running} rail={rail} onNavigate={closeMenu} /> : undefined}
+        highlight={!onLiveSqlPage && running ? (rail) => <RunningCard tour={running} rail={rail} onNavigate={closeMenu} /> : undefined}
       />
 
-      <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="flex h-13 items-center gap-3 border-b border-[#e5e7eb]">
             <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
-            <span
+            {!onLiveSqlPage && <span
               role="status"
               className={`hidden shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold sm:inline-flex ${
                 connection === 'connected' ? 'bg-[#ecfdf3] text-[#15803d]' : connection === 'disconnected' ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#fffbeb] text-[#b45309]'
@@ -107,7 +107,7 @@ export default function StaffShell() {
             >
               <LiveDot tone={connection === 'connected' ? 'ok' : connection === 'disconnected' ? 'danger' : 'warn'} />
               {CONNECTION_LABEL[connection]}
-            </span>
+            </span>}
 
             <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <StaffBell />
@@ -117,9 +117,9 @@ export default function StaffShell() {
           </div>
         </header>
 
-        {!onLiveSqlPage && <DevDataBadge>dữ liệu mẫu · mô phỏng thời gian thực</DevDataBadge>}
+        {!onLiveSqlPage && <p role="note" className="border-b border-[#e2e8f0] px-4 py-2 text-xs text-[#64748b] sm:px-6 lg:px-8">Chế độ mô phỏng · Số liệu minh họa</p>}
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
           <RouteView />
         </main>
 

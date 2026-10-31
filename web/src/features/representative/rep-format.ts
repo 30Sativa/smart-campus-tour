@@ -34,7 +34,7 @@ export const TOUR_LABEL: Record<TourState, { label: string; tone: StatusTone }> 
   READY: { label: 'Đã chốt danh sách', tone: 'muted' },
   RUNNING: { label: 'Đang diễn ra', tone: 'info' },
   COMPLETED: { label: 'Đã hoàn thành', tone: 'muted' },
-  CANCELLED: { label: 'Buổi đã hủy', tone: 'muted' },
+  CANCELLED: { label: 'Đã hủy', tone: 'muted' },
 }
 
 /** Display of the required group name. */
@@ -85,7 +85,7 @@ export function closedNote(r: RegistrationSummary): ClosedNote {
   if (r.state === 'CANCELLED')
     return { badge: 'Bạn đã hủy', tone: 'muted', by: 'Đại diện', reason: 'Bạn đã hủy đăng ký này.', at: `Hủy lúc ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
   if (r.tourState === 'CANCELLED')
-    return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: 'Buổi tham quan đã bị hủy.', at: `Cập nhật ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
+    return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: r.tourCancelReason?.trim() || 'Buổi tham quan đã bị hủy.', at: `Cập nhật ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
   const at = r.reviewedAt ?? r.updatedAt
   return { badge: 'Bị từ chối', tone: 'danger', by: 'Nhà trường', reason: r.rejectionReason?.trim() || 'Nhà trường không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
 }

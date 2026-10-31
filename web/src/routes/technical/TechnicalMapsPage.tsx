@@ -1,27 +1,20 @@
 import { useState, type FormEvent } from 'react'
-import { RefreshCw } from 'lucide-react'
-import { Link } from 'react-router'
 import { ApiError } from '../../api/client'
 import { Activity, CircleCheck, CircleX, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
+import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors, stamp } from '../../features/technical/technical-format'
-import type { MapAreaOption, MapVersionItem, PhysicalRobotConnectionStatus } from '../../features/technical/api/technical'
+import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
 const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
-const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
-  UNCONFIRMED: 'Chưa xác nhận kết nối',
-  CONNECTED: 'Đã xác nhận · Đang kết nối',
-  DISCONNECTED: 'Đã xác nhận · Mất kết nối',
-  AWAITING_DATA: 'Đã xác nhận · Chưa nhận dữ liệu',
-})[status]
 
 /**
- * Map versions: a figure strip, the version table, and two centered dialogs
- * (upload a package, record an on-robot check) so the table stays the page.
+ * Map versions: a figure strip, the version table, and two centered dialogs (upload a
+ * package, record an on-robot check) so the table stays the page.
  */
 export default function TechnicalMapsPage() {
   const maps = useMapVersions()
@@ -56,7 +49,7 @@ export default function TechnicalMapsPage() {
       <section className={panelClass} aria-label="Danh sách phiên bản bản đồ">
         <PanelHead title="Danh sách phiên bản bản đồ" description="Mỗi lần tải lên tạo một phiên bản mới của khu vực." />
         {maps.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : maps.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p> : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[1280px] text-left">
               <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Khu vực</th><th className={thClass}>Mã khu vực</th><th className={thClass}>Phiên bản</th><th className={thClass}>Tệp</th><th className={thClass}>Tình trạng tệp</th><th className={thClass}>Kiểm tra kỹ thuật</th><th className={thClass}>Điều kiện tạo POI</th><th className={thClass}>Robot đang triển khai</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">
@@ -141,7 +134,7 @@ function UploadModal({ open, initialArea, onClose }: { open: boolean; initialAre
         {!areas.isPending && !areas.isError && mode === 'existing' && areas.data?.length === 0 && <p role="status" className="text-sm text-[#64748b]">Chưa có khu vực nào. Chọn “Khu vực mới” để tạo khu vực đầu tiên.</p>}
         {mode === 'existing' ? <div>
           <label className={labelClass} htmlFor="map-existing-area">Chọn khu vực</label>
-          <select id="map-existing-area" className={`${inputClass} mt-1`} required value={areaKey} disabled={areas.isPending || areas.isError || !areas.data?.length} onChange={event => { const selected = areas.data?.find(area => area.areaKey === event.target.value); setAreaKey(selected?.areaKey ?? ''); setAreaName(selected?.displayName ?? ''); fieldChanged() }}>
+          <select title="" id="map-existing-area" className={`${inputClass} mt-1`} required value={areaKey} disabled={areas.isPending || areas.isError || !areas.data?.length} onChange={event => { const selected = areas.data?.find(area => area.areaKey === event.target.value); setAreaKey(selected?.areaKey ?? ''); setAreaName(selected?.displayName ?? ''); fieldChanged() }}>
             <option value="">— Chọn khu vực —</option>{areas.data?.map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}
           </select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Bản đồ sẽ được lưu thành phiên bản mới của khu vực này.</p>}
         </div> : <div className="grid gap-3 sm:grid-cols-[1.4fr_1fr]">
@@ -194,7 +187,7 @@ function DeploymentModal({ item, onClose }: { item: MapVersionItem | null; onClo
     <Modal open title={`Ghi kết quả kiểm tra · ${map.areaName} v${map.versionNumber}`} description={`Chỉ ghi khi robot đã nạp đúng tệp này (checksum ${shortSha(map.packageSha256)}).`} onClose={onClose}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || !robotCode || !note.trim() || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
       <form id="map-check-form" className="space-y-3.5" onSubmit={submit}>
-        <div><div className="flex items-end justify-between gap-2"><label className={labelClass} htmlFor="map-check-robot">Robot kiểm tra</label>{!robots.isPending && !robots.isError && <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button>}</div><select id="map-check-robot" className={`${inputClass} mt-1`} required value={robotCode} disabled={robots.isPending || robots.isError || !robots.data?.length} onChange={event => { setRobotCode(event.target.value); changed() }}><option value="">— Chọn robot vật lý —</option>{robots.data?.map(robot => { const status = connectionStatusLabel(robot.connectionStatus); return <option key={robot.id} value={robot.robotCode}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · {status}</option> })}</select>{robots.isPending && <p role="status" className="mt-1 text-sm text-[#64748b]">Đang tải danh sách robot…</p>}{robots.isError && <div role="alert" className="mt-1 text-sm text-[#b23e18]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div>}{!robots.isPending && !robots.isError && robots.data?.length === 0 && <div role="status" className="mt-1 text-sm text-[#b23e18]"><p>Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra.</p><Link className="mt-1 inline-block font-semibold text-[#1d4ed8] underline" to="/technical/robots">Đăng ký robot</Link></div>}{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy kết nối robot với hệ thống (Fleet Sync) trước khi ghi Đạt; bạn vẫn có thể ghi Không đạt sau khi quan sát thực tế.</p>}</div>
+        <div><RobotPicker id="map-check-robot" label="Robot kiểm tra" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra." />{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại trước khi ghi PASS; bạn vẫn có thể ghi FAIL sau khi quan sát thực tế.</p>}</div>
         <div className="space-y-2"><CheckRow checked={localizationPassed} onChange={value => { setLocalizationPassed(value); changed() }}>Localization đạt</CheckRow><CheckRow checked={displayPassed} onChange={value => { setDisplayPassed(value); changed() }}>Map hiển thị đúng</CheckRow></div>
         <div><label className={labelClass} htmlFor="map-check-note">Bằng chứng kiểm tra</label><textarea id="map-check-note" rows={4} className={`${inputClass} mt-1`} required maxLength={2000} value={note} onChange={event => { setNote(event.target.value); changed() }} placeholder="Ghi nhận quan sát thực tế, sai lệch, ảnh chụp màn hình đã lưu ở đâu…" /></div>
         {deployment.error && <p role="alert" className="rounded-lg bg-[#fff1ef] px-3 py-2 text-[13px] font-semibold text-[#b23e31]">{errorText(deployment.error)}</p>}

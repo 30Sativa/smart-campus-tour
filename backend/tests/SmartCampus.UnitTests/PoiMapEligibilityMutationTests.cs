@@ -17,7 +17,7 @@ public sealed class PoiMapEligibilityMutationTests
     private static readonly PoiProposalRevision Revision = new()
     {
         Id = Guid.NewGuid(), ProposalId = ProposalId, RevisionNumber = 1, MapVersionId = MapId,
-        MapVersion = Map, NavigationFingerprint = new byte[32]
+        MapVersion = Map, NavigationFingerprint = new byte[32], NarrationText = "Nội dung giới thiệu"
     };
 
     [Fact]
@@ -67,6 +67,32 @@ public sealed class PoiMapEligibilityMutationTests
     }
 
     [Fact]
+    public async Task Submitted_revision_without_current_pass_returns_vietnamese_conflict_message()
+    {
+        var handler = new CreatePoiRevisionCommandHandler(
+            MapRepository(), ProposalRepository(method => method.Name switch
+            {
+                nameof(IPoiProposalRepository.FindRevisionRequestAsync) => Task.FromResult<PoiProposalRevision?>(null),
+                nameof(IPoiProposalRepository.LockProposalAsync) => Task.FromResult<PoiProposal?>(Proposal),
+                nameof(IPoiProposalRepository.FindCurrentRevisionAsync) => Task.FromResult<PoiProposalRevision?>(Revision),
+                nameof(IPoiProposalRepository.FindSubmissionAsync) => Task.FromResult<PoiProposalSubmission?>(new PoiProposalSubmission()),
+                _ => throw new NotImplementedException(method.Name)
+            }),
+            VerificationRepository(method => method.Name switch
+            {
+                nameof(IPoiVerificationRepository.FindVerificationAsync) => Task.FromResult<PoiVerificationRecord?>(null),
+                nameof(IPoiVerificationRepository.FindLatestVerificationByFingerprintAsync) => Task.FromResult<PoiVerificationRecord?>(null),
+                _ => throw new NotImplementedException(method.Name)
+            }), RequestLock(), DatabaseContext(), TimeProvider.System);
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
+            new CreatePoiRevisionCommand(ActorId, ProposalId,
+                new CreatePoiRevisionRequest(Guid.NewGuid(), 1, Convert.ToBase64String(RowVersion), Draft())), default));
+
+        Assert.Equal("POI đã gửi chỉ được chỉnh sửa khi có kết quả kiểm chứng PASS còn hiệu lực cho đúng cấu hình điều hướng hiện tại.", error.Message);
+    }
+
+    [Fact]
     public async Task Submit_is_rejected_before_receipt_or_audit_write_when_map_loses_eligibility()
     {
         var writes = 0;
@@ -91,7 +117,7 @@ public sealed class PoiMapEligibilityMutationTests
         Assert.Equal(0, writes);
     }
 
-    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT");
+    private static PoiProposalDraft Draft() => new(MapId, "North entrance", "Entrance", null, 1m, 2m, 0m, "FRONT", "Nội dung giới thiệu", null);
 
     private static IMapVersionRepository MapRepository() => Proxy<IMapVersionRepository>(method => method.Name switch
     {
@@ -103,11 +129,11 @@ public sealed class PoiMapEligibilityMutationTests
 
     private static IPoiProposalRepository ProposalRepository(Func<MethodInfo, object?> handler) => Proxy<IPoiProposalRepository>(handler);
 
-    private static IPoiVerificationRepository VerificationRepository() => Proxy<IPoiVerificationRepository>(method => method.Name switch
+    private static IPoiVerificationRepository VerificationRepository(Func<MethodInfo, object?>? handler = null) => Proxy<IPoiVerificationRepository>(handler ?? (method => method.Name switch
     {
         nameof(IPoiVerificationRepository.FindVerificationAsync) => Task.FromResult<PoiVerificationRecord?>(null),
         _ => throw new NotImplementedException(method.Name)
-    });
+    }));
 
     private static IMapPoiRequestLock RequestLock() => Proxy<IMapPoiRequestLock>(_ => Task.CompletedTask);
     private static IApplicationDbContext DatabaseContext() => Proxy<IApplicationDbContext>(_ => Task.FromResult(0));

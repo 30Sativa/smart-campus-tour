@@ -17,6 +17,7 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
 {
     private const string StaffAndTechnical = ApplicationRoles.Staff + "," + ApplicationRoles.TechnicalStaff;
     private const string TechnicalAndAdmin = ApplicationRoles.TechnicalStaff + "," + ApplicationRoles.Admin;
+    private const string RobotListRoles = ApplicationRoles.TechnicalStaff + "," + ApplicationRoles.Admin + "," + ApplicationRoles.Staff;
 
     [HttpPost("technical/map-versions")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
@@ -45,10 +46,26 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
             Data = await sender.Send(new ListMapAreasQuery(), ct) });
 
     [HttpGet("technical/physical-robots")]
-    [Authorize(Roles = TechnicalAndAdmin)]
+    [Authorize(Roles = RobotListRoles)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotStatus>>>> ListPhysicalRobots(CancellationToken ct) =>
         Ok(new BaseResponse<IReadOnlyList<PhysicalRobotStatus>> { Success = true, Message = "Physical robots retrieved.",
             Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
+
+    [HttpPut("technical/physical-robots/{id:guid}/map-assignment")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<RobotMapAssignmentView>>> AssignRobotMap(
+        Guid id, [FromBody] AssignPhysicalRobotMapRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RobotMapAssignmentView> { Success = true, Message = "Robot map assigned.",
+            Data = await sender.Send(new ChangePhysicalRobotMapAssignmentCommand(id, User.GetRequiredUserId(),
+                request.RequestId, request.ExpectedRowVersion, request.MapVersionId), ct) });
+
+    [HttpDelete("technical/physical-robots/{id:guid}/map-assignment")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<RobotMapAssignmentView>>> ClearRobotMap(
+        Guid id, [FromBody] ClearPhysicalRobotMapRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RobotMapAssignmentView> { Success = true, Message = "Robot map assignment cleared.",
+            Data = await sender.Send(new ChangePhysicalRobotMapAssignmentCommand(id, User.GetRequiredUserId(),
+                request.RequestId, request.ExpectedRowVersion, null), ct) });
 
     [HttpPost("technical/physical-robots")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]

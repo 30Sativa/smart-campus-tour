@@ -31,6 +31,12 @@ public partial class Robot
 
     public string? FirstAcceptedFrameId { get; set; }
 
+    public Guid? AssignedMapVersionId { get; set; }
+
+    public DateTimeOffset? MapAssignedAt { get; set; }
+
+    public Guid? MapAssignedByUserId { get; set; }
+
     public bool IsDispatchEnabled { get; set; }
 
     public bool NeedsInspection { get; set; }
@@ -53,6 +59,10 @@ public partial class Robot
 
     public virtual User? CredentialRevokedByUser { get; set; }
 
+    public virtual MapVersion? AssignedMapVersion { get; set; }
+
+    public virtual User? MapAssignedByUser { get; set; }
+
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
@@ -60,6 +70,8 @@ public partial class Robot
     public virtual ICollection<RouteTestRun> RouteTestRuns { get; set; } = new List<RouteTestRun>();
 
     public virtual ICollection<TourEvent> TourEvents { get; set; } = new List<TourEvent>();
+
+    public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
 
     public virtual ICollection<Tour> Tours { get; set; } = new List<Tour>();
 }

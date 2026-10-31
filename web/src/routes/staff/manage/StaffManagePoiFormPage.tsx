@@ -5,6 +5,7 @@ import { ArrowLeft, MapPinned, MapPinOff } from 'lucide-react'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
+import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
@@ -13,12 +14,12 @@ import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../featur
 import { parseVersionedMapPackage, rasterPngBlob } from '../../../features/administration/pois/map/versioned-package'
 import type { OccupancyMap } from '../../../features/administration/pois/map/catalog'
 
-type Draft = { mapVersionId: string; name: string; purpose: string; description: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
-const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
+type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
+const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', narrationText: '', fallbackVideoUrl: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
 
 function asDraft(item: PoiProposal): Draft {
   const { revision } = item
-  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
+  return { mapVersionId: revision.mapVersionId, name: revision.name, purpose: revision.purpose, description: revision.description ?? '', narrationText: revision.narrationText ?? '', fallbackVideoUrl: revision.fallbackVideoUrl ?? '', x: revision.x, y: revision.y, yaw: revision.yaw, cameraPreset: revision.cameraPreset }
 }
 
 export default function StaffManagePoiFormPage() {
@@ -72,14 +73,15 @@ export default function StaffManagePoiFormPage() {
   const history = useQuery({ queryKey: ['technical', 'poi-history', poiId], queryFn: () => technicalApi.getPoiHistory(poiId!), enabled: Boolean(poiId) })
   const update = (values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
   const mutate = async (action: 'save' | 'submit') => {
-    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
-      setError('Cần chọn bản đồ, nhập tên và mục đích, và đặt vị trí cùng hướng trên bản đồ.')
+    if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
+      setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
       return
     }
-    const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null }
+    const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null, narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null }
     setBusy(true); setError(null)
     try {
       let result = current
+      const created = !result
       if (result) result = await technicalApi.revisePoiProposal(result.id, result, body)
       else result = await technicalApi.createPoiProposal(body)
       setSaved(result)
@@ -89,6 +91,11 @@ export default function StaffManagePoiFormPage() {
         setSaved(result)
         await queryClient.invalidateQueries({ queryKey: ['technical', 'poi-proposals'] })
       }
+      const submitted = action === 'submit'
+      if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận PASS.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận PASS trước khi dùng cho tuyến.' })
+      else notify(submitted
+        ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa tạo kết quả PASS.' }
+        : { title: `Đã lưu revision POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
       if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true })
     } catch (cause) {
       setError(errorText(cause))
@@ -130,7 +137,7 @@ export default function StaffManagePoiFormPage() {
       <div className="min-w-0 space-y-3">
         <section className={`${panelClass} space-y-2 p-4`}>
           <label className="block text-sm font-medium" htmlFor="poi-map">Bản đồ</label>
-          <select id="poi-map" className={inputClass} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{map.areaName} · v{map.versionNumber}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{selectedItem.map.areaName} · v{selectedItem.map.versionNumber} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
+          <select title="" id="poi-map" className={inputClass} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{map.areaName} · v{map.versionNumber}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{selectedItem.map.areaName} · v{selectedItem.map.versionNumber} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
           {selectedItem && <p className="flex flex-wrap items-center gap-2 text-xs text-[#64748b]"><span className="font-mono">{selectedItem.map.mapKey}</span>{selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">Robot đang triển khai: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}</p>}
           {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
         </section>
@@ -145,6 +152,8 @@ export default function StaffManagePoiFormPage() {
         <label className="block text-sm">Tên POI<input className={`${inputClass} mt-1`} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} placeholder="Sảnh thư viện" /></label>
         <label className="block text-sm">Mục đích<input className={`${inputClass} mt-1`} required maxLength={500} value={draft.purpose} onChange={e => update({ purpose: e.target.value })} placeholder="Giới thiệu khu tự học" /></label>
         <label className="block text-sm">Mô tả<textarea className={`${inputClass} mt-1`} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} /></label>
+        <label className="block text-sm">Nội dung thuyết minh<textarea className={`${inputClass} mt-1`} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} /></label>
+        <label className="block text-sm">Video dự phòng (HTTPS, không bắt buộc)<input className={`${inputClass} mt-1`} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} /></label>
         <label className="block text-sm">Góc camera<select className={`${inputClass} mt-1`} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{Object.entries(cameraPresetLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         <div className="flex flex-col gap-2 border-t border-[#eef1f4] pt-3">

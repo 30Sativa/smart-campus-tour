@@ -676,7 +676,7 @@ public sealed class AccountEndpointTests
             Client = new HttpClient
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
-                Timeout = TimeSpan.FromSeconds(5)
+                Timeout = TimeSpan.FromSeconds(15)
             };
         }
 

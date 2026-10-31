@@ -1,13 +1,10 @@
 namespace SmartCampus.Application.Features.FleetSync;
 
-public sealed record FleetRobotMapContext(string MapKey, string FrameId);
-
 public sealed class FleetSyncSettings
 {
     public const long MaximumBrowserSafeSequence = 9_007_199_254_740_991L;
 
     public FleetSyncSettings(
-        IReadOnlyDictionary<string, FleetRobotMapContext> robotContexts,
         TimeSpan maximumReportAge,
         TimeSpan maximumFutureSkew,
         TimeSpan syncFreshness,
@@ -24,7 +21,6 @@ public sealed class FleetSyncSettings
             broadcastRetryDelay <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(maximumReportAge), "Fleet sync durations must be positive (future skew may be zero).");
 
-        RobotContexts = new Dictionary<string, FleetRobotMapContext>(robotContexts, StringComparer.Ordinal);
         MaximumReportAge = maximumReportAge;
         MaximumFutureSkew = maximumFutureSkew;
         SyncFreshness = syncFreshness;
@@ -34,7 +30,6 @@ public sealed class FleetSyncSettings
         OperationsBroadcastRetryDelay = broadcastRetryDelay;
     }
 
-    public IReadOnlyDictionary<string, FleetRobotMapContext> RobotContexts { get; }
     public TimeSpan MaximumReportAge { get; }
     public TimeSpan MaximumFutureSkew { get; }
     public TimeSpan SyncFreshness { get; }
@@ -43,6 +38,4 @@ public sealed class FleetSyncSettings
     public TimeSpan OperationsBroadcastTimeout { get; }
     public TimeSpan OperationsBroadcastRetryDelay { get; }
 
-    public bool TryGetRobotContext(string robotCode, out FleetRobotMapContext context) =>
-        RobotContexts.TryGetValue(robotCode, out context!);
 }

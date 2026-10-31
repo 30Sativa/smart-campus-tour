@@ -48,20 +48,24 @@ source exists and row/email decisions can be rechecked.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/staff/manage/tours` | Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
-| POST | `/api/staff/manage/tours` | `{requestId, expectedRouteVersion, configuration}`; currently returns 409 `TOUR_DURATION_UNAVAILABLE` after validating the legacy route; no Tour or success receipt is written. |
-| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`. |
-| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
+| GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days), optional `time=HH:mm` to judge a typed start beside the slots (ADR-0036). Returns `customStartEarliest`/`customStartLatest`. Per day and configured slot: `available`, or `reasonCode` (`OUTSIDE_START_HOURS`, `LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
+| GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
+| GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
+| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be a configured slot or a whole minute inside the custom hours (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
+| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
+| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
+| POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
+| POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
+| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
 absolute HTTP(S) without embedded credentials. Schedule is a DateTimeOffset,
-normalized to UTC, with millisecond precision. Future-time and route checks run,
-but creating a Tour and changing its schedule/route fail closed because the
-approved configured-duration source is unavailable. `MeasuredDurationSeconds`
-from a manual route test is not a substitute (ADR-0024). Creating or changing
-Route requires its current opaque version,
+normalized to UTC, with millisecond precision. A new Tour names one tested Route
+revision, and changing a Tour's schedule/route fails closed (ADR-0034). Changing
+a legacy Tour's Route requires its current opaque version,
 active Route, active POIs and valid data/map/pose/stops/head configuration.
 Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
 
@@ -120,11 +124,15 @@ The former Route catalog create/update/availability/delete operations under
 `/api/staff/manage/routes` and its `/api/admin/routes` alias are retired. New
 authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
 submission and Technical Staff manual test evidence described in
-`backend/docs/route-revisions.md` and ADR-0023. Route stops carry exact
+`backend/docs/route-revisions.md` and ADR-0023. Technical Staff picks the
+participating Staff account from the read-only
+`GET /api/technical/route-verifications/participants`. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
-not pass legacy `PoiId` values. The two remaining Staff Route GET operations
+not pass legacy `PoiId` values. Saving or submitting a revision requires the
+exact map version to have current technical evidence, otherwise 409
+`TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
 serve existing Tour records only. Versioned Route to Tour selection,
-scheduling, reservations and READY remain blocked by ADR-0024; these APIs do
+creates and reserves under ADR-0034; READY remains blocked by ADR-0024; these APIs do
 not imply a schedulable Tour or hardware acceptance.
 
 How the pieces of CampusTour DT-AMR fit together. This file covers what
@@ -143,14 +151,20 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.6; the current snapshot
+The backend persistence baseline has advanced through v1.10; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
-plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`.
+plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
+and versioned POI narration content/route-stop snapshots in
+`backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
+`backend/database/smart-campus-tour-schema-v1.8.sql`, Tours on a tested revision in
+`backend/database/smart-campus-tour-schema-v1.9.sql`, and scheduling inputs in
+`backend/database/smart-campus-tour-schema-v1.10.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
-[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md), and
-[ADR-0030](decisions/0030-robot-credential-lifecycle.md). The
+[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
+[ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
+[ADR-0031](decisions/0031-versioned-poi-narration-content.md). The
 developer's local `SmartCampusTourV11` remains an older database and is not
 altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
@@ -644,13 +658,11 @@ transaction, so credential rotation cannot race through the gate. Replaying an
 already committed check returns it before this new-PASS condition. Offline state
 or backend restart does not erase confirmation; credential provisioning resets
 it. Runtime SQL can SELECT/INSERT Robots and update only credential lifecycle
-and confirmation columns, never DELETE or update the whole table. Technical
+and confirmation columns plus the three map-assignment columns, never DELETE or update the whole table. Technical
 Staff issues/rotates credentials through the web; Admin can revoke and inspect
 credential audit, while Staff sees only connection status. The separate CLI
 provisioner shares the lifecycle service, is attributed as `CLI`, and retains
-column-scoped Robot and append-only AuditLogs grants. RobotContexts remain
-deployment configuration; bridge and database
-RobotCode must match. This connection confirmation does not prove the named map
+column-scoped Robot and append-only AuditLogs grants. TechnicalStaff assigns a valid uploaded MapVersion to a physical robot; Fleet Sync projects MapKey and FrameId from that row. The bridge and database RobotCode must match. This connection confirmation does not prove the named map
 was loaded, localization succeeded, or operation is safe; the manual check
 remains a human observation. Report timestamp age/skew validation does not
 prove fleet-wide NTP. The stored map/frame values are historical context. A
@@ -660,13 +672,7 @@ deployment-check requests that expose requestId keep that ID stable for retries;
 physical robot registration has no requestId or receipt and duplicate code is
 409 via the unique constraint.
 
-The same TechnicalStaff robot list exposes only each robot's configured
-`RobotContexts` MapKey/FrameId and the latest recorded deployment-check map
-key/frame. It exposes no credential or other configuration values. The UI
-warns, without blocking work, when configuration is absent or differs from the
-latest check. Operators update RobotContexts and restart the backend after a
-map deployment, then rerun the Fleet Sync probe; this display is not a new
-deployment or readiness gate.
+The TechnicalStaff robot list exposes the database-assigned MapKey/FrameId and the latest deployment-check map key/frame. It exposes no credential or other configuration values. The UI warns without blocking work when the assignment is absent or differs from the latest check. After reassignment, operators update the MiniPC bridge context and rerun the Fleet Sync probe; this is not a deployment or readiness gate.
 
 When a current POI map version falls outside the normal version-list page, the
 Staff screen fetches that exact version by ID for preview. If backend eligibility
@@ -2019,8 +2025,8 @@ and `Robots` SELECT/INSERT plus column-level credential lifecycle and
 first-accepted confirmation UPDATE. Runtime has no whole-table `Robots`
 UPDATE/DELETE. The separate credential provisioner shares lifecycle logic,
 uses its own column-scoped grants, and appends audit rows without rewriting
-them. Existing v1.4/v1.5 databases require the controlled upgrade/regrant to
-v1.6 and read-only check-only gate before an API release that needs this schema.
+them. Existing v1.4/v1.5/v1.6 databases require the controlled upgrade/regrant to
+v1.7 and read-only check-only gate before an API release that needs this schema.
 The check-only gate does not change database state.
 The deployment adds two anonymous operational routes: `GET /health/live`
 returns 204 when the API process can serve a request; `GET /health/ready`
@@ -2070,7 +2076,9 @@ new endpoints are documented in
 Staff writes immutable `RouteRevisions` and ordered stops linked to exact map
 and POI revisions plus source POI PASS evidence. `GET /api/routes` lists only
 current VERSIONED revisions, including drafts, with search, sort, paging and
-optional exact map-version filtering; the legacy catalog remains separate.
+optional exact map-version and `isActive` filtering; the legacy catalog remains separate.
+Each view carries `isActive` and an opaque `rowVersion` (ADR-0037). Tour create and
+slots refuse an inactive route with 409 `ROUTE_UNAVAILABLE`.
 Submission receipts are separate from draft creation. Technical Staff appends
 manual whole-route test runs with an explicit distinct active Staff participant
 whose single persisted role resolves through `ApplicationRoles`. The technical

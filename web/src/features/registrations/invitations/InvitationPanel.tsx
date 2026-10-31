@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
+import { notify } from '../../../components/ui/toast-store'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { invitationsApi, type InvitationItem, type InvitationWrite } from './api'
 
@@ -24,15 +25,14 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion }: 
   const mutation = useMutation({ mutationFn: (write: InvitationWrite) => invitationsApi.write(registrationId, write),
     onSuccess: () => client.invalidateQueries({ queryKey: key }) })
   const [choice, setChoice] = useState<InvitationWrite | null>(null)
-  const [saved, setSaved] = useState(false)
   const choose = (operation: InvitationWrite['operation'], item?: InvitationItem) => {
-    mutation.reset(); setSaved(false)
+    mutation.reset()
     setChoice({ operation, invitationId: item?.id, requestId: crypto.randomUUID(),
       expectedRowVersion: item?.rowVersion ?? rowVersion, ...(item ? {} : { expectedTourRowVersion: tourRowVersion }) })
   }
   const submit = () => {
     if (!choice) return
-    mutation.mutate(choice, { onSuccess: () => { setChoice(null); setSaved(true) },
+    mutation.mutate(choice, { onSuccess: () => { setChoice(null); notify({ title: 'Đã lưu thao tác', detail: 'Kết quả gửi email sẽ cập nhật ở danh sách.' }) },
       onError: failure => { if (failure instanceof ApiError && failure.status === 409) { setChoice(null); void query.refetch() } } })
   }
   return <section aria-label="Hỗ trợ lời mời" className="rounded-xl border border-slate-200 bg-white p-4">
@@ -43,17 +43,18 @@ export function InvitationPanel({ registrationId, rowVersion, tourRowVersion }: 
     {query.isPending && <p aria-busy="true">Đang tải lời mời…</p>}
     {query.isError && <p role="alert">Không tải được lời mời. Vui lòng thử tải lại.</p>}
     {mutation.isError && <p role="alert" className="mb-3 text-sm text-red-700">{message(mutation.error)}</p>}
-    {saved && <p role="status" className="mb-3 text-sm text-emerald-700">Đã lưu thao tác. Kết quả gửi email sẽ cập nhật ở danh sách.</p>}
     {query.data && !query.isError && <>
       {!query.data.enabled && <p>Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.</p>}
       {query.data.canIssue && <button className={buttonClass('primary', 'sm')} disabled={mutation.isPending} onClick={() => choose('issue')}>Cấp và gửi lời mời</button>}
       {query.data.enabled && query.data.items.length === 0 && !query.data.canIssue && <p>Đăng ký này chưa có lời mời được cấp.</p>}
-      <div className="mt-3 space-y-3">{query.data.items.map(item => <article key={item.id} className="rounded-lg border border-slate-200 p-3">
-        <p className="font-medium text-slate-900">{item.displayName} <span className="text-xs text-slate-500">· {item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</span></p>
-        <p className="break-all text-sm text-slate-600">{item.email}</p>
-        <p className="mt-1 text-sm">{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'} · Hạn: {time(item.expiresAt)}</p>
-        <p className="text-sm">{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200">{query.data.items.map(item => <article key={item.id} className="flex flex-col gap-2 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900">{item.displayName} <span className="text-xs text-slate-500">· {item.rowType === 'SHARED_VIEWING' ? 'Điểm xem chung' : 'Cá nhân'}</span></p>
+          <p className="break-all text-sm text-slate-600">{item.email}</p>
+          <p className="text-[13px] text-slate-600">{item.revokedAt ? 'Đã thu hồi mã' : new Date(item.expiresAt) <= new Date() ? 'Mã đã hết hạn' : 'Mã còn hiệu lực'} · Hạn: {time(item.expiresAt)}</p>
+          <p className="text-[13px] font-medium text-slate-700">{statusLabel[item.emailStatus] ?? 'Chưa biết kết quả'}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
           <button className={buttonClass('secondary', 'sm')} disabled={!item.canSend || mutation.isPending || query.isFetching} onClick={() => choose('resend', item)}>Gửi lại email</button>
           <button className={buttonClass('secondary', 'sm')} disabled={!item.canReissue || mutation.isPending || query.isFetching} onClick={() => choose('reissue', item)}>Thu hồi và cấp mã mới</button>
           <button className={buttonClass('danger', 'sm')} disabled={!item.canRevoke || mutation.isPending || query.isFetching} onClick={() => choose('revoke', item)}>Thu hồi mã</button>

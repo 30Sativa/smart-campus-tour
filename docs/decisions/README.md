@@ -68,7 +68,14 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0028](0028-map-technical-check-before-poi-preparation.md) | Require latest exact-version physical robot check evidence before Tour Staff creates/revises/submits POI proposals | owner-authorized business rule; backend/frontend enforcement and tests in this change |
 | [0029](0029-robot-connection-confirmation-before-map-pass.md) | Persist first accepted Fleet Sync context per credential and require it for a new map-check PASS | owner-authorized cross-system implementation; v1.5 schema and backend/web enforcement; no hardware acceptance claimed |
 | [0030](0030-robot-credential-lifecycle.md) | Web-managed physical robot credential issue, rotation, revoke and append-only audit | owner-authorized implementation; v1.6 schema/API/UI rollout required; no hardware acceptance claimed |
+| [0031](0031-versioned-poi-narration-content.md) | Narration and optional HTTPS fallback video on immutable POI revisions, with route-stop snapshots | owner-authorized Part 1; v1.7 schema/API/UI; content-only revisions reuse navigation verification |
+| [0032](0032-robot-map-context-assignment.md) | Store physical robot Fleet Sync map context as a Technical Staff-managed MapVersion assignment | owner-authorized; v1.8 schema/API/UI rollout required; no hardware acceptance claimed |
 
+| [0033](0033-map-technical-check-before-route-authoring.md) | Require current ADR-0028 map evidence before saving or submitting a versioned Route revision | owner-authorized; no schema change; physical behavior unverified |
+| [0034](0034-tour-from-tested-route-revision.md) | Schedule new Tours from an exact tested Route revision; size the robot reservation from the effective PASS run (interim) | owner-authorized; partly supersedes ADR-0024; v1.9 schema |
+| [0035](0035-tour-slots-lead-time-and-measured-reservation.md) | Fixed Tour slots, 72-hour lead time, route test measures the whole run including dwell, reservation adds increased dwell | owner-authorized; amends ADR-0034; v1.10 schema |
+| [0036](0036-tour-custom-start-time.md) | Staff may type a Tour start inside configured hours; slots become quick choices | owner-authorized; amends ADR-0035; no schema change |
+| [0037](0037-versioned-route-availability.md) | Deactivate and reopen versioned Routes for new Tours through Routes.IsActive; rows never touched stay open | owner-authorized; no schema change |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

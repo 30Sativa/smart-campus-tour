@@ -52,7 +52,7 @@ Technical Staff registers the physical robot identity by `RobotCode` and name
 before selecting it for a map check. Registration creates an unassigned
 identity only; credential issue/rotation/revocation is managed separately in
 the Technical Staff web console under [ADR-0030](../decisions/0030-robot-credential-lifecycle.md),
-while deployment-specific `RobotContexts` remain outside the web. Registration
+while the map context is assigned to a valid uploaded map version in the Technical Staff web console under [ADR-0032](../decisions/0032-robot-map-context-assignment.md). Registration
 is not connection, readiness, or check-pass evidence. The bridge and database
 must use the same `RobotCode`.
 The upload form chooses either a new area (key and name) or an existing area
@@ -84,6 +84,24 @@ Technical Staff with the assigned Operator tests the whole route and permitted
 branches. A pass records exact map/POI/route/configuration, tester, Operator,
 time, evidence, measured duration and result. Staff cannot technically confirm.
 
+**POI result lifecycle.** Each immutable POI revision takes one technical result
+and that result cannot be edited or withdrawn. A rejected revision leaves the
+technical queue until Staff corrects and resubmits it. Content-only edits keep
+an existing PASS. A changed pose, camera preset or map version needs a fresh
+result, and a new map version inherits nothing. A later map check failure does
+not change results already recorded. There is no flow to withdraw a PASS when
+reality changes but the revision does not (open, see the gap register).
+
+**Route authoring map gate (ADR-0033, owner decision 2026-10-30).** Staff may
+save or submit a route revision only on a map version with current technical
+evidence: at least one physical robot's latest check for that exact version
+passes. This is stricter than POI evidence alone, so a map that lost its passing
+check stops accepting route work even if its POIs passed, and only a new passing
+check from Technical Staff or moving the route to another eligible map unblocks
+it. A draft saved earlier stays readable but cannot be submitted meanwhile.
+Revisions already submitted are not rewritten, and a route test run keeps its
+own rule on the testing robot's latest deployment.
+
 Scheduling and READY require the exact tested tuple. A movement-affecting new
 revision never inherits a pass; a retained, unrevoked old tested tuple remains
 eligible. READY/RUNNING references cannot be edited in place. Content-only
@@ -105,6 +123,13 @@ Reserve the one robot atomically for 15 minutes before + the longest allowed
 tested path duration + 15 minutes after. Overlaps are rejected; route/time
 changes rerun reservation and exact-version checks.
 Assign a Staff Operator explicitly. READY is not physical safety proof.
+Until an approved content/audio duration exists, the tested path duration is the
+effective PASS run of the exact route revision (ADR-0034, interim), counted as the
+whole run including dwell, plus any dwell the revision adds. A Tour starts on a
+configured slot or a time typed inside the allowed hours (ADR-0036), at least
+72 hours ahead; registration still closes 48 hours
+before the start (ADR-0035). Time, route
+and robot changes on a created Tour mean cancelling and recreating it.
 Start is requested while READY at/after published time, validates all guards,
 claims the robot atomically, commits the permitted transition, then sends the
 first leg. Deduplicate repeated Start/commands and record actor/time/reason.
