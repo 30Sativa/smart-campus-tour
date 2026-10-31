@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Features.Invitations;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
@@ -42,6 +43,25 @@ public sealed class EfInvitationRepository(ApplicationDbContext context) : IInvi
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == InvitationAudit.Started && start.OccurredAt < staleBefore)))
             .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
                 context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == InvitationAudit.Started))).ToArrayAsync(ct);
+
+    public Task<AuditLog?> GetTourCancelNoticeAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.CorrelationId == attemptId && a.Action == TourCancelNoticeAudit.Requested, ct);
+    public Task<bool> HasTourCancelNoticeStartedAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId && a.Action == TourCancelNoticeAudit.Started, ct);
+    public Task<bool> HasTourCancelNoticeResultAsync(Guid attemptId, CancellationToken ct) =>
+        context.AuditLogs.AnyAsync(a => a.CorrelationId == attemptId &&
+            (a.Action == TourCancelNoticeAudit.Sent || a.Action == TourCancelNoticeAudit.Failed), ct);
+    public async Task<IReadOnlyList<EmailWorkItem>> PendingTourCancelNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct) =>
+        await context.AuditLogs.AsNoTracking().Where(a => a.Action == TourCancelNoticeAudit.Requested &&
+            !context.AuditLogs.Any(result => result.CorrelationId == a.CorrelationId &&
+                (result.Action == TourCancelNoticeAudit.Sent || result.Action == TourCancelNoticeAudit.Failed)) &&
+            (!context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started) ||
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started && start.OccurredAt < staleBefore)))
+            .OrderBy(a => a.Id).Take(20).Select(a => new EmailWorkItem(a.CorrelationId!.Value,
+                context.AuditLogs.Any(start => start.CorrelationId == a.CorrelationId && start.Action == TourCancelNoticeAudit.Started))).ToArrayAsync(ct);
+    public async Task<IReadOnlyList<TourCancelRecipient>> LoadTourCancelRecipientsAsync(IReadOnlyCollection<Guid> registrationIds, CancellationToken ct) =>
+        await context.GroupRegistrations.AsNoTracking().Where(r => registrationIds.Contains(r.Id)).OrderBy(r => r.Id)
+            .Select(r => new TourCancelRecipient(r.Id, r.ContactEmail)).ToArrayAsync(ct);
 
     public async Task<InvitationReadModel?> ReadAsync(Guid registrationId, Guid? owner, CancellationToken ct)
     {

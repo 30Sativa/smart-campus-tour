@@ -11,7 +11,7 @@ route selector. See `web/docs/route-management.md` and ADR-0017.
 
 `/admin/tours`, `/admin/tours/new`, `/admin/tours/:id` and `/admin/tours/:id/edit`
 now use the live `/api/admin/tours` API (ADR-0018) through
-`src/features/administration/tours/`: list/search/state filter, create from an
+`src/features/administration/tours/`: list/search, tabs by phase beside the state filter, create from an
 active Route (route revision + idempotency key), metadata/schedule/Route edit
 within server permissions, and Cancel with a reason. READY (Chốt / Mở lại) has
 no backend endpoint yet and is not offered. The dashboard and `/admin/history`

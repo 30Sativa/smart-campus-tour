@@ -19,5 +19,11 @@ public interface IInvitationRepository
     Task<bool> HasStartedAsync(Guid attemptId, CancellationToken ct);
     Task<AuditLog?> GetAttemptAsync(Guid attemptId, CancellationToken ct);
     Task<IReadOnlyList<EmailWorkItem>> PendingAsync(DateTimeOffset staleBefore, CancellationToken ct);
+    Task<AuditLog?> GetTourCancelNoticeAsync(Guid attemptId, CancellationToken ct);
+    Task<bool> HasTourCancelNoticeStartedAsync(Guid attemptId, CancellationToken ct);
+    Task<bool> HasTourCancelNoticeResultAsync(Guid attemptId, CancellationToken ct);
+    Task<IReadOnlyList<EmailWorkItem>> PendingTourCancelNoticesAsync(DateTimeOffset staleBefore, CancellationToken ct);
+    /// <summary>The group contact address is the only email the schema holds for a representative.</summary>
+    Task<IReadOnlyList<TourCancelRecipient>> LoadTourCancelRecipientsAsync(IReadOnlyCollection<Guid> registrationIds, CancellationToken ct);
     Task<InvitationReadModel?> ReadAsync(Guid registrationId, Guid? owner, CancellationToken ct);
 }

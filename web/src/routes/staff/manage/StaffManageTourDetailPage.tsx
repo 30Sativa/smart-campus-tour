@@ -84,7 +84,7 @@ export default function StaffManageTourDetailPage() {
     </section>}
 
     <ConfirmationDialog open={confirming} title="Hủy Tour?" tone="danger" confirmLabel="Hủy Tour" requireReason reasonLabel="Lý do hủy"
-      description="Tour chuyển sang Đã hủy, lời mời của các đoàn bị thu hồi. Thao tác không hoàn tác được."
+      description="Tour chuyển sang Đã hủy, lời mời của các đoàn bị thu hồi và đại diện các đoàn nhận email thông báo kèm lý do. Thao tác không hoàn tác được."
       busy={cancel.isPending} error={cancel.isError ? tourError(cancel.error) : null}
       onCancel={() => { if (!cancel.isPending) setConfirming(false) }} onConfirm={reason => void confirmCancel(reason)} />
   </AdminPage>

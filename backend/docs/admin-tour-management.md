@@ -78,8 +78,14 @@ Only SCHEDULED/READY before Start and without runtime/robot/operational use.
 Registration decisions/rosters/history remain. Pending SUBMITTED registrations
 become CANCELLED with timestamps/audit, so they leave the existing review queue;
 prior APPROVED/REJECTED/CANCELLED decisions stay unchanged. Invitation rights are revoked
-and open sessions closed atomically. It does not send cancellation email or
-robot commands, release robot ownership, or grant post-Start fallback rights.
+and open sessions closed atomically. The same commit queues a notice on
+AuditLogs (`TOUR_CANCEL_NOTICE_REQUESTED`, registration ids only); the invitation
+email worker sends one email per distinct contact address of the registrations that
+were SUBMITTED or APPROVED, then records `TOUR_CANCEL_NOTICE_SENT` with the recipient
+count and one `TOUR_CANCEL_NOTICE_FAILED` per failed recipient. A claim interrupted by
+a restart is reported, never resent. With email disabled the commit records
+`TOUR_CANCEL_NOTICE_FAILED`/`EMAIL_DISABLED`. It does not send robot commands, release
+robot ownership, or grant post-Start fallback rights.
 No hard DELETE endpoint exists. RUNNING, terminal and anomalous execution rows
 must use later lifecycle/operational workflows instead of this cancellation API.
 

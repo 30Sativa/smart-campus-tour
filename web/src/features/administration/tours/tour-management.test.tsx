@@ -96,6 +96,38 @@ beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: tru
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
 describe('live Tour management', () => {
+  it('shows the backend message of a JSON 404 and a plain fallback for an empty one', () => {
+    expect(tourError(new ApiError(404, JSON.stringify({ success: false, message: 'Không tìm thấy phiên bản tuyến.' })))).toBe('Không tìm thấy phiên bản tuyến.')
+    expect(tourError(new ApiError(404, ''))).toBe('Không kết nối được chức năng này, có thể máy chủ chưa cập nhật.')
+    expect(tourError(new ApiError(404, '{}'))).toBe('Không tìm thấy Tour hoặc tuyến. Hãy tải lại danh sách.')
+    expect(tourError(new ApiError(409, JSON.stringify({ message: 'Lịch đã đổi.', errors: { code: 'SOMETHING_NEW' } })))).toBe('Lịch đã đổi.')
+    expect(tourError(new ApiError(500, JSON.stringify({ message: 'chi tiết nội bộ' })))).toBe('Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.')
+  })
+
+  it('shows why the slots picker was refused', async () => {
+    api()
+    const fetchTours = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, init) => new URL(String(input), 'http://localhost').pathname === '/api/staff/manage/tours/slots'
+      ? Promise.resolve(json({ success: false, message: 'Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.', errors: {} }, 404))
+      : fetchTours(input, init))
+    renderAt('/staff/manage/tours/new')
+    await screen.findByRole('option', { name: /Tuyến đã duyệt/ })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Tuyến đã kiểm chứng' }), { target: { value: 'revision-2' } })
+    await screen.findByRole('option', { name: /amr-01/ })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Robot' }), { target: { value: 'amr-01' } })
+    pickDate()
+    expect(await screen.findByText('Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.')).toBeInTheDocument()
+  })
+
+  it('asks only for routes in use when offering tested routes', async () => {
+    api()
+    const requested: URL[] = []
+    const fetchTours = vi.mocked(fetch).getMockImplementation()!
+    vi.mocked(fetch).mockImplementation((input, init) => { requested.push(new URL(String(input), 'http://localhost')); return fetchTours(input, init) })
+    renderAt('/staff/manage/tours/new')
+    await waitFor(() => expect(requested.find(url => url.pathname === '/api/routes')?.searchParams.get('isActive')).toBe('true'))
+  })
+
   it('explains a robot clash instead of a concurrency message', () => {
     const refusal = new ApiError(409, JSON.stringify({ message: 'x', errors: { code: 'ROBOT_RESERVATION_CONFLICT' } }))
     expect(tourError(refusal)).toContain('Robot đã có Tour khác')

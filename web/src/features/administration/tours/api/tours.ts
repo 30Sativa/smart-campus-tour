@@ -9,6 +9,7 @@ export const toursApi = {
     const params = new URLSearchParams({ page: String(query.page), size: String(query.size) })
     if (query.search?.trim()) params.set('search', query.search.trim())
     if (query.state) params.set('state', query.state)
+    if (query.phase) params.set('phase', query.phase)
     if (query.from) params.set('from', query.from)
     if (query.to) params.set('to', query.to)
     if (query.sort) params.set('sort', query.sort)

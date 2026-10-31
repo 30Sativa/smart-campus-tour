@@ -16,7 +16,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
     private static readonly Expression<Func<GroupRegistration, RegistrationListItem>> Summary = r =>
         new(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State, r.SchoolName, r.GroupName,
             r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-            r.RejectionReason, r.ReviewedAt);
+            r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null);
 
     // Mirrors RegistrationGroups: ended by cancellation, by a cancelled Tour, or refused after the Tour stopped taking changes.
     private static readonly Expression<Func<GroupRegistration, bool>> IsClosed = r =>
@@ -56,7 +56,8 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
         tour.State, tour.RowVersion, tour.Route.Name,
         tour.RouteRevision is { } revision
             ? revision.RouteRevisionStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Name, null)).ToArray()
-            : tour.Route.RouteStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Poi.Name, s.Poi.Description)).ToArray());
+            : tour.Route.RouteStops.OrderBy(s => s.StopOrder).Select(s => new TourStopResponse(s.StopOrder, s.Poi.Name, s.Poi.Description)).ToArray(),
+        tour.State == "CANCELLED" ? tour.EndReason : null);
     public async Task<PagedResult<RegistrationListItem>> ListRegistrationsAsync(Guid owner, RepresentativeListRequest request, CancellationToken ct)
     {
         var query = context.GroupRegistrations.AsNoTracking().Where(r => r.RepresentativeUserId == owner);
@@ -90,7 +91,7 @@ public sealed class EfRepresentativeRepository(ApplicationDbContext context) : I
             {
                 Summary = new RegistrationListItem(r.Id, r.TourId, r.Tour.Name, r.Tour.ScheduledStartAt, r.Tour.State,
                     r.SchoolName, r.GroupName, r.State, r.RosterRows.Count(row => row.IsActive), r.SubmittedAt, r.UpdatedAt ?? r.CreatedAt,
-                    r.RejectionReason, r.ReviewedAt),
+                    r.RejectionReason, r.ReviewedAt, r.Tour.State == "CANCELLED" ? r.Tour.EndReason : null),
                 r.ContactName, r.ContactEmail, r.RowVersion, TourVersion = r.Tour.RowVersion, r.RejectionReason, r.ReviewedAt,
                 HasInvitations = r.RosterRows.Any(row => row.Invitation != null),
                 Rows = r.RosterRows.Where(row => row.IsActive).OrderBy(row => row.RowNumber)

@@ -4,8 +4,8 @@ import { Plus } from 'lucide-react'
 import { PageHeader, SearchField, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
 import { KpiRow, KpiTile } from '../../../components/ui/Charts'
-import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../../features/administration/AdminUi'
-import { usePoiProposals } from '../../../features/technical/technical-hooks'
+import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
+import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { PoiProposal } from '../../../features/technical/api/technical'
 import { occupancyMapFor } from '../../../features/administration/pois/map/catalog'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
@@ -24,11 +24,15 @@ const STATUS: Record<Exclude<Filter, 'all'>, { label: string; chip: string; pin:
  */
 export default function StaffManagePoisPage() {
   const proposals = usePoiProposals()
+  const mapVersions = useMapVersions()
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('all')
+  const [deployedOnly, setDeployedOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedMap, setSelectedMap] = useState('')
-  const all = useMemo(() => proposals.data ?? [], [proposals.data])
+  const everyProposal = useMemo(() => proposals.data ?? [], [proposals.data])
+  const deployedMaps = new Set(mapVersions.data?.filter(item => item.currentlyDeployedOn.length > 0).map(item => item.map.id))
+  const all = deployedOnly ? everyProposal.filter(p => deployedMaps.has(p.revision.mapVersionId)) : everyProposal
   const maps = [...new Map(all.map(p => [p.revision.mapVersionId, { id: p.revision.mapVersionId, key: p.revision.mapKey }])).values()]
   const mapVersionId = maps.some(map => map.id === selectedMap) ? selectedMap : maps[0]?.id ?? ''
   const mapKey = maps.find(map => map.id === mapVersionId)?.key
@@ -39,6 +43,11 @@ export default function StaffManagePoisPage() {
   return <AdminPage>
     <PageHeader eyebrow="Chuẩn bị Tour · POI" title="Đề xuất POI" description="Quản lý điểm tham quan theo từng phiên bản bản đồ. Gửi đề xuất để nhân viên kỹ thuật kiểm chứng trước khi đưa vào tuyến."
       action={<Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo đề xuất</Link>} />
+    <div role="group" aria-label="Lọc theo robot đang triển khai" className="mb-3 inline-flex flex-wrap gap-0.5 rounded-[10px] bg-[#eef2f6] p-[3px]">
+      {([[false, 'Tất cả'], [true, 'Trên bản đồ robot đang triển khai']] as const).map(([value, label]) => <button key={label} type="button" aria-pressed={deployedOnly === value} onClick={() => setDeployedOnly(value)}
+        className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${deployedOnly === value ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{label}</button>)}
+    </div>
+    {deployedOnly && mapVersions.isError && <div className="mb-3"><Notice tone="danger">Không tải được thông tin triển khai bản đồ.</Notice></div>}
     {maps.length > 0 && <label className="mb-5 block max-w-sm text-xs font-semibold text-[#475569]">Bản đồ / Phiên bản
       <select aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => setSelectedMap(e.target.value)} className={`${inputClass} mt-2`}>
         {maps.map(map => <option key={map.id} value={map.id}>{map.key} · {map.id.slice(0, 8)}</option>)}
@@ -62,7 +71,7 @@ export default function StaffManagePoisPage() {
           <SearchField value={search} onChange={setSearch} label="Tìm POI" placeholder="Tìm POI" className="ml-auto w-full sm:w-56" />
         </div>
         {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
-          <EmptyState title={all.length ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} /> :
+          <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} /> :
           <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left">
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Map · revision</th><th className={thClass}>Camera</th><th className={thClass}>Trạng thái</th><th className={thClass}><span className="sr-only">Mở</span></th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">{rows.map((p) => { const st = STATUS[statusOf(p)]; return <tr key={p.id} className={rowClass}>

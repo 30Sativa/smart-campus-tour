@@ -6,6 +6,8 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'Tour', actions: {
     TOUR_CREATED: 'Tạo Tour', TOUR_UPDATED: 'Sửa Tour', TOUR_CANCELLED: 'Hủy Tour',
     TOUR_REGISTRATION_CANCELLED: 'Hủy đăng ký do hủy Tour', TOUR_INVITATION_REVOKED: 'Thu hồi lời mời do hủy Tour',
+    TOUR_CANCEL_NOTICE_REQUESTED: 'Xếp hàng email hủy Tour', TOUR_CANCEL_NOTICE_STARTED: 'Bắt đầu gửi email hủy Tour',
+    TOUR_CANCEL_NOTICE_SENT: 'Đã gửi email hủy Tour', TOUR_CANCEL_NOTICE_FAILED: 'Gửi email hủy Tour thất bại',
   } },
   { label: 'Đăng ký đoàn', actions: {
     REGISTRATION_SUBMITTED: 'Gửi đăng ký', REGISTRATION_RESUBMITTED: 'Gửi lại đăng ký', REGISTRATION_UPDATED: 'Sửa đăng ký',
@@ -20,6 +22,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'Tuyến', actions: {
     ROUTE_REVISION_CREATED: 'Tạo phiên bản tuyến', ROUTE_REVISION_SUBMITTED: 'Gửi kiểm chứng tuyến',
     ROUTE_TEST_PASSED: 'Chạy thử tuyến đạt', ROUTE_TEST_FAILED: 'Chạy thử tuyến không đạt',
+    ROUTE_DEACTIVATED: 'Ngừng sử dụng tuyến', ROUTE_ACTIVATED: 'Mở lại tuyến',
   } },
   { label: 'POI', actions: {
     POI_PROPOSAL_CREATED: 'Tạo POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',

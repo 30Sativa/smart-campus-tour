@@ -9,7 +9,10 @@ Implemented backend slice: Route identity and immutable fixed-route revisions, S
 | `POST /api/staff/routes` | `Staff` (Tour Staff) | Creates a Route and draft revision 1 |
 | `POST /api/staff/routes/{routeId}/revisions` | `Staff` | Appends a new immutable draft revision; requires `expectedCurrentRevision` |
 | `POST /api/staff/routes/{routeId}/revisions/{revisionId}/submit` | `Staff` | Appends a submission receipt for the exact current revision |
-| `GET /api/routes` | `Staff`, `TechnicalStaff` | Lists paged current VERSIONED revisions, including drafts; supports search, sort and optional exact `mapVersionId` filter |
+| `GET /api/routes` | `Staff`, `TechnicalStaff` | Lists paged current VERSIONED revisions, including drafts; supports search, sort and optional exact `mapVersionId` and `isActive` filters |
+| `POST /api/staff/routes/{routeId}/deactivate` | `Staff` | Stops new Tours on the route; body `{requestId, expectedRowVersion}` (ADR-0037) |
+| `POST /api/staff/routes/{routeId}/activate` | `Staff` | Lifts the stop; same body |
+| `GET /api/staff/routes/{routeId}/scheduled-tours` | `Staff` | SCHEDULED and READY Tours on the route |
 | `GET /api/routes/{routeId}/revisions?revisionId={id}&includeHistory=true` | `Staff`, `TechnicalStaff` | Reads exact selected/current revision, POI evidence links and test history |
 | `GET /api/technical/route-verifications/queue` | `TechnicalStaff` | Lists submitted revisions with no whole-route run yet |
 | `GET /api/technical/route-verifications/participants` | `TechnicalStaff` | Lists active single-role Staff accounts (`userId`, `fullName`, `username`, at most 200) that a test run can name as participant |

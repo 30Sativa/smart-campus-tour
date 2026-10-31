@@ -75,6 +75,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0034](0034-tour-from-tested-route-revision.md) | Schedule new Tours from an exact tested Route revision; size the robot reservation from the effective PASS run (interim) | owner-authorized; partly supersedes ADR-0024; v1.9 schema |
 | [0035](0035-tour-slots-lead-time-and-measured-reservation.md) | Fixed Tour slots, 72-hour lead time, route test measures the whole run including dwell, reservation adds increased dwell | owner-authorized; amends ADR-0034; v1.10 schema |
 | [0036](0036-tour-custom-start-time.md) | Staff may type a Tour start inside configured hours; slots become quick choices | owner-authorized; amends ADR-0035; no schema change |
+| [0037](0037-versioned-route-availability.md) | Deactivate and reopen versioned Routes for new Tours through Routes.IsActive; rows never touched stay open | owner-authorized; no schema change |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

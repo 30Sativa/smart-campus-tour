@@ -11,10 +11,14 @@ namespace SmartCampus.Application.Features.Tours;
 internal static class TourTarget
 {
     public static async Task<(RouteRevision Revision, RouteTestRunView Run)> RequireTestedRevisionAsync(
-        IRouteRevisionRepository revisions, IMapVersionRepository maps, Guid revisionId, bool lockMap, CancellationToken ct)
+        IRouteRevisionRepository revisions, IMapVersionRepository maps, Guid revisionId, bool lockTarget, CancellationToken ct)
     {
         var revision = await revisions.FindRevisionAsync(revisionId, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản tuyến.");
+        // Create holds the Route lock through commit, so a deactivation cannot slip between this check and the new Tour.
+        var route = await (lockTarget ? revisions.LockRouteAsync(revision.RouteId, ct) : revisions.FindRouteAsync(revision.RouteId, ct));
+        if (route is not { IsOpenForNewTours: true })
+            throw new ConflictException("Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.", "ROUTE_UNAVAILABLE");
         if (await revisions.GetSubmissionsAsync(revision.Id, ct) is not { Count: > 0 })
             throw new ConflictException("Phiên bản tuyến chưa được gửi kiểm chứng.", "ROUTE_NOT_SUBMITTED");
         var view = await RouteRevisionMapper.Load(revisions, revision.RouteId, revision.Id, false, ct);
@@ -25,7 +29,7 @@ internal static class TourTarget
             throw new ConflictException("Có POI trong tuyến không còn kết quả đạt.", "POI_VERIFICATION_STALE");
         var map = await maps.FindMapVersionAsync(revision.MapVersionId, includePackage: false, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
-        if (lockMap) await maps.LockMapPreparationStateAsync(map.Id, ct);
+        if (lockTarget) await maps.LockMapPreparationStateAsync(map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(maps, map, ct)).EnsureCanUse();
         return (revision, run);
     }

@@ -28,7 +28,8 @@ export type TourDetails = {
   usage: { hasRegistrations: boolean; hasAllowedBranches: boolean; hasOperationalHistory: boolean; hasRobotOwnership: boolean }
   permissions: { canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean }
 }
-export type TourListQuery = { search?: string; state?: TourState; from?: string; to?: string; sort?: string; page: number; size: number }
+export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
+export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
 export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'
 export type TourSlot = {
   time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null

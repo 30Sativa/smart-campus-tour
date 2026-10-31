@@ -18,7 +18,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         TourPreparation.RequireFuture(input.ScheduledStartAt, clock.GetUtcNow());
         if (TourSchedule.StartRule(settings, input.ScheduledStartAt) is { } outside)
             throw new ConflictException(outside.Message, "TOUR_SLOT_NOT_ALLOWED");
-        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockMap: true, ct);
+        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var robot = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");

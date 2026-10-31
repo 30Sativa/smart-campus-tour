@@ -8,6 +8,12 @@ public partial class Route
 {
     private static readonly JsonSerializerOptions HeadJson = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// ADR-0037. Versioned routes created before that decision were stored with IsActive = 0 although nothing
+    /// had turned them off. Only deactivate/activate set UpdatedAt on a versioned route, so a row never touched is open.
+    /// </summary>
+    public bool IsOpenForNewTours => IsActive || (AuthoringMode == "VERSIONED" && UpdatedAt is null);
+
     public static IReadOnlyList<RouteHeadStep> ReadHeadSteps(string json)
     {
         if (string.IsNullOrWhiteSpace(json)) return [];

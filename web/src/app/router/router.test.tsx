@@ -257,7 +257,7 @@ describe('route table', () => {
 
     it('opens a Tour at /staff/manage/tours/:id instead of redirecting it to operations', async () => {
       signIn('Staff')
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: false }), { status: 404 })))
       const router = renderAt('/staff/manage/tours/tour-03')
       await settled(router, '/staff/manage/tours/tour-03')
       // The live detail page asks the Tour API; an unknown id stays on the admin page.

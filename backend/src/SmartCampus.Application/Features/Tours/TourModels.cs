@@ -7,7 +7,14 @@ public sealed record TourInput(string Name, string? Description, Guid RouteId,
 public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
     Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
 public sealed record TourListRequest(string? Search, string Sort, int Page, int Size,
-    string? State, DateTimeOffset? From, DateTimeOffset? To);
+    string? State, DateTimeOffset? From, DateTimeOffset? To, string? Phase = null, DateTimeOffset Now = default);
+/// <summary>The Staff list's groupings of Tour state; a single <see cref="TourListRequest.State"/> cannot express them.</summary>
+public static class TourPhases
+{
+    public const string Upcoming = "UPCOMING";
+    public const string Running = "RUNNING";
+    public const string Finished = "FINISHED";
+}
 public sealed record TourSummary(Guid Id, string Name, string? Description, Guid RouteId, string RouteName,
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,

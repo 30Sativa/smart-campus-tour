@@ -35,7 +35,11 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     decimal? EndYaw, string ConfigurationFingerprint, bool IsSubmitted, string VerificationStatus,
     Guid? EffectiveTestRunId, string DurationStatus, int DwellDurationSeconds,
     IReadOnlyList<RouteRevisionStopView> Stops, IReadOnlyList<RouteTestRunView> TestRuns,
-    IReadOnlyList<RouteRevisionSummaryView> RevisionHistory, IReadOnlyList<string> EligibilityIssues);
+    IReadOnlyList<RouteRevisionSummaryView> RevisionHistory, IReadOnlyList<string> EligibilityIssues,
+    bool IsActive = true, string RowVersion = "");
+public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
+public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State);
+public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);
 
 public sealed record RoutePoiRevisionEvidence(PoiProposalRevision Revision, PoiVerificationRecord Verification);
 
@@ -65,7 +69,10 @@ public interface IRouteRevisionRepository
     Task<IReadOnlyList<RouteTestRun>> GetTestRunsAsync(Guid revisionId, CancellationToken ct);
     Task<IReadOnlyList<RouteTestRun>> GetTestRunsForRouteAsync(Guid routeId, CancellationToken ct);
     Task<PagedResult<Guid>> ListCurrentRevisionIdsAsync(string? search, Guid? mapVersionId,
-        string sort, int page, int size, CancellationToken ct);
+        string sort, int page, int size, CancellationToken ct, bool? isActive = null);
+    /// <summary>Tours not started yet that name this route; they keep it after a deactivation.</summary>
+    Task<IReadOnlyList<RouteScheduledTourView>> ListScheduledToursAsync(Guid routeId, CancellationToken ct);
+    Task<AuditLog?> FindAvailabilityRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<RouteRevisionSubmission?> FindSubmissionRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<RouteTestRun?> FindTestRequestAsync(Guid actorUserId, Guid requestId, CancellationToken ct);
     Task<User?> FindUserAsync(Guid userId, CancellationToken ct);

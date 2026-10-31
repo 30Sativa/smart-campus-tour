@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageDashboardPage from './StaffManageDashboardPage'
@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (input: string) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/staff/poi-proposals') return respond(proposals)
+    if (url.pathname === '/api/maps/versions') return respond([{ map: { id: 'map-b' }, currentlyDeployedOn: [{ robotCode: 'amr-01', checkedAt: '2026-10-30T00:00:00Z' }] }, { map: { id: 'map-a' }, currentlyDeployedOn: [] }])
     if (url.pathname === '/api/staff/manage/tours') return respond([], url.searchParams.get('state') === 'READY' ? 12 : 37)
     if (url.pathname === '/api/staff/manage/registrations') {
       if (failRegistrations) return new Response('{}', { status: 503 })
@@ -79,6 +80,42 @@ describe('staff preparation UI', () => {
     expect(within(list).getByText('Không có POI khớp bộ lọc')).toBeInTheDocument()
     const map = screen.getByRole('img', { name: `Bản đồ ${OCCUPANCY_MAPS[1].mapKey} với 0 POI` })
     expect(map.getAttribute('viewBox')).not.toMatch(/Infinity|NaN/)
+  })
+
+  it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
+    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
+    expect(screen.getByRole('button', { name: 'Tất cả' , pressed: true })).toBeInTheDocument()
+    expect(within(list).getByText('Điểm A')).toBeInTheDocument()
+    await waitFor(() => expect(requests.some(url => url.pathname === '/api/maps/versions')).toBe(true))
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Trên bản đồ robot đang triển khai' }))
+      expect(within(list).getByText('Điểm B')).toBeInTheDocument()
+    })
+    expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' })).toHaveValue('map-b')
+  })
+
+  it('opens the Tour list on upcoming Tours and asks the API for each tab', async () => {
+    show(<StaffManageTourListPage />, '/staff/manage/tours')
+    expect(screen.getByRole('button', { name: 'Sắp diễn ra' })).toHaveAttribute('aria-pressed', 'true')
+    const lastTourRequest = () => requests.filter(url => url.pathname === '/api/staff/manage/tours').at(-1)!.searchParams
+    await waitFor(() => expect(lastTourRequest().get('phase')).toBe('UPCOMING'))
+    expect(lastTourRequest().get('state')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Đang chạy' }))
+    await waitFor(() => expect(lastTourRequest().get('phase')).toBe('RUNNING'))
+    fireEvent.click(screen.getByRole('button', { name: 'Đã kết thúc / Đã hủy' }))
+    await waitFor(() => expect(lastTourRequest().get('phase')).toBe('FINISHED'))
+    expect(lastTourRequest().get('sort')).toBe('-scheduledStartAt')
+  })
+
+  it('reaches a Tour past its start that no tab covers through the state filter', async () => {
+    show(<StaffManageTourListPage />, '/staff/manage/tours')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Trạng thái Tour' }), { target: { value: 'ALL' } })
+    await waitFor(() => expect(requests.at(-1)!.searchParams.get('phase')).toBeNull())
+    expect(requests.at(-1)!.searchParams.get('state')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Sắp diễn ra' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('honors the READY dashboard link when opening the Tour list', async () => {

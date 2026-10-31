@@ -120,7 +120,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         {
             route = new Route { Id = routeId, AuthoringMode = "VERSIONED", Name = i.Name.Trim(), Description = Clean(i.Description),
                 MapKey = map.MapKey, MapFrame = map.FrameId, StartX = i.StartX, StartY = i.StartY, StartYaw = i.StartYaw,
-                EndMode = i.EndMode, EndX = i.EndX, EndY = i.EndY, EndYaw = i.EndYaw, IsActive = false, CreatedAt = now };
+                EndMode = i.EndMode, EndX = i.EndX, EndY = i.EndY, EndYaw = i.EndYaw, IsActive = true, CreatedAt = now };
             repo.Add(route);
         }
         var fingerprint = ConfigurationFingerprint(map.Id, map.PackageSha256, i, evidence);

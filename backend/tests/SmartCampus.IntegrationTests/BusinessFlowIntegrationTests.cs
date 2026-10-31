@@ -775,6 +775,83 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(routeRevisionId, tourData.GetProperty("routeRevision").GetProperty("revisionId").GetGuid());
         Assert.Equal("flow_physical", tourData.GetProperty("reservation").GetProperty("robotCode").GetString());
         Assert.Equal(1, await database.CountRowsAsync("dbo.TourRobotReservations"));
+
+        // ADR-0037: deactivating stops new Tours only, and leaves history and existing Tours alone.
+        async Task<JsonElement> ListedRoute(string query)
+        {
+            using var list = await Get(host.Client, "/api/routes" + query, staffToken);
+            Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+            return (await Body(list)).GetProperty("data");
+        }
+        async Task ExpectConflict(HttpResponseMessage refused, string code)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            Assert.Equal(code, (await Body(refused)).GetProperty("errors").GetProperty("code").GetString());
+        }
+        var newTour = new { requestId = Guid.NewGuid(), configuration = new
+            { name = "On a stopped route", description = (string?)null, routeRevisionId = routeRevisionId, robotCode = "flow_physical", operatorUserId = operatorId,
+                scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddDays(1), fallbackVideoUrl = (string?)null } };
+        var routeVersion = Assert.Single((await ListedRoute("?isActive=true")).EnumerateArray()).GetProperty("rowVersion").GetString()!;
+        Assert.Empty((await ListedRoute("?isActive=false")).EnumerateArray());
+        var deactivate = new { requestId = Guid.NewGuid(), expectedRowVersion = routeVersion };
+        using (var forbidden = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", technicalToken, deactivate))
+            Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        using (var forbiddenRead = await Get(host.Client, $"/api/staff/routes/{routeId}/scheduled-tours", technicalToken))
+            Assert.Equal(HttpStatusCode.Forbidden, forbiddenRead.StatusCode);
+        using (var anonymous = await host.Client.PostAsJsonAsync($"/api/staff/routes/{routeId}/activate", deactivate))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using (var preview = await Get(host.Client, $"/api/staff/routes/{routeId}/scheduled-tours", staffToken))
+            Assert.Equal(tourId, Assert.Single((await Body(preview)).GetProperty("data").EnumerateArray()).GetProperty("id").GetGuid());
+        var routeAudits = "dbo.AuditLogs WHERE [Action] IN ('ROUTE_DEACTIVATED','ROUTE_ACTIVATED')";
+        var testRuns = await database.CountRowsAsync("dbo.RouteTestRuns");
+        var revisions = await database.CountRowsAsync("dbo.RouteRevisions");
+        using var deactivated = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", staffToken, deactivate);
+        Assert.Equal(HttpStatusCode.OK, deactivated.StatusCode);
+        var availability = (await Body(deactivated)).GetProperty("data");
+        Assert.False(availability.GetProperty("isActive").GetBoolean());
+        Assert.Equal(tourId, Assert.Single(availability.GetProperty("scheduledTours").EnumerateArray()).GetProperty("id").GetGuid());
+        Assert.Equal(1, await database.CountRowsAsync($"{routeAudits} AND DataJson LIKE '%\"affectedTourCount\":1%' AND DataJson LIKE '%{routeId}%' AND CorrelationId = '{deactivate.requestId}'"));
+        Assert.Equal((testRuns, revisions), (await database.CountRowsAsync("dbo.RouteTestRuns"), await database.CountRowsAsync("dbo.RouteRevisions")));
+
+        Assert.Empty((await ListedRoute("?isActive=true")).EnumerateArray());
+        Assert.Single((await ListedRoute("?isActive=false")).EnumerateArray());
+        Assert.Single((await ListedRoute("")).EnumerateArray());
+        using (var refusedSlots = await Get(host.Client, slotPath, staffToken)) await ExpectConflict(refusedSlots, "ROUTE_UNAVAILABLE");
+        using (var refusedCreate = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken, newTour)) await ExpectConflict(refusedCreate, "ROUTE_UNAVAILABLE");
+        using (var stillReadable = await Get(host.Client, $"/api/staff/manage/tours/{tourId}", staffToken))
+        {
+            var readable = (await Body(stillReadable)).GetProperty("data");
+            Assert.Equal("SCHEDULED", readable.GetProperty("tour").GetProperty("state").GetString());
+            Assert.Equal(routeRevisionId, readable.GetProperty("routeRevision").GetProperty("revisionId").GetGuid());
+        }
+        using (var stoppedHistory = await Get(host.Client, $"/api/routes/{routeId}/revisions?revisionId={routeRevisionId}", staffToken))
+        {
+            var stopped = (await Body(stoppedHistory)).GetProperty("data");
+            Assert.Equal("PASS", stopped.GetProperty("verificationStatus").GetString());
+            Assert.False(stopped.GetProperty("isActive").GetBoolean());
+        }
+
+        using (var replay = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/deactivate", staffToken, deactivate))
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(1, await database.CountRowsAsync(routeAudits));
+        using (var reused = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, deactivate)) await ExpectConflict(reused, "IDEMPOTENCY_CONFLICT");
+        using (var stale = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, new { requestId = Guid.NewGuid(), expectedRowVersion = routeVersion }))
+            await ExpectConflict(stale, "STALE_ROUTE");
+        Assert.Equal(1, await database.CountRowsAsync(routeAudits));
+
+        var currentVersion = Assert.Single((await ListedRoute("?isActive=false")).EnumerateArray()).GetProperty("rowVersion").GetString();
+        using (var activated = await Json(host.Client, HttpMethod.Post, $"/api/staff/routes/{routeId}/activate", staffToken, new { requestId = Guid.NewGuid(), expectedRowVersion = currentVersion }))
+        {
+            Assert.Equal(HttpStatusCode.OK, activated.StatusCode);
+            Assert.True((await Body(activated)).GetProperty("data").GetProperty("isActive").GetBoolean());
+        }
+        Assert.Equal(1, await database.CountRowsAsync("dbo.AuditLogs WHERE [Action] = 'ROUTE_ACTIVATED'"));
+        using (var reopened = await Get(host.Client, slotPath, staffToken)) Assert.Equal(HttpStatusCode.OK, reopened.StatusCode);
+
+        // A row from before ADR-0037 was stored inactive though nobody turned it off: it stays open.
+        await database.ExecuteAsync($"UPDATE dbo.Routes SET IsActive = 0, UpdatedAt = NULL WHERE Id = '{routeId}';");
+        Assert.Single((await ListedRoute("?isActive=true")).EnumerateArray());
+        using (var untouched = await Get(host.Client, slotPath, staffToken)) Assert.Equal(HttpStatusCode.OK, untouched.StatusCode);
     }
 
     [SchemaV14Fact]

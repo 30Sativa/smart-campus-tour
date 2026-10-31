@@ -33,3 +33,4 @@ public sealed record InvitationReadModel(IReadOnlyList<Invitation> Invitations, 
     GroupRegistration Registration, IReadOnlyList<AuditLog> Audits);
 public sealed record InvitationDetails(bool Enabled, bool CanIssue, IReadOnlyList<InvitationItem> Items);
 public sealed record EmailWorkItem(Guid AttemptId, bool Interrupted);
+public sealed record TourCancelRecipient(Guid RegistrationId, string Email);
