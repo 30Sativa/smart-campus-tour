@@ -27,6 +27,9 @@ export function apiUrl(path: string): string {
 
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   json?: unknown
+  /** Multipart form data; the browser supplies the boundary header. */
+  formData?: FormData
+  responseType?: 'json' | 'blob' | 'arrayBuffer'
   auth?: boolean
 }
 
@@ -85,7 +88,7 @@ function isAuthResponse(value: unknown): value is AuthResponse {
     && response.userId.length > 0
     && typeof response.username === 'string'
     && response.username.length > 0
-    && ['Admin', 'Staff', 'Representative'].includes(response.role ?? '')
+    && ['Admin', 'Staff', 'Representative', 'TechnicalStaff'].includes(response.role ?? '')
 }
 /** Restore the current session from its HttpOnly cookie; stale responses reject with AbortError. */
 export async function restoreAuthSession(): Promise<void> {
@@ -100,7 +103,7 @@ export async function restoreAuthSession(): Promise<void> {
  */
 export async function apiClient<T>(
   path: string,
-  { json, headers, auth = true, ...options }: ApiRequestOptions = {},
+  { json, formData, headers, auth = true, responseType = 'json', ...options }: ApiRequestOptions = {},
 ): Promise<T> {
   const revision = useAuthStore.getState().sessionRevision
   const ensureCurrentSession = () => {
@@ -114,7 +117,7 @@ export async function apiClient<T>(
     return fetch(apiUrl(path), {
       ...options,
       headers: requestHeaders,
-      body: json === undefined ? undefined : JSON.stringify(json),
+      body: formData ?? (json === undefined ? undefined : JSON.stringify(json)),
     })
   }
 
@@ -141,12 +144,14 @@ export async function apiClient<T>(
     return undefined as T
   }
 
+  if (responseType === 'blob') return await response.blob() as T
+  if (responseType === 'arrayBuffer') return await response.arrayBuffer() as T
   const body = await response.text()
   ensureCurrentSession()
   return body.trim() ? (JSON.parse(body) as T) : (undefined as T)
 }
 
-/** Authenticate an account and accept only the three roles supported by Auth V1. */
+/** Authenticate an account and accept only the supported application roles. */
 export async function login(username: string, password: string): Promise<AuthResponse> {
   const response = await apiClient<unknown>('/api/auth/login', {
     method: 'POST',

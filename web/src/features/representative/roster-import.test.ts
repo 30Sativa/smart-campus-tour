@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { Blob as NodeBlob } from 'node:buffer'
 import { deflateRawSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -80,6 +81,14 @@ describe('roster import (flow review §4.2)', () => {
     expect(() => parseCsv('LoaiDong,HoTen,Email\nCA_NHAN,"Unclosed')).toThrow()
     const big = 'LoaiDong,HoTen,Email\n' + Array.from({ length: ROSTER_MAX_ROWS + 1 }, (_, i) => `CA_NHAN,HS ${i},hs${i}@example.com`).join('\n')
     expect(rowsToRoster('c.csv', parseCsv(big)).ok).toBe(false)
+  })
+  it('accepts exactly 10 viewing points and refuses the 11th (SRS v1.9)', () => {
+    const rows = (n: number) => 'LoaiDong,HoTen,Email\n' + Array.from({ length: n }, (_, i) => `${i % 2 ? 'DIEM_XEM_CHUNG' : 'CA_NHAN'},HS ${i},hs${i}@example.com`).join('\n')
+    expect(ROSTER_MAX_ROWS).toBe(10)
+    expect(rowsToRoster('ok.csv', parseCsv(rows(10))).ok).toBe(true)
+    const over = rowsToRoster('over.csv', parseCsv(rows(11)))
+    expect(over.ok).toBe(false)
+    if (!over.ok) expect(over.issues[0].message).toContain('tối đa 10 điểm xem')
   })
   it('refuses a non-UTF-8 CSV instead of storing garbled Vietnamese names', async () => {
     // "Nguyên" saved by Excel's plain CSV on Vietnamese Windows (code page 1258): 0xEA is "ê".

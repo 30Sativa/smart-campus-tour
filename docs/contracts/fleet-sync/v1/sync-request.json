@@ -1,0 +1,20 @@
+{
+  "robotId": "robot_test_01",
+  "streamId": "90eb5a67-dfea-48b0-aea1-ef3ed6d98695",
+  "seq": 1,
+  "reportedAt": "2026-10-22T00:00:00.000Z",
+  "mapKey": "test-campus-map-v1",
+  "frameId": "map",
+  "pose": {
+    "x": 1.25,
+    "y": -0.5,
+    "yaw": 0.25,
+    "capturedAt": "2026-10-22T00:00:00.000Z"
+  },
+  "status": "IDLE",
+  "legId": null,
+  "localized": null,
+  "motionReady": null,
+  "faultCode": null,
+  "batteryPercent": null
+}

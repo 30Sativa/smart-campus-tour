@@ -1257,6 +1257,84 @@
           "@"
         ]
       }
+    },
+    {
+      "id": "study-01",
+      "category": "site",
+      "question": "Vào trường FPT năm đầu học những gì?",
+      "expect": {
+        "behavior": "answer",
+        "mustMentionAny": [
+          [
+            "tiếng Anh"
+          ],
+          [
+            "Vovinam",
+            "nhạc cụ",
+            "định hướng",
+            "rèn luyện"
+          ]
+        ]
+      },
+      "needsContent": [
+        "chuong-trinh-hoc"
+      ]
+    },
+    {
+      "id": "study-02",
+      "category": "site",
+      "question": "OJT là gì vậy?",
+      "expect": {
+        "behavior": "answer",
+        "mustMentionAny": [
+          [
+            "doanh nghiệp"
+          ]
+        ]
+      },
+      "needsContent": [
+        "chuong-trinh-hoc"
+      ]
+    },
+    {
+      "id": "study-03",
+      "category": "site",
+      "question": "Học Kỹ thuật phần mềm ra trường làm gì?",
+      "expect": {
+        "behavior": "answer",
+        "mustMentionAny": [
+          [
+            "lập trình viên",
+            "Developer",
+            "kiểm thử",
+            "QA",
+            "DevOps",
+            "Business Analyst",
+            "phân tích nghiệp vụ"
+          ]
+        ]
+      },
+      "needsContent": [
+        "chuong-trinh-hoc"
+      ]
+    },
+    {
+      "id": "study-04",
+      "category": "site",
+      "question": "Em có IELTS 6.5 rồi thì có phải học tiếng Anh dự bị không?",
+      "expect": {
+        "behavior": "answer",
+        "mustMentionAny": [
+          [
+            "miễn",
+            "không cần",
+            "không phải"
+          ]
+        ]
+      },
+      "needsContent": [
+        "chuong-trinh-hoc"
+      ]
     }
   ]
 }

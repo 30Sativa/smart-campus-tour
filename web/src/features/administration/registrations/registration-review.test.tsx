@@ -2,11 +2,12 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminRegistrationsPage from '../../../routes/admin/AdminRegistrationsPage'
-import AdminShell from '../AdminShell'
+import StaffManageRegistrationsPage from '../../../routes/staff/manage/StaffManageRegistrationsPage'
+import StaffShell from '../../staff/StaffShell'
 import { useAuthStore } from '../../../stores/auth-store'
+import { useToastStore } from '../../../components/ui/toast-store'
 import { dateBoundary } from './presentation'
-import type { EmailCorrectionInput, ReviewDetails, ReviewInput } from './types'
+import type { ReviewDetails, ReviewInput } from './types'
 
 const firstVersion = 'AAAAAAAAAAE='
 const secondVersion = 'AAAAAAAAAAI='
@@ -15,57 +16,51 @@ const initial: ReviewDetails = {
     schoolName: 'Trường A', groupName: 'Đoàn A', state: 'SUBMITTED', rowCount: 1, representativeName: 'Đại diện A', submittedAt: '2026-10-08T03:00:00Z', updatedAt: '2026-10-08T03:00:00Z' },
   contactName: 'Người liên hệ', contactEmail: 'contact@example.com', rowVersion: firstVersion, tourRowVersion: secondVersion,
   rejectionReason: null, reviewedAt: null, reviewedByUserId: null,
-  roster: [{ id: 'row', rowVersion: firstVersion, invitationRowVersion: null, rowNumber: 4, rowType: 'SHARED_VIEWING', displayName: 'Phòng A', email: 'room@example.com', className: null }], review: { allowed: true, reason: null }, correctEmail: { allowed: true, reason: null },
+  roster: [{ id: 'row', rowVersion: firstVersion, invitationRowVersion: null, participationState: 'PENDING', canApprove: true, canReject: true, reviewReason: null, rowNumber: 4, rowType: 'SHARED_VIEWING', displayName: 'Phòng A', email: 'room@example.com', className: null }], review: { allowed: true, reason: null }, correctEmail: { allowed: true, reason: null },
 }
 let registration: ReviewDetails
-let decisions: { action: string; input: ReviewInput }[]
-let corrections: EmailCorrectionInput[]
+let decisions: { action: string; rowId: string; input: ReviewInput }[]
 let requests: URL[]
+let unexpectedMutations: string[]
 let failure: 'list' | 'detail' | 'stale' | 'reload' | 'network' | 'duplicate' | 'invalid' | 'forbidden' | 'uncertain-commit' | null
 let clients: QueryClient[]
 function response(data: unknown, status = 200, extra: object = {}) {
   return new Response(JSON.stringify({ success: status === 200, message: 'OK', data, ...extra }), { status })
 }
-function renderAt(path = '/admin/registrations/pending?review=registration', mode: 'pending' | 'all' = 'pending') {
+function renderAt(path = '/staff/manage/registrations/pending?review=registration', mode: 'pending' | 'all' = 'pending') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } })
   clients.push(client)
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/admin/registrations" element={<AdminRegistrationsPage mode={mode} />} />
-    <Route path="/admin/registrations/pending" element={<AdminRegistrationsPage mode={mode} />} />
+    <Route path="/staff/manage/registrations" element={<StaffManageRegistrationsPage mode={mode} />} />
+    <Route path="/staff/manage/registrations/pending" element={<StaffManageRegistrationsPage mode={mode} />} />
   </Routes></MemoryRouter></QueryClientProvider>)
   return client
 }
 beforeEach(() => {
-  clients = []; requests = []; decisions = []; corrections = []; registration = structuredClone(initial); failure = null
-  useAuthStore.getState().setAuth('admin-token', { userId: 'sql-admin', username: 'admin', role: 'Admin' })
+  useToastStore.setState({ toasts: [] })
+  clients = []; requests = []; decisions = []; unexpectedMutations = []; registration = structuredClone(initial); failure = null
+  useAuthStore.getState().setAuth('staff-token', { userId: 'sql-staff', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string, options?: RequestInit) => {
-    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer admin-token')
+    expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer staff-token')
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/registrations/registration/invitations')
       return response({ enabled: false, canIssue: false, items: [] })
-    expect(url.pathname).toMatch(/^\/api\/admin\/registrations/)
-    if (url.pathname.endsWith('/roster/row/email')) {
-      const input = JSON.parse(options?.body as string) as EmailCorrectionInput
-      corrections.push(input)
-      if (failure === 'duplicate') return response(null, 409, { message: 'Email đã tồn tại.', errors: { code: 'EMAIL_RESERVED' } })
-      if (failure === 'invalid') return response(null, 400)
-      if (failure === 'forbidden') return response(null, 403)
-      if (failure === 'stale') return response(null, 409, { message: 'Dữ liệu đã thay đổi.', errors: { code: 'STALE_VERSION' } })
-      if (failure === 'network') throw new TypeError('Disconnected')
-      registration.roster[0].email = input.email.toLowerCase().trim()
-      registration.roster[0].rowVersion = secondVersion
-      registration.rowVersion = secondVersion
-      if (failure === 'uncertain-commit') throw new TypeError('Reply lost after commit')
-      return response(null)
-    }
+    expect(url.pathname).toMatch(/^\/api\/staff\/manage\/registrations/)
     if (options?.method === 'POST') {
-      const action = url.pathname.endsWith('/approve') ? 'approve' : 'reject'
-      decisions.push({ action, input: JSON.parse(options.body as string) as ReviewInput })
+      const match = /^\/api\/staff\/manage\/registrations\/([^/]+)\/rows\/([^/]+)\/(accept|reject)$/.exec(url.pathname)
+      if (!match) { unexpectedMutations.push(url.pathname); return response(null, 404) }
+      const [, registrationId, rowId, action] = match
+      if (registrationId !== 'registration') { unexpectedMutations.push(url.pathname); return response(null, 404) }
+      decisions.push({ action, rowId, input: JSON.parse(options.body as string) as ReviewInput })
       if (failure === 'stale') return response(null, 409, { message: 'Dữ liệu đã thay đổi.', errors: { code: 'STALE_VERSION', fields: null } })
       if (failure === 'network') throw new TypeError('Disconnected')
-      registration.summary.state = action === 'approve' ? 'APPROVED' : 'REJECTED'
-      registration.rejectionReason = decisions.at(-1)?.input.reason ?? null
-      registration.review = { allowed: false, reason: 'Chỉ đăng ký chờ duyệt mới được xét duyệt.' }
+      const row = registration.roster.find(item => item.id === rowId)!
+      row.participationState = action === 'accept' ? 'ACCEPTED' : 'REJECTED'
+      row.reviewReason = decisions.at(-1)?.input.reason ?? null
+      row.canApprove = false; row.canReject = false; row.rowVersion = secondVersion
+      registration.summary.state = registration.roster.some(item => item.participationState === 'ACCEPTED') ? 'APPROVED'
+        : registration.roster.some(item => item.participationState === 'PENDING') ? 'SUBMITTED' : 'REJECTED'
+      registration.rejectionReason = registration.summary.state === 'REJECTED' ? row.reviewReason ?? null : null
       registration.rowVersion = secondVersion
       return response(null)
     }
@@ -74,117 +69,24 @@ beforeEach(() => {
       return response(structuredClone(registration))
     }
     if (failure === 'list') return response(null, 500)
-    const rows = url.searchParams.get('state') === 'SUBMITTED' && registration.summary.state !== 'SUBMITTED' ? [] : [structuredClone(registration.summary)]
+    const rows = url.searchParams.get('state') === 'SUBMITTED' && registration.summary.state !== 'SUBMITTED' && !registration.roster.some(row => row.participationState === 'PENDING') ? [] : [structuredClone(registration.summary)]
     return response(rows, 200, { pagination: { page: Number(url.searchParams.get('page') ?? 1), pageSize: 10, totalItems: 25, totalPages: 3 } })
   }))
 })
-afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals(); focusManager.setFocused(undefined) })
+afterEach(() => { expect(unexpectedMutations).toEqual([]); clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals(); focusManager.setFocused(undefined) })
 
-describe('Admin registration SQL HTTP boundary', () => {
-  it('corrects one identified shared row with opened versions, confirmation and committed reload', async () => {
-    registration.roster.push({ ...registration.roster[0], id: 'other-row', rowNumber: 7, displayName: 'Người khác', email: 'other@example.com' })
-    renderAt('/admin/registrations?review=registration', 'all')
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    const dialog = screen.getByRole('dialog', { name: 'Sửa email dòng 4?' })
-    expect(within(dialog).getByText(/chưa cấp mã hoặc gửi lời mời/i)).toBeInTheDocument()
-    fireEvent.change(within(dialog).getByLabelText('Email mới'), { target: { value: '  FIXED@example.com  ' } })
-    expect(corrections).toHaveLength(0)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận sửa email' }))
-    expect(await screen.findByText('Email đã được cập nhật.')).toBeInTheDocument()
-    expect(await screen.findByText('fixed@example.com')).toBeInTheDocument()
-    expect(screen.getByText('other@example.com')).toBeInTheDocument()
-    expect(corrections).toEqual([{ requestId: expect.any(String), email: 'FIXED@example.com', expectedRowVersion: firstVersion,
-      expectedTourRowVersion: secondVersion, expectedRosterRowVersion: firstVersion, expectedInvitationRowVersion: null }])
-    expect(decisions).toHaveLength(0)
-    expect(registration.summary.state).toBe('SUBMITTED')
-  })
-
-  it('shows approved revocation consequences and keeps APPROVED after correction', async () => {
-    registration.summary.state = 'APPROVED'; registration.review.allowed = false
-    registration.roster[0].invitationRowVersion = secondVersion
-    renderAt('/admin/registrations?review=registration', 'all')
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    const dialog = screen.getByRole('dialog', { name: 'Sửa email dòng 4?' })
-    expect(within(dialog).getByText(/gửi thư lỗi không khôi phục mã cũ/i)).toBeInTheDocument()
-    fireEvent.change(within(dialog).getByLabelText('Email mới'), { target: { value: 'approved@example.com' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận sửa email' }))
-    expect(await screen.findByText(/Email đã được cập nhật. Mã cũ đã bị vô hiệu hóa/)).toBeInTheDocument()
-    expect(corrections[0].expectedInvitationRowVersion).toBe(secondVersion)
-    expect(registration.summary.state).toBe('APPROVED')
-    expect(screen.getByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
-  })
-
-  it('keeps rejection metadata and waits for review without issuing access', async () => {
-    registration.summary.state = 'REJECTED'; registration.review.allowed = false; registration.rejectionReason = 'Cần sửa email'
-    renderAt('/admin/registrations?review=registration', 'all')
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    await screen.findByText('Email đã được cập nhật.')
-    expect(screen.getByText('Lý do từ chối: Cần sửa email')).toBeInTheDocument()
-    expect(registration.summary.state).toBe('REJECTED')
-    expect(screen.queryByRole('region', { name: 'Hỗ trợ lời mời' })).not.toBeInTheDocument()
-  })
-
-  it('retains exactly the request and snapshot after a lost committed response', async () => {
-    failure = 'uncertain-commit'; renderAt()
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Chưa xác nhận được kết quả')
-    expect(screen.getByLabelText('Email mới')).toHaveAttribute('readonly')
-    failure = null
-    fireEvent.click(screen.getByRole('button', { name: 'Thử lại cùng yêu cầu' }))
-    await screen.findByText('Email đã được cập nhật.')
-    expect(corrections).toHaveLength(2)
-    expect(corrections[1]).toEqual(corrections[0])
-  })
-
-  it.each(['duplicate', 'invalid'] as const)('allows correcting a confirmed %s error using a new request', async mode => {
-    failure = mode; renderAt()
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'taken@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(mode === 'duplicate' ? 'Email đã được đăng ký' : 'không hợp lệ')
-    expect(screen.getByLabelText('Email mới')).not.toHaveAttribute('readonly')
-    failure = null
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    await screen.findByText('Email đã được cập nhật.')
-    expect(corrections[1].requestId).not.toBe(corrections[0].requestId)
-  })
-
-  it.each(['stale', 'forbidden'] as const)('blocks writes after %s until an explicit successful reload', async mode => {
-    failure = mode; renderAt()
-    fireEvent.click(await screen.findByRole('button', { name: 'Sửa email dòng 4' }))
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    await screen.findByText(/Dữ liệu đã thay đổi hoặc Tour đã khóa/)
-    if (mode === 'forbidden') expect(screen.getByText(/Chỉ quản trị viên được sửa email/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Sửa email dòng 4' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Duyệt đăng ký' })).not.toBeInTheDocument()
-    failure = 'reload'; fireEvent.click(screen.getByRole('button', { name: 'Tải lại' }))
-    await screen.findByText('Không tải được đăng ký này.')
-    failure = null; registration.roster[0].rowVersion = secondVersion
-    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Sửa email dòng 4' })).toBeEnabled())
-    fireEvent.click(screen.getByRole('button', { name: 'Sửa email dòng 4' }))
-    fireEvent.change(screen.getByLabelText('Email mới'), { target: { value: 'fixed@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận sửa email' }))
-    await screen.findByText('Email đã được cập nhật.')
-    expect(corrections[1].expectedRosterRowVersion).toBe(secondVersion)
-  })
-
-  it('disables email correction using the server gate and displays the reopen instruction', async () => {
-    registration.summary.tourState = 'READY'; registration.correctEmail = { allowed: false, reason: 'Tour đã READY. Mở lại về SCHEDULED trước khi sửa email.' }
-    renderAt()
-    expect(await screen.findByRole('button', { name: 'Sửa email dòng 4' })).toBeDisabled()
-    expect(screen.getByText(/Mở lại về SCHEDULED/)).toBeInTheDocument()
-    expect(corrections).toHaveLength(0)
+describe('Staff registration review boundary', () => {
+  it('loads the Staff API and does not expose the legacy Admin-only direct email correction', async () => {
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    expect(await screen.findByRole('table', { name: 'Roster đăng ký' })).toBeInTheDocument()
+    expect(screen.getByText(/Yêu cầu đổi email cần quy trình gửi và xét duyệt riêng/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Sửa email dòng/ })).not.toBeInTheDocument()
+    expect(requests.some(url => url.pathname.startsWith('/api/staff/manage/registrations'))).toBe(true)
+    expect(requests.some(url => url.pathname.startsWith('/api/admin/registrations'))).toBe(false)
   })
 
   it('filters the redesigned tabs on the server and resets pagination', async () => {
-    renderAt('/admin/registrations?page=3', 'all')
+    renderAt('/staff/manage/registrations?page=3', 'all')
     await screen.findByRole('table', { name: 'Đăng ký từ đại diện' })
     expect(requests[0].searchParams.get('page')).toBe('3')
     fireEvent.click(screen.getByRole('button', { name: 'Đã duyệt' }))
@@ -201,68 +103,154 @@ describe('Admin registration SQL HTTP boundary', () => {
     expect(await screen.findByRole('table', { name: 'Roster đăng ký' })).toBeInTheDocument()
     expect(screen.getByText('Điểm xem chung')).toBeInTheDocument()
     expect(screen.getByText('25')).toBeInTheDocument()
-    expect(requests.find(u => u.pathname === '/api/admin/registrations')?.searchParams.get('state')).toBe('SUBMITTED')
+    expect(requests.find(u => u.pathname === '/api/staff/manage/registrations')?.searchParams.get('state')).toBe('SUBMITTED')
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }))
     await waitFor(() => expect(requests.some(u => u.searchParams.get('page') === '2')).toBe(true))
     expect(screen.queryByText('Số học sinh')).not.toBeInTheDocument()
   })
 
-  it('approves the opened SQL versions with confirmation and truthful access boundary', async () => {
-    renderAt('/admin/registrations?review=registration', 'all')
-    fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })
-    expect(within(dialog).getByText(/gửi email lỗi vẫn giữ đăng ký đã duyệt/i)).toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Duyệt' }))
-    expect(await screen.findByText('Quyết định đã được lưu.')).toBeInTheDocument()
+  it('accepts only the selected row with confirmation and the current SQL versions', async () => {
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấp nhận Phòng A' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })
+    expect(within(dialog).getByText(/chỉ dòng này được chấp nhận/i)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận dòng' }))
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
     await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })
-    expect(decisions).toEqual([{ action: 'approve', input: { expectedRowVersion: firstVersion, expectedTourRowVersion: secondVersion } }])
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0]).toMatchObject({ action: 'accept', rowId: 'row', input: { requestId: expect.any(String), expectedRegistrationRowVersion: firstVersion, expectedTourRowVersion: secondVersion, expectedRowVersion: firstVersion } })
+    expect(requests.some(url => url.pathname === '/api/staff/manage/registrations/registration/rows/row/accept')).toBe(true)
+    expect(requests.some(url => url.pathname.endsWith('/approve') || url.pathname.endsWith('/reject'))).toBe(false)
     expect(screen.queryByRole('button', { name: 'Gửi thông tin' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Mã đoàn:/)).not.toBeInTheDocument()
   })
 
+  it('keeps a mixed ACCEPTED/PENDING registration in the pending queue and reviews only its pending row', async () => {
+    registration = structuredClone(initial)
+    registration.summary.state = 'APPROVED'
+    registration.roster = [
+      { ...registration.roster[0], id: 'accepted-row', participationState: 'ACCEPTED', canApprove: false, canReject: false },
+      { ...registration.roster[0], id: 'pending-row', rowNumber: 5, displayName: 'Thiết bị B', email: 'b@example.com' },
+    ]
+    renderAt()
+    expect(await screen.findByRole('button', { name: 'Chấp nhận Thiết bị B' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chấp nhận Phòng A' })).not.toBeInTheDocument()
+    expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Thiết bị B' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Thiết bị B?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].rowId).toBe('pending-row')
+    expect(registration.roster.find(row => row.id === 'accepted-row')?.participationState).toBe('ACCEPTED')
+  })
+
+  const twoPendingRows = () => {
+    registration.roster = [
+      { ...initial.roster[0], id: 'row-a', displayName: 'Lan' },
+      { ...initial.roster[0], id: 'row-b', rowNumber: 5, displayName: 'Minh', email: 'minh@example.com' },
+    ]
+  }
+
+  it('accepts the selected rows one at a time, each against a fresh registration version', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả 2 dòng chờ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận đã chọn (2)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận 2 dòng đã chọn?' })
+    expect(within(dialog).getByText(/Lan, Minh/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận 2 dòng' }))
+    await waitFor(() => expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã chấp nhận 2 dòng'))
+    expect(decisions.map(decision => [decision.action, decision.rowId, decision.input.expectedRegistrationRowVersion])).toEqual([
+      ['accept', 'row-a', firstVersion], ['accept', 'row-b', secondVersion],
+    ])
+    expect(new Set(decisions.map(decision => decision.input.requestId)).size).toBe(2)
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+  })
+
+  it('rejects only the ticked rows with one shared reason', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn Minh' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Từ chối đã chọn (1)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Từ chối dòng Minh?' })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Lý do từ chối/ }), { target: { value: 'Sai email' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Từ chối dòng' }))
+    await waitFor(() => expect(decisions).toHaveLength(1))
+    expect(decisions[0]).toMatchObject({ action: 'reject', rowId: 'row-b', input: { reason: 'Sai email' } })
+  })
+
+  it('stops the run and says how far it got when a later row changed underneath', async () => {
+    twoPendingRows()
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn tất cả 2 dòng chờ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận đã chọn (2)' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Chấp nhận 2 dòng đã chọn?' })
+    // Another writer changes row B after the reviewer opened the snapshot.
+    registration.roster[1].rowVersion = secondVersion
+    registration.roster[1].displayName = 'Minh đã đổi'
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chấp nhận 2 dòng' }))
+    expect(await screen.findByText(/Dữ liệu đã thay đổi hoặc Tour đã khóa/)).toBeInTheDocument()
+    expect(decisions.map(decision => decision.rowId)).toEqual(['row-a'])
+    expect(useToastStore.getState().toasts.map(toast => toast.title)).toContain('Đã chấp nhận 1 trong 2 dòng')
+  })
+
+  it('opens an approved registration on invitations only when nothing is left to review', async () => {
+    registration.summary.state = 'APPROVED'
+    registration.roster[0] = { ...registration.roster[0], participationState: 'ACCEPTED', canApprove: false, canReject: false }
+    renderAt('/staff/manage/registrations?review=registration', 'all')
+    expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Roster đăng ký' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách dòng (1)' }))
+    expect(await screen.findByRole('table', { name: 'Roster đăng ký' })).toBeInTheDocument()
+  })
+
   it('requires a rejection reason and displays the saved reason', async () => {
-    renderAt('/admin/registrations?review=registration', 'all')
+    renderAt('/staff/manage/registrations?review=registration', 'all')
     const sheet = await screen.findByRole('dialog', { name: 'Đoàn A' })
-    fireEvent.click(await within(sheet).findByRole('button', { name: 'Từ chối' }))
-    const dialog = await screen.findByRole('dialog', { name: 'Từ chối Đoàn A?' })
-    const submit = within(dialog).getByRole('button', { name: 'Từ chối' })
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Từ chối Phòng A' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Từ chối dòng Phòng A?' })
+    const submit = within(dialog).getByRole('button', { name: 'Từ chối dòng' })
     expect(submit).toBeDisabled()
     fireEvent.change(within(dialog).getByRole('textbox', { name: /Lý do từ chối/ }), { target: { value: '  Sửa email  ' } })
     fireEvent.click(submit)
     expect(await screen.findByText('Lý do từ chối: Sửa email')).toBeInTheDocument()
+    expect(decisions[0].action).toBe('reject')
     expect(decisions[0].input.reason).toBe('Sửa email')
+    expect(decisions[0].input).toMatchObject({ requestId: expect.any(String), expectedRegistrationRowVersion: firstVersion, expectedTourRowVersion: secondVersion, expectedRowVersion: firstVersion })
   })
 
   it('keeps focus refresh from replacing a reviewed snapshot, then explicitly reloads after conflict', async () => {
     renderAt()
-    await screen.findByText('Phòng A')
+    const roster = await screen.findByRole('table', { name: 'Roster đăng ký' })
+    expect(within(roster).getByRole('cell', { name: 'Phòng A' })).toBeInTheDocument()
     registration.rowVersion = secondVersion
     registration.roster[0].displayName = 'Phòng mới'
+    registration.roster[0].rowVersion = secondVersion
     const reads = requests.filter(u => u.pathname.endsWith('/registration')).length
     await act(async () => { focusManager.setFocused(false); focusManager.setFocused(true) })
     expect(requests.filter(u => u.pathname.endsWith('/registration'))).toHaveLength(reads)
-    expect(screen.queryByText('Phòng mới')).not.toBeInTheDocument()
+    expect(within(roster).queryByText('Phòng mới')).not.toBeInTheDocument()
     failure = 'stale'
-    fireEvent.click(screen.getByRole('button', { name: 'Duyệt đăng ký' }))
-    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })).getByRole('button', { name: 'Duyệt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp nhận Phòng A' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
     expect(await screen.findByText(/Dữ liệu đã thay đổi hoặc Tour đã khóa/)).toBeInTheDocument()
     expect(decisions[0].input.expectedRowVersion).toBe(firstVersion)
-    expect(screen.queryByRole('button', { name: 'Duyệt đăng ký' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Chấp nhận Phòng A' })).toBeDisabled()
     failure = 'reload'
     fireEvent.click(screen.getByRole('button', { name: 'Tải lại' }))
     expect(await screen.findByText('Không tải được đăng ký này.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Duyệt đăng ký' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chấp nhận Phòng A' })).not.toBeInTheDocument()
     failure = null
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
-    expect(await screen.findByText('Phòng mới')).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
-    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })).getByRole('button', { name: 'Duyệt' }))
+    expect(within(await screen.findByRole('table', { name: 'Roster đăng ký' })).getByRole('cell', { name: 'Phòng mới' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấp nhận Phòng mới' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng mới?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
     await waitFor(() => expect(decisions).toHaveLength(2))
     expect(decisions[1].input.expectedRowVersion).toBe(secondVersion)
   })
 
   it('shows load failure with retry and never fills the queue from mock data', async () => {
-    failure = 'list'; renderAt('/admin/registrations/pending')
+    failure = 'list'; renderAt('/staff/manage/registrations/pending')
     expect(await screen.findByText('Không thể tải danh sách đăng ký.')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     failure = null
@@ -272,17 +260,17 @@ describe('Admin registration SQL HTTP boundary', () => {
 
   it('keeps an unsuccessful decision visible without pretending approval succeeded', async () => {
     failure = 'network'; renderAt()
-    fireEvent.click(await screen.findByRole('button', { name: 'Duyệt đăng ký' }))
-    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Duyệt Đoàn A?' })).getByRole('button', { name: 'Duyệt' }))
-    expect(await within(screen.getByRole('dialog', { name: 'Duyệt Đoàn A?' })).findByRole('alert')).toHaveTextContent('Không thực hiện được.')
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấp nhận Phòng A' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).getByRole('button', { name: 'Chấp nhận dòng' }))
+    expect(await within(screen.getByRole('dialog', { name: 'Chấp nhận dòng Phòng A?' })).findByRole('alert')).toHaveTextContent('Không thực hiện được.')
     expect(registration.summary.state).toBe('SUBMITTED')
-    expect(screen.queryByText('Quyết định đã được lưu.')).not.toBeInTheDocument()
+    expect(useToastStore.getState().toasts).toHaveLength(0)
   })
 
   it('explains an inverted Tour date range instead of sending a request that can only fail', async () => {
-    renderAt('/admin/registrations?from=2026-10-10&to=2026-10-09', 'all')
+    renderAt('/staff/manage/registrations?from=2026-10-10&to=2026-10-09', 'all')
     expect(await screen.findByText('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.')).toBeInTheDocument()
-    expect(requests.some(u => u.pathname === '/api/admin/registrations')).toBe(false)
+    expect(requests.some(u => u.pathname === '/api/staff/manage/registrations')).toBe(false)
     expect(screen.queryByText('Không thể tải danh sách đăng ký.')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tour đến ngày (UTC+7)'), { target: { value: '2026-10-10' } })
     await waitFor(() => expect(requests.some(u => u.searchParams.get('to') === '2026-10-10T17:00:00.000Z')).toBe(true))
@@ -291,25 +279,25 @@ describe('Admin registration SQL HTTP boundary', () => {
   it('counts the sidebar queue badge from the live SQL total, never from simulated registrations', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
     clients.push(client)
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
-      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/manage/registrations/pending']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/registrations/pending" element={<p>Hàng chờ</p>} /></Route>
     </Routes></MemoryRouter></QueryClientProvider>)
     expect(await screen.findByLabelText('25 đoàn chờ duyệt')).toBeInTheDocument()
-    const count = requests.find(u => u.pathname === '/api/admin/registrations' && u.searchParams.get('size') === '1')
+    const count = requests.find(u => u.pathname === '/api/staff/manage/registrations' && u.searchParams.get('size') === '1')
     expect(count?.searchParams.get('state')).toBe('SUBMITTED')
   })
 
   it('hides the sidebar count when its SQL refresh fails instead of retaining a stale or simulated count', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
     clients.push(client)
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/admin/registrations/pending']}><Routes>
-      <Route path="/admin" element={<AdminShell />}><Route path="registrations/pending" element={<p>Hàng chờ</p>} /></Route>
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/manage/registrations/pending']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/registrations/pending" element={<p>Hàng chờ</p>} /></Route>
     </Routes></MemoryRouter></QueryClientProvider>)
     await screen.findByLabelText('25 đoàn chờ duyệt')
     failure = 'list'
-    await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-admin', 'list'] }) })
+    await act(async () => { await client.invalidateQueries({ queryKey: ['admin-registration-review', 'sql-staff', 'list'] }) })
     await waitFor(() => expect(screen.queryByLabelText(/\d+ đoàn chờ duyệt/)).not.toBeInTheDocument())
-    expect(screen.getByRole('link', { name: 'Chờ duyệt' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Đăng ký đoàn' })).toBeInTheDocument()
   })
 
   it('uses Vietnam date boundaries with an exclusive upper bound', () => {

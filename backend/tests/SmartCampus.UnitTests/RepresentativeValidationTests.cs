@@ -35,6 +35,19 @@ public sealed class RepresentativeValidationTests
         Assert.False(new RegistrationInputValidator().Validate(input with { ExpectedTourRowVersion = "old-mock-version" }).IsValid);
     }
 
+    [Fact]
+    public void RosterLimitCountsViewingPointsAndStopsAtTen()
+    {
+        var rows = Enumerable.Range(1, 10)
+            .Select(i => new RosterInput(i, "SHARED_VIEWING", $"Room {i}", $"room{i}@example.com", null))
+            .ToArray();
+        Assert.True(new RegistrationInputValidator().Validate(Valid() with { Roster = rows }).IsValid);
+        Assert.Contains(new RegistrationInputValidator().Validate(Valid() with
+        {
+            Roster = rows.Append(new RosterInput(11, "SHARED_VIEWING", "Room 11", "room11@example.com", null)).ToArray()
+        }).Errors, e => e.PropertyName == "Roster");
+    }
+
     [Theory]
     [InlineData("a b@example.com")]
     [InlineData("a@@example.com")]
@@ -79,17 +92,13 @@ public sealed class RepresentativeValidationTests
         Assert.False(Allowed(open, RegistrationStates.Cancelled, false, RegistrationOperation.Update));
         Assert.False(Allowed(open, RegistrationStates.Cancelled, false, RegistrationOperation.Cancel));
 
-        foreach (var operation in new[] { RegistrationOperation.Update, RegistrationOperation.Resubmit, RegistrationOperation.Cancel })
-        {
-            Assert.False(Allowed(open, RegistrationStates.Submitted, true, operation));
-            Assert.False(Allowed("RUNNING", RegistrationStates.Submitted, false, operation));
-            var approved = RepresentativeRegistrationPolicy.Evaluate(open, RegistrationStates.Approved, false, operation);
-            Assert.False(approved.Allowed);
-            Assert.Equal(RepresentativeRegistrationPolicy.ApprovedBoundary, approved.ToActionGate().Reason);
-        }
-        var exception = Assert.Throws<ConflictException>(() => RepresentativeRegistrationPolicy.Evaluate(
-            open, RegistrationStates.Approved, false, RegistrationOperation.Cancel).EnsureAllowed());
-        Assert.Equal("INVITATION_BOUNDARY", exception.Code);
+        Assert.True(Allowed(open, RegistrationStates.Submitted, true, RegistrationOperation.Update));
+        Assert.True(Allowed(open, RegistrationStates.Submitted, true, RegistrationOperation.Cancel));
+        Assert.False(Allowed(open, RegistrationStates.Submitted, true, RegistrationOperation.Resubmit));
+        Assert.False(Allowed("RUNNING", RegistrationStates.Submitted, false, RegistrationOperation.Update));
+        Assert.True(Allowed(open, RegistrationStates.Approved, true, RegistrationOperation.Update));
+        Assert.True(Allowed(open, RegistrationStates.Approved, true, RegistrationOperation.Cancel));
+        Assert.False(Allowed(open, RegistrationStates.Approved, false, RegistrationOperation.Resubmit));
         var stale = Assert.Throws<ConflictException>(() => RowVersionToken.EnsureCurrent([0, 0, 0, 0, 0, 0, 0, 2], "AAAAAAAAAAE="));
         Assert.Equal("STALE_VERSION", stale.Code);
     }

@@ -57,26 +57,28 @@ benchmarking in a separate task after the production end-to-end path works.
 ## Foundation status
 
 The .NET 10 Fleet Emulator console-app foundation is in place. It is an
-external synthetic client and currently only prints a startup message. The
-official SignalR client is referenced for the future robot/backend connection;
-there is no connection, authentication, command, state, or benchmark logic yet.
-
-`docs/decisions/0008-production-fleet-transport.md` selects SignalR JSON Hub
-Protocol over TLS on `/hubs/fleet`, shared with the physical bridge. Production
-use is gated on the still-unproven Python client compatibility with ASP.NET
-Core/.NET 10. The checkpoint follows documentation merge and precedes
-production bridge implementation. A failed checkpoint reopens transport review
-for both clients; no fallback is preselected.
+external synthetic client and currently only prints a startup message; it does
+not yet implement Fleet Sync authentication or telemetry. ADR-0019 selects
+HTTPS `POST /api/fleet/v1/sync` for the robot telemetry boundary. The shared
+contract is in `docs/contracts/fleet-sync/v1/`. Python HTTPS/TLS compatibility
+from the ROS Humble image and the production reverse proxy remain R1 verification
+gates. ADR-0008's earlier `/hubs/fleet` production transport is superseded for
+robot telemetry; SignalR remains for the Staff operations projection and
+development preview.
 
 `docs/architecture.md` Section 3 records conceptual `GoTo`, `Cancel`,
-`ReportState`, and `ReportCommandResult` semantics, machine identity/auth, and
-reconnect rules. Each emulated robot uses its own identity/connection. Retain
-`Robot.SourceType` / eligibility so synthetic robots cannot serve real tours.
-The development Gazebo preview remains a separate path.
+`ReportState`, and `ReportCommandResult` semantics for M2, and implemented
+Fleet Sync v1 telemetry/authentication for M0/B1. The emulator has not yet
+implemented the shared Fleet Sync client or its retry/recovery behavior. Each
+emulated robot must use its own identity. Retain `Robot.SourceType` / eligibility
+so synthetic robots cannot serve real tours. The development Gazebo preview
+remains a separate path.
 
 Operational rates remain configurable and must be recorded during production
-integration; no numeric rate is fixed here. Exact DTO binding, auth
-implementation, and recovery details remain production work. Research
+integration. Fleet Sync currently uses a 600 requests per IP per minute default;
+the bridge cadence must fit that limit with retry headroom. The backend DTO,
+robot authentication, and response contract are implemented; emulator/robot
+client retry, recovery, and TLS deployment checks remain R1 work. Research
 implementation/benchmark execution are deferred under the unchanged Capstone
 scope; no research architecture decisions are made in this milestone.
 No Emulator behavior or dependency is added by this documentation decision.

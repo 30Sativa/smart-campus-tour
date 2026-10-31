@@ -1,10 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { ConfirmationDialog } from '../../../../components/ui/ConfirmationDialog'
 import { inputClass, labelClass } from '../../../../components/ui/ui-classes'
+import { notify } from '../../../../components/ui/toast-store'
 import { Notice } from '../../AdminUi'
 import { useCreateAccount } from '../hooks'
 import { accountFormError, type AccountFormErrors, type AccountFormField } from '../errors'
 import type { CreatableAccountRole, CreateAccountInput } from '../types'
+
+const ROLE_LABEL: Record<CreatableAccountRole, string> = { Staff: 'Staff', TechnicalStaff: 'Technical Staff', Representative: 'Đại diện trường' }
 
 const INITIAL_FORM = { username: '', fullName: '', role: '' as CreatableAccountRole | '', initialPassword: '' }
 
@@ -44,6 +47,10 @@ export function CreateAccountDialog({ onClose, onCreated }: { onClose: () => voi
     }
     create.mutate(input, {
       onSuccess: () => {
+        notify({
+          title: `Đã tạo tài khoản ${input.username}`,
+          detail: `Vai trò ${ROLE_LABEL[input.role]}. Gửi mật khẩu ban đầu cho ${input.fullName} qua kênh nội bộ.`,
+        })
         setForm(INITIAL_FORM)
         setLocalErrors({})
         onCreated()
@@ -57,7 +64,7 @@ export function CreateAccountDialog({ onClose, onCreated }: { onClose: () => voi
     <ConfirmationDialog
       open
       title="Tạo tài khoản"
-      description="Tạo tài khoản Staff hoặc Đại diện trường. Admin được cấp riêng qua cấu hình ban đầu."
+      description="Tạo tài khoản Staff, Technical Staff hoặc Đại diện trường. Admin được cấp riêng qua cấu hình ban đầu."
       confirmLabel="Tạo tài khoản"
       busyLabel="Đang tạo…"
       busy={create.isPending}
@@ -83,6 +90,7 @@ export function CreateAccountDialog({ onClose, onCreated }: { onClose: () => voi
           <select id="account-role" value={form.role} onChange={(event) => update('role', event.target.value as CreatableAccountRole | '')} required aria-invalid={Boolean(fieldError('role'))} aria-describedby={fieldError('role') ? 'account-role-error' : undefined} className={`${inputClass} mt-1.5`}>
             <option value="">Chọn vai trò</option>
             <option value="Staff">Staff</option>
+            <option value="TechnicalStaff">Technical Staff</option>
             <option value="Representative">Representative</option>
           </select>
           {fieldError('role') && <p id="account-role-error" className="mt-1 text-xs text-[#b23e31]">{fieldError('role')}</p>}

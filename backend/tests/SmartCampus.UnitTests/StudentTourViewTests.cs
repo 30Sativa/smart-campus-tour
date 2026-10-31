@@ -99,6 +99,7 @@ public sealed class StudentTourViewTests
 
         public Task<Guid?> FindInvitationIdAsync(Guid tourId, byte[] codeHash, CancellationToken ct) => throw new NotSupportedException();
         public Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Guid?> FindDeviceInvitationIdAsync(Guid tourId, byte[] deviceTokenHash, CancellationToken ct) => throw new NotSupportedException();
         public Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct) => throw new NotSupportedException();
         public Task CloseExpiredAsync(Guid invitationId, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
         public void Add(BrowserSession session) => throw new NotSupportedException();

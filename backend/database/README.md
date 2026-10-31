@@ -1,12 +1,84 @@
 # CampusTour database snapshots
 
+## v1.10 Tour scheduling inputs (ADR-0035)
+
+`smart-campus-tour-schema-v1.10.sql` adds nullable `RouteTestRuns.MeasurementBasis` and `TourRobotReservations.ExpectedDurationSeconds`; `patches/upgrade-v1.9-to-v1.10-tour-scheduling.sql` applies them to a v1.9 database and is idempotent. Existing rows keep NULL: an old run must be measured again before it can size a reservation, and an old reservation keeps its window. Runtime grants do not change. The API build requires v1.10, so run the upgrade first.
+
+## v1.9 Tour on a tested Route revision (ADR-0034)
+
+`smart-campus-tour-schema-v1.9.sql` adds `Tours.RouteRevisionId`, `Tours.OperatorUserId` and `TourRobotReservations`; `patches/upgrade-v1.8-to-v1.9-tour-route-revision.sql` applies them to a v1.8 database and is idempotent. Legacy Tours keep NULL in the new columns. Runtime gets SELECT/INSERT on reservations and UPDATE only on the release columns, never DELETE. Overlap is refused by the application under a per-robot lock, not by a database constraint. The API build requires v1.9, so run the upgrade first.
+
+## v1.2 versioned map/POI slice (ADR-0021)
+
+`smart-campus-tour-schema-v1.2.sql` is the full snapshot for a newly created
+database. `patches/upgrade-v1.1-to-v1.2-map-poi.sql` is an additive patch for
+an explicitly recognized v1.1 database and preserves existing rows; take and
+verify a full backup before the normal reviewed deployment process. The patch
+is idempotent for the v1.2 schema marker and rejects unknown/unmarked schemas.
+Neither file should be run against a shared or production database outside its
+approved change window. v1.1 and its recognized hashes remain unchanged.
+
+After v1.2 schema installation and the existing `campus_tour_app` role setup,
+apply `smart-campus-tour-map-poi-permissions.sql`. It grants read/insert for
+immutable map, deployment, revision, submission and verification records, plus
+only the current revision pointer fields on `PoiProposals`; it grants no
+update/delete on immutable result tables. Re-scaffold from a disposable v1.2
+database with `backend/scripts/scaffold-db`, then review generated output and
+the documented one-to-many corrections. Integration tests use a disposable
+SQL database when `SMARTCAMPUS_SCHEMA_TEST_CONNECTION` is set.
+
 ## Status
 
 - `backend/database/smart-campus-tour-schema-v1.1.sql` now matches the generated EF entities and was applied to the local `SmartCampusTourV11` database on SQL Server `localhost,1433` under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`.
 - The local DB was created empty. v1.1 is not an ALTER migration and did not migrate v1.0 or production data.
 - `backend/database/smart-campus-tour-permissions.sql` creates the `campus_tour_app` database role and grants SELECT/INSERT, denies UPDATE/DELETE on TourEvents/AuditLogs. Apply after the schema in the intended database. A deployment administrator provisions the runtime user and adds it to this role; the script does not create a login or change existing user memberships. Business-table permissions remain feature-specific.
+- Current schema is Database First v1.10. Runtime may SELECT/INSERT `Robots` for Technical Staff registration and UPDATE only credential lifecycle, `FirstAccepted*`, and the three map-assignment columns. It never gets whole-table UPDATE/DELETE. The separate provisioner has column-scoped SELECT/UPDATE grants for credential lifecycle and confirmation fields, plus append-only audit access. Versioned POI revisions and route-stop snapshots add nullable `NarrationText` and `FallbackVideoUrl`; runtime retains only SELECT/INSERT access to these immutable records.
+- A v1.4/v1.5/v1.6/v1.7/v1.8/v1.9 database must run the controlled upgrade/regrant through v1.10 and pass the read-only `init-db.sh --check-only` gate before deploying an API build that requires map assignment in the database. Do not run regrant against EC2/shared databases outside the verified-backup change process.
 
 No trigger/procedure is needed for these changes. No CHECK/DEFAULT is introduced: callers still supply GUIDs, required timestamps/flags and validate status values. Filtered indexes require the SET options at the top of the snapshot on connections performing DML.
+
+### Bootstrap compatibility and runtime permissions (2026-10-28)
+
+Treat the deployed snapshot as immutable, including comments. Put changing
+business explanations in docs/ADRs; in particular ADR-0017 freezes Route
+configuration from any Tour reference even if an older SQL comment mentions READY.
+The Compose initializer creates an empty database from
+`smart-campus-tour-schema-v1.10.sql`; its bootstrap check requires the current
+LF-normalized v1.10 hash marker or a recognized historical bootstrap marker plus
+the complete v1.10 structure before granting runtime permissions. The two
+historical v1.1 marker values (`96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68`
+and `2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67`)
+remain recognized as the accepted comment-only pair, but now return
+`UPGRADE_REQUIRED`: they do not prove the required tables/columns exist. The
+initializer refuses them without changing data or markers, and also refuses
+unknown or unmarked non-empty schemas. Normal API deployment runs this tool only
+in read-only `--check-only` mode; it cannot bootstrap, migrate, change login
+credentials, or change the SQL Server engine. Empty-database bootstrap is an
+explicit `--bootstrap` operation. Existing data uses the separately locked
+Backend Database Schema Upgrade workflow, which takes and verifies a full
+backup before applying additive patches in order (v1.1→v1.2, v1.2→v1.3,
+v1.3→v1.4, v1.4→v1.5, v1.5→v1.6, v1.6→v1.7, v1.7→v1.8, v1.8→v1.9, v1.9→v1.10), then checks the resulting structure and runtime grants. It retains
+the original bootstrap hash and records `CampusTourSchemaVersion=1.10` only
+after required structure checks. Unknown markers or incomplete upgrades fail
+closed. Any executable schema change needs its own ADR/database change process.
+
+For a fresh v1.10 database the initializer applies, in order, the full schema,
+the log role, map/POI grants, Route revision grants, then creates the runtime
+user and applies `backend/database/smart-campus-tour-runtime-permissions.sql`.
+That runtime script grants the v1.4 email request table only SELECT/INSERT/UPDATE
+and leaves DELETE denied; it does not skip missing objects. Route/RouteStops CRUD and Tour
+SELECT/INSERT/UPDATE are included. Robots allow SELECT/INSERT for identity
+registration and column-level UPDATE for credential lifecycle and first-sync
+confirmation fields; full-table UPDATE/DELETE remain denied. The separate
+provisioner has its own scoped credential/confirmation grants and appends audit
+rows without rewrite. Branch writes and Tour DELETE
+remain absent. Audit/TourEvent rewrite remains denied. SQL integration tests run
+the real Route/Tour preparation pipeline under an impersonated restricted user.
+
+Backend CI provisions disposable SQL Server and sets
+`SMARTCAMPUS_REQUIRE_SQL_TESTS=true`; verification fails before tests if its SQL
+connection is missing. Local fast verification remains opt-in for SQL; use
+`SMARTCAMPUS_SCHEMA_TEST_CONNECTION` for the complete SQL suite.
 
 Admin POI Management adds `Pois.RowVersion` to the v1.1 schema for optimistic
 concurrency. New empty databases receive it from the snapshot. Existing v1.1
@@ -47,12 +119,54 @@ The current local target is `SmartCampusTourV11` on `localhost,1433`; the local 
 
 ## Registration submission implementation
 
-The Representative submission API now enforces Tour-first locks, owned mutations,
-rowversions and normalized email reservations in SUBMITTED/APPROVED registrations.
-The schema is unchanged. See `web/docs/representative-registration.md` for the
-live slice, isolated Route/Tour fixture and verification. Admin approval/rejection now shares these locks and reservations; see
-`web/docs/admin-registration-review.md`. Approved roster replacement and
-invitation/session revocation remain future implementation.
+Admin Tour creation, preparation updates and pre-Start cancellation now use
+the existing v1.1 schema under ADR-0018. Request receipts use append-only
+AuditLogs plus transaction-owned application locks, with no new table/column.
+Selected Route/POI data uses the existing Route repository. Cancellation retains
+relationship history, closes pending review work and revokes invitation/session
+access. See `backend/docs/admin-tour-management.md` for request examples,
+locking, SQL verification and lifecycle boundaries.
+
+Admin Route Management uses the existing Routes/RouteStops model without a
+schema patch. It records an aggregate revision and serializable usage/POI
+checks, rather than adding a second route model. See
+`docs/decisions/0017-admin-route-management.md` and
+`web/docs/route-management.md`. Route SQL tests use disposable databases and
+exercise reorder, concurrency, reference locks and audit rollback.
+
+Wave C adds the v1.4 Database First row-registration slice. Representative roster
+updates use stable row IDs; new rows await Staff review, accepted rows retain
+their own access, and removed rows revoke only their own invitation/session.
+Email changes are requested by the owning Representative and reviewed by Staff;
+the old direct Admin correction URL fails closed. Invitation/access checks use
+row participation state. Same-browser reconnect uses a tour-scoped device token
+and a two-minute window. See
+`backend/docs/representative-registration.md` and
+`backend/docs/registration-review.md` for API details and boundaries.
+
+## v1.4 row-level registration and email change (ADR-0026)
+
+`smart-campus-tour-schema-v1.4.sql` is the snapshot for an empty database and
+retains v1.3 tables. Existing v1.3 schemas require
+`patches/upgrade-v1.3-to-v1.4-row-registration.sql` through a reviewed
+Database First change, with backup and explicit database approval. The patch
+validates known bootstrap markers, backfills row participation from the existing
+registration decision, and adds row review metadata, email-change request
+history, and a browser device-token hash. Do not run this patch on a shared or
+production database from this branch. Integration tests use disposable SQL
+databases; the developer's local v1.1 database is intentionally untouched.
+
+Apply `smart-campus-tour-runtime-permissions.sql` after the existing runtime
+role setup to grant the email-request table access required by the API and
+SELECT/INSERT on Robots for physical identity registration. Existing v1.4
+databases receive the controlled Backend Database Schema Upgrade regrant, which
+Backend Deploy now runs automatically (after a backup) when the release's
+read-only check reports missing grants; this regrant applies the
+existing permission scripts without adding a schema version or changing
+business data. The patch does not create a global seat-capacity setting,
+institutional calendar, or versioned scheduling/READY writer. Staff review ageing is observable from
+submission/request timestamps; an automatic business-day due date/escalation
+requires a separately approved working-day calendar.
 
 ## Remaining application invariants
 
@@ -66,3 +180,28 @@ invitation/session revocation remain future implementation.
 - Retention: enumerate RosterRows.DisplayName/Email/ClassName, group contacts and identifying free text, invitation secrets and sessions, import/export copies and links. Revoke rights, preserve only non-identifying aggregate statistics, then delete/de-identify operational data according to configured retention and FK order. See ADR-0011/0012; no cleanup job or retention duration is introduced here.
 
 Runtime users must not be dbo/sysadmin/db_owner, own schemas/tables, have DDL control or column-level grants overriding the intended restriction. The log role protects ordinary app access, not privileged DB administrators. Production identity provisioning and permissions must be checked under the real runtime account before use.
+
+## v1.3 immutable Route revisions (ADR-0023)
+
+`smart-campus-tour-schema-v1.3.sql` is the new-empty-database snapshot and
+retains all v1.2 structures. For an explicitly recognized v1.2 database, apply
+`patches/upgrade-v1.2-to-v1.3-route-revisions.sql` through the reviewed database
+change process after a full backup. The accepted `CampusTourBootstrapHash`
+values are the two known original snapshot hashes retained by the v1.1→v1.2
+upgrade; the map/POI upgrade preserves that marker. Unknown/unmarked schemas
+are rejected. The patch is additive and leaves `Routes`/`RouteStops` records
+unchanged; old rows default to `AuthoringMode=LEGACY`.
+
+After the patch and existing role scripts, apply
+`smart-campus-tour-route-revision-permissions.sql`. The runtime role can read
+and insert versioned route revisions, stops, submission receipts and test runs,
+but cannot update/delete those records. Route API code uses the same `Routes`
+identity table and legacy APIs filter to LEGACY rows. This patch has not been
+applied to any shared or production database. SQL integration tests cover the
+new snapshot and repeat application of the patch on a disposable database.
+
+Database First model generation was run against a disposable v1.3 local SQL
+database using EF Core scaffolding; generated entities and mappings were
+reviewed, including the manually corrected EF relationship/cardinality rules.
+The disposable database was removed. This work branch does not apply the patch
+to a shared database or scaffold/migrate a database at application startup.

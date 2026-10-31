@@ -18,46 +18,34 @@ type Tab = 'overview' | 'groups' | 'route' | 'log'
 const STREAM_LABEL: Record<string, string> = { Live: 'Đang phát', Connecting: 'Đang kết nối', Offline: 'Mất tín hiệu' }
 
 /**
- * The selected Tour beside the day board: its next step, what holds it back,
- * and its groups, route and log in tabs. On a wide screen it sits beside the
- * list; below that it slides in from the right over the page.
+ * The chosen Tour, opened in the middle of the page over a dimmed list: its
+ * next step, what holds it back, and its groups, route and log in tabs.
+ * Escape, the close button or a click outside closes it (the page owns that,
+ * through `useMobileNav`).
  */
-export function TourInspector({ tour, now, open, wide, onClose, panelRef }: {
+export function TourInspector({ tour, now, open, onClose, panelRef, docked = false }: {
   tour?: TourOperation
   now: number
-  /** Below xl: whether the panel is slid in. */
   open: boolean
-  /** At xl and up the panel is always shown beside the list. */
-  wide: boolean
   onClose: () => void
+  docked?: boolean
   panelRef?: Ref<HTMLElement>
 }) {
+  if (!open || !tour) return null
   return (
-    <>
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-[#0f172a]/40 transition-opacity duration-300 xl:hidden motion-reduce:transition-none ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
-      />
-      <aside
+    <div className={docked ? 'sticky top-20 min-w-0' : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6'}>
+      {!docked && <div aria-hidden="true" onClick={onClose} className="fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none" />}
+      <section
         ref={panelRef}
         tabIndex={-1}
+        role={docked ? 'complementary' : 'dialog'}
+        aria-modal={docked ? undefined : true}
         aria-label="Chi tiết buổi"
-        inert={!wide && !open}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col overflow-hidden bg-white shadow-2xl transition-transform duration-300 ease-out outline-none motion-reduce:transition-none sm:rounded-l-2xl xl:sticky xl:inset-auto xl:top-6 xl:z-auto xl:max-h-[calc(100vh-3rem)] xl:w-auto xl:max-w-none xl:translate-x-0 xl:rounded-[18px] xl:border xl:border-[var(--ops-border,#d9e9f5)] xl:shadow-[0_12px_32px_-30px_#285c7d] ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`relative flex w-full flex-col overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white outline-none transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none ${docked ? 'max-h-[calc(100dvh-7rem)] shadow-xs' : 'max-h-[calc(100dvh-1.5rem)] max-w-[880px] shadow-xl sm:max-h-[calc(100dvh-3rem)]'}`}
       >
-        {tour ? (
-          <InspectorBody key={tour.id} tour={tour} now={now} onClose={onClose} />
-        ) : (
-          <div className="grid flex-1 place-content-center gap-1.5 px-8 py-16 text-center text-sm text-[#64748b]">
-            <b className="text-[15px] text-[#0f172a]">Chọn một buổi</b>
-            Bấm vào buổi trong danh sách hoặc trên dải thời gian để xem đoàn, lộ trình và nhật ký.
-          </div>
-        )}
-      </aside>
-    </>
+        <InspectorBody key={tour.id} tour={tour} now={now} onClose={onClose} />
+      </section>
+    </div>
   )
 }
 
@@ -78,14 +66,14 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
     <>
       <span aria-hidden="true" className="h-1.5 shrink-0" style={{ background: tourColor(tour) }} />
       <div className="relative px-5 pt-4 pb-3">
-        <button type="button" onClick={onClose} aria-label="Đóng chi tiết" className="absolute top-3 right-3 grid size-9 place-items-center rounded-lg border border-[#e6ebf1] text-[#64748b] transition-colors hover:bg-[#f8fafc] hover:text-[#0f172a] xl:hidden">
+        <button type="button" onClick={onClose} aria-label="Đóng chi tiết" className="absolute top-3 right-3 grid size-9 place-items-center rounded-lg bg-[#f1f5f9] text-[#64748b] transition-colors hover:bg-[#e2e8f0] hover:text-[#0f172a]">
           <X size={16} aria-hidden="true" />
         </button>
-        <span className="flex flex-wrap items-center gap-1.5 pr-10 xl:pr-0">
+        <span className="flex flex-wrap items-center gap-1.5 pr-10">
           <span className="rounded-md bg-[#eff6ff] px-1.5 py-px font-mono text-[11.5px] font-bold text-[#2563eb]">{tour.code}</span>
           <TourStateBadges tour={tour} />
         </span>
-        <h2 className="mt-2 text-xl leading-snug font-extrabold tracking-tight text-[#0f172a]">{tour.name}</h2>
+        <h2 className="mt-2 text-xl leading-snug font-bold tracking-tight text-[#0f172a]">{tour.name}</h2>
         <p className="mt-1 flex flex-wrap gap-x-3.5 gap-y-1 text-[12.5px] text-[#64748b]">
           <span className="inline-flex items-center gap-1.5">
             <Clock size={13} aria-hidden="true" />
@@ -113,7 +101,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
 
       <Notice tour={tour} />
 
-      <div role="tablist" aria-label="Thông tin buổi" className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e6ebf1] px-3.5">
+      <div role="tablist" aria-label="Thông tin buổi" className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e6ebf1] px-5">
         {tabs.map((item) => (
           <button
             key={item.key}
@@ -125,7 +113,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
           >
             {item.label}
             {item.count != null && (
-              <span className={`rounded-full px-1.5 text-[10.5px] font-extrabold tabular-nums ${tab === item.key ? 'bg-[#0f172a] text-white' : 'bg-[#f1f5f9] text-[#64748b]'}`}>{item.count}</span>
+              <span className={`rounded-full px-1.5 text-[10.5px] font-bold tabular-nums ${tab === item.key ? 'bg-[#0f172a] text-white' : 'bg-[#f1f5f9] text-[#64748b]'}`}>{item.count}</span>
             )}
             <span aria-hidden="true" className={`absolute inset-x-2.5 -bottom-px h-0.5 rounded-full bg-[#0f172a] transition-transform duration-200 motion-reduce:transition-none ${tab === item.key ? 'scale-x-100' : 'scale-x-0'}`} />
           </button>
@@ -138,7 +126,7 @@ function InspectorBody({ tour, now, onClose }: { tour: TourOperation; now: numbe
         ) : tab === 'groups' ? (
           <>
             <RegistrationList registrations={tour.registrations} />
-            <p className="mt-4 text-[11.5px] text-[#94a3b8]">Admin duyệt và gửi thông tin tham gia; Staff chỉ theo dõi.</p>
+            <p className="mt-4 text-[11.5px] text-[#94a3b8]">Duyệt và gửi thông tin tham gia ở mục Chuẩn bị Tour.</p>
           </>
         ) : tab === 'route' ? (
           <TourTimeline tour={tour} />
@@ -159,7 +147,7 @@ function Notice({ tour }: { tour: TourOperation }) {
     body = <><b>Cần hỗ trợ{tour.reason ? ` · ${REASON_SHORT[tour.reason] ?? tour.reason}` : ''}.</b> {tour.reasonDetail ?? 'Mở điều hành để xử lý.'}</>
   } else if (tour.state === 'Scheduled' && tour.readyBlockers.length > 0) {
     tone = 'warn'
-    body = <><b>Chưa sẵn sàng.</b> {tour.readyBlockers.join(' · ')}. Admin chốt buổi khi đủ điều kiện; Staff chưa cần làm gì.</>
+    body = <><b>Chưa sẵn sàng.</b> {tour.readyBlockers.join(' · ')}. Chốt buổi ở mục Chuẩn bị Tour khi đủ điều kiện.</>
   } else if (tour.state === 'Ready' && !tour.allowedActions.start.allowed) {
     tone = 'warn'
     body = <><b>Chưa bắt đầu được.</b> {tour.allowedActions.start.reason ?? 'Chưa đủ điều kiện kiểm tra.'}</>
@@ -183,7 +171,7 @@ function Notice({ tour }: { tour: TourOperation }) {
 function Fact({ label, children, mono = false }: { label: string; children: ReactNode; mono?: boolean }) {
   return (
     <div className="min-w-0 bg-white px-3 py-2.5">
-      <dt className="text-[10.5px] font-bold tracking-[0.05em] text-[#94a3b8] uppercase">{label}</dt>
+      <dt className="text-[11.5px] font-medium text-[#94a3b8]">{label}</dt>
       <dd className={`mt-0.5 truncate text-[13.5px] font-bold text-[#0f172a] ${mono ? 'font-mono text-[12.5px]' : ''}`}>{children}</dd>
     </div>
   )
@@ -191,9 +179,9 @@ function Fact({ label, children, mono = false }: { label: string; children: Reac
 
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="mt-5">
+    <section className="mt-3">
       <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h3 className="text-[13px] font-extrabold text-[#0f172a]">{title}</h3>
+        <h3 className="text-[13px] font-bold text-[#0f172a]">{title}</h3>
         {note && <span className="truncate text-[11.5px] text-[#94a3b8]">{note}</span>}
       </div>
       {children}
@@ -227,15 +215,15 @@ function Overview({ tour, now }: { tour: TourOperation; now: number }) {
         <Section title="Đang diễn ra" note="cập nhật trực tiếp">
           <dl className="grid grid-cols-3 gap-2 max-sm:grid-cols-2">
             <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
-              <dt className="text-[10.5px] font-bold tracking-[0.05em] text-[#94a3b8] uppercase">POI</dt>
+              <dt className="text-[11.5px] font-medium text-[#94a3b8]">POI</dt>
               <dd className="mt-0.5 text-[12.5px] font-bold text-[#0f172a]">{progress.current ? `${(tour.progress?.stopIndex ?? 0) + 1}/${progress.total} · ${progress.current.name}` : `${progress.done}/${progress.total}`}</dd>
             </div>
             <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
-              <dt className="text-[10.5px] font-bold tracking-[0.05em] text-[#94a3b8] uppercase">Bước</dt>
+              <dt className="text-[11.5px] font-medium text-[#94a3b8]">Bước</dt>
               <dd className="mt-0.5 text-[12.5px] font-bold text-[#0f172a]">{tour.progress?.step ? stepLabel(tour.progress.step) : 'Không có dữ liệu'}</dd>
             </div>
             <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
-              <dt className="text-[10.5px] font-bold tracking-[0.05em] text-[#94a3b8] uppercase">Livestream</dt>
+              <dt className="text-[11.5px] font-medium text-[#94a3b8]">Livestream</dt>
               <dd className={`mt-0.5 text-[12.5px] font-bold ${tour.livestream.state === 'Live' ? 'text-[#16a34a]' : tour.livestream.state === 'Connecting' ? 'text-[#d97706]' : 'text-[#dc2626]'}`}>
                 {STREAM_LABEL[tour.livestream.state] ?? tour.livestream.state}
               </dd>

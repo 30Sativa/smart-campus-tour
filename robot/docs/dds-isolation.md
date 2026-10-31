@@ -1,5 +1,10 @@
 # Cô lập DDS của robot và debug từ xa bằng RViz qua SSH (R3)
 
+**Trạng thái (19/10): S3 ĐÃ TRIỂN KHAI trên MiniPC, ISOLATED.** S5a xác nhận robot
+không bị ảnh hưởng khi roam Wi-Fi. Một lần khởi động S2 lỗi discovery mà chưa rõ
+nguyên nhân, nên luôn chạy health gate sau khởi động. Chi tiết, bằng chứng và
+cách vận hành ở S3: [robot-status-2026-10-19.md](robot-status-2026-10-19.md).
+
 **Trạng thái (17/10):** đường debug S0b đã chạy trên robot thật; wrapper,
 adapter và guard được harden qua review đứng yên. Discovery server,
 `robot/.env`, mạng, SSH và Nav2 Baseline V1 chưa đổi. Chỉ overlay debug riêng
@@ -12,12 +17,13 @@ khi robot đứng yên ở vị trí chưa biết trên map; Initial Pose hợp 
 Vẫn cần phiên bảo trì, sudo, stop/restart toàn bộ ROS process và kiểm từng
 bước. Đây là kết luận sẵn sàng triển khai, không phải xác nhận đã cô lập.
 
-**Cập nhật review S0b:** user đã xác nhận RViz thật hiện map, LiDAR, TF và
+**Cập nhật review S0b:** người vận hành đã xác nhận RViz thật hiện map, LiDAR, TF và
 RobotModel sau khi source workspace laptop. Những sửa tiếp theo gồm wrapper
 `amr-rviz --r3`, cleanup, kiểm dữ liệu cũ và guard protocol v2 (`sent_at` bắt
 buộc). Đây không phải bằng chứng S1–S3 đã được áp dụng, cũng không thay cho
-kiểm thử localization/navigation. Kết quả của lượt review đứng yên nằm ở
-`robot/docs/r3-stationary-review-2026-10-17.md`.
+kiểm thử localization/navigation. Trạng thái nguồn và overlay được ghi ở
+[project-status.md](project-status.md); tiêu chí chuyển đổi/rollback ở
+[r3-dds-readiness-2026-10-17.md](r3-dds-readiness-2026-10-17.md).
 
 **Đính chính so với đề xuất v2:**
 - `fastdds discovery -l 127.0.0.1` **không** đóng discovery; socket vẫn bind
@@ -43,7 +49,8 @@ là thêm vào và chạy bằng launch riêng.
   - chỉ bật `ASYNCHRONOUS`: vẫn chặn 2 s;
   - `non_blocking_send`: mất scan âm thầm khi dữ liệu cục bộ đi qua UDP;
   - cô lập: 0 lần hở.
-- **Laptop ở mạng Wi-Fi khác** (10.87.x, khác subnet 10.86.4.0/22 của robot).
+- **Laptop ở mạng Wi-Fi khác**, khác subnet với robot (địa chỉ nội bộ được
+  lược khỏi tài liệu công khai).
   - Robot và laptop cách nhau 2 hop, RTT 3–312 ms.
   - Fast DDS gửi mỗi bản tin tới **mọi** IP mà reader khai báo, kể cả IP
     Tailscale của laptop nếu Tailscale còn chạy.
@@ -81,9 +88,10 @@ miniPC (robot)                                               laptop (Wi-Fi khác
     từ chối mọi client channel (đo được: 0 bản tin `cmd_vel` lọt qua).
 - **Đường ghi duy nhất là initial pose.** Nó đi tới `initialpose_guard` qua
   một cổng riêng, bằng giao thức JSON một chức năng.
-- **Backend và Digital Twin** không dùng DDS (`fleet_bridge` dùng SignalR,
-  ADR-0008), nên không bị ảnh hưởng. `fleet_bridge` phải theo cùng nguyên tắc:
-  là tiến trình riêng, và I/O mạng không bao giờ chặn callback ROS.
+- **Backend và Digital Twin** không dùng DDS. Fleet Bridge gửi telemetry qua
+  HTTPS Fleet Sync v1 (`POST /api/fleet/v1/sync`, ADR-0019); đường này không
+  tham gia graph DDS. Bridge phải là tiến trình riêng, và I/O mạng không bao
+  giờ chặn callback ROS.
 
 ## 3. Thành phần
 
@@ -107,8 +115,8 @@ rollback. Sau S2 nó không còn chạy được.
 
 ## 4. Dùng hằng ngày
 
-Lệnh vận hành ổn định là `amr-rviz`: mặc định vẫn gọi nguyên script cũ đã
-lưu thành `~/.local/bin/amr-rviz.legacy`. Chọn R3 bằng:
+Trên laptop hiện tại, lệnh vận hành là `amr-rviz`: mặc định vẫn gọi nguyên
+script cũ đã lưu thành `~/.local/bin/amr-rviz.legacy`. Chọn R3 bằng:
 
 ```bash
 amr-rviz --r3
@@ -118,8 +126,9 @@ amr-rviz --r3 -f odom
 
 Wrapper source Humble và workspace laptop ở
 `~/Desktop/smart-campus-tour/robot/ros2_ws/install/setup.bash`; chọn workspace
-khác bằng `AMR_ROS_WS_SETUP`. `AMR_RVIZ_TARGET` chọn SSH host (mặc định
-`sativa@10.86.7.244`). Mọi option được chuyển cho `rviz-over-ssh`.
+khác bằng `AMR_ROS_WS_SETUP`. `AMR_RVIZ_TARGET` chọn SSH user/host; nếu truyền
+đối số positional thì dùng `<user>@<ip-robot>`. Mọi option được chuyển cho
+`rviz-over-ssh`.
 Thiếu workspace hoặc `robot_description` thì dừng trước khi mở cửa sổ lỗi.
 R3 không tự fallback sang DDS cũ. Sau S2, `--legacy` chỉ dùng được khi đã
 rollback cấu hình robot theo mục 8.
@@ -141,7 +150,7 @@ Trên laptop: source ROS Humble và workspace có `robot_description` (để RVi
 hiện mesh), rồi chạy:
 
 ```bash
-robot/tools/rviz_over_ssh/rviz-over-ssh sativa@<ip-robot>
+robot/tools/rviz_over_ssh/rviz-over-ssh <user>@<ip-robot>
 ```
 
 - RViz mở `navigation.rviz` trong namespace `/robot_01`, cùng tên topic như
@@ -284,14 +293,18 @@ không bật `clientPublish`. Contract test chặn cả hai.
 - Robot đứng yên khi đổi cấu hình.
 - Thứ tự dừng như mọi khi: công cụ đo → bag → Nav2 (SIGINT).
 
-**Cài code lên robot (không đụng Nav2 Baseline V1).**
+**Cài code lên robot (không đụng Nav2 Baseline V1).** The exact safeguard
+behavior described here is the R3 code at `c4abcf3`, integrated onto `main`
+as branch `feature/claude/r3-hardening` (same non-documentation tree). Merging that branch
+does not deploy anything to the robot.
 - Robot chạy từ install cũ cộng overlay V1 (`~/.cache/armtc/smoothws`).
 - Build overlay `robot_navigation` của R3 vào một thư mục **mới**, chồng lên
   `smoothws`, và **chỉ source nó trong terminal debug**. Terminal Nav2 vẫn dùng
   đúng môi trường V1.
 - Các script (`check-dds-isolation`, `discovery-server-stage`,
-  `foxglove-bridge-portable`) chạy thẳng từ checkout của branch (hoặc main sau
-  khi merge), không cần build.
+  `foxglove-bridge-portable`) chạy thẳng từ checkout R3 đã được review, không
+  cần build. Chọn đúng source ref trước khi vận hành; không lấy bản cũ từ
+  checkout MiniPC đang bẩn.
 
 ```bash
 mkdir -p ~/.cache/armtc/r3_runtime && cd ~/.cache/armtc/r3_runtime \
@@ -339,8 +352,8 @@ Vì vậy dùng bản portable:
    ```
 
    - Terminal chạy Nav2 không source `env.sh`, nên không bị ảnh hưởng.
-3. Trên laptop: kiểm tra `ssh -o BatchMode=yes sativa@<ip-robot> true` chạy
-   được mà không hỏi mật khẩu, rồi chạy `rviz-over-ssh sativa@<ip-robot>`.
+3. Trên laptop: kiểm tra `ssh -o BatchMode=yes <user>@<ip-robot> true` chạy
+   được mà không hỏi mật khẩu, rồi chạy `rviz-over-ssh <user>@<ip-robot>`.
 4. Đạt khi:
    - RViz nhận map, scan mới, TF, RobotModel; adapter báo LIVE;
      khi chưa định vị dùng `-f odom` kiểm scan/model, không yêu cầu map overlay
@@ -466,7 +479,9 @@ sau S3. SSH warning là advisory, không tự sửa SSH trong phiên đổi DDS.
 
 **S0b/review đứng yên:** RViz2 trên laptop thật, SSH thật, tunnel reconnect,
 cold restart bridge, hash map/model, QoS, guard từ chối, cleanup và tài nguyên
-được ghi riêng ở `robot/docs/r3-stationary-review-2026-10-17.md`.
+được ghi riêng ở [project-status.md](project-status.md),
+[r3-dds-readiness-2026-10-17.md](r3-dds-readiness-2026-10-17.md) và bằng chứng
+chi tiết ở [r3-stationary-review-2026-10-17.md](r3-stationary-review-2026-10-17.md).
 
 **Vẫn chưa kiểm trên robot thật trong lượt này:**
 - Initial pose hợp lệ/AMCL ACCEPTED tại vị trí đã biết trên đúng map.

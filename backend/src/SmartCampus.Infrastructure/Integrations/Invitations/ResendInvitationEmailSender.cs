@@ -14,11 +14,22 @@ public sealed class ResendInvitationEmailSender(HttpClient client, InvitationCon
         var code = codes.Reveal(email.InvitationId, email.AccessVersion, email.ProtectedCode);
         var link = configuration.PublicBaseUrl + "/tour/" + email.TourId;
         var (html, text) = InvitationEmailTemplate.Render(email, code, link, configuration.SupportEmail);
+        return await PostAsync("campus-tour/" + email.AttemptId.ToString("D"), email.Recipient, "Lời mời tham gia CampusTour", html, text, ct);
+    }
+
+    public async Task<EmailSendResult> SendTourCancelledAsync(TourCancelEmail email, CancellationToken ct)
+    {
+        var (html, text) = TourCancelEmailTemplate.Render(email, configuration.SupportEmail);
+        return await PostAsync($"campus-tour/tour-cancel/{email.AttemptId:D}/{email.RegistrationId:D}", email.Recipient,
+            "Thông báo hủy buổi tham quan CampusTour", html, text, ct);
+    }
+
+    private async Task<EmailSendResult> PostAsync(string idempotencyKey, string recipient, string subject, string html, string text, CancellationToken ct)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", configuration.ApiKey);
-        request.Headers.Add("Idempotency-Key", "campus-tour/" + email.AttemptId.ToString("D"));
-        request.Content = JsonContent.Create(new { from = configuration.From, to = new[] { email.Recipient },
-            subject = "Lời mời tham gia CampusTour", html, text });
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        request.Content = JsonContent.Create(new { from = configuration.From, to = new[] { recipient }, subject, html, text });
         try
         {
             using var response = await client.SendAsync(request, ct);

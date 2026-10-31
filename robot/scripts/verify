@@ -134,9 +134,22 @@ fi
 
 section "Tier 1.7 - Remote-debug tools and robot scripts (pytest)"
 if ! python3 -c 'import pytest, yaml' >/dev/null 2>&1; then
-  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + script tests"
+  skip "python3 pytest/PyYAML not available" "rviz_over_ssh + odom_calibration + nav2_bench + route_test + script tests"
 else
-  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh scripts/tests; then ok; else fail; fi
+  if python3 -B -m pytest -q -p no:cacheprovider tools/rviz_over_ssh tools/odom_calibration tools/nav2_bench tools/route_test scripts/tests; then ok; else fail; fi
+fi
+
+section "Tier 1.8 - Fleet Bridge offline unit tests (stdlib unittest)"
+if ! command -v python3 >/dev/null 2>&1; then
+  skip "python3 not found" "Fleet Bridge offline tests"
+else
+  FLEET_BRIDGE_PYTHONPATH="$PWD/ros2_ws/src/fleet_bridge${PYTHONPATH:+:$PYTHONPATH}"
+  if PYTHONPATH="$FLEET_BRIDGE_PYTHONPATH" python3 -B -m unittest discover \
+      -s ros2_ws/src/fleet_bridge/test -p 'test_*.py' -v; then
+    ok
+  else
+    fail
+  fi
 fi
 
 # ---------------------------------------------------------------- TIER 2

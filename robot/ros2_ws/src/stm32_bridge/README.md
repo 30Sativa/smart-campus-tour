@@ -286,6 +286,8 @@ ros2 run tf2_tools view_frames
 | `imu_topic` | `imu/data` | Relative IMU topic name |
 | `imu_frame` | `imu_link` | IMU message frame |
 | `imu_orientation_report` | `game_rotation_vector` | Must match firmware `BNO08X_USE_GAME_ROTATION_VECTOR`. `game_rotation_vector`: fixed yaw variance 0.01 (no magnetometer, `yaw_acc` ignored). `rotation_vector`: variance from `yaw_acc` |
+| `imu_stale_timeout` | `1.0` | Seconds without FB `yaw_valid=1` before the bridge warns that the IMU is missing (checked at 1 Hz, so the warning arrives 1-2 s after the last sample) (EKF then uses wheel odometry only) and reports WARN on `/diagnostics` (`<node>: imu`). Recovery is logged with the outage length. Publishing is unchanged |
+| `odom_linear_scale` | `1.0` | Localization V2: multiplies only the **translation** integrated from STEP counts (pose and `twist.linear.x`). Rotation, commands sent to the STM32, `joint_states` and `wheel_radius` are unchanged. Values outside [0.8, 1.2] fall back to 1.0. Set it from a measured straight run (`robot/tools/odom_calibration`); see `robot/docs/localization-v2.md` |
 | `feedback_timeout` | `1.0` | Warn after missing feedback for this many seconds |
 | `feedback_counts_are_cumulative` | `true` | Treat feedback counts as cumulative |
 | `feedback_rate_warn_hz` | `2.0` | Max warning rate for feedback issues |

@@ -1,0 +1,26 @@
+# Tuyen mau cho route_test.py — map2: START -> POI_01 -> (POI_02 -> POI_03) -> ve START.
+# Copy file nay thanh tuyen cua ban (vd. route_campus.yaml) roi sua.
+#
+# File tuyen KHONG chua toa do: moi diem tro toi mot robot_maps/poi_*.yaml, duong
+# dan tinh tu thu muc file tuyen. map_yaml/frame_id cua POI phai trung voi tuyen.
+
+route_id: TEST_MAP2_LOOP
+map_yaml: map2.yaml         # map dang load tren robot phai la map nay
+frame_id: map
+default_dwell_s: 10         # dung o moi POI neu POI khong khai bao dwell_s
+
+start:                      # robot dung o day khi bat dau
+  poi_file: ../../robot_maps/poi_start.yaml
+
+pois:                       # chay dung thu tu nay
+  - poi_file: ../../robot_maps/poi_01.yaml
+    dwell_s: 10
+  # Bo comment khi da co file POI that (chua co trong robot_maps/):
+  # - poi_file: ../../robot_maps/poi_02.yaml
+  #   dwell_s: 10
+  #   timeout_s: 240        # tuy chon, ghi de --leg-timeout
+  # - poi_file: ../../robot_maps/poi_03.yaml
+  #   dwell_s: 10
+
+# return_to_start: chay them chang ve START | none: dung o POI cuoi
+end_mode: return_to_start

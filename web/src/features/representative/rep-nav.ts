@@ -3,8 +3,9 @@ import type { NavItem, NavSection } from '../../components/ui/nav-types'
 
 /**
  * Representative navigation (flow review §4.1): the overview, the Tours a
- * school can join and its own registrations. No account pages: accounts are
- * issued by Admin with the existing mechanism (flow review §10.1).
+ * school can join and its own registrations. The profile ("Hồ sơ của tôi",
+ * from the account menu) only reads the account: accounts are issued and
+ * changed by Admin with the existing mechanism (flow review §10.1).
  */
 export const REP_NAV_SECTIONS: NavSection[] = [
   {

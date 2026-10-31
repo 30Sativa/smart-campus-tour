@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { ADMIN_NAV, adminActivePath } from './admin-nav'
 
 describe('administration navigation', () => {
-  it('lists only pre-run work and records, nothing that drives a robot', () => {
-    const labels = ADMIN_NAV.map((item) => item.label).join(' ')
-    expect(labels).not.toMatch(/Robot|Điều hành|Fleet|Bảo trì|Phân tích/i)
+  it('lists account/security administration without adding Tour preparation or control', () => {
+    expect(ADMIN_NAV.map((item) => item.label)).toEqual([
+      'Tài khoản', 'Vai trò & quyền', 'Lịch sử khóa robot', 'Nhật ký hệ thống', 'Khu vực vận hành',
+    ])
+    expect(ADMIN_NAV.map((item) => item.path)).toEqual([
+      '/admin/accounts', '/admin/roles', '/admin/robot-credentials', '/admin/audit-logs', '/staff',
+    ])
   })
 
   it.each([
-    ['/admin', '/admin'],
-    ['/admin/tours', '/admin/tours'],
-    ['/admin/tours/new', '/admin/tours/new'],
-    ['/admin/tours/tour-03', '/admin/tours'],
-    ['/admin/tours/tour-03/edit', '/admin/tours'],
-    ['/admin/registrations', '/admin/registrations'],
-    ['/admin/registrations/pending', '/admin/registrations/pending'],
-    ['/admin/history', '/admin/history'],
     ['/admin/accounts', '/admin/accounts'],
-    ['/admin/roles', null],
+    ['/admin/roles', '/admin/roles'],
+    ['/admin/robot-credentials', '/admin/robot-credentials'],
+    ['/admin/audit-logs', '/admin/audit-logs'],
+    ['/staff', '/staff'],
+    ['/admin', null],
   ])('lights the right entry for %s', (path, expected) => {
     expect(adminActivePath(path)).toBe(expected)
   })

@@ -17,18 +17,26 @@ public sealed class EfStudentTourViewReader(ApplicationDbContext context) : IStu
                 t.OperationalStatus,
                 t.IsHeld,
                 t.ActiveRouteId,
+                t.RouteRevisionId,
                 CurrentPoiId = t.CurrentRouteStopId == null ? (Guid?)null : t.CurrentRouteStop!.PoiId,
                 LastArrivedPoiId = t.LastArrivedRouteStopId == null ? (Guid?)null : t.LastArrivedRouteStop!.PoiId,
             })
             .SingleOrDefaultAsync(ct);
         if (tour is null) return null;
 
-        var stops = await context.RouteStops.AsNoTracking()
-            .Where(s => s.RouteId == tour.ActiveRouteId)
-            .OrderBy(s => s.StopOrder)
-            .Select(s => new StudentTourStopData(s.StopOrder, s.PoiId, s.Poi.Name, s.Poi.Description, s.Poi.NarrationText,
-                s.Poi.AudioUrl, s.Poi.NarrationSeconds, s.DwellSeconds))
-            .ToListAsync(ct);
+        var stops = tour.RouteRevisionId is { } revisionId
+            ? await context.RouteRevisionStops.AsNoTracking()
+                .Where(s => s.RouteRevisionId == revisionId)
+                .OrderBy(s => s.StopOrder)
+                .Select(s => new StudentTourStopData(s.StopOrder, s.PoiProposalRevisionId, s.Name, null, s.NarrationText,
+                    null, null, s.DwellSeconds))
+                .ToListAsync(ct)
+            : await context.RouteStops.AsNoTracking()
+                .Where(s => s.RouteId == tour.ActiveRouteId)
+                .OrderBy(s => s.StopOrder)
+                .Select(s => new StudentTourStopData(s.StopOrder, s.PoiId, s.Poi.Name, s.Poi.Description, s.Poi.NarrationText,
+                    s.Poi.AudioUrl, s.Poi.NarrationSeconds, s.DwellSeconds))
+                .ToListAsync(ct);
         return new StudentTourViewData(tour.State, tour.CurrentStep, tour.OperationalStatus, tour.IsHeld,
             tour.CurrentPoiId, tour.LastArrivedPoiId, stops);
     }

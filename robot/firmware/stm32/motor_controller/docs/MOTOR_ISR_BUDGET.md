@@ -54,6 +54,30 @@ tràn → `ERR,bad_command`. Thêm vào đó, khi có lỗi đang chờ gửi,
 Chưa làm (rủi ro hơn): đưa SYSCLK lên PLL (phải sửa trong `.ioc`, kéo theo
 độ trễ flash và timing), hạ tần số TIM2 (xung STEP rung pha nhiều hơn).
 
+## Ngắt TIM6 của đầu quay PAN/TILT (thêm 23/10/2026)
+
+`head_core.c` chạy trong `TIM6_DAC_IRQHandler` ở 10 kHz, ưu tiên 2 (thấp hơn
+TIM2 nên không làm rung xung bánh xe; ngang EXTI sonar). File này cũng build
+`-O2` bằng `#pragma`. Profile hình thang (có `sqrtf`) chỉ cập nhật 1 kHz; trục
+đứng yên ở đúng đích đi đường thoát nhanh.
+
+Đo bằng cách chạy chính ngắt đã link trong Unicorn (cùng bảng chu kỳ như
+`isr_emulate.py`, cộng 24 chu kỳ vào/ra ngắt), bản build `-O0` của `Makefile`:
+
+| Trạng thái đầu quay | lệnh/tick | chu kỳ/tick | CPU ở 10 kHz |
+|---|---|---|---|
+| OFF (driver tắt) | 18 | 64–72 | 4,0–4,5 % |
+| Bật, đứng yên ở đích | 44 | 101–124 | 6,3–7,8 % |
+| Hai trục chạy 60°/s (PAN 1600, TILT 1067 bước/s, hộp số 3:1 / 2:1) | 99 | 175–225 | 10,9–14,1 % |
+
+Cộng với TIM2 (bảng trên), trường hợp xấu nhất là bánh xe 12 kHz cộng đầu quay
+đang chạy: khoảng 49–63 % CPU cho ngắt, vòng lặp chính còn 37–51 %. Sự cố
+13/10 xảy ra khi vòng lặp chính chỉ còn 14–30 %. Ở 250 mm/s và đầu quay đang
+chạy: khoảng 47–60 %. **Đây là ước lượng giả lập, chưa đo trên MCU**; bài bench
+ở `BENCH_STM32_LINK.md` phải chạy lại với đầu quay đang quay (xem
+`HEAD_PAN_TILT.md` mục bench). `isr_emulate.py` xác nhận chuỗi xung TIM2 của
+bánh xe giống hệt bản trước khi thêm đầu quay, ở mọi kịch bản.
+
 ## Các đường dừng và thời gian dừng mong đợi
 
 Watchdog 300 ms (vòng lặp chính) và 500 ms (ngắt) đo từ **lệnh `CMD` cuối cùng

@@ -1,16 +1,14 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { EmailCorrectionInput, ReviewDetails, ReviewFilters, ReviewInput, ReviewSummary } from '../types'
+import type { ReviewDetails, ReviewFilters, ReviewInput, ReviewSummary } from '../types'
 
 export const registrationsApi = {
   list: (filters: ReviewFilters, signal?: AbortSignal) => {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(filters)) if (value !== undefined && value !== '') params.set(key, String(value))
-    return apiClient<PagedApiResponse<ReviewSummary>>(`/api/admin/registrations?${params}`, { signal })
+    return apiClient<PagedApiResponse<ReviewSummary>>(`/api/staff/manage/registrations?${params}`, { signal })
   },
-  get: (id: string, signal?: AbortSignal) => apiClient<ApiResponse<ReviewDetails>>(`/api/admin/registrations/${encodeURIComponent(id)}`, { signal }),
-  review: (id: string, decision: 'approve' | 'reject', input: ReviewInput) =>
-    apiClient<ApiResponse<null>>(`/api/admin/registrations/${encodeURIComponent(id)}/${decision}`, { method: 'POST', json: input }),
-  correctEmail: (id: string, rowId: string, input: EmailCorrectionInput) =>
-    apiClient<ApiResponse<null>>(`/api/admin/registrations/${encodeURIComponent(id)}/roster/${encodeURIComponent(rowId)}/email`, { method: 'POST', json: input }),
+  get: (id: string, signal?: AbortSignal) => apiClient<ApiResponse<ReviewDetails>>(`/api/staff/manage/registrations/${encodeURIComponent(id)}`, { signal }),
+  reviewRow: (registrationId: string, rowId: string, decision: 'accept' | 'reject', input: ReviewInput) =>
+    apiClient<ApiResponse<null>>(`/api/staff/manage/registrations/${encodeURIComponent(registrationId)}/rows/${encodeURIComponent(rowId)}/${decision}`, { method: 'POST', json: input }),
 }

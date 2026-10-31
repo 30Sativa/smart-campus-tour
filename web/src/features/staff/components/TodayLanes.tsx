@@ -39,7 +39,7 @@ export function TodayLanes({ tours, now, selectedId, onSelect }: { tours: TourOp
   }
 
   return (
-    <div className="border-b border-[#f1f4f8] px-5 pt-4 pb-3">
+    <div className="border-b border-[#f1f4f8] px-3.5 pt-4 pb-3">
       <h2 className="text-sm font-bold text-[#0f172a]">
         Trong ngày
         <span className="ml-2 text-xs font-medium text-[#94a3b8]">
@@ -73,7 +73,7 @@ export function TodayLanes({ tours, now, selectedId, onSelect }: { tours: TourOp
                         aria-pressed={selected}
                         aria-label={`${tour.code} lúc ${formatTime(tour.scheduledAt)}, ${label}`}
                         title={`${tour.code} · ${formatTime(tour.scheduledAt)} – ${formatTime(tour.endedAt ?? tour.estimatedEndAt)} · ${label}`}
-                        className={`absolute top-2 flex h-[26px] items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-extrabold whitespace-nowrap transition-[transform,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] motion-reduce:transition-none ${
+                        className={`absolute top-2 flex h-[26px] items-center gap-1.5 rounded-[7px] px-2 text-[11px] font-bold whitespace-nowrap transition-[transform,box-shadow] duration-150 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] motion-reduce:transition-none ${
                           cancelled ? 'text-[#b91c1c]' : 'text-white'
                         } ${selected ? 'shadow-[0_0_0_2px_#fff,0_0_0_3.5px_#0f172a]' : ''}`}
                         style={{
@@ -97,7 +97,7 @@ export function TodayLanes({ tours, now, selectedId, onSelect }: { tours: TourOp
               className="pointer-events-none absolute top-[18px] bottom-[20px] z-10 w-0.5 -translate-x-px rounded-full bg-[#0f172a]"
               style={{ left: `calc(${LABEL_COLUMN}px + (100% - ${LABEL_COLUMN}px) * ${nowPct / 100})` }}
             >
-              <span className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-[5px] bg-[#0f172a] px-1.5 py-px text-[10.5px] font-extrabold whitespace-nowrap text-white">
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-[5px] bg-[#0f172a] px-1.5 py-px text-[10.5px] font-bold whitespace-nowrap text-white">
                 {clockLabel(nowMinute)}
               </span>
             </span>

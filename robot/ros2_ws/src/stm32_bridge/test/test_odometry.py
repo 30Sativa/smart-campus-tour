@@ -35,6 +35,12 @@ def _install_ros_stubs():
     geometry_msgs_msg.TransformStamped = type('TransformStamped', (), {})
     geometry_msgs_msg.Twist = type('Twist', (), {})
 
+    diagnostic_msgs = _stub_module('diagnostic_msgs')
+    diagnostic_msgs_msg = _stub_module('diagnostic_msgs.msg')
+    diagnostic_msgs.msg = diagnostic_msgs_msg
+    for _name in ('DiagnosticArray', 'DiagnosticStatus', 'KeyValue'):
+        setattr(diagnostic_msgs_msg, _name, type(_name, (), {}))
+
     nav_msgs = _stub_module('nav_msgs')
     nav_msgs_msg = _stub_module('nav_msgs.msg')
     nav_msgs.msg = nav_msgs_msg
@@ -95,6 +101,7 @@ _PKG_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
+from stm32_bridge.imu_health import ImuHealth  # noqa: E402
 from stm32_bridge.stm32_bridge_node import (  # noqa: E402
     DEFAULT_IMU_ORIENTATION_REPORT,
     DEFAULT_IMU_YAW_VARIANCE,
@@ -113,7 +120,9 @@ from stm32_bridge.stm32_bridge_node import (  # noqa: E402
 # ---------------------------------------------------------------------------
 class OdometryModel:
     def __init__(self, wheel_radius=0.09725, wheel_base=0.4325,
-                 steps_per_rev=200.0, microstep=8.0, gear_ratio=10.0):
+                 steps_per_rev=200.0, microstep=8.0, gear_ratio=10.0,
+                 odom_linear_scale=1.0):
+        self.odom_linear_scale = odom_linear_scale
         circ = 2.0 * math.pi * wheel_radius
         self.steps_per_meter = steps_per_rev * microstep * gear_ratio / circ
         self.wheel_base = wheel_base
@@ -162,6 +171,48 @@ def approx(a, b, tol=1e-6):
 # ---------------------------------------------------------------------------
 # Tests.
 # ---------------------------------------------------------------------------
+def _drive(model, left_steps, right_steps, n=100, dt=0.02):
+    model.feed(0, 0, dt)
+    for k in range(1, n + 1):
+        model.feed(left_steps * k // n, right_steps * k // n, dt)
+
+
+def test_odom_linear_scale_default_is_v1():
+    a, b = OdometryModel(), OdometryModel(odom_linear_scale=1.0)
+    _drive(a, 8000, 9000); _drive(b, 8000, 9000)
+    approx(a.x, b.x); approx(a.y, b.y); approx(a.theta, b.theta)
+
+
+def test_odom_linear_scale_scales_straight_distance_only():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, 26180, 26180); _drive(v2, 26180, 26180)
+    approx(v2.x, base.x * 1.045, tol=1e-9); approx(v2.y, 0.0); approx(v2.theta, 0.0)
+
+
+def test_odom_linear_scale_leaves_rotation_unchanged():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, -5000, 5000); _drive(v2, -5000, 5000)     # turn in place
+    approx(v2.theta, base.theta, tol=1e-12); approx(v2.x, 0.0); approx(v2.y, 0.0)
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    _drive(base, 20000, 26000); _drive(v2, 20000, 26000)   # arc
+    approx(v2.theta, base.theta, tol=1e-12)
+    approx(math.hypot(v2.x, v2.y), 1.045 * math.hypot(base.x, base.y), tol=1e-9)
+
+
+def test_odom_linear_scale_velocity_is_scaled_too():
+    base, v2 = OdometryModel(), OdometryModel(odom_linear_scale=1.045)
+    base.feed(0, 0, 0.02); v2.feed(0, 0, 0.02)
+    lb, ab = base.feed(100, 120, 0.02); lv, av = v2.feed(100, 120, 0.02)
+    approx(lv, lb * 1.045, tol=1e-12); approx(av, ab, tol=1e-12)
+
+
+def test_odom_linear_scale_rejects_typos():
+    v = Stm32BridgeNode._valid_odom_linear_scale
+    assert v(1.045) == 1.045 and v(0.8) == 0.8 and v(1.2) == 1.2
+    for bad in (0.0, -1.0, 1.21, 10.45, float('nan'), float('inf')):
+        assert v(bad) == 1.0
+
+
 def test_steps_per_meter_matches_firmware():
     """1600 driver pulses/rev * 10 gear / (pi * 0.1945 m)."""
     m = OdometryModel()
@@ -378,6 +429,25 @@ def test_parse_feedback_ignores_unknown_trailing_fields():
     assert parsed[7] == (1234, True)      # sonar khong bi xe dich
 
 
+def test_parse_feedback_twenty_three_field_with_head_status():
+    # Firmware co dau quay PAN/TILT + contactor: 19 truong cu + head_seq,
+    # pan_cdeg, tilt_cdeg, head_state, contactor. Odometry, yaw, sonar va
+    # yaw_acc khong doi vi tri.
+    parsed = Stm32BridgeNode._parse_feedback_line(
+        Stm32BridgeNode,
+        'FB,9,100,110,20,OK,9000,1,1234,1,0,0,2000,1,500,0,2,4,1,22,9000,-1500,1,1',
+        include_sonar=True,
+    )
+    assert parsed is not None
+    (seq, left, right, dt_ms, status, yaw_rad, yaw_acc,
+     sonar1, sonar2, sonar3, sonar4) = parsed
+    assert (seq, left, right, status) == (9, 100, 110, 'OK')
+    approx(yaw_rad, math.pi / 2, tol=1e-6)
+    assert yaw_acc == 2
+    assert sonar1 == (1234, True)
+    assert sonar4 == (500, False)
+
+
 def test_parse_feedback_accuracy_is_clamped():
     for raw, want in (('-1', 0), ('0', 0), ('3', 3), ('9', 3)):
         parsed = Stm32BridgeNode._parse_feedback_line(
@@ -488,6 +558,8 @@ def test_cached_imu_measurement_is_not_republished():
 
 class _FeedbackHarness:
     def __init__(self):
+        self._head = None   # giao dien dau quay tat trong harness odometry
+        self._contactor = None
         model = OdometryModel()
         self.steps_per_meter = model.steps_per_meter
         self.wheel_base = model.wheel_base
@@ -516,10 +588,13 @@ class _FeedbackHarness:
         self.odom_invert_left = False
         self.odom_invert_right = False
         self.published_odometry = []
+        self._imu_health = ImuHealth()
+        self.odom_linear_scale = 1.0
 
     def get_logger(self):
         return SimpleNamespace(
             debug=lambda *args, **kwargs: None,
+            info=lambda *args, **kwargs: None,
             warn=lambda *args, **kwargs: None,
         )
 
@@ -530,6 +605,7 @@ class _FeedbackHarness:
     _update_odometry = Stm32BridgeNode._update_odometry
     _publish_joint_state = Stm32BridgeNode._publish_joint_state
     _normalize_angle = staticmethod(Stm32BridgeNode._normalize_angle)
+    _log_imu_events = Stm32BridgeNode._log_imu_events
 
 
 def test_invalid_wheel_samples_do_not_publish_fake_zero_twist():
@@ -822,3 +898,41 @@ def _run_all():
 
 if __name__ == '__main__':
     sys.exit(1 if _run_all() else 0)
+
+
+def test_head_hook_errors_never_break_the_wheel_path():
+    """Loi trong head_ros (vd bug, msg sai kieu) chi duoc log, khong lan ra
+    timer/feedback cua banh xe."""
+    logged = []
+
+    class _Boom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('boom')
+
+    harness = SimpleNamespace(
+        _head=_Boom(),
+        get_logger=lambda: SimpleNamespace(error=logged.append),
+    )
+    Stm32BridgeNode._call_hook(harness, harness._head, 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, harness._head, 'on_feedback_line', 'FB,2')   # trong 5 s: khong log lai
+    assert len(logged) == 1 and 'boom' in logged[0]
+
+
+def test_contactor_hook_errors_are_isolated_and_logged_separately():
+    """Loi contactor khong lan ra banh xe va khong bi loi head lap lai che mat."""
+    logged = []
+
+    class HeadBoom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('head')
+
+    class ContactorBoom:
+        def on_feedback_line(self, line):
+            raise RuntimeError('contactor')
+
+    harness = SimpleNamespace(get_logger=lambda: SimpleNamespace(error=logged.append))
+    Stm32BridgeNode._call_hook(harness, HeadBoom(), 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, ContactorBoom(), 'on_feedback_line', 'FB,1')
+    Stm32BridgeNode._call_hook(harness, ContactorBoom(), 'on_feedback_line', 'FB,2')
+    assert len(logged) == 2
+    assert 'HeadBoom' in logged[0] and 'ContactorBoom' in logged[1]

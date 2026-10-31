@@ -43,7 +43,10 @@ public sealed class ManageInvitationCommandHandler(IRegistrationRepository regis
         {
             RowVersionToken.EnsureCurrent(registration.RowVersion, command.Request.ExpectedRowVersion);
             RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedTourRowVersion!);
-            InvitationPolicy.Require(registration.State == "APPROVED" && tour.State is "SCHEDULED" or "READY" or "RUNNING");
+            var issuedRows = (await repository.LoadAsync(registration.Id, ct)).Select(invitation => invitation.RosterRowId).ToHashSet();
+            InvitationPolicy.Require(registration.RosterRows.Any(row => row.IsActive &&
+                row.ParticipationState == RosterParticipationStates.Accepted && !issuedRows.Contains(row.Id)) &&
+                tour.State is "SCHEDULED" or "READY" or "RUNNING");
             await issuer.IssueAsync(registration, tour, command.Actor, now, ct);
         }
         else

@@ -38,6 +38,7 @@ describe('staff session workflow', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
     resetSim()
     useAuthStore.getState().logout()
   })
@@ -53,13 +54,13 @@ describe('staff session workflow', () => {
 
   it('offers each session the next step its state calls for', async () => {
     renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
-    // The whole day in one list; choosing a session opens it beside the list
+    // The whole day in one list; choosing a session opens it in the middle of the page
     // with the one next step its state calls for.
     const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
     // By the code chip: a note may name another session ("Đang phục vụ T-01").
     const open = async (code: string) => {
       fireEvent.click((await within(agenda).findByText(code, { selector: 'span' })).closest('button') as HTMLElement)
-      return screen.getByRole('complementary', { name: 'Chi tiết buổi' })
+      return screen.getByRole('dialog', { name: 'Chi tiết buổi' })
     }
     expect(within(await open('T-01')).getByRole('link', { name: 'Điều hành' })).toHaveAttribute('href', '/staff/live/tour-01')
     expect(within(await open('T-02')).getByRole('link', { name: 'Kiểm tra & bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-02/start')
@@ -75,7 +76,7 @@ describe('staff session workflow', () => {
     const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
     expect(within(agenda).getByText('T-02', { selector: 'span' }).closest('button')).toHaveAttribute('aria-pressed', 'true')
     expect(within(agenda).queryByText('T-01', { selector: 'span' })).toBeNull()
-    expect(within(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).getByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', { name: 'Chi tiết buổi' })).getByRole('heading', { name: /Buổi trưa/ })).toBeInTheDocument()
   })
 
   it('filters the day from the state dropdown', async () => {
@@ -91,6 +92,21 @@ describe('staff session workflow', () => {
     expect(screen.getByRole('button', { name: /Lọc buổi theo trạng thái: Sẵn sàng/ })).toBeInTheDocument()
   })
 
+  it('keeps the agenda available beside the inspector on wide screens and closes with Escape', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('1536'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
+    renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
+    const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
+    const opener = within(agenda).getByText('T-02', { selector: 'span' }).closest('button') as HTMLElement
+    opener.focus()
+    fireEvent.click(opener)
+    expect(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(agenda).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('complementary', { name: 'Chi tiết buổi' })).not.toBeInTheDocument()
+    expect(opener).toHaveFocus()
+  })
+
   it('keeps Start disabled with the server reason while the robot serves another session', async () => {
     renderAt('/staff/tours/tour-02/start', <StartCheckPage />, '/staff/tours/:tourId/start')
     const start = await screen.findByRole('button', { name: /Bắt đầu buổi/ })
@@ -98,10 +114,23 @@ describe('staff session workflow', () => {
     expect(screen.getByText(/Chưa thể bắt đầu: Đang phục vụ T-01/)).toBeInTheDocument()
   })
 
+  it('keeps Start closed until the published time, even with every check ticked', async () => {
+    command('tour-01', 'endEarly', 'Diễn tập')
+    tick(3)
+    confirmRobotReady('robot_01')
+    renderAt('/staff/tours/tour-02/start', <StartCheckPage />, '/staff/tours/:tourId/start')
+    const start = await screen.findByRole('button', { name: /Bắt đầu buổi/ })
+    for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box)
+    expect(start).toBeDisabled()
+    expect(screen.getByText(/Chỉ bắt đầu từ .*giờ đã công bố \(còn 40 phút\)/)).toBeInTheDocument()
+  })
+
   it('starts a Ready session only after on-site confirmations and a dialog', async () => {
     command('tour-01', 'endEarly', 'Diễn tập')
     tick(3)
     confirmRobotReady('robot_01')
+    // T-02 is published 40 minutes after the fixture clock.
+    vi.setSystemTime(new Date(2026, 9, 1, 12, 41))
     renderAt('/staff/tours/tour-02/start', <StartCheckPage />, '/staff/tours/:tourId/start')
     const start = await screen.findByRole('button', { name: /Bắt đầu buổi/ })
     expect(start).toBeDisabled()

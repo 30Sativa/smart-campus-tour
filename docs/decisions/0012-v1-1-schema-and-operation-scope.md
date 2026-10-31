@@ -1,10 +1,20 @@
 # ADR-0012: Schema v1.1, dwell cố định và quyền vận hành Staff
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). The all-Staff/all-Tours and no-assignment business target is superseded by assigned Staff Operator. Version-bound configuration and per-row access replace older target assumptions. SQL v1.1 remains current persistence; locks/audit/technical boundaries remain. No new advisor approval is recorded.
+
+
 - Ngày: 30/09/2026.
 - Trạng thái: **nhóm chấp nhận; snapshot đã apply/scaffold trên SQL Server local 30/09/2026**; GVHD xem lại ở Review 2; các use case nghiệp vụ chưa triển khai.
 - Phạm vi: snapshot SQL v1.1 và hợp đồng nghiệp vụ backend/web. Thay lựa chọn Admin chỉnh dwell theo Tour và cách diễn đạt Staff chỉ vận hành Tour được phân công. Không thay contract ROS/fleet.
 
 ## Context
+
+> **Điều chỉnh 19/10/2026, ADR-0017:** Admin quản lý Route/thứ tự POI/Start/End,
+> dwell và góc nhìn qua CRUD, thay yêu cầu kỹ thuật phải seed dwell. Không có
+> dwell riêng theo Tour; schema v1.1 giữ nguyên. Cấu hình đã có bất kỳ Tour hay
+> variant tham chiếu được bảo toàn bằng khóa sửa và sao chép tuyến mới.
+> [ADR-0017](0017-admin-route-management.md) thay phần quyết định này; nội dung
+> lịch sử bên dưới được giữ nguyên và không chứng nhận kiểm chứng robot.
 
 Review `backend/database/smart-campus-tour-schema-v1.1.sql` xác định cần khóa duy nhất cho lời mời/phiên/nhánh, định danh stop ổn định khi đổi tuyến và quy ước audit. Nhóm chọn cấu hình vận hành gọn cho V1 thay vì thêm bảng dwell theo Tour hoặc phân công operator.
 

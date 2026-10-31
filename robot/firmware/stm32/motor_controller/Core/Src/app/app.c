@@ -1,5 +1,7 @@
 #include "app/app.h"
 #include "contactor/contactor.h"
+#include "head/head.h"
+#include "head/head_core.h"
 #include "motor/motor.h"
 #include "usb_protocol.h"
 #include "imu/bno08x.h"
@@ -37,8 +39,9 @@ static void app_cdc_log(const char *s)
 
 void App_Init(void)
 {
-	Contactor_Init();
+	Contactor_Init();   /* PA10 = 0: MOSFET contactor tat luc khoi dong */
 	Motor_Init();
+	Head_Init();      /* nEN cao: driver PAN/TILT tat cho toi HEAD,<seq>,ZERO */
 	Protocol_Init();
 
 	BNO08x_Init();
@@ -84,6 +87,7 @@ void App_Loop(void)
 	Motor_Update();
 	SR04T_Update();
 	Protocol_Update();
+	HeadCore_Service(HAL_GetTick());   /* pha homing, deadman JOG */
 
 	{
 		BNO08x_Euler e;
@@ -107,6 +111,10 @@ void App_Loop(void)
 			(void)e;
 #endif
 		}
+
+		/* Chip im lang (tu reset, bus bi giu) -> gui lai Set Feature, co
+		 * gioi han tan suat. Khong reset chip, khong cho doi. */
+		BNO08x_Service();
 	}
 }
 

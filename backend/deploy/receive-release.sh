@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Executed as root from the authenticated, reviewed bundle. Deploy key is root-equivalent.
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+[[ $(id -u) == 0 ]] || fail 'Run the receiver as root.'
+[[ $# == 2 && ( $1 == application || $1 == sql-maintenance || $1 == schema-upgrade ) && $2 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail 'Invalid receiver arguments.'
+mode=$1 registry_user=$2
+bundle=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+mapfile -t revisions < "$bundle/verified-revisions"
+release=${revisions[0]:-} ops=${revisions[1]:-}
+for sha in "$release" "$ops"; do [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail 'Malformed bundle revision.'; done
+for run in "${revisions[2]:-}" "${revisions[3]:-}"; do [[ "$run" =~ ^[0-9]+$ ]] || fail 'Missing verification run identity.'; done
+umask 077
+# A cancelled runner or dropped SSH session closes our stdout. Without this, the next write
+# would SIGPIPE-kill the deployment between steps. tee -p ignores that and keeps a host log.
+# The logger also ignores TERM/HUP/INT so a timeout's group TERM cannot kill it before the
+# credential cleanup and rollback output below are written; it exits at EOF.
+log=${CAMPUS_DELIVERY_LOG:-/var/log/campustour/delivery.log}
+install -d -m 0700 "$(dirname "$log")"
+if [[ -f "$log" ]] && (( $(stat -c '%s' "$log") > 10485760 )); then mv -f -- "$log" "$log.1"; fi
+exec > >(trap '' TERM HUP INT; exec tee -p -a "$log") 2>&1
+echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) delivery mode=$mode release=$release ops=$ops run=${revisions[2]}"
+credentials=$(mktemp -d "${CAMPUS_REGISTRY_TEMP_ROOT:-/run}/campustour-registry.XXXXXXXXXX")
+cleanup() { rm -f -- "$credentials/config.json" "$credentials/images"; rmdir -- "$credentials"; }
+trap cleanup EXIT
+trap 'exit 143' TERM HUP
+trap 'exit 130' INT
+export DOCKER_CONFIG="$credentials"
+python3 "$bundle/ops/validate-release-manifest.py" "$bundle/release/backend-release.json" "$release" "$credentials/images"
+# The parser only emits validated image references. Do not source a downloaded file.
+api=$(sed -n 's/^api_image=//p' "$credentials/images")
+initializer=$(sed -n 's/^db_init_image=//p' "$credentials/images")
+sql=$(sed -n 's/^sqlserver_image=//p' "$credentials/images")
+export DB_INIT_SOURCE_SHA=$(sed -n 's/^db_init_source_sha=//p' "$credentials/images")
+export DB_SCHEMA_VERSION=$(sed -n 's/^database_schema_version=//p' "$credentials/images")
+docker login ghcr.io --username "$registry_user" --password-stdin
+# Serialize the installer + deploy pair as well as the inner operation locks.
+exec 7>"${CAMPUS_DELIVERY_LOCK:-/run/lock/campustour-delivery.lock}"
+flock -n 7 || fail 'Another delivery is active; inspect it before retrying.'
+bash "$bundle/ops/install-host-tools.sh" "$ops" "$bundle/ops"
+export CAMPUS_RELEASE_COMPOSE="$bundle/release/docker-compose.yml"
+export CAMPUS_RELEASE_DB_INIT_COMPOSE="$bundle/release/docker-compose.db-init.yml"
+if [[ "$mode" == schema-upgrade ]]; then
+  bash "$bundle/ops/upgrade-db-schema-ec2.sh" "$initializer" "$DB_INIT_SOURCE_SHA" "$DB_SCHEMA_VERSION"
+  exit 0
+fi
+options=()
+[[ "$mode" != sql-maintenance ]] || options+=(--sql-maintenance)
+if [[ "$mode" == application ]]; then
+  # Upgrade/regrant first only when the read-only check rejects this release's DB tool.
+  bash "$bundle/ops/upgrade-db-schema-ec2.sh" --if-needed "$initializer" "$DB_INIT_SOURCE_SHA" "$DB_SCHEMA_VERSION"
+fi
+bash "$bundle/ops/deploy-ec2.sh" "${options[@]}" "$release" "$api" "$initializer" "$sql" "$ops"

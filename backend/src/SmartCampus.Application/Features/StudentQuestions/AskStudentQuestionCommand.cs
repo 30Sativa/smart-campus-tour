@@ -39,7 +39,7 @@ public sealed class AskStudentQuestionCommandValidator : AbstractValidator<AskSt
         RuleFor(c => c.RecentTurns).NotNull()
             .Must(turns => turns is null || turns.Count <= StudentQuestionText.MaxRecentTurns)
             .WithMessage($"Chỉ gửi tối đa {StudentQuestionText.MaxRecentTurns} lượt hỏi đáp gần nhất.");
-        RuleForEach(c => c.RecentTurns).ChildRules(turn =>
+        RuleForEach(c => c.RecentTurns).NotNull().ChildRules(turn =>
         {
             turn.RuleFor(t => t.Question).NotEmpty().MaximumLength(StudentQuestionText.MaxQuestionLength);
             turn.RuleFor(t => t.Answer).NotEmpty().MaximumLength(StudentQuestionText.MaxAnswerLength);
@@ -61,10 +61,8 @@ public sealed class AskStudentQuestionCommandHandler(IStudentAccessRepository re
         var tokenHash = codes.Hash("browser-session:" + command.SessionToken);
         var access = await CheckAsync(command.TourId, tokenHash, ct);
         var text = StudentQuestionText.Normalize(command.Text);
-        var earlier = gate.Find(access.SessionId, command.QuestionId, text);
+        var earlier = gate.Enter(access.SessionId, command.QuestionId, text);
         if (earlier is not null) return earlier;
-        if (!gate.TryEnter(access.SessionId))
-            throw new TooManyRequestsException("Bạn hỏi hơi nhanh. Đợi một chút rồi hỏi tiếp nhé.");
         try
         {
             // POI snapshot from the Tour's progress columns: the current stop while the robot is at it, otherwise

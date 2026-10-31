@@ -59,8 +59,9 @@ export function operationsCounts(tours: TourOperation[]): OperationsCounts {
   }
 }
 
-/** Seconds after which a pose is not shown as live (display policy, not a robot rule). */
-export const POSE_STALE_SECONDS = 5
+/** SRS v1.9 NFR: telemetry at 5 Hz is stale after 2 s and treated as disconnected after 5 s. */
+export const POSE_STALE_SECONDS = 2
+export const POSE_DISCONNECTED_SECONDS = 5
 
 /**
  * A robot needs a look when it cannot be reached, is not localized, reports a
@@ -68,11 +69,13 @@ export const POSE_STALE_SECONDS = 5
  */
 export function robotIssues(robot: AmrStatus): string[] {
   const issues: string[] = []
-  if (robot.connectionState !== 'Live') issues.push('Mất kết nối')
+  const age = robot.poseAgeSeconds
+  const silent = robot.connectionState === 'Live' && age != null && age > POSE_DISCONNECTED_SECONDS
+  if (robot.connectionState !== 'Live' || silent) issues.push('Mất kết nối')
   if (robot.localized === false) issues.push('Chưa định vị')
   if (robot.headFault) issues.push('Lỗi đầu xoay')
   if (robot.needsCheck) issues.push('Chờ xác nhận kiểm tra')
-  if (robot.connectionState === 'Live' && robot.poseAgeSeconds != null && robot.poseAgeSeconds > POSE_STALE_SECONDS) issues.push('Vị trí cũ')
+  if (robot.connectionState === 'Live' && !silent && age != null && age > POSE_STALE_SECONDS) issues.push('Vị trí cũ')
   return issues
 }
 
@@ -106,7 +109,7 @@ export function buildAttentionQueue({ tours, robots }: { tours: TourOperation[];
     } else if (tour.state === 'Ready' && start - now <= DUE_MS) {
       items.push({ id: `tour:${tour.id}`, tone: start < now ? 'warn' : 'info', subject, headline: start < now ? 'Đã tới giờ, chưa bắt đầu' : 'Sắp tới giờ bắt đầu', detail: tour.allowedActions.start.allowed ? 'Đủ điều kiện kiểm tra để bắt đầu.' : tour.allowedActions.start.reason ?? undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}/start`, toLabel: 'Kiểm tra & bắt đầu', rank: 2 })
     } else if (tour.state === 'Scheduled' && start - now <= SOON_MS) {
-      items.push({ id: `tour:${tour.id}`, tone: 'warn', subject, headline: 'Chưa được Admin chốt buổi', detail: tour.readyBlockers.join(' · ') || undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}`, toLabel: 'Xem chi tiết', rank: 4 })
+      items.push({ id: `tour:${tour.id}`, tone: 'warn', subject, headline: 'Chưa chốt buổi', detail: tour.readyBlockers.join(' · ') || undefined, since: tour.scheduledAt, to: `/staff/tours/${tour.id}`, toLabel: 'Xem chi tiết', rank: 4 })
     }
   }
 

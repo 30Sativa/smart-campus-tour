@@ -3,17 +3,16 @@ import { CellIcon, PageHeader, PanelHead, SummaryTile, panelClass } from '../../
 import { AdminPage } from '../../features/administration/AdminUi'
 import { ALL_ROLES, AREAS, roleRow } from '../../auth/access'
 import { STAFF_NAV } from '../../features/staff/staff-nav'
-import { VISITOR_NAV, VISITOR_SECONDARY_NAV } from '../../features/visitor/visitor-content'
+import { REP_NAV } from '../../features/representative/rep-nav'
+import { TECHNICAL_NAV } from '../../features/technical/technical-nav'
 import { ADMIN_NAV } from '../../features/administration/admin-nav'
 
 const AREA_PAGES: Record<string, string[]> = {
-  public: ['Trang giới thiệu', 'Đăng nhập', 'Đăng ký'],
-  // The visitor app is an English surface, so its own nav labels are English.
-  // They are listed as the area ships them rather than translated here, which
-  // would put a second name on every page.
-  visitor: [...VISITOR_NAV, ...VISITOR_SECONDARY_NAV].map((item) => item.label),
+  public: ['Trang giới thiệu', 'Đăng nhập', 'Trang xem tour (link mời)'],
   staff: STAFF_NAV.map((item) => item.label),
-  admin: ADMIN_NAV.map((item) => item.label),
+  admin: ADMIN_NAV.filter((item) => item.path.startsWith('/admin')).map((item) => item.label),
+  representative: REP_NAV.map((item) => item.label),
+  technical: TECHNICAL_NAV.map((item) => item.label),
 }
 
 /**
@@ -63,7 +62,7 @@ export default function RolesPage() {
   return (
     <AdminPage>
         <PageHeader
-          eyebrow="Tham khảo"
+          eyebrow="Phân quyền"
           title="Vai trò & quyền"
           description="Vai trò nào vào được khu vực nào. Bảng này đọc trực tiếp từ quy tắc mà route guard đang áp dụng, nên luôn khớp với hành vi thật của ứng dụng."
         />
@@ -82,7 +81,7 @@ export default function RolesPage() {
           />
         </section>
 
-        <section className={`${panelClass} mt-5`} aria-label="Ma trận quyền truy cập">
+        <section className={`${panelClass} mt-3`} aria-label="Ma trận quyền truy cập">
           <PanelHead
             title="Ma trận truy cập"
             description="Chỉ đọc. Việc cấp hoặc thu hồi vai trò được thực hiện ở máy chủ, giao diện chưa có chức năng chỉnh sửa."
@@ -93,28 +92,28 @@ export default function RolesPage() {
               grid on a phone is a scrollbar with a table behind it. */}
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-[#f1f5f9] bg-[#f8fafc] text-xs font-medium text-[#64748b]">
+              <thead className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11.5px] font-medium text-[#64748b]">
                 <tr>
-                  <th scope="col" className="px-5 py-4">Vai trò</th>
+                  <th scope="col" className="px-3.5 py-[7px]">Vai trò</th>
                   {AREAS.map((area) => (
-                    <th key={area.id} scope="col" className="px-4 py-4">{area.label}</th>
+                    <th key={area.id} scope="col" className="px-3 py-[7px]">{area.label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f1f5f9]">
                 {rows.map((row) => (
                   <tr key={row.role} className="transition-colors hover:bg-[#f8fbff]">
-                    <th scope="row" className="px-5 py-4 text-left align-top">
+                    <th scope="row" className="px-3.5 py-2 text-left align-top">
                       <div className="flex items-center gap-3">
                         <CellIcon icon={ShieldCheck} />
                         <span className="min-w-0">
-                          <span className="block font-bold text-[#334155]">{row.label}</span>
+                          <span className="block font-semibold text-[#0f172a]">{row.label}</span>
                           <code className="mt-0.5 block font-mono text-[11px] font-normal text-[#94a3b8]">{row.role}</code>
                         </span>
                       </div>
                     </th>
                     {row.areas.map((cell) => (
-                      <td key={cell.id} className="px-4 py-4 align-middle">
+                      <td key={cell.id} className="px-3 py-2 align-middle">
                         <AccessCell allowed={cell.allowed} />
                       </td>
                     ))}
@@ -126,11 +125,11 @@ export default function RolesPage() {
 
           <ul className="divide-y divide-[#f1f5f9] lg:hidden">
             {rows.map((row) => (
-              <li key={row.role} className="p-4">
+              <li key={row.role} className="px-3.5 py-3">
                 <div className="flex items-center gap-3">
                   <CellIcon icon={ShieldCheck} />
                   <span className="min-w-0">
-                    <span className="block font-bold text-[#334155]">{row.label}</span>
+                    <span className="block font-semibold text-[#0f172a]">{row.label}</span>
                     <code className="mt-0.5 block font-mono text-[11px] text-[#94a3b8]">{row.role}</code>
                   </span>
                 </div>
@@ -151,22 +150,22 @@ export default function RolesPage() {
           </ul>
         </section>
 
-        <section className={`${panelClass} mt-5`} aria-label="Nội dung từng khu vực">
+        <section className={`${panelClass} mt-3`} aria-label="Nội dung từng khu vực">
           <PanelHead
             title="Mỗi khu vực gồm những gì"
             description="Danh sách lấy từ chính cấu hình điều hướng của từng khu vực."
           />
-          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-4 lg:divide-y-0">
-            {AREAS.filter((area) => area.id !== 'visitor').map((area) => (
-              <div key={area.id} className="p-5">
+          <div className="grid divide-y divide-[#f1f5f9] md:grid-cols-2 md:divide-x md:divide-[#f1f5f9] lg:grid-cols-3 lg:divide-y-0">
+            {AREAS.map((area) => (
+              <div key={area.id} className="px-3.5 py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-bold text-[#1e293b]">{area.label}</h3>
+                  <h3 className="text-[13px] font-semibold text-[#0f172a]">{area.label}</h3>
                   <code className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11px] text-[#2563eb]">{area.path}</code>
                 </div>
                 <p className="mt-1.5 text-xs leading-5 text-[#64748b]">{area.purpose}</p>
-                <ul className="mt-3 space-y-1.5">
+                <ul className="mt-2 space-y-1">
                   {(AREA_PAGES[area.id] ?? []).map((page) => (
-                    <li key={page} className="flex items-start gap-2 text-sm text-[#64748b]">
+                    <li key={page} className="flex items-start gap-2 text-[13px] text-[#64748b]">
                       <span aria-hidden="true" className="mt-2 size-1 shrink-0 rounded-full bg-[#5b91ed]" />
                       {page}
                     </li>

@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/client'
-import type { RegistrationState, RegistrationSummary, TourState } from './api/types'
+import type { RegistrationGroup, RegistrationSummary, TourState } from './api/types'
 import type { StatusTone } from '../../components/ui/status-tone'
 
 /**
@@ -34,7 +34,7 @@ export const TOUR_LABEL: Record<TourState, { label: string; tone: StatusTone }> 
   READY: { label: 'Đã chốt danh sách', tone: 'muted' },
   RUNNING: { label: 'Đang diễn ra', tone: 'info' },
   COMPLETED: { label: 'Đã hoàn thành', tone: 'muted' },
-  CANCELLED: { label: 'Buổi đã hủy', tone: 'muted' },
+  CANCELLED: { label: 'Đã hủy', tone: 'muted' },
 }
 
 /** Display of the required group name. */
@@ -64,11 +64,28 @@ export function readRepError(error: unknown, fallback = 'Không thực hiện đ
   }
 }
 
-/** Filters of "Đăng ký của tôi", keyed by the `?trang-thai=` slug. */
-export const REGISTRATION_FILTERS: Array<{ slug: string; label: string; state: RegistrationState | null }> = [
-  { slug: 'tat-ca', label: 'Tất cả', state: null },
-  { slug: 'cho-duyet', label: 'Chờ duyệt', state: 'SUBMITTED' },
-  { slug: 'da-duyet', label: 'Đã duyệt', state: 'APPROVED' },
-  { slug: 'tu-choi', label: 'Từ chối', state: 'REJECTED' },
-  { slug: 'da-huy', label: 'Đã hủy', state: 'CANCELLED' },
+/** The two tabs of "Đăng ký của tôi", keyed by the `?nhom=` slug. */
+export const REGISTRATION_GROUPS: Array<{ slug: string; label: string; group: RegistrationGroup }> = [
+  { slug: 'dang-hoat-dong', label: 'Đang hoạt động', group: 'active' },
+  { slug: 'da-huy', label: 'Đã hủy', group: 'closed' },
 ]
+
+/**
+ * Same rule as the backend's `RegistrationGroups`: a registration has ended when it was cancelled,
+ * its Tour was cancelled, or it was refused after the Tour stopped taking changes.
+ */
+export function isClosedRegistration(r: Pick<RegistrationSummary, 'state' | 'tourState'>) {
+  return r.state === 'CANCELLED' || r.tourState === 'CANCELLED' || (r.state === 'REJECTED' && r.tourState !== 'SCHEDULED')
+}
+
+export type ClosedNote = { badge: string; tone: 'muted' | 'danger'; by: string; reason: string; at: string }
+
+/** Why an ended registration ended, who ended it and when. Only a refusal has a stored reason. */
+export function closedNote(r: RegistrationSummary): ClosedNote {
+  if (r.state === 'CANCELLED')
+    return { badge: 'Bạn đã hủy', tone: 'muted', by: 'Đại diện', reason: 'Bạn đã hủy đăng ký này.', at: `Hủy lúc ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
+  if (r.tourState === 'CANCELLED')
+    return { badge: 'Buổi bị hủy', tone: 'danger', by: 'Nhà trường', reason: r.tourCancelReason?.trim() || 'Buổi tham quan đã bị hủy.', at: `Cập nhật ${formatTime(r.updatedAt)}, ${formatShortDate(r.updatedAt)}` }
+  const at = r.reviewedAt ?? r.updatedAt
+  return { badge: 'Bị từ chối', tone: 'danger', by: 'Nhà trường', reason: r.rejectionReason?.trim() || 'Nhà trường không ghi lý do.', at: `Từ chối lúc ${formatTime(at)}, ${formatShortDate(at)}` }
+}

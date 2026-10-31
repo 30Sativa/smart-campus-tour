@@ -321,7 +321,7 @@ public sealed class DemoPoiSeederTests
                 await database.ExecuteAsync($"CREATE DATABASE [{database.name}];");
                 database.created = true;
                 database.settings.InitialCatalog = database.name;
-                var script = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Schema", "snapshot.sql"));
+                var script = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Schema", "snapshot-v1.3.sql"));
                 foreach (var batch in Regex.Split(script, @"^\s*GO\s*\r?$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
                     if (!string.IsNullOrWhiteSpace(batch)) await database.ExecuteAsync(batch);
                 return database;

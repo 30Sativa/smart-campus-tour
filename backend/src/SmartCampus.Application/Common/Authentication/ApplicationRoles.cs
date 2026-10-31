@@ -7,10 +7,12 @@ public static class ApplicationRoles
 {
     public const string Admin = "Admin";
     public const string Staff = "Staff";
+    public const string TechnicalStaff = "TechnicalStaff";
     public const string Representative = "Representative";
 
     public const string AdminCode = "ADMIN";
     public const string StaffCode = "STAFF";
+    public const string TechnicalStaffCode = "TECHNICAL_STAFF";
     public const string RepresentativeCode = "SCHOOL_REPRESENTATIVE";
 
     public static string Resolve(IEnumerable<string> assignedRoles)
@@ -34,6 +36,7 @@ public static class ApplicationRoles
         {
             AdminCode => Admin,
             StaffCode => Staff,
+            TechnicalStaffCode => TechnicalStaff,
             RepresentativeCode => Representative,
             _ => null
         };

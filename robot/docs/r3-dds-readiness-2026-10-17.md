@@ -5,14 +5,22 @@
 stack và quyền sudo đổi service. Lượt này chỉ review, kiểm tra chỉ đọc và sửa
 script trên branch R3; chưa triển khai cô lập DDS lên runtime.
 
-Kết luận này thay phần điều kiện trước S1–S3 trong
-`robot/docs/r3-stationary-review-2026-10-17.md`. Initial Pose hợp lệ là bài
-nghiệm thu localization sau này, không phải điều kiện của transport DDS.
-Không có kết luận rằng navigation đã được nghiệm thu.
+Source `c4abcf3` used for the reviewed stage scripts was present in the local
+MiniPC checkout at the time, but was not on GitHub `main` or a published
+branch. A future operator must verify that exact commit is available before
+using these commands; the dirty runtime checkout at `1cc5b33` is not a
+substitute. On 2026-10-19 the same tree was integrated as branch
+`feature/claude/r3-hardening` (commit `35c2da6`, non-documentation files identical to
+`c4abcf3`).
+
+Kết luận này thay thế đề xuất trước đó yêu cầu AMCL chấp nhận Initial Pose
+trước S1–S3. Initial Pose hợp lệ là bài nghiệm thu localization sau này,
+không phải điều kiện của transport DDS. Báo cáo này không kết luận rằng
+navigation đã được nghiệm thu.
 
 ## Trạng thái MiniPC thực tế
 
-Ảnh chụp kiểm tra khoảng 16:10 +07, hostname `sativa-NUC7PJYH`:
+Ảnh chụp kiểm tra khoảng 16:10 +07 trên MiniPC:
 
 | Thành phần | Thực tế và hệ quả |
 |---|---|
@@ -21,7 +29,7 @@ Không có kết luận rằng navigation đã được nghiệm thu.
 | Overlay Nav2 V1 | `$HOME/.cache/armtc/smoothws/install`, symlink tới `$HOME/sct-nav-smooth`, HEAD `73b8630`. Commit sau `dfcf889` chỉ sửa tài liệu; các package/file V1 được kiểm vẫn không đổi. |
 | Overlay debug thực sự đang dùng | `$HOME/.cache/armtc/r3_runtime_review_20261017/install`; portable bridge 3.6.0; guard protocol v2. Không dùng lại overlay S0a cũ chỉ vì thư mục còn tồn tại. |
 | Helper runtime | `robot/scripts/source-minipc` trong checkout runtime còn là bản cũ, thiếu các chặn S1/S2/S3. Helper trong R3 không tự tìm `.env` runtime: cần chọn runtime root rõ ràng như bên dưới. |
-| DDS | Domain 30, Fast DDS, discovery `127.0.0.1:11811`, `ROS_LOCALHOST_ONLY=0`; service gốc không drop-in, MainPID 2214, server PID 2268. Server và node còn socket trên LAN/Tailscale. Checker: **NOT ISOLATED, 22 FAIL, 1 WARN**, đúng trạng thái trước S1. |
+| DDS | Domain 30, Fast DDS, discovery `127.0.0.1:11811`, `ROS_LOCALHOST_ONLY=0`; service gốc không có drop-in. Server và node còn socket trên LAN/Tailscale. Checker: **NOT ISOLATED, 22 FAIL, 1 WARN**, đúng trạng thái trước S1. |
 | CLI daemon | PID 158550, domain 30, `LOCALHOST_ONLY=0`, `ROS_SUPER_CLIENT=TRUE`. Phải dừng trước chuyển bậc; không để daemon này sống qua S2. |
 | Điều khiển | Nav2 launch PID 163567, AMCL 163595, controller 163603. Launch map2, camera=false, rviz=false, params smooth V1. Không có explorer hoặc stop_navigator trong snapshot. |
 | Quyền vận hành | SSH key hoạt động. `sudo -n true` không được cấp: cần người vận hành có sudo trong phiên triển khai. Không đổi sudoers, SSH hay mạng để vượt qua điều này. |

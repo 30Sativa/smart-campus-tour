@@ -22,6 +22,40 @@ html.dark {
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The one styled dropdown for every <select>. Browsers without customizable
+   select ignore this block and keep their native list. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select::picker-icon { color: #64748b; transition: rotate 150ms; }
+  select:open::picker-icon { rotate: 180deg; }
+  ::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    position-try-order: normal;
+    width: anchor-size(width);
+    max-height: 18rem;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 12px 32px rgb(31 49 77 / 0.16);
+  }
+  select option {
+    min-height: 2.25rem;
+    white-space: normal;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.25rem;
+    color: #0f172a;
+    cursor: pointer;
+  }
+  select option::checkmark { display: none; }
+  select option:hover, select option:focus-visible { background: #eff6ff; outline: none; }
+  select option:checked { background: #e6f1f9; color: #173b59; font-weight: 600; }
+  select option:disabled { color: #94a3b8; background: transparent; cursor: not-allowed; }
+}
+
 body {
   font-family: "Be Vietnam Pro", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--bg-primary);
@@ -30,4 +64,59 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ── Console motion ──────────────────────────────────────────────────────────
+   Page change: a thin sweep along the top edge and the new page rising into
+   place. `backwards` (not `both`) so no transform lingers after the entrance:
+   a leftover transform would trap the page's fixed dialogs and sticky panels. */
+@keyframes console-sweep {
+  0% { transform: scaleX(0); opacity: 1; }
+  70% { transform: scaleX(0.85); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+@keyframes console-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes console-toast-shrink { to { transform: scaleX(0); } }
+
+.console-sweep { transform-origin: left; animation: console-sweep 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.console-enter { animation: console-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.console-toast-bar { transform-origin: left; animation: console-toast-shrink linear forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .console-sweep, .console-enter { animation: none; }
+  .console-sweep { opacity: 0; }
+}
+
+/* ── Milestone celebration (components/ui/Celebration.tsx) ───────────────────
+   The card pops in, a ring draws round, then the tick; paper pieces fly out
+   from behind the ring and fall a little as they fade. */
+@keyframes celebrate-pop {
+  0% { opacity: 0; transform: translateY(14px) scale(0.92); }
+  60% { opacity: 1; transform: translateY(0) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes celebrate-draw { to { stroke-dashoffset: 0; } }
+@keyframes celebrate-ring {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+@keyframes celebrate-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); }
+  12% { opacity: 1; }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 54px)) scale(1) rotate(var(--rot)); }
+}
+.celebrate-card { animation: celebrate-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.celebrate-draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: celebrate-draw 0.5s ease-out 0.12s forwards; }
+.celebrate-draw-late { animation-delay: 0.5s; }
+.celebrate-ring { animation: celebrate-ring 0.9s ease-out 0.45s backwards; opacity: 0; }
+.celebrate-piece { position: absolute; left: 50%; top: 50%; opacity: 0; animation: celebrate-burst 1.15s cubic-bezier(0.2, 0.7, 0.3, 1) 0.4s backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-card { animation: none; }
+  .celebrate-draw { animation: none; stroke-dashoffset: 0; }
+  .celebrate-piece, .celebrate-ring { display: none; }
 }

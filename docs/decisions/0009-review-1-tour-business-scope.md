@@ -1,5 +1,8 @@
 # ADR-0009: Chốt nghiệp vụ Tour sau Review 1
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Admin business ownership, direct email correction and post-End-Early fallback are superseded as target by Staff/Technical ownership, row request/review and terminal revocation. Original Review 1 decisions and approval status below are historical. No new advisor approval is recorded.
+
+
 - Ngày: 30/09/2026.
 - Trạng thái: **nhóm chấp nhận để triển khai**; GVHD giao nhóm tự quyết theo thông tin nhóm cung cấp và sẽ xem lại ở Review 2. Không ghi nhận GVHD đã duyệt từng thay đổi.
 - Phạm vi: quyết định nghiệp vụ cho `backend/` và `web/`, liên quan điều phối Tour trong `docs/architecture.md`. ADR không xác nhận code hoặc phần cứng đã đáp ứng.
@@ -9,6 +12,12 @@
 > **Cập nhật ADR-0012:** dwell cố định do kỹ thuật seed/kiểm chứng, Admin không chỉnh theo Tour; mọi Staff được vận hành mọi Tour. Các đoạn về chỉnh thời gian bên dưới được đọc theo quyết định mới trong docs/decisions/0012-v1-1-schema-and-operation-scope.md.
 
 ## Context
+
+> **Điều chỉnh 19/10/2026, ADR-0017:** quyền chuẩn bị Route bằng seed-only và
+> giới hạn Admin chỉ chọn tuyến ở §3 được thay bằng Admin Route CRUD. Dwell
+> vẫn thuộc RouteStop, không chỉnh riêng theo Tour. Các đoạn quyết định gốc
+> bên dưới được giữ để truy vết; chính sách hiện hành xem
+> [ADR-0017](0017-admin-route-management.md). Đây không phải xác nhận GVHD duyệt.
 
 Review 1 yêu cầu làm rõ cách vào Tour, giá trị tương tác với robot, quyền vận hành và xử lý sự cố. Ban đầu nhóm chọn link bí mật gửi trực tiếp qua email sau duyệt, dùng lại trong hạn; không account Student, mã phòng hoặc OTP. Một lời mời giữ tối đa một phiên browser hoạt động, giữ phiên trước và từ chối phiên khác đến sau. Reload/reconnect nhận lại phiên theo chính sách giữ kết nối hữu hạn. Link vẫn có thể bị chuyển tiếp; đây không phải xác minh danh tính hay điểm danh.
 

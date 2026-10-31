@@ -1,21 +1,26 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using SmartCampus.Application.Common.Abstractions.Assistant;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.StudentQuestions;
 
 namespace SmartCampus.Infrastructure.Integrations.Assistant;
 
 /// <summary>
 /// Calls POST {BaseUrl}/v1/answer of ai-assistant with the shared service key.
-/// Logs only status codes and error types: never question text, answers or provider bodies.
+/// Logs request IDs, status, outcome and timing: never question text, answers or provider bodies.
 /// </summary>
 public sealed class HttpAiAssistantClient(HttpClient client, AiAssistantConfiguration configuration,
     ILogger<HttpAiAssistantClient> logger) : IAiAssistantClient
 {
+    public const int MaximumResponseBytes = 32 * 1024;
+    private static readonly Meter Metrics = new("SmartCampus.Assistant");
+    private static readonly Histogram<double> Duration = Metrics.CreateHistogram<double>("assistant.duration", "ms");
     private static ServiceUnavailableException Unavailable() =>
         new("Trợ lý AI đang tạm thời không dùng được. Bạn thử lại sau ít phút nhé.", "AI_UNAVAILABLE");
 
@@ -38,42 +43,62 @@ public sealed class HttpAiAssistantClient(HttpClient client, AiAssistantConfigur
         request.Content = new StringContent(JsonSerializer.Serialize(body, JsonSerializerOptions.Web), Encoding.UTF8,
             "application/json");
 
-        HttpResponseMessage response;
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var timeout = TimeSpan.FromSeconds(20);
+        if (client.Timeout > TimeSpan.Zero && client.Timeout < timeout) timeout = client.Timeout;
+        budget.CancelAfter(timeout);
+        var started = Stopwatch.GetTimestamp();
+        var outcome = "UNAVAILABLE";
+        int? status = null;
         try
         {
-            response = await client.SendAsync(request, ct);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, budget.Token);
+            status = (int)response.StatusCode;
+            if (response.StatusCode == HttpStatusCode.GatewayTimeout) throw TimedOut();
+            if (!response.IsSuccessStatusCode) throw Unavailable();
+            if (response.Content.Headers.ContentLength > MaximumResponseBytes) throw Unavailable();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(budget.Token);
+            var bytes = new byte[MaximumResponseBytes + 1];
+            var length = 0;
+            int read;
+            while ((read = await stream.ReadAsync(bytes.AsMemory(length), budget.Token)) > 0)
+            {
+                length += read;
+                if (length > MaximumResponseBytes) throw Unavailable();
+            }
+            var reply = JsonSerializer.Deserialize<AnswerResponseBody>(bytes.AsSpan(0, length), JsonSerializerOptions.Web);
+            if (reply?.OutOfScope is null || string.IsNullOrWhiteSpace(reply.Answer) ||
+                reply.Answer.Length > StudentQuestionText.MaxAnswerLength) throw Unavailable();
+            outcome = "SUCCESS";
+            return new AssistantAnswer(reply.Answer.Trim(), reply.OutOfScope.Value);
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning("AI assistant call timed out.");
+            outcome = "TIMEOUT";
             throw TimedOut();
         }
-        catch (HttpRequestException exception)
+        catch (GatewayTimeoutException)
         {
-            logger.LogWarning("AI assistant is unreachable ({ErrorType}).", exception.GetType().Name);
+            outcome = "TIMEOUT";
+            throw;
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or JsonException)
+        {
             throw Unavailable();
         }
-
-        using (response)
+        catch (OperationCanceledException)
         {
-            if (response.StatusCode == HttpStatusCode.GatewayTimeout) throw TimedOut();
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning("AI assistant returned HTTP {StatusCode}.", (int)response.StatusCode);
-                throw Unavailable();
-            }
-            AnswerResponseBody? reply;
-            try
-            {
-                reply = await response.Content.ReadFromJsonAsync<AnswerResponseBody>(ct);
-            }
-            catch (JsonException)
-            {
-                logger.LogWarning("AI assistant returned an unreadable body.");
-                throw Unavailable();
-            }
-            if (reply is null || string.IsNullOrWhiteSpace(reply.Answer)) throw Unavailable();
-            return new AssistantAnswer(reply.Answer.Trim(), reply.OutOfScope);
+            outcome = "CANCELLED";
+            throw;
+        }
+        finally
+        {
+            var milliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            Duration.Record(milliseconds, new KeyValuePair<string, object?>("outcome", outcome));
+            logger.Log(outcome == "SUCCESS" ? LogLevel.Information : LogLevel.Warning,
+                "AI request {RequestId} ended {Outcome}, HTTP {StatusCode}, duration {ElapsedMs} ms.",
+                question.RequestId, outcome, status, milliseconds);
         }
     }
 
@@ -81,5 +106,5 @@ public sealed class HttpAiAssistantClient(HttpClient client, AiAssistantConfigur
     private sealed record PoiBody(Guid Id, string Name, string? Description, string? NarrationText);
     private sealed record AnswerRequestBody(Guid RequestId, string Question, IReadOnlyList<TurnBody> RecentTurns,
         PoiBody? Poi, string Language);
-    private sealed record AnswerResponseBody(string? Answer, bool OutOfScope);
+    private sealed record AnswerResponseBody(string? Answer, bool? OutOfScope);
 }

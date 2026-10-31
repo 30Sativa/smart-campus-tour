@@ -1,4 +1,19 @@
-# fleet-management-system
+# CampusTour DT-AMR — robot
+
+For a new contributor, read [robot/AGENTS.md](AGENTS.md), then the
+[robot documentation index](docs/README.md) and its
+[current status and handoff page](docs/project-status.md). The status page
+distinguishes code, offline tests, hardware tests, readiness and deployment;
+its machine observations are dated snapshots.
+
+**R3 status (2026-10-17):** S0b remote RViz through SSH is deployed and has
+shown map, LiDAR, TF and RobotModel on the real system. DDS S1–S3 are still
+not deployed. On the current laptop, `amr-rviz --r3` selects R3 while bare
+`amr-rviz` deliberately keeps the legacy viewer as default. Keep that default
+until the R3 transition and viewer are accepted. See
+[`docs/dds-isolation.md`](docs/dds-isolation.md) and
+[`docs/r3-dds-readiness-2026-10-17.md`](docs/r3-dds-readiness-2026-10-17.md)
+before any DDS transition.
 
 ## Architecture
 
@@ -13,10 +28,11 @@ ROS 2 packages under `robot/ros2_ws/src/`:
 | `robot_control` | mode manager (cmd_vel mux), manual / manual-mapping / auto-explore launches, Nav2 + SLAM configs, frontier explorer |
 | `robot_description` | URDF/xacro robot model, Gazebo + display launches |
 | `robot_navigation` | localization (map_server + AMCL) and navigation on a saved map |
-| `robot_nav_plugins` | Nav2 plugins (C++): `LatchedGoalChecker`, used only by the opt-in `nav2_params_smooth.yaml` |
+| `robot_nav_plugins` | Nav2 plugins (C++): `LatchedGoalChecker`, used by the opt-in baselines `nav2_params_smooth.yaml` (V1) and `nav2_params_v2.yaml` (V2) |
 | `orbbec_bringup` | Astra Pro depth camera bringup + mount TF + Phase 2 depth diagnostics |
 | `robot_perception` | Phase 4 person perception -> Nav2 speed limit |
 | `gazebo_preview_bridge` | Development-only Gazebo telemetry -> local backend `SimulationPreview` |
+| `fleet_bridge` | R1 telemetry-only TF observation -> Backend Fleet Sync v1 over HTTPS; execution status stays UNKNOWN |
 | `bus_manager` | `go_to_stop` action: drive to named bus stops via Nav2 |
 | `bus_interfaces` | action/msg definitions for the bus system |
 | `simulation` | Gazebo worlds/models for testing without hardware |
@@ -74,19 +90,22 @@ Astra Pro -> /camera/depth/points    -> local costmap ONLY (3D obstacles)
 Astra Pro -> RGB                     -> Phase 4 person detection
 ```
 
-## Build phases
+## Historical build phases
 
-The robot software was brought up in four phases; each has a design doc under
-`docs/` with run steps, close-out criteria, and an error table:
+The original bring-up was recorded in four phase documents under `docs/`.
+These describe phase-specific evidence, not necessarily the current runtime
+configuration. In particular, Phase 3 is historical; use
+[`docs/nav2-baseline-v2.md`](docs/nav2-baseline-v2.md) for the current Nav2
+development baseline (V1, frozen for rollback: [`docs/nav2-baseline-v1.md`](docs/nav2-baseline-v1.md)) and [`docs/project-status.md`](docs/project-status.md) for deployment
+evidence:
 
 1. **Phase 1 — Camera** (`docs/phase1-camera.md`): Astra Pro streaming
    RGB/Depth/CameraInfo/TF reliably into RViz2.
 2. **Phase 2 — 3D perception** (`docs/phase2-perception.md`): depth ->
    PointCloud2, with quantitative checks (depth accuracy, TF, ground-plane
    tilt, ground noise) via `orbbec_bringup depth_check`.
-3. **Phase 3 — Nav2** (`docs/phase3-nav2.md`): Astra point cloud feeds the
-   local costmap for obstacle avoidance; verified with
-   `orbbec_bringup costmap_contrib`.
+3. **Phase 3 — Nav2** (`docs/phase3-nav2.md`): historical Astra point-cloud
+   local-costmap experiment. It does not define the current V1 deployment.
 4. **Phase 4 — person perception** (`docs/phase4-ai.md`): RGB person detection
    (YOLO / OpenVINO on the mini PC) -> Nav2 speed limit. This is navigation
    perception, not the WP4 AI tour-guide assistant in `ai-assistant/`.
@@ -105,6 +124,12 @@ Gazebo simulation; it is not used to start the physical robot. See
 5. Add Astra and person perception only after the baseline is stable.
 6. Flash STM32 manually with ST-Link when required.
 
+The R1 `fleet_bridge` package is an additional telemetry-only node; it does
+not start or modify Nav2. Follow [the Fleet Bridge guide](docs/fleet-bridge.md)
+for Backend deployment gates, the Python HTTPS preflight and a later authorized
+stationary test. Do not send EC2 traffic until the proxy and rate-limit gates
+are met.
+
 ## Docker Compose Environments
 
 `robot/docker-compose.yml` is retained for laptop `debug` and standalone `sim`
@@ -119,14 +144,30 @@ remains the separate Gazebo → SimulationPreview integration path.
 Both profiles have no USB device mappings. Never launch the physical stack from
 the debug container.
 
-### Networking giữa native miniPC và development laptop
+### DDS networking between the native miniPC and laptop
 
-Both machines use the same `ROS_DOMAIN_ID` and `RMW_IMPLEMENTATION` from their
-`.env` file. The miniPC may run a Fast DDS Discovery Server at
-`127.0.0.1:11811`; a laptop inspector points to that server. Set the variables
-before launching every node. If graph introspection looks incomplete, follow
-[`docs/network-ros-discovery.md`](docs/network-ros-discovery.md) and query a
-known topic before restarting processes.
+The documented miniPC snapshot still has the original Discovery Server and
+`ROS_LOCALHOST_ONLY=0`; the DDS graph is **not isolated** and has no
+authentication. A remote DDS reader previously caused `/scan` stalls during
+Wi-Fi disruption. Do not leave a laptop DDS subscriber connected while the
+robot is moving. Query known data on the robot itself when debugging.
+
+R3 keeps laptop RViz in a separate local DDS graph and reaches the robot only
+through SSH-forwarded loopback ports. On the current laptop, run
+`amr-rviz --r3` to opt in. Bare `amr-rviz` still uses the legacy direct-DDS
+script for rollback and pre-isolation use; do not change that default until
+the R3 gates have been accepted. The wrapper is present on the current laptop
+but comes from the post-`main` R3 commits (integration branch
+`feature/claude/r3-hardening`). Until that branch merges, a fresh checkout of GitHub `main` does
+not contain the wrapper.
+
+After S2, direct-DDS laptop inspection and the old `remote_rviz` relay will no
+longer work; use the SSH viewer or SSH into the robot for CLI inspection. The
+older Docker/Discovery Server instructions below are retained as legacy
+procedures for a pre-isolation setup or a reviewed rollback. They are not the
+R3 procedure. See [`docs/dds-isolation.md`](docs/dds-isolation.md), the
+[dated readiness report](docs/r3-dds-readiness-2026-10-17.md), and
+[`docs/network-ros-discovery.md`](docs/network-ros-discovery.md).
 
 ### Chạy trên laptop Ubuntu 22.04 (debug + RViz2)
 

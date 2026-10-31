@@ -4,7 +4,10 @@ using SmartCampus.Application.Common.Abstractions.Messaging;
 
 namespace SmartCampus.Application.Features.Auth.Commands.Logout;
 
-public sealed record LogoutCommand(string? RefreshToken) : ICommand<Unit>;
+public sealed record LogoutCommand(string? RefreshToken) : ICommand<Unit>, IAccountTransactionRequest
+{
+    public bool RequiresAccountTransaction => !string.IsNullOrWhiteSpace(RefreshToken);
+}
 
 public sealed class LogoutCommandHandler(
     IAuthRepository authRepository,

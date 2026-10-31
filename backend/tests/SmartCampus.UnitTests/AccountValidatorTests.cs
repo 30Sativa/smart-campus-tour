@@ -20,7 +20,7 @@ public sealed class AccountValidatorTests
     public void CreateAccountValidator_RejectsWhitespaceInUsername(string username)
     {
         var command = new CreateAccountCommand(
-            Guid.NewGuid(), new CreateAccountRequest(username, "Staff User", "Staff", " password "));
+            Guid.NewGuid(), new CreateAccountRequest(username, "Staff User", "Staff", " valid password "));
 
         var result = new CreateAccountCommandValidator().Validate(command);
 
@@ -68,6 +68,11 @@ public sealed class AccountValidatorTests
     [InlineData("Admin")]
     [InlineData("Student")]
     [InlineData("Visitor")]
+    [InlineData("Viewer")]
+    [InlineData("Operator")]
+    [InlineData("Technical Staff")]
+    [InlineData("TECHNICAL_STAFF")]
+    [InlineData("TechnicalStaff,Staff")]
     [InlineData("STAFF,Representative")]
     public void CreateAccountValidator_RejectsUnsupportedRoles(string role)
     {
@@ -85,6 +90,8 @@ public sealed class AccountValidatorTests
     [InlineData("Staff")]
     [InlineData("Representative")]
     [InlineData("staff")]
+    [InlineData("TechnicalStaff")]
+    [InlineData("technicalstaff")]
     public void CreateAccountValidator_AcceptsSupportedRoles(string role)
     {
         var validator = new CreateAccountCommandValidator();

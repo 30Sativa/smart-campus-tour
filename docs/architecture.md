@@ -1,5 +1,140 @@
 # System Architecture
 
+## SRS v0.2 adoption and implementation boundary (2026-10-27)
+
+The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 through
+[ADR-0020](decisions/0020-srs-v02-business-baseline-and-technical-staff.md).
+The current target is in `docs/requirements/campus-tour-scope.md`; source evidence,
+implementation gaps and waves are in `docs/requirements/srs-v02-backend-gap-register.md`.
+TechnicalStaff accounts, the scoped versioned map/POI API, and Wave C's
+per-row registration/email-change slice are implemented.
+Staff owns versioned POI proposals and route revisions, per-row registration
+review, and the existing pre-execution Tour operations. Admin business aliases,
+the legacy POI catalog API, legacy Route authoring writes, aggregate registration
+review, and direct Admin email correction have been removed from HTTP routing.
+Read-only legacy Route projections remain for the Tour slice that cannot yet
+consume RouteRevision. Admin account management remains available.
+F-14, conflicting branch cutoff, project YAML/frame mapping and M2 command transport remain pending.
+Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
+
+## API ownership and retired compatibility routes (2026-10-28)
+
+The accepted cutover is recorded in
+[ADR-0027](decisions/0027-versioned-map-poi-and-route-api-cutover.md). `Staff`
+is the application/JWT role for Tour Staff; `TechnicalStaff` has only the
+map-upload, deployment-evidence and POI-verification policies. Admin keeps
+account management. The old `/api/admin/{pois,routes,tours,registrations}`
+aliases and direct Admin email correction are not routed. `GET
+/api/staff/manage/routes` and its detail read remain a legacy projection used by
+the existing Tour model; route creation/edit/activation is versioned under
+`/api/staff/routes`. Staff registration review remains under its Staff path and
+uses per-row actions. The legacy POI catalog endpoints and aggregate approve/
+reject endpoints are removed. Existing SQL tables and rows are retained.
+
+## Tour Management API (legacy pre-execution slice)
+
+This is the pre-execution SQL slice in
+`docs/decisions/0018-admin-tour-management.md`; Staff now owns the existing
+pre-execution API. All endpoints require Staff, and CreatedByUserId is attribution
+only. `/api/staff/manage/tours` is canonical; the former `/api/admin/tours`
+compatibility alias was retired under ADR-0027. Route selection is restricted
+to `AuthoringMode=LEGACY`.
+This API cannot persist a RouteRevisionId, assigned Operator, robot reservation,
+or immutable READY snapshot. It is not a versioned Route scheduling path. No
+target READY/Finalize/Reopen, explicit robot/Operator assignment, reservation,
+Staff operation or branch-request endpoint is implemented here. ADR-0024 records
+why Tour scheduling remains blocked until an approved configured-duration
+source exists and row/email decisions can be rechecked.
+
+| Method | Path | Behavior |
+|---|---|---|
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
+| GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days), optional `time=HH:mm` to judge a typed start beside the slots (ADR-0036). Returns `customStartEarliest`/`customStartLatest`. Per day and configured slot: `available`, or `reasonCode` (`OUTSIDE_START_HOURS`, `LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
+| GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
+| GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
+| POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be a configured slot or a whole minute inside the custom hours (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
+| PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
+| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
+| POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
+| POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
+| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
+
+`configuration` is `{name, description?, routeId, scheduledStartAt,
+fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
+absolute HTTP(S) without embedded credentials. Schedule is a DateTimeOffset,
+normalized to UTC, with millisecond precision. A new Tour names one tested Route
+revision, and changing a Tour's schedule/route fails closed (ADR-0034). Changing
+a legacy Tour's Route requires its current opaque version,
+active Route, active POIs and valid data/map/pose/stops/head configuration.
+Metadata corrections on an unchanged Route do not reactivate/reconfigure it.
+
+List returns PagedResponse with Tour summaries: id, name, description, routeId,
+routeName, activeRouteId, scheduledStartAt, state, createdByUserId, createdAt,
+updatedAt, base64 SQL rowVersion, registrationCount and invitationCount. Detail
+is BaseResponse data `{tour, route, activeRoute, fallbackVideoUrl, startedAt,
+endedAt, endReason, usage, permissions}`. Permission fields are canEditMetadata,
+canChangeScheduleAndRoute, canCancel and canDelete (always false). Responses
+are advisory until rechecked under locks. Writes return BaseResponse `{id}`;
+reload detail for the committed RowVersion. No DELETE endpoint is provided;
+append-only audit and relationship history are preserved even for unused Tours.
+
+Any registration (including terminal history), allowed branch, operational
+history or runtime ownership blocks schedule/Route changes. Metadata still
+needs SCHEDULED and no execution. Registered rescheduling requires the deferred
+notification/coordination/expiry workflow, rather than silent schedule changes.
+Route replacement before registration updates both route IDs and appends a
+configuration-only `TOUR_ROUTE_CHANGED` event with RouteId = old Route, retaining
+its ADR-0017 protection without claiming an arrival or sending robot commands.
+
+Cancel retains registrations/approval history and all relationships. Pending
+SUBMITTED registrations become CANCELLED with timestamps/audit; prior decisions
+stay unchanged, keeping cancelled pending work out of the existing review queue. It stores
+CANCELLED, EndedAt, EndReason; revokes invitations and uses existing invitation
+session closure semantics. StartedAt stays null and no fallback entitlement is
+created. Existing pending email claims recheck access and cannot grant new
+rights; an already claimed external send may finish with a now-invalid code.
+Cancellation notification email is not implemented in this slice.
+
+Mutation requestIds are durable and scoped to (Staff, requestId) across these
+Tour actions. A transaction-owned SQL application lock serializes a key; an
+AuditLog receipt contains action, Tour ID and canonical payload SHA-256, never
+raw descriptions, cancellation reason or invitation secrets. Committed matching
+retries replay before current version/state/time checks; changed payload,
+resource or action conflicts. Expected Tour RowVersion is excluded from the
+payload hash, but Route version is included. No-op updates do not consume a
+receipt or change the RowVersion. All other update/cancel attempts require
+the current SQL RowVersion. Create has a server-generated Tour ID.
+
+Tour transactions are read committed and acquire the same Tour UPDLOCK used
+by registration, review, invitation and Student admission writers. Selected
+Routes and POIs are held with update locks through commit via the existing
+Route repository. Detail queries use the shared Tour read-lock snapshot and
+do not save. Route/Tour/audit/access changes commit together through UnitOfWork;
+SQL deadlock/key-lock conflicts return 409, and audit/storage failures roll back.
+Errors use BaseResponse: 400 validation, 401/403 auth/role, 404 missing Tour/Route,
+409 STALE_VERSION, STALE_ROUTE, IDEMPOTENCY_CONFLICT, TOUR_LOCKED,
+TOUR_CONFIGURATION_LOCKED, ROUTE_VERSION_REQUIRED, ROUTE_UNAVAILABLE or
+TOUR_CONCURRENT_CHANGE. Data-valid/active configuration is not physical
+commissioning or readiness for robot operation.
+
+## Versioned Route authoring and legacy Tour read boundary
+
+The former Route catalog create/update/availability/delete operations under
+`/api/staff/manage/routes` and its `/api/admin/routes` alias are retired. New
+authoring uses `GET /api/routes`, `POST /api/staff/routes`, revision creation,
+submission and Technical Staff manual test evidence described in
+`backend/docs/route-revisions.md` and ADR-0023. Technical Staff picks the
+participating Staff account from the read-only
+`GET /api/technical/route-verifications/participants`. Route stops carry exact
+`PoiRevisionId` and the corresponding effective verification evidence; they do
+not pass legacy `PoiId` values. Saving or submitting a revision requires the
+exact map version to have current technical evidence, otherwise 409
+`TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
+serve existing Tour records only. Versioned Route to Tour selection,
+creates and reserves under ADR-0034; READY remains blocked by ADR-0024; these APIs do
+not imply a schedulable Tour or hardware acceptance.
+
 How the pieces of CampusTour DT-AMR fit together. This file covers what
 crosses a folder boundary. Anything internal to one folder is documented
 inside that folder.
@@ -16,11 +151,22 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The current backend persistence model is defined by
-`backend/database/smart-campus-tour-schema-v1.1.sql` and
-[ADR-0012](decisions/0012-v1-1-schema-and-operation-scope.md). It is scaffolded
-to EF and applied to the local development database `SmartCampusTourV11` on
-SQL Server `localhost,1433`; it does not migrate existing data. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
+The backend persistence baseline has advanced through v1.10; the current snapshot
+includes row-registration/email-request schema in
+`backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
+connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
+plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql`
+and versioned POI narration content/route-stop snapshots in
+`backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
+`backend/database/smart-campus-tour-schema-v1.8.sql`, Tours on a tested revision in
+`backend/database/smart-campus-tour-schema-v1.9.sql`, and scheduling inputs in
+`backend/database/smart-campus-tour-schema-v1.10.sql`.
+See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
+[ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
+[ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
+[ADR-0031](decisions/0031-versioned-poi-narration-content.md). The
+developer's local `SmartCampusTourV11` remains an older database and is not
+altered by this branch. [ADR-0006](decisions/0006-demo-first-tour-schema.md)
 records the superseded v1.0 baseline. This document also
 records decided **planned** boundaries; a diagram or flow below does not imply
 that its API, dispatch, bridge, or realtime implementation already exists.
@@ -37,11 +183,12 @@ active browser session per invitation. A valid existing session avoids repeated
 code entry; the URL alone grants no access. Resending sends the same valid code
 without terminating the session; revoke/reissue invalidates the old code and
 session and sends a new code to the approved email, retaining invitation identity
-and expiry. Representative support is limited to owned groups; Admin supports
-all groups; Staff-only has no recovery privilege. These are planned backend/web
-integration semantics, not implemented API or persistence guarantees. The current
-schema and mock name/class entry still need a dedicated implementation with
-documented contracts, storage, concurrency and revocation tests.
+and expiry. The SRS target limits Representative support to owned rows and permits Staff
+support for managed tours. Email changes use Representative request + Staff review;
+unchanged accepted rows keep credentials while new rows await review. Wave C
+implements the row-specific registration and email-request APIs; legacy direct
+Admin email correction is disabled. Media-relay authorization and broader
+Staff/Representative support migration remain separate gaps.
 
 [ADR-0011](decisions/0011-student-data-use-for-tour.md) limits student data to
 registration, invitations and aggregate Tour operational statistics. V1 excludes
@@ -95,9 +242,10 @@ and robot assignment is a decided boundary; the dispatch use cases are not
 implemented yet. A robot is intended to execute one navigation leg at a time
 without owning the tour workflow. The web app owns the 3D Operational Digital
 Twin UI, while `digital-twin/` owns the Fleet Emulator scaffold and future
-load experiments, not the 3D frontend. Production fleet transport is selected
-by [ADR-0008](decisions/0008-production-fleet-transport.md), with a Python
-compatibility acceptance gate that has not passed yet.
+load experiments, not the 3D frontend. M0/B1 robot telemetry uses HTTPS
+report-and-reconcile under [ADR-0019](decisions/0019-https-fleet-sync.md).
+SignalR remains the Staff-facing operations projection and the development
+SimulationPreview transport. Per-leg commands remain M2 work.
 
 ---
 
@@ -122,6 +270,13 @@ reads encoder position. The EKF fuses `vx`, the nonholonomic `vy = 0`
 constraint and wheel-derived `vyaw` from `wheel/odom`, plus BNO085 **orientation
 yaw** from `imu/data`. Firmware publishes no raw gyro rate, so nothing in this
 stack fuses gyro yaw-rate.
+
+IMU availability is reported, not hidden: `stm32_bridge` publishes
+`/diagnostics` (`DiagnosticArray`, status `<node>: imu`, OK/WARN) and warns when
+the STM32 feedback carries `yaw_valid=0` for longer than `imu_stale_timeout`;
+the EKF then runs on wheel odometry only. The firmware re-requests the BNO085
+report on its own and counts it in feedback fields 17-18
+(`robot/docs/PROTOCOL_FB.md`).
 
 ### 2.0 Navigation baseline
 
@@ -291,15 +446,30 @@ runtime changes, rollback and hardware acceptance gates.
 
 ### 3.0 User account authentication API (implemented)
 
-The backend implements login and refresh-session endpoints for the three
-account roles `ADMIN`, `STAFF`, and `SCHOOL_REPRESENTATIVE`. Each V1 account
+The backend implements login and refresh-session endpoints for four persisted
+account roles `ADMIN`, `STAFF`, `TECHNICAL_STAFF`, and `SCHOOL_REPRESENTATIVE`. Each account
 must have exactly one supported role. An account with no role, more than one
 role, or an unsupported role is denied with HTTP 403; a human who needs more
 than one application role uses separate accounts. This is an application
 authentication rule; the existing `(UserId, Role)` database primary key is
 unchanged. [ADR-0013](decisions/0013-single-application-role-per-account.md)
-records the reason for this single-role V1 contract. Student invitation access
-uses browser sessions, not an account role.
+records the single-role invariant; ADR-0020 extends only its supported-role set.
+Viewer invitation access uses browser sessions, not an account role. Tour Operator
+is assigned Staff; the safety attendant has no separate account/workspace.
+
+| Persisted code | JSON role / JWT role claim | Meaning |
+|---|---|---|
+| ADMIN | Admin | Administrative account/configuration/audit |
+| STAFF | Staff | Business preparation and assigned operation target |
+| TECHNICAL_STAFF | TechnicalStaff | Technical Staff account foundation |
+| SCHOOL_REPRESENTATIVE | Representative | Own registration and row support |
+
+TechnicalStaff is the exact public value (display label: Technical Staff), with
+one role claim and no inherited Admin/Staff/Representative policy. Its login does
+not implement map/POI workspaces, technical confirmation or broader AC-08 coverage.
+UserRoles.Role VARCHAR(32) has no role-value CHECK; no DDL/re-scaffold is needed.
+Integration instructions and separate frontend tasks:
+`backend/docs/technical-staff-accounts.md`.
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
@@ -315,6 +485,32 @@ rather than trimming it. Username lookup remains case-insensitive;
 passwords are passed unchanged. Existing stored usernames are not migrated by
 this change; a username containing whitespace cannot be used in a login request.
 
+Account security hardening (2026-10-19): new account/bootstrap passwords require
+12–128 characters and must not be blank; spaces are preserved. Login accepts
+existing shorter passwords but rejects passwords over 128 characters. Login has
+an IP budget of 30 attempts/minute and a normalized-account budget of 10/minute,
+including successful attempts; exhausted budgets return 429 `RATE_LIMITED`.
+The bounded account budget is in memory for the single-instance V1 deployment,
+resets after its minute window and does not persist a permanent account lockout.
+
+Login, refresh and logout reject an explicit Origin unless it matches the API
+origin or an exact `Cors:AllowedOrigins` entry. `Origin: null` is rejected.
+With no Origin, browser requests declaring `Sec-Fetch-Site: same-site` or
+`cross-site` are rejected; non-browser probes without either header remain
+supported. A rejected origin returns 403 before credential/cookie state changes
+and does not clear the existing refresh cookie. The same origin policy applies
+to Student cookie endpoints. CORS alone is not the CSRF control.
+
+Account commands and refresh use a read-committed account transaction. Login
+verifies the initial password snapshot, then locks/re-reads the User and roles
+before issuing credentials; deactivate/reactivate and token reads use that same
+User-first order through commit. Deactivate therefore revokes a winning login's
+token or rejects a later issuance, without reviving revoked tokens on reactivate.
+Username creation reserves its unique-index range. Refresh remains read-only
+and has no UnitOfWork save. Missing-cookie refresh rejects without opening SQL,
+preserving the hosting-only health probe. SQL deadlock/lock conflicts map to 409
+`ACCOUNT_CONCURRENT_CHANGE`, without automatic mutation retries.
+
 Application exceptions and automatic `[ApiController]` model-binding
 validation errors use the same JSON envelope with `success: false`, a message,
 null data, and optional errors. `AddProblemDetails()` remains registered for
@@ -329,7 +525,7 @@ issuing a new access token. Logout revokes a matching stored token. The cookie
 is named `campustour.refresh`, with `HttpOnly`, `Secure`, `SameSite=None`, and
 `Path=/api/auth`. Access tokens are 15-minute HS256 JWTs with configured issuer
 and audience (defaults `SmartCampus.Api` and `SmartCampus.Web`); their user
-identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, or
+identity claims are `sub` (GUID) and `role` (`Admin`, `Staff`, `TechnicalStaff`, or
 `Representative`), alongside registered issuer/audience/time claims. They
 contain no username, full name, email, or other personal data.
 
@@ -346,7 +542,12 @@ configured explicitly, with no wildcard.
 
 ### 3.0.1 Admin account management (V1)
 
-The following endpoints require the `Admin` role:
+The following endpoints require the `Admin` role. Create accepts exactly one
+application role string: `Staff`, `TechnicalStaff` or `Representative`
+(case-insensitive input, canonical output). List/deactivate/reactivate support
+TechnicalStaff through the existing flow; role reassignment is not an existing
+endpoint and is not introduced here. Persisted codes are not create-request values.
+
 
 | Endpoint | Request and success | Rejection behavior |
 |---|---|---|
@@ -381,107 +582,128 @@ JWT may remain usable until its natural expiry (about 15 minutes plus validation
 clock skew). This is the accepted V1 limitation; no token version or blacklist
 is used.
 
-### 3.0.2 Admin POI management (V1)
+### 3.0.2 Retired POI catalog API and retained legacy data
 
-The POI endpoints require the `Admin` role. They implement the Admin POI slice
-selected in [ADR-0014](decisions/0014-admin-poi-management.md):
+The legacy POI catalog API (/api/staff/manage/pois and /api/admin/pois) has
+been removed from routing and OpenAPI under owner-authorized ADR-0027. New
+Staff POI work uses the immutable map-version/proposal/revision workflow in
+§3.0.3. The legacy POI rows and their SQL tables remain intact because
+existing legacy Route/Tour records still reference them; HTTP API retirement
+does not delete or migrate that data. The old Route authoring API must not
+consume proposal IDs as legacy POI IDs.
 
-| Endpoint | Request and success | Rejection behavior |
-|---|---|---|
-| `GET /api/admin/pois` | Optional `search`, `sort`, `page`, `size`, and `isActive`; HTTP 200 with POI summaries and pagination. | Invalid page/size/sort or non-empty `expand`: 400. Anonymous: 401. Non-Admin: 403. |
-| `GET /api/admin/pois/{id}` | HTTP 200 with POI details, base64 `rowVersion`, and current usage/editability flags. | Missing POI: 404. Anonymous: 401. Non-Admin: 403. |
-| `POST /api/admin/pois` | JSON fields: `name`, `description`, `mapKey`, `mapFrame`, `x`, `y`, `yaw`, `narrationText`, `audioUrl`, `narrationSeconds`, `fallbackVideoUrl`; HTTP 200 with the new ID. New rows are inactive. | Invalid input: 400. Anonymous: 401. Non-Admin: 403. |
-| `PUT /api/admin/pois/{id}` | Same content/map/pose fields plus current base64 `expectedRowVersion`; HTTP 200. | Invalid input: 400. Missing POI: 404. Stale version, a live Tour lock, or editing referenced geometry: 409. |
-| `POST /api/admin/pois/{id}/activate` | JSON `{ "expectedRowVersion": "..." }`; HTTP 200. | Missing POI: 404. Stale version or a live Tour lock: 409. |
-| `POST /api/admin/pois/{id}/deactivate` | Same body as activate; HTTP 200. Existing route/history references remain intact. | Missing POI: 404. Stale version or a live Tour lock: 409. |
+### 3.0.3 Versioned map package and per-POI technical verification (ADR-0021, ADR-0028)
 
-List search covers name/description. Sort accepts `name`, `isActive`,
-`createdAt`, or `updatedAt`, with `-` for descending; `page` defaults to 1,
-`size` to 20 and is limited to 1–100. A non-empty `expand` is rejected. There
-is no delete endpoint. `IsActive` only means selectable for a newly prepared
-Route; it is not evidence of narration readiness or physical navigation
-verification.
+The additive v1.2 schema and new `/api/technical/map-versions` and
+`/api/staff/poi-proposals` contracts implement map package versioning, manual
+deployment evidence, Staff proposals/revisions/submission, and TechnicalStaff
+per-revision checks. The complete endpoint/request/role/error/audit contract is
+in [`backend/docs/map-poi-versioning.md`](../backend/docs/map-poi-versioning.md).
+The new endpoints do not grant Admin access. Existing legacy POI rows are not
+migrated or deleted; only their old HTTP catalog interface has been retired.
 
-Content and availability remain editable for referenced POIs except while a
-`READY` or `RUNNING` Tour uses the POI through its base route, active route, or
-enabled branch. Map/frame/x/y/yaw can be changed only before any `RouteStop` or
-historical `TourEvent` references the POI. POI writes and audit rows commit
-together inside a POI-specific serializable SQL transaction. Updates and
-lifecycle operations require the current SQL Server `RowVersion`; the
-transaction takes an update lock on the POI row before reading that token, so
-concurrent requests with one version serialize into one success and one 409
-stale-version conflict. Stale writes preserve the stable POI ID. This scope
-does not implement audio upload or route editing. Existing v1.1
-databases need `backend/database/patches/add-poi-rowversion-v1.1.sql` before
-this API build.
+Under ADR-0028, a valid uploaded package alone is not selectable for new POI
+work. Map list/detail return backend-calculated `technicalCheckStatus`,
+`canUseForPoiPreparation`, a block reason code/text, and the evidence record
+(robot, time and check) used by that calculation. For each exact map-version /
+physical-robot pair, the newest record is effective; a matching-checksum
+localization+display pass on any one robot makes that exact version eligible.
+A newer failure for the same pair supersedes the older pass, and a new map
+version inherits no evidence. This gate is checked in the same transaction by
+create proposal, create revision (including map changes), and submit. An
+ineligible state returns 409 before proposal/revision/submission or success
+audit writes. A transaction-owned per-map preparation lock serializes these
+mutations with deployment-check inserts. A committed idempotent retry still
+returns its committed result.
+Eligibility remains historical to its map version when a robot later moves
+elsewhere; POI verification retains ADR-0021's stricter latest cross-map
+deployment check for the robot used to verify it. See
+[`ADR-0028`](decisions/0028-map-technical-check-before-poi-preparation.md).
+Map list/detail responses additionally expose read-only `currentlyDeployedOn`
+entries for physical robots whose latest cross-map deployment check points to
+that exact version with matching checksum and localization/display passing.
+This is operational context only: absence does not change eligibility or
+selection. The Staff POI picker warns when a PASSED version has no such robot.
 
-#### 3.0.2.1 Admin occupancy-map pose picker
+The supported upload is a bounded ZIP of root ROS trinary YAML and referenced
+8-bit PGM. Upload is not robot deployment; TechnicalStaff records exact package
+checksum plus localization/display observations after manual robot work. POI
+coordinates are ROS `map` frame meters/radians; current robot map examples have
+zero origin yaw, and the API rejects non-zero yaw. Staff submits world poses;
+the API validates map bounds/free occupancy. Technical verification records
+reach/stop/localization/camera observations against that exact version and
+physical robot. These operator-entered records do not prove backend-executed
+hardware tests. POI verification does not test or certify a complete route.
 
-The Web picker uses a versioned static map package exported from
-`robot/robot_maps/map2.yaml` and its referenced `map_fix.pgm`. Robot owns the
-source files; Web owns the deployment derivative. `map2-v2`, frame `map`,
-identifies the current snapshot; `map2-v1` remains registered for existing POIs.
-Neither key is an alias for demo, Student, or Twin maps.
-The exporter records source SHA-256 hashes, resolution, the full origin pose,
-dimensions, thresholds, and a fingerprinted PNG URL. Every output pixel is the
-same cell as the source pixel, with Nav2 Humble trinary classification. There
-is no crop, resize, rotation, or interpolation. Changed geometry or occupancy
-semantics requires a new MapKey. Web builds use committed assets and do not
-need the robot filesystem. Source parity is checked by `web/scripts/verify`.
-The exporter and Web catalog accept only zero origin yaw: Nav2 Humble's
-StaticLayer and AMCL use origin position without map orientation, so a rotated
-OccupancyGrid is outside this navigation package contract. Web resolves the
-static image path against Vite `BASE_URL` for both display and cell sampling.
+TechnicalStaff map upload offers new-area and existing-area modes. The complete
+read-only `/api/technical/map-areas` catalog reads `MapAreas` directly, so its
+contents do not depend on the capped map-version list. Existing-area mode shows
+and locks the stored key/name; a duplicate key in new-area mode directs the
+operator to select the existing area. The server allocates each version inside
+the existing transaction-owned area lock and returns the assigned version.
+The physical-robot picker uses `/api/technical/physical-robots`, filtered only
+by the existing `SourceType=PHYSICAL` condition. GET returns ID/code/display
+name, persisted first accepted sync context, and a connection status derived
+from the in-memory latest report and existing freshness threshold. It also
+returns credential lifecycle status, safe hint/issue/revocation metadata and a
+rowversion for credential changes, never the credential hash or plaintext.
+TechnicalStaff
+POST registers the same safe identity fields and appends actor/time audit in
+the robot save transaction. Registration remains available offline and the
+unique RobotCode constraint protects concurrent duplicates. The write command
+revalidates the robot and exact checksum. A new deployment-check PASS additionally
+requires a persisted first accepted Fleet Sync report for the current credential;
+FAIL remains allowed before confirmation. The check locks the Robot row in its
+transaction, so credential rotation cannot race through the gate. Replaying an
+already committed check returns it before this new-PASS condition. Offline state
+or backend restart does not erase confirmation; credential provisioning resets
+it. Runtime SQL can SELECT/INSERT Robots and update only credential lifecycle
+and confirmation columns plus the three map-assignment columns, never DELETE or update the whole table. Technical
+Staff issues/rotates credentials through the web; Admin can revoke and inspect
+credential audit, while Staff sees only connection status. The separate CLI
+provisioner shares the lifecycle service, is attributed as `CLI`, and retains
+column-scoped Robot and append-only AuditLogs grants. TechnicalStaff assigns a valid uploaded MapVersion to a physical robot; Fleet Sync projects MapKey and FrameId from that row. The bridge and database RobotCode must match. This connection confirmation does not prove the named map
+was loaded, localization succeeded, or operation is safe; the manual check
+remains a human observation. Report timestamp age/skew validation does not
+prove fleet-wide NTP. The stored map/frame values are historical context. A
+confirmation-write failure leaves accepted sync successful but keeps PASS
+blocked until a later new report can persist confirmation. Upload and
+deployment-check requests that expose requestId keep that ID stable for retries;
+physical robot registration has no requestId or receipt and duplicate code is
+409 via the unique constraint.
 
-For continuous image coordinates `(u,v)`, measured from the top-left edge,
-let `(a,b) = resolution * (u, height-v)`. ROS position is
-`origin.xy + R(origin.yaw) * (a,b)`. Cell centers use half-pixel coordinates;
-continuous pointer positions do not receive an extra half-cell offset. Yaw is
-body heading in radians about +Z, positive counter-clockwise from +X. The Web
-picker quantizes newly edited x/y to four decimals and yaw to six; unchanged
-stored poses retain their values. Pixel conversion is separate from calibrated
-Student/Twin presentation transforms. With this map, ROS `(0,0)` projects to
-image `(306,427)`.
+The TechnicalStaff robot list exposes the database-assigned MapKey/FrameId and the latest deployment-check map key/frame. It exposes no credential or other configuration values. The UI warns without blocking work when the assignment is absent or differs from the latest check. After reassignment, operators update the MiniPC bridge context and rerun the Fleet Sync probe; this is not a deployment or readiness gate.
 
-Create/Edit share a picker with position, heading, numeric fine-tuning, and
-view-only zoom/pan when pose is locked. A missing MapKey/frame package never
-falls back to a different map. Selecting a different map clears the draft pose
-and requires a new position/heading. Existing POI endpoints, RowVersion,
-transactional locks, and inactive-on-create behavior are unchanged. Occupied
-and unknown cells produce advisory warnings, not navigation verification.
-The API still validates numeric precision/range, not map existence, bounds,
-occupancy, reachability, or loaded robot-map identity.
+When a current POI map version falls outside the normal version-list page, the
+Staff screen fetches that exact version by ID for preview. If backend eligibility
+has since failed, its map/pose/revision/history remains readable in a
+non-editable pose view with the backend block reason. A 409 caused by a changed
+technical check refreshes eligibility metadata without changing local form
+values or the selected map.
 
-The current source uses `negate: 0` and `free_thresh: 0.196`; gray 205 is
-unknown (`1-205/255 > 0.196`). `map2-v2` records these thresholds and is the
-source-parity check target and default for new POIs. `map2-v1` remains an
-immutable snapshot with `free_thresh: 0.25`, where gray 205 is free and no
-cells are unknown. Existing POIs retain their key and raster; switching to
-the new map requires explicit pose review and never bulk-relabels stored POIs.
-Do not infer occupancy from the source image's appearance or alter robot
-thresholds as part of the picker. Deployment-map binding, current robot pose,
-navigation testing, and fleet integration remain separate work. A later
-threshold change requires a new key and source-parity check target.
+Project POI YAML/frame mapping, route revision/test tuple, scheduling/READY,
+robot deployment control, frontend workspaces and physical acceptance remain
+pending/not implemented. v1.1 remains immutable; v1.2 has an additive upgrade
+patch and empty-database snapshot. The runtime grants for these tables are
+separate and least privilege in `backend/database/smart-campus-tour-map-poi-permissions.sql`.
+Do not run the patch on a shared or production database as part of this feature.
 
 ### 3.1 Fleet contract
 
-**Decided contract, implementation and compatibility checkpoint pending:** the
+**M0/B1 telemetry implementation; command/runtime work remains pending:** the
 backend does not speak ROS. [ADR-0005](decisions/0005-backend-authoritative-poi-per-leg-orchestration.md)
-defines ownership; [ADR-0008](decisions/0008-production-fleet-transport.md)
-selects **SignalR JSON Hub Protocol over TLS** for the physical `fleet_bridge`
-and Fleet Emulator. Production use depends on a successful Python client
-compatibility checkpoint against ASP.NET Core/.NET 10. That compatibility has
-not been demonstrated.
+defines ownership; [ADR-0019](decisions/0019-https-fleet-sync.md) selects
+**HTTPS report-and-reconcile** for robot telemetry. The S2/S2B SignalR harness
+is historical compatibility evidence and does not block the HTTPS sync path.
 
 ```text
-Physical fleet_bridge -- outbound --\
-                                    <-> /hubs/fleet <-> Backend Application
-Fleet Emulator ------- outbound --/                         |
-                                                  operations projection
-                                                           |
-                                                   /hubs/operations
-                                                           |
-                                                   Staff Web / 3D Twin
+Physical fleet_bridge -- HTTPS POST /api/fleet/v1/sync --> Backend Application
+Fleet Emulator -------- (future client) --------------->          |
+                                                     operations projection
+                                                              |
+                                                      /hubs/operations
+                                                              |
+                                                      Staff Web / 3D Twin
 
 Separate development path (already exists):
 Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
@@ -490,32 +712,28 @@ Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
 
 | Boundary | Clients and purpose |
 |---|---|
-| `/hubs/fleet` | Physical bridge and Fleet Emulator; bidirectional machine command/state contract. |
-| `/hubs/operations` | Backend-to-browser projections for Staff Web / Operational Digital Twin. |
+| `/api/fleet/v1/sync` | HTTPS robot-to-backend telemetry report and empty-command reconciliation response. |
+| `/hubs/operations` | Staff-only SignalR projection, including latest fleet telemetry. |
 | `/hubs/simulation` | Existing development-only SimulationPreview; unchanged. |
 
-Do not merge these Hubs. Browsers do not connect to the fleet Hub; robots do not
-connect to operations. Different URLs are not authorization: Section 3.7 defines
-the required identity separation. The production Hubs are not implemented yet.
+The robot sync API uses per-robot machine credentials. Staff use account JWTs
+for the operations Hub; robot credentials cannot join it. The HTTPS endpoint
+does not keep a robot socket open, and browsers never submit robot reports.
 
-A temporary one-way robot pose prototype (`POST /api/robots/telemetry` with a
-read-only `/hubs/fleet` browser stream) was removed. It did not implement the
-production machine command/state contract selected by ADR-0008. The
-`/hubs/fleet` contract and pose fields below remain planned and gated by the
-Python compatibility checkpoint.
+A previous temporary pose prototype (`POST /api/robots/telemetry`) was removed.
+Fleet Sync v1 is a separate, versioned contract; it writes latest state only to
+process memory and does not add a persistent pose table.
 
-Application owns a future gateway boundary such as `IFleetGateway`. Hubs and
-the thin SignalR adapter using `IHubContext` belong in Api, without an
+Application owns sync validation and the transient state-store boundary. The
+Operations Hub and thin SignalR projection adapter belong in Api, without an
 Infrastructure-to-Api reference. Application stays independent of SignalR and
-ROS types. The bridge translates fleet commands/state only; it owns no booking,
-scheduling, assignment, or tour state machine. Execution tracking and result
-retention belong to the adapter, not to tour orchestration.
+ROS types. A future bridge translates telemetry and later commands; it owns no
+booking, scheduling, assignment, or tour state machine.
 
-The conceptual MVP contract is below. Method names and semantics are selected;
-these are not implemented DTOs or new database entities. Exact binding,
-validation limits, and acknowledgement encoding remain implementation work.
-`?` denotes an optional/nullable value. Commands travel backend-to-robot;
-reports travel robot-to-backend.
+The following GoTo/Cancel and result shapes are reserved for M2. They are not
+Fleet Sync v1 DTOs or implemented endpoints. `?` denotes an
+optional/nullable value. Fleet Sync v1 request/response binding and validation
+are documented in [`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/).
 
 ```text
 GoTo { legId, mapKey, frameId, x, y, yaw, stopId? }
@@ -540,6 +758,75 @@ mapping to `Poi`/`RouteStop` is introduced. End/return legs need not have a stop
 The navigation MVP has no manual drive, raw `/cmd_vel`, cloud E-stop, or Head
 command. Head support remains separate despite the existing frontend/schema
 references; this MVP does not complete the full remote-tour feature set.
+
+#### 3.1.2 Fleet Sync v1 (implemented telemetry slice)
+
+The backend exposes `POST /api/fleet/v1/sync` over HTTPS. Each request uses a
+per-robot bearer credential plus `X-Robot-Code`; the code is resolved from
+`dbo.Robots` and JSON `robotId` must match that authenticated identity.
+`Robot.CredentialHash` stores SHA-256 of a 32-byte random Base64URL secret and
+is nullable: NULL means no active credential. Technical Staff can issue when
+none is active, rotate an active key, and revoke; Admin can revoke and read
+safe metadata/audit, while Staff has connection-status read access only. The
+secret is returned once with no-store headers, never included in a GET or audit
+data. Request IDs make mutations replay-safe: a duplicate returns 409 without
+returning the secret. A unique filtered AuditLogs index backs that boundary.
+The separate least-privilege CLI calls the same lifecycle service with a null
+actor and `source=CLI`; each invocation issues or explicitly rotates the
+existing PHYSICAL robot key. Issue, rotate and revoke reset the three
+confirmation fields in the same conditional update and write an audit entry in
+the same transaction. Rotation invalidates the previous key. Schema v1.6 adds
+nullable hash and lifecycle metadata; old non-empty hashes remain active with
+legacy/null metadata. No key expires, and no last-used DB write is performed.
+
+Request fields, response/error examples and shared fixtures are in
+[`docs/contracts/fleet-sync/v1/`](contracts/fleet-sync/v1/). Reports carry
+`streamId`, browser-safe increasing `seq`, UTC `reportedAt`, configured
+`mapKey`/`frameId`, nullable pose and its distinct `capturedAt`, execution
+status, nullable localization, nullable motion readiness, and observed fault
+or battery data. Payloads are validated against the configured robot context.
+Exact duplicate reports are ACKed without refreshing liveness; sequence reuse
+with different content, out-of-order reports, and retired streams are rejected.
+A new bridge stream must begin at sequence 1 while another stream is current; a
+non-retired stream with another starting sequence receives
+`STREAM_START_REQUIRED`. The last 16 replaced stream IDs are rejected with
+`STALE_STREAM` while they remain in this process's history. A bridge process
+restart uses a new stream when its `reportedAt` is not older than current state.
+If the API process restarts, its store and tombstones are empty: the bridge
+preserves its current stream ID and sequence, and the API accepts any valid
+positive sequence as the first observed report. This creates a fresh ordering
+baseline and does not replay reports missed during the outage. A 400 validation
+rejection happens before storage; after correcting the payload, the bridge may
+retry the same stream and sequence. If a response is uncertain, it retries the
+exact same report; a still-latest report is acknowledged as a duplicate, while
+a report superseded by a later sequence receives `OUT_OF_ORDER`. Reports older
+than the age window return 400 before duplicate detection. Bridge retry actions
+are specified in the shared contract.
+Once a stream ID falls outside the bounded last-16 history, a delayed process
+using that ID can qualify for a new ownership change with sequence 1 and a
+recent timestamp. Keep one bridge process per robot identity.
+
+The backend keeps one latest report per robot and a bounded replaced-stream
+history in a thread-safe in-memory store. Credential authentication reads
+Robot data from SQL, but telemetry causes no SQL pose writes. The store clears
+on backend restart, after which the next authenticated report at any valid
+sequence rebuilds its ordering baseline. This is a single-instance B1 baseline,
+not a durable or shared multi-instance cache. Initial configurable age/freshness
+defaults are listed in the contract and backend runbook; operations must validate
+them against the bridge and network. Accepted reports signal a coalescing
+background broadcaster; HTTP success does not wait for a Staff client, and
+failed/time-limited sends are retried.
+
+Staff-only `/hubs/operations` emits `FleetUpdated` with a current snapshot on
+connect, after accepted reports, and when sync/pose freshness crosses a
+threshold. It refreshes age values at the configured interval; freshness flags
+can lag by one interval. Hub connections close when the Staff-role JWT expires.
+Account deactivation does not immediately revoke an already-issued JWT; it
+remains valid until expiry under current API authentication. Its legacy
+`connectionState: Live|Stale` describes recent HTTPS sync, not an open socket.
+`syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
+remain separate. Neither a new sync nor a pose sample implies localization or
+motion readiness. No command is emitted by v1.
 
 #### 3.1.1 POI target invariant
 
@@ -606,9 +893,9 @@ accepted branch request, and each invitation to one open browser session while
 allowing multiple other request/session records. EF initially inferred
 singular Tour-to-BranchRequest and Invitation-to-BrowserSession navigations
 from the filtered indexes; both mappings are corrected to one-to-many.
-In a future fleet implementation, live pose, connection, battery, and external
-execution state are transient fleet telemetry, separate from persisted tour
-business state and `TourEvent`.
+Fleet Sync v1 keeps live pose, sync liveness, battery, localization, motion
+readiness, and reported execution state as transient telemetry, separate from
+persisted tour business state and `TourEvent`.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
@@ -618,7 +905,8 @@ operational rules below are not backend implementations. Ignoring stale or
 duplicate results, eligibility checks and reconciling release still need
 application enforcement beyond the claim uniqueness indexes.
 
-FleetHub transport is not tour orchestration. The later Application work owns:
+Fleet Sync and the Operations projection are not tour orchestration. The later
+Application work owns:
 
 ```text
 Tour/dispatch -> derive current leg -> persist execution intent/current leg
@@ -639,6 +927,16 @@ eligibility checks so synthetic robots cannot be dispatched into real tours;
 shared transport does not erase source or validation boundaries.
 
 #### Remote Tour operational rules (planned Application behavior)
+
+SRS v0.2/ADR-0020 governs target authorization, incidents and End Early. Only the
+assigned Operator may operate. Movement requires telemetry age <=2s, no incident,
+no unresolved command, console connection and an attendant. End Early revokes
+live/fallback/Q&A including copied URLs, preserves Result, expires branch requests,
+requests active mission cancellation, prevents later Tour motion, and notifies
+accepted groups with audit (FR-48/BR-21/AC-11). No state or ACK proves physical stop.
+Historical FRONT/head sequencing below is supporting M2 design, not selected
+command transport; FR-49/50 require a checked POI camera preset and approved
+narration delivery/receipt and guide cue. No new command transport is enabled here.
 
 These rules make explicit the existing remote-tour intent in
 `backend/database/smart-campus-tour-schema-v1.1.sql`,
@@ -678,6 +976,20 @@ send/cancel reconciliation, not only a check before the send. Publish business
 notifications after the corresponding state/event commit. Define tour revision
 semantics across backend restart before wiring the frontend revision guard.
 
+**Robot-local head interface (draft, 23/10/2026).** The STM32 firmware and
+`stm32_bridge` expose the PAN/TILT head on the robot's ROS graph: action
+`head/set` (`bus_interfaces/action/SetHead`: absolute angle or HOME against
+the mechanical stop), topics `head/jog`, `head/step` (operator buttons),
+`head/state`, services `head/stop`, `head/off`, `head/zero`, plus
+`contactor/set` / `contactor/state` (separate module, needs only
+`std_msgs`/`std_srvs`, stays up when the head interface is disabled). A goal succeeds only when the firmware
+feedback reports that command's sequence number as accepted **and** the head
+idle; the position is open-loop (step counting, no encoder). Serial contract:
+`robot/docs/PROTOCOL_FB.md`; interface details:
+`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`. This does **not** define the
+backend↔robot head contract, presets, or who may operate the head; Fleet
+Sync v1 still carries no robot commands.
+
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a
 separately established Capstone requirement. A separate patch must define presets,
@@ -695,7 +1007,10 @@ The SQL file is the Database First source: it was scaffolded into Domain
 entities and Infrastructure `ApplicationDbContext`. There is no normal EF
 migration flow. See `backend/AGENTS.md` for the re-scaffold procedure.
 
-#### v1.1 snapshot and accepted implementation target (ADR-0012)
+#### v1.1 snapshot and historical operation target (ADR-0012)
+
+ADR-0020 supersedes the business-role/row-access portions for the SRS v0.2 target.
+The schema and existing APIs below describe current persistence and implementation.
 
 `backend/database/smart-campus-tour-schema-v1.1.sql` is the current empty-DB
 snapshot for invitation/session/branch storage. It is applied to the local
@@ -703,18 +1018,20 @@ SQL Server database `SmartCampusTourV11` on `localhost,1433` and scaffolded to D
 Infrastructure `ApplicationDbContext`. It does not migrate existing v1.0 or
 production data. Database setup/scaffolding were exercised locally. The current
 backend also implements Representative submission/pre-approval registration,
-Admin registration review, Auth V1, Admin account management, Admin POI
-management, and development-only SimulationPreview; the relevant HTTP contracts
+Staff registration review, Auth V1, Admin account management, Staff legacy POI
+catalog management, and development-only SimulationPreview; the relevant HTTP contracts
 are described in Sections 3.0–3.0.2 and 3.2.1–3.2.2. Tour execution/orchestration,
 invitation/session product APIs, branch-request use cases, fleet
 dispatch, and production fleet/operations Hubs remain unimplemented.
 
-Under `docs/decisions/0012-v1-1-schema-and-operation-scope.md`, dwell is fixed in
-seeded, verified RouteStops; Admin selects routes/branches and adjusts audio to
-fit, with no per-Tour dwell editor. Every active STAFF account may operate every
-Tour. There is no operator assignment field or takeover screen; all state,
-readiness, time and robot-claim checks still apply. Admin-only cannot operate and
-Staff-only cannot recover invitation codes. RowVersion must be checked on writes;
+Under ADR-0012 and the original CRUD slice in `docs/decisions/0017-admin-route-management.md`,
+dwell is fixed in RouteStops and Staff can edit unreferenced Route configuration
+through CRUD under current ADR-0020 ownership. Technical staff still verify physical execution; there is no
+per-Tour dwell editor. The old all-Staff/all-Tours rule is superseded: target
+operation requires an explicitly assigned Staff Operator. Current schema has no
+assignment field; CreatedByUserId is attribution only. Staff target invitation
+support is separate from current Staff/Representative endpoints. All state,
+readiness, time and robot-claim checks still apply. RowVersion must be checked on writes;
 only a committed winning decision may lead to robot dispatch.
 
 In v1.1, CurrentRouteStopId replaces CurrentStopOrder and must belong to the
@@ -803,7 +1120,7 @@ through the existing UnitOfWork. Active roster rows reserve normalized
 the same Tour. REJECTED/CANCELLED release that reservation; resubmit rechecks.
 No alias canonicalization or name matching is applied. Conflicts do not expose
 another group's data. Replaced rows become inactive; no invitation is created.
-Future Admin review and Tour-state writers must follow the same Tour-first lock
+Staff review and Tour-state writers must follow the same Tour-first lock
 order and recheck effective emails before APPROVED.
 
 Create idempotency is durable: AuditLogs.CorrelationId is scoped by actor,
@@ -812,20 +1129,23 @@ same lock/transaction. Replaying a committed key returns its original ID,
 even after a state change; it never edits the original registration. A fresh
 key creates another group. Audit contains identifiers/actions only, no roster
 PII. Invitation/email/session, branch runtime and voting are
-outside this slice. Admin review is implemented separately below; Admin/Staff
+outside this slice. Staff review is implemented separately below; Admin/Staff
 Tour preview mocks continue to use their own simulation records.
 
-#### 3.2.2 Admin registration review HTTP boundary (implemented)
+#### 3.2.2 Staff registration review HTTP boundary (per-row workflow)
 
-This integrates `backend/` and `web/` against the existing v1.1 schema; no
-schema change is required. All endpoints require the Admin JWT role.
+This integrates `backend/` and `web/` against the current schema. Review
+list/detail and per-row accept/reject require the Staff JWT role under
+`/api/staff/manage/registrations`; former Admin aliases and aggregate decisions
+are retired under ADR-0027. Email changes use the Representative request and
+Staff review workflow in §3.2.3; direct Admin correction is no longer routed.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | /api/admin/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
-| GET | /api/admin/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
-| POST | /api/admin/registrations/{id}/approve | SUBMITTED -> APPROVED while SCHEDULED |
-| POST | /api/admin/registrations/{id}/reject | SUBMITTED -> REJECTED while SCHEDULED, with required reason |
+| GET | /api/staff/manage/registrations | Paginated registrations across Representatives; optional tourId/state/from/to |
+| GET | /api/staff/manage/registrations/{id} | Details, active roster, reviewer ID/time, opaque versions and review gate |
+| POST | /api/staff/manage/registrations/{id}/rows/{rowId}/accept | Accepts one pending row after row, registration and Tour version checks |
+| POST | /api/staff/manage/registrations/{id}/rows/{rowId}/reject | Rejects one pending row with a reason after version checks |
 
 Collections use BaseResponse/PagedResponse and page/size/search/sort; expand is
 unsupported. Search covers school, group, Representative full name and Tour name.
@@ -833,7 +1153,7 @@ Sort supports submittedAt (default, oldest first), updatedAt and groupName, with
 optional '-' descending and ID tie-breaker. State uses the SQL uppercase values.
 from/to are offset-qualified instants filtering Tour scheduled time, inclusive
 lower/exclusive upper bound; the web converts calendar dates using UTC+7.
-Unknown IDs return 404. Anonymous/non-Admin requests return 401/403.
+Unknown IDs return 404. Anonymous/non-Staff requests return 401/403.
 
 Both decisions accept {expectedRowVersion, expectedTourRowVersion, reason?};
 versions must be 8-byte base64 SQL rowversions, reason is required for rejection
@@ -880,7 +1200,7 @@ separate from demo caches. Existing Admin Tour/dashboard review drawers,
 invitation demos, Staff/Student simulations and legacy contracts remain mock;
 their links use the mock Tour review consumer rather than sending fixture IDs
 to live SQL endpoints. A SQL review does not change demo Tour counts/readiness.
-The Admin sidebar "Chờ duyệt" badge links to the live queue, so it reads
+The Staff sidebar "Chờ duyệt" badge links to the live queue, so it reads
 `pagination.totalItems` of the same SUBMITTED query; the dashboard and bell stay
 simulated. Representative lists/details refetch from SQL and show committed review state.
 
@@ -906,10 +1226,10 @@ backend/docs/invitations-resend.md. This integrates backend and web without a
 schema change. Enabled approval atomically issues/queues one private invitation
 per active approved row; failed mail never reverses approval or changes Tour state.
 
-Admin or owner Representative GET /api/registrations/{registrationId}/invitations
+Staff or owner Representative GET /api/registrations/{registrationId}/invitations
 returns enabled/canIssue and items with approved row identity, version, expiry,
 revocation, latest email status and action gates. Codes/hashes/ciphertext/session
-credentials are never returned. Staff-only gets 403, another owner's group 404.
+credentials are never returned. Staff has organization-wide support; a Representative can access only their own group's invitations; Admin is denied.
 POST the same path + /issue with requestId (UUID), expectedRowVersion
 (registration), expectedTourRowVersion to fill missing invitations of previously
 approved groups. POST + /{invitationId}/resend, /reissue or /revoke with requestId
@@ -945,7 +1265,13 @@ filtered UNIQUE enforce one active session; expired sessions close before INSERT
 The same cookie/tabs reuse it; competing browsers get 409 INVITATION_IN_USE.
 Wrong-Tour/invalid/expired/revoked access gets a generic 401. Heartbeats retain the
 session for configured SessionIdleMinutes (default 10), bounded by invitation
-expiry. First successful entry records INVITATION_ENTERED once per invitation.
+expiry. Reconnect/heartbeat is a separate two-minute grace from the active
+session's `LastSeenAt`: both the session and device cookies may be presented,
+or a matching device cookie alone may recover that browser by rotating the
+session token. A stale session cookie does not bypass the grace, and the
+10-minute idle lease does not enlarge it. The Tour-scoped device token is a
+browser credential, never an IP-derived identity. First successful entry
+records INVITATION_ENTERED once per invitation.
 
 Student GET /api/student/tours/{tourId}/view (same cookie and exact-origin check,
 no body, `Cache-Control: no-store`) returns the read-only route for the session's
@@ -961,7 +1287,7 @@ allowed; no session/invitation/Tour → generic 401. No roster, invitation or
 account data. Implementation: `Features/StudentTour/GetStudentTourViewQuery.cs`,
 `EfStudentTourViewReader`, `Api/Controllers/StudentTourController.cs`.
 
-Live Admin review and owner Representative detail share real invitation support.
+Live Staff review and owner Representative detail share real invitation support.
 SQL GUID /tour/{tourId} links use code/cookie entry and committed Tour state, then
 show the same waiting-room, live and end screens as the demo, filled only from
 join/session and /view (polled every 5 s while RUNNING, 30 s otherwise). The page
@@ -969,26 +1295,29 @@ shows no student identity, hides the 2D map (no pose feed yet) and says so when
 there is no livestream; a fallback video plays inline only when it is an
 https/same-site .mp4/.webm file, otherwise it is a link. Non-GUID fixtures retain
 the labelled demo. No simulated stream/AI/robot state
-is inserted into a SQL room. Tour scheduling/readiness, livestream/AI, Admin
-roster replacement after issuance and retention remain separate. Admin email
+is inserted into a SQL room. Tour preparation scheduling and text Q&A are now
+implemented; runtime/readiness, livestream, roster replacement after issuance
+and retention remain separate. Admin email
 correction is implemented below.
 HTTPS and browser cookie/local-network permissions still apply to local BE use.
 
-#### 3.2.4 Admin roster email correction (implemented)
+#### 3.2.4 Historical Admin roster email correction (retired)
 
-This integrates backend and the live Admin registration drawer without a schema
-change. Business authority is scope Section 5.2; it is a single-row correction,
-not approval reversal or roster replacement.
+This section records the historical contract only. The Admin-only correction
+endpoint is retired under ADR-0027; the current path is the request/review
+workflow in §3.2.3. Business authority described below belongs to the prior
+baseline and is not a current routable operation.
 
-POST /api/admin/registrations/{id}/roster/{rowId}/email requires the Admin JWT
-role. Body: {requestId, email, expectedRowVersion, expectedTourRowVersion,
+Former route `POST /api/admin/registrations/{id}/roster/{rowId}/email` required
+the Admin JWT role. It is no longer mapped. Its historical body was
+{requestId, email, expectedRowVersion, expectedTourRowVersion,
 expectedRosterRowVersion, expectedInvitationRowVersion?}. UUID requestId and
 8-byte base64 version tokens are required; the invitation token is null only
 when the selected row has no invitation. Unknown JSON properties are rejected;
 actor comes from JWT sub. BaseResponse returns null on committed success;
 clients refetch detail and invitation support.
 
-Admin GET detail now adds correctEmail {allowed, reason}; each active roster row
+Staff GET detail includes correctEmail {allowed, reason}; each active roster row
 adds id, rowVersion and nullable invitationRowVersion. These tokens and the
 roster are read under the existing Tour snapshot lock. Representative input and
 detail contracts are unchanged. Row ID, never row number/name, selects the write.
@@ -1000,12 +1329,12 @@ active rows in the same registration and the existing SUBMITTED/APPROVED
 Tour-wide reservations. Normalization/format/length match registration input;
 no alias canonicalization. The selected active row retains ID, name, type and
 class; only Email/UpdatedAt change. Registration UpdatedAt/version advances so
-opened Representative replacements and Admin decisions become stale. Review
+opened Representative replacements and Staff decisions become stale. Review
 metadata and registration state are preserved.
 
 SUBMITTED and REJECTED may be corrected without sending or granting access;
 REJECTED retains its reason/reviewer and still needs Representative resubmit and
-Admin approval. CANCELLED/unknown states are refused. Any invitation history on
+Staff approval. CANCELLED/unknown states are refused. Any invitation history on
 a non-approved registration blocks correction, consistent with existing review
 and Representative boundaries. READY requires reopening; RUNNING and terminal
 Tours are refused. The real Tour reopen endpoint is still separate implementation
@@ -1065,39 +1394,43 @@ must not receive every pose update. A controlled benchmark may write telemetry
 to a dedicated experiment log/file.
 
 
-Backend-to-browser realtime uses the selected `/hubs/operations` boundary.
-`FleetUpdated`, `TourUpdated(tourId, revision)`, and `AssistanceRequired` are
-the operations event vocabulary; payloads are backend projections, not raw
-fleet reports. `web/src/api/contracts/staff-realtime.ts` records the unwired
-frontend proposal. Exact payload mapping and reconnect/refetch behavior still
-need implementation agreement, including revision handling across backend
-restart. This decision does not approve or implement the proposed staff/admin
-HTTP APIs in `web/src/api/contracts/staff.ts` and
+Backend-to-browser realtime uses the Staff-authorized `/hubs/operations`
+boundary. `FleetUpdated` now carries the current fleet telemetry projection on
+connect, after new sync reports, and when freshness changes. The backend
+projection matches the existing `AmrStatus` shape and adds explicit sync/pose
+freshness and readiness fields. `TourUpdated(tourId, revision)` and
+`AssistanceRequired` remain planned events. The web still selects its mock
+realtime provider; wiring production auth, reconnect/refetch, and Staff data
+flows is separate work. This decision does not approve or implement the
+proposed staff/admin HTTP APIs in `web/src/api/contracts/staff.ts` and
 `web/src/api/contracts/admin.ts`, nor their error/version contracts.
 
-No robot-to-backend or backend-to-browser frequency is fixed in this decision.
-Production integration must declare configurable operational rates and
-freshness thresholds, independently of ROS internal rates. Send execution/fault
-changes promptly; bound buffers and
-keep network I/O off ROS callbacks. Latest-state pose delivery must not discard
-terminal results, which require separate retention/retry. The SimulationPreview
+Fleet Sync v1 has initial configurable age/freshness defaults; R1 must validate
+report rates and thresholds against the bridge/network, independently of ROS
+internal rates. Keep network I/O off ROS callbacks. M2 terminal results require
+separate retention/retry from latest-state pose delivery. The SimulationPreview
 10 Hz limit remains local to preview. Research implementation and benchmark
 execution are deferred under Section 5. Research requirements impose no
 constraints or acceptance gates on this production milestone; the Capstone
 scope remains unchanged.
 
 The backend implements development SimulationPreview, user JWT login/session
-authentication, Representative owned registration management, Admin account
-management, and Admin POI management. Admin role
-authorization is enforced for the account and POI management APIs. Authorization
-for future Admin Tour/review, invitation, branch-request, and fleet business
-APIs remains unimplemented, as does robot/machine authentication. Production
-fleet and operations Hubs and fleet dispatch remain unimplemented. A single
-backend process with per-robot latest state is the initial implementation
-baseline; multiple instances would require shared-state and connection-routing
-design, not just separate Hub names.
+authentication, Representative-owned registration management, Admin account management,
+Staff POI, Route and Tour preparation management and registration review,
+invitation support, Student access, authenticated Fleet Sync v1, and the
+Staff-authorized Operations Hub projection. Admin role authorization is
+enforced for Admin APIs; invitation support grants Staff-wide support and owner-Representative access.
+Student access applies invitation/session rules. Runtime branch-request,
+command/result, dispatch, and Tour runtime APIs remain unimplemented. Latest
+fleet state is single-process memory; multiple instances need shared-state and
+routing design.
 
-### 3.4 State and command-result semantics
+### 3.4 M2 execution and command-result semantics
+
+Fleet Sync v1 implements telemetry state reporting as described in §3.1.2.
+The per-leg result/command rules below are retained for M2 design; no
+`ReportCommandResult` endpoint, navigation command, or tour runtime is
+implemented by this backend slice.
 
 | Field | Requirement and meaning |
 |---|---|
@@ -1117,11 +1450,11 @@ design, not just separate Hub names.
 Numeric JSON `seq` must stay within `1..9007199254740991` for exact representation
 in the browser; a backend int64 type alone does not guarantee this.
 
-Use `reportedAt` and `pose.capturedAt` to distinguish a living bridge from a stale
-pose. ROS time and wall-clock conversion/freshness thresholds must be documented
-when implementing the bridge. Sequence ordering does not depend on synchronized
-wall clocks. Server-side source metadata comes from `Robot.SourceType`; no
-per-sample source/version field is required by this MVP.
+Use `reportedAt` and `pose.capturedAt` to distinguish a recent sync from a stale
+pose. R1 must document ROS-time-to-wall-clock conversion. Sequence ordering is
+per stream; timestamps are used for freshness and new-stream reconciliation.
+Server-side source metadata comes from `Robot.SourceType`; no per-sample
+source/version field is required by this MVP.
 
 Execution status is separate from both `Tour.State` and connection/freshness.
 `UNKNOWN` means the bridge/robot cannot determine execution, for example after
@@ -1185,16 +1518,29 @@ and readiness evidence. `set_initial_pose: false` is deliberate; neither an
 RViz initial-pose message nor `Route.StartX/Y/Yaw` proves the robot is localized
 at that position. This prerequisite does not block the transport-only spike.
 
-### 3.6 Connection lifecycle and idempotency
+### 3.6 HTTPS report lifecycle and M2 command idempotency
 
-- Retry initial connection failure and automatically reconnect after disconnect,
-  with bounded backoff and jitter. Register handlers once, not on every retry.
-- Keep one current authenticated connection per robot. A valid new connection
-  supersedes the old; reject reports from the old connection and prevent its
-  disconnect callback from removing the new one.
-- Reject duplicate/out-of-order state within `(robotId, streamId, seq)`. Bind
-  streams to the authenticated current connection; reconcile new streams after
-  process restart rather than comparing sequence numbers across streams.
+- R1 must retry HTTPS report failures with bounded backoff and retain the exact
+  report, `streamId`, and sequence until the response is known. A 400 validation
+  rejection occurs before storage; after correcting its payload, the same
+  sequence may be retried. When a response is uncertain, retry the same body.
+  If it is still the latest report, Fleet Sync v1 acknowledges it as a duplicate
+  without refreshing liveness. If a later sequence already replaced it, the
+  older retry receives `OUT_OF_ORDER` and must be dropped. Idempotency history
+  is process-local: if the API restarts first, an uncertain retry may be
+  accepted as the first observation with `duplicate: false`. Keep one report in
+  flight and retain its exact body until a response arrives; v1 has no durable
+  exactly-once delivery.
+- A robot bridge process restart creates a new stream at sequence 1 when
+  `reportedAt` is at least as new as the previous stream. Sequence values are
+  not compared across stream IDs. An API backend restart clears its
+  process-local projection and tombstones; a robot bridge that is still running
+  keeps its stream and continues at N+1, which the empty store accepts as its
+  first observed report. This establishes a fresh ordering baseline and does
+  not recover telemetry missed during downtime. While a current stream exists,
+  a new non-retired stream must start at sequence 1 (`STREAM_START_REQUIRED`),
+  and a stream in the retained retired history remains rejected (`STALE_STREAM`).
+  V1 does not replay commands.
 - Duplicate `GoTo` with the same leg and target returns existing execution/result
   information without creating a new goal. The same leg with a different target
   is rejected. A busy robot rejects other legs, without automatic preemption or
@@ -1212,37 +1558,43 @@ at that position. This prerequisite does not block the transport-only spike.
   Replaying a persisted intent after bridge restart is not automatically safe:
   in-memory idempotency history may be gone. Reconcile first.
 
-These are application guarantees, not exactly-once delivery or distributed
-consensus supplied by SignalR.
+These are M2 application guarantees, not exactly-once delivery or distributed
+consensus supplied by HTTPS or SignalR.
 
-### 3.7 Authentication and compatibility acceptance gate
+### 3.7 Fleet authentication and compatibility status
 
-The local-only spike may bootstrap with dummy/local identity. Passing the
-checkpoint requires valid credentials, invalid-credential rejection,
-authenticated reconnect, and backend restart. Outside that spike, before
-allowing navigation commands require TLS, a machine credential per robot, and
-a fleet-machine authorization policy. User/browser identities cannot submit
-robot state or use the fleet Hub. Operations requires separate user access.
-Reuse `Robot.CredentialHash`; robot credential verification and credential
-lifecycle are later work, without adding PKI/mTLS or a device-management
-platform to the MVP.
+Fleet Sync v1 authenticates each request using the existing
+`Robot.CredentialHash` field and a distinct per-robot credential. Credential
+verification and the web issue/rotate/revoke lifecycle are implemented in
+backend; the one-shot CLI fallback calls the same lifecycle service with a
+separate SQL principal. Only the hash is stored; the plaintext is returned once
+for issue/rotation, and credential audit records are append-only. TLS is a
+deployment requirement. The API runtime does not receive the provisioning
+connection string. Full lifecycle and provisioning role instructions and the
+client probe are in [`backend/docs/fleet-sync.md`](../backend/docs/fleet-sync.md).
+Fleet sync is currently rate-limited before authentication by connection IP.
+Before real R1 traffic, configure ASP.NET Core forwarded headers with only the
+actual trusted proxy addresses; otherwise robots may all share the proxy's
+bucket. Credential failures also consume the pre-auth bucket, so deployments
+must test the robot cadence plus retries and separate abuse protection from the
+authenticated per-robot reporting budget (or validate an equivalent design).
+Until those proxy and capacity conditions are exercised, this limiter is a
+blocker for real R1 traffic; controlled single-instance B1 verification can
+continue.
 
-After these docs are merged, the next task is a small Python SignalR client
-against an ASP.NET Core/.NET 10 test Hub. The acceptance checklist is in
-[ADR-0008](decisions/0008-production-fleet-transport.md#python-compatibility-checkpoint-next-step-after-documentation-merge):
-runtime parity with the robot's Humble image; verified TLS/auth; bidirectional
-representative payloads; initial retry; clean and silent loss detection;
-authenticated reconnect/backend restart; observable result acknowledgement and
-idempotent replay; bounded offline buffering; and an at least 30-minute soak
-at a declared configurable test rate with memory/queue/callback evidence.
-The test rate is not a production frequency or research requirement. No ROS
-nodes, TF, Nav2, or hardware is needed. Spike measurements do not establish a
-physical stop budget.
+`/hubs/operations` accepts Staff-role JWTs at connection time and closes each
+connection when its JWT expires. Account deactivation does not immediately
+revoke an issued JWT. SignalR browser WebSocket requests may send the JWT as
+`access_token` only on that Hub path. `/api/fleet/v1/sync` uses the robot scheme
+explicitly and does not accept user JWTs; robot credentials cannot join the
+Operations Hub.
 
-**Python SignalR compatibility with ASP.NET Core/.NET 10 is unproven and must
-pass this checkpoint before production fleet bridge implementation.** No Python
-client dependency is selected here. If it fails, review the transport for both
-the physical bridge and Fleet Emulator; no fallback implementation is chosen.
+The S2/S2B Python SignalR compatibility harness remains evidence about the
+tested SignalR clients. It is no longer a gate for HTTP Fleet Sync, and it does
+not show that SignalR is impossible. R1 must test the Python HTTPS client,
+verified TLS, invalid credentials, retries, process/backend restart, and
+sequence continuity. This transport test does not establish physical safety or
+a valid robot-local stop budget.
 
 
 ---
@@ -1275,8 +1627,9 @@ rosters or navigation commands. Audience authorization and exact delivery
 endpoint remain to be specified in the viewer integration patch; this decision
 does not select group-code authentication or a new Hub.
 
-Livestream is a separate media path, not payload on `/hubs/fleet` or a camera
-texture requirement for the operational Twin. Staff start/progression checks
+Livestream is a separate media path, not payload on Fleet Sync or the
+operations projection, and is not a camera-texture requirement for the
+operational Twin. Staff start/progression checks
 need an explicit, testable source of stream availability. Its owner, observation
 method, freshness, and manual-confirmation policy must be defined before full
 Remote Tour acceptance. A media outage is distinct from loss of the backend
@@ -1297,8 +1650,8 @@ add audio or head commands to the navigation fleet MVP.
 ### Local Gazebo display integration
 
 The first executable display integration is a **development-only, read-only,
-single-Gazebo-robot** path. It does not implement the production fleet command
-contract, robot authentication, dispatch, or physical localization above.
+single-Gazebo-robot** path. It does not use production Fleet Sync v1, implement
+fleet commands, dispatch, or provide physical localization evidence.
 
 - Enable backend `SimulationPreview:Enabled=true` in `Development` only.
   Preview endpoints accept loopback connections only; use an SSH tunnel when
@@ -1448,9 +1801,14 @@ paths; their final media transports remain undecided.
 ### 7.1 Student private Q&A contract (implemented; integration verification pending)
 
 Decision record: [ADR-0016](decisions/0016-student-qa-assistant-stack.md).
-Business rules: `docs/requirements/campus-tour-scope.md` (P0-07, R1-06,
-R1-12, R1-14) and UI flow §5.5. This section is the text-Q&A contract; STT/TTS
-(P1-01) will extend it in a later change.
+ADR-0020 supersedes runtime provider/general-answer generation as a target:
+Viewer answers must come from the approved bank; providers assist Staff drafting.
+Current code below remains the provider-backed implementation contract and is a
+gap. StudentQuestionGate is per-session and does not implement the instance-wide
+8 executing/20 total admission queue; target latency includes queue waiting.
+Target business rules: `docs/requirements/campus-tour-scope.md`, SRS FR-30–34,
+BR-18/19, NFR-PERF-04 and NFR-AI-01. The gap register records how the current
+text-Q&A contract below differs. Voice/transcript/TTS integration remains later work.
 
 ```text
 browser --(session cookie)--> backend --(service key)--> ai-assistant --> LLM provider
@@ -1528,6 +1886,15 @@ backend cache (10-minute TTL). Nothing is persisted: no question/answer table,
 no audit row containing text. One backend instance is assumed for V1; a
 multi-instance deployment needs a shared idempotency store first.
 
+Backend hardening (2026-10-19): cache lookup and session reservation are atomic.
+Null recent-turn items return validation 400 before mapping; upstream replies
+must contain a nonblank answer of at most 1200 characters and an explicit boolean
+outOfScope. The backend reads at most 32 KiB of response bytes, even without a
+Content-Length, under a 20 s deadline covering headers and body. Invalid/oversized
+replies return 503 AI_UNAVAILABLE. Caller cancellation propagates. Safe telemetry
+records internal requestId, status, outcome and duration; the
+`SmartCampus.Assistant` meter exposes `assistant.duration` in milliseconds.
+
 A `DIEM_XEM_CHUNG` session may ask questions. The answer is private to that
 session but visible to everyone in that room; the web labels it as shared.
 
@@ -1565,7 +1932,8 @@ route).
 | Per session | 6 questions/minute, 1 in flight |
 | Assistant concurrent LLM calls | configurable, default 8 |
 
-Values are initial settings to validate in the R1-14 load test, not measured
+Values are current implementation settings to evaluate against SRS NFR-PERF-04
+and NFR-CAP-01, not measured
 capacity.
 
 #### Answer rules (enforced in `ai-assistant`)
@@ -1610,7 +1978,7 @@ the data-use condition of the provider tier.
 | `robot/` Docker profiles | GitHub Actions / local Docker | `docker compose --profile debug` or `--profile sim` | development/simulation only |
 | `robot/` firmware | GitHub Actions (compile only) | manual ST-Link flash | STM32G431 |
 | `digital-twin/` | <!-- TODO(WP4) --> | service/container | simulation workstation/server |
-| `backend/` | multi-stage .NET 10 image (`backend/Dockerfile`) | `backend/docker-compose.yml`: HTTPS API + SQL Server + one-shot database bootstrap | one x86_64 AWS EC2 |
+| `backend/` | .NET 10 API (`backend/Dockerfile`); separately versioned DB bootstrap/upgrade tool (`backend/Dockerfile.db-init`) | `backend/docker-compose.yml`: HTTPS API + pinned SQL Server and persistent volume; `backend/docker-compose.db-init.yml` is explicit opt-in only | one x86_64 AWS EC2 |
 | `ai-assistant/` | Python 3.11+ / Starlette (ADR-0016); `ai-assistant/scripts/verify` in CI; image TODO(WP4) | container image, private network only | server/cloud, not robot miniPC |
 | `web/` | Vercel (git integration) | auto-deploy on push | Vercel, one project |
 
@@ -1619,6 +1987,18 @@ CI never flashes the STM32 and the miniPC never auto-flashes it; see
 
 ### Backend EC2 deployment
 
+Backend CI smoke-tests and publishes private GHCR digests with a verified release
+manifest. A successful push/main Backend Verify automatically triggers Backend
+Deploy; superseded automatic releases are skipped. Application delivery also
+supports manual dispatch; SQL maintenance remains manual. Both reference
+`production` and share deployment concurrency. Authenticated source bundles and
+pinned OpenSSH are shared with the trusted-workstation CLI; AWS OIDC/SSM is not required. EC2
+receives Compose/operations files and temporary registry auth, without retaining
+a GitHub PAT. The deploy identity is root-equivalent; host pins, network access
+and GitHub environment eligibility are operator prerequisites. Verified off-host
+backups support AWS S3 or a dedicated HTTPS S3-compatible endpoint/profile
+independent of AWS IAM. Schema/readiness, ownership and API rollback guards remain.
+
 `backend/docs/ec2-deployment.md` records configuration, TLS, secrets, initial Admin,
 backup and smoke-test commands for the single-instance deployment. Kestrel
 terminates TLS on container port 8443, published as host 443; the API runs as a
@@ -1626,16 +2006,46 @@ non-root user. SQL Server 2022 Express is the default edition, uses a persistent
 named volume and an internal Docker network, and publishes no host database port.
 The API has a separate outbound network for invitation delivery.
 
-The one-shot `db-init` waits for SQL health, applies the existing v1.1 snapshot
-transactionally only to an empty database, marks its canonical snapshot hash in
-database metadata, and provisions the dedicated `smartcampus_api` login. It
-rejects existing unmarked/different snapshots instead of migrating them. Runtime
-permissions preserve append-only AuditLogs/TourEvents, grant writes for current
-implemented features, and grant read access only to Tour/route/robot/branch data.
-This deployment introduces no API route or schema migration. The API process
-probe expects 401 from the existing refresh route without a cookie; it is not a
-database/business readiness check. Docker smoke testing and real EC2/browser TLS
-validation remain separate from the normal backend verification script.
+The API deployment never migrates the schema or changes the SQL Server engine.
+It runs the separately versioned `db-init` tool in read-only `--check-only`
+mode before promoting only the API container. Fresh bootstrap uses an explicit
+`--bootstrap` operation against an empty database. Existing data upgrades use
+the separately locked Backend Database Schema Upgrade workflow: it takes and
+verifies a full backup, applies ordered additive Database First patches, checks
+the resulting v1.4 structure and runtime grants, and retains the original
+bootstrap hash while recording the application schema version. Backend Deploy
+runs that same step first in `--if-needed` mode: it backs up and upgrades or
+regrants only when the release DB tool's read-only check rejects the live
+database, and is a no-op otherwise. The distinct
+Backend SQL Maintenance workflow changes only the pinned SQL Server engine and
+resource settings. All three operations share the production host/deploy lock.
+Unknown schemas fail closed. Runtime permissions preserve append-only AuditLogs/TourEvents, grant writes for current
+implemented features: Route/RouteStops CRUD, Tour INSERT/UPDATE without DELETE,
+and `Robots` SELECT/INSERT plus column-level credential lifecycle and
+first-accepted confirmation UPDATE. Runtime has no whole-table `Robots`
+UPDATE/DELETE. The separate credential provisioner shares lifecycle logic,
+uses its own column-scoped grants, and appends audit rows without rewriting
+them. Existing v1.4/v1.5/v1.6 databases require the controlled upgrade/regrant to
+v1.7 and read-only check-only gate before an API release that needs this schema.
+The check-only gate does not change database state.
+The deployment adds two anonymous operational routes: `GET /health/live`
+returns 204 when the API process can serve a request; `GET /health/ready`
+performs a SQL connectivity check with a three-second timeout and returns 200
+with `{ "status": "ready" }` or a generic 503. Neither route returns connection
+details. Compose and deployment use readiness; liveness is useful to distinguish
+an API process from an API with a database outage. These routes do not change
+the database schema, and no migration is run during deployment. Docker smoke
+testing and real EC2/browser TLS and resource validation remain separate from
+the normal backend verification script.
+
+API documentation is opt-in: `GET /openapi/v1.json` (OpenAPI 3.1) and Swagger
+UI under `/swagger` are mapped when `ApiDocumentation:Enabled` is true, which
+defaults to Development only; otherwise both return 404. Outside Development
+enabling them requires a shared Basic credential
+(`ApiDocumentation:Username`/`Password`) that covers only those two paths and
+grants no API access. Business authentication, authorization, CORS and rate
+limits are unchanged. Configuration and exposure trade-offs are in
+`backend/docs/api-documentation.md`.
 
 
 ### Physical robot deployment
@@ -1652,6 +2062,42 @@ read-only `foxglove_bridge` and `initialpose_guard`, the only remote write. That
 write is the initial pose, accepted only while the robot is stationary with no
 active goal. Laptops render in their own local DDS graph (RViz2). No other work
 package uses DDS to reach the robot: the backend and the Twin use `fleet_bridge`
-over SignalR (Section 3.1), which runs on the robot and is unaffected. Once this
+over HTTPS Fleet Sync (Section 3.1), which runs on the robot and is unaffected. Once this
 boundary is applied, laptop access by `ROS_DISCOVERY_SERVER`/`remote_rviz` stops
 working.
+
+### Route revision and manual verification API (backend)
+
+As of schema v1.3, `Routes` remains the shared identity table and uses
+`AuthoringMode` to isolate existing `LEGACY` Route/RouteStops CRUD from new
+`VERSIONED` route preparation. Legacy APIs list and load only legacy rows; the
+new endpoints are documented in
+[`backend/docs/route-revisions.md`](../backend/docs/route-revisions.md).
+Staff writes immutable `RouteRevisions` and ordered stops linked to exact map
+and POI revisions plus source POI PASS evidence. `GET /api/routes` lists only
+current VERSIONED revisions, including drafts, with search, sort, paging and
+optional exact map-version and `isActive` filtering; the legacy catalog remains separate.
+Each view carries `isActive` and an opaque `rowVersion` (ADR-0037). Tour create and
+slots refuse an inactive route with 409 `ROUTE_UNAVAILABLE`.
+Submission receipts are separate from draft creation. Technical Staff appends
+manual whole-route test runs with an explicit distinct active Staff participant
+whose single persisted role resolves through `ApplicationRoles`. The technical
+test path uses the same transaction-owned robot deployment application lock as
+map deployment/POI checks and confirms the robot's latest cross-map deployment
+record matches the selected map ID and SHA-256.
+
+The current route navigation fingerprint comprises exact map ID/checksum,
+start/end pose, ordered POI navigation fingerprints, camera presets and
+head-step configuration. Dwell is excluded from navigation identity but is
+recomputed for every revision's incomplete duration projection. Historical
+revision/run hashes are preserved; compatibility is established from their
+immutable map/pose/ordered-stop/camera/head-step snapshots. The newest
+whole-route result for the same navigation configuration is effective, while
+unrelated configurations retain their outcomes. Evidence is human-entered, not
+automatic physical proof; manual PASS is not tour scheduling, reservation,
+READY, or movement authorization. Approved narration/audio duration is not yet
+linked to versioned POI content, so API duration is explicitly incomplete and
+reports the dwell subtotal only. Branch authoring, branch requests/cutoff,
+project POI YAML/frame mapping, Tour runtime and command transport remain staged
+or pending. See ADR-0023. ERD, preparation sequence and verification-state
+diagrams require member redraw/review and remain pending.

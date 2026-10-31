@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
@@ -23,10 +24,10 @@ describe('simulator map assets', () => {
     expect(visible.some((n: { name: string }) => n.name === '601 floor finish')).toBe(true)
     expect(visible.some((n: { name: string }) => n.name === 'Original architectural shell')).toBe(true)
     expect(json.asset.extras.replacedWallTriangles).toBeGreaterThan(0)
-    expect(json.asset.extras.alignedDoors).toBe(22)
+    expect(json.asset.extras.alignedDoors).toBe(23)
     expect(json.asset.extras.campusStyle).toBe('modern-glass-v2')
-    expect(json.asset.extras.doorOpenings).toHaveLength(22)
-    expect(json.asset.extras.doorOpenings.filter((d: { added?: boolean }) => d.added).map((d: { name: string }) => d.name)).toEqual(['615', '616', '615 secondary', '617'])
+    expect(json.asset.extras.doorOpenings).toHaveLength(23)
+    expect(json.asset.extras.doorOpenings.filter((d: { added?: boolean }) => d.added).map((d: { name: string }) => d.name)).toEqual(['615', '616', '615 secondary', '617', '617 secondary'])
     expect(visible.some(n => /^Source .* (clear upper glass|outer aluminium head)$/.test(n.name))).toBe(false)
     const run = json.asset.extras.glazingRuns[0]
     const start = run[2], end = run[3], length = Math.hypot(end[0] - start[0], end[1] - start[1])
@@ -84,8 +85,8 @@ describe('simulator map assets', () => {
     const visible: { name: string; mesh?: number; translation?: number[] }[] = []
     const visit = (i: number) => { visible.push(json.nodes[i]); json.nodes[i].children?.forEach(visit) }
     json.scenes[json.scene ?? 0].nodes.forEach(visit)
-    expect(visible.filter(n => / door leaf stile 0$/.test(n.name))).toHaveLength(22)
-    expect(visible.filter(n => / lever handle [-1]+$/.test(n.name))).toHaveLength(44)
+    expect(visible.filter(n => / door leaf stile 0$/.test(n.name))).toHaveLength(23)
+    expect(visible.filter(n => / lever handle [-1]+$/.test(n.name))).toHaveLength(46)
     expect(visible.some(n => /solid lower aluminium infill/.test(n.name))).toBe(false)
     for (const node of visible.filter(n => / (outer aluminium|door leaf)/.test(n.name))) {
       expect(json.materials[json.meshes[node.mesh!].primitives[0].material].name).toBe('Satin aluminium door frames')

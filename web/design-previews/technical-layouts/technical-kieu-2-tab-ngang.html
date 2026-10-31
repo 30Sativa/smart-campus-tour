@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="vi" data-variant="topnav">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kỹ thuật · Tab ngang</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f7f9;--surface:#fff;--ink:#0f172a;--ink2:#173b59;--text2:#334155;--muted:#64748b;--line:#e2e8f0;--line2:#eef1f4;--soft:#f8fafc;--accent:#2d719e;--accent-ink:#174b70;--accent-soft:#e5f3ff;--accent-soft2:#f1f8fe;--ok:#166534;--ok-soft:#dcfce7;--warn:#92400e;--warn-soft:#fef3c7;--bad:#b91c1c;--bad-soft:#fee2e2;--radius:14px;--shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.06)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent)}
+h1{font-size:24px;margin:0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:16px;margin:0;font-weight:700}
+h3{font-size:14px;margin:0;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)}.small{font-size:12.5px}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+.grow{flex:1 1 auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 14px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:600;cursor:pointer;text-decoration:none;color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-ink)}
+.btn-danger{color:var(--bad);border-color:#fecaca}
+.btn-danger-solid{background:var(--bad);border-color:var(--bad);color:#fff}.btn-danger-solid:hover{background:#991b1b}
+.btn-ghost{border-color:transparent;background:transparent}
+.btn:disabled{background:#e2e8f0;border-color:#e2e8f0;color:#64748b;cursor:not-allowed}
+.btn-sm{min-height:34px;padding:0 10px;font-size:13px}
+.icon-btn{width:40px;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;min-width:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:14px}
+.g-auto{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g-2{grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-items:start}
+.g-side{display:grid;gap:18px;grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);align-items:start}
+.page-h{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.page-h .grow{flex:1 1 280px}
+.crumb{font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.crumb a{color:var(--muted);text-decoration:none}.crumb a:hover{color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.c-ok{background:var(--ok-soft);color:var(--ok)}.c-warn{background:var(--warn-soft);color:var(--warn)}.c-bad{background:var(--bad-soft);color:var(--bad)}.c-info{background:var(--accent-soft);color:var(--accent-ink)}.c-mute{background:#f1f5f9;color:#475569}
+.stat .lbl{font-size:12.5px;color:var(--muted)}.stat .val{font-size:24px;font-weight:700;margin-top:4px}.stat .sub{font-size:12.5px;margin-top:2px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+table.t{width:100%;border-collapse:collapse}
+.t th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);padding:10px 12px;background:var(--soft);border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.t tr:last-child td{border-bottom:none}
+.t tr.click{cursor:pointer}.t tr.click:hover td{background:var(--accent-soft2)}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--text2)}
+.field input:not([type=checkbox]):not([type=radio]):not([type=file]),.field select,.field textarea{min-height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:8px 12px;font-weight:400;background:#fff;font-size:14px;color:var(--ink);width:100%}
+.field textarea{min-height:76px;resize:vertical}
+.cell{width:100%;min-height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:4px 8px;background:#fff}
+.hint{font-size:12px;font-weight:400;color:var(--muted)}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:#fff;font-weight:500}
+.check input{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.check.warn{background:#fffbeb;border-color:#fde68a}
+.seg{display:inline-flex;background:var(--line2);padding:4px;border-radius:11px;gap:4px;flex-wrap:wrap}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0}
+.seg span{display:flex;align-items:center;min-height:36px;padding:0 14px;border-radius:8px;font-weight:600;color:#475569;cursor:pointer;font-size:13px}
+.seg input:checked+span{background:#fff;color:var(--accent-ink);box-shadow:0 1px 2px rgba(15,23,42,.1)}
+.seg input:focus-visible+span{outline:2px solid var(--accent)}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res label{position:relative}
+.res input{position:absolute;opacity:0;margin:0}
+.res span{display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #cbd5e1;border-radius:10px;font-weight:600;color:#475569;cursor:pointer;background:#fff}
+.res input:focus-visible+span{outline:2px solid var(--accent)}
+.res input[value=pass]:checked+span{border:2px solid #15803d;background:#f0fdf4;color:var(--ok)}
+.res input[value=fail]:checked+span{border:2px solid var(--bad);background:#fef2f2;color:var(--bad)}
+.note{padding:12px 14px;border-radius:10px;background:var(--accent-soft2);border:1px solid #d6e8f5;color:var(--accent-ink);font-size:13px}
+.note.warn{background:#fffbeb;border-color:#fde68a;color:var(--warn)}
+.note.bad{background:#fef2f2;border-color:#fecaca;color:var(--bad)}
+.note.ok{background:#f0fdf4;border-color:#bbf7d0;color:var(--ok)}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed #cbd5e1;border-radius:12px;background:#fff}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:13px;margin:0}.kv dt{color:var(--muted)}.kv dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere}
+ul.miss{margin:6px 0 0;padding-left:18px;color:var(--bad);font-size:13px}
+.piperow{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line2);border-radius:12px}
+.piperow.cur{background:var(--accent-soft2);border-color:#d6e8f5}
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;flex:1 1 480px}
+.step{padding:8px 10px;border-radius:8px;font-size:12.5px;font-weight:600;background:#f1f5f9;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step.done{background:var(--ok-soft);color:var(--ok)}.step.doing{background:var(--warn-soft);color:var(--warn)}.step.fail{background:var(--bad-soft);color:var(--bad)}
+.bar{display:flex;gap:4px}.bar i{flex:1;height:5px;border-radius:3px;background:#e2e8f0}.bar i.done{background:var(--accent)}.bar i.doing{background:#f59e0b}.bar i.fail{background:var(--bad)}
+.mapc{position:relative;width:100%;aspect-ratio:40/25;border-radius:12px;background-color:#f8fafc;background-image:linear-gradient(#e2e8f0 1px,transparent 1px),linear-gradient(90deg,#e2e8f0 1px,transparent 1px);background-size:5% 8%;overflow:hidden;border:1px solid var(--line)}
+.bld{position:absolute;background:#dbe4ec;border-radius:6px;font-size:11px;color:#475569;padding:6px 8px;font-weight:600;line-height:1.2}
+.bld.new{background:#fde7c8;outline:2px dashed #d97706;color:var(--warn)}
+.mapc svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.dot{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
+.dot i{width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px rgba(15,23,42,.35);display:block}
+.dot.verified i{background:#15803d}.dot.pending i{background:#d97706}.dot.failed i{background:var(--bad)}.dot.preview i{background:#7c3aed}
+.dot.sel i{width:20px;height:20px;box-shadow:0 0 0 4px rgba(45,113,158,.35),0 0 0 1.5px #2d719e}
+.dot b{position:absolute;top:27px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:6px;white-space:nowrap;color:var(--ink)}
+.robot{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:6px;background:var(--accent);border:3px solid #fff;box-shadow:0 0 0 2px var(--accent);z-index:3}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.kan{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.col{background:var(--line2);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:110px}
+.col-h{display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:2px 4px}
+.rcard{display:block;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-decoration:none;color:var(--ink)}
+.rcard:hover{border-color:var(--accent)}
+.rcard.bad{border-color:#fecaca}
+.drop{border:2px dashed #cbd5e1;border-radius:12px;padding:22px;text-align:center;background:var(--soft);display:flex;flex-direction:column;gap:8px;align-items:center;color:var(--text2)}
+.drop.on{border-color:var(--accent);background:var(--accent-soft2)}
+.panel{background:#fff;display:flex;flex-direction:column;min-width:0}
+.panel-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.panel-b{padding:18px 20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:40}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 32px));background:#fff;border-radius:16px;z-index:50;box-shadow:0 20px 60px rgba(15,23,42,.25);overflow:hidden}
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+#toast div{background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-weight:500;box-shadow:var(--shadow);max-width:90vw}
+.tl{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2);font-size:13px}
+.tl:last-child{border-bottom:none}
+.tl .when{width:84px;flex:none;color:var(--muted);font-size:12.5px}
+.vstep{display:flex;gap:14px;position:relative;padding-bottom:18px}
+.vstep .num{width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:#f1f5f9;color:#475569;z-index:1}
+.vstep.done .num{background:var(--ok-soft);color:var(--ok)}.vstep.doing .num{background:var(--warn-soft);color:var(--warn)}.vstep.fail .num{background:var(--bad-soft);color:var(--bad)}
+.vstep:not(:last-child)::before{content:"";position:absolute;left:14px;top:30px;bottom:0;width:2px;background:var(--line)}
+.vstep .vb{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;padding-top:4px}
+.lock{opacity:.5;pointer-events:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.badge{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;margin-left:auto}
+.b-warn{background:var(--warn-soft);color:var(--warn)}.b-bad{background:var(--bad-soft);color:var(--bad)}
+.task{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 18px;cursor:pointer;color:var(--ink)}
+.task:hover{border-color:#94a3b8}.task.sel{border:2px solid var(--accent);padding:13px 17px}
+.task .t1{display:block;font-weight:600}.task .t2{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.tico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.ti-bad{background:var(--bad-soft);color:var(--bad)}.ti-warn{background:var(--warn-soft);color:var(--warn)}.ti-info{background:var(--accent-soft);color:var(--accent)}
+.sec-t{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:6px 0 0}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.fchip{min-height:38px;padding:0 14px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:var(--text2);font-weight:600;font-size:13px;cursor:pointer}
+.fchip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.stops{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.stops li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px}
+.stops .n{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex:none}
+.brand{display:flex;align-items:center;gap:10px;white-space:nowrap;flex:none}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.avatar{width:34px;height:34px;border-radius:999px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.item{display:flex;align-items:center;gap:10px;color:#374151;text-decoration:none;font-weight:500;position:relative}
+.switch{position:fixed;right:16px;bottom:16px;z-index:25;display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;box-shadow:var(--shadow);font-size:12px;font-weight:600;color:var(--muted)}
+.switch a{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--text2)}
+.switch a.on{background:var(--accent);color:#fff}
+.mini-steps{display:flex;flex-direction:column;gap:6px}
+.mini-steps div{display:flex;align-items:center;gap:8px;font-size:13px}
+.mini-steps i{width:18px;height:18px;border-radius:50%;flex:none;background:#e2e8f0}
+.mini-steps .done i{background:#15803d}.mini-steps .doing i{background:#f59e0b}.mini-steps .fail i{background:var(--bad)}
+
+/* ── Kiểu 1: Sidebar ─────────────────────────────── */
+.v-sidebar .shell{display:flex;min-height:100vh}
+.v-sidebar .nav{width:248px;flex:none;background:#fff;border-right:1px solid #e5e7eb;padding:20px 14px;display:flex;flex-direction:column;gap:20px;position:sticky;top:0;height:100vh}
+.v-sidebar .navlist{display:flex;flex-direction:column;gap:2px}
+.v-sidebar .item{padding:10px 12px;border-radius:10px;min-height:44px}
+.v-sidebar .item:hover{background:#f3f4f6}
+.v-sidebar .item.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:700}
+.v-sidebar .user{margin-top:auto;border-top:1px solid #eceef1;padding:14px 6px 0;display:flex;align-items:center;gap:10px}
+.v-sidebar .main{flex:1;min-width:0;padding:28px 36px 80px}
+.v-sidebar .panel{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);z-index:45;box-shadow:-10px 0 40px rgba(15,23,42,.15)}
+
+/* ── Kiểu 2: Tab ngang ───────────────────────────── */
+.v-topnav .top{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:20px;padding:0 28px;min-height:64px;flex-wrap:wrap}
+.v-topnav .navlist{display:flex;gap:2px;flex-wrap:wrap}
+.v-topnav .item{min-height:64px;padding:0 12px;color:var(--muted)}
+.v-topnav .item:hover{color:var(--ink)}
+.v-topnav .item.on{color:var(--accent-ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--accent)}
+.v-topnav .item .badge{margin-left:2px}
+.v-topnav .user{display:flex;align-items:center;gap:10px;margin-left:auto}
+.v-topnav .body{display:grid;grid-template-columns:minmax(0,1fr);max-width:1480px;margin:0 auto;padding:24px 28px 80px;gap:20px;align-items:start}
+.v-topnav .body.has-panel{grid-template-columns:minmax(0,1fr) 420px}
+.v-topnav .panel{position:sticky;top:88px;border:1px solid var(--line);border-radius:16px;max-height:calc(100vh - 110px);overflow:hidden}
+.wb{display:grid;grid-template-columns:300px minmax(0,1fr);gap:20px;align-items:start}
+.mcard{display:flex;flex-direction:column;gap:8px;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;width:100%;color:var(--ink)}
+.mcard.on{border:2px solid var(--accent);background:var(--accent-soft2);padding:11px 13px}
+
+/* ── Kiểu 3: Hộp việc ────────────────────────────── */
+.v-inbox .shell{display:grid;grid-template-columns:80px minmax(0,1fr) 420px;min-height:100vh}
+.v-inbox .rail{background:#fff;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 0;position:sticky;top:0;height:100vh}
+.v-inbox .navlist{display:flex;flex-direction:column;gap:4px;align-items:center}
+.v-inbox .item{width:60px;min-height:56px;flex-direction:column;justify-content:center;gap:3px;padding:6px 0;font-size:11px;font-weight:600;text-align:center;border-radius:12px;color:#475569}
+.v-inbox .item:hover{background:#f3f4f6}
+.v-inbox .item.on{background:var(--accent-soft);color:var(--accent-ink)}
+.v-inbox .item .badge{position:absolute;top:2px;right:2px;margin:0;padding:0 6px;font-size:10.5px}
+.v-inbox .rail .user{margin-top:auto}
+.v-inbox .main{padding:28px 32px 80px;min-width:0}
+.v-inbox .panel{border-left:1px solid #e5e7eb;position:sticky;top:0;height:100vh}
+.v-inbox .switch{left:96px;right:auto}
+
+/* ── Kiểu 4: Bản đồ ──────────────────────────────── */
+.v-map{background:#e9eef3}
+.v-map .bgmap{position:fixed;inset:0;z-index:0;padding:78px 24px 100px;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
+.v-map .bgmap .mapc{width:min(100%,calc((100vh - 190px)*1.6));border-radius:18px;box-shadow:0 10px 40px rgba(15,23,42,.08)}
+.v-map .bgmap.side{padding-left:372px}
+.v-map .bgmap.side .mapc{width:min(100%,calc((100vh - 190px)*1.6))}
+.v-map .bgmap.dim{opacity:.35;pointer-events:none;filter:saturate(.6)}
+.v-map .topbar{position:fixed;top:14px;left:16px;right:16px;z-index:20;display:flex;gap:10px;align-items:center;pointer-events:none}
+.v-map .topbar>*{pointer-events:auto}
+.pill{background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;padding:5px 14px 5px 6px;min-height:46px}
+.v-map .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:30;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px rgba(15,23,42,.15);display:flex;padding:6px;max-width:calc(100vw - 24px);overflow-x:auto}
+.v-map .navlist{display:flex;gap:4px}
+.v-map .item{flex-direction:column;gap:2px;min-width:82px;font-size:12px;padding:8px 10px;justify-content:center;border-radius:12px;color:#475569;font-weight:600}
+.v-map .item:hover{background:#f3f4f6}
+.v-map .item.on{background:var(--accent);color:#fff}
+.v-map .item .badge{position:absolute;top:3px;right:8px;margin:0;padding:0 6px;font-size:10.5px}
+.v-map .sheet{position:relative;z-index:10;max-width:1180px;margin:78px auto 110px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 60px rgba(15,23,42,.12);padding:28px 32px}
+.v-map .sheet.bare{background:none;border:none;box-shadow:none;padding:0;margin:0;max-width:none;position:static}
+.float{position:fixed;z-index:15;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px rgba(15,23,42,.12);padding:16px 18px;overflow:auto}
+.f-tl{top:78px;left:16px;width:330px}
+.f-bl{left:16px;bottom:96px;width:330px;top:450px}
+.f-tr{top:78px;right:16px;width:280px}
+.f-left{top:78px;left:16px;bottom:96px;width:360px}
+.v-map .panel{position:fixed;right:16px;bottom:96px;top:78px;width:min(420px,calc(100vw - 32px));z-index:35;border-radius:18px;border:1px solid var(--line);box-shadow:0 20px 50px rgba(15,23,42,.2);overflow:hidden}
+.v-map .switch{top:16px;bottom:auto;right:auto;left:50%;transform:translateX(-50%)}
+
+@media (max-width:1100px){
+  .v-inbox .shell{grid-template-columns:80px minmax(0,1fr)}
+  .v-inbox .panel{position:fixed;inset:0;z-index:70;height:auto}
+  .v-inbox .panel.ph{display:none}
+  .v-topnav .body.has-panel{grid-template-columns:minmax(0,1fr)}
+  .v-topnav .panel{position:fixed;inset:0;z-index:70;max-height:none;border-radius:0}
+  .g-side,.wb{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:820px){
+  .v-map .bgmap.side{padding-left:12px}
+  .v-sidebar .shell{flex-direction:column}
+  .v-sidebar .nav{width:auto;height:auto;position:static;flex-direction:row;align-items:center;padding:10px 12px;gap:12px;overflow-x:auto}
+  .v-sidebar .navlist{flex-direction:row}
+  .v-sidebar .item span.lbl{white-space:nowrap}
+  .v-sidebar .user{display:none}
+  .v-sidebar .main{padding:20px 16px 80px}
+  .v-topnav .top{padding:0 16px;gap:8px}
+  .v-topnav .navlist{overflow-x:auto;flex-wrap:nowrap;width:100%;order:3}
+  .v-topnav .item{min-height:48px;white-space:nowrap}
+  .v-topnav .body{padding:16px 16px 80px}
+  .v-inbox .shell{display:flex;flex-direction:column}
+  .v-inbox .rail{position:static;height:auto;flex-direction:row;padding:8px 12px;overflow-x:auto}
+  .v-inbox .navlist{flex-direction:row}
+  .v-inbox .rail .user{display:none}
+  .v-inbox .main{padding:20px 16px 80px}
+  .v-inbox .switch{left:auto;right:16px}
+  .v-map .bgmap{position:relative;padding:76px 12px 12px;inset:auto}
+  .v-map .bgmap.side{padding-left:372px}
+.v-map .bgmap.side .mapc{width:min(100%,calc((100vh - 190px)*1.6))}
+.v-map .bgmap.dim{display:none}
+  .float{position:static;width:auto!important;margin:12px;max-height:none}
+  .v-map .sheet{margin:76px 12px 110px;padding:18px}
+  .v-map .sheet.bare{margin:0 0 110px}
+  .g-2{grid-template-columns:minmax(0,1fr)}
+  .pipe{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .v-sidebar .panel,.v-map .panel{inset:0;width:auto;border-radius:0;z-index:70}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+const V = document.documentElement.dataset.variant;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const ICONS = {
+  home: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+  map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"/>',
+  route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H17a3.5 3.5 0 0 0 0-7H7a3.5 3.5 0 0 1 0-7h8.5"/>',
+  log: '<path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  robot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M8.5 13h.01M15.5 13h.01"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  gauge: '<path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/>',
+};
+const ic = (n, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+
+function now() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function fmtDT(v) { if (!v) return now(); const d = new Date(v), p = n => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+/* ── Dữ liệu mẫu ─────────────────────────────────── */
+const S = {
+  me: { user: 'kythuat01', role: 'Nhân viên kỹ thuật' },
+  robots: ['AMR-01'],
+  operators: ['Nguyễn Văn An (Staff)', 'Trần Thị Bình (Staff)'],
+  maps: [
+    { id: 'map2-v3', area: 'Tầng 2 · dãy B', checksum: 'b71e5c0d…04aa', size: '4.6 MB', res: 0.05, origin: '[-2.0, -3.0, 0]', uploadedAt: '27/10 08:40', uploadedBy: 'kythuat01', note: 'Mở rộng khu xưởng cơ khí', deploy: null, loc: null, onRobot: false },
+    { id: 'map2-v2', area: 'Tầng 2 · dãy B', checksum: '9f3a71b2…c21e', size: '4.2 MB', res: 0.05, origin: '[-2.0, -3.0, 0]', uploadedAt: '24/10 09:12', uploadedBy: 'kythuat01', note: 'Bổ sung Phòng Lab 2 và xưởng', deploy: { robot: 'AMR-01', at: '25/10 14:30', by: 'kythuat01' }, loc: { result: 'pass', err: 4.2, points: [['Sảnh chính', 3], ['Hành lang B', 5], ['Phòng Lab 2', 6]], note: 'Twin khớp, không lệch góc ở hành lang B.', at: '25/10 15:05', by: 'kythuat01' }, onRobot: true },
+    { id: 'map2-v1', area: 'Tầng 2 · dãy B', checksum: '41d0e9aa…77f0', size: '3.9 MB', res: 0.05, origin: '[-2.0, -3.0, 0]', uploadedAt: '08/10 10:20', uploadedBy: 'kythuat01', note: 'Bản đầu tiên', deploy: { robot: 'AMR-01', at: '09/10 10:00', by: 'kythuat01' }, loc: { result: 'pass', err: 5.1, points: [['Sảnh chính', 4], ['Thư viện', 6]], note: '', at: '09/10 10:40', by: 'kythuat01' }, onRobot: false },
+  ],
+  pois: [
+    { id: 'p1', name: 'Sảnh chính', map: 'map2-v2', x: 6, y: 18, yaw: 0, source: 'staff', status: 'verified', camera: 'FRONT', rev: 2, last: { at: '25/10 15:20', note: 'Đạt · lệch 3 cm' } },
+    { id: 'p2', name: 'Thư viện', map: 'map2-v2', x: 14, y: 20, yaw: 1.57, source: 'staff', status: 'verified', camera: 'LEFT', rev: 1, last: { at: '25/10 15:32', note: 'Đạt · lệch 4 cm' } },
+    { id: 'p3', name: 'Phòng Lab 2', map: 'map2-v2', x: 26, y: 19, yaw: -1.57, source: 'staff', status: 'pending', camera: null, rev: 1, last: null },
+    { id: 'p4', name: 'Hành lang B', map: 'map2-v2', x: 20, y: 12, yaw: 3.14, source: 'staff', status: 'verified', camera: 'RIGHT', rev: 1, last: { at: '25/10 15:41', note: 'Đạt · lệch 5 cm' } },
+    { id: 'p5', name: 'Xưởng cơ khí', map: 'map2-v2', x: 33, y: 6, yaw: 0, source: 'yaml', status: 'pending', camera: null, rev: 1, last: null },
+    { id: 'p6', name: 'Sân trước', map: 'map2-v2', x: 8, y: 3, yaw: 1.57, source: 'yaml', status: 'pending', camera: null, rev: 1, last: null },
+    { id: 'p7', name: 'Phòng truyền thống', map: 'map2-v2', x: 34, y: 20, yaw: -1.57, source: 'staff', status: 'failed', camera: 'FRONT', rev: 1, last: { at: '25/10 10:02', note: 'Robot lệch 18 cm, vướng cánh cửa khi quay.' } },
+    { id: 'q1', name: 'Sảnh chính', map: 'map2-v1', x: 6, y: 18, yaw: 0, source: 'staff', status: 'verified', camera: 'FRONT', rev: 1, last: { at: '09/10 11:00', note: 'Đạt' } },
+    { id: 'q2', name: 'Thư viện', map: 'map2-v1', x: 14, y: 20, yaw: 1.57, source: 'staff', status: 'verified', camera: 'LEFT', rev: 1, last: { at: '09/10 11:10', note: 'Đạt' } },
+    { id: 'q3', name: 'Hành lang B', map: 'map2-v1', x: 20, y: 12, yaw: 3.14, source: 'staff', status: 'verified', camera: 'RIGHT', rev: 1, last: { at: '09/10 11:20', note: 'Đạt' } },
+  ],
+  routes: [
+    { id: 'r4', name: 'Tuyến chính', ver: 4, prev: 'v3', map: 'map2-v2', status: 'needs', stops: ['p1', 'p2', 'p3', 'p4'], branches: ['Nhánh rẽ: Hành lang B → Sảnh chính'], changes: [{ t: 'Đổi thứ tự chặng 3–4', nav: true }, { t: 'Thêm điểm dừng Phòng Lab 2', nav: true }, { t: 'Sửa thuyết minh tại Thư viện', nav: false }], blocking: 'Buổi 30/10 · 09:00', conf: null, history: [{ at: '26/10 11:20', text: 'Staff tạo v4 từ v3. Có thay đổi ảnh hưởng di chuyển nên không thừa hưởng xác nhận.' }] },
+    { id: 'r31', name: 'Tuyến chính', ver: '3.1', prev: 'v3', map: 'map2-v2', status: 'confirmed', contentOnly: true, stops: ['p1', 'p2', 'p4'], branches: [], changes: [{ t: 'Sửa thuyết minh tại Sảnh chính', nav: false }], conf: { by: 'kythuat01', at: '26/10 16:10', operator: 'Nguyễn Văn An (Staff)', inherited: 'v3' }, history: [{ at: '27/10 07:50', text: 'Chỉ đổi thuyết minh → giữ xác nhận của v3, không cần chạy lại navigation.' }] },
+    { id: 'r3', name: 'Tuyến chính', ver: 3, prev: 'v2', map: 'map2-v2', status: 'confirmed', stops: ['p1', 'p2', 'p4'], branches: [], changes: [{ t: 'Chuyển sang map2-v2', nav: true }], conf: { by: 'kythuat01', at: '26/10 16:10', operator: 'Nguyễn Văn An (Staff)' }, history: [{ at: '26/10 16:10', text: 'Xác nhận kỹ thuật sau khi chạy thử cùng Nguyễn Văn An.' }] },
+    { id: 'rp1', name: 'Tuyến khu thực hành', ver: 1, prev: null, map: 'map2-v2', status: 'unconfirmed', stops: ['p4', 'p5', 'p6'], branches: [], changes: [{ t: 'Tuyến mới', nav: true }], conf: null, history: [{ at: '26/10 14:00', text: 'Staff soạn tuyến mới.' }] },
+    { id: 'r2', name: 'Tuyến chính', ver: 2, prev: 'v1', map: 'map2-v1', status: 'confirmed', stops: ['q1', 'q2', 'q3'], branches: [], changes: [{ t: 'Thêm Hành lang B', nav: true }], conf: { by: 'kythuat01', at: '12/10 15:00', operator: 'Trần Thị Bình (Staff)' }, history: [{ at: '12/10 15:00', text: 'Xác nhận kỹ thuật.' }] },
+  ],
+  log: [
+    { at: '27/10 08:40', who: 'kythuat01', type: 'map', action: 'Upload version map', target: 'map2-v3', note: 'Mở rộng khu xưởng cơ khí' },
+    { at: '27/10 07:50', who: 'staff01', type: 'route', action: 'Sửa thuyết minh', target: 'Tuyến chính v3.1', note: 'Giữ xác nhận của v3' },
+    { at: '26/10 16:10', who: 'kythuat01', type: 'route', action: 'Xác nhận kỹ thuật', target: 'Tuyến chính v3', note: 'Chạy thử cùng Nguyễn Văn An' },
+    { at: '26/10 11:20', who: 'staff01', type: 'route', action: 'Tạo version tuyến', target: 'Tuyến chính v4', note: 'Đổi thứ tự chặng → cần xác nhận lại' },
+    { at: '26/10 09:30', who: 'kythuat01', type: 'poi', action: 'Import YAML', target: '2 POI · map2-v2', note: 'poi-xuong.yaml' },
+    { at: '25/10 15:05', who: 'kythuat01', type: 'map', action: 'Ghi localization', target: 'map2-v2', note: 'Đạt · 4.2 cm' },
+    { at: '25/10 14:30', who: 'kythuat01', type: 'map', action: 'Ghi deploy', target: 'map2-v2 → AMR-01', note: 'Checksum khớp' },
+    { at: '25/10 10:02', who: 'kythuat01', type: 'poi', action: 'Xác minh POI', target: 'Phòng truyền thống', note: 'Không đạt · vướng cửa' },
+  ],
+  sel: { poiMap: 'map2-v2', poiFilter: 'all', poi: null, ovMap: 'map2-v2', task: null, tf: 'all', logF: 'all' },
+  imp: { map: 'map2-v2', files: [] },
+  up: null, panel: null, modal: null,
+};
+const mapBy = id => S.maps.find(m => m.id === id);
+const poiBy = id => S.pois.find(p => p.id === id);
+const routeBy = id => S.routes.find(r => r.id === id);
+const onRobot = () => S.maps.find(m => m.onRobot) || S.maps[0];
+function addLog(type, action, target, note) { S.log.unshift({ at: now(), who: S.me.user, type, action, target, note }); }
+function toast(msg) { const d = document.createElement('div'); d.textContent = msg; $('#toast').appendChild(d); setTimeout(() => d.remove(), 2800); }
+
+/* ── Trạng thái & nhãn ───────────────────────────── */
+const chip = (cls, t) => `<span class="chip ${cls}">${esc(t)}</span>`;
+function mapChip(m) {
+  if (m.onRobot && m.loc && m.loc.result === 'pass') return chip('c-ok', 'Trên robot');
+  if (!m.deploy) return chip('c-warn', 'Chờ deploy');
+  if (!m.loc) return chip('c-warn', 'Chờ localization');
+  if (m.loc.result !== 'pass') return chip('c-bad', 'Localization lỗi');
+  return chip('c-mute', 'Đã kiểm tra');
+}
+const poiChip = p => p.status === 'verified' ? chip('c-ok', 'Đã xác minh') : p.status === 'failed' ? chip('c-bad', 'Không đạt') : chip('c-warn', 'Chờ xác minh');
+const routeChip = r => r.status === 'confirmed' ? chip('c-ok', 'Đã xác nhận') : r.status === 'needs' ? chip('c-bad', 'Cần xác nhận lại') : chip('c-warn', 'Chưa xác nhận');
+const rName = r => `${r.name} · v${r.ver}`;
+const srcLabel = p => p.source === 'yaml' ? 'Import YAML' : 'Staff đề xuất';
+
+function pipe(m) {
+  const pois = S.pois.filter(p => p.map === m.id), ver = pois.filter(p => p.status === 'verified').length;
+  const rts = S.routes.filter(r => r.map === m.id), conf = rts.filter(r => r.status === 'confirmed').length;
+  return [
+    { k: 'upload', label: 'Upload', st: 'done' },
+    { k: 'deploy', label: 'Deploy', st: m.deploy ? 'done' : 'doing' },
+    { k: 'loc', label: 'Localization', st: !m.deploy ? 'todo' : !m.loc ? 'doing' : m.loc.result === 'pass' ? 'done' : 'fail' },
+    { k: 'poi', label: `POI ${ver}/${pois.length}`, st: !pois.length ? 'todo' : ver === pois.length ? 'done' : 'doing', ver, total: pois.length },
+    { k: 'route', label: `Tuyến ${conf}/${rts.length}`, st: !rts.length ? 'todo' : conf === rts.length ? 'done' : 'doing', conf, total: rts.length },
+  ];
+}
+const stepCell = s => `<div class="step ${s.st}">${s.st === 'done' ? '✓ ' : ''}${esc(s.label)}</div>`;
+const bar = m => `<span class="bar" aria-hidden="true">${pipe(m).map(s => `<i class="${s.st}"></i>`).join('')}</span>`;
+
+function tasks() {
+  const t = [];
+  S.routes.filter(r => r.status === 'needs').forEach(r => t.push({ id: 'route-' + r.id, grp: 'block', kind: 'route', ref: r.id, icon: 'alert', tone: 'bad', title: `Xác nhận lại ${rName(r)}`, sub: `${r.map} · ${r.blocking ? 'Đang chặn ' + r.blocking : 'Có thay đổi ảnh hưởng di chuyển'}` }));
+  S.maps.filter(m => !m.deploy).forEach(m => t.push({ id: 'map-' + m.id, grp: 'map', kind: 'map', ref: m.id, icon: 'robot', tone: 'info', title: `Deploy ${m.id} lên robot`, sub: `Upload ${m.uploadedAt} · ${m.note}` }));
+  S.maps.filter(m => m.deploy && (!m.loc || m.loc.result !== 'pass')).forEach(m => t.push({ id: 'loc-' + m.id, grp: 'map', kind: 'map', ref: m.id, icon: 'gauge', tone: 'warn', title: `Đo localization ${m.id}`, sub: `Deploy ${m.deploy.at} · ${m.deploy.robot}` }));
+  S.pois.filter(p => p.status !== 'verified').forEach(p => t.push({ id: 'poi-' + p.id, grp: 'poi', kind: 'poi', ref: p.id, icon: 'pin', tone: p.status === 'failed' ? 'bad' : 'warn', title: `Xác minh POI "${p.name}"`, sub: `${p.map} · ${p.status === 'failed' ? 'Lần trước không đạt' : srcLabel(p)}` }));
+  S.routes.filter(r => r.status === 'unconfirmed').forEach(r => t.push({ id: 'route-' + r.id, grp: 'route', kind: 'route', ref: r.id, icon: 'route', tone: 'info', title: `Test & xác nhận ${rName(r)}`, sub: `${r.map} · ${r.stops.length} điểm dừng` }));
+  return t;
+}
+const GROUPS = [['block', 'Đang chặn xếp lịch', 'var(--bad)'], ['map', 'Map', 'var(--accent-ink)'], ['poi', 'Cần xác minh tại chỗ', 'var(--warn)'], ['route', 'Tuyến chờ test', 'var(--text2)']];
+const taskBtn = t => `<button type="button" class="task ${S.sel.task === t.id ? 'sel' : ''}" data-act="pickTask" data-id="${t.id}"><span class="tico ti-${t.tone}">${ic(t.icon, 20)}</span><span class="grow" style="min-width:0"><span class="t1">${esc(t.title)}</span><span class="t2">${esc(t.sub)}</span></span></button>`;
+
+/* ── Bản đồ khuôn viên (mẫu) ─────────────────────── */
+const BLD = [{ l: 6, t: 8, w: 30, h: 26, n: 'Sảnh & Thư viện' }, { l: 44, t: 8, w: 24, h: 22, n: 'Khu Lab' }, { l: 74, t: 8, w: 20, h: 30, n: 'Phòng truyền thống' }, { l: 6, t: 46, w: 22, h: 28, n: 'Khu hành chính' }, { l: 36, t: 44, w: 26, h: 16, n: 'Hành lang B' }];
+function buildings(mapId) {
+  const b = BLD.slice();
+  if (mapId === 'map2-v2') b.push({ l: 72, t: 62, w: 22, h: 26, n: 'Xưởng cơ khí' });
+  else if (mapId !== 'map2-v1') b.push({ l: 66, t: 52, w: 28, h: 40, n: 'Xưởng cơ khí (mở rộng)', isNew: true });
+  return b;
+}
+const pxy = (x, y) => [x / 40 * 100, (1 - y / 25) * 100];
+function campusMap(mapId, o = {}) {
+  const pois = o.pois || S.pois.filter(p => p.map === mapId && (!o.filter || o.filter === 'all' || p.status === o.filter));
+  let path = '';
+  if (o.route) {
+    const pts = o.route.stops.map(poiBy).map(p => pxy(p.x, p.y).join(',')).join(' ');
+    path = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="#2d719e" stroke-width="3" stroke-dasharray="6 5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+  }
+  const dots = pois.map(p => { const [l, t] = pxy(p.x, p.y); const cls = p.preview ? 'preview' : p.status; return o.interactive && !p.preview ? `<button type="button" class="dot ${cls} ${S.sel.poi === p.id ? 'sel' : ''}" style="left:${l}%;top:${t}%" data-act="pickPoi" data-id="${p.id}" aria-label="${esc(p.name)}"><i></i>${o.labels ? `<b>${esc(p.name)}</b>` : ''}</button>` : `<span class="dot ${cls}" style="left:${l}%;top:${t}%"><i></i>${o.labels ? `<b>${esc(p.name)}</b>` : ''}</span>`; }).join('');
+  const m = mapBy(mapId);
+  const robot = o.robot && m && m.onRobot ? (() => { const [l, t] = pxy(9, 16); return `<span class="robot" style="left:${l}%;top:${t}%" title="AMR-01"></span>`; })() : '';
+  return `<div class="mapc" role="group" aria-label="Bản đồ ${esc(mapId)}">${buildings(mapId).map(b => `<div class="bld ${b.isNew ? 'new' : ''}" style="left:${b.l}%;top:${b.t}%;width:${b.w}%;height:${b.h}%">${esc(b.n)}</div>`).join('')}${path}${dots}${robot}</div>`;
+}
+const legend = (extra = '') => `<div class="legend"><span><i style="background:#15803d"></i>Đã xác minh</span><span><i style="background:#d97706"></i>Chờ xác minh</span><span><i style="background:#b91c1c"></i>Không đạt</span>${extra}</div>`;
+
+/* ── Điều hướng & khung ──────────────────────────── */
+const NAV = [
+  { k: 'home', label: V === 'inbox' ? 'Việc cần làm' : 'Tổng quan', short: V === 'inbox' ? 'Việc' : 'Tổng quan', icon: V === 'inbox' ? 'inbox' : 'home', badge: () => V === 'inbox' ? [tasks().length, 'b-bad'] : null },
+  { k: 'maps', label: 'Version map', short: 'Map', icon: 'map' },
+  { k: 'poi', label: 'POI', short: 'POI', icon: 'pin', badge: () => [S.pois.filter(p => p.status !== 'verified').length, 'b-warn'] },
+  { k: 'import', label: 'Import YAML', short: 'Import', icon: 'file' },
+  { k: 'routes', label: 'Xác nhận tuyến', short: 'Tuyến', icon: 'route', badge: () => [S.routes.filter(r => r.status !== 'confirmed').length, 'b-bad'] },
+  { k: 'log', label: 'Nhật ký', short: 'Nhật ký', icon: 'log' },
+];
+function route() { const h = location.hash.replace(/^#\/?/, '') || 'home'; const [page, id] = h.split('/'); return { page, id: id && decodeURIComponent(id) }; }
+const isOn = (k, page) => k === page || (k === 'maps' && page === 'map') || (k === 'routes' && page === 'route');
+function navItems(short) {
+  const { page } = route();
+  return NAV.map(n => { const on = isOn(n.k, page); const b = n.badge && n.badge(); return `<a class="item ${on ? 'on' : ''}" href="#/${n.k}" ${on ? 'aria-current="page"' : ''} ${short ? `title="${esc(n.label)}"` : ''}>${ic(n.icon, short ? 20 : 18)}<span class="lbl">${esc(short ? n.short : n.label)}</span>${b && b[0] ? `<span class="badge ${b[1]}">${b[0]}</span>` : ''}</a>`; }).join('');
+}
+const brand = () => `<div class="brand"><div class="logo">DT</div><div><div style="font-weight:700">DT-AMR</div><div class="small muted">Kỹ thuật</div></div></div>`;
+const userBlock = full => `<div class="user"><div class="avatar">KT</div>${full ? `<div class="grow" style="min-width:0"><div style="font-weight:600;font-size:13px">${S.me.user}</div><div class="small muted">${S.me.role}</div></div>` : ''}<button type="button" class="btn btn-ghost icon-btn" data-act="logout" aria-label="Đăng xuất">${ic('logout')}</button></div>`;
+const FILES = [['sidebar', 'technical-kieu-1-sidebar.html'], ['topnav', 'technical-kieu-2-tab-ngang.html'], ['inbox', 'technical-kieu-3-hop-viec.html'], ['map', 'technical-kieu-4-ban-do.html']];
+const switcher = () => `<nav class="switch" aria-label="Chọn kiểu bố cục"><span>Kiểu</span>${FILES.map(([v, f], i) => `<a href="${f}" ${v === V ? 'class="on" aria-current="page"' : ''} aria-label="Kiểu ${i + 1}">${i + 1}</a>`).join('')}</nav>`;
+
+function panelView() {
+  const P = S.panel; if (!P) return null;
+  if (P.type === 'poi') { const p = poiBy(P.id); return p && { title: p.name, sub: `POI · ${p.map}`, body: poiForm(p) }; }
+  if (P.type === 'upload') return { title: 'Upload version map', sub: 'Lưu gói map lên portal', body: uploadForm() };
+  if (P.type === 'task') {
+    const t = tasks().find(x => x.id === P.id); if (!t) return { title: 'Đã xử lý', sub: 'Việc cần làm', body: '<div class="note ok">Việc này đã xong. Chọn việc khác ở danh sách.</div>' };
+    if (t.kind === 'poi') { const p = poiBy(t.ref); return { title: p.name, sub: `Xác minh POI · ${p.map}`, body: poiForm(p) }; }
+    if (t.kind === 'route') { const r = routeBy(t.ref); return { title: rName(r), sub: `Tuyến · ${r.map}`, body: routeSummary(r) }; }
+    if (t.kind === 'map') { const m = mapBy(t.ref); return { title: m.id, sub: 'Version map', body: mapSummary(m) }; }
+  }
+  return null;
+}
+function panelAside() {
+  const v = panelView(); if (!v) return '';
+  return `<aside class="panel" aria-label="${esc(v.title)}"><div class="panel-h"><div class="grow" style="min-width:0"><div class="small muted">${esc(v.sub)}</div><h2 style="font-size:18px;margin-top:2px">${esc(v.title)}</h2></div><button type="button" class="btn icon-btn btn-ghost" data-act="closePanel" aria-label="Đóng">${ic('x')}</button></div><div class="panel-b">${v.body}</div></aside>`;
+}
+function modalHtml() {
+  const M = S.modal; if (!M) return '';
+  let title = '', body = '';
+  if (M.type === 'revoke') {
+    const r = routeBy(M.id); title = `Thu hồi xác nhận ${rName(r)}`;
+    body = `<form data-form="revoke" data-id="${r.id}" class="stack"><p class="muted">Tuyến chuyển về "Chưa xác nhận" và bị chặn xếp lịch cho tới khi xác nhận lại. Staff phụ trách các buổi đã xếp sẽ được báo.</p><label class="field">Lý do thu hồi<textarea name="reason" required placeholder="Ví dụ: cửa hành lang B đã đổi hướng mở"></textarea></label><div class="row" style="justify-content:flex-end"><button type="button" class="btn" data-act="closeModal">Hủy</button><button class="btn btn-danger-solid" type="submit">Thu hồi xác nhận</button></div></form>`;
+  }
+  if (M.type === 'redeploy') {
+    const m = mapBy(M.id); title = `Deploy lại ${m.id}`;
+    body = `<form data-form="redeploy" data-id="${m.id}" class="stack"><p class="muted">Kết quả localization hiện tại sẽ bị xóa. Bạn cần đo lại trước khi xác minh POI hoặc test tuyến trên map này.</p><label class="field">Robot<select name="robot">${S.robots.map(r => `<option>${r}</option>`).join('')}</select></label><label class="check"><input type="checkbox" name="ok" required> Checksum trên robot khớp <span class="mono">${esc(m.checksum)}</span></label><div class="row" style="justify-content:flex-end"><button type="button" class="btn" data-act="closeModal">Hủy</button><button class="btn btn-primary" type="submit">Ghi deploy lại</button></div></form>`;
+  }
+  return `<div class="backdrop" data-act="closeModal"></div><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="panel-h"><h2 class="grow">${esc(title)}</h2><button type="button" class="btn icon-btn btn-ghost" data-act="closeModal" aria-label="Đóng">${ic('x')}</button></div><div class="panel-b">${body}</div></div>`;
+}
+
+function shell(content) {
+  const { page } = route();
+  if (V === 'sidebar') return `<div class="shell"><nav class="nav" aria-label="Điều hướng kỹ thuật">${brand()}<div class="navlist">${navItems()}</div>${userBlock(true)}</nav><main class="main">${content}</main></div>${S.panel ? `<div class="backdrop" data-act="closePanel"></div>${panelAside()}` : ''}`;
+  if (V === 'topnav') return `<header class="top">${brand()}<nav class="navlist" aria-label="Điều hướng kỹ thuật">${navItems()}</nav><div class="user"><div style="text-align:right"><div style="font-weight:600;font-size:13px">${S.me.user}</div><div class="small muted">${S.me.role}</div></div><div class="avatar">KT</div></div></header><div class="body ${S.panel ? 'has-panel' : ''}"><main class="main" style="min-width:0">${content}</main>${panelAside()}</div>`;
+  if (V === 'inbox') return `<div class="shell"><nav class="rail" aria-label="Điều hướng kỹ thuật"><div class="logo" style="margin-bottom:10px">DT</div><div class="navlist">${navItems(true)}</div>${userBlock(false)}</nav><main class="main">${content}</main>${S.panel ? panelAside() : `<aside class="panel ph"><div class="panel-b" style="justify-content:center;align-items:center;text-align:center;color:var(--muted);gap:10px">${ic('inbox', 30)}<div style="max-width:260px">Chọn một việc hoặc một POI để xem chi tiết và xử lý ngay tại đây.</div></div></aside>`}</div>`;
+  // map
+  const bare = page === 'home' || page === 'poi';
+  const r = page === 'route' ? routeBy(route().id) : null;
+  const bgId = page === 'poi' ? S.sel.poiMap : page === 'map' ? route().id : r ? r.map : onRobot().id;
+  const bgRoute = r || (page === 'home' ? S.routes.find(x => x.status === 'needs' && x.map === bgId) : null);
+  return `<div class="bgmap ${bare ? 'side' : 'dim'}">${mapBy(bgId) ? campusMap(bgId, { interactive: bare, labels: true, robot: true, route: bgRoute, filter: page === 'poi' ? S.sel.poiFilter : 'all' }) : ''}</div><header class="topbar"><div class="pill">${brand()}</div><div class="grow"></div><div class="pill"><div class="avatar">KT</div><div><div style="font-weight:600;font-size:13px">${S.me.user}</div><div class="small muted">${S.me.role}</div></div></div></header><main class="sheet ${bare ? 'bare' : ''}">${content}</main><nav class="dock" aria-label="Điều hướng kỹ thuật"><div class="navlist">${navItems(true)}</div></nav>${panelAside()}`;
+}
+
+/* ── Trang: Tổng quan (khác nhau theo kiểu) ──────── */
+const tile = (lbl, val, sub) => `<div class="card stat"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`;
+function statTiles() {
+  const on = onRobot(), pend = S.pois.filter(p => p.status !== 'verified'), needs = S.routes.filter(r => r.status === 'needs');
+  return `<div class="grid g-auto">${tile('Map đang chạy trên robot', esc(on.id), on.loc ? `<span style="color:${on.loc.result === 'pass' ? 'var(--ok)' : 'var(--bad)'}">Localization ${on.loc.result === 'pass' ? 'đạt' : 'không đạt'}</span>` : '<span style="color:var(--warn)">chưa đo localization</span>')}${tile('POI chờ xác minh', pend.length, `<span style="color:var(--warn)">${pend.filter(p => p.status === 'failed').length} lần trước không đạt</span>`)}${tile('Tuyến bị chặn xếp lịch', needs.length, needs.length ? '<span style="color:var(--bad)">cần xác nhận lại</span>' : '<span class="muted">không có</span>')}${tile('Version map', S.maps.length, `<span class="muted">${S.maps.filter(m => !m.deploy).length} chờ deploy</span>`)}</div>`;
+}
+const pipeRow = m => `<div class="piperow ${m.onRobot ? 'cur' : ''}"><div style="width:130px"><a href="#/map/${m.id}" style="font-weight:700;color:var(--ink);text-decoration:none">${esc(m.id)}</a><div class="small muted">${m.onRobot ? 'đang chạy trên robot' : m.deploy ? 'đã deploy trước đó' : 'mới upload'}</div></div><div class="pipe">${pipe(m).map(stepCell).join('')}</div><a class="btn btn-sm" href="#/map/${m.id}">Mở</a></div>`;
+function kanban() {
+  const cols = [['needs', 'Cần xác nhận lại', 'var(--bad)'], ['unconfirmed', 'Chưa xác nhận', 'var(--warn)'], ['confirmed', 'Đã xác nhận', 'var(--ok)']];
+  return `<div class="kan">${cols.map(([st, label, color]) => { const rs = S.routes.filter(r => r.status === st); return `<div class="col"><div class="col-h" style="color:${color}"><span>${label}</span><span>${rs.length}</span></div>${rs.map(r => `<a class="rcard ${st === 'needs' ? 'bad' : ''}" href="#/route/${r.id}"><div style="font-weight:600">${esc(rName(r))}</div><div class="small muted" style="margin-top:4px">${r.map} · ${r.stops.length} điểm dừng${r.contentOnly ? ' · chỉ đổi thuyết minh' : ''}</div>${r.blocking ? `<div class="small" style="color:var(--bad);font-weight:600;margin-top:8px">Đang chặn ${esc(r.blocking)}</div>` : r.conf ? `<div class="small muted" style="margin-top:8px">Xác nhận ${r.conf.at}${r.conf.inherited ? ` (giữ từ ${r.conf.inherited})` : ''}</div>` : ''}</a>`).join('') || '<div class="small muted" style="padding:6px">Trống</div>'}</div>`; }).join('')}</div>`;
+}
+const logList = (n, f) => `<div>${S.log.filter(f || (() => true)).slice(0, n).map(l => `<div class="tl"><div class="when">${l.at}</div><div><b>${esc(l.action)}</b> · ${esc(l.target)}<div class="small muted">${esc(l.who)}${l.note ? ' · ' + esc(l.note) : ''}</div></div></div>`).join('') || '<div class="small muted">Chưa có.</div>'}</div>`;
+
+function homeSidebar() {
+  return `<div class="page-h"><div class="grow"><div class="crumb">CampusTour / Kỹ thuật</div><h1>Tổng quan kỹ thuật</h1></div><a class="btn" href="#/import">${ic('file')}Import POI</a><button type="button" class="btn btn-primary" data-act="openUpload">${ic('upload')}Upload version map</button></div>
+  <div class="stack">${statTiles()}
+  <section class="card"><div class="card-h"><h2>Tiến trình theo version map</h2><a href="#/maps" class="small" style="font-weight:600">Tất cả version</a></div><div class="stack" style="gap:10px">${S.maps.map(pipeRow).join('')}</div></section>
+  <section><div class="card-h" style="margin-bottom:10px"><h2>Xác nhận tuyến</h2><a href="#/routes" class="small" style="font-weight:600">Mở trang tuyến</a></div>${kanban()}</section>
+  <section class="card"><div class="card-h"><h2>Hoạt động gần đây</h2><a href="#/log" class="small" style="font-weight:600">Nhật ký</a></div>${logList(5)}</section></div>`;
+}
+function vsteps(m) {
+  const desc = {
+    upload: () => `<span class="small muted">${esc(m.checksum)} · ${m.uploadedAt} · ${m.uploadedBy}</span>`,
+    deploy: () => m.deploy ? `<span class="small muted">${m.deploy.robot} · ${m.deploy.at}</span>` : `<span class="small muted">Chưa deploy lên robot.</span><a class="btn btn-sm btn-primary" style="align-self:flex-start" href="#/map/${m.id}">Ghi deploy</a>`,
+    loc: () => !m.deploy ? '<span class="small muted">Cần deploy trước.</span>' : !m.loc ? `<span class="small muted">Đã deploy, chưa đo.</span><a class="btn btn-sm btn-primary" style="align-self:flex-start" href="#/map/${m.id}">Ghi localization</a>` : `<span class="small muted">${m.loc.result === 'pass' ? 'Đạt' : 'Không đạt'} · lệch ${m.loc.err} cm · ${m.loc.at}</span>`,
+    poi: s => `<span class="small muted">${s.ver}/${s.total} POI đã xác minh</span>${s.total && s.ver < s.total ? `<button type="button" class="btn btn-sm" style="align-self:flex-start" data-act="goPoi" data-map="${m.id}">Xác minh POI</button>` : ''}`,
+    route: s => `<span class="small muted">${s.conf}/${s.total} tuyến đã xác nhận</span>${s.total && s.conf < s.total ? `<a class="btn btn-sm" style="align-self:flex-start" href="#/routes">Mở xác nhận tuyến</a>` : ''}`,
+  };
+  const titles = { upload: 'Upload gói map', deploy: 'Deploy lên robot', loc: 'Kiểm tra localization', poi: 'Xác minh POI', route: 'Test & xác nhận tuyến' };
+  return pipe(m).map((s, i) => `<div class="vstep ${s.st}"><div class="num">${s.st === 'done' ? '✓' : i + 1}</div><div class="vb"><b>${titles[s.k]}</b>${desc[s.k](s)}</div></div>`).join('');
+}
+function homeTopnav() {
+  const m = mapBy(S.sel.ovMap) || S.maps[0];
+  const rts = S.routes.filter(r => r.map === m.id);
+  return `<div class="page-h"><div class="grow"><div class="crumb">Kỹ thuật</div><h1>Bàn làm việc</h1></div><button type="button" class="btn btn-primary" data-act="openUpload">${ic('upload')}Upload version map</button></div>
+  <div class="wb"><div class="stack" style="gap:10px"><div class="sec-t muted">Version map</div>${S.maps.map(mm => `<button type="button" class="mcard ${mm.id === m.id ? 'on' : ''}" data-act="ovMap" data-id="${mm.id}"><span class="row" style="justify-content:space-between;width:100%"><b>${esc(mm.id)}</b>${mapChip(mm)}</span><span class="small muted">${esc(mm.note)}</span>${bar(mm)}</button>`).join('')}</div>
+  <div class="grid g-2"><section class="card"><div class="card-h"><div><h2>${esc(m.id)}</h2><div class="small muted">${esc(m.area)}</div></div>${mapChip(m)}</div>${vsteps(m)}<a class="btn" href="#/map/${m.id}">Mở chi tiết version</a></section>
+  <div class="stack"><section class="card"><div class="card-h"><h2>Bản đồ</h2></div>${campusMap(m.id, { interactive: true, robot: true })}<div style="margin-top:10px">${legend()}</div></section>
+  <section class="card"><div class="card-h"><h2>Tuyến trên map này</h2></div>${rts.length ? rts.map(r => `<a class="rcard" href="#/route/${r.id}" style="margin-bottom:8px"><div class="row" style="justify-content:space-between"><b>${esc(rName(r))}</b>${routeChip(r)}</div></a>`).join('') : '<div class="small muted">Chưa có tuyến nào dùng map này.</div>'}</section>
+  <section class="card"><div class="card-h"><h2>Hoạt động</h2></div>${logList(4, l => l.target.includes(m.id) || l.note.includes(m.id))}</section></div></div></div>`;
+}
+function homeInbox() {
+  const ts = tasks(), f = S.sel.tf;
+  const d = new Date(), days = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+  return `<div class="page-h"><div class="grow"><div class="crumb">${days[d.getDay()]}, ${now().slice(0, 5)}</div><h1>${ts.length ? `Có ${ts.length} việc kỹ thuật cần làm` : 'Không còn việc nào'}</h1></div><button type="button" class="btn" data-act="openUpload">${ic('upload')}Upload map</button></div>
+  <div class="chips" style="margin-bottom:18px"><button type="button" class="fchip ${f === 'all' ? 'on' : ''}" data-act="tf" data-v="all">Tất cả · ${ts.length}</button>${GROUPS.map(([g, l]) => { const n = ts.filter(t => t.grp === g).length; return n ? `<button type="button" class="fchip ${f === g ? 'on' : ''}" data-act="tf" data-v="${g}">${l} · ${n}</button>` : ''; }).join('')}</div>
+  <div class="stack">${GROUPS.filter(([g]) => f === 'all' || f === g).map(([g, l, c]) => { const list = ts.filter(t => t.grp === g); return list.length ? `<section class="stack" style="gap:10px"><h2 class="sec-t" style="color:${c}">${l}</h2>${list.map(taskBtn).join('')}</section>` : ''; }).join('') || '<div class="empty">Mọi thứ đã xong. Khi Staff tạo tuyến mới hoặc đề xuất POI, việc sẽ hiện ở đây.</div>'}
+  <section class="card"><div class="card-h"><h2>Đã làm gần đây</h2><a href="#/log" class="small" style="font-weight:600">Nhật ký</a></div>${logList(4, l => l.who === S.me.user)}</section></div>`;
+}
+function homeMap() {
+  const on = onRobot(), ts = tasks();
+  return `<section class="float f-tl" aria-label="Map trên robot"><div class="row" style="justify-content:space-between"><div><div class="small muted">Map đang chạy trên robot</div><div style="font-size:22px;font-weight:700">${esc(on.id)}</div></div>${mapChip(on)}</div>
+  <div class="mini-steps" style="margin:14px 0">${pipe(on).map(s => `<div class="${s.st}"><i></i>${esc(s.label)}</div>`).join('')}</div><div style="margin-bottom:12px">${legend('<span><i style="background:#2d719e;border-radius:3px"></i>Robot</span>')}</div>
+  <div class="row"><a class="btn btn-sm" href="#/map/${on.id}">Chi tiết version</a><button type="button" class="btn btn-sm btn-primary" data-act="openUpload">Upload map</button></div></section>
+  <section class="float f-bl" aria-label="Việc cần làm"><div class="card-h" style="margin-bottom:10px"><h2>Việc cần làm · ${ts.length}</h2></div><div class="stack" style="gap:8px">${ts.slice(0, 6).map(taskBtn).join('') || '<div class="small muted">Không có.</div>'}</div></section>
+</section>`;
+}
+
+/* ── Trang: Version map ──────────────────────────── */
+function pageMaps() {
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/home">Kỹ thuật</a> / Version map</div><h1>Version map</h1><p class="muted small" style="margin-top:4px">Map được tạo bên ngoài web. Ở đây bạn lưu gói map, ghi deploy và kết quả localization.</p></div><button type="button" class="btn btn-primary" data-act="openUpload">${ic('upload')}Upload version map</button></div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>Version</th><th>Checksum</th><th>Upload</th><th>Deploy</th><th>Localization</th><th>Tuyến dùng</th><th>Trạng thái</th></tr></thead><tbody>
+  ${S.maps.map(m => `<tr class="click" data-act="go" data-href="#/map/${m.id}"><td><a href="#/map/${m.id}" style="font-weight:700;color:var(--ink);text-decoration:none">${esc(m.id)}</a><div class="small muted">${esc(m.area)}</div></td><td class="mono">${esc(m.checksum)}</td><td>${m.uploadedAt}<div class="small muted">${m.size}</div></td><td>${m.deploy ? `${m.deploy.robot}<div class="small muted">${m.deploy.at}</div>` : '<span class="muted">—</span>'}</td><td>${m.loc ? `${m.loc.result === 'pass' ? 'Đạt' : 'Không đạt'} · ${m.loc.err} cm` : '<span class="muted">—</span>'}</td><td>${S.routes.filter(r => r.map === m.id).length}</td><td>${mapChip(m)}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="note" style="margin-top:16px">Version mới có thay đổi ảnh hưởng di chuyển sẽ không thừa hưởng xác nhận cũ. Version cũ đã xác nhận vẫn dùng được cho các tuyến đang gắn với nó.</div>`;
+}
+const ptRow = (n = '', e = '') => `<tr><td><input class="cell" name="ptn" value="${esc(n)}" aria-label="Vị trí đo"></td><td style="width:140px"><input class="cell" name="pte" type="number" step="0.1" min="0" value="${e}" aria-label="Sai lệch (cm)"></td></tr>`;
+const resRadios = (name = 'res', v = '') => `<div class="res" role="radiogroup" aria-label="Kết quả"><label><input type="radio" name="${name}" value="pass" ${v === 'pass' ? 'checked' : ''}><span>Đạt</span></label><label><input type="radio" name="${name}" value="fail" ${v === 'fail' ? 'checked' : ''}><span>Không đạt</span></label></div>`;
+function pageMap(id) {
+  const m = mapBy(id); if (!m) return `<div class="empty">Không tìm thấy version ${esc(id)}. <a href="#/maps">Về danh sách</a></div>`;
+  const rts = S.routes.filter(r => r.map === m.id), pois = S.pois.filter(p => p.map === m.id);
+  const deployBox = m.deploy
+    ? `<dl class="kv"><dt>Robot</dt><dd>${m.deploy.robot}</dd><dt>Thời điểm</dt><dd>${m.deploy.at}</dd><dt>Checksum trên robot</dt><dd style="color:var(--ok)">Khớp</dd><dt>Người ghi</dt><dd>${m.deploy.by}</dd></dl><button type="button" class="btn btn-sm" style="align-self:flex-start" data-act="redeploy" data-id="${m.id}">Deploy lại</button>`
+    : `<form data-form="deploy" data-id="${m.id}" class="stack" style="gap:12px"><div class="grid" style="grid-template-columns:1fr 1fr"><label class="field">Robot<select name="robot">${S.robots.map(r => `<option>${r}</option>`).join('')}</select></label><label class="field">Thời điểm deploy<input type="datetime-local" name="at"></label></div><label class="check"><input type="checkbox" name="ok"> Checksum trên robot khớp <span class="mono">${esc(m.checksum)}</span></label><button class="btn btn-primary" type="submit" style="align-self:flex-start">Ghi deploy</button></form>`;
+  const locBox = !m.deploy ? '<div class="note warn">Ghi deploy trước, rồi mới đo localization.</div>'
+    : m.loc ? `<div class="row">${m.loc.result === 'pass' ? chip('c-ok', 'Đạt') : chip('c-bad', 'Không đạt')}<span class="small muted">lệch trung bình ${m.loc.err} cm · ${m.loc.at}</span></div>${m.loc.points.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Vị trí đo</th><th>Sai lệch</th></tr></thead><tbody>${m.loc.points.map(([n, e]) => `<tr><td>${esc(n)}</td><td>${e} cm</td></tr>`).join('')}</tbody></table></div>` : ''}${m.loc.note ? `<div class="small muted">${esc(m.loc.note)}</div>` : ''}<button type="button" class="btn btn-sm" style="align-self:flex-start" data-act="relocate" data-id="${m.id}">Đo lại</button>`
+    : `<form data-form="loc" data-id="${m.id}" class="stack" style="gap:12px"><div class="field"><span>Kết quả</span>${resRadios()}</div><label class="field">Sai lệch trung bình (cm)<input type="number" name="err" step="0.1" min="0" required></label><div class="field"><span>Điểm đo</span><div class="tbl-wrap"><table class="t"><tbody id="pts">${ptRow('Sảnh chính')}${ptRow('Hành lang B')}${ptRow('Phòng Lab 2')}</tbody></table></div><button type="button" class="btn btn-sm" style="align-self:flex-start" data-act="addPoint">+ Thêm điểm đo</button></div><label class="check"><input type="checkbox" name="twin"> Đã đối chiếu vị trí với 3D Twin</label><label class="field">Ghi chú<textarea name="note"></textarea></label><button class="btn btn-primary" type="submit" style="align-self:flex-start">Lưu kết quả localization</button></form>`;
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/maps">Version map</a> / ${esc(m.id)}</div><div class="row"><h1>${esc(m.id)}</h1>${mapChip(m)}</div><p class="muted small" style="margin-top:4px">${esc(m.area)} · ${esc(m.note)}</p></div><button type="button" class="btn" data-act="download">${ic('download')}Tải package</button></div>
+  <div class="g-side"><div class="stack">
+    <section class="card"><div class="card-h"><h2>Xem trước map</h2>${buildings(m.id).some(b => b.isNew) ? '<span class="small" style="color:var(--warn);font-weight:600">Vùng tô cam: khác version trước</span>' : ''}</div>${campusMap(m.id, { labels: true, robot: true })}<div style="margin-top:10px">${legend()}</div></section>
+    <section class="card"><div class="card-h"><h2>Ảnh hưởng</h2></div><div class="grid g-auto" style="margin-bottom:12px">${tile('POI trên map', pois.length, `<span class="muted">${pois.filter(p => p.status === 'verified').length} đã xác minh</span>`)}${tile('Tuyến dùng map', rts.length, `<span class="muted">${rts.filter(r => r.status === 'confirmed').length} đã xác nhận</span>`)}</div>${rts.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Tuyến</th><th>Trạng thái</th></tr></thead><tbody>${rts.map(r => `<tr class="click" data-act="go" data-href="#/route/${r.id}"><td><b>${esc(rName(r))}</b></td><td>${routeChip(r)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="small muted">Chưa có tuyến nào dùng map này. Staff chỉ chọn được map đã đạt localization.</div>'}</section>
+  </div>
+  <section class="card"><div class="card-h"><h2>Bằng chứng kỹ thuật</h2></div>
+    <div class="vstep done"><div class="num">✓</div><div class="vb"><b>Upload</b><dl class="kv"><dt>Checksum</dt><dd class="mono">${esc(m.checksum)}</dd><dt>Dung lượng</dt><dd>${m.size}</dd><dt>Resolution</dt><dd>${m.res} m/px</dd><dt>Origin</dt><dd>${m.origin}</dd><dt>Người upload</dt><dd>${m.uploadedBy} · ${m.uploadedAt}</dd></dl></div></div>
+    <div class="vstep ${m.deploy ? 'done' : 'doing'}"><div class="num">${m.deploy ? '✓' : 2}</div><div class="vb"><b>Deploy lên robot</b>${deployBox}</div></div>
+    <div class="vstep ${!m.deploy ? '' : !m.loc ? 'doing' : m.loc.result === 'pass' ? 'done' : 'fail'}"><div class="num">${m.loc && m.loc.result === 'pass' ? '✓' : 3}</div><div class="vb"><b>Localization</b>${locBox}</div></div>
+  </section></div>`;
+}
+function suggestId() { const n = Math.max(...S.maps.map(m => +(m.id.match(/v(\d+)$/) || [0, 0])[1])); return `map2-v${n + 1}`; }
+const upSummary = () => S.up ? `<div class="note"><b>${esc(S.up.file)}</b> · ${S.up.size}<br>SHA-256 <span class="mono">${esc(S.up.checksum)}</span><br>map.yaml: resolution ${S.up.res} m/px · origin ${S.up.origin}</div>` : '';
+function uploadForm() {
+  return `<form data-form="upload" class="stack"><div class="drop" data-drop="pkg">${ic('upload', 26)}<b>Kéo thả gói map (.zip)</b><span class="small muted">Gồm map.pgm và map.yaml</span><div class="row" style="justify-content:center"><label class="btn btn-sm">Chọn file<input type="file" accept=".zip" class="sr" data-change="pkg"></label><button type="button" class="btn btn-sm btn-ghost" data-act="samplePkg">Dùng gói mẫu</button></div></div>
+  <div id="upsum">${upSummary()}</div>
+  <label class="field">Tên version<input name="id" value="${suggestId()}" required></label>
+  <label class="field">Khu vực<input name="area" value="Tầng 2 · dãy B"></label>
+  <label class="field">Thay đổi so với version trước<textarea name="note" placeholder="Ví dụ: quét lại hành lang B sau khi đổi cửa"></textarea></label>
+  <div class="note warn">Upload chưa phải deploy. Robot vẫn chạy map hiện tại cho tới khi bạn ghi deploy.</div>
+  <button class="btn btn-primary" type="submit" ${S.up ? '' : 'disabled'}>Lưu version</button></form>`;
+}
+function mapSummary(m) {
+  return `${mapChip(m)}<div class="mini-steps">${pipe(m).map(s => `<div class="${s.st}"><i></i>${esc(s.label)}</div>`).join('')}</div>${campusMap(m.id, {})}<dl class="kv"><dt>Upload</dt><dd>${m.uploadedAt}</dd><dt>Checksum</dt><dd class="mono">${esc(m.checksum)}</dd><dt>Ghi chú</dt><dd>${esc(m.note)}</dd></dl><a class="btn btn-primary" href="#/map/${m.id}">${!m.deploy ? 'Ghi deploy' : 'Ghi localization'}</a>`;
+}
+
+/* ── Trang: POI ──────────────────────────────────── */
+function poiList() {
+  const list = S.pois.filter(p => p.map === S.sel.poiMap && (S.sel.poiFilter === 'all' || p.status === S.sel.poiFilter));
+  return list.length ? `<div class="stack" style="gap:8px">${list.map(p => `<button type="button" class="task ${S.sel.poi === p.id ? 'sel' : ''}" data-act="pickPoi" data-id="${p.id}"><span class="grow" style="min-width:0"><span class="t1">${esc(p.name)}</span><span class="t2">x ${p.x} · y ${p.y} · ${srcLabel(p)}${p.camera ? ' · ' + p.camera : ''}</span></span>${poiChip(p)}</button>`).join('')}</div>` : '<div class="empty">Không có POI phù hợp bộ lọc.</div>';
+}
+function poiControls() {
+  const fl = [['all', 'Tất cả'], ['pending', 'Chờ'], ['verified', 'Đã xác minh'], ['failed', 'Không đạt']];
+  return `<div class="row"><label class="field" style="flex:0 0 auto"><span class="sr">Version map</span><select data-change="poiMap" aria-label="Version map">${S.maps.map(m => `<option value="${m.id}" ${m.id === S.sel.poiMap ? 'selected' : ''}>${m.id}</option>`).join('')}</select></label><div class="seg" role="radiogroup" aria-label="Lọc trạng thái">${fl.map(([v, l]) => `<label><input type="radio" name="pf" value="${v}" data-change="poiFilter" ${S.sel.poiFilter === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>`;
+}
+function pagePoi() {
+  const m = mapBy(S.sel.poiMap);
+  const locWarn = m && !(m.loc && m.loc.result === 'pass') ? `<div class="note warn">${esc(m.id)} chưa đạt localization. Đo localization trước khi xác minh POI trên map này.</div>` : '';
+  if (V === 'map') return `<section class="float f-left" aria-label="Danh sách POI"><h1 style="font-size:20px">POI</h1><p class="small muted" style="margin:4px 0 12px">Staff đề xuất bằng cách click trên map. Bạn xác minh tại chỗ.</p><div class="stack" style="gap:12px">${poiControls()}${locWarn}${poiList()}<a class="btn btn-sm" href="#/import">${ic('file')}Import YAML</a></div></section>`;
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/home">Kỹ thuật</a> / POI</div><h1>POI</h1><p class="muted small" style="margin-top:4px">Staff chỉ đề xuất POI. Kỹ thuật viên ra tận nơi kiểm tra robot tới đúng chỗ, chọn góc camera rồi xác minh.</p></div><a class="btn" href="#/import">${ic('file')}Import YAML</a></div>
+  <div class="stack">${poiControls()}${locWarn}<div class="g-side"><section class="card"><div class="card-h"><h2>Bản đồ ${esc(S.sel.poiMap)}</h2>${legend()}</div>${campusMap(S.sel.poiMap, { interactive: true, labels: true, filter: S.sel.poiFilter, robot: true })}</section><section class="card"><div class="card-h"><h2>Danh sách</h2><span class="small muted">Bấm để xác minh</span></div>${poiList()}</section></div></div>`;
+}
+function poiForm(p) {
+  const m = mapBy(p.map), locOk = m && m.loc && m.loc.result === 'pass';
+  return `${!locOk ? '<div class="note warn">Map chưa đạt localization, chưa thể xác minh POI.</div>' : ''}
+  <div class="row" style="justify-content:space-between">${poiChip(p)}<span class="small muted">rev ${p.rev} · ${srcLabel(p)}</span></div>
+  <dl class="kv"><dt>Tọa độ (frame map)</dt><dd>x ${p.x} · y ${p.y} · yaw ${p.yaw}</dd><dt>Góc camera hiện tại</dt><dd>${p.camera || '—'}</dd></dl>
+  ${p.last ? `<div class="note ${p.status === 'failed' ? 'bad' : ''}">Lần trước (${p.last.at}): ${esc(p.last.note)}</div>` : ''}
+  <form data-form="poi" data-id="${p.id}" class="stack ${locOk ? '' : 'lock'}" style="gap:12px">
+    <label class="check"><input type="checkbox" name="arrived"> Robot tới đúng vị trí</label>
+    <label class="field">Sai lệch đo được (cm)<input name="err" type="number" step="0.1" min="0"></label>
+    <div class="field"><span>Góc camera (FR-49)</span><div class="seg" role="radiogroup" aria-label="Góc camera">${['LEFT', 'FRONT', 'RIGHT'].map(c => `<label><input type="radio" name="cam" value="${c}" ${p.camera === c ? 'checked' : ''}><span>${c}</span></label>`).join('')}</div></div>
+    <label class="check"><input type="checkbox" name="frame"> Khung hình livestream đúng nội dung</label>
+    <div class="field"><span>Kết quả</span>${resRadios()}</div>
+    <label class="field">Ghi chú<textarea name="note" placeholder="Ví dụ: cửa phòng phải mở khi tour đi qua"></textarea></label>
+    <button class="btn btn-primary" type="submit">Lưu kết quả xác minh</button>
+  </form>`;
+}
+
+/* ── Trang: Import YAML ──────────────────────────── */
+const TEMPLATE = `# Template POI — Smart Campus Tour
+map: map2-v2
+frame: map
+pois:
+  - name: Phòng họp A
+    x: 12.5
+    y: 7.0
+    yaw: 1.57
+`;
+const SAMPLES = [
+  { name: 'poi-tang2-dot2.yaml', text: `map: map2-v2\nframe: map\npois:\n  - name: Phòng họp A\n    x: 12.5\n    y: 7.0\n    yaw: 1.57\n  - name: Góc trưng bày\n    x: 24\n    y: 4\n    yaw: 0\n` },
+  { name: 'poi-kho.yaml', text: `map: map2-v2\nframe: map\npois:\n  - name: Kho thiết bị\n    x: 45\n    y: 5\n    yaw: 0\n  - name: Sảnh chính\n    x: 6\n    y: 18\n    yaw: 0\n  - name: Phòng máy 3\n    frame: odom\n    x: 18\n    y: 22\n    yaw: 0.5\n` },
+];
+function parseYaml(text) {
+  const out = { pois: [] }; let cur = null, inPois = false;
+  text.split(/\r?\n/).forEach(raw => {
+    const line = raw.replace(/\s+#.*$/, '').replace(/^#.*$/, ''); if (!line.trim()) return;
+    const ind = line.match(/^\s*/)[0].length; let s = line.trim();
+    if (ind === 0 && !s.startsWith('-')) { const i = s.indexOf(':'); if (i < 0) return; const k = s.slice(0, i).trim(), v = s.slice(i + 1).trim(); if (k === 'pois') { inPois = true; return; } inPois = false; out[k] = v.replace(/^["']|["']$/g, ''); return; }
+    if (!inPois) return;
+    if (s.startsWith('-')) { cur = {}; out.pois.push(cur); s = s.slice(1).trim(); }
+    if (cur && s.includes(':')) { const i = s.indexOf(':'); cur[s.slice(0, i).trim()] = s.slice(i + 1).trim().replace(/^["']|["']$/g, ''); }
+  });
+  return out;
+}
+function validateImport() {
+  const map = S.imp.map, existing = new Set(S.pois.filter(p => p.map === map).map(p => p.name.toLowerCase())), seen = new Set(), rows = [];
+  S.imp.files.forEach(f => {
+    const d = parseYaml(f.text);
+    if (!d.pois.length) { rows.push({ file: f.name, name: '—', err: 'Không có mục pois hoặc sai định dạng template' }); return; }
+    d.pois.forEach(p => {
+      const errs = [], x = parseFloat(p.x), y = parseFloat(p.y), yaw = parseFloat(p.yaw);
+      if (d.map !== map) errs.push(`File ghi map "${d.map || 'trống'}", khác ${map}`);
+      if (!p.name) errs.push('Thiếu name');
+      const fr = p.frame || d.frame || ''; if (fr !== 'map') errs.push(`frame phải là "map" (đang là "${fr || 'trống'}")`);
+      if ([x, y, yaw].some(Number.isNaN)) errs.push('x, y, yaw phải là số');
+      else { if (x < 0 || x > 40 || y < 0 || y > 25) errs.push('Tọa độ nằm ngoài bản đồ (40 × 25 m)'); if (Math.abs(yaw) > 3.1416) errs.push('yaw ngoài khoảng ±π'); }
+      const key = (p.name || '').toLowerCase();
+      if (existing.has(key)) errs.push('Trùng tên POI đã có trên map'); else if (seen.has(key)) errs.push('Trùng tên giữa các file');
+      seen.add(key);
+      rows.push({ file: f.name, name: p.name || '—', x, y, yaw, err: errs.join(' · ') });
+    });
+  });
+  return rows;
+}
+function pageImport() {
+  const rows = validateImport(), ok = rows.filter(r => !r.err);
+  const existing = S.pois.filter(p => p.map === S.imp.map);
+  const preview = ok.map((r, i) => ({ id: 'pv' + i, name: r.name, x: r.x, y: r.y, preview: true }));
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/poi">POI</a> / Import YAML</div><h1>Import POI từ YAML</h1><p class="muted small" style="margin-top:4px">POI import vào ở trạng thái "Chờ xác minh". Bạn vẫn phải ra tận nơi xác minh từng điểm.</p></div><button type="button" class="btn" data-act="dlTemplate">${ic('download')}Tải template</button></div>
+  <div class="g-side"><div class="stack">
+    <section class="card"><div class="card-h"><h2>1 · Chọn version map</h2></div><label class="field"><span class="sr">Version map</span><select data-change="impMap" aria-label="Version map">${S.maps.map(m => `<option value="${m.id}" ${m.id === S.imp.map ? 'selected' : ''}>${m.id} · ${m.loc && m.loc.result === 'pass' ? 'đã đạt localization' : 'chưa đạt localization'}</option>`).join('')}</select></label></section>
+    <section class="card"><div class="card-h"><h2>2 · Thêm file YAML</h2></div><div class="drop" data-drop="yaml">${ic('file', 26)}<b>Kéo thả một hoặc nhiều file .yaml</b><span class="small muted">Theo template của dự án: map, frame, pois[name, x, y, yaw]</span><div class="row" style="justify-content:center"><label class="btn btn-sm">Chọn file<input type="file" accept=".yaml,.yml,text/yaml" multiple class="sr" data-change="yaml"></label><button type="button" class="btn btn-sm btn-ghost" data-act="sampleYaml">Dùng file mẫu</button></div></div>
+    ${S.imp.files.length ? `<div class="stack" style="gap:8px;margin-top:12px">${S.imp.files.map((f, i) => `<div class="row" style="padding:8px 12px;border:1px solid var(--line);border-radius:10px">${ic('file')}<span class="grow">${esc(f.name)}</span><button type="button" class="btn btn-sm btn-ghost" data-act="removeFile" data-i="${i}" aria-label="Bỏ ${esc(f.name)}">${ic('x', 16)}</button></div>`).join('')}</div>` : ''}</section>
+    <section class="card"><div class="card-h"><h2>3 · Kết quả kiểm tra</h2>${rows.length ? `<span class="small"><b style="color:var(--ok)">${ok.length} hợp lệ</b> · <b style="color:var(--bad)">${rows.length - ok.length} lỗi</b></span>` : ''}</div>
+    ${rows.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>File</th><th>POI</th><th>Tọa độ</th><th>Kết quả</th></tr></thead><tbody>${rows.map(r => `<tr><td class="small">${esc(r.file)}</td><td><b>${esc(r.name)}</b></td><td class="small">${Number.isNaN(r.x) || r.x === undefined ? '—' : `${r.x}, ${r.y}, ${r.yaw}`}</td><td>${r.err ? `<span style="color:var(--bad);font-size:13px">${esc(r.err)}</span>` : chip('c-ok', 'Hợp lệ')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Chưa có file nào.</div>'}
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><button type="button" class="btn btn-primary" data-act="doImport" ${ok.length ? '' : 'disabled'}>Import ${ok.length} POI (chưa xác minh)</button></div></section>
+  </div>
+  <section class="card"><div class="card-h"><h2>Xem trước vị trí</h2></div>${campusMap(S.imp.map, { pois: existing.concat(preview), labels: true })}<div style="margin-top:10px">${legend('<span><i style="background:#7c3aed"></i>Sắp import</span>')}</div><pre class="mono" style="margin:14px 0 0;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px;white-space:pre-wrap">${esc(TEMPLATE)}</pre></section></div>`;
+}
+
+/* ── Trang: Tuyến ────────────────────────────────── */
+function pageRoutes() {
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/home">Kỹ thuật</a> / Xác nhận tuyến</div><h1>Xác nhận tuyến</h1><p class="muted small" style="margin-top:4px">Staff soạn tuyến. Bạn chạy thử cùng người vận hành rồi xác nhận cho đúng bộ map–POI–tuyến.</p></div></div>
+  <div class="stack">${kanban()}<div class="grid g-2"><div class="note"><b>Version mới ảnh hưởng di chuyển</b> (đổi chặng, thêm/bớt điểm dừng, đổi map) không thừa hưởng xác nhận cũ và bị chặn xếp lịch.</div><div class="note ok"><b>Chỉ sửa thuyết minh</b> thì giữ xác nhận, không cần chạy lại navigation.</div></div></div>`;
+}
+function confirmMissing(r, f) {
+  const miss = [], m = mapBy(r.map);
+  if (!(m.loc && m.loc.result === 'pass')) miss.push(`Map ${m.id} chưa đạt localization`);
+  const unv = r.stops.map(poiBy).filter(p => p.status !== 'verified');
+  if (unv.length) miss.push(`${unv.length} POI chưa xác minh: ${unv.map(p => p.name).join(', ')}`);
+  if (f) {
+    const fd = new FormData(f);
+    if (!fd.get('op')) miss.push('Chưa chọn người vận hành cùng chạy thử');
+    const segs = [...f.querySelectorAll('input[name=seg]')], so = segs.filter(x => x.checked).length; if (so < segs.length) miss.push(`Còn ${segs.length - so} chặng chưa tick`);
+    const brs = [...f.querySelectorAll('input[name=br]')], bo = brs.filter(x => x.checked).length; if (bo < brs.length) miss.push(`Còn ${brs.length - bo} nhánh chưa chạy thử`);
+    if (fd.get('res') !== 'pass') miss.push('Chưa chọn kết quả Đạt');
+  }
+  return miss;
+}
+function routeSummary(r) {
+  const miss = confirmMissing(r);
+  return `<div class="row">${routeChip(r)}${r.blocking ? `<span class="small" style="color:var(--bad);font-weight:600">Đang chặn ${esc(r.blocking)}</span>` : ''}</div>
+  ${r.prev ? `<div><div class="small muted" style="margin-bottom:6px">Thay đổi so với ${r.prev}</div>${r.changes.map(c => `<div class="row" style="justify-content:space-between;padding:6px 0"><span>${esc(c.t)}</span>${c.nav ? chip('c-bad', 'Ảnh hưởng di chuyển') : chip('c-mute', 'Chỉ nội dung')}</div>`).join('')}</div>` : ''}
+  ${campusMap(r.map, { route: r, pois: r.stops.map(poiBy) })}
+  <ol class="stops">${r.stops.map(poiBy).map((p, i) => `<li><span class="n">${i + 1}</span><span class="grow">${esc(p.name)}</span>${poiChip(p)}</li>`).join('')}</ol>
+  ${miss.length ? `<div class="note warn">Cần xử lý trước khi chạy thử:<ul class="miss" style="color:var(--warn)">${miss.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+  <a class="btn btn-primary" href="#/route/${r.id}">Mở test & xác nhận</a>`;
+}
+function pageRoute(id) {
+  const r = routeBy(id); if (!r) return `<div class="empty">Không tìm thấy tuyến. <a href="#/routes">Về danh sách</a></div>`;
+  const stops = r.stops.map(poiBy), segs = stops.slice(1).map((p, i) => `${stops[i].name} → ${p.name}`);
+  const right = r.status === 'confirmed'
+    ? `<section class="card"><div class="card-h"><h2>Xác nhận kỹ thuật</h2>${chip('c-ok', 'Đã xác nhận')}</div><dl class="kv"><dt>Người xác nhận</dt><dd>${r.conf.by}</dd><dt>Thời điểm</dt><dd>${r.conf.at}</dd><dt>Chạy thử cùng</dt><dd>${esc(r.conf.operator)}</dd><dt>Bộ version</dt><dd>${r.map} · ${stops.length} POI · v${r.ver}</dd></dl>${r.conf.inherited ? `<div class="note ok" style="margin-top:12px">Giữ xác nhận từ ${r.conf.inherited} vì chỉ đổi thuyết minh.</div>` : ''}<button type="button" class="btn btn-danger" style="margin-top:14px" data-act="revoke" data-id="${r.id}">Thu hồi xác nhận</button></section>`
+    : `<section class="card"><div class="card-h"><h2>Test cùng người vận hành</h2></div><form data-form="confirm" data-live data-id="${r.id}" class="stack" style="gap:12px">
+      <label class="field">Người vận hành<select name="op"><option value="">Chọn người vận hành</option>${S.operators.map(o => `<option>${esc(o)}</option>`).join('')}</select></label>
+      <div class="field"><span>Các chặng đã chạy thử</span>${segs.map((s, i) => `<label class="check"><input type="checkbox" name="seg" value="${i}"> Chặng ${i + 1}: ${esc(s)}</label>`).join('')}</div>
+      ${r.branches.length ? `<div class="field"><span>Nhánh rẽ</span>${r.branches.map((b, i) => `<label class="check"><input type="checkbox" name="br" value="${i}"> ${esc(b)}</label>`).join('')}</div>` : ''}
+      <div class="field"><span>Kết quả</span>${resRadios()}</div>
+      <label class="field">Ghi chú<textarea name="note" placeholder="Ví dụ: chặng 3 robot giảm tốc đúng ở cửa Lab"></textarea></label>
+      <div id="miss"></div>
+      <button class="btn btn-primary" type="submit" disabled>Xác nhận kỹ thuật</button>
+      <p class="hint">Chỉ Nhân viên kỹ thuật thấy nút này. Server từ chối nếu tài khoản Staff gọi xác nhận.</p></form></section>`;
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/routes">Xác nhận tuyến</a> / ${esc(rName(r))}</div><div class="row"><h1>${esc(rName(r))}</h1>${routeChip(r)}</div><p class="muted small" style="margin-top:4px">${r.map} · ${stops.length} điểm dừng${r.blocking ? ` · <b style="color:var(--bad)">đang chặn ${esc(r.blocking)}</b>` : ''}</p></div></div>
+  <div class="g-side"><div class="stack">
+    ${r.prev ? `<section class="card"><div class="card-h"><h2>Thay đổi so với ${r.prev}</h2></div>${r.changes.map(c => `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2)"><span>${esc(c.t)}</span>${c.nav ? chip('c-bad', 'Ảnh hưởng di chuyển') : chip('c-mute', 'Chỉ nội dung')}</div>`).join('')}${r.contentOnly ? '<div class="note ok" style="margin-top:12px">Chỉ đổi thuyết minh → giữ xác nhận, không cần chạy lại navigation.</div>' : r.changes.some(c => c.nav) ? '<div class="note bad" style="margin-top:12px">Có thay đổi ảnh hưởng di chuyển → phải test lại toàn tuyến.</div>' : ''}</section>` : ''}
+    <section class="card"><div class="card-h"><h2>Lộ trình</h2></div>${campusMap(r.map, { route: r, pois: stops, labels: true, interactive: true })}</section>
+    <section class="card"><div class="card-h"><h2>Điểm dừng</h2></div><ol class="stops">${stops.map((p, i) => `<li><span class="n">${i + 1}</span><span class="grow"><b>${esc(p.name)}</b><span class="small muted" style="display:block">${p.camera ? 'Camera ' + p.camera : 'Chưa chọn góc camera'}</span></span>${poiChip(p)}${p.status !== 'verified' ? `<button type="button" class="btn btn-sm" data-act="pickPoi" data-id="${p.id}">Xác minh</button>` : ''}</li>`).join('')}</ol></section>
+    <section class="card"><div class="card-h"><h2>Lịch sử</h2></div>${r.history.map(h => `<div class="tl"><div class="when">${h.at}</div><div>${esc(h.text)}</div></div>`).join('')}</section>
+  </div>${right}</div>`;
+}
+
+/* ── Trang: Nhật ký ──────────────────────────────── */
+function pageLog() {
+  const f = S.sel.logF, list = S.log.filter(l => f === 'all' || l.type === f);
+  const fl = [['all', 'Tất cả'], ['map', 'Map'], ['poi', 'POI'], ['route', 'Tuyến']];
+  return `<div class="page-h"><div class="grow"><div class="crumb"><a href="#/home">Kỹ thuật</a> / Nhật ký</div><h1>Nhật ký kỹ thuật</h1><p class="muted small" style="margin-top:4px">Mọi lần upload, deploy, localization, xác minh, xác nhận và thu hồi đều được ghi lại.</p></div><div class="seg" role="radiogroup" aria-label="Lọc">${fl.map(([v, l]) => `<label><input type="radio" name="lf" value="${v}" data-change="logF" ${f === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>Thời điểm</th><th>Người</th><th>Hành động</th><th>Đối tượng</th><th>Ghi chú</th></tr></thead><tbody>${list.map(l => `<tr><td class="small">${l.at}</td><td>${esc(l.who)}</td><td><b>${esc(l.action)}</b></td><td>${esc(l.target)}</td><td class="small muted">${esc(l.note)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ── Render ──────────────────────────────────────── */
+function content() {
+  const { page, id } = route();
+  if (page === 'home') return V === 'sidebar' ? homeSidebar() : V === 'topnav' ? homeTopnav() : V === 'inbox' ? homeInbox() : homeMap();
+  if (page === 'maps') return pageMaps();
+  if (page === 'map') return pageMap(id);
+  if (page === 'poi') return pagePoi();
+  if (page === 'import') return pageImport();
+  if (page === 'routes') return pageRoutes();
+  if (page === 'route') return pageRoute(id);
+  if (page === 'log') return pageLog();
+  return `<div class="empty">Không có trang này. <a href="#/home">Về trang chủ</a></div>`;
+}
+function render() {
+  document.body.className = 'v-' + V;
+  $('#app').innerHTML = shell(content()) + modalHtml() + switcher();
+  document.querySelectorAll('form[data-live]').forEach(f => LIVE[f.dataset.form] && LIVE[f.dataset.form](f));
+}
+function openPanel(p) { S.panel = p; render(); const b = $('.panel .panel-b'); if (b) b.scrollTop = 0; }
+function closePanel() { S.panel = null; S.sel.poi = null; S.sel.task = null; render(); }
+
+/* ── Hành động ───────────────────────────────────── */
+async function sha(file) {
+  try { const h = await crypto.subtle.digest('SHA-256', await file.arrayBuffer()); const hex = [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join(''); return hex.slice(0, 8) + '…' + hex.slice(-4); }
+  catch (e) { return Math.random().toString(16).slice(2, 10) + '…' + Math.random().toString(16).slice(2, 6); }
+}
+function patchUpload() { const el = $('#upsum'); if (el) el.innerHTML = upSummary(); const b = $('form[data-form=upload] [type=submit]'); if (b) b.disabled = !S.up; }
+async function takePkg(file) {
+  if (!/\.zip$/i.test(file.name)) { toast('Chỉ nhận gói .zip'); return; }
+  S.up = { file: file.name, size: (file.size / 1048576).toFixed(1) + ' MB', checksum: await sha(file), res: 0.05, origin: '[-2.0, -3.0, 0]' }; patchUpload();
+}
+function takeYaml(files) {
+  const list = [...files].filter(f => /\.ya?ml$/i.test(f.name));
+  if (!list.length) { toast('Chỉ nhận file .yaml hoặc .yml'); return; }
+  Promise.all(list.map(f => f.text().then(text => ({ name: f.name, text })))).then(arr => { S.imp.files.push(...arr); render(); });
+}
+const ACT = {
+  go: d => { location.hash = d.href; },
+  openUpload: () => { S.up = null; openPanel({ type: 'upload' }); },
+  closePanel: () => closePanel(),
+  closeModal: () => { S.modal = null; render(); },
+  logout: () => toast('Bản mẫu: đăng xuất bị tắt'),
+  download: () => toast('Bản mẫu: chưa có API tải package'),
+  pickPoi: d => { S.sel.poi = d.id; S.sel.task = null; openPanel({ type: 'poi', id: d.id }); },
+  pickTask: d => { S.sel.task = d.id; S.sel.poi = null; openPanel({ type: 'task', id: d.id }); },
+  ovMap: d => { S.sel.ovMap = d.id; render(); },
+  tf: d => { S.sel.tf = d.v; render(); },
+  goPoi: d => { S.sel.poiMap = d.map; S.sel.poiFilter = 'all'; location.hash = '#/poi'; },
+  samplePkg: () => { S.up = { file: suggestId() + '.zip', size: '4.7 MB', checksum: '5c2e9a10…7b3d', res: 0.05, origin: '[-2.0, -3.0, 0]' }; patchUpload(); },
+  sampleYaml: () => { S.imp.files.push(...SAMPLES.map(s => ({ ...s }))); render(); },
+  removeFile: d => { S.imp.files.splice(+d.i, 1); render(); },
+  dlTemplate: () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([TEMPLATE], { type: 'text/yaml' })); a.download = 'poi-template.yaml'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); },
+  doImport: () => {
+    const ok = validateImport().filter(r => !r.err); if (!ok.length) return;
+    ok.forEach((r, i) => S.pois.push({ id: 'n' + Date.now() + i, name: r.name, map: S.imp.map, x: r.x, y: r.y, yaw: r.yaw, source: 'yaml', status: 'pending', camera: null, rev: 1, last: null }));
+    addLog('poi', 'Import YAML', `${ok.length} POI · ${S.imp.map}`, S.imp.files.map(f => f.name).join(', '));
+    S.imp.files = []; S.sel.poiMap = S.imp.map; S.sel.poiFilter = 'pending';
+    toast(`Đã import ${ok.length} POI, đang chờ xác minh`); location.hash = '#/poi';
+  },
+  addPoint: () => { const tb = $('#pts'); if (tb) tb.insertAdjacentHTML('beforeend', ptRow()); },
+  relocate: d => { const m = mapBy(d.id); m.loc = null; addLog('map', 'Mở đo lại localization', m.id, ''); render(); },
+  redeploy: d => { S.modal = { type: 'redeploy', id: d.id }; render(); },
+  revoke: d => { S.modal = { type: 'revoke', id: d.id }; render(); },
+};
+const CHG = {
+  poiMap: el => { S.sel.poiMap = el.value; S.sel.poi = null; if (S.panel && S.panel.type === 'poi') S.panel = null; render(); },
+  poiFilter: el => { S.sel.poiFilter = el.value; render(); },
+  impMap: el => { S.imp.map = el.value; render(); },
+  logF: el => { S.sel.logF = el.value; render(); },
+  pkg: el => { if (el.files[0]) takePkg(el.files[0]); },
+  yaml: el => { if (el.files.length) takeYaml(el.files); },
+};
+const LIVE = {
+  confirm: f => {
+    const r = routeBy(f.dataset.id), fd = new FormData(f), res = fd.get('res'), btn = f.querySelector('[type=submit]'), out = f.querySelector('#miss');
+    if (res === 'fail') { btn.disabled = !fd.get('op'); btn.textContent = 'Ghi kết quả không đạt'; btn.className = 'btn btn-danger'; out.innerHTML = fd.get('op') ? '<div class="note bad">Tuyến giữ trạng thái hiện tại. Lần test không đạt được lưu vào lịch sử.</div>' : '<div class="small muted">Chọn người vận hành để ghi kết quả.</div>'; return; }
+    const miss = confirmMissing(r, f);
+    btn.textContent = 'Xác nhận kỹ thuật'; btn.className = 'btn btn-primary'; btn.disabled = miss.length > 0;
+    out.innerHTML = miss.length ? `<div class="small" style="font-weight:600;color:var(--text2)">Còn thiếu:</div><ul class="miss">${miss.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="note ok">Đủ điều kiện. Xác nhận sẽ gắn với đúng bộ map–POI–tuyến hiện tại.</div>';
+  },
+};
+const FORM = {
+  upload: (f, fd) => {
+    if (!S.up) return toast('Chọn gói map trước');
+    const id = (fd.get('id') || '').trim(); if (!id) return toast('Nhập tên version');
+    if (mapBy(id)) return toast(`Version ${id} đã tồn tại`);
+    S.maps.unshift({ id, area: fd.get('area') || '', checksum: S.up.checksum, size: S.up.size, res: S.up.res, origin: S.up.origin, uploadedAt: now(), uploadedBy: S.me.user, note: fd.get('note') || 'Không ghi chú', deploy: null, loc: null, onRobot: false });
+    addLog('map', 'Upload version map', id, fd.get('note') || ''); S.up = null; S.panel = null; toast(`Đã lưu ${id}. Chưa deploy lên robot.`);
+    location.hash = '#/map/' + id; render();
+  },
+  deploy: (f, fd) => {
+    if (!fd.get('ok')) return toast('Xác nhận checksum trên robot khớp trước khi ghi');
+    const m = mapBy(f.dataset.id); S.maps.forEach(x => x.onRobot = false);
+    m.deploy = { robot: fd.get('robot'), at: fmtDT(fd.get('at')), by: S.me.user }; m.loc = null; m.onRobot = true;
+    addLog('map', 'Ghi deploy', `${m.id} → ${m.deploy.robot}`, 'Checksum khớp'); toast(`Robot giờ chạy ${m.id}. Hãy đo localization.`); render();
+  },
+  redeploy: (f, fd) => {
+    if (!fd.get('ok')) return toast('Xác nhận checksum trước');
+    const m = mapBy(f.dataset.id); S.maps.forEach(x => x.onRobot = false);
+    m.deploy = { robot: fd.get('robot'), at: now(), by: S.me.user }; m.loc = null; m.onRobot = true; S.modal = null;
+    addLog('map', 'Deploy lại', `${m.id} → ${m.deploy.robot}`, 'Xóa kết quả localization cũ'); toast('Đã ghi deploy lại. Cần đo localization.'); render();
+  },
+  loc: (f, fd) => {
+    const res = fd.get('res'), err = parseFloat(fd.get('err'));
+    if (!res) return toast('Chọn kết quả Đạt hoặc Không đạt'); if (Number.isNaN(err)) return toast('Nhập sai lệch trung bình');
+    const names = fd.getAll('ptn'), errs = fd.getAll('pte'), points = names.map((n, i) => [n, errs[i]]).filter(([n, e]) => n && e !== '');
+    const m = mapBy(f.dataset.id); m.loc = { result: res, err, points, note: fd.get('note') || '', at: now(), by: S.me.user };
+    addLog('map', 'Ghi localization', m.id, `${res === 'pass' ? 'Đạt' : 'Không đạt'} · ${err} cm`); toast('Đã lưu kết quả localization'); render();
+  },
+  poi: (f, fd) => {
+    const p = poiBy(f.dataset.id), res = fd.get('res'); if (!res) return toast('Chọn kết quả');
+    if (res === 'pass' && (!fd.get('arrived') || !fd.get('frame') || !fd.get('cam'))) return toast('Đạt cần: robot tới đúng chỗ, chọn góc camera, khung hình đúng');
+    p.status = res === 'pass' ? 'verified' : 'failed'; if (fd.get('cam')) p.camera = fd.get('cam');
+    const err = fd.get('err'), note = `${res === 'pass' ? 'Đạt' : 'Không đạt'}${err ? ` · lệch ${err} cm` : ''}${fd.get('note') ? ' · ' + fd.get('note') : ''}`;
+    p.last = { at: now(), note }; addLog('poi', 'Xác minh POI', `${p.name} (${p.map})`, note);
+    toast(res === 'pass' ? `Đã xác minh ${p.name}` : `Đã ghi ${p.name} không đạt`);
+    S.panel = null; S.sel.poi = null; S.sel.task = null; render();
+  },
+  confirm: (f, fd) => {
+    const r = routeBy(f.dataset.id), op = fd.get('op'), note = fd.get('note');
+    if (fd.get('res') === 'fail') { r.history.unshift({ at: now(), text: `Test không đạt cùng ${op}${note ? ': ' + note : ''}` }); addLog('route', 'Test không đạt', rName(r), note || ''); toast('Đã ghi lần test không đạt'); render(); return; }
+    if (confirmMissing(r, f).length) return;
+    r.status = 'confirmed'; r.conf = { by: S.me.user, at: now(), operator: op }; r.blocking = null;
+    r.history.unshift({ at: now(), text: `Xác nhận kỹ thuật sau khi chạy thử cùng ${op}${note ? ': ' + note : ''}` });
+    addLog('route', 'Xác nhận kỹ thuật', rName(r), `Chạy thử cùng ${op}`); toast(`Đã xác nhận ${rName(r)}. Staff có thể xếp lịch.`); render();
+  },
+  revoke: (f, fd) => {
+    const r = routeBy(f.dataset.id), reason = (fd.get('reason') || '').trim(); if (!reason) return toast('Nhập lý do thu hồi');
+    r.status = 'unconfirmed'; r.conf = null; r.history.unshift({ at: now(), text: `Thu hồi xác nhận: ${reason}` });
+    addLog('route', 'Thu hồi xác nhận', rName(r), reason); S.modal = null; toast('Đã thu hồi. Tuyến bị chặn xếp lịch.'); render();
+  },
+};
+document.addEventListener('click', e => { const a = e.target.closest('[data-act]'); if (!a || !ACT[a.dataset.act]) return; e.preventDefault(); ACT[a.dataset.act](a.dataset, a); });
+document.addEventListener('change', e => { const el = e.target; if (el.dataset.change && CHG[el.dataset.change]) CHG[el.dataset.change](el); const f = el.closest('form[data-live]'); if (f && LIVE[f.dataset.form]) LIVE[f.dataset.form](f); });
+document.addEventListener('submit', e => { const f = e.target.closest('form[data-form]'); if (!f) return; e.preventDefault(); FORM[f.dataset.form](f, new FormData(f)); });
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (S.modal) { S.modal = null; render(); } else if (S.panel) closePanel(); });
+document.addEventListener('dragover', e => { const z = e.target.closest && e.target.closest('[data-drop]'); if (z) { e.preventDefault(); z.classList.add('on'); } });
+document.addEventListener('dragleave', e => { const z = e.target.closest && e.target.closest('[data-drop]'); if (z) z.classList.remove('on'); });
+document.addEventListener('drop', e => { const z = e.target.closest && e.target.closest('[data-drop]'); if (!z) return; e.preventDefault(); z.classList.remove('on'); const fs = e.dataTransfer.files; if (!fs.length) return; if (z.dataset.drop === 'pkg') takePkg(fs[0]); else takeYaml(fs); });
+window.addEventListener('hashchange', () => { S.panel = null; S.sel.poi = null; S.sel.task = null; S.modal = null; render(); window.scrollTo(0, 0); });
+render();
+</script>
+</body>
+</html>

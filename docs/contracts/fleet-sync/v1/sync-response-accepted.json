@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "message": "Telemetry reconciled.",
+  "data": {
+    "accepted": true,
+    "duplicate": false,
+    "receivedAt": "2026-10-22T00:00:00+00:00",
+    "commands": []
+  },
+  "errors": null
+}

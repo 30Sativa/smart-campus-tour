@@ -11,8 +11,13 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
     public Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct) =>
         context.BrowserSessions.AsNoTracking().Where(s => s.Invitation.RosterRow.Registration.TourId == tourId && s.SessionTokenHash == tokenHash)
             .Select(s => (Guid?)s.InvitationId).SingleOrDefaultAsync(ct);
+    public Task<Guid?> FindDeviceInvitationIdAsync(Guid tourId, byte[] deviceTokenHash, CancellationToken ct) =>
+        context.BrowserSessions.AsNoTracking().Where(s => s.EndedAt == null && s.DeviceTokenHash == deviceTokenHash &&
+                s.Invitation.RosterRow.Registration.TourId == tourId)
+            .Select(s => (Guid?)s.InvitationId).SingleOrDefaultAsync(ct);
     public Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct) =>
-        context.Invitations.Include(i => i.RosterRow).ThenInclude(r => r.Registration).Include(i => i.BrowserSessions)
+        context.Invitations.Include(i => i.RosterRow).ThenInclude(r => r.Registration)
+            .Include(i => i.BrowserSessions.Where(s => s.EndedAt == null))
             .SingleOrDefaultAsync(i => i.Id == invitationId, ct);
     public void Add(BrowserSession session) => context.BrowserSessions.Add(session);
     public Task<bool> HasEnteredAsync(Guid invitationId, CancellationToken ct) => context.AuditLogs
@@ -22,7 +27,7 @@ public sealed class EfStudentAccessRepository(ApplicationDbContext context) : IS
         context.BrowserSessions.AsNoTracking()
             .Where(s => s.SessionTokenHash == tokenHash && s.EndedAt == null && s.ExpiresAt > now &&
                 s.Invitation.RevokedAt == null && s.Invitation.ExpiresAt > now && s.Invitation.RosterRow.IsActive &&
-                s.Invitation.RosterRow.Registration.State == "APPROVED" && s.Invitation.RosterRow.Registration.TourId == tourId)
+                s.Invitation.RosterRow.ParticipationState == "ACCEPTED" && s.Invitation.RosterRow.Registration.TourId == tourId)
             .Select(s => new StudentQuestionAccess(s.Id, s.Invitation.RosterRow.Registration.Tour.State, s.Invitation.RosterRow.RowType))
             .SingleOrDefaultAsync(ct);
     // Close before INSERT to respect the filtered UNIQUE index in the same Tour transaction.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { ChevronDown, ChevronLeft, LogOut, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
@@ -10,7 +10,7 @@ type Badge = { value: number; label: string; tone?: 'info' | 'danger' }
 type Secondary = { to: string; label: string; icon: LucideIcon; current?: boolean }
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
-const tinted = 'bg-gradient-to-r from-[#e5f3ff] to-[#f1f8fe]'
+const tinted = 'bg-[#f1f8fe] shadow-[inset_3px_0_0_#2d719e]'
 /** One curve and one length for everything that moves when the sidebar folds. */
 const EASE = 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none'
 
@@ -28,7 +28,7 @@ const EASE = 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:tran
  * A badge fades into a dot on its icon, and choosing a group unfolds the
  * sidebar with that group open.
  */
-export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], onNavigate, onLogout, open, panelRef, closeRef }: {
+export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], highlight, onNavigate, onLogout, open, panelRef, closeRef }: {
   id: string
   label: string
   navLabel: string
@@ -38,6 +38,8 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   currentPath: string | null
   badges?: Record<string, Badge>
   secondary?: Secondary[]
+  /** Something live to keep in view under the logo, e.g. the running session; told whether the sidebar is a rail. */
+  highlight?: (rail: boolean) => ReactNode
   onNavigate: () => void
   onLogout: () => void
   open: boolean
@@ -45,13 +47,14 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   closeRef?: Ref<HTMLButtonElement>
 }) {
   const [toggled, setToggled] = useState<Record<string, boolean>>({})
+  const hasHeadings = entries.some((entry) => entry.kind === 'heading')
   const rail = useSidebarStore((state) => state.collapsed)
   const toggleRail = useSidebarStore((state) => state.toggle)
   const setRail = useSidebarStore((state) => state.setCollapsed)
 
   /** Fades on the rail (wide screens only: the phone drawer is always full). */
   const fade = `transition-opacity ${EASE} ${rail ? 'lg:pointer-events-none lg:opacity-0' : ''}`
-  const row = `relative flex min-h-9 items-center gap-[11px] rounded-[10px] px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
+  const row = `relative flex min-h-8 items-center gap-[11px] rounded-lg px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
 
   const pill = (badge?: Badge) => {
     if (!badge || badge.value <= 0) return null
@@ -73,10 +76,10 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
       data-collapsed={rail || undefined}
       className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-[248px] shrink-0 flex-col overflow-hidden bg-white shadow-[1px_0_0_#eceef1] transition-[transform,width] ${EASE} lg:sticky lg:translate-x-0 focus-visible:outline-none ${rail ? 'lg:w-[68px]' : ''} ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)]' : '-translate-x-full'}`}
     >
-      <div className="relative flex h-16 w-[248px] shrink-0 items-center px-[15px]">
+      <div className="relative flex h-14 w-[248px] shrink-0 items-center px-[15px]">
         <Link to={homePath} onClick={onNavigate} tabIndex={rail ? -1 : undefined} className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl pr-9 ${focusRing} ${fade}`}>
-          <span className="grid size-[38px] shrink-0 place-items-center rounded-[11px] bg-white shadow-[0_0_0_1px_#e5e7eb,0_6px_14px_-8px_rgba(17,24,39,0.35)] transition-transform duration-500 group-hover:-rotate-6 motion-reduce:transition-none">
-            <img src="/images/logo.png" alt="" width={30} height={30} className="size-[30px] object-contain" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-white shadow-[0_0_0_1px_#e5e7eb,0_6px_14px_-8px_rgba(17,24,39,0.35)] transition-transform duration-500 group-hover:-rotate-6 motion-reduce:transition-none">
+            <img src="/images/logo.png" alt="" width={25} height={25} className="size-[25px] object-contain" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-bold tracking-[-0.03em] text-[#0f172a]">CampusTour</span>
@@ -99,9 +102,17 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
       </div>
 
       <nav className="w-[248px] flex-1 overflow-x-hidden overflow-y-auto px-3.5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
-        <p className={`mt-3 mb-2 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-[#9ca3af] uppercase ${fade}`}>Trang</p>
+        {highlight && <div className="mt-1">{highlight(rail)}</div>}
+        {!hasHeadings && <p className={`mt-3 mb-1 px-3 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Trang</p>}
         <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
-          {entries.map((entry) => {
+          {entries.map((entry, index) => {
+            if (entry.kind === 'heading') {
+              return (
+                <div key={entry.key} className={index === 0 ? 'pt-1' : 'mt-1.5 border-t border-[#eef1f4] pt-1.5'}>
+                  <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>{entry.label}</p>
+                </div>
+              )
+            }
             if (entry.kind === 'link') {
               const { path, label: name, icon: Icon } = entry.item
               const active = currentPath === path
@@ -163,7 +174,9 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
 
         {secondary.length > 0 && (
           <>
-            <p className={`mt-5 mb-2 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-[#9ca3af] uppercase ${fade}`}>Khác</p>
+            <div className="mt-2 border-t border-[#f1f3f5] pt-2">
+              <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Khu vực khác</p>
+            </div>
             <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
               {secondary.map(({ to, label: name, icon: Icon, current }) => (
                 <Link key={to} to={to} onClick={onNavigate} aria-current={current ? 'page' : undefined} title={rail ? name : undefined}

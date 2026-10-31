@@ -83,6 +83,34 @@ public sealed class InvitationPrimitiveTests
     }
 
     [Fact]
+    public async Task CancelEmail_CarriesTourTimeReasonAndContact_ButNoLinkOrCode()
+    {
+        var config = Configuration(); var codec = new InvitationCodeService(config);
+        var handler = new CaptureHandler(200, "{\"id\":\"preview\"}");
+        using var http = new HttpClient(handler);
+        var attempt = Guid.NewGuid(); var registration = Guid.NewGuid(); var tour = Guid.NewGuid();
+        var result = await new ResendInvitationEmailSender(http, config, codec).SendTourCancelledAsync(new(tour, attempt, registration,
+            "rep@example.test", "<b>Tour</b>", new DateTimeOffset(2026, 11, 20, 2, 0, 0, TimeSpan.Zero), "Robot <maintenance>"), default);
+        Assert.Equal("ACCEPTED", result.Status);
+        Assert.Equal($"campus-tour/tour-cancel/{attempt:D}/{registration:D}", handler.IdempotencyKey);
+        using var json = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("rep@example.test", Assert.Single(json.RootElement.GetProperty("to").EnumerateArray()).GetString());
+        var html = json.RootElement.GetProperty("html").GetString()!;
+        var text = json.RootElement.GetProperty("text").GetString()!;
+        Assert.Contains("20/11/2026 09:00", html); Assert.Contains("20/11/2026 09:00 (UTC+7)", text);
+        Assert.Contains("&lt;b&gt;Tour&lt;/b&gt;", html); Assert.DoesNotContain("<b>Tour", html);
+        Assert.Contains("Robot &lt;maintenance&gt;", html); Assert.Contains("Lý do: Robot <maintenance>", text);
+        Assert.Contains("support@example.test", html); Assert.Contains("support@example.test", text);
+        foreach (var body in new[] { html, text })
+        {
+            Assert.DoesNotContain("https://", body);
+            Assert.DoesNotContain("/tour/", body);
+            Assert.DoesNotContain(tour.ToString(), body);
+            Assert.DoesNotContain("Mã truy cập", body);
+        }
+    }
+
+    [Fact]
     public async Task InvitationEmail_PreservesAccessInstructions_InHtmlAndPlainText_WithVietnamTimes()
     {
         var config = Configuration(); var codec = new InvitationCodeService(config);

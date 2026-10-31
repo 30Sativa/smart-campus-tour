@@ -1,6 +1,6 @@
 # ADR-0008: SignalR production fleet transport with a Python compatibility gate
 
-**Status: accepted architecture decision; production acceptance gate pending.**
+**Status: superseded for robot-to-backend transport by ADR-0019 before production implementation.** The command/result semantics below remain M2 design material. SignalR remains the browser-facing `/hubs/operations` transport and the development `/hubs/simulation` transport.
 
 ## Context
 

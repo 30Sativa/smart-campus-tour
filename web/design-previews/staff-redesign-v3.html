@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff · thiết kế mới (xem trước)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+:root{--ink:#0f172a;--navy:#173b59;--primary:#2d719e;--primary-deep:#245e84;--wash:#e5f3ff;--wash-2:#f1f8fe;--ground:#f6f7f9;--line:#e2e8f0;--line-soft:#eef1f4;--muted:#64748b;--text-2:#334155;--ok:#1f7a55;--ok-bg:#effbf5;--warn:#8a5a06;--warn-bg:#fff8e6;--bad:#b23e31;--bad-bg:#fff1ef;--mapbg:#e2eaf2}
+*{box-sizing:border-box}html,body{margin:0}
+body{font-family:"Be Vietnam Pro",system-ui,sans-serif;background:var(--ground);color:var(--ink);font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}a{color:var(--primary)}h1,h2,h3,p{margin:0}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.shell{display:flex;min-height:100vh}
+/* sidebar A */
+.side{width:236px;flex:none;background:#fff;box-shadow:1px 0 0 #eceef1;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:10px;height:56px;padding:0 14px;flex:none;text-decoration:none;color:var(--ink);cursor:pointer;border:none;background:none;text-align:left}
+.brand .mark{width:32px;height:32px;flex:none;border-radius:10px;background:#fff;box-shadow:0 0 0 1px #e5e7eb,0 6px 14px -8px rgba(17,24,39,.35);display:grid;place-items:center}
+.brand .mark img{width:25px;height:25px;object-fit:contain}
+.brand b{display:block;font-size:14px;letter-spacing:-.03em}.brand small{display:block;font-size:11px;color:#6b7280;font-weight:600}
+.livecard{margin:2px 10px 4px;display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;background:var(--navy);color:#fff;border:none;cursor:pointer;text-align:left;width:calc(100% - 20px)}
+.livecard:hover{background:#1f4b70}
+.livecard i{width:8px;height:8px;border-radius:50%;background:#4ade80;flex:none;box-shadow:0 0 0 3px rgba(74,222,128,.25)}
+.livecard b{display:block;font-size:12.5px}.livecard small{font-size:11px;opacity:.85}
+.navs{flex:1;overflow-y:auto;padding:0 10px 10px;scrollbar-width:thin}
+.grp{font-size:11.5px;font-weight:600;color:var(--muted);padding:8px 10px 3px;border-top:1px solid var(--line-soft);margin-top:4px}
+.grp:first-child{border-top:none;margin-top:0}
+.it{display:flex;align-items:center;gap:10px;width:100%;min-height:30px;padding:0 10px;border:none;background:none;border-radius:8px;color:#374151;cursor:pointer;text-align:left;white-space:nowrap}
+.it svg{flex:none;color:#6b7280}
+.it:hover{background:#f3f4f6;color:var(--ink)}
+.it[aria-current]{background:var(--wash-2);color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--primary)}
+.it[aria-current] svg{color:var(--primary)}
+.it .lb{flex:1;overflow:hidden;text-overflow:ellipsis}
+.n{min-width:20px;height:18px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;background:var(--primary);padding:0 6px}
+.n.r{background:#dc2626}
+.foot{flex:none;border-top:1px solid #eceef1;padding:8px 12px}
+.body{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;z-index:10;height:52px;display:flex;align-items:center;gap:10px;padding:0 24px;background:rgba(246,247,249,.9);backdrop-filter:blur(6px);border-bottom:1px solid #e5e7eb}
+.crumb{font-size:12.5px;color:#9ca3af}.crumb b{color:#6b7280;font-weight:500}
+.conn{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 10px;background:#ecfdf3;color:#15803d}
+.conn i{width:7px;height:7px;border-radius:50%;background:#16a34a}
+.acct{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px}
+.acct .av{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;font-size:11px;display:grid;place-items:center}
+.acct b{display:block;font-size:12.5px}.acct span{color:var(--muted);font-size:11px}
+.bell{width:32px;height:32px;border-radius:9px;border:none;background:none;display:grid;place-items:center;color:#64748b;position:relative;cursor:pointer}
+.bell i{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:#dc2626;box-shadow:0 0 0 2px #f6f7f9}
+.main{padding:16px 24px 40px;max-width:1400px;width:100%}
+
+/* page parts */
+.top{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.top .g{flex:1 1 360px}.top h1{font-size:21px;font-weight:700;letter-spacing:-.025em;color:var(--navy);line-height:1.2}
+.top p{color:var(--muted);font-size:12.5px;margin-top:2px;max-width:80ch}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:0 12px;border-radius:9px;border:1px solid #d9e9f5;background:#fff;color:#285c7d;font-weight:600;font-size:12.5px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--wash-2)}.btn.p{background:var(--primary);border-color:var(--primary);color:#fff}.btn.p:hover{background:var(--primary-deep)}
+.btn.s{min-height:28px;padding:0 9px;font-size:12px;border-radius:8px}
+.btn.danger{border-color:#f5c8c2;background:var(--bad-bg);color:var(--bad)}
+.btn:disabled{background:#e3edf4;border-color:#e3edf4;color:#64748b;cursor:not-allowed}
+.st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;border:1px solid;white-space:nowrap}
+.st.ok{color:var(--ok);background:var(--ok-bg);border-color:#cde9dc}.st.warn{color:var(--warn);background:var(--warn-bg);border-color:#f0d89f}.st.bad{color:var(--bad);background:var(--bad-bg);border-color:#f5c8c2}.st.mute{color:#5d7085;background:#f6f9fd;border-color:#dbe6f4}.st.run{color:#fff;background:var(--primary);border-color:var(--primary)}.st.info{color:#2f62b8;background:#eef5ff;border-color:#cfe1fb}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;min-width:0}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line-soft)}
+.ph h2{font-size:13px;font-weight:600}.ph a,.ph .lnk{font-size:12px;font-weight:600;text-decoration:none;color:var(--primary);background:none;border:none;cursor:pointer}
+.ph small{font-size:11.5px;color:var(--muted)}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--line-soft)}
+.list li:first-child{border-top:none}.list .g{flex:1;min-width:0}.list small{display:block;color:var(--muted);font-size:11.5px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:12px}
+.kpi{padding:10px 14px;border-left:1px solid var(--line-soft);min-width:0;background:none;border-top:none;border-right:none;border-bottom:none;text-align:left;cursor:default}
+.kpi:first-child{border-left:none}
+button.kpi{cursor:pointer}button.kpi:hover{background:#fafcfe}
+.kpi small{display:block;font-size:11.5px;color:var(--muted)}.kpi b{display:block;font-size:20px;font-weight:700;letter-spacing:-.01em;line-height:1.3}.kpi i{font-style:normal;font-size:11.5px;color:var(--muted)}
+.kpi.bad b{color:var(--bad)}.kpi.warn b{color:var(--warn)}
+.g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.g21{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr);gap:12px;align-items:start}
+.stack{display:grid;gap:12px}
+.tw{overflow-x:auto}
+table.t{width:100%;border-collapse:collapse}
+.t th{font-size:11.5px;font-weight:500;color:var(--muted);text-align:left;padding:7px 12px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:8px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+.t tr:last-child td{border-bottom:none}
+.t tr.click{cursor:pointer}.t tr.click:hover td{background:#fafcfe}
+.t small{display:block;color:var(--muted);font-size:11.5px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line-soft)}
+.search{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid #d9e9f5;border-radius:9px;background:#fff;min-width:220px;color:var(--muted)}
+.search input{border:none;outline:none;flex:1;min-width:0;font-size:12.5px;background:none;color:var(--ink)}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chips button{min-height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--text-2);cursor:pointer}
+.chips button[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+.pager{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--line-soft);font-size:12px;color:var(--muted)}
+.pager .pg{display:flex;gap:4px}.pager .pg button{width:28px;height:28px;border-radius:7px;border:1px solid var(--line);background:#fff;cursor:pointer;font-size:12px}
+.pager .pg button[aria-current]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px;margin:0;padding:10px 14px}.facts dt{color:var(--muted)}.facts dd{margin:0;text-align:right;font-weight:600}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:500;color:var(--text-2)}
+.field input,.field select,.field textarea{min-height:36px;border:1px solid #d9e9f5;border-radius:9px;padding:6px 10px;background:#fff;font-size:13px;font-weight:400;color:var(--ink)}
+.field textarea{min-height:64px;resize:vertical}
+.hint{font-size:11.5px;color:var(--muted);font-weight:400}
+.note{padding:9px 12px;border-radius:9px;font-size:12.5px;background:var(--wash-2);border:1px solid #d6e8f5;color:#174b70}
+.note.warn{background:#fffbeb;border-color:#fde68a;color:var(--warn)}.note.bad{background:var(--bad-bg);border-color:#f5c8c2;color:var(--bad)}.note.ok{background:var(--ok-bg);border-color:#cde9dc;color:var(--ok)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tabs button{border:none;background:none;padding:8px 12px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;box-shadow:inset 0 -2px 0 transparent}
+.tabs button[aria-selected=true]{color:var(--navy);box-shadow:inset 0 -2px 0 var(--primary)}
+.ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line-soft);padding:0 8px}
+.ptabs button{border:none;background:none;padding:8px 10px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;box-shadow:inset 0 -2px 0 transparent}
+.ptabs button[aria-selected=true]{color:var(--navy);box-shadow:inset 0 -2px 0 var(--primary)}
+.mapbox{background:var(--mapbg);display:flex;justify-content:center}
+.mapbox svg{display:block;width:100%;height:auto}
+/* day strip */
+.day{padding:10px 14px 12px}
+.axis{position:relative;height:18px;margin-left:140px;font-size:11px;color:var(--muted)}
+.axis span{position:absolute;transform:translateX(-50%)}
+.lane{display:grid;grid-template-columns:140px minmax(0,1fr);align-items:center;min-height:38px;border-top:1px solid var(--line-soft)}
+.lane .w{font-size:12px;padding-right:10px}.lane .w b{display:block;font-size:12.5px}.lane .w small{color:var(--muted)}
+.track{position:relative;height:38px;background:repeating-linear-gradient(90deg,transparent 0 calc(100%/9 - 1px),var(--line-soft) calc(100%/9 - 1px) calc(100%/9))}
+.bar{position:absolute;top:8px;height:22px;border-radius:7px;display:flex;overflow:hidden;cursor:pointer;border:none;padding:0}
+.bar .buf{width:var(--b);background:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 4px,transparent 4px 8px)}
+.bar .run{flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden}
+.bar.running{background:var(--primary);color:#fff}.bar.ready{background:#b9dcf2;color:var(--navy)}.bar.sched{background:#e2e8f0;color:var(--text-2)}.bar.blocked{background:#f9d6d1;color:var(--bad)}.bar.done{background:#cfe9dc;color:var(--ok)}
+.now{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--bad);z-index:2}
+.now::before{content:attr(data-t);position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-size:10.5px;font-weight:700;color:var(--bad);background:#fff;padding:0 3px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);padding:0 14px 10px}
+.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:16px;height:8px;border-radius:3px;display:inline-block}
+/* live (mẫu A) */
+.strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+.strip div{padding:7px 12px;border-left:1px solid var(--line-soft);min-width:0}.strip div:first-child{border-left:none}
+.strip small{display:block;font-size:11px;color:var(--muted)}.strip b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.strip i{display:block;font-style:normal;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.schem{display:flex;padding:14px 16px 10px;overflow-x:auto}
+.schem div{flex:1;min-width:110px;position:relative}
+.schem div::after{content:"";position:absolute;top:15px;left:34px;right:0;height:3px;background:#c9dfee}
+.schem div.d::after{background:#7db9db}.schem div:last-child::after{display:none}
+.schem span.nn{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:#d5eaf8;color:#3d789d;border:4px solid #fff}
+.schem .d span.nn{background:#aadcf6;color:#285c7d}.schem .c span.nn{background:#347ea9;color:#fff}
+.schem b{display:block;font-size:12px;margin-top:4px;color:#527b98}.schem .c b{color:#28739f}
+.schem small{font-size:10.5px;color:#8a9fb0}
+.stops{list-style:none;margin:0;padding:0}
+.stops li{display:flex;gap:10px;align-items:flex-start;padding:7px 12px;border-top:1px solid var(--line-soft)}
+.stops li:first-child{border-top:none}
+.stops .mk{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:700;border:2px solid #d5dfec;color:#8a98ac;background:#fff}
+.stops .d .mk{background:#2f8f6b;border-color:#2f8f6b;color:#fff}
+.stops .c .mk{background:#5b91ed;border-color:#5b91ed;color:#fff;box-shadow:0 0 0 4px rgba(91,145,237,.2)}
+.stops .c{background:var(--wash-2)}
+.stops b{display:block;font-size:12.5px;font-weight:600}.stops small{color:var(--muted);font-size:11px}
+.hs{display:inline-flex;gap:3px;margin-left:4px}.hs i{font-style:normal;font-size:9.5px;font-weight:700;background:#f1f5fb;color:#647793;border-radius:4px;padding:0 4px}
+.big{min-height:52px;border-radius:12px;font-size:15px;font-weight:700;border:none;cursor:pointer}
+.big.next{background:var(--primary);color:#fff}.big.hold{background:#fff;border:2px solid var(--navy);color:var(--navy)}
+.end{width:100%;min-height:36px;border-radius:10px;border:1px solid #f5c8c2;background:var(--bad-bg);color:var(--bad);font-weight:600;cursor:pointer}
+.small{font-size:11px;color:var(--muted);line-height:1.35}
+.log{list-style:none;margin:0;padding:6px}
+.log li{display:flex;gap:10px;padding:5px 8px;border-radius:7px;font-size:11.5px;background:#f8fafc}
+.log li+li{margin-top:3px}.log time{width:38px;flex:none;font-weight:700;color:var(--muted)}
+/* checks */
+.cond{list-style:none;margin:0;padding:0}
+.cond li{display:flex;gap:10px;align-items:flex-start;padding:9px 14px;border-top:1px solid var(--line-soft)}
+.cond li:first-child{border-top:none}
+.cond .ic{width:18px;height:18px;border-radius:50%;flex:none;display:grid;place-items:center;margin-top:1px;color:#fff;font-size:11px;font-weight:700}
+.cond .ok .ic{background:var(--ok)}.cond .no .ic{background:var(--bad)}.cond .wait .ic{background:#d69412}
+.cond .g{flex:1}.cond b{display:block;font-weight:600}.cond small{color:var(--muted);font-size:11.5px}
+.ck{display:flex;align-items:center;gap:10px;min-height:38px;padding:6px 12px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px;background:#fff}
+.ck input{width:16px;height:16px;accent-color:var(--primary)}
+/* robot cards */
+.devs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.meter{height:6px;border-radius:3px;background:var(--line-soft);overflow:hidden;margin-top:4px}.meter i{display:block;height:100%;background:var(--ok)}
+/* charts */
+.bars{display:flex;align-items:flex-end;gap:10px;height:120px;padding:12px 14px 4px}
+.bars div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--muted)}
+.bars span{width:100%;max-width:34px;border-radius:5px 5px 0 0;background:#b9dcf2}
+.bars span.today{background:var(--primary)}
+.bars span.x{background:#f9d6d1}
+/* review */
+.rv{display:grid;grid-template-columns:340px minmax(0,1fr);gap:12px;align-items:start}
+.queue > button{all:unset;box-sizing:border-box;display:flex;gap:10px;align-items:center;width:100%;padding:9px 14px;cursor:pointer;border-top:1px solid var(--line-soft)}
+.queue > button:hover{background:#fafcfe}.queue > button[aria-pressed=true]{background:var(--wash-2);box-shadow:inset 3px 0 0 var(--primary)}
+.queue .g{flex:1;min-width:0}.queue b{display:block;font-weight:600}.queue small{color:var(--muted);font-size:11.5px}
+.age{font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;background:var(--line-soft);color:var(--text-2)}.age.late{background:var(--bad-bg);color:var(--bad)}
+.foot2{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid var(--line-soft)}
+/* intercom */
+.talk{display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 16px}
+.talk button.ptt{width:150px;height:150px;border-radius:50%;border:none;background:var(--primary);color:#fff;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 0 0 10px var(--wash)}
+.talk button.ptt[aria-pressed=true]{background:var(--bad);box-shadow:0 0 0 10px var(--bad-bg)}
+/* create */
+.steps3{display:flex;gap:6px;margin-bottom:12px}
+.steps3 span{flex:1;padding:7px 10px;border-radius:9px;background:#fff;border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.steps3 span.on{border-color:var(--primary);color:var(--navy);font-weight:600;background:var(--wash-2)}
+.steps3 span.d{color:var(--ok)}
+.routepick{display:grid;gap:8px}
+.routepick label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:#fff}
+.routepick label:has(input:checked){border-color:var(--primary);background:var(--wash-2)}
+.routepick label.off{opacity:.6;cursor:not-allowed}
+.wbar{display:flex;height:22px;border-radius:7px;overflow:hidden;margin:8px 0 4px;font-size:11px;font-weight:600}
+.wbar span{display:flex;align-items:center;justify-content:center}
+.wscale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:10px 12px}
+.cal div{min-height:84px;border:1px solid var(--line-soft);border-radius:9px;padding:6px;font-size:11px}
+.cal div.today{border-color:var(--primary);background:var(--wash-2)}
+.cal div b{display:block;font-size:12px;margin-bottom:4px}
+.cal div span{display:block;border-radius:5px;padding:1px 5px;margin-top:3px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.view[hidden]{display:none}
+@media (max-width:1100px){.livegrid{grid-template-columns:minmax(0,1fr)!important}.g2,.g21,.rv{grid-template-columns:minmax(0,1fr)}.strip{grid-template-columns:repeat(3,minmax(0,1fr))}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:820px){.shell{flex-direction:column}.side{width:auto;height:auto;position:static}.navs{display:flex;overflow-x:auto;gap:4px;padding:4px 10px}.grp{display:none}.it{width:auto}.foot{display:none}.main{padding:12px}.topbar{padding:0 12px}.acct div{display:none}.axis{margin-left:90px}.lane{grid-template-columns:90px minmax(0,1fr)}.strip{grid-template-columns:repeat(2,minmax(0,1fr))}.cal{grid-template-columns:repeat(2,minmax(0,1fr))}.f3{grid-template-columns:minmax(0,1fr)!important}.steps3{flex-direction:column}.routepick label{flex-wrap:wrap}.search{min-width:0;flex:1}}
+
+/* page transition: one sweep + content rise */
+#progress{position:fixed;top:0;left:0;height:2px;width:0;background:var(--primary);z-index:60;opacity:0}
+#progress.run{animation:sweep .5s cubic-bezier(.22,1,.36,1)}
+@keyframes sweep{0%{width:0;opacity:1}70%{width:85%;opacity:1}100%{width:100%;opacity:0}}
+.main.enter{animation:rise .32s cubic-bezier(.22,1,.36,1)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.it{transition:background-color .15s,color .15s,box-shadow .2s}
+/* toasts */
+#toasts{position:fixed;right:18px;bottom:18px;z-index:70;display:flex;flex-direction:column;gap:8px;width:min(380px,calc(100vw - 24px))}
+.toast{position:relative;overflow:hidden;display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px 13px;box-shadow:0 14px 34px -14px rgba(15,23,42,.35);animation:tin .28s cubic-bezier(.22,1,.36,1)}
+.toast.out{animation:tout .2s ease-in forwards}
+@keyframes tin{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes tout{to{opacity:0;transform:translateX(16px)}}
+.toast .ti{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex:none;color:#fff}
+.toast.ok .ti{background:var(--ok)}.toast.info .ti{background:var(--primary)}.toast.error .ti{background:var(--bad)}
+.toast .tb{flex:1;min-width:0}.toast .tb b{display:block;font-size:13px}.toast .tb span{display:block;font-size:12px;color:var(--muted);margin-top:1px}
+.toast .ta{margin-top:6px;border:none;background:none;padding:0;font-weight:600;font-size:12px;color:var(--primary);cursor:pointer}
+.toast .tx{border:none;background:none;color:#94a3b8;cursor:pointer;padding:2px;border-radius:6px}.toast .tx:hover{background:#f1f5f9;color:var(--ink)}
+.toast .tp{position:absolute;left:0;bottom:0;height:3px;width:100%;transform-origin:left;animation:shrink var(--d,5000ms) linear forwards}
+.toast.ok .tp{background:var(--ok)}.toast.info .tp{background:var(--primary)}.toast.error .tp{background:var(--bad)}
+.toast.paused .tp{animation-play-state:paused}
+@keyframes shrink{to{transform:scaleX(0)}}
+/* overlay: dialog + drawer */
+#overlay{position:fixed;inset:0;z-index:65}
+#overlay .scrim{position:absolute;inset:0;background:rgba(15,23,42,.28);backdrop-filter:blur(2px);opacity:0;transition:opacity .2s}
+#overlay.on .scrim{opacity:1}
+.dialog{position:absolute;left:50%;top:50%;width:min(460px,calc(100vw - 24px));background:#fff;border-radius:16px;padding:18px;transform:translate(-50%,-46%) scale(.97);opacity:0;transition:transform .24s cubic-bezier(.22,1,.36,1),opacity .2s;box-shadow:0 24px 60px -20px rgba(15,23,42,.45)}
+#overlay.on .dialog{transform:translate(-50%,-50%);opacity:1}
+.dialog h2{font-size:16px;color:var(--navy)}.dialog p{font-size:12.5px;color:var(--text-2);margin-top:6px}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(420px,100vw);background:#fff;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.22,1,.36,1);box-shadow:-20px 0 50px -20px rgba(15,23,42,.35)}
+#overlay.on .drawer{transform:none}
+.drawer .dh{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line-soft)}
+.drawer .dh h2{font-size:16px;color:var(--navy)}.drawer .dh p{font-size:12px;color:var(--muted);margin-top:2px}
+.drawer .db{flex:1;overflow-y:auto;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.btn.dangerSolid{background:var(--bad);border-color:var(--bad);color:#fff}
+@media (prefers-reduced-motion:reduce){.main.enter,#progress.run,.toast,.toast.out,.toast .tp{animation:none!important}.dialog,.drawer,#overlay .scrim{transition:none!important}}
+@media (max-width:820px){#toasts{bottom:60px}}
+
+/* ── v3: information-first pages, centred detail ─────────────────────────── */
+.main{max-width:1440px}
+.top .eyebrow{font-size:12px;font-weight:600;color:var(--primary);margin-bottom:2px}
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:14px 0 8px}
+.sec h2{font-size:14px;font-weight:600;letter-spacing:-.01em}.sec small{font-size:12px;color:var(--muted)}
+.lnk{font-size:12px;font-weight:600;color:var(--primary);background:none;border:none;cursor:pointer;padding:0}
+.lnk:hover{text-decoration:underline}
+
+/* needs attention: what to do now, first thing on a page */
+.attn{display:grid;gap:6px;margin:0 0 12px;padding:0}
+.attn li{list-style:none;display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px 8px 12px}
+.attn .sev{width:8px;height:8px;border-radius:50%;flex:none}
+.attn .sev.bad{background:var(--bad);box-shadow:0 0 0 4px var(--bad-bg)}.attn .sev.warn{background:#d69412;box-shadow:0 0 0 4px var(--warn-bg)}.attn .sev.info{background:var(--primary);box-shadow:0 0 0 4px var(--wash)}
+.attn .g{flex:1;min-width:0}.attn b{font-weight:600}.attn small{color:var(--muted);font-size:12px;margin-left:6px}
+.attn ul{margin:0;padding:0;display:grid;gap:6px}
+
+/* bento KPI tiles: number, change, trend */
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px 8px;display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left;font:inherit;color:inherit}
+button.tile{cursor:pointer}button.tile:hover{border-color:#c9dcec}
+.tile small{font-size:11.5px;color:var(--muted)}
+.tile .v{display:flex;align-items:baseline;gap:6px}
+.tile .v b{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.tile .v span{font-size:12px;color:var(--muted)}
+.tile .spark{height:30px;margin-top:2px}
+.delta{display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;border-radius:6px;padding:0 5px}
+.delta.up{background:var(--ok-bg);color:var(--ok)}.delta.down{background:var(--bad-bg);color:var(--bad)}.delta.flat{background:#f1f5f9;color:#475569}
+.tile.bad{background:var(--bad-bg);border-color:#f5c8c2}.tile.bad b,.tile.bad small{color:var(--bad)}
+.tile.warn{background:#fffcf2;border-color:#f0d89f}.tile.warn .v b{color:var(--warn)}
+
+/* charts */
+.chart{padding:10px 14px 12px}
+.chart svg{display:block;width:100%;height:auto;max-height:210px;overflow:visible}
+.chart svg.spark{height:40px;max-height:none}
+.chart .ax{font-size:10.5px;fill:#94a3b8}
+.chart .grid{stroke:#eef1f4}
+.keys{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:var(--muted);padding:0 14px 10px}
+.keys span{display:inline-flex;align-items:center;gap:5px}.keys i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.donut{display:flex;align-items:center;gap:16px;padding:12px 14px}
+.donut svg{width:120px;height:120px;flex:none}
+.donut ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;flex:1;min-width:0}
+.donut li{display:flex;align-items:center;gap:8px;font-size:12.5px}.donut li i{width:10px;height:10px;border-radius:3px;flex:none}
+.donut li b{margin-left:auto;font-weight:700}
+.hbars{display:grid;gap:8px;padding:12px 14px}
+.hbars div{display:grid;grid-template-columns:150px minmax(0,1fr) 34px;align-items:center;gap:10px;font-size:12px}
+.hbars span.tr{height:8px;border-radius:4px;background:#eef1f4;overflow:hidden}.hbars span.tr i{display:block;height:100%;border-radius:4px}
+.hbars b{text-align:right}
+
+/* three-up / two-up layouts */
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.g12{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px;align-items:start}
+.mb{margin-bottom:12px}
+
+/* live summary card on the overview */
+.livecard2{display:grid;gap:10px;padding:12px 14px}
+.prog{display:flex;gap:4px}.prog span{flex:1;height:6px;border-radius:3px;background:#e2e8f0}.prog span.d{background:#7db9db}.prog span.c{background:var(--bad)}.prog span.c.ok{background:var(--primary)}
+.prog-l{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+
+/* segmented filter */
+.seg{display:inline-flex;background:#eef2f6;border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:none;background:none;border-radius:8px;padding:5px 11px;font-weight:600;font-size:12px;color:#475569;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.seg button i{font-style:normal;font-size:11px;color:#94a3b8}
+.seg button[aria-pressed=true]{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.seg button[aria-pressed=true] i{color:var(--primary)}
+
+/* today: sessions as a timeline of rows */
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:64px 18px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line-soft);cursor:pointer}
+.tl li:first-child{border-top:none}.tl li:hover{background:#fafcfe}
+.tl time{font-weight:700;font-size:14px}.tl time small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
+.tl .dot{width:12px;height:12px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line);justify-self:center}
+.tl .g{min-width:0}.tl .g b{font-weight:600}.tl .g .meta{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl .side2{display:flex;align-items:center;gap:10px}
+.tl .seats{width:120px}
+.tl .period{display:block;padding:6px 14px;background:#f8fafc;font-size:11.5px;font-weight:600;color:var(--muted);border-top:1px solid var(--line-soft);cursor:default}
+.tl .period:hover{background:#f8fafc}
+.cap{height:6px;border-radius:3px;background:#eef1f4;overflow:hidden}.cap i{display:block;height:100%;background:var(--primary);border-radius:3px}
+.cap.full i{background:var(--ok)}.cap.low i{background:#d69412}
+.capl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px}
+
+/* centred detail */
+#overlay .modal{position:absolute;left:50%;top:50%;width:min(var(--mw,880px),calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column;background:#fff;border-radius:16px;box-shadow:0 30px 80px -24px rgba(15,23,42,.5);transform:translate(-50%,-47%) scale(.98);opacity:0;transition:transform .26s cubic-bezier(.22,1,.36,1),opacity .2s;overflow:hidden}
+#overlay.on .modal{transform:translate(-50%,-50%);opacity:1}
+.modal .mh{display:flex;align-items:flex-start;gap:12px;padding:16px 20px 12px}
+.modal .mh .g{flex:1;min-width:0}
+.modal .mh .badges{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px}
+.modal .mh h2{font-size:18px;letter-spacing:-.02em;color:var(--ink)}
+.modal .mh p{color:var(--muted);margin-top:2px}
+.modal .x{width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;color:#64748b;display:grid;place-items:center;cursor:pointer;flex:none}
+.modal .x:hover{background:#e2e8f0;color:var(--ink)}
+.modal .mt{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line)}
+.modal .mt button{border:none;background:none;padding:8px 10px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;box-shadow:inset 0 -2px 0 transparent}
+.modal .mt button[aria-selected=true]{color:var(--navy);box-shadow:inset 0 -2px 0 var(--primary)}
+.modal .mb2{flex:1;overflow-y:auto;padding:16px 20px;background:#fbfcfd}
+.modal .mf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 20px;border-top:1px solid var(--line-soft);background:#fff}
+.modal .mf .sp{flex:1}
+.modal .cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:14px;align-items:start}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;font-weight:700;color:var(--primary);background:var(--wash-2);padding:1px 6px;border-radius:5px}
+.cells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:10px;overflow:hidden}
+.cells > div{background:#fff;padding:8px 12px;min-width:0}.cells small{display:block;font-size:11px;color:var(--muted)}.cells b{font-weight:600}
+.cells.c4{grid-template-columns:repeat(4,minmax(0,1fr))}.cells.c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.todo{border:1px solid #f5c8c2;background:var(--bad-bg);border-radius:10px;padding:12px}
+.todo.ok{border-color:#cde9dc;background:var(--ok-bg)}.todo.warn{border-color:#f0d89f;background:#fffcf2}
+.todo p{font-size:12.5px;margin-top:3px;color:var(--text-2)}.todo b{color:var(--bad)}.todo.ok b{color:var(--ok)}.todo.warn b{color:var(--warn)}
+.stack2{display:grid;gap:10px}
+.btn.wide{width:100%;min-height:36px}
+
+/* SLA: how long a review can still wait */
+.sla{min-width:120px}.sla .cap i{background:var(--ok)}.sla.warn .cap i{background:#d69412}.sla.bad .cap i{background:var(--bad)}
+.sla small{font-size:11px;color:var(--muted)}.sla.bad small{color:var(--bad);font-weight:600}
+
+/* funnel */
+.funnel{display:grid;gap:6px;padding:12px 14px}
+.funnel div{display:grid;grid-template-columns:130px minmax(0,1fr) 40px;gap:10px;align-items:center;font-size:12px}
+.funnel span.bar2{height:22px;border-radius:6px;background:var(--wash);position:relative;overflow:hidden}
+.funnel span.bar2 i{position:absolute;inset:0 auto 0 0;background:#7db9db;border-radius:6px}
+.funnel b{text-align:right}
+
+/* versions of a route */
+.vers{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.vers span{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;border:1px solid var(--line);background:#fff;color:#475569}
+.vers span.ok{border-color:#cde9dc;background:var(--ok-bg);color:var(--ok)}.vers span.bad{border-color:#f5c8c2;background:var(--bad-bg);color:var(--bad)}.vers span.warn{border-color:#f0d89f;background:var(--warn-bg);color:var(--warn)}
+.vers em{font-style:normal;color:#cbd5e1}
+.rcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.rcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.rcard:hover{border-color:#c9dcec}
+.rcard .h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.rcard .h b{font-size:14px}
+.minipath{display:flex;align-items:center;gap:0}
+.minipath span{width:10px;height:10px;border-radius:50%;background:#7db9db;flex:none}
+.minipath i{flex:1;height:2px;background:#c9dfee}
+.minipath span.w{background:#d69412}
+
+/* robot gauges */
+.ring{width:54px;height:54px;flex:none}
+.dev{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dev .dh2{display:flex;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.dev .dh2 .g{flex:1;min-width:0}.dev .dh2 b{font-size:14px}
+.dev dl{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line-soft)}
+.dev dl div{background:#fff;padding:8px 14px}.dev dt{font-size:11px;color:var(--muted)}.dev dd{margin:0;font-weight:600}
+.dev .df{display:flex;gap:8px;padding:10px 14px;justify-content:flex-end}
+
+/* calendar heat */
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;padding:12px 14px}
+.week button{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:8px;min-height:112px;display:flex;flex-direction:column;gap:4px;background:#fff}
+.week button:hover{border-color:#c9dcec}.week button[aria-pressed=true]{border-color:var(--primary);background:var(--wash-2)}
+.week .dd{display:flex;justify-content:space-between;align-items:baseline}.week .dd b{font-size:13px}.week .dd small{font-size:11px;color:var(--muted)}
+.week .occ{height:5px;border-radius:3px;background:#eef1f4;overflow:hidden}.week .occ i{display:block;height:100%;background:#7db9db}
+.week .ev{font-size:11px;font-weight:600;border-radius:5px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* wizard */
+.wiz{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:12px;align-items:start}
+.stepper{display:flex;gap:0;margin-bottom:12px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stepper span{flex:1;display:flex;gap:8px;align-items:center;padding:9px 12px;font-size:12.5px;color:var(--muted);border-left:1px solid var(--line-soft)}
+.stepper span:first-child{border-left:none}
+.stepper span i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:700;background:#f1f5f9;color:#64748b;flex:none}
+.stepper span.d{color:var(--ok)}.stepper span.d i{background:var(--ok);color:#fff}
+.stepper span.on{color:var(--navy);font-weight:600;background:var(--wash-2)}.stepper span.on i{background:var(--primary);color:#fff}
+.sum{position:sticky;top:64px}
+
+/* quest */
+.meterbars{display:flex;align-items:flex-end;gap:3px;height:36px}
+.meterbars i{width:6px;border-radius:2px;background:#b9dcf2}
+.meterbars i.on{background:var(--primary)}
+
+/* page enter for rows */
+@media (prefers-reduced-motion:reduce){#overlay .modal{transition:none}}
+@media (max-width:1100px){.bento{grid-template-columns:repeat(2,minmax(0,1fr))}.g3,.g12,.wiz,.modal .cols{grid-template-columns:minmax(0,1fr)}.week{grid-template-columns:repeat(4,minmax(0,1fr))}.sum{position:static}}
+@media (max-width:820px){.bento{grid-template-columns:minmax(0,1fr)}.tl li{grid-template-columns:52px 14px minmax(0,1fr)}.tl .side2{grid-column:3}.cells,.cells.c4{grid-template-columns:repeat(2,minmax(0,1fr))}.hbars div,.funnel div{grid-template-columns:100px minmax(0,1fr) 30px}.week{grid-template-columns:repeat(2,minmax(0,1fr))}.stepper{flex-direction:column}.stepper span{border-left:none;border-top:1px solid var(--line-soft)}}
+
+.livecard.bad{background:var(--bad)}.livecard.bad:hover{background:#9c3328}.livecard.bad i{background:#fde68a;box-shadow:0 0 0 3px rgba(253,230,138,.3)}
+</style>
+</head>
+<body>
+<span id="progress" aria-hidden="true"></span>
+<div class="shell">
+  <aside class="side">
+    <button class="brand" data-go="overview"><span class="mark"><img src="data:image/png;base64,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" alt=""></span><span><b>CampusTour</b><small>DT-AMR · Vận hành</small></span></button>
+    <button class="livecard bad" data-go="live"><i></i><span><b>T-01 cần hỗ trợ</b><small>Đang tới Phòng Robotics (3/4)</small></span></button>
+    <nav class="navs" aria-label="Điều hướng vận hành" id="nav"></nav>
+    <div class="foot"><button class="it"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="lb">Đăng xuất</span></button></div>
+  </aside>
+  <div class="body">
+    <header class="topbar"><span class="crumb">CampusTour / <b id="crumb"></b></span><span class="conn"><i></i>Thời gian thực</span><div class="acct"><button class="bell" aria-label="Thông báo, 3 việc cần chú ý"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><i></i></button><span class="av">ST</span><div><b>staff01</b><span>Nhân viên vận hành</span></div></div></header>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="overlay" hidden></div>
+<script>
+/* ── icons ── */
+const MAP = 'data:image/png;base64,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';
+const I = {
+  dash: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  play: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="m10 8 4 2.5-4 2.5zM8 21h8"/>', bot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M8.5 13h.01M15.5 13h.01"/>',
+  head: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="14" width="4" height="6" rx="1.5"/><rect x="17.5" y="14" width="4" height="6" rx="1.5"/>',
+  clip: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>', plus: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M12 13v5M9.5 15.5h5"/>',
+  check: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>', todo: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l1.5 1.5L11 8M13 9h4M7 15l1.5 1.5L11 14M13 15h4"/>',
+  route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H17a3.5 3.5 0 0 0 0-7H7a3.5 3.5 0 0 1 0-7h8.5"/>', pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  hist: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 8v4l3 2"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>', ok: '<path d="M20 6 9 17l-5-5"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+};
+const ic = (n, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+
+/* ── navigation ── */
+const PAGES = {
+  overview: ['Tổng quan vận hành', 'dash'], today: ['Buổi hôm nay', 'list'], schedule: ['Lịch buổi', 'cal'],
+  live: ['Điều hành trực tiếp', 'play'], robot: ['Robot & thiết bị', 'bot'], intercom: ['Đàm thoại Quest', 'head'],
+  prep: ['Tổng quan chuẩn bị', 'clip'], pois: ['Quản lý POI', 'pin'], routes: ['Danh mục tuyến', 'route'], create: ['Tạo Tour', 'plus'], pending: ['Đăng ký chờ duyệt', 'check'], regs: ['Tất cả đăng ký', 'todo'], tours: ['Danh sách Tour', 'list'],
+  history: ['Lịch sử phiên', 'hist'],
+};
+const GROUPS = [['Trong ngày', ['overview', 'today', 'schedule']], ['Điều hành', ['live', 'robot', 'intercom']], ['Chuẩn bị Tour', ['prep', 'pois', 'routes', 'create', 'pending', 'regs', 'tours']], ['Lịch sử', ['history']]];
+const BADGE = { live: [1, 'r'], pending: [3, ''] };
+let cur = 'overview';
+
+/* ── data (mẫu) ── */
+const SESS = [
+  { id: 'T-00', who: 'THPT Tân Bình', groups: 1, n: 9, cap: 10, op: 'Trần Thị Bình', start: '08:00', len: 40, route: 'Thư viện – AI Lab v3', state: ['ok', 'Hoàn thành'], cls: 'done', dot: '#1f7a55' },
+  { id: 'T-01', who: 'THCS Hòa Bình', groups: 2, n: 18, cap: 20, op: 'Nguyễn Văn An', start: '09:00', len: 40, route: 'Thư viện – AI Lab v3', state: ['bad', 'Cần hỗ trợ'], cls: 'running', dot: '#b23e31', live: true },
+  { id: 'T-02', who: 'THPT Hòa Hiệp', groups: 1, n: 10, cap: 10, op: 'Trần Thị Bình', start: '10:30', len: 40, route: 'Thư viện – AI Lab v3.1', state: ['info', 'Sẵn sàng'], cls: 'ready', dot: '#2d719e' },
+  { id: 'T-03', who: 'THCS Tân Phú', groups: 1, n: 8, cap: 10, op: 'Nguyễn Văn An', start: '14:00', len: 50, route: 'Thư viện – AI Lab v4', state: ['warn', 'Bị chặn'], cls: 'blocked', dot: '#d69412', note: 'Tuyến v4 chưa được kỹ thuật xác nhận' },
+  { id: 'T-04', who: 'THPT Long Thạnh', groups: 1, n: 6, cap: 10, op: '', start: '15:30', len: 20, route: 'Hành lang tầng 6 v1', state: ['mute', 'Đã lên lịch'], cls: 'sched', dot: '#94a3b8', note: 'Chưa giao người vận hành' },
+];
+const STOPS = [{ n: 'Sảnh thang máy', s: 'd', meta: 'Tới 09:03 · dừng 90 giây', hs: ['FRONT'] }, { n: 'Thư viện', s: 'd', meta: 'Tới 09:15 · dừng 120 giây', hs: ['LEFT', 'FRONT'] }, { n: 'Phòng Robotics', s: 'c', meta: 'Đang tới · dự kiến 09:24', hs: ['LEFT', 'FRONT'] }, { n: 'AI Lab', s: '', meta: 'Dừng 90 giây', hs: ['RIGHT'] }];
+const LOG = [['09:21', 'Robot tạm dừng: vật cản kéo dài', 'bad'], ['09:17', 'Rời POI', 'Thư viện'], ['09:15', 'Tới POI', 'Thư viện'], ['09:08', 'Rời POI', 'Sảnh thang máy'], ['09:03', 'Tới POI', 'Sảnh thang máy'], ['09:00', 'Bắt đầu buổi', 'Nguyễn Văn An']];
+const TOURS = [
+  ['T-01', 'Hôm nay 09:00', 'Thư viện – AI Lab v3', 2, 18, 20, 'Nguyễn Văn An', ['bad', 'Đang chạy']], ['T-02', 'Hôm nay 10:30', 'Thư viện – AI Lab v3.1', 1, 10, 10, 'Trần Thị Bình', ['info', 'Sẵn sàng']],
+  ['T-03', 'Hôm nay 14:00', 'Thư viện – AI Lab v4', 1, 8, 10, 'Nguyễn Văn An', ['warn', 'Bị chặn']], ['T-04', 'Hôm nay 15:30', 'Hành lang tầng 6 v1', 1, 6, 10, '—', ['mute', 'Đã lên lịch']],
+  ['T-05', '29/10 09:00', 'Thư viện – AI Lab v3.1', 0, 0, 20, 'Trần Thị Bình', ['info', 'Nhận đăng ký']], ['T-06', '30/10 13:30', 'Thư viện – AI Lab v3.1', 2, 14, 20, 'Nguyễn Văn An', ['info', 'Nhận đăng ký']],
+  ['T-07', '31/10 09:30', 'Hành lang tầng 6 v1', 1, 4, 10, '—', ['info', 'Nhận đăng ký']],
+];
+const REGS = [
+  { school: 'THPT Hòa Hiệp', tour: 'T-06', rep: 'Thầy Võ Minh Quân', rows: 12, sent: '26/10 09:14', left: 3, state: ['warn', 'Chờ duyệt'] },
+  { school: 'THCS Phú Lâm', tour: 'T-06', rep: 'Cô Ngọc', rows: 9, sent: '27/10 16:05', left: 30, state: ['warn', 'Chờ duyệt'] },
+  { school: 'THCS Bình Trị', tour: 'T-07', rep: 'Thầy Khang', rows: 5, sent: '28/10 07:11', left: 45, state: ['warn', 'Chờ duyệt'] },
+  { school: 'THCS Tân Phú', tour: 'T-03', rep: 'Cô Lê Thu Hà', rows: 8, sent: '24/10 15:20', state: ['ok', 'Đã duyệt'] },
+  { school: 'THCS Hòa Bình', tour: 'T-01', rep: 'Cô Hoa', rows: 18, sent: '22/10 10:02', state: ['ok', 'Đã duyệt'] },
+  { school: 'THPT Long Thạnh', tour: 'T-04', rep: 'Thầy Bảo', rows: 6, sent: '23/10 08:40', state: ['ok', 'Đã duyệt'] },
+  { school: 'THPT Tân Bình', tour: 'T-00', rep: 'Cô Mai', rows: 9, sent: '20/10 09:00', state: ['bad', 'Từ chối'] },
+];
+const ROUTES = [
+  { name: 'Thư viện – AI Lab', map: 'map2-v2', stops: 4, vers: [['v2', 'ok'], ['v3', 'ok'], ['v3.1', 'ok'], ['v4', 'bad']], cur: 'v4', state: ['bad', 'v4 cần xác nhận lại'], used: 'T-01, T-02, T-03, T-05, T-06', len: '22 phút' },
+  { name: 'Hành lang tầng 6', map: 'map2-v2', stops: 2, vers: [['v1', 'warn']], cur: 'v1', state: ['warn', 'Chưa xác nhận'], used: 'T-04, T-07', len: '9 phút' },
+  { name: 'Khu xưởng cơ khí', map: 'map2-v3', stops: 3, vers: [['v1', '']], cur: 'v1', state: ['mute', 'Bản nháp'], used: 'Chưa dùng', len: '—' },
+];
+const POIS = [['Sảnh thang máy', 510, 300, ['ok', 'Đã xác minh'], 'FRONT', 4], ['Thư viện', 990, 396, ['ok', 'Đã xác minh'], 'LEFT', 4], ['AI Lab', 498, 702, ['ok', 'Đã xác minh'], 'RIGHT', 5], ['Phòng Robotics', 1152, 900, ['warn', 'Chờ kỹ thuật'], '—', 1], ['Hành lang tầng 6', 552, 1098, ['ok', 'Đã xác minh'], 'FRONT', 1], ['Khu trưng bày', 1140, 1362, ['warn', 'Chờ kỹ thuật'], '—', 0], ['Phòng hội thảo', 600, 1500, ['bad', 'Không đạt'], 'FRONT', 0]];
+const HIST = [['T-00', '28/10 08:00', 'THPT Tân Bình', 'Thư viện – AI Lab v3', 41, ['ok', 'Hoàn thành'], 9], ['T-99', '27/10 14:00', 'THCS Phú Lâm', 'Thư viện – AI Lab v3', 17, ['bad', 'Kết thúc sớm'], 7], ['T-98', '27/10 09:00', 'THPT Long Thạnh', 'Thư viện – AI Lab v3', 39, ['ok', 'Hoàn thành'], 10], ['T-97', '26/10 09:30', 'THCS Bình Trị', 'Thư viện – AI Lab v2', 44, ['ok', 'Hoàn thành'], 8], ['T-96', '25/10 13:00', 'THCS Hòa Bình', 'Thư viện – AI Lab v2', 0, ['mute', 'Đã hủy'], 0], ['T-95', '24/10 10:00', 'THCS An Lạc', 'Thư viện – AI Lab v2', 42, ['ok', 'Hoàn thành'], 12]];
+const WEEK7 = [['T5', 3, 0], ['T6', 2, 1], ['T7', 1, 0], ['CN', 0, 0], ['T2', 3, 0], ['T3', 2, 1], ['T4', 1, 0]];
+
+/* ── small helpers ── */
+const st = ([c, t]) => `<span class="st ${c}">${t}</span>`;
+const head = (title, desc, actions = '', eyebrow = '') => `<div class="top"><div class="g">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h1>${title}</h1>${desc ? `<p>${desc}</p>` : ''}</div>${actions}</div>`;
+const search = (ph) => `<label class="search">${ic('search', 14)}<input placeholder="${ph}" aria-label="${ph}"></label>`;
+const seg = (arr) => `<div class="seg" role="group">${arr.map(([t, n], i) => `<button aria-pressed="${i === 0}">${t}${n != null ? ` <i>${n}</i>` : ''}</button>`).join('')}</div>`;
+const pager = (n) => `<div class="pager"><span>${n} kết quả</span><span class="pg"><button aria-current="page">1</button><button>2</button><button aria-label="Trang sau">›</button></span></div>`;
+const cap = (n, c) => { const p = c ? Math.round((n / c) * 100) : 0; return `<div class="cap ${p >= 100 ? 'full' : p < 40 ? 'low' : ''}"><i style="width:${p}%"></i></div><div class="capl"><span>${n}/${c} chỗ</span><span>${p}%</span></div>`; };
+const panel = (title, body, right = '') => `<section class="panel"><div class="ph"><h2>${title}</h2>${right}</div>${body}</section>`;
+
+/* ── charts (inline SVG, no library) ── */
+function spark(vals, color = '#2d719e') {
+  const w = 120, h = 30, max = Math.max(...vals, 1), step = w / (vals.length - 1);
+  const pts = vals.map((v, i) => [i * step, h - 3 - (v / max) * (h - 6)]);
+  const line = pts.map((p) => p.join(',')).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,${h} ${line} ${w},${h}" fill="${color}" opacity=".12"/><polyline points="${line}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function donut(parts, center, label) {
+  const total = parts.reduce((s, p) => s + p.v, 0) || 1, r = 42, C = 2 * Math.PI * r; let off = 0;
+  const arcs = parts.filter((p) => p.v).map((p) => { const len = (p.v / total) * C; const a = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${p.c}" stroke-width="14" stroke-dasharray="${len - 2} ${C - len + 2}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; return a; }).join('');
+  return `<div class="donut"><svg viewBox="0 0 120 120" role="img" aria-label="${label}"><circle cx="60" cy="60" r="${r}" fill="none" stroke="#eef1f4" stroke-width="14"/>${arcs}<text x="60" y="58" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">${center[0]}</text><text x="60" y="76" text-anchor="middle" font-size="10.5" fill="#64748b">${center[1]}</text></svg><ul>${parts.map((p) => `<li><i style="background:${p.c}"></i>${p.l}<b>${p.v}</b></li>`).join('')}</ul></div>`;
+}
+function stacked(days, label, W = 360) {
+  const H = 130, pad = 22, bw = 26, max = Math.max(...days.map((d) => d[1] + d[2]), 1), gap = (W - pad) / days.length;
+  let s = `<svg viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${label}">`;
+  [0, 0.5, 1].forEach((f) => { const y = H - f * (H - 10); s += `<line class="grid" x1="${pad}" x2="${W}" y1="${y}" y2="${y}"/><text class="ax" x="0" y="${y + 3}">${Math.round(f * max)}</text>`; });
+  days.forEach(([d, a, b], i) => {
+    const x = pad + i * gap + (gap - bw) / 2, ha = (a / max) * (H - 10), hb = (b / max) * (H - 10), last = i === days.length - 1;
+    s += `<rect x="${x}" y="${H - ha}" width="${bw}" height="${ha}" rx="4" fill="${last ? '#2d719e' : '#7db9db'}"/>`;
+    if (b) s += `<rect x="${x}" y="${H - ha - hb - 2}" width="${bw}" height="${hb}" rx="4" fill="#f2a59b"/>`;
+    s += `<text class="ax" x="${x + bw / 2}" y="${H + 14}" text-anchor="middle"${last ? ' font-weight="700" style="fill:#0f172a"' : ''}>${d}</text>`;
+  });
+  return s + '</svg>';
+}
+function area(points, label, W = 360) {
+  const H = 120, pad = 22, max = 40, step = (W - pad) / (points.length - 1);
+  const xy = points.map(([, v], i) => [pad + i * step, v == null ? null : H - (v / max) * (H - 10)]);
+  const known = xy.filter((p) => p[1] != null), line = known.map((p) => p.join(',')).join(' ');
+  let s = `<svg viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="${label}">`;
+  [0, 20, 40].forEach((v) => { const y = H - (v / max) * (H - 10); s += `<line class="grid" x1="${pad}" x2="${W}" y1="${y}" y2="${y}"/><text class="ax" x="0" y="${y + 3}">${v}</text>`; });
+  s += `<polygon points="${known[0][0]},${H} ${line} ${known[known.length - 1][0]},${H}" fill="#2d719e" opacity=".12"/><polyline points="${line}" fill="none" stroke="#2d719e" stroke-width="2.2"/>`;
+  const planned = xy.map(([x], i) => `${x},${H - (points[i][2] / max) * (H - 10)}`).join(' ');
+  s += `<polyline points="${planned}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  points.forEach(([t], i) => { if (i % 2 === 0) s += `<text class="ax" x="${pad + i * step}" y="${H + 14}" text-anchor="middle">${t}</text>`; });
+  const nx = known[known.length - 1][0]; const end = nx > W - 50; s += `<line x1="${nx}" x2="${nx}" y1="6" y2="${H}" stroke="#b23e31" stroke-width="1.5"/><text x="${end ? nx - 4 : nx + 4}" y="14" text-anchor="${end ? 'end' : 'start'}" font-size="10.5" font-weight="700" fill="#b23e31">Bây giờ</text>`;
+  return s + '</svg>';
+}
+const hbars = (rows, ofMax = false) => `<div class="hbars"${ofMax ? ' style="--vw:52px"' : ''}>${rows.map(([l, v, max, c]) => `<div${ofMax ? ' style="grid-template-columns:150px minmax(0,1fr) 52px"' : ''}><span>${l}</span><span class="tr"><i style="width:${(v / max) * 100}%;background:${c}"></i></span><b>${ofMax ? `${v}/${max}` : v}</b></div>`).join('')}</div>`;
+function ring(p, color) {
+  const r = 22, C = 2 * Math.PI * r;
+  return `<svg class="ring" viewBox="0 0 54 54" role="img" aria-label="Pin ${p}%"><circle cx="27" cy="27" r="${r}" fill="none" stroke="#eef1f4" stroke-width="6"/><circle cx="27" cy="27" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(p / 100) * C} ${C}" transform="rotate(-90 27 27)"/><text x="27" y="31" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">${p}%</text></svg>`;
+}
+function mapSvg({ pins = [], vb = '380 200 960 1400' } = {}) {
+  let h = `<svg viewBox="${vb}" role="img" aria-label="Bản đồ map2-v2"><image href="${MAP}" x="0" y="0" width="1419" height="1949" style="image-rendering:pixelated"/>`;
+  pins.forEach(([n, u, v, c]) => { h += `<circle cx="${u}" cy="${v}" r="18" fill="${c}" stroke="#fff" stroke-width="6"/><text x="${u}" y="${v + 56}" text-anchor="middle" font-size="30" font-weight="600" fill="#0f172a" stroke="#fff" stroke-width="10" paint-order="stroke">${n}</text>`; });
+  return h + '</svg>';
+}
+const H0 = 7.5, H1 = 17, pct = (h) => ((h - H0) / (H1 - H0)) * 100, hm = (s) => { const [a, b] = s.split(':').map(Number); return a + b / 60; };
+function dayStrip(rows = SESS) {
+  const axis = Array.from({ length: 10 }, (_, i) => `<span style="left:${pct(8 + i)}%">${String(8 + i).padStart(2, '0')}:00</span>`).join('');
+  const lanes = rows.map((s) => { const a = hm(s.start) - 0.25, b = hm(s.start) + s.len / 60 + 0.25, buf = (15 / (s.len + 30)) * 100; return `<div class="lane"><div class="w"><b>${s.id}</b><small>${s.who}</small></div><div class="track">${s.live ? `<span class="now" style="left:${pct(9.35)}%" data-t="09:21"></span>` : ''}<button class="bar ${s.cls}" style="left:${pct(a)}%;width:${pct(b) - pct(a)}%;--b:${buf}%" data-sess="${s.id}" aria-label="${s.id} lúc ${s.start}"><span class="buf"></span><span class="run">${s.start}</span><span class="buf"></span></button></div></div>`; }).join('');
+  return `<div class="day"><div class="axis">${axis}</div>${lanes}</div><div class="legend"><span><i style="background:var(--primary)"></i>Đang chạy</span><span><i style="background:#b9dcf2"></i>Sẵn sàng</span><span><i style="background:#cfe9dc"></i>Hoàn thành</span><span><i style="background:#f9d6d1"></i>Bị chặn</span><span><i style="background:#e2e8f0"></i>Đã lên lịch</span><span><i style="background:repeating-linear-gradient(135deg,#cbd5e1 0 3px,#fff 3px 6px)"></i>Giữ robot 15 phút trước/sau</span></div>`;
+}
+
+/* ── feedback: toasts ── */
+function toast(kind, title, detail = '') {
+  const box = document.getElementById('toasts'); const el = document.createElement('div');
+  el.className = `toast ${kind}`; el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  el.innerHTML = `<span class="ti">${ic(kind === 'ok' ? 'ok' : kind === 'error' ? 'alert' : 'info', 15)}</span><div class="tb"><b>${title}</b>${detail ? `<span>${detail}</span>` : ''}</div><button class="tx" aria-label="Đóng thông báo">${ic('x', 14)}</button><i class="tp"></i>`;
+  box.appendChild(el);
+  let left = 5000, t0 = Date.now(), timer;
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 220); };
+  const run = () => { t0 = Date.now(); el.style.setProperty('--d', left + 'ms'); el.classList.remove('paused'); timer = setTimeout(close, left); };
+  el.addEventListener('mouseenter', () => { clearTimeout(timer); left -= Date.now() - t0; el.classList.add('paused'); });
+  el.addEventListener('mouseleave', run); el.querySelector('.tx').addEventListener('click', close); run();
+}
+
+/* ── centred detail ── */
+let MODAL = null;
+function openModal(m) {
+  MODAL = m; const o = document.getElementById('overlay');
+  const tabs = m.tabs ? `<div class="mt" role="tablist">${m.tabs.map((t, i) => `<button role="tab" aria-selected="${i === 0}" data-mtab="${i}">${t[0]}</button>`).join('')}</div>` : '';
+  o.innerHTML = `<div class="scrim" data-close></div><section class="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle" style="--mw:${m.w || 880}px"><div class="mh"><div class="g">${m.badges ? `<div class="badges">${m.badges}</div>` : ''}<h2 id="mtitle">${m.title}</h2>${m.sub ? `<p>${m.sub}</p>` : ''}</div><button class="x" data-close aria-label="Đóng">${ic('x', 15)}</button></div>${tabs}<div class="mb2" id="mbody">${m.tabs ? m.tabs[0][1]() : m.body}</div>${m.foot ? `<div class="mf">${m.foot}</div>` : ''}</section>`;
+  o.hidden = false; requestAnimationFrame(() => o.classList.add('on'));
+  o.querySelector('.x').focus();
+}
+function closeModal() { const o = document.getElementById('overlay'); o.classList.remove('on'); MODAL = null; setTimeout(() => { if (!MODAL) { o.hidden = true; o.innerHTML = ''; } }, 220); }
+
+/* ── details that open in the middle of the page ── */
+const sessBy = (id) => SESS.find((s) => s.id === id);
+function sessModal(id) {
+  const s = sessBy(id);
+  const cells = `<div class="cells">${[['Giờ', `${s.start} · ${s.len} phút`], ['Robot', 'AMR-01'], ['Người vận hành', s.op || '<span style="color:var(--bad)">Chưa giao</span>'], ['Tuyến', s.route], ['Đoàn', `${s.groups} đoàn · ${s.n} học sinh`], ['Giữ robot', `${s.start} ±15 phút`]].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div>`;
+  const todo = s.live ? `<div class="todo"><b>Robot tạm dừng trên đường tới Phòng Robotics</b><p>Nav2 báo vật cản kéo dài. Kiểm tra tại chỗ, rồi chọn một thao tác phục hồi.</p></div>`
+    : s.cls === 'ready' ? `<div class="todo ok"><b>Đủ điều kiện bắt đầu lúc ${s.start}</b><p>Đoàn đã duyệt, robot định vị đạt. Chờ T-01 kết thúc để robot rảnh.</p></div>`
+    : s.cls === 'blocked' ? `<div class="todo warn"><b>Chưa chốt được buổi</b><p>${s.note}. Nhờ kỹ thuật xác nhận, hoặc đổi sang v3.1 đã xác nhận.</p></div>`
+    : s.cls === 'sched' ? `<div class="todo warn"><b>Chưa giao người vận hành</b><p>Chọn người phụ trách trước 14:30 để kịp kiểm tra thiết bị.</p></div>`
+    : `<div class="todo ok"><b>Buổi đã hoàn thành</b><p>41 phút · 4/4 điểm dừng · 9 học sinh xem đến cuối.</p></div>`;
+  const stops = `<ul class="stops">${STOPS.map((p, i) => `<li class="${s.live ? p.s : s.cls === 'done' ? 'd' : ''}"><span class="mk">${i + 1}</span><div><b>${p.n}<span class="hs">${p.hs.map((h) => `<i>${h}</i>`).join('')}</span></b><small>${s.live ? p.meta : 'Dừng 90–120 giây'}</small></div></li>`).join('')}</ul>`;
+  const groups = `<div class="panel"><div class="tw"><table class="t"><thead><tr><th>Trường</th><th>Đại diện</th><th>Học sinh</th><th>Thư mời</th></tr></thead><tbody>${(s.groups > 1 ? [['THCS Hòa Bình', 'Cô Hoa', 10], ['THCS An Lạc', 'Thầy Nam', 8]] : [[s.who, 'Đại diện trường', s.n]]).map(([a, b, c]) => `<tr><td><b>${a}</b></td><td>${b}</td><td>${c}</td><td>${st(['ok', 'Đã gửi'])}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const log = `<ul class="log">${LOG.map(([t, a, d]) => `<li><time>${t}</time><span><b>${a}</b> <span class="small">${d === 'bad' ? '' : d}</span></span></li>`).join('')}</ul>`;
+  const foot = s.live ? `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn" data-sess-log>Nhật ký đầy đủ</button><button class="btn p" data-go="live">Mở điều hành trực tiếp</button>`
+    : s.cls === 'ready' ? `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn p" data-start="${s.id}">Kiểm tra & bắt đầu</button>`
+    : s.cls === 'blocked' ? `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn" data-act="swapRoute">Đổi sang v3.1</button><button class="btn p" data-go="routes">Mở tuyến v4</button>`
+    : s.cls === 'sched' ? `<button class="btn" data-close>Đóng</button><span class="sp"></span><label class="field" style="flex-direction:row;align-items:center;gap:8px">Người vận hành <select><option>Trần Thị Bình</option><option>Nguyễn Văn An</option></select></label><button class="btn p" data-act="assign">Giao người</button>`
+    : `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn p" data-go="history">Xem báo cáo</button>`;
+  openModal({
+    w: 920, badges: `<span class="code">${s.id}</span>${st(s.state)}`, title: `${s.who} · ${s.start}`, sub: `${s.route} · ${s.groups} đoàn, ${s.n}/${s.cap} học sinh`,
+    tabs: [['Tổng quan', () => `<div class="cols"><div class="stack2">${cells}<div class="panel"><div class="ph"><h2>Lộ trình</h2><small>${STOPS.length} điểm dừng</small></div>${stops}</div></div><div class="stack2">${todo}<div class="panel"><div class="ph"><h2>Sức chứa</h2></div><div style="padding:10px 14px">${cap(s.n, s.cap)}</div></div></div></div>`], ['Đoàn', () => groups], ['Lộ trình', () => `<div class="panel">${stops}</div>`], ['Nhật ký', () => `<div class="panel">${log}</div>`]],
+    foot,
+  });
+}
+function startModal(id) {
+  const s = sessBy(id);
+  openModal({
+    w: 760, badges: `<span class="code">${s.id}</span>${st(s.state)}`, title: `Kiểm tra & bắt đầu ${s.id}`, sub: `Chỉ bắt đầu từ ${s.start}, giờ đã công bố. Server kiểm tra lại mọi điều kiện khi bấm.`,
+    body: `<div class="cols"><div class="panel"><div class="ph"><h2>Server kiểm tra</h2><small>6/7 đạt</small></div><ul class="cond">${[['ok', 'Đoàn đã duyệt', '1 đoàn, 10 học sinh'], ['ok', 'Robot kết nối', 'AMR-01, ổn định'], ['ok', 'Robot định vị', 'Lệch 4,2 cm trên map2-v2'], ['wait', 'Robot rảnh', 'Đang chạy T-01, dự kiến xong 09:45'], ['ok', 'Đầu xoay ở FRONT', ''], ['ok', 'Pin', '64%'], ['ok', 'Livestream', 'Trực tiếp']].map(([c, t, d]) => `<li class="${c}"><span class="ic">${c === 'ok' ? '✓' : '…'}</span><div class="g"><b>${t}</b><small>${d}</small></div></li>`).join('')}</ul></div>
+      <div class="stack2"><label class="ck"><input type="checkbox"> Robot đúng vị trí xuất phát</label><label class="ck"><input type="checkbox"> Người an toàn đứng cạnh nút dừng khẩn cấp</label><label class="ck"><input type="checkbox"> Camera và livestream đúng</label><div class="note">Còn 1 giờ 09 phút tới giờ bắt đầu.</div></div></div>`,
+    foot: `<button class="btn" data-close>Để sau</button><span class="sp"></span><button class="btn p" disabled>Bắt đầu buổi</button>`,
+  });
+}
+function reviewModal(i) {
+  const r = REGS[i];
+  const roster = [['Nguyễn Minh Anh', '10A1', 'minhanh.10a1@hoahiep.edu.vn', ['ok', 'Hợp lệ']], ['Trần Gia Bảo', '10A1', 'giabao.10a1@hoahiep.edu.vn', ['ok', 'Hợp lệ']], ['Lê Khánh Chi', '10A2', 'khanhchi@hoahiep.edu', ['warn', 'Sai tên miền']], ['Phạm Đức Duy', '10A2', 'ducduy.10a2@hoahiep.edu.vn', ['ok', 'Hợp lệ']], ['Võ Thảo My', '10A3', 'thaomy.10a3@hoahiep.edu.vn', ['warn', 'Trùng với T-05']]];
+  openModal({
+    w: 860, badges: `${st(r.state)}${r.left != null ? `<span class="st ${r.left < 6 ? 'bad' : 'mute'}">Còn ${r.left} giờ</span>` : ''}`, title: `${r.school} · ${r.rows} học sinh`, sub: `Buổi ${r.tour} · gửi ${r.sent} · ${r.rep}`,
+    body: `<div class="stack2"><div class="cells c4">${[['Trong danh sách', r.rows], ['Email hợp lệ', `<span style="color:var(--ok)">${r.rows - 2}</span>`], ['Cần sửa', '<span style="color:var(--warn)">2</span>'], ['Chỗ còn của buổi', 6]].map(([a, b]) => `<div><small>${a}</small><b style="font-size:17px">${b}</b></div>`).join('')}</div>
+      <div class="panel"><div class="tw"><table class="t"><thead><tr><th>Học sinh</th><th>Lớp</th><th>Email</th><th>Kiểm tra</th></tr></thead><tbody>${roster.map(([a, b, c, d]) => `<tr><td><b>${a}</b></td><td>${b}</td><td class="small" style="font-size:12px">${c}</td><td>${st(d)}</td></tr>`).join('')}</tbody></table></div><div class="pager"><span>5 / ${r.rows} dòng · lỗi xếp lên đầu</span><button class="lnk">Xem tất cả</button></div></div>
+      <label class="field">Ghi chú gửi đại diện (bắt buộc khi từ chối hoặc yêu cầu sửa)<textarea id="rvnote" placeholder="Ví dụ: dòng 3 sai tên miền, dòng 5 đã đăng ký buổi T-05."></textarea></label></div>`,
+    foot: `<button class="btn danger" data-act="reject">Từ chối</button><button class="btn" data-act="askfix">Yêu cầu sửa</button><span class="sp"></span><button class="btn p" data-act="approve" data-who="${r.school}">Duyệt đoàn</button>`,
+  });
+}
+function tourModal(code) {
+  const t = TOURS.find((x) => x[0] === code);
+  openModal({
+    w: 820, badges: `<span class="code">${t[0]}</span>${st(t[7])}`, title: `${t[2]} · ${t[1]}`, sub: `Người vận hành: ${t[6]}`,
+    body: `<div class="cols"><div class="stack2"><div class="cells c2">${[['Thời gian', `${t[1]} · 40 phút`], ['Giữ robot', '15 phút trước và sau'], ['Đoàn', `${t[3]} đoàn`], ['Tuyến', t[2]]].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div><div class="panel"><div class="ph"><h2>Đăng ký</h2><button class="lnk" data-go="regs">Tất cả đăng ký</button></div><div style="padding:10px 14px">${cap(t[4], t[5])}</div></div></div>
+      <div class="stack2"><div class="todo ${t[7][0] === 'warn' ? 'warn' : 'ok'}"><b>${t[7][0] === 'warn' ? 'Tuyến chưa được xác nhận' : 'Không có việc chặn'}</b><p>${t[7][0] === 'warn' ? 'Buổi không thể chốt Sẵn sàng cho tới khi kỹ thuật xác nhận tuyến.' : 'Sửa được cấu hình cho tới khi buổi bắt đầu.'}</p></div></div></div>`,
+    foot: `<button class="btn danger" data-act="cancelTour">Hủy buổi…</button><span class="sp"></span><button class="btn" data-close>Đóng</button><button class="btn p" data-act="editTour">Sửa Tour</button>`,
+  });
+}
+function routeModal(i) {
+  const r = ROUTES[i];
+  openModal({
+    w: 860, badges: `${st(r.state)}<span class="st mute">${r.map}</span>`, title: `${r.name} ${r.cur}`, sub: `${r.stops} điểm dừng · khoảng ${r.len} · dùng cho ${r.used}`,
+    tabs: [['Tổng quan', () => `<div class="cols"><div class="stack2"><div class="panel"><div class="ph"><h2>Điểm dừng</h2></div><ul class="stops">${STOPS.slice(0, r.stops).map((p, j) => `<li><span class="mk">${j + 1}</span><div><b>${p.n}<span class="hs">${p.hs.map((h) => `<i>${h}</i>`).join('')}</span></b><small>${j === 2 && r.cur === 'v4' ? 'POI mới, chờ kỹ thuật xác minh' : 'Đã xác minh'}</small></div></li>`).join('')}</ul></div></div><div class="stack2"><div class="todo ${r.state[0] === 'bad' ? '' : r.state[0] === 'warn' ? 'warn' : 'ok'}"><b>${r.state[1]}</b><p>${r.cur === 'v4' ? 'Thêm Phòng Robotics và đổi thứ tự dừng nên v4 không thừa hưởng xác nhận của v3.1. Đang chặn T-03.' : 'Nhờ kỹ thuật chạy thử toàn tuyến cùng người vận hành.'}</p></div><div class="panel"><div class="ph"><h2>Các version</h2></div><div style="padding:10px 14px" class="vers">${r.vers.map(([v, c]) => `<span class="${c}">${v}</span>`).join('<em>→</em>')}</div></div></div></div>`], ['Thay đổi so với bản trước', () => `<div class="panel"><ul class="list"><li><div class="g">Thêm điểm dừng Phòng Robotics</div>${st(['bad', 'Ảnh hưởng di chuyển'])}</li><li><div class="g">Đổi thứ tự dừng 3 và 4</div>${st(['bad', 'Ảnh hưởng di chuyển'])}</li><li><div class="g">Sửa thuyết minh tại Thư viện</div>${st(['mute', 'Chỉ nội dung'])}</li></ul></div>`]],
+    foot: `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn" data-act="copyRoute">Sao chép thành version mới</button><button class="btn p" data-act="editRoute">Sửa tuyến</button>`,
+  });
+}
+function poiModal(i) {
+  const p = POIS[i];
+  openModal({
+    w: 820, badges: st(p[3]), title: p[0], sub: `map2-v2 · dùng trong ${p[5]} tuyến`,
+    body: `<div class="cols"><div class="panel" style="overflow:hidden"><div class="mapbox">${mapSvg({ pins: [[p[0], p[1], p[2], p[3][0] === 'ok' ? '#1f7a55' : p[3][0] === 'bad' ? '#b23e31' : '#d69412']], vb: `${p[1] - 260} ${p[2] - 220} 520 440` })}</div></div><div class="stack2"><div class="cells c2">${[['Tọa độ (m)', `${((p[1] * 0.05) - 15.3).toFixed(2)}, ${(-76.1 + (1949 - p[2]) * 0.05).toFixed(2)}`], ['Hướng', '1,57 rad'], ['Góc camera', p[4]], ['Thuyết minh', '~90 giây']].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('')}</div><div class="todo ${p[3][0] === 'ok' ? 'ok' : p[3][0] === 'bad' ? '' : 'warn'}"><b>${p[3][1]}</b><p>${p[3][0] === 'ok' ? 'Kỹ thuật đã xác minh tại chỗ trên map2-v2.' : p[3][0] === 'bad' ? 'Lần kiểm tra trước lệch 18 cm vì vướng cửa. Chỉnh vị trí rồi gửi lại.' : 'Đã gửi kỹ thuật. Tuyến dùng POI này chưa xác nhận được.'}</p></div></div></div>`,
+    foot: `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn" data-act="poiOff">Ngừng dùng</button><button class="btn p" data-act="poiEdit">Sửa POI</button>`,
+  });
+}
+function histModal(code) {
+  const h = HIST.find((x) => x[0] === code);
+  const early = h[5][0] === 'bad';
+  openModal({
+    w: 820, badges: `<span class="code">${h[0]}</span>${st(h[5])}`, title: `${h[2]} · ${h[1]}`, sub: h[3],
+    body: `<div class="stack2"><div class="cells c4">${[['Thời lượng', h[4] ? `${h[4]} phút` : '—'], ['Điểm dừng', early ? '2/4' : '4/4'], ['Học sinh xem', h[6]], ['Sự cố', early ? '1' : '0']].map(([a, b]) => `<div><small>${a}</small><b style="font-size:17px">${b}</b></div>`).join('')}</div>${early ? '<div class="todo"><b>Kết thúc sớm: vật cản không xử lý được</b><p>Đã thử phục hồi một lần (chạy lại chặng). Người vận hành ghi: "Cửa thư viện bị khóa".</p></div>' : ''}<div class="panel"><div class="ph"><h2>Diễn biến</h2></div><ul class="log">${LOG.slice().reverse().map(([t, a, d]) => `<li><time>${t}</time><span><b>${a}</b> <span class="small">${d === 'bad' ? '' : d}</span></span></li>`).join('')}</ul></div></div>`,
+    foot: `<button class="btn" data-close>Đóng</button><span class="sp"></span><button class="btn" data-act="export">Tải báo cáo</button>`,
+  });
+}
+function robotModal() {
+  openModal({
+    w: 620, title: 'Xác nhận AMR-01 sẵn sàng sau tour', sub: 'Ghi lại kiểm tra tại chỗ trước khi robot nhận buổi kế tiếp.',
+    body: `<div class="stack2"><label class="ck"><input type="checkbox" checked> Thân robot và cảm biến không hư hại</label><label class="ck"><input type="checkbox" checked> Đầu xoay về FRONT</label><label class="ck"><input type="checkbox"> Pin trên 40% hoặc đã cắm sạc</label><label class="field">Ghi chú<textarea placeholder="Ví dụ: lau camera, kiểm tra bánh trái."></textarea></label></div>`,
+    foot: `<button class="btn" data-close>Hủy</button><span class="sp"></span><button class="btn p" data-act="robotReady">Xác nhận sẵn sàng</button>`,
+  });
+}
+
+/* ── pages ── */
+const P = {};
+P.overview = () => head('Thứ Tư, 28/10', '5 buổi hôm nay, 1 đang chạy. Robot AMR-01 bận tới 16:05.', '<button class="btn" data-go="schedule">Lịch buổi</button><button class="btn p" data-go="live">Điều hành trực tiếp</button>', 'Tổng quan vận hành') +
+  `<ul class="attn"><li><span class="sev bad"></span><div class="g"><b>T-01 cần hỗ trợ</b><small>Robot tạm dừng vì vật cản, 3 phút trước</small></div><button class="btn s p" data-go="live">Xử lý</button></li><li><span class="sev warn"></span><div class="g"><b>T-03 lúc 14:00 bị chặn</b><small>Tuyến v4 chưa được kỹ thuật xác nhận</small></div><button class="btn s" data-sess="T-03">Xem</button></li><li><span class="sev info"></span><div class="g"><b>3 đoàn chờ duyệt</b><small>1 đoàn còn 3 giờ là quá hạn</small></div><button class="btn s" data-go="pending">Duyệt</button></li></ul>
+  <div class="bento"><button class="tile" data-go="history"><small>Buổi đã chạy · 7 ngày</small><div class="v"><b>12</b><span class="delta up">▲ 3</span></div>${spark([1, 2, 1, 3, 2, 1, 2])}</button><button class="tile" data-go="history"><small>Tỉ lệ hoàn thành</small><div class="v"><b>83%</b><span class="delta flat">— 0</span></div>${spark([100, 50, 100, 100, 100, 67, 100], '#1f7a55')}</button><button class="tile" data-go="today"><small>Học sinh hôm nay</small><div class="v"><b>27</b><span>/ 51 đã đăng ký</span></div>${spark([0, 9, 9, 27, 27], '#2d719e')}</button><button class="tile warn" data-go="pending"><small>Đoàn chờ duyệt</small><div class="v"><b>3</b><span>26 học sinh</span></div>${spark([1, 2, 2, 3, 2, 3, 3], '#d69412')}</button></div>
+  <div class="g21 mb">${panel('Robot AMR-01 hôm nay', dayStrip(), '<button class="lnk" data-go="schedule">Lịch tuần</button>')}${panel('Buổi hôm nay theo trạng thái', donut([{ l: 'Hoàn thành', v: 1, c: '#1f7a55' }, { l: 'Đang chạy', v: 1, c: '#b23e31' }, { l: 'Sẵn sàng', v: 1, c: '#2d719e' }, { l: 'Bị chặn', v: 1, c: '#d69412' }, { l: 'Đã lên lịch', v: 1, c: '#cbd5e1' }], ['5', 'buổi'], 'Buổi hôm nay theo trạng thái'))}</div>
+  <div class="g3">${panel('Đang chạy', `<div class="livecard2"><div style="display:flex;gap:8px;align-items:center"><span class="code">T-01</span>${st(['bad', 'Cần hỗ trợ'])}</div><b>THCS Hòa Bình · 18 học sinh</b><div><div class="prog"><span class="d"></span><span class="d"></span><span class="c"></span><span></span></div><div class="prog-l"><span>Sảnh</span><span>Thư viện</span><span style="color:var(--bad);font-weight:700">Robotics</span><span>AI Lab</span></div></div><button class="btn p wide" data-go="live">Mở điều hành</button></div>`)}${panel('Học sinh tham gia theo giờ', `<div class="chart">${area([['08', 0, 9], ['09', 9, 27], ['10', 27, 27], ['11', null, 37], ['12', null, 37], ['13', null, 37], ['14', null, 45], ['15', null, 51], ['16', null, 51]], 'Học sinh tham gia theo giờ')}</div><div class="keys"><span><i style="background:#2d719e"></i>Đã tham gia</span><span><i style="background:#94a3b8"></i>Theo đăng ký</span></div>`)}${panel('7 ngày qua', `<div class="chart">${stacked(WEEK7, 'Buổi 7 ngày qua')}</div><div class="keys"><span><i style="background:#7db9db"></i>Hoàn thành</span><span><i style="background:#f2a59b"></i>Kết thúc sớm</span></div>`)}</div>`;
+
+const tlRow = (s) => `<li data-sess="${s.id}"><time>${s.start}<small>${s.len} phút</small></time><span class="dot" style="background:${s.dot}"></span><div class="g"><b>${s.id} · ${s.who}</b><div class="meta">${s.route}${s.op ? ` · ${s.op}` : ''}${s.note ? ` · <span style="color:var(--warn)">${s.note}</span>` : ''}</div></div><div class="side2"><div class="seats">${cap(s.n, s.cap)}</div>${st(s.state)}</div></li>`;
+P.today = () => head('Buổi hôm nay', 'Bấm một buổi để mở chi tiết ngay giữa màn hình.', '<button class="btn p" data-go="create">Tạo Tour</button>', 'Trong ngày') +
+  `<div class="bento"><div class="tile"><small>Tổng buổi</small><div class="v"><b>5</b><span>51 học sinh</span></div></div><div class="tile bad"><small>Cần hỗ trợ</small><div class="v"><b>1</b><span>T-01</span></div></div><div class="tile"><small>Sắp tới</small><div class="v"><b>10:30</b><span>T-02 · còn 1 giờ 09 phút</span></div></div><div class="tile warn"><small>Chưa chốt được</small><div class="v"><b>2</b><span>T-03, T-04</span></div></div></div>
+  <section class="panel"><div class="tools">${seg([['Tất cả', 5], ['Cần xử lý', 3], ['Sắp tới', 3], ['Đã xong', 1]])}<span style="flex:1"></span>${search('Tìm buổi, trường, người vận hành')}</div><ul class="tl"><li class="period">Buổi sáng</li>${SESS.slice(0, 3).map(tlRow).join('')}<li class="period">Buổi chiều</li>${SESS.slice(3).map(tlRow).join('')}</ul></section>`;
+
+const WEEKDAYS = [['T2', '26', 40, [['09:00 T-95', 'ok']]], ['T3', '27', 80, [['09:00 T-98', 'ok'], ['14:00 T-99', 'bad']]], ['T4', '28', 100, [['08:00 T-00', 'ok'], ['09:00 T-01', 'bad'], ['10:30 T-02', 'info'], ['14:00 T-03', 'warn'], ['15:30 T-04', 'mute']]], ['T5', '29', 20, [['09:00 T-05', 'info']]], ['T6', '30', 40, [['13:30 T-06', 'info']]], ['T7', '31', 20, [['09:30 T-07', 'info']]], ['CN', '01', 0, []]];
+P.schedule = () => head('Lịch buổi', 'Mỗi buổi giữ robot 15 phút trước và sau tuyến. Thanh màu dưới ngày cho biết robot đã kín lịch bao nhiêu.', '<button class="btn s" aria-label="Tuần trước">‹</button><button class="btn s">Tuần này</button><button class="btn s" aria-label="Tuần sau">›</button>', 'Trong ngày') +
+  `<section class="panel mb"><div class="ph"><h2>Tuần 26/10 – 01/11</h2><small>AMR-01</small></div><div class="week">${WEEKDAYS.map(([d, n, occ, evs]) => `<button aria-pressed="${n === '28'}"><span class="dd"><b>${d} ${n}</b><small>${evs.length} buổi</small></span><span class="occ"><i style="width:${occ}%"></i></span>${evs.map(([t, c]) => `<span class="ev st ${c}"${n === '28' ? ` data-sess="${t.slice(-4)}"` : ''}>${t}</span>`).join('')}</button>`).join('')}</div></section>
+  ${panel('Thứ Tư 28/10 theo giờ', dayStrip(), '<small>bấm một buổi để mở</small>')}`;
+
+P.live = () => `<div class="top" style="align-items:center"><div class="g" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="code" style="font-size:13px">T-01</span><h1 style="font-size:19px">THCS Hòa Bình · Thư viện – AI Lab v3</h1>${st(['bad', 'Cần hỗ trợ'])}</div><button class="btn s" data-sess="T-01">Chi tiết buổi</button></div>
+  <div class="alertrow" style="display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:10px;background:var(--bad-bg);border:1px solid #f5c8c2;margin-bottom:10px">${ic('alert', 16)}<span><b style="color:var(--bad)">Robot tạm dừng trên đường tới Phòng Robotics.</b> Nav2 báo vật cản kéo dài từ 09:21.</span></div>
+  <div class="strip">${[['Bước hiện tại', 'Đang tới POI 3', 'tạm dừng'], ['Điểm', 'Phòng Robotics', '3 / 4'], ['Thời gian dừng còn', '—', 'chưa tới'], ['Đã chạy', '21:40', 'bắt đầu 09:00'], ['Vị trí robot', '0,4 giây trước', 'ổn định'], ['Lệnh đang chờ', 'Không có', '']].map(([a, b, c]) => `<div><small>${a}</small><b>${b}</b><i>${c}</i></div>`).join('')}</div>
+  <div class="livegrid" style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;align-items:start"><div class="stack"><section class="panel"><div class="ph"><h2>Sơ đồ tuyến</h2><small>robot_01 · map2-v2</small></div><div class="schem">${STOPS.map((p, i) => `<div class="${p.s}"><span class="nn">${i + 1}</span><b>${p.n}</b><small>${p.s === 'd' ? 'Đã qua' : p.s === 'c' ? 'Đang tới' : 'Sắp tới'}</small></div>`).join('')}</div></section>
+  <div class="g2"><section class="panel"><div class="ph"><h2>Nhật ký</h2><small>mới nhất trên cùng</small></div><ul class="log">${LOG.map(([t, a, d]) => `<li${d === 'bad' ? ' style="background:var(--bad-bg);color:var(--bad)"' : ''}><time>${t}</time><span><b>${a}</b> <span class="small">${d === 'bad' ? '' : d}</span></span></li>`).join('')}</ul></section>
+  <section class="panel"><div class="ph"><h2>Kết nối 5 phút qua</h2><small>độ trễ vị trí</small></div><div class="chart">${area([['−5', 6, 6], ['−4', 5, 6], ['−3', 7, 6], ['−2', 6, 6], ['−1', 31, 6], ['0', 8, 6]], 'Độ trễ vị trí', 520)}</div><div class="keys"><span><i style="background:#2d719e"></i>Độ trễ (×0,1 giây)</span></div></section></div></div>
+  <aside class="stack" style="position:sticky;top:64px"><section class="panel"><div class="ph"><h2>Điều khiển</h2></div><div style="padding:12px;display:grid;gap:8px"><div class="todo"><b>Xử lý theo thứ tự</b><p>1. Dừng an toàn · 2. Chuyển fallback · 3. Thử phục hồi một lần · 4. Kết thúc sớm nếu chưa an toàn</p></div><button class="btn p wide" data-act="retryLeg">Chạy lại chặng</button><button class="btn wide" data-act="fallback">Chuyển video dự phòng</button><button class="end" data-act="endEarly">Kết thúc sớm…</button></div></section>
+  <section class="panel"><div class="ph"><h2>Người xem</h2></div><div style="padding:10px 14px">${cap(18, 20).replace('chỗ', 'đang xem')}</div></section></aside></div>`;
+
+P.robot = () => head('Robot & thiết bị', 'Mỗi thẻ là một thiết bị: pin, kết nối, định vị và việc đang làm.', '', 'Điều hành') +
+  `<div class="devs"><div class="dev"><div class="dh2">${ring(64, '#1f7a55')}<div class="g"><b>AMR-01</b><div class="small" style="font-size:12px">Robot thật · đang chạy T-01</div></div>${st(['bad', 'Cần hỗ trợ'])}</div><dl>${[['Kết nối', 'Trực tiếp · 0,4 giây'], ['Định vị', 'Lệch 4,2 cm'], ['Đầu xoay', 'FRONT'], ['Map', 'map2-v2']].map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl><div class="chart" style="padding-top:6px">${spark([88, 84, 80, 77, 73, 70, 66, 64], '#1f7a55')}<div class="small">Pin 2 giờ qua</div></div><div class="df"><button class="btn" data-go="live">Điều hành</button><button class="btn p" data-robot>Xác nhận sẵn sàng</button></div></div>
+  <div class="dev"><div class="dh2">${ring(81, '#2d719e')}<div class="g"><b>Kính Quest 3</b><div class="small" style="font-size:12px">Gắn trên AMR-01 · camera livestream</div></div>${st(['ok', 'Trực tiếp'])}</div><dl>${[['Kết nối', 'WebRTC · 42 ms'], ['Khung hình', '30 fps · 720p'], ['Âm thanh', 'Bật'], ['Nhiệt độ', '38 °C']].map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl><div class="df"><button class="btn" data-go="intercom">Đàm thoại</button></div></div>
+  <div class="dev"><div class="dh2">${ring(100, '#94a3b8')}<div class="g"><b>AMR-02 (Gazebo)</b><div class="small" style="font-size:12px">Mô phỏng · không phục vụ buổi thật</div></div>${st(['mute', 'Mô phỏng'])}</div><dl>${[['Kết nối', 'Ổn định'], ['Định vị', 'Đạt'], ['Đầu xoay', 'FRONT'], ['Map', 'map2-v2']].map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></div></div>`;
+
+P.intercom = () => head('Đàm thoại Quest', 'Nói với người đứng cạnh robot qua kính Quest. Giữ nút để nói.', '', 'Điều hành') +
+  `<div class="g12"><section class="panel"><div class="ph"><h2>Trạng thái</h2></div><ul class="cond">${[['ok', 'Kính Quest 3', 'Đã kết nối · pin 81%'], ['ok', 'Micro của bạn', 'Đã cấp quyền'], ['ok', 'Loa trên kính', 'Âm lượng 70%']].map(([c, t, d]) => `<li class="${c}"><span class="ic">✓</span><div class="g"><b>${t}</b><small>${d}</small></div></li>`).join('')}</ul></section>
+  <section class="panel"><div class="talk"><button class="ptt" id="ptt" aria-pressed="false">Giữ để nói</button><div class="meterbars" aria-hidden="true">${[8, 14, 22, 30, 18, 26, 12, 20, 9, 16, 24, 10].map((h, i) => `<i class="${i < 7 ? 'on' : ''}" style="height:${h}px"></i>`).join('')}</div><p class="small">Mức âm thanh từ kính · lần nói gần nhất 09:22</p></div></section></div>`;
+
+P.prep = () => head('Tổng quan chuẩn bị', 'Việc cần làm để các Tour 7 ngày tới chạy được, theo thứ tự tạo một Tour.', '<button class="btn p" data-go="create">Tạo Tour</button>', 'Chuẩn bị Tour') +
+  `<ul class="attn"><li><span class="sev bad"></span><div class="g"><b>Tuyến Thư viện – AI Lab v4 cần xác nhận lại</b><small>đang chặn T-03 hôm nay</small></div><button class="btn s" data-route="0">Mở tuyến</button></li><li><span class="sev warn"></span><div class="g"><b>2 POI chờ kỹ thuật xác minh</b><small>Phòng Robotics, Khu trưng bày</small></div><button class="btn s" data-go="pois">Xem POI</button></li><li><span class="sev warn"></span><div class="g"><b>3 đoàn chờ duyệt</b><small>sớm nhất còn 3 giờ</small></div><button class="btn s" data-go="pending">Duyệt</button></li><li><span class="sev info"></span><div class="g"><b>T-04, T-07 chưa giao người vận hành</b></div><button class="btn s" data-go="tours">Danh sách Tour</button></li></ul>
+  <div class="bento"><div class="tile"><small>Tour 7 ngày tới</small><div class="v"><b>6</b><span>4 hôm nay</span></div></div><div class="tile"><small>Chỗ đã đăng ký</small><div class="v"><b>60%</b><span>60 / 100</span></div>${spark([20, 28, 35, 41, 48, 55, 60])}</div><div class="tile warn"><small>Đoàn chờ duyệt</small><div class="v"><b>3</b><span>26 học sinh</span></div></div><div class="tile bad"><small>Tuyến chưa xác nhận</small><div class="v"><b>2</b><span>v4, Hành lang v1</span></div></div></div>
+  <div class="g2">${panel('Chỗ đã đăng ký theo Tour', hbars(TOURS.map((t) => [`${t[0]} · ${t[1].replace('Hôm nay ', '')}`, t[4], t[5], t[4] / t[5] >= 1 ? '#1f7a55' : t[4] / t[5] < 0.4 ? '#d69412' : '#2d719e']), true), '<button class="lnk" data-go="tours">Danh sách Tour</button>')}${panel('Đăng ký 30 ngày qua', `<div class="funnel">${[['Đại diện gửi', 24, 24], ['Đã duyệt', 19, 24], ['Đã gửi thư mời', 17, 24], ['Học sinh đã vào xem', 14, 24]].map(([a, v, m]) => `<div><span>${a}</span><span class="bar2"><i style="width:${(v / m) * 100}%"></i></span><b>${v}</b></div>`).join('')}</div>`, '<button class="lnk" data-go="regs">Tất cả đăng ký</button>')}</div>`;
+
+P.pois = () => head('Quản lý POI', 'Staff đề xuất POI trên map. Kỹ thuật xác minh tại chỗ trước khi tuyến dùng được.', '<button class="btn p" data-act="newPoi">Thêm POI</button>', 'Chuẩn bị Tour') +
+  `<div class="g21"><section class="panel"><div class="tools">${seg([['Tất cả', 7], ['Đã xác minh', 4], ['Chờ kỹ thuật', 2], ['Không đạt', 1]])}<span style="flex:1"></span>${search('Tìm POI')}</div><div class="tw"><table class="t"><thead><tr><th>POI</th><th>Góc camera</th><th>Dùng trong</th><th>Trạng thái</th></tr></thead><tbody>${POIS.map((p, i) => `<tr class="click" data-poi="${i}"><td><b>${p[0]}</b><small>map2-v2</small></td><td>${p[4]}</td><td>${p[5]} tuyến</td><td>${st(p[3])}</td></tr>`).join('')}</tbody></table></div></section>
+  <section class="panel"><div class="ph"><h2>Bản đồ map2-v2</h2><small>bấm điểm để mở</small></div><div class="mapbox">${mapSvg({ pins: POIS.map(([n, u, v, s]) => [n, u, v, s[0] === 'ok' ? '#1f7a55' : s[0] === 'bad' ? '#b23e31' : '#d69412']) })}</div></section></div>`;
+
+P.routes = () => head('Danh mục tuyến', 'Mỗi tuyến có nhiều version. Version ảnh hưởng di chuyển cần kỹ thuật xác nhận lại.', '<button class="btn p" data-act="newRoute">Tạo tuyến</button>', 'Chuẩn bị Tour') +
+  `<div class="rcards">${ROUTES.map((r, i) => `<button class="rcard" data-route="${i}"><div class="h"><div><b>${r.name}</b><div class="small" style="font-size:12px">${r.map} · ${r.stops} điểm dừng · ${r.len}</div></div>${st(r.state)}</div><div class="minipath">${Array.from({ length: r.stops }, (_, j) => `<span class="${j === 2 && r.cur === 'v4' ? 'w' : ''}"></span>`).join('<i></i>')}</div><div class="vers">${r.vers.map(([v, c]) => `<span class="${c}">${v}</span>`).join('<em>→</em>')}</div><div class="small" style="font-size:12px">Dùng cho: ${r.used}</div></button>`).join('')}</div>`;
+
+P.create = () => head('Tạo Tour mới', 'Tour mới ở trạng thái Nhận đăng ký. Chỉ chọn được tuyến đã có version được xác nhận.', '', 'Chuẩn bị Tour') +
+  `<div class="stepper"><span class="d"><i>✓</i>Chọn tuyến</span><span class="on"><i>2</i>Thời gian & sức chứa</span><span><i>3</i>Xem lại</span></div>
+  <div class="wiz"><section class="panel"><div class="ph"><h2>Thời gian & sức chứa</h2></div><div style="padding:14px;display:grid;gap:12px"><div class="f3" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px"><label class="field">Ngày<input type="date" value="2026-10-30"></label><label class="field">Giờ bắt đầu<input type="time" value="09:00"></label><label class="field">Số học sinh tối đa<input type="number" value="20"></label></div>
+  <div><div class="small" style="font-size:12px;color:var(--text-2);font-weight:600">Robot bị giữ 08:45 – 09:52</div><div class="wbar"><span style="flex:15;background:#e2e8f0;color:#475569">15'</span><span style="flex:22;background:var(--primary);color:#fff">Tuyến 22'</span><span style="flex:15;background:#e2e8f0;color:#475569">15'</span><span style="flex:15;background:#fff;border:1px dashed #cbd5e1;color:#94a3b8">trống</span></div><div class="wscale"><span>08:45</span><span>09:00</span><span>09:22</span><span>09:37</span></div></div>
+  <div class="note ok">Không trùng buổi nào khác trên AMR-01 trong khoảng này.</div><label class="field">Mô tả cho đại diện trường<textarea>Tham quan thư viện và phòng thí nghiệm AI, có thuyết minh trực tiếp.</textarea></label></div><div class="foot2"><button class="btn">Quay lại</button><button class="btn p" data-act="createTour">Tiếp: xem lại</button></div></section>
+  <aside class="panel sum"><div class="ph"><h2>Tóm tắt</h2></div><dl class="facts"><dt>Tuyến</dt><dd>Thư viện – AI Lab v3.1</dd><dt>Trạng thái tuyến</dt><dd>${st(['ok', 'Đã xác nhận'])}</dd><dt>Điểm dừng</dt><dd>3</dd><dt>Thời lượng</dt><dd>22 phút</dd><dt>Ngày</dt><dd>Thứ Sáu 30/10</dd><dt>Sức chứa</dt><dd>20 học sinh</dd></dl></aside></div>`;
+
+P.pending = () => head('Đăng ký chờ duyệt', 'Hạn xử lý 2 ngày kể từ khi đại diện gửi. Bấm một đoàn để xét duyệt ngay giữa màn hình.', '', 'Chuẩn bị Tour') +
+  `<section class="panel"><div class="tw"><table class="t"><thead><tr><th>Trường</th><th>Buổi</th><th>Học sinh</th><th>Gửi lúc</th><th>Hạn xử lý</th><th></th></tr></thead><tbody>${REGS.filter((r) => r.left != null).map((r) => { const i = REGS.indexOf(r); const lvl = r.left < 6 ? 'bad' : r.left < 24 ? 'warn' : ''; return `<tr class="click" data-rv="${i}"><td><b>${r.school}</b><small>${r.rep}</small></td><td>${r.tour}</td><td>${r.rows}</td><td class="small" style="font-size:12px">${r.sent}</td><td><div class="sla ${lvl}"><div class="cap"><i style="width:${(r.left / 48) * 100}%"></i></div><small>Còn ${r.left} giờ</small></div></td><td style="text-align:right"><button class="btn s p" data-rv="${i}">Xét duyệt</button></td></tr>`; }).join('')}</tbody></table></div></section>`;
+
+P.regs = () => head('Tất cả đăng ký', 'Mọi đăng ký từ đại diện trường, theo trạng thái.', '', 'Chuẩn bị Tour') +
+  `<div class="g12 mb">${panel('30 ngày qua', `<div class="funnel">${[['Đại diện gửi', 24, 24], ['Đã duyệt', 19, 24], ['Đã gửi thư mời', 17, 24], ['Đã vào xem', 14, 24]].map(([a, v, m]) => `<div><span>${a}</span><span class="bar2"><i style="width:${(v / m) * 100}%"></i></span><b>${v}</b></div>`).join('')}</div>`)}
+  <section class="panel"><div class="tools">${seg([['Tất cả', 7], ['Chờ duyệt', 3], ['Đã duyệt', 3], ['Từ chối', 1]])}<span style="flex:1"></span>${search('Tìm trường hoặc đại diện')}</div><div class="tw"><table class="t"><thead><tr><th>Trường</th><th>Buổi</th><th>Học sinh</th><th>Gửi lúc</th><th>Trạng thái</th></tr></thead><tbody>${REGS.map((r, i) => `<tr class="click" data-rv="${i}"><td><b>${r.school}</b><small>${r.rep}</small></td><td>${r.tour}</td><td>${r.rows}</td><td class="small" style="font-size:12px">${r.sent}</td><td>${st(r.state)}</td></tr>`).join('')}</tbody></table></div>${pager(7)}</section></div>`;
+
+P.tours = () => head('Danh sách Tour', 'Tour đã tạo, theo thời gian. Thanh sức chứa cho biết đã kín bao nhiêu chỗ.', '<button class="btn p" data-go="create">Tạo Tour</button>', 'Chuẩn bị Tour') +
+  `<section class="panel"><div class="tools">${seg([['Sắp tới', 7], ['Nhận đăng ký', 3], ['Bị chặn', 1], ['Đã kết thúc', 12]])}<span style="flex:1"></span>${search('Tìm mã Tour hoặc tuyến')}</div><div class="tw"><table class="t"><thead><tr><th>Tour</th><th>Thời gian</th><th>Tuyến</th><th style="width:170px">Sức chứa</th><th>Người vận hành</th><th>Trạng thái</th></tr></thead><tbody>${TOURS.map((t) => `<tr class="click" data-tour="${t[0]}"><td><b>${t[0]}</b><small>${t[3]} đoàn</small></td><td>${t[1]}</td><td>${t[2]}</td><td>${cap(t[4], t[5])}</td><td>${t[6] === '—' ? '<span style="color:var(--bad)">Chưa giao</span>' : t[6]}</td><td>${st(t[7])}</td></tr>`).join('')}</tbody></table></div>${pager(7)}</section>`;
+
+P.history = () => head('Lịch sử phiên', 'Các buổi đã chạy, cách chúng kết thúc và vì sao.', '<button class="btn" data-act="export">Xuất CSV</button>', 'Lịch sử') +
+  `<div class="bento"><div class="tile"><small>Buổi 30 ngày</small><div class="v"><b>24</b><span class="delta up">▲ 6</span></div>${spark([3, 4, 2, 5, 4, 6])}</div><div class="tile"><small>Hoàn thành</small><div class="v"><b>88%</b><span>21 / 24</span></div>${spark([80, 85, 82, 90, 86, 88], '#1f7a55')}</div><div class="tile"><small>Thời lượng trung bình</small><div class="v"><b>41'</b><span>dự kiến 40'</span></div></div><div class="tile"><small>Học sinh đã xem</small><div class="v"><b>214</b><span>9 / buổi</span></div></div></div>
+  <div class="g2 mb">${panel('7 ngày qua', `<div class="chart">${stacked(WEEK7, 'Buổi 7 ngày qua', 560)}</div><div class="keys"><span><i style="background:#7db9db"></i>Hoàn thành</span><span><i style="background:#f2a59b"></i>Kết thúc sớm</span></div>`)}${panel('Vì sao kết thúc sớm hoặc hủy', hbars([['Vật cản không xử lý được', 2, 3, '#b23e31'], ['Mất kết nối robot', 1, 3, '#d69412'], ['Trường hủy', 1, 3, '#94a3b8']]))}</div>
+  <section class="panel"><div class="tools">${seg([['Tất cả', 24], ['Hoàn thành', 21], ['Kết thúc sớm', 2], ['Đã hủy', 1]])}<span style="flex:1"></span>${search('Tìm buổi hoặc trường')}</div><div class="tw"><table class="t"><thead><tr><th>Buổi</th><th>Thời gian</th><th>Tuyến</th><th>Thời lượng</th><th>Học sinh</th><th>Kết quả</th></tr></thead><tbody>${HIST.map((h) => `<tr class="click" data-hist="${h[0]}"><td><b>${h[0]}</b><small>${h[2]}</small></td><td>${h[1]}</td><td>${h[3]}</td><td>${h[4] ? `${h[4]} phút` : '—'}</td><td>${h[6]}</td><td>${st(h[5])}</td></tr>`).join('')}</tbody></table></div>${pager(24)}</section>`;
+
+/* ── actions → notifications ── */
+const ACT = {
+  approve: (b) => { closeModal(); toast('ok', `Đã duyệt ${b.dataset.who}`, 'Bước tiếp theo: gửi thông tin tham gia cho đại diện.'); },
+  reject: () => { const n = document.getElementById('rvnote'); if (!n.value.trim()) { n.focus(); toast('error', 'Cần ghi lý do từ chối', 'Lý do được gửi cho đại diện trường.'); return; } closeModal(); toast('info', 'Đã từ chối đăng ký', 'Lý do đã gửi cho đại diện.'); },
+  askfix: () => { const n = document.getElementById('rvnote'); if (!n.value.trim()) { n.focus(); toast('error', 'Cần ghi điều cần sửa'); return; } closeModal(); toast('info', 'Đã yêu cầu đại diện sửa danh sách'); },
+  swapRoute: () => { closeModal(); toast('ok', 'T-03 đã đổi sang v3.1', 'Tuyến đã xác nhận. Buổi có thể chốt Sẵn sàng.'); },
+  assign: () => { closeModal(); toast('ok', 'Đã giao Trần Thị Bình cho T-04'); },
+  robotReady: () => { closeModal(); toast('ok', 'AMR-01 sẵn sàng cho buổi kế tiếp', 'Đã ghi xác nhận sau tour.'); },
+  retryLeg: () => toast('ok', 'T-01 · Đã gửi lại chặng', 'Theo dõi vị trí robot trên dải trạng thái.'),
+  fallback: () => toast('info', 'T-01 · Đã chuyển video dự phòng', 'Học sinh thấy nhãn “video dự phòng”.'),
+  endEarly: () => toast('error', 'Kết thúc sớm cần lý do', 'Trong ứng dụng thật, hộp xác nhận có ô lý do bắt buộc.'),
+  createTour: () => toast('ok', 'Đã lưu bước 2', 'Xem lại rồi bấm Tạo Tour.'),
+  cancelTour: () => toast('error', 'Hủy buổi cần lý do', 'Hộp xác nhận có ô lý do bắt buộc.'),
+  export: () => toast('ok', 'Đã tạo file báo cáo'),
+};
+const DEFAULT_ACT = (b) => toast('info', b.textContent.trim(), 'Bản xem trước: thao tác này mở màn hình tương ứng trong ứng dụng.');
+
+/* ── render ── */
+function nav() {
+  document.getElementById('nav').innerHTML = GROUPS.map(([g, items]) => `<div class="grp">${g}</div>${items.map((k) => { const [n, icon] = PAGES[k]; const b = BADGE[k]; return `<button class="it" data-go="${k}" ${k === cur ? 'aria-current="page"' : ''}>${ic(icon)}<span class="lb">${n}</span>${b ? `<span class="n ${b[1]}">${b[0]}</span>` : ''}</button>`; }).join('')}`).join('');
+}
+function show(p) {
+  if (MODAL) closeModal();
+  cur = p; nav(); document.getElementById('crumb').textContent = PAGES[p][0];
+  const bar = document.getElementById('progress'); bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run');
+  const m = document.getElementById('main'); m.classList.remove('enter'); void m.offsetWidth; m.innerHTML = P[p](); m.classList.add('enter');
+  window.scrollTo(0, 0);
+}
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t.closest('[data-close]')) return closeModal();
+  const mt = t.closest('[data-mtab]'); if (mt && MODAL) { mt.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', b === mt)); document.getElementById('mbody').innerHTML = MODAL.tabs[+mt.dataset.mtab][1](); return; }
+  const go = t.closest('[data-go]'); if (go) return show(go.dataset.go);
+  const ss = t.closest('[data-start]'); if (ss) return startModal(ss.dataset.start);
+  const se = t.closest('[data-sess]'); if (se) return sessModal(se.dataset.sess);
+  const rv = t.closest('[data-rv]'); if (rv) return reviewModal(+rv.dataset.rv);
+  const to = t.closest('[data-tour]'); if (to) { const s = sessBy(to.dataset.tour); return s ? sessModal(s.id) : tourModal(to.dataset.tour); }
+  const ro = t.closest('[data-route]'); if (ro) return routeModal(+ro.dataset.route);
+  const po = t.closest('[data-poi]'); if (po) return poiModal(+po.dataset.poi);
+  const hi = t.closest('[data-hist]'); if (hi) return histModal(hi.dataset.hist);
+  if (t.closest('[data-robot]')) return robotModal();
+  if (t.closest('[data-sess-log]') && MODAL) { const b = document.querySelector('[data-mtab="3"]'); if (b) b.click(); return; }
+  const a = t.closest('[data-act]'); if (a) return (ACT[a.dataset.act] || DEFAULT_ACT)(a);
+  const sg = t.closest('.seg button'); if (sg) sg.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === sg));
+  const wk = t.closest('.week button'); if (wk) wk.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === wk));
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && MODAL) closeModal(); });
+document.addEventListener('pointerdown', (e) => { if (e.target.id === 'ptt') { e.target.setAttribute('aria-pressed', 'true'); e.target.textContent = 'Đang nói…'; } });
+document.addEventListener('pointerup', () => { const b = document.getElementById('ptt'); if (b && b.getAttribute('aria-pressed') === 'true') { b.setAttribute('aria-pressed', 'false'); b.textContent = 'Giữ để nói'; } });
+show(location.hash.slice(1) in P ? location.hash.slice(1) : 'overview');
+
+</script>
+</body>
+</html>

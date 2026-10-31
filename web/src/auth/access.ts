@@ -1,7 +1,7 @@
-import { ALL_ROLES, REPRESENTATIVE_HOME, VISITOR_HOME, homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole, isVisitorAreaRole, normalizeRole, roleLabel } from './roles'
+import { ALL_ROLES, REPRESENTATIVE_HOME, TECHNICAL_HOME, homePathForRole, isAdminRole, isRepresentativeRole, isStaffRole, isTechnicalRole, normalizeRole, roleLabel } from './roles'
 
 /**
- * The four areas of the product, and who may enter each one.
+ * The signed-in areas of the product, and who may enter each one.
  *
  * This is deliberately the ONLY place the answer is written down. The router's
  * guard asks `allows()` before rendering an area, and the "Vai trò & quyền"
@@ -13,7 +13,7 @@ import { ALL_ROLES, REPRESENTATIVE_HOME, VISITOR_HOME, homePathForRole, isAdminR
  * account from opening the wrong area by typing the URL, and it is what decides
  * what an account is shown.
  */
-export type AreaId = 'public' | 'visitor' | 'staff' | 'admin' | 'representative'
+export type AreaId = 'public' | 'staff' | 'admin' | 'representative' | 'technical'
 
 export type Area = {
   id: AreaId
@@ -29,28 +29,21 @@ export const AREAS: Area[] = [
     id: 'public',
     label: 'Khu vực công khai',
     path: '/',
-    purpose: 'Giới thiệu và trải nghiệm tour. Không cần đăng nhập.',
+    purpose: 'Giới thiệu và trang xem tour cho người được mời. Không cần đăng nhập.',
     allows: () => true,
-  },
-  {
-    id: 'visitor',
-    label: 'Ứng dụng khách tham quan',
-    path: VISITOR_HOME,
-    purpose: 'Khám phá khuôn viên, đặt robot và theo dõi tour của chính mình. Cần đăng nhập.',
-    allows: isVisitorAreaRole,
   },
   {
     id: 'staff',
     label: 'Vận hành tour',
     path: '/staff',
-    purpose: 'Kiểm tra và bắt đầu Tour đã chốt, giữ / đi tiếp tại POI, xử lý sự cố, kết thúc sớm. Quản trị viên chỉ xem.',
+    purpose: 'Chuẩn bị Tour (tạo Tour, duyệt đăng ký, tuyến, POI) và vận hành: bắt đầu, giữ / đi tiếp tại POI, xử lý sự cố, kết thúc sớm.',
     allows: isStaffRole,
   },
   {
     id: 'admin',
-    label: 'Quản trị Tour',
+    label: 'Quản trị hệ thống',
     path: '/admin',
-    purpose: 'Tạo Tour, duyệt đoàn đăng ký, gửi thông tin tham gia, Chốt / Mở lại / Hủy Tour trước khi chạy. Không điều khiển robot.',
+    purpose: 'Quản lý tài khoản và vai trò. Không chuẩn bị Tour và không điều khiển robot.',
     allows: isAdminRole,
   },
   {
@@ -59,6 +52,13 @@ export const AREAS: Area[] = [
     path: REPRESENTATIVE_HOME,
     purpose: 'Đại diện trường chọn buổi, gửi danh sách Excel, theo dõi duyệt và chia sẻ lời mời cho học sinh.',
     allows: isRepresentativeRole,
+  },
+  {
+    id: 'technical',
+    label: 'Kỹ thuật',
+    path: TECHNICAL_HOME,
+    purpose: 'Quản lý version map, import POI bằng YAML, kiểm tra thực tế và xác nhận kỹ thuật cho đúng version map–POI–route.',
+    allows: isTechnicalRole,
   },
 ]
 
@@ -76,7 +76,7 @@ function areaOfPath(path: string): AreaId {
   if (path.startsWith('/admin')) return 'admin'
   if (path.startsWith('/staff')) return 'staff'
   if (path.startsWith(REPRESENTATIVE_HOME)) return 'representative'
-  if (path.startsWith(VISITOR_HOME)) return 'visitor'
+  if (path.startsWith(TECHNICAL_HOME)) return 'technical'
   return 'public'
 }
 

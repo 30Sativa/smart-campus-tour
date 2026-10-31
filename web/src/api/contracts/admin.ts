@@ -4,8 +4,7 @@
  *
  * Same arrangement as `staff.ts`: the TYPES are live - every admin screen is
  * written against them - while the HTTP implementations at the bottom are NOT
- * wired. `/api/admin/*` does not exist yet, so `features/administration/
- * admin-hooks.ts` binds the labelled mock (`src/mocks/admin-mock.ts`) instead.
+ * wired. Live Tour and registration screens use their own feature APIs.
  * They stay here as the written record of the endpoints this frontend expects.
  *
  * Model: "CampusTour DT-AMR — Đặc tả phạm vi" (19/09/2026) §2, §3, §5.2, §5.5.
@@ -244,13 +243,13 @@ function queryString(values: Record<string, string | undefined>) {
   return text ? `?${text}` : ''
 }
 
-const tourPath = (id: string) => `/api/admin/tours/${id}`
-const registrationPath = (id: string) => `/api/admin/registrations/${id}`
+const tourPath = (id: string) => `/api/staff/manage/tours/${id}`
+const registrationPath = (id: string) => `/api/staff/manage/registrations/${id}`
 
 export const adminTourService: AdminTourService = {
-  list: (filters = {}) => apiClient(`/api/admin/tours${queryString(filters)}`),
+  list: (filters = {}) => apiClient(`/api/staff/manage/tours${queryString(filters)}`),
   get: (id) => apiClient(tourPath(id)),
-  create: (input, requestId) => apiClient('/api/admin/tours', { method: 'POST', json: input, headers: { 'Idempotency-Key': requestId } }),
+  create: (input, requestId) => apiClient('/api/staff/manage/tours', { method: 'POST', json: input, headers: { 'Idempotency-Key': requestId } }),
   update: (id, input, version) => apiClient(tourPath(id), { method: 'PUT', json: { ...input, version } }),
   finalize: (id, version) => apiClient(`${tourPath(id)}/finalize`, { method: 'POST', json: { version } }),
   reopen: (id, version) => apiClient(`${tourPath(id)}/reopen`, { method: 'POST', json: { version } }),
@@ -258,7 +257,7 @@ export const adminTourService: AdminTourService = {
 }
 
 export const adminRegistrationService: AdminRegistrationService = {
-  list: (filters = {}) => apiClient(`/api/admin/registrations${queryString(filters)}`),
+  list: (filters = {}) => apiClient(`/api/staff/manage/registrations${queryString(filters)}`),
   get: (id) => apiClient(registrationPath(id)),
   approve: (id, version) => apiClient(`${registrationPath(id)}/approve`, { method: 'POST', json: { version } }),
   reject: (id, reason, version) => apiClient(`${registrationPath(id)}/reject`, { method: 'POST', json: { reason, version } }),
@@ -270,5 +269,5 @@ export const adminInvitationService: AdminInvitationService = {
 }
 
 export const adminRouteService: AdminRouteService = {
-  list: () => apiClient('/api/admin/routes'),
+  list: () => apiClient('/api/staff/manage/routes'),
 }

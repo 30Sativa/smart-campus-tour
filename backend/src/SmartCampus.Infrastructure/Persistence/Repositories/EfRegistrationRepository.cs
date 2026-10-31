@@ -37,6 +37,17 @@ public sealed class EfRegistrationRepository(ApplicationDbContext context) : IRe
         return id is null ? null : Guid.Parse(id);
     }
 
+    public Task<bool> HasRegistrationForRepresentativeTourAsync(Guid owner, Guid tour, CancellationToken ct) =>
+        context.GroupRegistrations.AnyAsync(r => r.RepresentativeUserId == owner && r.TourId == tour, ct);
+
+    public async Task<bool> HasPendingDecisionsAsync(Guid tour, CancellationToken ct) =>
+        await context.RosterRows.AnyAsync(row => row.Registration.TourId == tour && row.IsActive && row.ParticipationState == "PENDING", ct) ||
+        await context.RosterEmailChangeRequests.AnyAsync(request => request.RosterRow.IsActive &&
+            request.RosterRow.Registration.TourId == tour && request.State == "PENDING", ct);
+
+    public Task<AuditLog?> FindMutationAsync(Guid tour, Guid requestId, CancellationToken ct) =>
+        context.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.TourId == tour && a.CorrelationId == requestId, ct);
+
     public Task<bool> HasInvitationsAsync(Guid registration, CancellationToken ct) =>
         context.Invitations.AnyAsync(i => i.RosterRow.RegistrationId == registration, ct);
 
@@ -53,8 +64,13 @@ public sealed class EfRegistrationRepository(ApplicationDbContext context) : IRe
     {
         var reserved = await context.RosterRows.AsNoTracking().Where(r => r.IsActive &&
             r.Registration.TourId == tour && (excludingRegistration == null || r.RegistrationId != excludingRegistration) &&
-            (r.Registration.State == RegistrationStates.Submitted || r.Registration.State == RegistrationStates.Approved))
+            (r.ParticipationState == RosterParticipationStates.Pending || r.ParticipationState == RosterParticipationStates.Accepted))
             .Select(r => r.Email).ToListAsync(ct);
+        var pendingProposals = await context.RosterEmailChangeRequests.AsNoTracking().Where(request =>
+                request.State == "PENDING" && request.RosterRow.IsActive && request.RosterRow.Registration.TourId == tour &&
+                (excludingRegistration == null || request.RosterRow.RegistrationId != excludingRegistration))
+            .Select(request => request.ProposedEmail).ToListAsync(ct);
+        reserved.AddRange(pendingProposals);
         var reservedSet = reserved.Select(RegistrationEmail.Normalize).ToHashSet(StringComparer.Ordinal);
         return emails.Select((email, index) => (email, index))
             .Where(item => reservedSet.Contains(RegistrationEmail.Normalize(item.email)))

@@ -1,11 +1,12 @@
-import { Suspense, useEffect, useState } from 'react'
-import { LogOut, Menu, Moon, Sun, X } from 'lucide-react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { ChevronDown, LogOut, Menu, Moon, Sun, UserRound, X } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { repQueryKeys } from './representative-hooks'
 import { useLogout } from '../../auth/use-logout'
 import { useAuthStore } from '../../stores/auth-store'
 import { useThemeStore } from '../../stores/theme-store'
+import { useDismiss } from '../../components/ui/use-dismiss'
 import { PageSkeleton } from './components/RepUi'
 import { RepBell } from './RepBell'
 import { REP_NAV, repActivePath } from './rep-nav'
@@ -17,6 +18,9 @@ import './representative.css'
  */
 export default function RepresentativeShell() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [meOpen, setMeOpen] = useState(false)
+  const closeMe = useCallback(() => setMeOpen(false), [])
+  const meRef = useDismiss<HTMLDivElement>(meOpen, closeMe)
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const logout = useLogout()
@@ -82,9 +86,19 @@ export default function RepresentativeShell() {
             <button type="button" className="rep-icon-btn" onClick={(event) => switchTheme(event.currentTarget)} aria-label={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}>
               {theme === 'dark' ? <Sun size={18} strokeWidth={1.8} aria-hidden="true" /> : <Moon size={18} strokeWidth={1.8} aria-hidden="true" />}
             </button>
-            <div className="rep-me" title="Đại diện trường">
-              <span className="rep-avatar" aria-hidden="true">{initials}</span>
-              <span className="rep-me-copy"><strong>{name}</strong><small>Đại diện trường</small></span>
+            <div ref={meRef} className="rep-me-wrap">
+              <button type="button" className="rep-me" aria-haspopup="menu" aria-expanded={meOpen} aria-label={`Tài khoản ${name}`} onClick={() => setMeOpen((open) => !open)}>
+                <span className="rep-avatar" aria-hidden="true">{initials}</span>
+                <span className="rep-me-copy"><strong>{name}</strong><small>Đại diện trường</small></span>
+                <ChevronDown size={14} aria-hidden="true" className="rep-me-chevron" />
+              </button>
+              {meOpen && (
+                <div className="rep-me-menu" role="menu" aria-label="Tài khoản">
+                  <div className="rep-me-menu-who"><strong>{name}</strong><small>Đại diện trường</small></div>
+                  <Link role="menuitem" to="/dai-dien/ho-so" onClick={() => { closeMe(); setMenuOpen(false) }} aria-current={location.pathname.startsWith('/dai-dien/ho-so') ? 'page' : undefined}><UserRound size={16} aria-hidden="true" />Hồ sơ của tôi</Link>
+                  <button role="menuitem" type="button" className="rep-me-menu-out" onClick={() => { closeMe(); void logout() }}><LogOut size={16} aria-hidden="true" />Đăng xuất</button>
+                </div>
+              )}
             </div>
             <button type="button" className="rep-icon-btn rep-logout" onClick={() => void logout()} aria-label="Đăng xuất" title="Đăng xuất"><LogOut size={18} aria-hidden="true" /></button>
             <button type="button" className="rep-icon-btn rep-burger" aria-label={menuOpen ? 'Đóng menu' : 'Mở menu'} aria-controls="rep-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>

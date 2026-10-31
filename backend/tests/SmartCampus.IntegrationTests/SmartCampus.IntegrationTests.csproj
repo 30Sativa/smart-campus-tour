@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -26,9 +26,35 @@
 
   <ItemGroup>
     <None Include="..\..\database\smart-campus-tour-schema-v1.1.sql" Link="Schema\snapshot.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.2.sql" Link="Schema\snapshot-v1.2.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.3.sql" Link="Schema\snapshot-v1.3.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.4.sql" Link="Schema\snapshot-v1.4.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.5.sql" Link="Schema\snapshot-v1.5.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.6.sql" Link="Schema\snapshot-v1.6.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.7.sql" Link="Schema\snapshot-v1.7.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.8.sql" Link="Schema\snapshot-v1.8.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.9.sql" Link="Schema\snapshot-v1.9.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-schema-v1.10.sql" Link="Schema\snapshot-v1.10.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.2-to-v1.3-route-revisions.sql" Link="Schema\upgrade-v1.2-to-v1.3-route-revisions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.3-to-v1.4-row-registration.sql" Link="Schema\upgrade-v1.3-to-v1.4-row-registration.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" Link="Schema\upgrade-v1.4-to-v1.5-robot-connection-confirmation.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql" Link="Schema\upgrade-v1.5-to-v1.6-robot-credential-lifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.6-to-v1.7-poi-narration.sql" Link="Schema\upgrade-v1.6-to-v1.7-poi-narration.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.7-to-v1.8-robot-map-assignment.sql" Link="Schema\upgrade-v1.7-to-v1.8-robot-map-assignment.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.8-to-v1.9-tour-route-revision.sql" Link="Schema\upgrade-v1.8-to-v1.9-tour-route-revision.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.9-to-v1.10-tour-scheduling.sql" Link="Schema\upgrade-v1.9-to-v1.10-tour-scheduling.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-route-revision-permissions.sql" Link="Schema\route-revision-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\upgrade-v1.1-to-v1.2-map-poi.sql" Link="Schema\upgrade-v1.1-to-v1.2-map-poi.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\patches\add-poi-rowversion-v1.1.sql" Link="Schema\add-poi-rowversion-v1.1.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-map-poi-permissions.sql" Link="Schema\map-poi-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\fixtures\representative-registration-demo.sql" Link="Schema\representative-demo.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.0.sql" Link="Schema\snapshot-v1.0.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-permissions.sql" Link="Schema\permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-runtime-permissions.sql" Link="Schema\runtime-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-bootstrap-check.sql" Link="Schema\bootstrap-check.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\fleet-credential-provisioning-permissions.sql" Link="Schema\fleet-credential-provisioning-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-request.json" Link="ContractFixtures\fleet-sync\v1\sync-request.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-response-accepted.json" Link="ContractFixtures\fleet-sync\v1\sync-response-accepted.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

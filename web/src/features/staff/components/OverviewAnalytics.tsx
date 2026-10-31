@@ -19,20 +19,20 @@ export function RunningFunnel({ tours, robots, now }: { tours: TourOperation[]; 
   const assist = running?.operationalStatus === 'NeedsAssistance'
   return (
     <section className={CARD} aria-labelledby="ov-run">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-5 py-3.5">
-        <h2 id="ov-run" className="text-sm font-semibold tracking-[-0.01em] text-[#1f2937]">Buổi đang chạy{running ? ` · ${running.code}` : ''}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-3.5 py-2.5">
+        <h2 id="ov-run" className="text-[13px] font-semibold text-[#1f2937]">Buổi đang chạy{running ? ` · ${running.code}` : ''}</h2>
         {running && <Link to={`/staff/live/${running.id}`} className="text-xs font-semibold text-[#2d719e] hover:underline">Mở điều hành ›</Link>}
       </div>
       {!running ? (
-        <p className="px-5 py-10 text-center text-sm text-[#6b7280]">Hiện không có buổi nào đang chạy.</p>
+        <p className="px-3.5 py-8 text-center text-sm text-[#6b7280]">Hiện không có buổi nào đang chạy.</p>
       ) : (
         <>
-          <ol className="grid gap-4 px-5 py-5">
+          <ol className="grid gap-3 px-3.5 py-3.5">
             <Meter label="POI đã qua" detail={`${progress?.done ?? 0} / ${progress?.total ?? 0}`} value={progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0} color={DONE} />
             {elapsed != null && <Meter label="Thời gian đã chạy" detail={`${minutes} phút · dự kiến xong lúc ${new Date(ends).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`} value={elapsed} color={NAVY} />}
             {robot?.batteryPercent != null && <Meter label={`Pin ${robot.name}`} detail={`${robot.batteryPercent}%`} value={robot.batteryPercent} color={robot.batteryPercent < 30 ? '#b42318' : REST} />}
           </ol>
-          <p className="flex flex-wrap gap-1.5 px-5 pb-5">
+          <p className="flex flex-wrap gap-1.5 px-3.5 pb-3.5">
             {assist && <span className="rounded-md bg-[#fef2f2] px-2 py-0.5 text-[11.5px] font-semibold text-[#b42318]">Cần hỗ trợ{running.reason ? ` · ${(REASON_SHORT[running.reason] ?? running.reason).toLowerCase()}` : ''}</span>}
             {progress?.current && <span className="rounded-md bg-[#f3f4f6] px-2 py-0.5 text-[11.5px] font-semibold text-[#4b5563]">Đang tới {progress.current.name}</span>}
             <span className="rounded-md bg-[#f3f4f6] px-2 py-0.5 text-[11.5px] font-semibold text-[#4b5563]">{groupSummary(running).groups} đoàn · {groupSummary(running).students} HS</span>
@@ -69,14 +69,14 @@ export function StudentsByTour({ tours }: { tours: TourOperation[] }) {
   const total = rows.reduce((s, row) => s + row.students, 0)
   return (
     <section className={CARD} aria-labelledby="ov-students">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-5 py-3.5">
-        <h2 id="ov-students" className="text-sm font-semibold tracking-[-0.01em] text-[#1f2937]">Học sinh theo buổi hôm nay</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f2f4] px-3.5 py-2.5">
+        <h2 id="ov-students" className="text-[13px] font-semibold text-[#1f2937]">Học sinh theo buổi hôm nay</h2>
         <span className="text-xs text-[#6b7280] tabular-nums">{total} học sinh · {rows.length} buổi</span>
       </div>
       {rows.length === 0 ? (
-        <p className="px-5 py-10 text-center text-sm text-[#6b7280]">Chưa có dữ liệu buổi hôm nay.</p>
+        <p className="px-3.5 py-8 text-center text-sm text-[#6b7280]">Chưa có dữ liệu buổi hôm nay.</p>
       ) : (
-        <ul className="grid gap-2.5 px-5 py-5" role="img" aria-label={rows.map((row) => `${row.code}: ${row.students} học sinh`).join(', ')}>
+        <ul className="grid gap-2 px-3.5 py-3.5" role="img" aria-label={rows.map((row) => `${row.code}: ${row.students} học sinh`).join(', ')}>
           {rows.map((row) => (
             <li key={row.id} className="grid grid-cols-[minmax(0,150px)_minmax(0,1fr)_40px] items-center gap-3 text-[13px]">
               <span className="truncate"><Link to={`/staff/tours/${row.id}`} className="font-semibold text-[#1f2937] hover:text-[#2d719e]">{row.code}</Link> · {row.time} <span className={row.status === 'đang chạy' ? 'font-semibold text-[#2563eb]' : 'text-[#6b7280]'}>{row.status}</span></span>

@@ -75,7 +75,7 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const content = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className={`truncate text-[14px] ${current ? 'font-extrabold text-[#1f314d]' : done ? 'font-semibold text-[#40546f]' : 'font-semibold text-[#71819a]'} ${skipped ? 'line-through decoration-[#b9c6d8]' : ''}`}>{stop.name}</span>
+        <span className={`truncate text-[14px] ${current ? 'font-bold text-[#1f314d]' : done ? 'font-semibold text-[#40546f]' : 'font-semibold text-[#71819a]'} ${skipped ? 'line-through decoration-[#b9c6d8]' : ''}`}>{stop.name}</span>
         {current && step && <span className="shrink-0 rounded-full bg-[#eaf4ff] px-2 py-0.5 text-[10px] font-bold text-[#2f62b8]">{stepLabel(step)}</span>}
       </span>
       {!compact && (

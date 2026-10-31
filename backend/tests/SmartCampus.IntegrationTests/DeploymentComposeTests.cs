@@ -46,11 +46,14 @@ public sealed class DeploymentComposeTests
         var services = config.RootElement.GetProperty("services");
         var api = services.GetProperty("api");
         var sql = services.GetProperty("sqlserver");
-        var init = services.GetProperty("db-init");
         var seed = services.GetProperty("seed-admin");
         var apiEnvironment = api.GetProperty("environment");
         var connection = apiEnvironment.GetProperty("ConnectionStrings__DefaultConnection").GetString()!;
 
+        Assert.Equal("campustour-backend:config-test", api.GetProperty("image").GetString());
+        Assert.False(api.TryGetProperty("build", out _));
+        Assert.False(services.TryGetProperty("db-init", out _));
+        Assert.False(api.TryGetProperty("depends_on", out var apiDependencies) && apiDependencies.TryGetProperty("db-init", out _));
         Assert.Contains("User ID=smartcampus_api", connection);
         Assert.Contains(fixture.AppPassword, connection);
         Assert.DoesNotContain(fixture.SaPassword, api.GetRawText());
@@ -58,16 +61,47 @@ public sealed class DeploymentComposeTests
         Assert.False(apiEnvironment.TryGetProperty("MSSQL_SA_PASSWORD", out _));
         Assert.Equal("Production", apiEnvironment.GetProperty("ASPNETCORE_ENVIRONMENT").GetString());
         Assert.True(api.GetProperty("read_only").GetBoolean());
+        Assert.Equal("536870912", api.GetProperty("mem_limit").GetString());
+        Assert.Equal(0.75, api.GetProperty("cpus").GetDouble());
         Assert.Single(api.GetProperty("ports").EnumerateArray());
         Assert.False(sql.TryGetProperty("ports", out _));
-        Assert.Equal("service_completed_successfully",
-            api.GetProperty("depends_on").GetProperty("db-init").GetProperty("condition").GetString());
+        Assert.Equal("2684354560", sql.GetProperty("mem_limit").GetString());
+        Assert.Equal(1.25, sql.GetProperty("cpus").GetDouble());
+        Assert.Equal("2048", sql.GetProperty("environment").GetProperty("MSSQL_MEMORY_LIMIT_MB").GetString());
         Assert.Equal("service_healthy",
-            init.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
+            api.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
+        Assert.Equal("service_healthy",
+            seed.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
         Assert.Equal("InternalTestAdminPassword123!",
             seed.GetProperty("environment").GetProperty("InitialAdminSeed__Password").GetString());
         Assert.False(seed.TryGetProperty("ports", out _));
+        Assert.False(seed.TryGetProperty("volumes", out _));
+        Assert.False(seed.TryGetProperty("env_file", out _));
+        Assert.DoesNotContain("TLS", seed.GetRawText());
+        Assert.DoesNotContain("Resend__ApiKey", seed.GetRawText());
         Assert.True(config.RootElement.GetProperty("networks").GetProperty("database").GetProperty("internal").GetBoolean());
+        var healthcheck = api.GetProperty("healthcheck").GetProperty("test").EnumerateArray()
+            .Select(value => value.GetString()).ToArray();
+        Assert.Contains(healthcheck, value => value?.Contains("/health/ready", StringComparison.Ordinal) == true);
+
+        var toolResult = await fixture.ResolveAsync(includeDbInit: true);
+        Assert.True(toolResult.ExitCode == 0, toolResult.Error);
+        using var toolConfig = JsonDocument.Parse(toolResult.Output);
+        var init = toolConfig.RootElement.GetProperty("services").GetProperty("db-init");
+        Assert.Equal("campustour-db-init:config-test", init.GetProperty("image").GetString());
+        Assert.False(init.TryGetProperty("build", out _));
+        Assert.False(init.TryGetProperty("volumes", out _));
+        Assert.True(init.GetProperty("read_only").GetBoolean());
+        Assert.Equal("201326592", init.GetProperty("mem_limit").GetString());
+        Assert.Equal(0.25, init.GetProperty("cpus").GetDouble());
+        Assert.Equal("service_healthy",
+            init.GetProperty("depends_on").GetProperty("sqlserver").GetProperty("condition").GetString());
+
+        var backupMount = sql.GetProperty("volumes").EnumerateArray()
+            .Single(volume => volume.GetProperty("target").GetString() == "/var/opt/mssql/backup");
+        Assert.Equal(
+            NormalizePath(Path.Combine(fixture.Directory, "backups")),
+            NormalizePath(backupMount.GetProperty("source").GetString()!));
     }
 
     [DockerComposeFact]
@@ -79,24 +113,36 @@ public sealed class DeploymentComposeTests
         Assert.Contains("SQL_APP_PASSWORD", result.Error);
     }
 
+    [DockerComposeFact]
+    public async Task MissingReleaseImages_FailsBeforeStartingAnyContainer()
+    {
+        using var fixture = new ComposeFixture();
+        var result = await fixture.ResolveAsync(missingReleaseImages: true);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("BACKEND_IMAGE", result.Error);
+    }
+
     private sealed class ComposeFixture : IDisposable
     {
         private readonly string directory = Path.Combine(Path.GetTempPath(), "campustour-compose-" + Guid.NewGuid().ToString("N"));
         private readonly string backend;
+        public string Directory => directory;
         public string SaPassword { get; } = "Aa1!SAconfigurationtest12345678901234567890";
         public string AppPassword { get; } = "Aa1!APPconfigurationtest123456789012345678";
 
         public ComposeFixture()
         {
             backend = FindBackend();
-            Directory.CreateDirectory(directory);
+            System.IO.Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory, "test.env"), "");
             File.WriteAllText(Path.Combine(directory, "api.env"), "Invitations__Enabled=false\nInvitations__EmailWorkerEnabled=false\n");
             File.WriteAllText(Path.Combine(directory, "cert.pem"), "configuration-only test certificate");
             File.WriteAllText(Path.Combine(directory, "key.pem"), "configuration-only test key");
+            System.IO.Directory.CreateDirectory(Path.Combine(directory, "backups"));
         }
 
-        public async Task<(int ExitCode, string Output, string Error)> ResolveAsync(bool missingAppPassword = false)
+        public async Task<(int ExitCode, string Output, string Error)> ResolveAsync(
+            bool missingAppPassword = false, bool missingReleaseImages = false, bool includeDbInit = false)
         {
             var start = new ProcessStartInfo("docker")
             {
@@ -106,15 +152,30 @@ public sealed class DeploymentComposeTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
-            foreach (var argument in new[] { "compose", "--env-file", Path.Combine(directory, "test.env"),
-                         "-f", Path.Combine(backend, "docker-compose.yml"), "--profile", "tools", "config", "--format", "json" })
+            var arguments = new List<string> { "compose", "--env-file", Path.Combine(directory, "test.env"),
+                "-f", Path.Combine(backend, "docker-compose.yml") };
+            if (includeDbInit)
+            {
+                arguments.AddRange(["-f", Path.Combine(backend, "docker-compose.db-init.yml"), "--profile", "db-bootstrap"]);
+            }
+            else
+            {
+                arguments.AddRange(["--profile", "tools"]);
+            }
+            arguments.AddRange(["config", "--format", "json"]);
+            foreach (var argument in arguments)
                 start.ArgumentList.Add(argument);
             var environment = new Dictionary<string, string>
             {
                 ["COMPOSE_PROJECT_NAME"] = "campustour-config-test",
-                ["BACKEND_IMAGE"] = "campustour-backend:config-test",
+                ["COMPOSE_OWNER"] = "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                ["BACKEND_IMAGE"] = missingReleaseImages ? "" : "campustour-backend:config-test",
+                ["DB_INIT_IMAGE"] = "campustour-db-init:config-test",
                 ["SQLSERVER_IMAGE"] = "mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04",
                 ["MSSQL_PID"] = "Express",
+                ["MSSQL_MEMORY_LIMIT_MB"] = "2048",
+                ["SQLSERVER_MEMORY_LIMIT"] = "2560m",
+                ["API_MEMORY_LIMIT"] = "512m",
                 ["SQL_SA_PASSWORD"] = SaPassword,
                 ["SQL_APP_PASSWORD"] = missingAppPassword ? "" : AppPassword,
                 ["JWT_SIGNING_KEY"] = "internal-configuration-test-key-32-bytes",
@@ -125,6 +186,7 @@ public sealed class DeploymentComposeTests
                 ["API_ENV_FILE"] = Path.Combine(directory, "api.env"),
                 ["TLS_CERT_PATH"] = Path.Combine(directory, "cert.pem"),
                 ["TLS_KEY_PATH"] = Path.Combine(directory, "key.pem"),
+                ["SQL_BACKUP_DIR"] = Path.Combine(directory, "backups"),
                 ["INITIAL_ADMIN_USERNAME"] = "deployment.admin",
                 ["INITIAL_ADMIN_PASSWORD"] = "InternalTestAdminPassword123!",
                 ["INITIAL_ADMIN_FULL_NAME"] = "Deployment Test Admin"
@@ -144,7 +206,8 @@ public sealed class DeploymentComposeTests
         {
             foreach (var name in new[] { "test.env", "api.env", "cert.pem", "key.pem" })
                 File.Delete(Path.Combine(directory, name));
-            Directory.Delete(directory);
+            System.IO.Directory.Delete(Path.Combine(directory, "backups"));
+            System.IO.Directory.Delete(directory);
         }
 
         private static string FindBackend()
@@ -155,4 +218,8 @@ public sealed class DeploymentComposeTests
             throw new DirectoryNotFoundException("Cannot find backend/SmartCampus.slnx.");
         }
     }
+
+    private static string NormalizePath(string path) => Path.GetFullPath(path)
+        .Replace('\\', '/')
+        .TrimEnd('/');
 }

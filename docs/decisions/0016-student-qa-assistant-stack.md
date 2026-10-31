@@ -1,10 +1,19 @@
 # ADR-0016: Student Q&A assistant stack and backend-mediated access
 
+> Scoped succession, 2026-10-27: [ADR-0020](0020-srs-v02-business-baseline-and-technical-staff.md). Viewer runtime provider/general-answer generation is superseded as target by approved-bank answers only; provider assists Staff drafting. Backend privacy/robot-control boundaries remain. Per-session limits are not the target global 8/20 queue. No new advisor approval is recorded.
+
+
 - Date: 2026-10-13.
 - Status: accepted by team for implementation planning; not implemented.
 - Business baseline: ADR-0009/0010/0011, scope P0-07 and P1-01; advisor
   approval is not implied.
 - Contract: `docs/architecture.md` §7.1.
+
+Implementation update, 2026-10-19: the backend-mediated text Q&A slice and invited
+Student integration now exist under the §7.1 contract, including SQL-backed
+access checks and offline/fake-service tests. The original planning status above
+is historical; it does not claim live provider quality, voice integration,
+production readiness or advisor approval. STT/TTS remain separate work.
 
 ## Context
 
@@ -79,3 +88,25 @@ implementation could not install packages from PyPI, while these choices let
 the full test suite run there. Requests and responses still use pydantic and
 the §7.1 contract is unchanged. Switching to FastAPI later only affects
 `src/campus_assistant/api.py`.
+
+## Addendum: OpenAI-compatible gateway adapter (2026-10-19)
+
+The team's available key is for a third-party gateway that serves Gemini
+models through the OpenAI chat-completions format, not a Google AI Studio key.
+`AI_PROVIDER=openai_compat` adds a second adapter
+(`providers/openai_compat.py`, configured by `OPENAI_BASE_URL`,
+`OPENAI_API_KEY`, `OPENAI_MODEL`) behind the same provider interface. Still
+one provider per deployment and no fallback; the `/v1/answer` contract is
+unchanged and `gemini` stays the default.
+
+Consequences: student questions and approved content pass through the gateway
+operator as well as the model provider, so the data and terms concerns above
+apply to that operator too. Gateway availability is outside the team's
+control; a Google AI Studio key is the fallback, switched by configuration
+only. The adapter does not request structured output; it relies on the system
+prompt and strips a Markdown fence, so a live evaluation run is needed before
+relying on it. First live run (2026-10-19, `ag/gemini-3.8-flash-low`, same
+content version and question set as the recorded Gemini baseline): 64/64
+gradable questions passed (baseline 63/64), no regressions. Grading is by
+keywords; reports stay untracked and `evals/recorded/latest.json` remains the
+Gemini baseline.

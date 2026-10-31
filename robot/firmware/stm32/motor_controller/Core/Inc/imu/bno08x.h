@@ -102,6 +102,16 @@ uint32_t BNO08x_GetBusRecoverCount(void);
 /* 0 = DWT CYCCNT khong chay, bb_delay dang dung duong du phong (bus se cham hon). */
 uint8_t BNO08x_IsDwtOk(void);
 
+/* Goi moi vong App_Loop() sau ReadRotationVector(). Neu chip im lang qua
+ * BNO08X_REARM_STALE_MS, gui lai Set Feature (toi da 1 lan moi
+ * BNO08X_REARM_MIN_INTERVAL_MS). Khong reset chip, khong cho doi. */
+void BNO08x_Service(void);
+/* So lan BNO08x_Service() da gui lai Set Feature tu luc boot. */
+uint32_t BNO08x_GetRearmCount(void);
+/* So goi SH-2 "reset complete" doc duoc trong luc polling (gom ca goi sau
+ * cap nguon neu no den sau BNO08x_Init, va sau self-test cua DIAG). */
+uint32_t BNO08x_GetResetSeenCount(void);
+
 /* Tare mem (chi anh huong yaw, khong ghi flash cua BNO08x).
  * SetYawDeg(0) = "huong dang quay mat vao la 0 do". */
 void BNO08x_SetYawDeg(float yaw_deg);

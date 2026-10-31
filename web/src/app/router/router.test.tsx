@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { routes } from './index'
@@ -54,7 +54,7 @@ describe('route table', () => {
 
   // Compile both dashboards before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
-    await import('../../routes/admin/AdminDashboardPage')
+    await import('../../routes/staff/manage/StaffManageDashboardPage')
     await import('../../routes/staff/OverviewPage')
   }, 30_000)
 
@@ -62,7 +62,7 @@ describe('route table', () => {
 
 
   // Compile the dashboard's chart chunk before timing session/guard behavior.
-  beforeAll(async () => { await import('../../routes/admin/AdminDashboardPage') }, 30_000)
+  beforeAll(async () => { await import('../../routes/staff/manage/StaffManageDashboardPage') }, 30_000)
 
 
   beforeEach(() => useAuthStore.getState().setAuthReady())
@@ -91,10 +91,9 @@ describe('route table', () => {
     vi.stubGlobal('fetch', fetchMock)
     const router = renderWithBootstrapAt('/admin')
 
-    await settled(router, '/admin')
+    await settled(router, '/admin/accounts')
 
-    expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: /Một nơi để chuẩn bị mọi buổi tham quan/i, level: 1 })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Quản lý tài khoản/i, level: 1 })).toBeInTheDocument()
 
     expect(useAuthStore.getState().user?.role).toBe('Admin')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/refresh'), {
@@ -125,6 +124,12 @@ describe('route table', () => {
   })
 
   describe('guards', () => {
+    it('loads physical robot registration inside the Technical Staff protected area', async () => {
+      signIn('TechnicalStaff')
+      renderAt('/technical/robots')
+      expect(await screen.findByRole('heading', { name: 'Robot vật lý', level: 1 })).toBeInTheDocument()
+    })
+
     it('sends a signed-out visitor from /staff to sign in', async () => {
       const router = renderAt('/staff')
       await settled(router, '/login')
@@ -133,6 +138,26 @@ describe('route table', () => {
     it('sends a signed-out visitor from /admin to sign in', async () => {
       const router = renderAt('/admin')
       await settled(router, '/login')
+    })
+
+    it('sends Technical Staff to /technical and keeps Staff out of it', async () => {
+      signIn('TechnicalStaff')
+      const router = renderAt('/technical')
+      await settled(router, '/technical/maps')
+      expect(await screen.findByRole('heading', { name: 'Quản lý bản đồ', level: 1 })).toBeInTheDocument()
+    })
+
+    it('keeps Staff out of the technical area', async () => {
+      signIn('Staff')
+      const router = renderAt('/technical/confirmations')
+      await settled(router, '/staff')
+    })
+
+    // SRS LI-09–14: viewers have no accounts, so the old visitor app is gone.
+    it('no longer serves the removed /visit area', async () => {
+      signIn('Staff')
+      const router = renderAt('/visit/book')
+      await settled(router, '/')
     })
 
     it('sends an operator who types /admin back to their own console', async () => {
@@ -147,6 +172,12 @@ describe('route table', () => {
       await settled(router, '/staff')
     })
 
+    it.each(['/staff/manage/routes', '/staff/manage/tours', '/staff/manage/registrations'])('keeps Tour preparation away from a representative at %s', async path => {
+      signIn('Representative')
+      const router = renderAt(path)
+      await settled(router, '/dai-dien')
+    })
+
     it('lets an operator into /staff', async () => {
       signIn('Staff')
       const router = renderAt('/staff')
@@ -154,11 +185,10 @@ describe('route table', () => {
       expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
     })
 
-    it('lets an administrator into /staff as well', async () => {
+    it('keeps Admin out of the Staff workspace', async () => {
       signIn('Admin')
       const router = renderAt('/staff')
-      await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
+      await settled(router, '/admin/accounts')
     })
 
     it('still accepts a token minted before the operations roles were merged', async () => {
@@ -169,11 +199,10 @@ describe('route table', () => {
   })
 
   describe('administration', () => {
-    it('renders the administration overview at /admin, not the operations console', async () => {
+    it('opens /admin on Accounts, not the operations console', async () => {
       signIn('Admin')
       const router = renderAt('/admin')
-      await settled(router, '/admin')
-      expect(await screen.findByRole('heading', { name: /^Tổng quan$/i, level: 1 })).toBeInTheDocument()
+      await settled(router, '/admin/accounts')
       expect(screen.queryByRole('heading', { name: /Tổng quan vận hành/i })).toBeNull()
     })
 
@@ -183,47 +212,87 @@ describe('route table', () => {
       await settled(router, '/admin/roles')
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
     })
+
+    it('shows credential audit to Admin and redirects other roles away', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+        success: true,
+        data: { items: [], page: 1, pageSize: 50, totalItems: 0 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      signIn('Admin')
+      const adminRouter = renderAt('/admin/robot-credentials')
+      await settled(adminRouter, '/admin/robot-credentials')
+      expect(await screen.findByRole('heading', { name: 'Lịch sử khóa robot' })).toBeInTheDocument()
+
+      cleanup()
+      signIn('Staff')
+      const staffRouter = renderAt('/admin/robot-credentials')
+      await settled(staffRouter, '/staff')
+    })
   })
 
-  describe('tour administration', () => {
+  describe('tour preparation (Staff)', () => {
     beforeAll(async () => {
       // Cold Windows transforms can exceed the UI query timeout before React renders.
-      await import('../../routes/admin/AdminRegistrationsPage')
+      await import('../../routes/staff/manage/StaffManageRegistrationsPage')
     }, 30_000)
 
     it.each([
-      ['/admin/tours', /Quản lý Tour/],
-      ['/admin/tours/new', /Tạo Tour mới/],
-      ['/admin/registrations/pending', /Đăng ký chờ duyệt/],
-      ['/admin/registrations', /Tất cả đăng ký/],
-      ['/admin/routes', /Danh mục tuyến/],
-      ['/admin/history', /Lịch sử Tour/],
-    ])('serves %s as a real admin page', async (path, heading) => {
-      signIn('Admin')
+      ['/staff/manage/tours', /Quản lý Tour/],
+      ['/staff/manage/tours/new', /Tạo Tour mới/],
+      ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
+      ['/staff/manage/registrations', /Tất cả đăng ký/],
+      ['/staff/manage/routes', /Danh mục tuyến/],
+      ['/staff/manage', /Tổng quan chuẩn bị/],
+    ])('serves %s to Staff', async (path, heading) => {
+      signIn('Staff')
+      if (path === '/staff/manage/routes') {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+          success: true, data: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      }
       const router = renderAt(path)
       await settled(router, path)
       expect(await screen.findByRole('heading', { name: heading, level: 1 }, { timeout: 10_000 })).toBeInTheDocument()
     })
 
-    it('opens a Tour at /admin/tours/:id instead of redirecting it to operations', async () => {
-      signIn('Admin')
-      const router = renderAt('/admin/tours/tour-03')
-      await settled(router, '/admin/tours/tour-03')
-
-
-      // AdminTourDetailPage renders the tour name in h2 and its code in h1.
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
-
-
-
-      expect(await screen.findByRole('heading', { name: /Tour T-03/i, level: 1 })).toBeInTheDocument()
-      expect(await screen.findByRole('heading', { name: /Buổi chiều/i, level: 2 })).toBeInTheDocument()
+    it('opens a Tour at /staff/manage/tours/:id instead of redirecting it to operations', async () => {
+      signIn('Staff')
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: false }), { status: 404 })))
+      const router = renderAt('/staff/manage/tours/tour-03')
+      await settled(router, '/staff/manage/tours/tour-03')
+      // The live detail page asks the Tour API; an unknown id stays on the admin page.
+      expect(await screen.findByText(/Không tìm thấy Tour/)).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/staff/manage/tours/tour-03')
     })
 
     it('keeps a mistyped admin path inside administration', async () => {
       signIn('Admin')
       const router = renderAt('/admin/khong-co')
-      await settled(router, '/admin')
+      await settled(router, '/admin/accounts')
+    })
+  })
+
+  describe('Tour preparation URLs moved from /admin', () => {
+    it.each([
+      ['/admin/tours', '/staff/manage/tours'],
+      ['/admin/tours/new', '/staff/manage/tours/new'],
+      ['/admin/tours/tour-03/edit', '/staff/manage/tours/tour-03/edit'],
+      ['/admin/registrations/pending', '/staff/manage/registrations/pending'],
+      ['/admin/routes/sql-id', '/staff/manage/routes/sql-id'],
+      ['/admin/pois/new', '/staff/manage/pois/new'],
+      ['/admin/history', '/staff/history'],
+    ])('redirects %s to %s', async (from, to) => {
+      signIn('Staff')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
+      const router = renderAt(from)
+      await settled(router, to)
+    })
+
+    it('keeps the query string', async () => {
+      signIn('Staff')
+      const router = renderAt('/admin/registrations?review=abc')
+      await settled(router, '/staff/manage/registrations')
+      expect(router.state.location.search).toBe('?review=abc')
     })
   })
 
@@ -238,7 +307,7 @@ describe('route table', () => {
       ['/staff/alerts', '/staff'],
       ['/staff/reports', '/staff/history'],
     ])('redirects %s to %s', async (from, to) => {
-      signIn('Admin')
+      signIn('Staff')
       const router = renderAt(from)
       await settled(router, to)
     })

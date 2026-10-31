@@ -84,6 +84,9 @@ tránh nhiễu đầu vào hở (không bắt buộc).
 | PA11/PA12 | USB CDC |
 | PA13/PA14 | SWD debug |
 | PB6/PB7 | IMU BNO085 (I2C bit-bang) |
+| PA8/PA15/PB2 | Đầu quay PAN: STEP/DIR/nEN, **không** qua 74HCT245 (DRV8825) |
+| PA9/PA7/PB10 | Đầu quay TILT: STEP/DIR/nEN, **không** qua 74HCT245 (DRV8825) |
+| PA10 | Cổng MOSFET contactor (trước 23/10/2026 là PB10) |
 | (PC4/PF0) | Trống — dành cho CAN/cảm biến sau này |
 
 Xem thêm `docs/PIN_MAP.md` cho pin-map tổng thể.

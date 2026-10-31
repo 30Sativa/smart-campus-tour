@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CampusTour · Bản mẫu hành trình tour từ xa</title>
+  <style>
+    :root{font-family:"Segoe UI",Arial,sans-serif;color:#102d31;background:#f5f8f5}
+    *{box-sizing:border-box}body{margin:0}button{font:inherit}
+    .preview{max-width:1680px;margin:auto;padding:30px 5vw 70px}
+    .preview-note{display:flex;align-items:center;justify-content:space-between;color:#55706c;font-size:12px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;margin-bottom:30px}
+    .preview-note span:last-child{font-weight:500;letter-spacing:0;text-transform:none}
+    .head{display:flex;align-items:end;justify-content:space-between;gap:30px;padding-bottom:35px;border-bottom:1px solid #d6e0d9}
+    .eyebrow{font-size:13px;font-weight:800;letter-spacing:.14em;color:#377261;text-transform:uppercase}
+    h1{font-size:clamp(38px,4vw,62px);line-height:1.08;letter-spacing:-.055em;margin:14px 0 0;max-width:830px}
+    .head p{font-size:17px;line-height:1.55;color:#536c6c;max-width:420px;margin:0 0 6px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(365px,.72fr);gap:38px;align-items:stretch;margin-top:38px}
+    .scene{background:#0b292d;color:#eaf5e8;border-radius:22px;padding:30px;min-height:568px;position:relative;overflow:hidden;box-shadow:0 26px 60px -35px #113b32}
+    .scene:before{content:"";position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,#214b45 0,transparent 64%);right:-180px;top:-200px;opacity:.7;pointer-events:none}
+    .scene-top{display:flex;justify-content:space-between;gap:20px;position:relative;z-index:1;align-items:center}
+    .scene-title{font-size:18px;font-weight:750;letter-spacing:-.03em}.scene-sub{font-size:12px;color:#9ebbb5;margin-top:6px}
+    .badge{border:1px solid #577a70;border-radius:100px;padding:8px 12px;font-size:11px;font-weight:800;letter-spacing:.08em;white-space:nowrap}.badge b{display:inline-block;width:7px;height:7px;background:#d6f18d;border-radius:50%;margin-right:7px}
+    .flow{position:relative;display:grid;grid-template-columns:1fr 1fr 1.22fr;gap:14px;margin-top:52px;z-index:1;align-items:stretch}
+    .flow:before{content:"";position:absolute;top:46px;left:8%;right:8%;height:2px;background:linear-gradient(90deg,#9cc96e,#bde68b);z-index:-1}
+    .card{background:#f7faf5;color:#17383a;border-radius:17px;min-height:290px;padding:18px;box-shadow:0 18px 30px -18px #0009;position:relative;display:flex;flex-direction:column}
+    .card-label{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:#3d7568}
+    .card-label em{font-style:normal;background:#d6f18d;color:#17383a;border-radius:6px;padding:5px 7px}
+    .card h2{font-size:19px;letter-spacing:-.04em;line-height:1.2;margin:19px 0 13px}
+    .sheet{border:1px solid #dbe7dc;border-radius:10px;background:#fff;overflow:hidden;font-size:11px;color:#506766}
+    .sheet div{padding:9px 10px;border-top:1px solid #e8eee8;display:flex;justify-content:space-between;gap:8px}.sheet div:first-child{border-top:0;background:#e7f1e9;font-weight:750;color:#315f52}.sheet strong{color:#367257}
+    .micro{margin:auto 0 0;padding-top:14px;font-size:11px;color:#618078;line-height:1.4}
+    .mail{border:1px solid #dbe7dc;border-radius:10px;background:#fff;padding:12px;font-size:11px}.mail b{display:block;font-size:12px;margin:8px 0;color:#17383a}.mail span{color:#69817c}.code{display:flex;justify-content:space-between;align-items:center;margin-top:12px;border:1px dashed #b5d4a4;border-radius:7px;background:#f4faea;padding:10px;color:#355d41;font-weight:800;letter-spacing:.08em}
+    .tour{padding:0;overflow:hidden}.tour-photo{height:145px;background:linear-gradient(0deg,#102d3199,#102d3100 60%),url('../public/images/student-poi/library.webp') center/cover;position:relative}.live{position:absolute;top:12px;left:12px;border-radius:20px;background:#d6f18d;color:#163637;font-size:10px;font-weight:850;padding:6px 9px}.tour-photo span:last-child{position:absolute;bottom:12px;left:12px;color:#fff;font-weight:800;font-size:13px}.tour-inner{padding:15px}.tour-inner h2{margin:0 0 8px}.tour-inner p{font-size:11px;color:#627b76;margin:0 0 14px}.route{height:43px;border-radius:7px;background:#e9f1e9;position:relative;display:flex;align-items:center;justify-content:space-around}.route:before{content:"";position:absolute;left:16%;right:16%;top:20px;border-top:3px solid #72ab75}.route i{width:12px;height:12px;background:#fff;border:3px solid #4e9665;border-radius:50%;z-index:1}.route i:nth-child(2){background:#d6f18d;width:17px;height:17px;border-color:#123d3e}
+    .arrow{position:absolute;top:34px;right:-22px;width:30px;height:30px;z-index:2;border-radius:50%;background:#d6f18d;color:#15383a;display:grid;place-items:center;font-size:19px;font-weight:900;box-shadow:0 0 0 5px #0b292d}
+    .bottom{display:flex;align-items:center;gap:15px;border-top:1px solid #38605d;margin-top:26px;padding-top:19px;position:relative;z-index:1;color:#c9ded8;font-size:12px;line-height:1.5}.bot-icon{height:39px;width:39px;border:1px solid #72998c;border-radius:10px;display:grid;place-items:center;font-size:21px;flex:none}.bottom strong{color:#eff8ec}.bottom small{margin-left:auto;color:#b8d27f;white-space:nowrap;font-size:11px}
+    .steps{list-style:none;margin:0;padding:0}.steps li{display:grid;grid-template-columns:62px 1fr;gap:15px;padding:22px 0;border-bottom:1px solid #d6e0d9}.steps li:first-child{padding-top:5px}.num{font-size:43px;letter-spacing:-.08em;font-weight:300;line-height:1;color:#88b88b}.steps h3{font-size:21px;letter-spacing:-.035em;line-height:1.25;margin:1px 0 9px}.steps p{font-size:14px;line-height:1.6;color:#597170;margin:0}.action{display:inline-flex;align-items:center;gap:15px;margin-top:32px;color:#245d58;font-weight:750;text-decoration:none;border-bottom:1px solid #78a868;padding-bottom:9px;font-size:14px}.action span{font-size:19px}
+    .caption{margin:16px 0 0;color:#6b8580;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+    @media(max-width:1100px){.layout{grid-template-columns:1fr}.scene{min-height:0}.head{display:block}.head p{margin-top:18px}}
+    @media(max-width:660px){.preview{padding:22px 18px 50px}.preview-note span:last-child{display:none}.scene{padding:20px}.flow{grid-template-columns:1fr;margin-top:25px}.flow:before,.arrow{display:none}.card{min-height:220px}.head{padding-bottom:24px}.layout{gap:28px;margin-top:26px}.scene-top{align-items:start}.badge{white-space:normal}.bottom{align-items:start}.bottom small{display:none}}
+  </style>
+</head>
+<body>
+  <main class="preview">
+    <div class="preview-note"><span>Bản mẫu đề xuất · Khu vực “Hành trình”</span><span>Minh họa nội dung, chưa áp dụng lên trang chủ</span></div>
+    <header class="head">
+      <div><div class="eyebrow">01 / Hành trình tham quan</div><h1>Từ lớp học đến campus,<br>qua góc nhìn của robot.</h1></div>
+      <p>Đăng ký đoàn, nhận quyền truy cập và cùng theo dõi một chuyến tham quan trực tiếp từ xa.</p>
+    </header>
+    <div class="layout">
+      <div>
+        <div class="scene" aria-label="Sơ đồ minh họa luồng đăng ký, nhận mã và xem tour từ robot">
+          <div class="scene-top"><div><div class="scene-title">Một tour · Một luồng trải nghiệm</div><div class="scene-sub">Đại diện đoàn → lời mời → người xem</div></div><span class="badge"><b></b>CAMPUS TOUR DT-AMR</span></div>
+          <div class="flow">
+            <article class="card"><div class="card-label"><em>01</em> Đại diện đoàn</div><h2>Gửi danh sách đăng ký</h2><div class="sheet"><div><span>Loại lời mời</span><span>Trạng thái</span></div><div><span>Học sinh xem riêng</span><strong>Hợp lệ</strong></div><div><span>Điểm xem chung</span><strong>Hợp lệ</strong></div></div><p class="micro">Admin duyệt đăng ký trước khi gửi lời mời.</p><span class="arrow">›</span></article>
+            <article class="card"><div class="card-label"><em>02</em> Lời mời</div><h2>Nhận link và mã riêng</h2><div class="mail"><span>CampusTour · Lời mời tham quan</span><b>Buổi Tour của đoàn bạn</b><span>Mở trang Tour và nhập mã truy cập đã nhận qua email.</span><div class="code"><span>MÃ TRUY CẬP</span><span>•••• ••••</span></div></div><p class="micro">Vào phòng chờ trước giờ bắt đầu.</p><span class="arrow">›</span></article>
+            <article class="card tour"><div class="tour-photo"><span class="live">● MINH HỌA LIVE</span><span>Thư viện · Góc nhìn từ robot</span></div><div class="tour-inner"><div class="card-label">03 / TOUR TRỰC TIẾP</div><h2>Quan sát theo từng điểm dừng</h2><p>Hình ảnh, thuyết minh và vị trí robot trên bản đồ 2D.</p><div class="route" aria-hidden="true"><i></i><i></i><i></i></div></div></article>
+          </div>
+          <div class="bottom"><span class="bot-icon" aria-hidden="true">⌁</span><span><strong>Robot AMR di chuyển theo tuyến đã chuẩn bị.</strong><br>Staff khởi chạy và theo dõi trạng thái trên Digital Twin 3D.</span><small>3 ĐIỂM DỪNG MINH HỌA</small></div>
+        </div>
+        <p class="caption">Sơ đồ giao diện minh họa · Không phải dữ liệu vận hành trực tiếp</p>
+      </div>
+      <div>
+        <ol class="steps">
+          <li><span class="num">01</span><div><h3>Đăng ký và được duyệt</h3><p>Đại diện gửi danh sách cấp lời mời. Admin duyệt đoàn và gửi email tham gia.</p></div></li>
+          <li><span class="num">02</span><div><h3>Nhập mã, vào phòng chờ</h3><p>Người xem mở trang Tour và nhập mã riêng. Có thể kiểm tra thiết bị trước giờ bắt đầu.</p></div></li>
+          <li><span class="num">03</span><div><h3>Theo dõi robot trực tiếp</h3><p>Staff bắt đầu buổi Tour; người xem nhận hình ảnh, thuyết minh và bản đồ 2D theo hành trình robot.</p></div></li>
+        </ol>
+        <div class="action">Bố cục đề xuất cho trang chủ <span>✓</span></div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

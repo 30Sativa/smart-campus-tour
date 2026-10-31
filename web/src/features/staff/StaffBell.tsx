@@ -57,7 +57,7 @@ export function StaffBell() {
             {items.length > 0 && <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-[11px] font-bold text-[#b23e31] tabular-nums">{items.length}</span>}
           </div>
           {items.length === 0 ? (
-            <p className="flex items-center gap-2.5 px-4 py-5 text-sm font-semibold text-[#16a34a]"><CheckCheck size={18} aria-hidden="true" />Hệ thống hoạt động bình thường, không có sự cố.</p>
+            <p className="flex items-center gap-2.5 px-4 py-4 text-sm font-semibold text-[#16a34a]"><CheckCheck size={18} aria-hidden="true" />Hệ thống hoạt động bình thường, không có sự cố.</p>
           ) : (
             <ul className="max-h-[min(440px,60vh)] divide-y divide-[#f3f4f6] overflow-y-auto">
               {items.map((item) => (

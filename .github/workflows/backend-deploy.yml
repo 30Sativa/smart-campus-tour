@@ -1,0 +1,145 @@
+name: Backend Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Successful main commit SHA from Backend Verify
+        required: true
+        type: string
+  workflow_run:
+    workflows: [Backend Verify]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  release-gate:
+    name: Confirm a verified backend release artifact exists
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      deploy: ${{ steps.artifact.outputs.deploy }}
+      release_sha: ${{ steps.artifact.outputs.release_sha }}
+    steps:
+      - name: Check release artifact for the selected successful main run
+        id: artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.release_sha }}
+          RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid release SHA.' >&2; exit 1; }
+          if [[ -z "$RUN_ID" ]]; then
+            RUN_ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/backend-verify.yml/runs?head_sha=$RELEASE_SHA&status=success&per_page=100" \
+              | jq -r --arg sha "$RELEASE_SHA" '[.workflow_runs[] | select(.event == "push" and .head_branch == "main" and .head_sha == $sha and .conclusion == "success")] | sort_by(.run_number) | last | .id // empty')
+          fi
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo 'No successful main Backend Verify run for this SHA.' >&2; exit 1; }
+          artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+            | jq -r --arg name "backend-release-$RELEASE_SHA" '[.artifacts[] | select(.name == $name and .expired == false)] | length')
+          if [[ "$artifact" =~ ^[1-9][0-9]*$ ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "No verified backend release artifact for $RELEASE_SHA; backend deployment is skipped." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy:
+    name: Deploy verified main backend release through SSH
+    # A successful push/main verify includes image publication. Never trust a
+    # pull-request or fork workflow_run with production environment credentials.
+    needs: release-gate
+    if: needs.release-gate.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 55
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_SHA: ${{ needs.release-gate.outputs.release_sha }}
+      OPS_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Skip superseded automatic releases
+        id: freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            latest_main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+            if [[ "$latest_main" != "$RELEASE_SHA" ]]; then
+              echo "Skipping superseded release $RELEASE_SHA; current main is $latest_main." | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned operations revision
+        if: steps.freshness.outputs.deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.OPS_SHA }}
+          persist-credentials: false
+
+      - name: Verify both revisions and prepare authenticated source bundle
+        if: steps.freshness.outputs.deploy == 'true'
+        run: bash backend/deploy/prepare-release.sh "$RELEASE_SHA" "$OPS_SHA" "$RUNNER_TEMP/backend-bundle"
+
+      - name: Deploy verified bundle over pinned SSH
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          DEPLOY_SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT }}
+          DEPLOY_SSH_USER: ${{ vars.DEPLOY_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export DEPLOY_SSH_KEY_FILE="$RUNNER_TEMP/deploy-key"
+          export DEPLOY_SSH_KNOWN_HOSTS_FILE="$RUNNER_TEMP/deploy-known-hosts"
+          trap 'rm -f -- "$DEPLOY_SSH_KEY_FILE" "$DEPLOY_SSH_KNOWN_HOSTS_FILE"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$DEPLOY_SSH_KEY_FILE"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$DEPLOY_SSH_KNOWN_HOSTS_FILE"
+          unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
+          bash backend/deploy/ssh-deploy.sh "$RUNNER_TEMP/backend-bundle" application
+
+      # The host already passed its loopback HTTPS probe; this one goes through public DNS,
+      # the security group and the real certificate. A failure here does not roll back.
+      - name: Check public HTTPS readiness
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL || 'https://api.fptcampustour.cloud/health/ready' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 10); do
+            if curl --silent --show-error --fail --max-time 10 "$BACKEND_HEALTH_URL" -o /dev/null; then
+              echo "PASS: $BACKEND_HEALTH_URL is ready for release $RELEASE_SHA."
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::Release $RELEASE_SHA passed on-host readiness but $BACKEND_HEALTH_URL is not ready from the internet (DNS, security group or certificate)."
+          exit 1

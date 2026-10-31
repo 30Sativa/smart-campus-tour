@@ -19,6 +19,19 @@ public sealed class StudentQuestionGate(TimeProvider clock)
     private readonly Dictionary<Guid, SessionState> sessions = new();
     private readonly Dictionary<(Guid SessionId, Guid QuestionId), Remembered> answers = new();
 
+    /// <summary>Atomically replays an answer or reserves the session; a completed cache miss cannot race a new call.</summary>
+    public StudentAnswer? Enter(Guid sessionId, Guid questionId, string text)
+    {
+        lock (sync)
+        {
+            var answer = Find(sessionId, questionId, text);
+            if (answer is not null) return answer;
+            if (!TryEnter(sessionId))
+                throw new TooManyRequestsException("Bạn hỏi hơi nhanh. Đợi một chút rồi hỏi tiếp nhé.");
+            return null;
+        }
+    }
+
     /// <summary>The earlier answer for this question, or null. Throws when the id is reused for other text.</summary>
     public StudentAnswer? Find(Guid sessionId, Guid questionId, string text)
     {

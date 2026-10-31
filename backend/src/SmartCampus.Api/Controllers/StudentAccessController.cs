@@ -24,15 +24,22 @@ public sealed class StudentAccessController(ISender sender, IConfiguration confi
     {
         StudentSessionCookie.EnsureAllowedOrigin(Request, configuration);
         var name = StudentSessionCookie.Name(tourId);
+        var deviceName = StudentSessionCookie.DeviceName(tourId);
         var options = new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.None,
             Path = $"/api/student/tours/{tourId:D}", IsEssential = true };
         // Register before dispatch: exception middleware may clear existing headers.
         if (operation == "leave")
             Response.OnStarting(() => { Response.Cookies.Delete(name, options); return Task.CompletedTask; });
-        var result = await sender.Send(new AccessTourCommand(tourId, operation, code, Request.Cookies[name]), ct);
+        var result = await sender.Send(new AccessTourCommand(tourId, operation, code, Request.Cookies[name], Request.Cookies[deviceName]), ct);
         if (operation != "leave" && result.Token is not null) {
             options.Expires = result.Info!.InvitationExpiresAt;
             Response.Cookies.Append(name, result.Token, options);
+        }
+        if (operation != "leave" && result.DeviceToken is not null)
+        {
+            options.Expires = result.Info!.InvitationExpiresAt;
+            options.Path = $"/api/student/tours/{tourId:D}";
+            Response.Cookies.Append(deviceName, result.DeviceToken, options);
         }
         Response.Headers.CacheControl = "no-store";
         return Ok(new BaseResponse<StudentTourInfo?> { Success = true, Message = "OK", Data = result.Info });

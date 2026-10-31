@@ -1,0 +1,13 @@
+[Unit]
+Description=Reconcile a queued Smart Campus Tour TLS certificate renewal
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=CAMPUS_DEPLOY_ROOT=/opt/campustour
+Environment=CAMPUS_CONFIG_DIR=/etc/campustour
+ExecStart=/usr/local/sbin/campustour-refresh-certificate --reconcile
+TimeoutStartSec=10min

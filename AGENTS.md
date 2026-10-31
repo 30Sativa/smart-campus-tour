@@ -46,6 +46,14 @@ Rules that follow from this layout:
 
 ## Documentation authority
 
+The owner adopts Report 3 SRS v0.2 aligned to Phiếu v1.9 on 27/10/2026 through
+`docs/decisions/0020-srs-v02-business-baseline-and-technical-staff.md`.
+Read `docs/requirements/srs-v02-backend-gap-register.md` for source/status and
+staged implementation. Its scoped succession replaces old business ownership,
+all-Staff operation and aggregate roster-access targets; it does not claim the
+current APIs/schema implement them. HTTPS Fleet Sync remains telemetry-only.
+Do not implement F-14, branch cutoff, YAML/frame mapping or M2 transport while pending.
+
 Start at [`docs/README.md`](docs/README.md) for the document map and reading
 order. `docs/requirements/` describes target business behavior, with the status
 of each decision stated in the document; the detailed scope outranks its short
@@ -62,6 +70,12 @@ PENDING or requiring approval. If business scope, current implementation,
 schema, and a technical contract conflict, report the conflict and identify
 which document/status applies; do not silently treat a target as implemented
 or change a public contract to make the documents agree.
+
+The owner-authorized Route Management update is recorded in
+`docs/decisions/0017-admin-route-management.md`: Admin CRUD replaces the
+seed-only Route/dwell preparation portions of ADR-0009/0012. Physical
+commissioning remains technical work; pending Tour runtime/branch authoring
+is not implicitly authorized or implemented by that update.
 
 ---
 

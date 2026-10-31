@@ -21,7 +21,7 @@ Báo cáo này cập nhật kết luận review ban đầu sau khi nhóm chốt 
 
 ## Các lựa chọn đơn giản đã chốt
 
-- **Dwell cố định trong seed:** Admin xem dwell/chỉnh audio, không chỉnh dwell theo Tour. Kỹ thuật kiểm chứng lại nếu thay cấu hình, khóa dữ liệu đang được READY/RUNNING sử dụng. Không có bảng TourStopSettings.
+- **Dwell cố định theo RouteStop (cập nhật ADR-0017, 19/10/2026):** Admin CRUD chỉnh dwell khi tuyến chưa được tham chiếu, thay phần seed-only của ADR-0012. Không chỉnh riêng theo Tour, không có TourStopSettings. Kỹ thuật vẫn kiểm chứng thực tế; bất kỳ Tour/variant/history tham chiếu khóa cấu hình, READY/RUNNING còn khóa metadata/trạng thái. Schema không đổi.
 - **Mọi Staff vận hành mọi Tour:** tài khoản phải đang hoạt động và có role STAFF; vẫn kiểm tra state/readiness/giờ/robot claim. Không có OperatorUserId. RowVersion cần được sử dụng trong conditional write, không tự chống lệnh trùng.
 - **Không thêm FK kép:** seed validation và backend chịu trách nhiệm cùng Tour/route/branch point. Đây là phần còn phải test khi có use case, không phải DB đã bảo đảm.
 - **Không lặp TourId vào RosterRows:** mọi đường import/thay roster/duyệt/sửa email khóa Tour bằng UPDLOCK trước kiểm tra/ghi trong cùng transaction.

@@ -1,53 +1,33 @@
-import { CalendarPlus, ClipboardCheck, History, LayoutDashboard, ListChecks, ListTodo, MapPinned, Route, UsersRound } from 'lucide-react'
+import { KeyRound, Radio, ScrollText, ShieldAlert, UsersRound } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
-import { groupNavSections, type GroupedNavEntry } from '../../components/ui/grouped-nav'
+import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
- * Administration navigation: what Admin does before a Tour starts, and the
- * record afterwards (scope §2, §3, §11.1). Nothing here drives a robot: no
- * live operations, fleet, scenario editor, maintenance or analytics. Those
- * are either Staff's (`/staff/*`) or outside the V1 scope.
+ * Administration is accounts, roles, configuration and audit only (SRS v1.9 §3.2.c).
+ * Tour preparation (Tours, registrations, Routes, POIs) belongs to Staff and
+ * lives under `/staff/manage/*`.
+ *
+ * Laid out like the Staff and Technical sidebars: always-open sections under
+ * small headings. "Khu vực vận hành" is the way across to `/staff`, which an
+ * Admin account also holds.
  */
 export const ADMIN_NAV_SECTIONS: NavSection[] = [
-  { label: null, items: [{ label: 'Tổng quan', path: '/admin', icon: LayoutDashboard }] },
-  {
-    label: 'Quản lý Tour',
-    items: [
-      { label: 'Danh sách Tour', path: '/admin/tours', icon: ListChecks },
-      { label: 'Tạo Tour', path: '/admin/tours/new', icon: CalendarPlus },
-    ],
-  },
-  {
-    label: 'Đăng ký đoàn',
-    items: [
-      { label: 'Chờ duyệt', path: '/admin/registrations/pending', icon: ClipboardCheck },
-      { label: 'Tất cả đăng ký', path: '/admin/registrations', icon: ListTodo },
-    ],
-  },
-  { label: 'Tuyến', items: [{ label: 'Danh mục tuyến', path: '/admin/routes', icon: Route }] },
-  { label: 'Địa điểm', items: [{ label: 'Quản lý POI', path: '/admin/pois', icon: MapPinned }] },
-  { label: 'Quản lý tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
-  { label: 'Lịch sử', items: [{ label: 'Lịch sử Tour', path: '/admin/history', icon: History }] },
+  { label: 'Tài khoản', items: [{ label: 'Tài khoản', path: '/admin/accounts', icon: UsersRound }] },
+  { label: 'Phân quyền', items: [{ label: 'Vai trò & quyền', path: '/admin/roles', icon: KeyRound }] },
+  { label: 'Bảo mật robot', items: [{ label: 'Lịch sử khóa robot', path: '/admin/robot-credentials', icon: ShieldAlert }] },
+  { label: 'Giám sát', items: [{ label: 'Nhật ký hệ thống', path: '/admin/audit-logs', icon: ScrollText }] },
+  { label: 'Khu vực khác', items: [{ label: 'Khu vực vận hành', path: '/staff', icon: Radio }] },
 ]
 
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_SECTIONS.flatMap((section) => section.items)
 
-/** The same entries as the sidebar draws them: Quản lý Tour and Đăng ký đoàn fold; single pages are links. */
-export const ADMIN_NAV_ENTRIES: GroupedNavEntry[] = groupNavSections(ADMIN_NAV_SECTIONS, { 'Quản lý Tour': ListChecks, 'Đăng ký đoàn': ClipboardCheck })
+export const ADMIN_NAV_ENTRIES: GroupedNavEntry[] = sectionNav(ADMIN_NAV_SECTIONS)
 
-/**
- * The nav item a path belongs to. Exact match wins; otherwise the longest
- * prefix, except that a Tour page (`/admin/tours/:id…`) lights "Danh sách Tour",
- * not "Tạo Tour".
- */
 export function adminActivePath(pathname: string): string | null {
   const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
-  if (ADMIN_NAV.some((item) => item.path === path)) return path
-  if (path.startsWith('/admin/tours/')) return '/admin/tours'
-  if (path.startsWith('/admin/pois/')) return '/admin/pois'
   let best: string | null = null
   for (const item of ADMIN_NAV) {
-    if (item.path !== '/admin' && path.startsWith(`${item.path}/`) && (!best || item.path.length > best.length)) best = item.path
+    if ((path === item.path || path.startsWith(`${item.path}/`)) && (!best || item.path.length > best.length)) best = item.path
   }
   return best
 }

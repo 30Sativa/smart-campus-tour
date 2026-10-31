@@ -13,7 +13,8 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
          [os.path.join('resource', package_name)]),
-        (os.path.join('share', package_name), ['package.xml', 'README.md']),
+        (os.path.join('share', package_name),
+         ['package.xml', 'README.md', 'HEAD_CONTROL.md', 'LINUX_TEST.md']),
         (os.path.join('share', package_name, 'launch'),
          glob(os.path.join('launch', '*.launch.py'))),
     ],
@@ -27,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'stm32_bridge_node = stm32_bridge.stm32_bridge_node:main',
+            'head_teleop = stm32_bridge.head_teleop:main',
         ],
     },
 )

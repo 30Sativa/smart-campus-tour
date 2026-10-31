@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Toaster } from '../../../components/ui/Toaster'
 import { useAuthStore } from '../../../stores/auth-store'
 import AdminAccountsPage from '../../../routes/admin/AdminAccountsPage'
 import type { AccountListItem } from './types'
@@ -45,7 +47,7 @@ function stubApi(handler: FetchHandler) {
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}><AdminAccountsPage /></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><MemoryRouter><AdminAccountsPage /><Toaster /></MemoryRouter></QueryClientProvider>)
 }
 
 function requestExists(fetchMock: ReturnType<typeof stubApi>, predicate: (url: URL, init?: RequestInit) => boolean) {
@@ -94,7 +96,7 @@ describe('Admin Account Management', () => {
     }
   })
 
-  it.each(['Staff', 'Representative'] as const)('creates a %s account and invalidates the list', async (role) => {
+  it.each(['Staff', 'TechnicalStaff', 'Representative'] as const)('creates a %s account and invalidates the list', async (role) => {
     let listCalls = 0
     let createdPayload: unknown
     const fetchMock = stubApi((url, init) => {
@@ -112,13 +114,13 @@ describe('Admin Account Management', () => {
     fireEvent.change(within(dialog).getByLabelText('Tên đăng nhập'), { target: { value: 'new.staff' } })
     fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'New Staff' } })
     fireEvent.change(within(dialog).getByLabelText('Vai trò'), { target: { value: role } })
-    expect(within(dialog).getAllByRole('option').map((option) => option.textContent)).toEqual(['Chọn vai trò', 'Staff', 'Representative'])
+    expect(within(dialog).getAllByRole('option').map((option) => option.textContent)).toEqual(['Chọn vai trò', 'Staff', 'Technical Staff', 'Representative'])
     fireEvent.change(within(dialog).getByLabelText('Mật khẩu ban đầu'), { target: { value: 'one-time-secret' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo tài khoản' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes('/api/admin/accounts') && init?.method === 'POST')).toBe(true))
     expect(createdPayload).toEqual({ username: 'new.staff', fullName: 'New Staff', role, initialPassword: 'one-time-secret' })
-    expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo tài khoản.')
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã tạo tài khoản')
     expect(screen.queryByLabelText('Mật khẩu ban đầu')).toBeNull()
     await waitFor(() => expect(listCalls).toBeGreaterThan(1))
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true)

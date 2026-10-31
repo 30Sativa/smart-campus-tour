@@ -189,6 +189,20 @@ public sealed class StudentQuestionTests
         Assert.Null(gate.Find(SessionId, id, "q"));
     }
 
+    [Fact]
+    public void Gate_AtomicallyRechecksAnswerWhenReserving_AndValidatesNullTurns()
+    {
+        var h = new Harness();
+        var id = Guid.NewGuid();
+        Assert.Null(h.Gate.Enter(SessionId, id, "q"));
+        Assert.Throws<TooManyRequestsException>(() => h.Gate.Enter(SessionId, id, "q"));
+        var answer = new StudentAnswer(id, "a", false, null, h.Clock.GetUtcNow());
+        h.Gate.Remember(SessionId, id, "q", answer);
+        h.Gate.Exit(SessionId);
+        Assert.Same(answer, h.Gate.Enter(SessionId, id, "q"));
+        Assert.False(new AskStudentQuestionCommandValidator().Validate(Ask(turns: [null!])).IsValid);
+    }
+
     [Theory]
     [InlineData("", 0, false)]
     [InlineData("   ", 0, false)]
@@ -227,6 +241,7 @@ public sealed class StudentQuestionTests
 
         public Task<Guid?> FindInvitationIdAsync(Guid tourId, byte[] codeHash, CancellationToken ct) => throw new NotSupportedException();
         public Task<Guid?> FindSessionInvitationIdAsync(Guid tourId, byte[] tokenHash, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Guid?> FindDeviceInvitationIdAsync(Guid tourId, byte[] deviceTokenHash, CancellationToken ct) => throw new NotSupportedException();
         public Task<Invitation?> LoadAsync(Guid invitationId, CancellationToken ct) => throw new NotSupportedException();
         public Task CloseExpiredAsync(Guid invitationId, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
         public void Add(BrowserSession session) => throw new NotSupportedException();
