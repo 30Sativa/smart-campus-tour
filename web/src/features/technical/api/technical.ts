@@ -25,10 +25,14 @@ export type MapVersion = {
   uploadedAt: string
 }
 
+export type RobotAffectedTour = { tourId: string; name: string; scheduledStartAt: string; state: string }
+export type RobotLifecycleResult = { id: string; robotCode: string; deactivatedAt: string | null; deactivationReason: string | null; rowVersion: string; affectedTours: RobotAffectedTour[] }
 export type MapAreaOption = { areaKey: string; displayName: string }
 export type PhysicalRobotRegistration = { id: string; robotCode: string; displayName: string | null }
 export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA'
 export type PhysicalRobotOption = PhysicalRobotRegistration & {
+  deactivatedAt?: string | null
+  deactivationReason?: string | null
   firstAcceptedSyncAt: string | null
   firstAcceptedMapKey: string | null
   firstAcceptedFrameId: string | null
@@ -84,6 +88,8 @@ export type MapVersionItem = {
   currentlyDeployedOn: Array<{ robotCode: string; checkedAt: string }>
 }
 
+export type PoiVerificationMethod = 'MANUAL_CHECK' | 'POSE_CAPTURE'
+
 export type PoiRevision = {
   id: string
   revisionNumber: number
@@ -103,6 +109,7 @@ export type PoiRevision = {
   submittedAt: string | null
   navigationStatus: string
   verificationSourceRevisionId: string | null
+  verificationMethod?: PoiVerificationMethod | null
 }
 
 export type PoiProposal = {
@@ -110,14 +117,36 @@ export type PoiProposal = {
   currentRevision: number
   rowVersion: string
   revision: PoiRevision
+  sourcePoiId?: string | null
 }
 
-export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision }
+export type PoiVerificationQueueItem = { proposalId: string; currentRevision: number; rowVersion: string; revision: PoiRevision; sourcePoiId?: string | null }
 export type PoiVerification = {
   id: string; proposalId: string; proposalRevisionId: string; revisionNumber: number; mapVersionId: string
-  mapKey: string; robotCode: string; resultCode: 'PASS' | 'FAIL'; reached: boolean; stopped: boolean
-  localizationPassed: boolean; cameraPresetConfirmed: boolean; reason: string | null; evidenceNote: string
-  checkedByUserId: string; checkedAt: string
+  mapKey: string; robotCode: string; resultCode: 'PASS' | 'FAIL'; reached: boolean | null; stopped: boolean | null
+  localizationPassed: boolean | null; cameraPresetConfirmed: boolean | null; reason: string | null; evidenceNote: string
+  checkedByUserId: string; checkedAt: string; verificationMethod: PoiVerificationMethod; sourceFileSha256: string | null
+}
+
+export type PoiImportAction = 'CREATE' | 'NEW_REVISION' | 'NO_CHANGE'
+export type PoiImportPreviewFile = {
+  fileName: string; fileSha256: string; poiId: string | null; name: string | null
+  x: number | null; y: number | null; yaw: number | null; verified: boolean | null
+  action: PoiImportAction | null; errorCode: string | null; errorMessage: string | null
+}
+export type PoiImportPreview = { mapVersionId: string; robotCode: string; canImport: boolean; files: PoiImportPreviewFile[] }
+export type PoiImportResult = {
+  requestId: string; mapVersionId: string; createdProposalIds: string[]; updatedProposalIds: string[]
+  files: { fileName: string; poiId: string; action: PoiImportAction; verified: boolean; proposalId: string; proposalRevisionId: string }[]
+}
+type PoiImportInput = { mapVersionId: string; robotCode: string; files: File[] }
+
+function poiImportForm({ mapVersionId, robotCode, files }: PoiImportInput) {
+  const formData = new FormData()
+  formData.set('mapVersionId', mapVersionId)
+  formData.set('robotCode', robotCode)
+  for (const file of files) formData.append('files', file)
+  return formData
 }
 
 export type RouteTestParticipant = { userId: string; fullName: string; username: string }
@@ -134,6 +163,13 @@ export const technicalApi = {
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
+  listAllPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots?includeDeactivated=true').then(response => response.data ?? []),
+  listRobotAffectedTours: (id: string, mapVersionId?: string) =>
+    apiClient<Envelope<RobotAffectedTour[]>>(`/api/technical/physical-robots/${id}/affected-tours${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
+  deactivateRobot: ({ id, ...input }: { id: string; requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/deactivate`, { method: 'POST', json: input }).then(response => response.data!),
+  activateRobot: ({ id, ...input }: { id: string; requestId: string; expectedRowVersion: string }) =>
+    apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/activate`, { method: 'POST', json: input }).then(response => response.data!),
   assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
     apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
   clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>
@@ -161,6 +197,14 @@ export const technicalApi = {
     formData.set('package', input.package)
     return apiClient<Envelope<MapVersion>>('/api/technical/map-versions', { method: 'POST', formData })
       .then(response => response.data!)
+  },
+  previewPoiImport: (input: PoiImportInput) =>
+    apiClient<Envelope<PoiImportPreview>>('/api/technical/poi-imports/preview', { method: 'POST', formData: poiImportForm(input) }).then(response => response.data!),
+  importPoiFiles: ({ requestId, evidenceNote, ...input }: PoiImportInput & { requestId: string; evidenceNote: string }) => {
+    const formData = poiImportForm(input)
+    formData.set('requestId', requestId)
+    formData.set('evidenceNote', evidenceNote)
+    return apiClient<Envelope<PoiImportResult>>('/api/technical/poi-imports', { method: 'POST', formData }).then(response => response.data!)
   },
   recordDeployment: ({ mapVersionId, requestId, ...input }: Omit<DeploymentCheck, 'id' | 'mapVersionId' | 'checkedAt' | 'passed'> & { mapVersionId: string; requestId: string }) =>
     apiClient<Envelope<DeploymentCheck>>(`/api/technical/map-versions/${mapVersionId}/deployment-checks`, {

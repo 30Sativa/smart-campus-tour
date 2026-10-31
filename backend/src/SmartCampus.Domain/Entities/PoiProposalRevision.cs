@@ -51,5 +51,7 @@ public partial class PoiProposalRevision
 
     public virtual PoiProposal Proposal { get; set; } = null!;
 
+    public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
     public virtual ICollection<RouteRevisionStop> RouteRevisionStops { get; set; } = new List<RouteRevisionStop>();
 }

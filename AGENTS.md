@@ -52,7 +52,8 @@ Read `docs/requirements/srs-v02-backend-gap-register.md` for source/status and
 staged implementation. Its scoped succession replaces old business ownership,
 all-Staff operation and aggregate roster-access targets; it does not claim the
 current APIs/schema implement them. HTTPS Fleet Sync remains telemetry-only.
-Do not implement F-14, branch cutoff, YAML/frame mapping or M2 transport while pending.
+Do not implement F-14, branch cutoff, project YAML/frame mapping or M2 transport while pending;
+ADR-0038 covers only the robot pose-capture format, with no frame transform.
 
 Start at [`docs/README.md`](docs/README.md) for the document map and reading
 order. `docs/requirements/` describes target business behavior, with the status

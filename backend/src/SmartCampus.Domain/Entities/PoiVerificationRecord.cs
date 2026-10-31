@@ -17,13 +17,13 @@ public partial class PoiVerificationRecord
 
     public string ResultCode { get; set; } = null!;
 
-    public bool Reached { get; set; }
+    public bool? Reached { get; set; }
 
-    public bool Stopped { get; set; }
+    public bool? Stopped { get; set; }
 
-    public bool LocalizationPassed { get; set; }
+    public bool? LocalizationPassed { get; set; }
 
-    public bool CameraPresetConfirmed { get; set; }
+    public bool? CameraPresetConfirmed { get; set; }
 
     public string? Reason { get; set; }
 
@@ -36,6 +36,12 @@ public partial class PoiVerificationRecord
     public byte[] RequestHash { get; set; } = null!;
 
     public DateTimeOffset CheckedAt { get; set; }
+
+    public string VerificationMethod { get; set; } = null!;
+
+    public byte[]? SourceFileSha256 { get; set; }
+
+    public byte[]? SourceFileContent { get; set; }
 
     public virtual User CheckedByUser { get; set; } = null!;
 

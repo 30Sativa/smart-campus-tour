@@ -22,6 +22,15 @@ export function usePhysicalRobots(enabled = true) {
   return useQuery({ queryKey: keys.physicalRobots, queryFn: technicalApi.listPhysicalRobots, enabled })
 }
 
+/** The robot page only; every picker uses usePhysicalRobots, which leaves deactivated robots out. */
+export function useAllPhysicalRobots() {
+  return useQuery({ queryKey: [...keys.physicalRobots, 'all'], queryFn: technicalApi.listAllPhysicalRobots })
+}
+
+export function useRobotAffectedTours(robotId: string, mapVersionId: string | undefined, enabled: boolean) {
+  return useQuery({ queryKey: [...keys.physicalRobots, 'affected-tours', robotId, mapVersionId ?? ''], queryFn: () => technicalApi.listRobotAffectedTours(robotId, mapVersionId), enabled })
+}
+
 export function usePoiProposals() {
   return useQuery({ queryKey: keys.poiProposals, queryFn: () => technicalApi.listPoiProposals() })
 }
@@ -75,6 +84,16 @@ export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, k
   detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
 }))
 
+/** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
+export function usePreviewPoiImport() {
+  return useMutation({ mutationFn: technicalApi.previewPoiImport })
+}
+
+export const useImportPoiFiles = () => useTechnicalMutation(technicalApi.importPoiFiles, keys.poiProposals, (_input, result) => ({
+  title: `Đã nhập ${result.files.length} tệp POI`,
+  detail: 'Staff cần bổ sung tên và thuyết minh cho POI mới.',
+}))
+
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed
   ? { title: `Đã ghi kiểm tra trên ${input.robotCode}: đạt`, detail: 'Localization và hiển thị map đều đạt.' }
   : { tone: 'info', title: `Đã ghi kiểm tra trên ${input.robotCode}: chưa đạt`, detail: 'Version này chưa dùng được cho tới khi kiểm tra lại đạt.' })
@@ -82,6 +101,16 @@ export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recor
 export const useRegisterPhysicalRobot = () => useTechnicalMutation(technicalApi.registerPhysicalRobot, keys.physicalRobots, (_input, robot) => ({
   title: `Đã đăng ký ${robot.robotCode}`,
   detail: 'Đăng ký tạo danh tính robot trong hệ thống. Thiết lập kết nối ROS2 được thực hiện riêng.',
+}))
+
+export const useDeactivateRobot = () => useTechnicalMutation(technicalApi.deactivateRobot, keys.physicalRobots, (_input, result) => ({
+  title: `Đã ngừng sử dụng ${result.robotCode}`,
+  detail: 'Khóa kết nối đã bị thu hồi và bản đồ đã được gỡ gán.',
+}))
+
+export const useActivateRobot = () => useTechnicalMutation(technicalApi.activateRobot, keys.physicalRobots, (_input, result) => ({
+  title: `Đã kích hoạt lại ${result.robotCode}`,
+  detail: 'Cần cấp khóa mới và gán lại bản đồ trước khi dùng robot.',
 }))
 
 export function useAssignRobotMap() {

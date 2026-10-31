@@ -79,6 +79,7 @@ const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShel
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
 const TechnicalRobotsPage = lazy(() => import('../../routes/technical/TechnicalRobotsPage'))
 const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
+const TechnicalPoiFileImportPage = lazy(() => import('../../routes/technical/TechnicalPoiFileImportPage'))
 const TechnicalConfirmationsPage = lazy(() => import('../../routes/technical/TechnicalConfirmationsPage'))
 
 function ShellFallback({ background }: { background: string }) {
@@ -282,6 +283,7 @@ export const routes = [
       { path: 'maps', element: <TechnicalMapsPage /> },
       { path: 'robots', element: <TechnicalRobotsPage /> },
       { path: 'poi-import', element: <TechnicalPoiImportPage /> },
+      { path: 'poi-file-import', element: <TechnicalPoiFileImportPage /> },
       { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],

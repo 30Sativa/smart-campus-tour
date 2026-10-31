@@ -20,9 +20,14 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             throw new ConflictException(outside.Message, "TOUR_SLOT_NOT_ALLOWED");
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
+        var found = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
+            ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
+        // Deactivation takes these two locks in this order, so the robot is read again behind them.
+        await revisions.LockRobotDeploymentStateAsync(found.Id, ct);
+        await repository.LockRobotReservationsAsync(found.Id, ct);
         var robot = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
-        await repository.LockRobotReservationsAsync(robot.Id, ct);
+        await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
         var (startsAt, endsAt) = TourSchedule.Window(input.ScheduledStartAt, plan?.ExpectedDurationSeconds ?? run.MeasuredDurationSeconds);
         // Decided after the robot lock, on a fresh clock, so a slot taken while waiting is seen.

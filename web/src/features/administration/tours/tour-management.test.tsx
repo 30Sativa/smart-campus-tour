@@ -74,7 +74,10 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
       return Promise.resolve(json({ success: true, data: { id: 'tour-1' } }))
     }
     if (path === '/api/routes') return Promise.resolve(json({ data: testedRoutes, pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
-    if (path === '/api/technical/physical-robots') return Promise.resolve(json({ success: true, data: [{ id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01' }] }))
+    if (path === '/api/staff/manage/tours/robots') return Promise.resolve(json({ success: true, data: [
+      { robotCode: 'amr-01', displayName: 'AMR 01', usable: true, blockReason: null },
+      { robotCode: 'amr-02', displayName: 'AMR 02', usable: false, blockReason: 'Robot chưa xác nhận kết nối.' },
+    ] }))
     if (path === '/api/staff/manage/tours/operators') return Promise.resolve(json({ success: true, data: [{ userId: 'staff-1', fullName: 'Lan Staff', username: 'lan' }] }))
     if (path === '/api/staff/manage/routes') return Promise.resolve(json({ data: [ROUTE], pagination: { page: 1, pageSize: 100, totalItems: 1, totalPages: 1 } }))
     if (path === '/api/staff/manage/routes/route-1') return Promise.resolve(json({ success: true, data: ROUTE }))
@@ -94,6 +97,17 @@ function renderAt(path: string) {
 beforeEach(() => { slotDay = [freeSlot, lockedSlot]; refuseCreate = null })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
+
+it('offers only robots the chosen route can use, and says why the others are off', async () => {
+  api()
+  renderAt('/staff/manage/tours/new')
+  await screen.findByRole('option', { name: 'Tuyến đã duyệt · phiên bản 3 · 1 điểm dừng' })
+  expect(screen.getByLabelText('Robot')).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
+
+  expect(await screen.findByRole('option', { name: 'AMR 01 · amr-01' })).toBeEnabled()
+  expect(screen.getByRole('option', { name: 'AMR 02 · amr-02 (Robot chưa xác nhận kết nối.)' })).toBeDisabled()
+})
 
 describe('live Tour management', () => {
   it('shows the backend message of a JSON 404 and a plain fallback for an empty one', () => {

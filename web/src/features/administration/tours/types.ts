@@ -11,6 +11,7 @@ export type CreateTourInput = {
   operatorUserId: string; scheduledStartAt: string; fallbackVideoUrl: string | null
 }
 export type TourOperator = { userId: string; fullName: string; username: string }
+export type TourRobotOption = { robotCode: string; displayName: string | null; usable: boolean; blockReason: string | null }
 export type TourReservation = { robotCode: string; startsAt: string; endsAt: string; measuredDurationSeconds: number; expectedDurationSeconds: number; releasedAt: string | null }
 export type TourSummary = {
   id: string; name: string; description: string | null; routeId: string; routeName: string; activeRouteId: string

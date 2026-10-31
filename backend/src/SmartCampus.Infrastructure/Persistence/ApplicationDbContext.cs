@@ -36,6 +36,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<PoiProposalSubmission> PoiProposalSubmissions { get; set; }
 
+    public virtual DbSet<PoiImportReceipt> PoiImportReceipts { get; set; }
+
     public virtual DbSet<PoiVerificationRecord> PoiVerificationRecords { get; set; }
 
     public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
@@ -375,9 +377,61 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.Yaw).HasColumnType("decimal(9, 6)");
         });
 
+        modelBuilder.Entity<PoiImportReceipt>(entity =>
+        {
+            entity.HasIndex(e => new { e.ImportedByUserId, e.RequestId, e.FileSha256 }, "UQ_PoiImportReceipts_RequestFile").IsUnique();
+
+            entity.HasIndex(e => new { e.MapVersionId, e.FileSha256 }, "UX_PoiImportReceipts_MapFile")
+                .IsUnique()
+                .HasFilter("([Action]<>'NO_CHANGE')");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Action)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.FileName).HasMaxLength(255);
+            entity.Property(e => e.FileSha256)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.ImportedAt).HasPrecision(3);
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.SourcePoiId).HasMaxLength(64);
+
+            entity.HasOne(d => d.ImportedByUser).WithMany(p => p.PoiImportReceipts)
+                .HasForeignKey(d => d.ImportedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiImportReceipts_ImportedByUserId");
+
+            entity.HasOne(d => d.MapVersion).WithMany(p => p.PoiImportReceipts)
+                .HasForeignKey(d => d.MapVersionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiImportReceipts_MapVersionId");
+
+            entity.HasOne(d => d.Proposal).WithMany(p => p.PoiImportReceipts)
+                .HasForeignKey(d => d.ProposalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiImportReceipts_ProposalId");
+
+            entity.HasOne(d => d.ProposalRevision).WithMany(p => p.PoiImportReceipts)
+                .HasForeignKey(d => d.ProposalRevisionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiImportReceipts_ProposalRevisionId");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.PoiImportReceipts)
+                .HasForeignKey(d => d.RobotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PoiImportReceipts_RobotId");
+        });
+
         modelBuilder.Entity<PoiProposal>(entity =>
         {
             entity.HasIndex(e => new { e.CreatedByUserId, e.CreateRequestId }, "UQ_PoiProposals_OwnerRequest").IsUnique();
+
+            entity.HasIndex(e => new { e.SourceAreaKey, e.SourcePoiId }, "UX_PoiProposals_Source")
+                .IsUnique()
+                .HasFilter("([SourcePoiId] IS NOT NULL)");
 
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreateRequestHash)
@@ -387,7 +441,13 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.RowVersion)
                 .IsRowVersion()
                 .IsConcurrencyToken();
+            entity.Property(e => e.SourceAreaKey).HasMaxLength(100);
+            entity.Property(e => e.SourcePoiId).HasMaxLength(64);
             entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.SourceAreaKeyNavigation).WithMany(p => p.PoiProposals)
+                .HasForeignKey(d => d.SourceAreaKey)
+                .HasConstraintName("FK_PoiProposals_SourceAreaKey");
 
             entity.HasOne(d => d.CreatedByUser).WithMany(p => p.PoiProposals)
                 .HasForeignKey(d => d.CreatedByUserId)
@@ -487,6 +547,13 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.ResultCode)
                 .HasMaxLength(10)
                 .IsUnicode(false);
+            entity.Property(e => e.SourceFileSha256)
+                .HasMaxLength(32)
+                .IsFixedLength();
+            entity.Property(e => e.VerificationMethod)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("MANUAL_CHECK", "DF_PoiVerificationRecords_Method");
 
             entity.HasOne(d => d.CheckedByUser).WithMany(p => p.PoiVerificationRecords)
                 .HasForeignKey(d => d.CheckedByUserId)
@@ -537,6 +604,14 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_Robots_MapAssignedByUserId");
             entity.HasIndex(e => e.RobotCode, "UQ_Robots_RobotCode").IsUnique();
 
+            entity.HasIndex(e => e.AssignedAreaKey, "UX_Robots_AssignedArea")
+                .IsUnique()
+                .HasFilter("([AssignedAreaKey] IS NOT NULL)");
+
+            entity.Property(e => e.AssignedAreaKey).HasMaxLength(100);
+            entity.Property(e => e.DeactivatedAt).HasPrecision(3);
+            entity.Property(e => e.DeactivationReason).HasMaxLength(500);
+
             entity.HasIndex(e => e.CurrentTourId, "UX_Robots_CurrentTour")
                 .IsUnique()
                 .HasFilter("([CurrentTourId] IS NOT NULL)");
@@ -570,6 +645,16 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.CredentialRevokedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Robots_CredentialRevokedByUserId");
+
+            entity.HasOne(d => d.AssignedAreaKeyNavigation).WithMany()
+                .HasForeignKey(d => d.AssignedAreaKey)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_AssignedAreaKey");
+
+            entity.HasOne(d => d.DeactivatedByUser).WithMany()
+                .HasForeignKey(d => d.DeactivatedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_DeactivatedByUserId");
 
             entity.HasOne(d => d.CurrentTour).WithOne(p => p.Robot)
                 .HasForeignKey<Robot>(d => d.CurrentTourId)

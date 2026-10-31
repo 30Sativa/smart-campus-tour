@@ -676,6 +676,10 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.8-to-v1.9-tour-route-revision.sql");
         await db.ApplyFileAsync("upgrade-v1.9-to-v1.10-tour-scheduling.sql");
         await db.ApplyFileAsync("upgrade-v1.9-to-v1.10-tour-scheduling.sql");
+        await db.ApplyFileAsync("upgrade-v1.10-to-v1.11-poi-pose-import.sql");
+        await db.ApplyFileAsync("upgrade-v1.10-to-v1.11-poi-pose-import.sql");
+        await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
+        await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -686,7 +690,8 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.10", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.12", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name='DeactivatedAt' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourRobotReservations';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteTestRuns') AND name='MeasurementBasis' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.TourRobotReservations') AND name='ExpectedDurationSeconds' AND is_nullable=1;"));
@@ -704,14 +709,119 @@ public sealed class SchemaV11Tests
             Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RouteRevisions','OBJECT','INSERT');"));
             Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.RosterEmailChangeRequests','OBJECT','INSERT');"));
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.MapVersions','OBJECT','UPDATE');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiImportReceipts','OBJECT','INSERT');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiImportReceipts','OBJECT','SELECT');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiImportReceipts','OBJECT','UPDATE');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiImportReceipts','OBJECT','DELETE');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiVerificationRecords','OBJECT','UPDATE');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiVerificationRecords','OBJECT','DELETE');"));
         }
         finally { await ExecuteAsync(connection, "REVERT;"); }
     }
 
     [SchemaV17Fact]
-    public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
+    public async Task RobotLifecycleUpgrade_BackfillsTheArea_AndGuardsItsRules()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.11.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.11';");
+        await db.ExecuteAsync(RobotFixture(Id(93)));
+        await db.ExecuteAsync($"UPDATE dbo.Robots SET AssignedMapVersionId='{Id(94)}', MapAssignedAt=SYSDATETIMEOFFSET(), MapAssignedByUserId='{Id(1)}' WHERE RobotCode=N'upgrade_a';");
+
+        await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
+        await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
+
+        Assert.Equal("1.12", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("pilot", await db.ScalarAsync<string>("SELECT AssignedAreaKey FROM dbo.Robots WHERE RobotCode=N'upgrade_a';"));
+        await using var connection = await db.OpenAsync();
+        await ExpectErrorAsync(connection, 2601, $"UPDATE dbo.Robots SET AssignedMapVersionId='{Id(94)}', AssignedAreaKey=N'pilot', MapAssignedAt=SYSDATETIMEOFFSET(), MapAssignedByUserId='{Id(1)}' WHERE RobotCode=N'upgrade_b';");
+        await ExpectErrorAsync(connection, 547, $"UPDATE dbo.Robots SET AssignedMapVersionId=NULL, MapAssignedAt=NULL, MapAssignedByUserId=NULL WHERE RobotCode=N'upgrade_a';");
+        await ExpectErrorAsync(connection, 547, "UPDATE dbo.Robots SET DeactivatedAt=SYSDATETIMEOFFSET() WHERE RobotCode=N'upgrade_b';");
+        await ExecuteAsync(connection, $"UPDATE dbo.Robots SET DeactivatedAt=SYSDATETIMEOFFSET(), DeactivatedByUserId='{Id(1)}', DeactivationReason=N'test' WHERE RobotCode=N'upgrade_b';");
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotLifecycleUpgrade_StopsWithTheRobotsNamed_WhenAnAreaIsAlreadyShared()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.11.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.11';");
+        await db.ExecuteAsync(RobotFixture(Id(93)));
+        await db.ExecuteAsync($"UPDATE dbo.Robots SET AssignedMapVersionId='{Id(94)}', MapAssignedAt=SYSDATETIMEOFFSET(), MapAssignedByUserId='{Id(1)}' WHERE RobotCode LIKE N'upgrade[_]%';");
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql"));
+
+        Assert.Contains("upgrade_a", error.Message);
+        Assert.Contains("upgrade_b", error.Message);
+        Assert.Equal("1.11", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Robots WHERE RobotCode LIKE N'upgrade[_]%' AND AssignedMapVersionId IS NOT NULL;"));
+    }
+
+    private static string RobotFixture(string marker) => $"""
+        INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
+            VALUES('{marker}',N'upgrade_a','PHYSICAL',0x01,0,0,SYSDATETIMEOFFSET()), ('{Id(95)}',N'upgrade_b','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET());
+        INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'pilot',N'Pilot','{Id(1)}',SYSDATETIMEOFFSET());
+        INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            VALUES('{Id(94)}',N'pilot',1,N'pilot-v1',N'map.zip',0x{new string('A', 64)},0x{new string('A', 64)},0x01,N'map.pgm',1,1,1,0,0,0,0,0.65,0.196,N'map','VALID','{Id(1)}',NEWID(),SYSDATETIMEOFFSET());
+        """;
+
+    [SchemaV17Fact]
+    public async Task PoiPoseImportUpgrade_KeepsExistingResultsAsManualChecks_AndEnforcesEvidencePerMethod()
     {
         await using var db = await TestDatabase.CreateAsync("snapshot-v1.10.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.10';");
+        var hash = "0x" + new string('A', 64);
+        await db.ExecuteAsync($"""
+            INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x01,0,0,SYSDATETIMEOFFSET());
+            INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'pilot',N'Pilot','{Id(1)}',SYSDATETIMEOFFSET());
+            INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+                VALUES('{Id(84)}',N'pilot',1,N'pilot-v1',N'map.zip',{hash},{hash},0x01,N'map.pgm',1,1,1,0,0,0,0,0.65,0.196,N'map','VALID','{Id(1)}',NEWID(),SYSDATETIMEOFFSET());
+            INSERT dbo.PoiProposals(Id,CreatedByUserId,CreateRequestId,CreateRequestHash,CurrentRevision,CreatedAt) VALUES('{Id(85)}','{Id(2)}',NEWID(),{hash},2,SYSDATETIMEOFFSET());
+            INSERT dbo.PoiProposalRevisions(Id,ProposalId,RevisionNumber,MapVersionId,Name,Purpose,X,Y,Yaw,CameraPreset,NavigationFingerprint,RequestId,RequestHash,CreatedByUserId,CreatedAt)
+                VALUES('{Id(86)}','{Id(85)}',1,'{Id(84)}',N'A',N'B',1,1,0,N'FRONT',{hash},NEWID(),{hash},'{Id(2)}',SYSDATETIMEOFFSET()),
+                      ('{Id(87)}','{Id(85)}',2,'{Id(84)}',N'A',N'B',1,1,0,N'FRONT',{hash},NEWID(),{hash},'{Id(2)}',SYSDATETIMEOFFSET());
+            INSERT dbo.PoiVerificationRecords(Id,ProposalRevisionId,MapVersionId,RobotId,NavigationFingerprint,ResultCode,Reached,Stopped,LocalizationPassed,CameraPresetConfirmed,Reason,EvidenceNote,CheckedByUserId,RequestId,RequestHash,CheckedAt)
+                VALUES('{Id(88)}','{Id(86)}','{Id(84)}','{Id(83)}',{hash},'PASS',1,1,1,1,NULL,N'manual','{Id(1)}',NEWID(),{hash},SYSDATETIMEOFFSET()),
+                      ('{Id(89)}','{Id(87)}','{Id(84)}','{Id(83)}',{hash},'FAIL',0,1,1,1,N'off target',N'manual','{Id(1)}',NEWID(),{hash},SYSDATETIMEOFFSET());
+            """);
+
+        await db.ApplyFileAsync("upgrade-v1.10-to-v1.11-poi-pose-import.sql");
+        await db.ApplyFileAsync("upgrade-v1.10-to-v1.11-poi-pose-import.sql");
+
+        Assert.Equal("1.11", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.PoiVerificationRecords WHERE VerificationMethod='MANUAL_CHECK' AND Reached IS NOT NULL AND SourceFileSha256 IS NULL AND SourceFileContent IS NULL;"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.PoiVerificationRecords') AND (is_disabled=1 OR is_not_trusted=1);"));
+
+        await using var connection = await db.OpenAsync();
+        string Insert(string result, string observations, string reason, string method, string file) => $"""
+            INSERT dbo.PoiVerificationRecords(Id,ProposalRevisionId,MapVersionId,RobotId,NavigationFingerprint,ResultCode,Reached,Stopped,LocalizationPassed,CameraPresetConfirmed,Reason,EvidenceNote,CheckedByUserId,RequestId,RequestHash,CheckedAt,VerificationMethod,SourceFileSha256,SourceFileContent)
+            VALUES(NEWID(),'{Id(90)}','{Id(84)}','{Id(83)}',{hash},'{result}',{observations},{reason},N'note','{Id(1)}','{Id(91)}',{hash},SYSDATETIMEOFFSET(),'{method}',{file});
+            """;
+        const string notObserved = "NULL,NULL,NULL,NULL";
+        var sourceFile = $"{hash},0x01";
+        await db.ExecuteAsync($"""
+            INSERT dbo.PoiProposalRevisions(Id,ProposalId,RevisionNumber,MapVersionId,Name,Purpose,X,Y,Yaw,CameraPreset,NavigationFingerprint,RequestId,RequestHash,CreatedByUserId,CreatedAt)
+                VALUES('{Id(90)}','{Id(85)}',3,'{Id(84)}',N'A',N'B',1,1,0,N'FRONT',{hash},NEWID(),{hash},'{Id(2)}',SYSDATETIMEOFFSET());
+            """);
+        // A manual result can never drop its observations or carry a file.
+        await ExpectErrorAsync(connection, 547, Insert("PASS", notObserved, "NULL", "MANUAL_CHECK", "NULL,NULL"));
+        await ExpectErrorAsync(connection, 547, Insert("PASS", "1,1,1,1", "NULL", "MANUAL_CHECK", sourceFile));
+        await ExpectErrorAsync(connection, 547, Insert("PASS", "1,0,1,1", "NULL", "MANUAL_CHECK", "NULL,NULL"));
+        // A pose capture cannot claim an observation, fail, or lack its file.
+        await ExpectErrorAsync(connection, 547, Insert("PASS", "1,1,1,1", "NULL", "POSE_CAPTURE", sourceFile));
+        await ExpectErrorAsync(connection, 547, Insert("FAIL", notObserved, "N'x'", "POSE_CAPTURE", sourceFile));
+        await ExpectErrorAsync(connection, 547, Insert("PASS", notObserved, "NULL", "POSE_CAPTURE", "NULL,NULL"));
+        await ExpectErrorAsync(connection, 547, Insert("PASS", notObserved, "NULL", "POSE_CAPTURE", $"{hash},CONVERT(varbinary(max),REPLICATE(CONVERT(varchar(max),'a'),65537))"));
+        await ExpectErrorAsync(connection, 547, Insert("PASS", notObserved, "NULL", "OTHER", sourceFile));
+        await ExecuteAsync(connection, Insert("PASS", notObserved, "NULL", "POSE_CAPTURE", sourceFile));
+
+        await db.ExecuteAsync($"UPDATE dbo.PoiProposals SET SourceAreaKey=N'pilot', SourcePoiId=N'POI_01' WHERE Id='{Id(85)}';");
+        await ExpectErrorAsync(connection, 547, $"UPDATE dbo.PoiProposals SET SourceAreaKey=NULL WHERE Id='{Id(85)}';");
+        await ExpectErrorAsync(connection, 2601, $"INSERT dbo.PoiProposals(Id,CreatedByUserId,CreateRequestId,CreateRequestHash,CurrentRevision,CreatedAt,SourceAreaKey,SourcePoiId) VALUES(NEWID(),'{Id(2)}',NEWID(),{hash},1,SYSDATETIMEOFFSET(),N'pilot',N'POI_01');");
+    }
+
+    [SchemaV17Fact]
+    public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -818,7 +928,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.10.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -854,7 +964,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.10.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var package = CreateMapPackage();
@@ -1056,7 +1166,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.10.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.12.sql")
         {
             var db = new TestDatabase();
             try
@@ -1088,6 +1198,7 @@ public sealed class SchemaV11Tests
             services.AddScoped<IMapPoiRequestLock>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IMapVersionRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+            services.AddScoped<IPoiImportRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
             services.AddScoped<IPoiManagementTransaction, EfPoiManagementTransaction>();
             services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();

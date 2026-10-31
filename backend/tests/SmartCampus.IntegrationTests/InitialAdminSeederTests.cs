@@ -413,7 +413,7 @@ public sealed class InitialAdminSeederTests
 
         public string ConnectionString => settings.ConnectionString;
 
-        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot-v1.10.sql", bool demo = false)
+        public static async Task<EmptySchemaDatabase> CreateAsync(string snapshot = "snapshot-v1.12.sql", bool demo = false)
         {
             var database = new EmptySchemaDatabase(demo);
             try

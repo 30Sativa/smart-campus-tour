@@ -30,6 +30,8 @@ const proposal = (id: string, mapVersionId: string, mapKey: string, name: string
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 const proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v2', 'Điểm B')]
+let proposals = [proposal('poi-a', 'map-a', OCCUPANCY_MAPS[0].mapKey, 'Điểm A'), proposal('poi-b', 'map-b', OCCUPANCY_MAPS[1].mapKey, 'Điểm B')]
+const standardProposals = proposals
 function respond(data: unknown, total?: number) {
   return new Response(JSON.stringify({ success: true, data, ...(total == null ? {} : { pagination: { page: 1, pageSize: 5, totalItems: total, totalPages: Math.ceil(total / 5) } }) }), { status: 200 })
 }
@@ -40,6 +42,7 @@ function show(element: React.ReactNode, path = '/staff/manage') {
 }
 beforeEach(() => {
   requests.length = 0; failRegistrations = false; packageFailure = null
+  requests.length = 0; failRegistrations = false; proposals = standardProposals
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-ui', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
@@ -143,6 +146,17 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     expect(await screen.findByText('Chưa có bản đồ cho các POI đang lọc.')).toBeInTheDocument()
     expect(requests.some(url => url.pathname.endsWith('/package'))).toBe(false)
+  it('marks imported POIs that still need narration and names how they were verified', async () => {
+    const imported = proposal('poi-c', 'map-a', OCCUPANCY_MAPS[0].mapKey, 'POI 02')
+    proposals = [
+      { ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, verificationMethod: 'POSE_CAPTURE' } },
+      { ...proposal('poi-d', 'map-a', OCCUPANCY_MAPS[0].mapKey, 'Thư viện'), sourcePoiId: 'POI_03', revision: { ...imported.revision, id: 'poi-d-rev', name: 'Thư viện', narrationText: 'Đây là thư viện.', verificationMethod: 'MANUAL_CHECK' } },
+    ]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
+    expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
+    expect(screen.getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    expect(screen.getByText('Kiểm tra thủ công')).toBeInTheDocument()
   })
 
   it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {

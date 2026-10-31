@@ -39,6 +39,39 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         return Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map package validated and versioned.", Data = result });
     }
 
+    [HttpPost("technical/poi-imports/preview")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    [RequestSizeLimit(PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    public async Task<ActionResult<BaseResponse<PoiImportPreview>>> PreviewPoiImport(
+        [FromForm] Guid mapVersionId, [FromForm] string robotCode, [FromForm] IFormFileCollection files, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiImportPreview> { Success = true, Message = "POI import preview built; nothing was saved.",
+            Data = await sender.Send(new PreviewPoiImportQuery(new(mapVersionId, robotCode, await ReadUploadsAsync(files, ct))), ct) });
+
+    [HttpPost("technical/poi-imports")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    [RequestSizeLimit(PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    public async Task<ActionResult<BaseResponse<PoiImportResult>>> ImportPois(
+        [FromForm] Guid requestId, [FromForm] Guid mapVersionId, [FromForm] string robotCode, [FromForm] string evidenceNote,
+        [FromForm] IFormFileCollection files, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiImportResult> { Success = true, Message = "POI files imported.",
+            Data = await sender.Send(new ImportPoiFilesCommand(User.GetRequiredUserId(),
+                new(requestId, mapVersionId, robotCode, evidenceNote, await ReadUploadsAsync(files, ct))), ct) });
+
+    private static async Task<IReadOnlyList<PoiImportUpload>> ReadUploadsAsync(IFormFileCollection files, CancellationToken ct)
+    {
+        var uploads = new List<PoiImportUpload>(files.Count);
+        foreach (var file in files)
+        {
+            await using var input = file.OpenReadStream();
+            using var output = new MemoryStream((int)file.Length);
+            await input.CopyToAsync(output, ct);
+            uploads.Add(new PoiImportUpload(file.FileName, output.ToArray()));
+        }
+        return uploads;
+    }
+
     [HttpGet("technical/map-areas")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapAreaOption>>>> ListMapAreas(CancellationToken ct) =>
@@ -47,9 +80,31 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
 
     [HttpGet("technical/physical-robots")]
     [Authorize(Roles = RobotListRoles)]
-    public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotStatus>>>> ListPhysicalRobots(CancellationToken ct) =>
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<PhysicalRobotStatus>>>> ListPhysicalRobots(
+        [FromQuery] bool includeDeactivated = false, CancellationToken ct = default) =>
         Ok(new BaseResponse<IReadOnlyList<PhysicalRobotStatus>> { Success = true, Message = "Physical robots retrieved.",
-            Data = await sender.Send(new ListPhysicalRobotsQuery(), ct) });
+            Data = await sender.Send(new ListPhysicalRobotsQuery(includeDeactivated), ct) });
+
+    [HttpGet("technical/physical-robots/{id:guid}/affected-tours")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<IReadOnlyList<RobotAffectedTour>>>> ListRobotAffectedTours(
+        Guid id, [FromQuery] Guid? mapVersionId, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<RobotAffectedTour>> { Success = true, Message = "Affected Tours retrieved.",
+            Data = await sender.Send(new ListRobotAffectedToursQuery(id, mapVersionId), ct) });
+
+    [HttpPost("technical/physical-robots/{id:guid}/deactivate")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<RobotLifecycleResult>>> DeactivateRobot(
+        Guid id, [FromBody] DeactivatePhysicalRobotRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RobotLifecycleResult> { Success = true, Message = "Robot deactivated.",
+            Data = await sender.Send(new DeactivatePhysicalRobotCommand(id, User.GetRequiredUserId(), request), ct) });
+
+    [HttpPost("technical/physical-robots/{id:guid}/activate")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    public async Task<ActionResult<BaseResponse<RobotLifecycleResult>>> ActivateRobot(
+        Guid id, [FromBody] ActivatePhysicalRobotRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<RobotLifecycleResult> { Success = true, Message = "Robot activated.",
+            Data = await sender.Send(new ActivatePhysicalRobotCommand(id, User.GetRequiredUserId(), request), ct) });
 
     [HttpPut("technical/physical-robots/{id:guid}/map-assignment")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
@@ -91,7 +146,7 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
-        var robot = (await sender.Send(new ListPhysicalRobotsQuery(), ct)).SingleOrDefault(item => item.Id == id)
+        var robot = (await sender.Send(new ListPhysicalRobotsQuery(IncludeDeactivated: true), ct)).SingleOrDefault(item => item.Id == id)
             ?? throw new NotFoundException("Physical robot", id);
         var result = await sender.Send(new ChangeRobotCredentialCommand(robot.RobotCode,
             User.GetRequiredUserId(), request.RequestId, request.ExpectedRowVersion, request.Reason,

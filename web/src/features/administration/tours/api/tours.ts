@@ -1,6 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { CreateTourInput, TourDetails, TourInput, TourListQuery, TourOperator, TourSlots, TourSummary } from '../types'
+import type { CreateTourInput, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourSlots, TourSummary } from '../types'
 
 type Mutation = ApiResponse<{ id: string }>
 
@@ -17,6 +17,7 @@ export const toursApi = {
   },
   get: (id: string) => apiClient<ApiResponse<TourDetails>>(`/api/staff/manage/tours/${id}`).then(r => r.data!),
   operators: () => apiClient<ApiResponse<TourOperator[]>>('/api/staff/manage/tours/operators').then(r => r.data ?? []),
+  robots: (routeRevisionId: string) => apiClient<ApiResponse<TourRobotOption[]>>(`/api/staff/manage/tours/robots?routeRevisionId=${encodeURIComponent(routeRevisionId)}`).then(r => r.data ?? []),
   slots: (routeRevisionId: string, robotCode: string, from: string, to: string, time?: string) => {
     const params = new URLSearchParams({ routeRevisionId, robotCode, from, to })
     if (time) params.set('time', time)

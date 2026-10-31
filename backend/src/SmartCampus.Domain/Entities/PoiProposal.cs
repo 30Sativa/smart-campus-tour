@@ -21,7 +21,15 @@ public partial class PoiProposal
 
     public byte[] RowVersion { get; set; } = null!;
 
+    public string? SourceAreaKey { get; set; }
+
+    public string? SourcePoiId { get; set; }
+
     public virtual User CreatedByUser { get; set; } = null!;
+
+    public virtual MapArea? SourceAreaKeyNavigation { get; set; }
+
+    public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
 
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 }

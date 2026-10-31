@@ -9,7 +9,7 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { cameraPresetLabel, mapCheckLabel, poiStatus } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
@@ -110,6 +110,8 @@ export default function StaffManagePoiFormPage() {
     {back}
     <PageHeader eyebrow="Chuẩn bị Tour · POI" title={poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'} description="Chọn bản đồ, bấm lên bản đồ để đặt vị trí và hướng, rồi gửi kỹ thuật viên kiểm chứng." />
     {current && state && <div className="mb-4"><Notice tone={state.tone === 'danger' ? 'danger' : state.tone === 'ok' ? 'success' : 'info'}>Phiên bản {current.currentRevision} · {state.label}{current.revision.verificationSourceRevisionId ? ' · kết quả lấy từ một phiên bản trước' : ''}</Notice></div>}
+    {current?.revision.verificationMethod && <div className="mb-4"><Notice tone="info">Cách kiểm chứng: {verificationMethodLabel[current.revision.verificationMethod]}.</Notice></div>}
+    {current?.sourcePoiId && !current.revision.narrationText && <div className="mb-4"><Notice tone="warn">{NARRATION_NEEDED}. POI này được nhập từ tệp ghi pose trên robot, chỉ cần thêm tên và thuyết minh; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
     {current && selectedItem && !selectedItem.canUseForPoiPreparation && <div className="mb-4"><Notice tone="warn">Bản đồ của điểm này hiện không đủ điều kiện để chỉnh sửa: {selectedItem.preparationBlockReason} Lịch sử và kết quả kiểm chứng vẫn được giữ; bản đồ và vị trí bên dưới chỉ để xem.</Notice></div>}
     <form className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
       <div className="min-w-0 space-y-3">

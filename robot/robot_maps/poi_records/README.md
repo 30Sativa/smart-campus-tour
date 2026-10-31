@@ -22,3 +22,13 @@ so it is represented by that existing file instead of a duplicate copy.
 Do not promote a record to an active or production POI based only on this
 archive. Re-record and verify its pose against the current map before using it
 for navigation or route authoring.
+
+## Importing into the web
+
+Technical Staff can import these files on "Nhập POI từ file" (`/technical/poi-file-import`, ADR-0038):
+
+1. Record the pose on the MiniPC, then copy the `.yaml` files to a computer. A ZIP with the files at its root also works.
+2. Pick the exact map version and the robot used. `map_yaml` must equal the YAML name inside that map package, and `frame_id` must match it.
+3. Read the preview, fix any file it rejects, add an evidence note and import.
+
+Only the files you import are affected: `verified: true` needs the robot's latest deployment check to be a PASS on that map, and `verified: false` waits for manual verification. The warning above still applies: set `verified: true` only after checking the pose against the current map, because the import records that claim. Do not import both POI_02 captures together, because they share an `id`.

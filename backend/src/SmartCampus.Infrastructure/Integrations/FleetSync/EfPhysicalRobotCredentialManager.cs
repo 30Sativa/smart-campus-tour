@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Common.Models;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Authentication;
 using SmartCampus.Infrastructure.Persistence;
@@ -45,7 +46,7 @@ public sealed class EfPhysicalRobotCredentialManager(
             .Select(candidate => new
             {
                 candidate.Id, candidate.RobotCode, candidate.CredentialHash, candidate.CredentialHint,
-                candidate.RowVersion
+                candidate.RowVersion, candidate.DeactivatedAt
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (robot is null) throw new NotFoundException("Physical robot", robotCode);
@@ -56,6 +57,9 @@ public sealed class EfPhysicalRobotCredentialManager(
         if (priorRequest)
             throw new ConflictException("RequestId was already used for this robot credential operation; secrets are never returned on replay.",
                 "CREDENTIAL_REQUEST_REPLAYED");
+
+        if (robot.DeactivatedAt is not null && operation != RobotCredentialOperation.Revoke)
+            throw new ConflictException($"Robot {robot.RobotCode} đã ngừng sử dụng. Kích hoạt lại trước khi cấp khóa.", RobotLifecycleRules.DeactivatedCode);
 
         var hasActiveCredential = robot.CredentialHash is not null;
         if (operation == RobotCredentialOperation.Issue && hasActiveCredential)
@@ -89,13 +93,7 @@ public sealed class EfPhysicalRobotCredentialManager(
                 .SetProperty(candidate => candidate.FirstAcceptedSyncAt, (DateTimeOffset?)null)
                 .SetProperty(candidate => candidate.FirstAcceptedMapKey, (string?)null)
                 .SetProperty(candidate => candidate.FirstAcceptedFrameId, (string?)null), cancellationToken),
-            RobotCredentialOperation.Revoke => await query.ExecuteUpdateAsync(update => update
-                .SetProperty(candidate => candidate.CredentialHash, (byte[]?)null)
-                .SetProperty(candidate => candidate.CredentialRevokedAt, (DateTimeOffset?)now)
-                .SetProperty(candidate => candidate.CredentialRevokedByUserId, actorUserId)
-                .SetProperty(candidate => candidate.FirstAcceptedSyncAt, (DateTimeOffset?)null)
-                .SetProperty(candidate => candidate.FirstAcceptedMapKey, (string?)null)
-                .SetProperty(candidate => candidate.FirstAcceptedFrameId, (string?)null), cancellationToken),
+            RobotCredentialOperation.Revoke => await RevokeAsync(query, now, actorUserId, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(operation))
         };
 
@@ -108,24 +106,7 @@ public sealed class EfPhysicalRobotCredentialManager(
             RobotCredentialOperation.Revoke => Revoked,
             _ => throw new ArgumentOutOfRangeException(nameof(operation))
         };
-        dbContext.AuditLogs.Add(new AuditLog
-        {
-            ActorUserId = actorUserId,
-            RobotId = robot.Id,
-            CorrelationId = requestId,
-            Action = action,
-            EntityType = "Robot",
-            EntityId = robot.Id.ToString("D"),
-            ResultCode = "SUCCESS",
-            DataJson = JsonSerializer.Serialize(new
-            {
-                robotCode = robot.RobotCode,
-                hint,
-                reason = normalizedReason,
-                source
-            }),
-            OccurredAt = now
-        });
+        dbContext.AuditLogs.Add(Audit(action, robot.Id, robot.RobotCode, hint, requestId, actorUserId, normalizedReason, source, now));
 
         try
         {
@@ -143,6 +124,34 @@ public sealed class EfPhysicalRobotCredentialManager(
             generated is null ? null : now,
             operation == RobotCredentialOperation.Revoke ? "REVOKED" : "ACTIVE");
     }
+
+    /// <summary>Clears the key and its connection confirmation inside the caller's transaction.</summary>
+    internal static Task<int> RevokeAsync(IQueryable<Robot> query, DateTimeOffset now, Guid? actorUserId, CancellationToken cancellationToken) =>
+        query.ExecuteUpdateAsync(update => update
+            .SetProperty(candidate => candidate.CredentialHash, (byte[]?)null)
+            .SetProperty(candidate => candidate.CredentialRevokedAt, (DateTimeOffset?)now)
+            .SetProperty(candidate => candidate.CredentialRevokedByUserId, actorUserId)
+            .SetProperty(candidate => candidate.FirstAcceptedSyncAt, (DateTimeOffset?)null)
+            .SetProperty(candidate => candidate.FirstAcceptedMapKey, (string?)null)
+            .SetProperty(candidate => candidate.FirstAcceptedFrameId, (string?)null), cancellationToken);
+
+    internal static AuditLog RevokedAudit(Guid robotId, string robotCode, string? hint, Guid requestId, Guid? actorUserId,
+        string? reason, string source, DateTimeOffset now) =>
+        Audit(Revoked, robotId, robotCode, hint, requestId, actorUserId, reason, source, now);
+
+    private static AuditLog Audit(string action, Guid robotId, string robotCode, string? hint, Guid requestId, Guid? actorUserId,
+        string? reason, string source, DateTimeOffset now) => new()
+    {
+        ActorUserId = actorUserId,
+        RobotId = robotId,
+        CorrelationId = requestId,
+        Action = action,
+        EntityType = "Robot",
+        EntityId = robotId.ToString("D"),
+        ResultCode = "SUCCESS",
+        DataJson = JsonSerializer.Serialize(new { robotCode, hint, reason, source }),
+        OccurredAt = now
+    };
 
     public async Task<RobotCredentialView?> GetAsync(string robotCode, CancellationToken cancellationToken)
     {

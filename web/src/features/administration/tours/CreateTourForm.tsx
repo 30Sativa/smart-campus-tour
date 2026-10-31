@@ -2,9 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
-import { usePhysicalRobots } from '../../technical/technical-hooks'
 import { Notice } from '../AdminUi'
-import { useTestedRoutes, useTourOperators, useTourSlots } from './hooks'
+import { useTestedRoutes, useTourOperators, useTourRobots, useTourSlots } from './hooks'
 import { campusDay, campusStamp, campusTime, formatDuration } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { CreateTourInput, TourSlot } from './types'
@@ -23,7 +22,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const [video, setVideo] = useState('')
   const [clientError, setClientError] = useState('')
   const routes = useTestedRoutes()
-  const robots = usePhysicalRobots()
+  const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date)
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
@@ -50,18 +49,20 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
       {(clientError || error) && <Notice tone="danger">{clientError || error}</Notice>}
       <label className="block text-sm">Tên Tour<input required maxLength={150} className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Tham quan từ xa · Sáng thứ Bảy" /></label>
       <label className="block text-sm">Mô tả<textarea maxLength={1000} rows={3} className={inputClass} value={description} onChange={e => setDescription(e.target.value)} placeholder="Nội dung ngắn đại diện trường sẽ thấy khi đăng ký." /></label>
-      <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => setRouteRevisionId(e.target.value)}>
+      <label className="block text-sm">Tuyến đã kiểm chứng<select title="" required aria-label="Tuyến đã kiểm chứng" className={inputClass} value={routeRevisionId} disabled={routes.isPending} onChange={e => { setRouteRevisionId(e.target.value); setRobotCode('') }}>
         <option value="">— Chọn tuyến —</option>
         {routes.data?.map(route => <option key={route.revisionId} value={route.revisionId}>{route.name} · phiên bản {route.revisionNumber} · {route.stops.length} điểm dừng</option>)}
       </select>
         {routes.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh mục tuyến.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
           : <span className="mt-1 block text-xs text-[#64748b]">Chỉ hiện tuyến đã gửi kiểm chứng và có kết quả chạy thử đạt.</span>}</label>
-      <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={robots.isPending} onChange={e => setRobotCode(e.target.value)}>
+      <label className="block text-sm">Robot<select title="" required aria-label="Robot" className={inputClass} value={robotCode} disabled={!routeRevisionId || robots.isPending} onChange={e => setRobotCode(e.target.value)}>
         <option value="">— Chọn robot vật lý —</option>
-        {robots.data?.map(robot => <option key={robot.id} value={robot.robotCode}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}</option>)}
+        {robots.data?.map(robot => <option key={robot.robotCode} value={robot.robotCode} disabled={!robot.usable}>{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode}{robot.blockReason ? ` (${robot.blockReason})` : ''}</option>)}
       </select>
-        {robots.isError && <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách robot.</span>}</label>
+        {robots.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh sách robot.</span>
+          : !routeRevisionId ? <span className="mt-1 block text-xs text-[#64748b]">Chọn tuyến trước để biết robot nào chạy được.</span>
+          : robots.data && !robots.data.some(robot => robot.usable) && <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có robot nào sẵn sàng cho tuyến này.</span>}</label>
       <label className="block text-sm">Người vận hành<select title="" required aria-label="Người vận hành" className={inputClass} value={operatorUserId} disabled={operators.isPending} onChange={e => setOperatorUserId(e.target.value)}>
         <option value="">— Chọn Staff —</option>
         {operators.data?.map(person => <option key={person.userId} value={person.userId}>{person.fullName} · {person.username}</option>)}

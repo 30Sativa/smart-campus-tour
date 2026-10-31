@@ -76,7 +76,8 @@ extension folder on GitHub is not missing setup.
 The owner-authorized ADR-0021 slice adds versioned ROS map-package and manual
 deployment-check APIs plus Tour Staff POI revisions and TechnicalStaff
 verification. See `backend/docs/map-poi-versioning.md`. It does not retire the
-legacy Admin POI API, implement project POI YAML import, route certification,
+legacy Admin POI API, implement project POI YAML templates (the robot pose-capture
+import is ADR-0038), route certification,
 scheduling/READY, frontend, or physical robot execution. Keep v1.1 snapshot
 immutable; v1.2 changes are Database First and require its additive patch or
 fresh snapshot followed by reviewed scaffolding. Never apply on shared/prod
@@ -291,7 +292,7 @@ per-session limits do not satisfy these targets.
 Operator assignment is explicit and cannot be derived from CreatedByUserId.
 End Early revokes live/fallback/Q&A for all sessions and copied URLs, preserving
 Result only; cancellation/ACK does not establish physical stop. Do not implement
-pending F-14, branch cutoff, YAML/frame mapping or M2 command transport.
+pending F-14, branch cutoff, project YAML/frame mapping or M2 command transport.
 HTTPS Fleet Sync ADR-0019 remains telemetry-only with no commands.
 
 ## 4. Request, persistence, and response flow
@@ -474,7 +475,8 @@ future READY/Staff runtime, dispatch, and fleet business APIs remains
 unimplemented. Robot machine authentication is implemented for Fleet Sync v1
 using `Robot.CredentialHash`, with a separate Staff JWT policy for the
 Operations Hub. The API runtime may SELECT and INSERT Robots for Technical
-Staff physical-identity registration, but has no UPDATE or DELETE permission;
+Staff physical-identity registration, with column-level UPDATE for credential lifecycle,
+map assignment and deactivation (ADR-0039) and no whole-table UPDATE or DELETE;
 credential provisioning uses its own SQL role and updates only `CredentialHash`.
 Browser/user credentials cannot submit robot state. No command path or physical
 readiness policy is implemented.

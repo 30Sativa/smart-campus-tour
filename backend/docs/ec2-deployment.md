@@ -15,7 +15,7 @@ database, change login credentials, apply a schema patch, or change the SQL
 Server image. Empty-database bootstrap is an explicit `--bootstrap` operation.
 Existing data uses Backend Database Schema Upgrade, not Backend SQL Maintenance.
 The former takes a verified full backup under the host operation lock, applies
-the ordered v1.1→v1.10 additive patches, then verifies structure and runtime
+the ordered v1.1→v1.12 additive patches, then verifies structure and runtime
 permissions. The latter continues to handle SQL Server engine/resource changes.
 An existing v1.4 database must receive the v1.4→v1.5, v1.5→v1.6,
 v1.6→v1.7 and v1.7→v1.8 patches and permission regrant before deploying code
@@ -23,9 +23,9 @@ that requires durable robot confirmation, credential lifecycle metadata,
 versioned POI narration and database-owned robot map assignments. A v1.5
 database receives the v1.5→v1.6, v1.6→v1.7 and v1.7→v1.8 patches; a v1.6
 database receives the v1.6→v1.7 and v1.7→v1.8 patches; a v1.7 database
-receives the v1.7→v1.8 and v1.8→v1.9 patches; a v1.8 database receives the v1.8→v1.9 and v1.9→v1.10 patches; a v1.9 database receives the v1.9→v1.10 patch. The controlled path validates the prior snapshot marker and
+receives the v1.7→v1.8 and v1.8→v1.9 patches; a v1.8 database receives the v1.8→v1.9 and v1.9→v1.10 patches; a v1.9 database receives the v1.9→v1.10 and v1.10→v1.11 patches; a v1.10 database receives the v1.10→v1.11 and v1.11→v1.12 patches; a v1.11 database receives the v1.11→v1.12 patch. The controlled path validates the prior snapshot marker and
 complete structure, applies each additive patch, reapplies the existing
-permission scripts, then runs read-only `--check-only`. A v1.10 database can use
+permission scripts, then runs read-only `--check-only`. A v1.12 database can use
 the same path to reapply grants without DDL or data backfill. Do not run the
 upgrade or regrant manually on EC2 or a shared database outside the controlled
 workflow and verified-backup process.

@@ -22,12 +22,15 @@ internal static class MapPoiReadModelMapper
         record.ProposalRevision.RevisionNumber, record.MapVersionId, record.ProposalRevision.MapVersion.MapKey,
         record.Robot.RobotCode, Convert.ToHexString(record.NavigationFingerprint).ToLowerInvariant(),
         record.ResultCode, record.Reached, record.Stopped, record.LocalizationPassed,
-        record.CameraPresetConfirmed, record.Reason, record.EvidenceNote, record.CheckedByUserId, record.CheckedAt);
+        record.CameraPresetConfirmed, record.Reason, record.EvidenceNote, record.CheckedByUserId, record.CheckedAt,
+        record.VerificationMethod, Hex(record.SourceFileSha256));
 
     public static PoiVerificationView ToVerificationView(PoiVerificationRecord record, PoiProposalRevision revision,
         string mapKey, string robotCode) => new(
         record.Id, revision.ProposalId, record.ProposalRevisionId, revision.RevisionNumber, record.MapVersionId,
         mapKey, robotCode, Convert.ToHexString(record.NavigationFingerprint).ToLowerInvariant(), record.ResultCode,
         record.Reached, record.Stopped, record.LocalizationPassed, record.CameraPresetConfirmed, record.Reason,
-        record.EvidenceNote, record.CheckedByUserId, record.CheckedAt);
+        record.EvidenceNote, record.CheckedByUserId, record.CheckedAt, record.VerificationMethod, Hex(record.SourceFileSha256));
+
+    private static string? Hex(byte[]? value) => value is null ? null : Convert.ToHexString(value).ToLowerInvariant();
 }

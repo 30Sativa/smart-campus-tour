@@ -29,3 +29,27 @@ Decision: ADR-0037.
 - "Mở lại" only lifts the stop. Creating a Tour still needs an effective PASS.
 - Revisions and history stay viewable while a route is stopped.
 - Legacy Routes are unchanged.
+
+## Importing POIs from pose files
+
+Decision: ADR-0038.
+
+- Technical Staff drive the robot to the spot and record its pose on the MiniPC, which writes a YAML file.
+- On "Nhập POI từ file" they pick the exact map version and the robot, drop the files, read the preview and add an evidence note. If any file fails, nothing is imported.
+- A `verified: true` file needs that robot's latest deployment check to be a PASS on this map. It is recorded as "Ghi pose trực tiếp trên robot" with the raw file. It claims nothing about reach, stop, localization or camera.
+- A `verified: false` file goes to the normal "Kiểm chứng POI" queue.
+- The same file on the same map changes nothing. A new file with a known `id` adds a revision of that POI and keeps what Staff wrote.
+- Staff sees "Cần bổ sung nội dung thuyết minh" on imported POIs and adds name and narration through a normal edit. Keeping the pose keeps the PASS. Moving it or changing the camera needs a new check.
+- A route cannot use a stop without narration (`POI_NARRATION_REQUIRED`), and the whole-route test run is still required.
+
+## Setting up a robot and its life cycle
+
+Decision: ADR-0039.
+
+- One physical robot has one robot record. The system cannot attest hardware, so this is an operating rule. Replacing a robot means deactivating the old record and registering the new one.
+- Setup order: register the robot, issue its key, assign a map, connect once so the connection is confirmed, then record a deployment check on that map.
+- One map area has one robot for now. Assigning an area another robot holds is refused with `MAP_AREA_ALREADY_ASSIGNED`, which names that robot. Clear it first. This limit is to be relaxed when the fleet grows.
+- Changing a robot's map replaces the old assignment and frees the old area. The confirmation lists Tours that cannot run on the new map. They are not cancelled, so Staff decides what happens to them.
+- A Tour accepts only a usable robot: not deactivated, connection confirmed, and latest deployment check a PASS on the route's exact map. Otherwise `ROBOT_NOT_READY_FOR_ROUTE` gives the reason. Tours already created are not changed.
+- "Ngừng sử dụng" needs a reason. In one step it revokes the key, clears the map and lists the Tours reserved on the robot, without cancelling them. The robot leaves every picker and stays on the robot page under "Ngừng sử dụng" with its history.
+- "Kích hoạt lại" only lifts the stop. Technical Staff must issue a new key and assign a map again.
