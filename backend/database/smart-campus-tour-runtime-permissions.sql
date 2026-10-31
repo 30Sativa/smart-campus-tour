@@ -14,6 +14,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RouteStops TO campus_tour_ap
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.Tours TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
 GRANT UPDATE (ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
+GRANT SELECT, INSERT ON OBJECT::dbo.PoiImportReceipts TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.Robots TO campus_tour_app;
 GRANT UPDATE (CredentialHash, CredentialIssuedAt, CredentialIssuedByUserId, CredentialHint,

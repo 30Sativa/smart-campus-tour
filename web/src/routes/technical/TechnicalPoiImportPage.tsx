@@ -6,7 +6,7 @@ import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, DetailFact, Note, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { cameraPresetLabel } from '../../features/technical/poi-labels'
+import { cameraPresetLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
@@ -70,7 +70,7 @@ export default function TechnicalPoiImportPage() {
       )}
 
       <section className={panelClass} aria-label="Danh sách kiểm chứng POI">
-        <PanelHead title={filterText[filter].title} description="Nạp trực tiếp từ backend. Import POI bằng project YAML vẫn pending vì template/frame mapping chưa được chốt." />
+        <PanelHead title={filterText[filter].title} description="Nạp trực tiếp từ backend. POI nhập từ tệp có verified: false cũng nằm trong hàng chờ này." />
         {filter !== 'pending' && allProposals.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(allProposals.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void allProposals.refetch()}>Tải lại danh sách POI</button></div>}
         {proposals.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : proposals.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(proposals.error)}</p> : (
           <div className="relative overflow-x-auto">
@@ -100,9 +100,13 @@ export default function TechnicalPoiImportPage() {
 
 function PoiStatus({ row }: { row: PoiRow }) {
   if (row.filter === 'pending') return <ToneBadge tone="warn">Chờ kiểm chứng</ToneBadge>
-  if (row.filter === 'passed') return <ToneBadge tone="ok">Đã đạt</ToneBadge>
+  if (row.filter === 'passed') return <><ToneBadge tone="ok">Đã đạt</ToneBadge><MethodBadge method={row.revision.verificationMethod} /></>
   if (row.recordable) return <ToneBadge tone="danger">Cần kiểm tra lại</ToneBadge>
   return <><ToneBadge tone="danger">Không đạt</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">Chờ Staff sửa và gửi lại</p></>
+}
+
+function MethodBadge({ method }: { method?: string | null }) {
+  return method ? <span className="ml-1"><ToneBadge tone="info">{verificationMethodLabel[method] ?? method}</ToneBadge></span> : null
 }
 
 /** What the table leaves out: where the robot must go and what it will say there. */
@@ -216,9 +220,11 @@ function PoiResultModal({ proposalId, revision, onClose }: { proposalId: string;
           const effective = record.proposalRevisionId === revision.verificationSourceRevisionId
           return (
             <section key={record.id} aria-label={`Kết quả revision ${record.revisionNumber}`} className="rounded-lg border border-[#e2e8f0] p-3 text-[13px] text-[#334155]">
-              <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={record.resultCode === 'PASS' ? 'ok' : 'danger'}>{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="font-semibold text-[#0f172a]">Revision {record.revisionNumber}</span>{effective && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
+              <div className="flex flex-wrap items-center gap-2"><ToneBadge tone={record.resultCode === 'PASS' ? 'ok' : 'danger'}>{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'}</ToneBadge><span className="font-semibold text-[#0f172a]">Revision {record.revisionNumber}</span><ToneBadge tone="muted">{verificationMethodLabel[record.verificationMethod] ?? record.verificationMethod}</ToneBadge>{effective && <ToneBadge tone="info">Đang áp dụng</ToneBadge>}</div>
               <p className="mt-1.5 text-xs text-[#64748b]">Robot <span className="font-mono">{record.robotCode}</span> · {stamp(record.checkedAt)}</p>
-              <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">{observations(record).map(item => <li key={item.label}>{item.passed ? 'Đạt' : 'Chưa đạt'}: {item.label}</li>)}</ul>
+              {record.verificationMethod === 'POSE_CAPTURE'
+                ? <p className="mt-2 text-xs">Pose được ghi từ robot khi đang ở đúng điểm. Không có quan sát tới nơi, dừng, localization hay camera.{record.sourceFileSha256 && <span className="mt-0.5 block break-all font-mono text-[11px] text-[#64748b]">SHA-256 {record.sourceFileSha256}</span>}</p>
+                : <ul className="mt-2 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">{observations(record).map(item => <li key={item.label}>{item.passed ? 'Đạt' : 'Chưa đạt'}: {item.label}</li>)}</ul>}
               {record.reason && <p className="mt-2"><span className="font-medium">Lý do:</span> {record.reason}</p>}
               <p className="mt-2 whitespace-pre-wrap"><span className="font-medium">Bằng chứng:</span> {record.evidenceNote}</p>
             </section>

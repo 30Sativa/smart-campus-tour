@@ -65,6 +65,8 @@ public partial class Robot
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
 
+    public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();
 
     public virtual ICollection<RouteTestRun> RouteTestRuns { get; set; } = new List<RouteTestRun>();

@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IPhysicalRobotRepository, EfPhysicalRobotRepository>();
         services.AddScoped<IPoiProposalRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
         services.AddScoped<IPoiVerificationRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
+        services.AddScoped<IPoiImportRepository>(provider => provider.GetRequiredService<EfVersionedMapPoiRepository>());
         services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
         services.AddScoped<IRouteRevisionRepository, EfRouteRevisionRepository>();
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();

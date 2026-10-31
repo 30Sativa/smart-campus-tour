@@ -11,6 +11,12 @@ export function poiStatus(revision: { navigationStatus: string; isSubmitted: boo
   return revision.isSubmitted ? { label: 'Chờ kiểm chứng', tone: 'warn' } : { label: 'Bản nháp', tone: 'muted' }
 }
 
+export const verificationMethodLabel: Record<string, string> = { POSE_CAPTURE: 'Ghi pose trực tiếp trên robot', MANUAL_CHECK: 'Kiểm tra thủ công' }
+
+export const poiImportActionLabel: Record<string, string> = { CREATE: 'Tạo POI mới', NEW_REVISION: 'Thêm phiên bản', NO_CHANGE: 'Không thay đổi' }
+
+export const NARRATION_NEEDED = 'Cần bổ sung nội dung thuyết minh'
+
 export const cameraPresetLabel: Record<string, string> = { FRONT: 'Phía trước', LEFT: 'Bên trái', RIGHT: 'Bên phải' }
 
 export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đạt kiểm tra' : status === 'FAILED' ? 'Kiểm tra không đạt' : 'Chờ kỹ thuật kiểm tra'

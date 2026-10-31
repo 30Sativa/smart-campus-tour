@@ -39,6 +39,8 @@ public partial class User
 
     public virtual ICollection<Robot> MapAssignedRobots { get; set; } = new List<Robot>();
 
+    public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 
     public virtual ICollection<PoiProposalSubmission> PoiProposalSubmissions { get; set; } = new List<PoiProposalSubmission>();

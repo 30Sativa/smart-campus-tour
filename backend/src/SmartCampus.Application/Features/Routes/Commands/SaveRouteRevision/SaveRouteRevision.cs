@@ -102,6 +102,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             var latest = await repo.GetEffectivePoiVerificationAsync(selected.Revision.ProposalId, selected.Revision.NavigationFingerprint, ct);
             if (latest?.Id != selected.Verification.Id || latest.ResultCode != "PASS")
                 throw new ConflictException("A newer POI verification result supersedes the selected PASS.", "POI_VERIFICATION_STALE");
+            if (string.IsNullOrWhiteSpace(selected.Revision.NarrationText))
+                throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
         var package = MapPackageValidator.Validate(map.PackageBytes);
         MapPackageValidator.EnsureFreePosition(package, i.StartX, i.StartY, i.StartYaw);

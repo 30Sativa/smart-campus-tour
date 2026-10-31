@@ -151,7 +151,7 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.10; the current snapshot
+The backend persistence baseline has advanced through v1.11; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
@@ -159,8 +159,9 @@ plus credential lifecycle in `backend/database/smart-campus-tour-schema-v1.6.sql
 and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
 `backend/database/smart-campus-tour-schema-v1.8.sql`, Tours on a tested revision in
-`backend/database/smart-campus-tour-schema-v1.9.sql`, and scheduling inputs in
-`backend/database/smart-campus-tour-schema-v1.10.sql`.
+`backend/database/smart-campus-tour-schema-v1.9.sql`, scheduling inputs in
+`backend/database/smart-campus-tour-schema-v1.10.sql`, and POI pose-capture import in
+`backend/database/smart-campus-tour-schema-v1.11.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -681,7 +682,15 @@ non-editable pose view with the backend block reason. A 409 caused by a changed
 technical check refreshes eligibility metadata without changing local form
 values or the selected map.
 
-Project POI YAML/frame mapping, route revision/test tuple, scheduling/READY,
+TechnicalStaff imports robot pose-capture files through multipart
+`POST /api/technical/poi-imports/preview` (no writes) and `POST /api/technical/poi-imports`
+(`requestId`, `mapVersionId`, `robotCode`, `evidenceNote`, `files`; all-or-nothing, 409
+`POI_IMPORT_INVALID` with per-file errors). Verification views add `verificationMethod` and
+`sourceFileSha256`, their four observation fields are null for `POSE_CAPTURE`, revisions add the
+effective `verificationMethod`, and proposals add `sourcePoiId`. Route save returns 409
+`POI_NARRATION_REQUIRED` for a stop without narration. See ADR-0038.
+
+Project POI YAML templates/frame mapping, route revision/test tuple, scheduling/READY,
 robot deployment control, frontend workspaces and physical acceptance remain
 pending/not implemented. v1.1 remains immutable; v1.2 has an additive upgrade
 patch and empty-database snapshot. The runtime grants for these tables are

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
@@ -75,9 +74,7 @@ public sealed class RecordPoiVerificationCommandHandler(
         var latestDeployment = await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", revision.MapVersionId);
-        if (latestDeployment is null || latestDeployment.MapVersionId != revision.MapVersionId ||
-            !latestDeployment.LocalizationPassed || !latestDeployment.DisplayPassed ||
-            !CryptographicOperations.FixedTimeEquals(latestDeployment.PackageSha256, map.PackageSha256))
+        if (!PoiProposalRules.IsDeployedOn(latestDeployment, map))
             throw new ConflictException("The exact map version must have a current successful localization/display deployment check on this robot.", "MAP_NOT_DEPLOYED");
 
         PoiProposalRules.ValidatePosition(map, new PoiProposalDraft(
@@ -102,6 +99,7 @@ public sealed class RecordPoiVerificationCommandHandler(
             RequestId = request.RequestId,
             RequestHash = requestHash,
             CheckedAt = now,
+            VerificationMethod = PoiVerificationMethods.ManualCheck,
         };
         verificationRepository.Add(result);
         verificationRepository.AddAuditLog(new AuditLog

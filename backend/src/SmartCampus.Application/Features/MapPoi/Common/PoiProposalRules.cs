@@ -17,6 +17,12 @@ internal static class PoiProposalRules
         MapPackageValidator.EnsureFreePosition(package, draft.X, draft.Y, draft.Yaw);
     }
 
+    /// <summary>The robot's newest check across all maps must be a pass on this exact version and package.</summary>
+    public static bool IsDeployedOn(MapDeploymentCheck? latestDeployment, MapVersion map) =>
+        latestDeployment is not null && latestDeployment.MapVersionId == map.Id &&
+        latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed &&
+        CryptographicOperations.FixedTimeEquals(latestDeployment.PackageSha256, map.PackageSha256);
+
     public static PoiProposalRevision CreateRevision(Guid proposalId, int revisionNumber, Guid actorUserId,
         Guid requestId, byte[] requestHash, PoiProposalDraft draft, DateTimeOffset now) => new()
     {

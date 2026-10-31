@@ -18,7 +18,7 @@ public sealed record MapPackageMetadata(
     decimal FreeThreshold,
     string FrameId);
 
-public sealed record ValidatedMapPackage(MapPackageMetadata Metadata, byte[] Pixels, byte[] Sha256);
+public sealed record ValidatedMapPackage(MapPackageMetadata Metadata, byte[] Pixels, byte[] Sha256, string YamlFileName);
 
 /// <summary>Accepts the bounded ROS map-server format used in robot/robot_maps.</summary>
 public static class MapPackageValidator
@@ -69,7 +69,7 @@ public static class MapPackageValidator
                 throw Invalid("image", "The raster dimensions exceed the supported maximum of 8192 per side and 32 million pixels.");
 
             metadata = metadata with { ImageWidth = width, ImageHeight = height };
-            return new ValidatedMapPackage(metadata, pixels, SHA256.HashData(package.Span));
+            return new ValidatedMapPackage(metadata, pixels, SHA256.HashData(package.Span), yamlEntry.Name);
         }
         catch (ValidationException)
         {

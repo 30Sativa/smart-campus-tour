@@ -45,8 +45,8 @@ shared rules; this file only covers what is specific to `web/`.
     listing/upload, deployment evidence and submitted POI verification use the
     existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
     `/api/technical/route-verifications/*` and the test-run endpoint; they are
-    human-entered evidence, not proof of a physical run or READY. Project POI
-    YAML import remains pending; no mock success state is shown for it.
+    human-entered evidence, not proof of a physical run or READY. Robot pose files import
+    through `/api/technical/poi-imports` (ADR-0038); project YAML templates remain pending.
   - `/admin/*`: administration, `Admin` only: Accounts, Roles, robot key history and the read-only system audit log. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.
