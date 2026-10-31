@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text.Json;
 using FluentValidation;
@@ -34,6 +35,16 @@ public sealed class RecordRouteTestRunValidator : AbstractValidator<RecordRouteT
     }
 }
 
+/// <summary>The robot's newest check across all maps must pass on the revision's exact map package.</summary>
+public static class RouteRobotDeployment
+{
+    public static bool IsCurrent([NotNullWhen(true)] MapDeploymentCheck? deployment, MapVersion map, RouteRevision revision) =>
+        deployment is not null && deployment.Id != Guid.Empty && deployment.MapVersionId == map.Id &&
+        deployment.LocalizationPassed && deployment.DisplayPassed &&
+        CryptographicOperations.FixedTimeEquals(deployment.PackageSha256, revision.MapPackageSha256) &&
+        CryptographicOperations.FixedTimeEquals(map.PackageSha256, revision.MapPackageSha256);
+}
+
 public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, TimeProvider clock)
     : IRequestHandler<RecordRouteTestRunCommand, RouteRevisionView>
 {
@@ -63,12 +74,10 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
         if (q.ParticipatingStaffUserId == c.ActorUserId) throw new ConflictException("Technical checker and participating Staff must be distinct accounts.", "SEPARATE_TEST_ROLES_REQUIRED");
         var robot = await repo.FindPhysicalRobotAsync(q.RobotCode.Trim(), ct) ?? throw new NotFoundException("Physical robot", q.RobotCode.Trim());
         await repo.LockRobotDeploymentStateAsync(robot.Id, ct);
+        RobotLifecycleRules.EnsureActive(robot);
         var deployment = await repo.GetLatestDeploymentForRobotAsync(robot.Id, ct);
         var map = await repo.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Map version", revision.MapVersionId);
-        if (deployment is null || deployment.Id == Guid.Empty || deployment.MapVersionId != map.Id ||
-            !deployment.LocalizationPassed || !deployment.DisplayPassed ||
-            !CryptographicOperations.FixedTimeEquals(deployment.PackageSha256, revision.MapPackageSha256) ||
-            !CryptographicOperations.FixedTimeEquals(map.PackageSha256, revision.MapPackageSha256))
+        if (!RouteRobotDeployment.IsCurrent(deployment, map, revision))
             throw new ConflictException("The robot's latest deployment check must match the exact map version and checksum in this revision.", "MAP_NOT_CURRENTLY_DEPLOYED");
         var now = clock.GetUtcNow();
         var routeRuns = await repo.GetTestRunsForRouteAsync(route.Id, ct);

@@ -9,7 +9,8 @@ public sealed record AssignPhysicalRobotMapRequest(Guid RequestId, string Expect
 public sealed record ClearPhysicalRobotMapRequest(Guid RequestId, string ExpectedRowVersion);
 public sealed record RobotMapAssignmentView(Guid Id, string RobotCode, Guid? AssignedMapVersionId,
     string? AssignedAreaName, int? AssignedVersionNumber, string? AssignedMapKey, string? AssignedFrameId,
-    DateTimeOffset? MapAssignedAt, string? MapAssignedByName, string RowVersion);
+    DateTimeOffset? MapAssignedAt, string? MapAssignedByName, string RowVersion,
+    IReadOnlyList<RobotAffectedTour> AffectedTours);
 
 public sealed record ChangePhysicalRobotMapAssignmentCommand(Guid RobotId, Guid ActorUserId, Guid RequestId,
     string ExpectedRowVersion, Guid? MapVersionId) : ICommand<RobotMapAssignmentView>;

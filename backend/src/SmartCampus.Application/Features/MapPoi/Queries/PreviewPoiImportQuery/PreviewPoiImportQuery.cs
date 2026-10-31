@@ -28,6 +28,7 @@ public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapReposi
         var robotCode = request.RobotCode.Trim();
         var robot = await mapRepository.FindPhysicalRobotAsync(robotCode, cancellationToken)
             ?? throw new NotFoundException("Physical robot", robotCode);
+        RobotLifecycleRules.EnsureActive(robot);
 
         var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot,
             PoiImportPlanner.Parse(sources), cancellationToken);

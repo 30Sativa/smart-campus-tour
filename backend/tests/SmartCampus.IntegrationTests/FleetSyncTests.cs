@@ -755,7 +755,7 @@ public sealed class FleetSyncTests
             VALUES('{mapId:D}',N'fleet-test-area',1,N'{mapKey}',N'fleet.zip',0x1111111111111111111111111111111111111111111111111111111111111111,
                 0x1111111111111111111111111111111111111111111111111111111111111111,0x01,N'map.pgm',1,1,0.05,0,0,0,0,0.65,0.25,
                 N'map','VALID','{technical.Id:D}','{uploadId:D}',SYSDATETIMEOFFSET());
-            UPDATE dbo.Robots SET AssignedMapVersionId='{mapId:D}',MapAssignedAt=SYSDATETIMEOFFSET(),MapAssignedByUserId='{technical.Id:D}'
+            UPDATE dbo.Robots SET AssignedMapVersionId='{mapId:D}', AssignedAreaKey=(SELECT AreaKey FROM dbo.MapVersions WHERE Id='{mapId:D}'),MapAssignedAt=SYSDATETIMEOFFSET(),MapAssignedByUserId='{technical.Id:D}'
             WHERE RobotCode=N'{robotCode}';
             """);
     }

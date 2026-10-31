@@ -14,6 +14,7 @@ using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
+using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 
 namespace SmartCampus.Api.Controllers;
@@ -40,6 +41,11 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     public async Task<IActionResult> Operators(CancellationToken ct) =>
         Ok(new BaseResponse<IReadOnlyList<RouteTestParticipantView>> { Success = true, Message = "Tour operators retrieved.",
             Data = await sender.Send(new ListRouteTestParticipantsQuery(), ct) });
+
+    [HttpGet("robots")]
+    public async Task<IActionResult> Robots([FromQuery] Guid routeRevisionId, CancellationToken ct) =>
+        Ok(new BaseResponse<IReadOnlyList<TourRobotOption>> { Success = true, Message = "Tour robots retrieved.",
+            Data = await sender.Send(new ListTourRobotsQuery(routeRevisionId), ct) });
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,

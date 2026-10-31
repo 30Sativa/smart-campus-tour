@@ -49,6 +49,10 @@ All successes use the existing `BaseResponse<T>` envelope except ZIP download. `
 | `POST /api/technical/poi-imports/preview` | TechnicalStaff | multipart `mapVersionId`, `robotCode`, `files` → per-file pose, verified flag, action or error code | No writes (ADR-0038). |
 | `POST /api/technical/poi-imports` | TechnicalStaff | same plus `requestId`, `evidenceNote` → created/updated proposal IDs and per-file actions | All-or-nothing, 409 `POI_IMPORT_INVALID`; `POSE_CAPTURE` evidence claims no observation. |
 
+| `POST /api/technical/physical-robots/{id}/deactivate` | TechnicalStaff | `{requestId, expectedRowVersion, reason}` → state and Tours reserved on the robot | One transaction: columns, key revoke, map clear (ADR-0039). |
+| `POST /api/technical/physical-robots/{id}/activate` | TechnicalStaff | `{requestId, expectedRowVersion}` | Lifts the stop only. |
+| `GET /api/technical/physical-robots/{id}/affected-tours?mapVersionId=` | TechnicalStaff | → SCHEDULED/READY Tours that cannot run on that map, or all without it | Read-only. |
+
 Map upload, deployment-check, and POI proposal/revision/submission/verification requests that expose a `requestId` require the caller to keep it stable for retries; a committed identical retry replays its result, while reuse with different content conflicts. Physical robot registration contains only `robotCode` and `displayName`; it has no `requestId` or receipt. Unique `Robots.RobotCode` protects concurrent duplicates, and an existing code returns 409. SQL transaction-owned application locks serialize request retries and area version allocation; proposal row locks and SQL rowversion guard concurrent edits. Immutable version/revision/submission/check/result tables receive SELECT/INSERT only; only `PoiProposals.CurrentRevision` and `UpdatedAt` are update-granted by `smart-campus-tour-map-poi-permissions.sql`.
 
 ### Robot connection confirmation before map-check PASS (ADR-0029)

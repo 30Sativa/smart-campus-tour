@@ -25,10 +25,14 @@ export type MapVersion = {
   uploadedAt: string
 }
 
+export type RobotAffectedTour = { tourId: string; name: string; scheduledStartAt: string; state: string }
+export type RobotLifecycleResult = { id: string; robotCode: string; deactivatedAt: string | null; deactivationReason: string | null; rowVersion: string; affectedTours: RobotAffectedTour[] }
 export type MapAreaOption = { areaKey: string; displayName: string }
 export type PhysicalRobotRegistration = { id: string; robotCode: string; displayName: string | null }
 export type PhysicalRobotConnectionStatus = 'UNCONFIRMED' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_DATA'
 export type PhysicalRobotOption = PhysicalRobotRegistration & {
+  deactivatedAt?: string | null
+  deactivationReason?: string | null
   firstAcceptedSyncAt: string | null
   firstAcceptedMapKey: string | null
   firstAcceptedFrameId: string | null
@@ -159,6 +163,13 @@ export const technicalApi = {
   getMap: (id: string) => apiClient<Envelope<MapVersionItem>>(`/api/maps/versions/${id}`).then(response => response.data!),
   listMapAreas: () => apiClient<Envelope<MapAreaOption[]>>('/api/technical/map-areas').then(response => response.data ?? []),
   listPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots').then(response => response.data ?? []),
+  listAllPhysicalRobots: () => apiClient<Envelope<PhysicalRobotOption[]>>('/api/technical/physical-robots?includeDeactivated=true').then(response => response.data ?? []),
+  listRobotAffectedTours: (id: string, mapVersionId?: string) =>
+    apiClient<Envelope<RobotAffectedTour[]>>(`/api/technical/physical-robots/${id}/affected-tours${mapVersionId ? `?mapVersionId=${encodeURIComponent(mapVersionId)}` : ''}`).then(response => response.data ?? []),
+  deactivateRobot: ({ id, ...input }: { id: string; requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/deactivate`, { method: 'POST', json: input }).then(response => response.data!),
+  activateRobot: ({ id, ...input }: { id: string; requestId: string; expectedRowVersion: string }) =>
+    apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/activate`, { method: 'POST', json: input }).then(response => response.data!),
   assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
     apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
   clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>

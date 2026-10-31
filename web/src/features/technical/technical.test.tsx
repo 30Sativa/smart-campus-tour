@@ -31,6 +31,7 @@ const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): Physic
   ...overrides,
 })
 let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
+let affectedTours: unknown[] = []
 let mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
 let failMapAreaLookup = false
 let failDeploymentOnce = false
@@ -60,6 +61,7 @@ describe('Technical Staff API integration', () => {
   beforeEach(() => {
     requests = []
     physicalRobots = [makePhysicalRobot()]
+    affectedTours = []
     mapAreas = [{ areaKey: 'library', displayName: 'Library' }]
     failMapAreaLookup = false
     failDeploymentOnce = false
@@ -117,6 +119,15 @@ describe('Technical Staff API integration', () => {
         const registered = makePhysicalRobot({ id: 'robot-2', ...JSON.parse(String(init.body)), firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null, connectionStatus: 'UNCONFIRMED', lastSyncReceivedAt: null, assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null, latestDeployedMapKey: null, latestDeployedFrameId: null, latestDeploymentPassed: null })
         physicalRobots = [...physicalRobots, registered]
         return response(registered)
+      }
+      if (url.pathname.endsWith('/affected-tours')) return response(affectedTours)
+      if (url.pathname.endsWith('/deactivate') && init?.method === 'POST') {
+        physicalRobots = physicalRobots.map(robot => ({ ...robot, deactivatedAt: '2026-11-01T00:00:00Z', deactivationReason: 'Hỏng động cơ' }))
+        return response({ id: 'robot-1', robotCode: 'amr-01', deactivatedAt: '2026-11-01T00:00:00Z', deactivationReason: 'Hỏng động cơ', rowVersion: 'AAAAAAAAAAE=', affectedTours })
+      }
+      if (url.pathname.endsWith('/activate') && init?.method === 'POST') {
+        physicalRobots = physicalRobots.map(robot => ({ ...robot, deactivatedAt: null, deactivationReason: null }))
+        return response({ id: 'robot-1', robotCode: 'amr-01', deactivatedAt: null, deactivationReason: null, rowVersion: 'AAAAAAAAAAI=', affectedTours: [] })
       }
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
         ? new Response(JSON.stringify({ success: false, message: 'Robot lookup unavailable.' }), { status: 503 })
@@ -283,6 +294,47 @@ describe('Technical Staff API integration', () => {
     expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
+  })
+
+  it('warns about Tours a map change strands and leaves them scheduled', async () => {
+    affectedTours = [{ tourId: 'tour-1', name: 'Tour sáng', scheduledStartAt: '2026-11-20T02:00:00Z', state: 'SCHEDULED' }]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: /Gán bản đồ|Thay đổi bản đồ/ }))
+    const dialog = within(await screen.findByRole('dialog'))
+    await dialog.findByRole('option', { name: /Library/ })
+    fireEvent.change(dialog.getByLabelText('Khu vực'), { target: { value: 'library' } })
+    await dialog.findByRole('option', { name: /v1/ })
+    fireEvent.change(dialog.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    fireEvent.submit(document.getElementById('robot-map-assignment-form') as HTMLFormElement)
+
+    expect(await screen.findByText('Các Tour sau sẽ không chạy được với bản đồ mới:')).toBeInTheDocument()
+    expect(screen.getByText(/Tour sáng/)).toBeInTheDocument()
+    expect(screen.getByText('Các Tour này không bị tự hủy.')).toBeInTheDocument()
+  })
+
+  it('takes a robot out of use with a reason, files it under Ngừng sử dụng and brings it back', async () => {
+    affectedTours = [{ tourId: 'tour-1', name: 'Tour sáng', scheduledStartAt: '2026-11-20T02:00:00Z', state: 'SCHEDULED' }]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ngừng sử dụng' }))
+
+    expect(await screen.findByText('Các Tour sau đang giữ robot này:')).toBeInTheDocument()
+    const confirm = screen.getAllByRole('button', { name: 'Ngừng sử dụng' }).at(-1)!
+    expect(confirm).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Lý do ngừng sử dụng/), { target: { value: 'Hỏng động cơ' } })
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/deactivate'))).toBe(true))
+    const sent = requests.find(item => item.url.pathname.endsWith('/deactivate'))!
+    expect(JSON.parse(String(sent.init?.body))).toMatchObject({ reason: 'Hỏng động cơ', expectedRowVersion: 'AAAAAAAAAAA=' })
+    expect(await screen.findByRole('button', { name: 'Kích hoạt lại' })).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Đóng' }).at(-1)!)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Chi tiết amr-01' })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng (1)' }))
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt lại' }))
+    await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/activate'))).toBe(true))
   })
 
   it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {

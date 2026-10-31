@@ -78,6 +78,7 @@ public sealed class ImportPoiFilesCommandHandler(
                 ?? throw new NotFoundException("POI proposal", proposal.Id);
         await mapRepository.LockMapPreparationStateAsync(map.Id, cancellationToken);
         await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
+        RobotLifecycleRules.EnsureActive(robot);
 
         var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot, parsed, cancellationToken);
         var failures = planned.Where(file => file.ErrorCode is not null).ToArray();

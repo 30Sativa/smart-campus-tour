@@ -151,7 +151,7 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.11; the current snapshot
+The backend persistence baseline has advanced through v1.12; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
@@ -160,8 +160,9 @@ and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.7.sql`, with database-owned physical robot map assignments in
 `backend/database/smart-campus-tour-schema-v1.8.sql`, Tours on a tested revision in
 `backend/database/smart-campus-tour-schema-v1.9.sql`, scheduling inputs in
-`backend/database/smart-campus-tour-schema-v1.10.sql`, and POI pose-capture import in
-`backend/database/smart-campus-tour-schema-v1.11.sql`.
+`backend/database/smart-campus-tour-schema-v1.10.sql`, POI pose-capture import in
+`backend/database/smart-campus-tour-schema-v1.11.sql`, and robot area and deactivation columns in
+`backend/database/smart-campus-tour-schema-v1.12.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -689,6 +690,14 @@ TechnicalStaff imports robot pose-capture files through multipart
 `sourceFileSha256`, their four observation fields are null for `POSE_CAPTURE`, revisions add the
 effective `verificationMethod`, and proposals add `sourcePoiId`. Route save returns 409
 `POI_NARRATION_REQUIRED` for a stop without narration. See ADR-0038.
+
+Robot integrity (ADR-0039): map assignment returns `affectedTours` and 409
+`MAP_AREA_ALREADY_ASSIGNED`; TechnicalStaff `POST /api/technical/physical-robots/{id}/deactivate`
+(`requestId`, `expectedRowVersion`, `reason`), `/activate` and `GET .../affected-tours?mapVersionId=`;
+`GET /api/technical/physical-robots` hides deactivated robots unless `includeDeactivated=true` and adds
+`deactivatedAt`, `deactivationReason`. Staff `GET /api/staff/manage/tours/robots?routeRevisionId=` lists
+robots with `usable` and `blockReason`; create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers
+refuse a deactivated robot with 409 `ROBOT_DEACTIVATED`.
 
 Project POI YAML templates/frame mapping, route revision/test tuple, scheduling/READY,
 robot deployment control, frontend workspaces and physical acceptance remain

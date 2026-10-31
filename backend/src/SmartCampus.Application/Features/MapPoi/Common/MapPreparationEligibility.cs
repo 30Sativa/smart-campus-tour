@@ -57,7 +57,7 @@ public static class MapCurrentlyDeployedOn
         MapVersion map, IReadOnlyCollection<MapDeploymentCheck> latestChecks)
     {
         return latestChecks
-            .Where(check => check.Robot.SourceType == "PHYSICAL")
+            .Where(check => check.Robot.SourceType == "PHYSICAL" && !check.Robot.IsDeactivated)
             .GroupBy(check => check.RobotId)
             .Select(group => group.OrderByDescending(check => check.CheckedAt)
                 .ThenByDescending(check => check.Id).First())

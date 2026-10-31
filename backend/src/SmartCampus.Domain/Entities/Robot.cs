@@ -37,6 +37,14 @@ public partial class Robot
 
     public Guid? MapAssignedByUserId { get; set; }
 
+    public string? AssignedAreaKey { get; set; }
+
+    public DateTimeOffset? DeactivatedAt { get; set; }
+
+    public Guid? DeactivatedByUserId { get; set; }
+
+    public string? DeactivationReason { get; set; }
+
     public bool IsDispatchEnabled { get; set; }
 
     public bool NeedsInspection { get; set; }
@@ -64,6 +72,10 @@ public partial class Robot
     public virtual User? MapAssignedByUser { get; set; }
 
     public virtual ICollection<MapDeploymentCheck> MapDeploymentChecks { get; set; } = new List<MapDeploymentCheck>();
+
+    public virtual MapArea? AssignedAreaKeyNavigation { get; set; }
+
+    public virtual User? DeactivatedByUser { get; set; }
 
     public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
 

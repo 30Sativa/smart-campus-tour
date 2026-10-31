@@ -27,6 +27,9 @@ export function useTourCalendar(from: string, to: string) {
 }
 /** Availability of one campus date. Refreshed when a create is refused, because a slot was taken meanwhile. */
 /** With `customTime`, the day also judges that one start, so a typed time and a slot get the same answer. */
+export function useTourRobots(routeRevisionId: string) {
+  return useQuery({ queryKey: [...tourKeys.all, 'robots', routeRevisionId], queryFn: () => toursApi.robots(routeRevisionId), enabled: Boolean(routeRevisionId) })
+}
 export function useTourSlots(routeRevisionId: string, robotCode: string, date: string, customTime?: string) {
   return useQuery({ queryKey: [...tourKeys.slots, routeRevisionId, robotCode, date, customTime ?? ''], queryFn: () => toursApi.slots(routeRevisionId, robotCode, date, date, customTime),
     enabled: Boolean(routeRevisionId && robotCode && date && customTime !== ''), retry: false })
