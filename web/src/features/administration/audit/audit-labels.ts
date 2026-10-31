@@ -27,6 +27,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
   { label: 'POI', actions: {
     POI_PROPOSAL_CREATED: 'Tạo POI', POI_PROPOSAL_REVISION_CREATED: 'Tạo phiên bản POI', POI_PROPOSAL_SUBMITTED: 'Gửi kiểm chứng POI',
     POI_TECHNICAL_VERIFIED: 'Kiểm chứng POI đạt', POI_TECHNICAL_REJECTED: 'Kiểm chứng POI không đạt',
+    POI_POSE_IMPORT_COMPLETED: 'Nhập POI từ file', POI_POSE_CAPTURE_VERIFIED: 'Ghi nhận pose trực tiếp trên robot',
   } },
   { label: 'Bản đồ và robot', actions: {
     MAP_VERSION_UPLOADED: 'Tải lên bản đồ', MAP_DEPLOYMENT_CHECK_RECORDED: 'Ghi kiểm tra bản đồ',
@@ -39,11 +40,11 @@ const ACTION_LABELS: Record<string, string> = Object.assign({}, ...AUDIT_ACTION_
 const ENTITY_LABELS: Record<string, string> = {
   User: 'Tài khoản', Tour: 'Tour', GroupRegistration: 'Đăng ký đoàn', RosterRow: 'Dòng danh sách', RosterEmailChangeRequest: 'Yêu cầu đổi email',
   Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI',
-  MapVersion: 'Bản đồ', Robot: 'Robot',
+  MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI',
 }
 const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'danger' | 'muted' }> = {
   SUCCESS: { label: 'Thành công', tone: 'ok' }, PASS: { label: 'Đạt', tone: 'ok' }, FAIL: { label: 'Không đạt', tone: 'danger' },
-  DRAFT: { label: 'Bản nháp', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' },
+  DRAFT: { label: 'Bản nháp', tone: 'muted' }, SUBMITTED: { label: 'Đã gửi', tone: 'muted' }, IMPORTED: { label: 'Đã nhập', tone: 'ok' },
 }
 
 export const auditActionLabel = (action: string) => ACTION_LABELS[action] ?? 'Thao tác khác'

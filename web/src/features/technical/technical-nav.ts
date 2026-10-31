@@ -1,4 +1,4 @@
-import { Bot, CheckCheck, FileUp, Map } from 'lucide-react'
+import { Bot, CheckCheck, ClipboardCheck, FileUp, Map } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -6,7 +6,10 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
 export const TECHNICAL_NAV_SECTIONS: NavSection[] = [
   { label: 'Bản đồ', items: [{ label: 'Quản lý bản đồ', path: '/technical/maps', icon: Map }] },
   { label: 'Robot', items: [{ label: 'Robot', path: '/technical/robots', icon: Bot }] },
-  { label: 'POI', items: [{ label: 'Kiểm chứng POI', path: '/technical/poi-import', icon: FileUp }] },
+  { label: 'POI', items: [
+    { label: 'Nhập POI từ file', path: '/technical/poi-file-import', icon: FileUp },
+    { label: 'Kiểm chứng POI', path: '/technical/poi-import', icon: ClipboardCheck },
+  ] },
   { label: 'Tuyến', items: [{ label: 'Xác nhận kỹ thuật', path: '/technical/confirmations', icon: CheckCheck }] },
 ]
 

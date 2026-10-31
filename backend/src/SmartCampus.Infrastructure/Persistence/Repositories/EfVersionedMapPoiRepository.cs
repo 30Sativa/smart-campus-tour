@@ -6,7 +6,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Infrastructure.Persistence.Repositories;
 
 public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) :
-    IMapPoiRequestLock, IMapVersionRepository, IPoiProposalRepository, IPoiVerificationRepository
+    IMapPoiRequestLock, IMapVersionRepository, IPoiProposalRepository, IPoiVerificationRepository, IPoiImportRepository
 {
     public async Task<IReadOnlyList<MapArea>> ListMapAreasAsync(CancellationToken cancellationToken) =>
         await dbContext.MapAreas.AsNoTracking()
@@ -237,6 +237,22 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
             .Take(100).ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<PoiImportReceipt>> ListImportRequestReceiptsAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken) =>
+        await dbContext.PoiImportReceipts.AsNoTracking()
+            .Where(receipt => receipt.ImportedByUserId == actorUserId && receipt.RequestId == requestId)
+            .OrderBy(receipt => receipt.FileName).ThenBy(receipt => receipt.Id).ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PoiImportReceipt>> ListAppliedImportReceiptsAsync(Guid mapVersionId, CancellationToken cancellationToken) =>
+        await dbContext.PoiImportReceipts.AsNoTracking()
+            .Where(receipt => receipt.MapVersionId == mapVersionId && receipt.Action != PoiImportActions.NoChange)
+            .ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PoiProposal>> ListProposalsBySourceAsync(string areaKey, IReadOnlyCollection<string> sourcePoiIds, CancellationToken cancellationToken) =>
+        await dbContext.PoiProposals.AsNoTracking()
+            .Where(proposal => proposal.SourceAreaKey == areaKey && sourcePoiIds.Contains(proposal.SourcePoiId!))
+            .ToArrayAsync(cancellationToken);
+
+    public void Add(PoiImportReceipt receipt) => dbContext.PoiImportReceipts.Add(receipt);
     public void Add(MapArea area) => dbContext.MapAreas.Add(area);
     public void Add(MapVersion mapVersion) => dbContext.MapVersions.Add(mapVersion);
     public void Add(MapDeploymentCheck deploymentCheck) => dbContext.MapDeploymentChecks.Add(deploymentCheck);

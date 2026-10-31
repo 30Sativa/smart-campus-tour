@@ -61,8 +61,8 @@ frontend handoff are in `backend/docs/map-poi-versioning.md`. Route revision and
 manual whole-route test evidence follow the scoped succession in
 [ADR-0023](decisions/0023-versioned-routes-and-manual-route-verification.md);
 their API sequence is in `backend/docs/route-revisions.md`. This is human
-evidence only, not physical acceptance or Tour readiness. Project POI YAML
-import, branch runtime, scheduling and command transport remain pending.
+evidence only, not physical acceptance or Tour readiness. Robot pose-capture
+import is ADR-0038; project POI YAML templates, branch runtime, scheduling and command transport remain pending.
 
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility

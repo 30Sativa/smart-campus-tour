@@ -26,7 +26,8 @@ public sealed class ListPoiVerificationQueueQueryHandler(IPoiVerificationReposit
             if (effectiveResult?.ResultCode == "PASS") continue;
             result.Add(new PoiVerificationQueueItem(revision.ProposalId, revision.Proposal.CurrentRevision,
                 Convert.ToBase64String(revision.Proposal.RowVersion),
-                PoiProposalReadModelLoader.ToRevisionView(revision, revision.PoiProposalSubmission, effectiveResult)));
+                PoiProposalReadModelLoader.ToRevisionView(revision, revision.PoiProposalSubmission, effectiveResult),
+                revision.Proposal.SourcePoiId));
         }
         return result;
     }

@@ -17,7 +17,7 @@ internal static class PoiProposalReadModelLoader
         revision.Yaw, revision.CameraPreset, Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(),
         revision.CreatedByUserId, revision.CreatedAt, submission is not null, submission?.SubmittedAt,
         verification?.ResultCode ?? "NOT_CHECKED", revision.NarrationText, revision.FallbackVideoUrl,
-        verification?.ProposalRevisionId);
+        verification?.ProposalRevisionId, verification?.VerificationMethod);
 
     public static async Task<PoiProposalView> LoadAsync(
         IPoiProposalRepository proposalRepository, IPoiVerificationRepository verificationRepository,
@@ -33,8 +33,8 @@ internal static class PoiProposalReadModelLoader
             Convert.ToHexString(revision.NavigationFingerprint).ToLowerInvariant(), revision.CreatedByUserId,
             revision.CreatedAt, submitted is not null, submitted?.SubmittedAt,
             verification?.ResultCode ?? "NOT_CHECKED", revision.NarrationText, revision.FallbackVideoUrl,
-            verification?.ProposalRevisionId);
+            verification?.ProposalRevisionId, verification?.VerificationMethod);
         return new PoiProposalView(proposal.Id, proposal.CurrentRevision,
-            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view);
+            Convert.ToBase64String(proposal.RowVersion), proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId);
     }
 }

@@ -69,8 +69,9 @@ state does not clear it. This is an implementation rule added after the SRS
 baseline, not a claim that sync proves map loading, localization, or safety.
 After a map version has a successful exact-checksum localization and display
 check recorded for at least one physical robot, Staff may click-propose POIs or
-Technical Staff may import a project YAML template; both create unverified POI
-revisions bound to the map version. A new map version does not inherit the
+Technical Staff may import robot pose-capture files (ADR-0038); both create POI
+revisions bound to the map version, unverified unless the file carries a pose-capture
+PASS under ADR-0038. A new map version does not inherit the
 check. Later robot deployment elsewhere preserves the map version's historical
 preparation eligibility, while POI verification still requires its robot's
 latest deployment record to name that exact map version/checksum.

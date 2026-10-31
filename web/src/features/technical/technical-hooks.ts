@@ -75,6 +75,16 @@ export const useUploadMap = () => useTechnicalMutation(technicalApi.uploadMap, k
   detail: 'Upload chỉ lưu phiên bản trên hệ thống; chưa nạp map lên robot.',
 }))
 
+/** Preview changes nothing on the server, so it neither invalidates data nor notifies. */
+export function usePreviewPoiImport() {
+  return useMutation({ mutationFn: technicalApi.previewPoiImport })
+}
+
+export const useImportPoiFiles = () => useTechnicalMutation(technicalApi.importPoiFiles, keys.poiProposals, (_input, result) => ({
+  title: `Đã nhập ${result.files.length} tệp POI`,
+  detail: 'Staff cần bổ sung tên và thuyết minh cho POI mới.',
+}))
+
 export const useRecordDeployment = () => useTechnicalMutation(technicalApi.recordDeployment, keys.maps, (input, check) => check?.passed
   ? { title: `Đã ghi kiểm tra trên ${input.robotCode}: đạt`, detail: 'Localization và hiển thị map đều đạt.' }
   : { tone: 'info', title: `Đã ghi kiểm tra trên ${input.robotCode}: chưa đạt`, detail: 'Version này chưa dùng được cho tới khi kiểm tra lại đạt.' })

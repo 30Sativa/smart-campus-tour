@@ -39,6 +39,39 @@ public sealed class MapPoiController(ISender sender) : ControllerBase
         return Ok(new BaseResponse<MapVersionView> { Success = true, Message = "Map package validated and versioned.", Data = result });
     }
 
+    [HttpPost("technical/poi-imports/preview")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    [RequestSizeLimit(PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    public async Task<ActionResult<BaseResponse<PoiImportPreview>>> PreviewPoiImport(
+        [FromForm] Guid mapVersionId, [FromForm] string robotCode, [FromForm] IFormFileCollection files, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiImportPreview> { Success = true, Message = "POI import preview built; nothing was saved.",
+            Data = await sender.Send(new PreviewPoiImportQuery(new(mapVersionId, robotCode, await ReadUploadsAsync(files, ct))), ct) });
+
+    [HttpPost("technical/poi-imports")]
+    [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
+    [RequestSizeLimit(PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PoiImportFileSet.MaxUploadBytes + 1024 * 1024)]
+    public async Task<ActionResult<BaseResponse<PoiImportResult>>> ImportPois(
+        [FromForm] Guid requestId, [FromForm] Guid mapVersionId, [FromForm] string robotCode, [FromForm] string evidenceNote,
+        [FromForm] IFormFileCollection files, CancellationToken ct) =>
+        Ok(new BaseResponse<PoiImportResult> { Success = true, Message = "POI files imported.",
+            Data = await sender.Send(new ImportPoiFilesCommand(User.GetRequiredUserId(),
+                new(requestId, mapVersionId, robotCode, evidenceNote, await ReadUploadsAsync(files, ct))), ct) });
+
+    private static async Task<IReadOnlyList<PoiImportUpload>> ReadUploadsAsync(IFormFileCollection files, CancellationToken ct)
+    {
+        var uploads = new List<PoiImportUpload>(files.Count);
+        foreach (var file in files)
+        {
+            await using var input = file.OpenReadStream();
+            using var output = new MemoryStream((int)file.Length);
+            await input.CopyToAsync(output, ct);
+            uploads.Add(new PoiImportUpload(file.FileName, output.ToArray()));
+        }
+        return uploads;
+    }
+
     [HttpGet("technical/map-areas")]
     [Authorize(Roles = ApplicationRoles.TechnicalStaff)]
     public async Task<ActionResult<BaseResponse<IReadOnlyList<MapAreaOption>>>> ListMapAreas(CancellationToken ct) =>

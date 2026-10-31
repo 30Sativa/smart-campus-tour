@@ -29,3 +29,15 @@ Decision: ADR-0037.
 - "Mở lại" only lifts the stop. Creating a Tour still needs an effective PASS.
 - Revisions and history stay viewable while a route is stopped.
 - Legacy Routes are unchanged.
+
+## Importing POIs from pose files
+
+Decision: ADR-0038.
+
+- Technical Staff drive the robot to the spot and record its pose on the MiniPC, which writes a YAML file.
+- On "Nhập POI từ file" they pick the exact map version and the robot, drop the files, read the preview and add an evidence note. If any file fails, nothing is imported.
+- A `verified: true` file needs that robot's latest deployment check to be a PASS on this map. It is recorded as "Ghi pose trực tiếp trên robot" with the raw file. It claims nothing about reach, stop, localization or camera.
+- A `verified: false` file goes to the normal "Kiểm chứng POI" queue.
+- The same file on the same map changes nothing. A new file with a known `id` adds a revision of that POI and keeps what Staff wrote.
+- Staff sees "Cần bổ sung nội dung thuyết minh" on imported POIs and adds name and narration through a normal edit. Keeping the pose keeps the PASS. Moving it or changing the camera needs a new check.
+- A route cannot use a stop without narration (`POI_NARRATION_REQUIRED`), and the whole-route test run is still required.

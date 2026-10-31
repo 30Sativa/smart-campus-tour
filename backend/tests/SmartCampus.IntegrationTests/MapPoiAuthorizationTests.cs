@@ -13,6 +13,8 @@ public sealed class MapPoiAuthorizationTests
     [InlineData(nameof(MapPoiController.ListDeploymentChecks), ApplicationRoles.TechnicalStaff)]
     [InlineData(nameof(MapPoiController.VerificationQueue), ApplicationRoles.TechnicalStaff)]
     [InlineData(nameof(MapPoiController.RecordVerification), ApplicationRoles.TechnicalStaff)]
+    [InlineData(nameof(MapPoiController.PreviewPoiImport), ApplicationRoles.TechnicalStaff)]
+    [InlineData(nameof(MapPoiController.ImportPois), ApplicationRoles.TechnicalStaff)]
     [InlineData(nameof(MapPoiController.CreateProposal), ApplicationRoles.Staff)]
     [InlineData(nameof(MapPoiController.ReviseProposal), ApplicationRoles.Staff)]
     [InlineData(nameof(MapPoiController.SubmitProposal), ApplicationRoles.Staff)]

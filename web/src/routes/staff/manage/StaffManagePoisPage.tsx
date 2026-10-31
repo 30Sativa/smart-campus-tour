@@ -8,7 +8,7 @@ import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '..
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { cameraPresetLabel, mapCheckLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { occupancyMapFor } from '../../../features/administration/pois/map/catalog'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 
@@ -85,10 +85,10 @@ export default function StaffManagePoisPage() {
           <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left">
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Bản đồ</th><th className={thClass}>Camera</th><th className={thClass}>Trạng thái</th><th className={thClass}><span className="sr-only">Mở</span></th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">{rows.map((p) => { const st = STATUS[statusOf(p)]; return <tr key={p.id} className={rowClass}>
-              <td className={tdClass}><b className="font-semibold text-[#0f172a]">{p.revision.name}</b><p className="text-[11.5px] text-[#64748b]">{p.revision.purpose}</p></td>
+              <td className={tdClass}><b className="font-semibold text-[#0f172a]">{p.revision.name}</b><p className="text-[11.5px] text-[#64748b]">{p.revision.purpose}</p>{p.sourcePoiId && !p.revision.narrationText && <p className="mt-0.5"><ToneBadge tone="warn">{NARRATION_NEEDED}</ToneBadge></p>}</td>
               <td className={tdClass}>{mapName(p.revision.mapVersionId, p.revision.mapKey)}<p className="text-[11.5px] text-[#64748b]">Phiên bản {p.currentRevision}</p></td>
               <td className={tdClass}>{cameraPresetLabel[p.revision.cameraPreset] ?? p.revision.cameraPreset}</td>
-              <td className={tdClass}><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${st.chip}`}>{st.label}</span>{!p.revision.isSubmitted && <span className="ml-1 text-[11px] text-[#64748b]">bản nháp</span>}</td>
+              <td className={tdClass}><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${st.chip}`}>{st.label}</span>{p.revision.verificationMethod && <p className="mt-0.5 text-[11px] text-[#64748b]">{verificationMethodLabel[p.revision.verificationMethod]}</p>}{!p.revision.isSubmitted && <span className="ml-1 text-[11px] text-[#64748b]">bản nháp</span>}</td>
               <td className={`${tdClass} text-right`}><Link to={`/staff/manage/pois/${p.id}`} className={buttonClass('secondary', 'sm')}>Mở</Link></td>
             </tr> })}</tbody>
           </table></div>}

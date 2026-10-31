@@ -27,22 +27,23 @@ public sealed record PoiRevisionView(
     string NavigationFingerprint, Guid CreatedByUserId, DateTimeOffset CreatedAt,
     bool IsSubmitted, DateTimeOffset? SubmittedAt, string NavigationStatus,
     string? NarrationText, string? FallbackVideoUrl,
-    Guid? VerificationSourceRevisionId);
+    Guid? VerificationSourceRevisionId, string? VerificationMethod = null);
 
 public sealed record PoiProposalView(Guid Id, int CurrentRevision, string RowVersion, DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt, PoiRevisionView Revision);
+    DateTimeOffset? UpdatedAt, PoiRevisionView Revision, string? SourcePoiId = null);
 
 public sealed record PoiVerificationView(
     Guid Id, Guid ProposalId, Guid ProposalRevisionId, int RevisionNumber, Guid MapVersionId,
     string MapKey, string RobotCode, string NavigationFingerprint, string ResultCode,
-    bool Reached, bool Stopped, bool LocalizationPassed, bool CameraPresetConfirmed,
-    string? Reason, string EvidenceNote, Guid CheckedByUserId, DateTimeOffset CheckedAt);
+    bool? Reached, bool? Stopped, bool? LocalizationPassed, bool? CameraPresetConfirmed,
+    string? Reason, string EvidenceNote, Guid CheckedByUserId, DateTimeOffset CheckedAt,
+    string VerificationMethod, string? SourceFileSha256);
 
 public sealed record PoiHistoryView(Guid ProposalId, IReadOnlyList<PoiRevisionView> Revisions,
     IReadOnlyList<PoiVerificationView> VerificationRecords);
 
 public sealed record PoiVerificationQueueItem(Guid ProposalId, int CurrentRevision, string RowVersion,
-    PoiRevisionView Revision)
+    PoiRevisionView Revision, string? SourcePoiId = null)
 {
     public string NavigationStatus => Revision.NavigationStatus;
     public Guid? VerificationSourceRevisionId => Revision.VerificationSourceRevisionId;

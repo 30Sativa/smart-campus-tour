@@ -57,6 +57,8 @@ public partial class MapVersion
 
     public virtual ICollection<Robot> AssignedRobots { get; set; } = new List<Robot>();
 
+    public virtual ICollection<PoiImportReceipt> PoiImportReceipts { get; set; } = new List<PoiImportReceipt>();
+
     public virtual ICollection<PoiProposalRevision> PoiProposalRevisions { get; set; } = new List<PoiProposalRevision>();
 
     public virtual ICollection<PoiVerificationRecord> PoiVerificationRecords { get; set; } = new List<PoiVerificationRecord>();

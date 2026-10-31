@@ -31,7 +31,7 @@ public sealed class ListPoiProposalsQueryHandler(IPoiProposalRepository proposal
             var submission = revision.PoiProposalSubmission;
             var view = PoiProposalReadModelLoader.ToRevisionView(revision, submission, verification);
             result.Add(new(proposal.Id, proposal.CurrentRevision, Convert.ToBase64String(proposal.RowVersion),
-                proposal.CreatedAt, proposal.UpdatedAt, view));
+                proposal.CreatedAt, proposal.UpdatedAt, view, proposal.SourcePoiId));
         }
         return result;
     }

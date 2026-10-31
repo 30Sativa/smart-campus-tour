@@ -16,4 +16,6 @@ public partial class MapArea
     public virtual User CreatedByUser { get; set; } = null!;
 
     public virtual ICollection<MapVersion> MapVersions { get; set; } = new List<MapVersion>();
+
+    public virtual ICollection<PoiProposal> PoiProposals { get; set; } = new List<PoiProposal>();
 }
