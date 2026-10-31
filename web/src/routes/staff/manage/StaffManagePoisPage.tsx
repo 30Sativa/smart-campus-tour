@@ -9,8 +9,8 @@ import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
 import { cameraPresetLabel, mapCheckLabel } from '../../../features/technical/poi-labels'
-import { occupancyMapFor } from '../../../features/administration/pois/map/catalog'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
+import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
 type Filter = 'all' | 'PASS' | 'WAIT' | 'FAIL'
 const statusOf = (p: PoiProposal): Exclude<Filter, 'all'> => p.revision.navigationStatus === 'PASS' ? 'PASS' : p.revision.navigationStatus === 'FAIL' ? 'FAIL' : 'WAIT'
@@ -37,7 +37,6 @@ export default function StaffManagePoisPage() {
   const all = deployedOnly ? everyProposal.filter(p => deployedMaps.has(p.revision.mapVersionId)) : everyProposal
   const maps = [...new Map(all.map(p => [p.revision.mapVersionId, { id: p.revision.mapVersionId, key: p.revision.mapKey }])).values()]
   const mapVersionId = maps.some(map => map.id === selectedMap) ? selectedMap : maps[0]?.id ?? ''
-  const mapKey = maps.find(map => map.id === mapVersionId)?.key
   const scoped = all.filter(p => p.revision.mapVersionId === mapVersionId)
   const count = (f: Exclude<Filter, 'all'>) => scoped.filter((p) => statusOf(p) === f).length
   const rows = scoped.filter((p) => (filter === 'all' || statusOf(p) === filter) && `${p.revision.name} ${p.revision.purpose}`.toLowerCase().includes(search.trim().toLowerCase()))
@@ -93,7 +92,7 @@ export default function StaffManagePoisPage() {
             </tr> })}</tbody>
           </table></div>}
       </section>
-      {proposals.isSuccess && <PoiMap mapKey={mapKey} proposals={rows} onOpen={(id) => navigate(`/staff/manage/pois/${id}`)} />}
+      {proposals.isSuccess && <PoiMap mapVersionId={mapVersionId} proposals={rows} onOpen={(id) => navigate(`/staff/manage/pois/${id}`)} />}
     </div>
   </AdminPage>
 }
@@ -113,23 +112,28 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
 }
 
 /** The listed POIs on their map, coloured by check status; a point opens its proposal. */
-function PoiMap({ proposals, mapKey, onOpen }: { proposals: PoiProposal[]; mapKey?: string; onOpen: (id: string) => void }) {
-  const map = mapKey ? occupancyMapFor(mapKey, 'map') : null
-  if (!map) return <section className={`${panelClass} p-6 text-center text-[13px] text-[#64748b]`} aria-label="Bản đồ POI">Chưa có bản đồ cho các POI đang lọc.</section>
-  const points = proposals.filter((p) => p.revision.mapKey === map.mapKey).map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
+function PoiMap({ proposals, mapVersionId, onOpen }: { proposals: PoiProposal[]; mapVersionId: string; onOpen: (id: string) => void }) {
+  const { map, error, retry } = useMapRaster(mapVersionId)
+  if (!mapVersionId) return <section className={`${panelClass} p-6 text-center text-[13px] text-[#64748b]`} aria-label="Bản đồ POI">Chưa có bản đồ cho các POI đang lọc.</section>
+  if (error) return <section aria-label="Bản đồ POI"><AdminErrorPanel title="Không tải được bản đồ." description={error} onRetry={retry} /></section>
+  if (!map) return <section className={`${panelClass} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
+  const points = proposals.map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
   const us = points.map((pt) => pt.at.u), vs = points.map((pt) => pt.at.v)
   const pad = 140
   const x0 = Math.max(0, (us.length ? Math.min(...us) - pad : 0)), y0 = Math.max(0, (vs.length ? Math.min(...vs) - pad : 0))
-  const w = Math.min(map.width, (us.length ? Math.max(...us) + pad : map.width)) - x0, h = Math.min(map.height, (vs.length ? Math.max(...vs) + pad : map.height)) - y0
+  const w = Math.max(Math.min(map.width, (us.length ? Math.max(...us) + pad : map.width)) - x0, Math.min(200, map.width))
+  const h = Math.max(Math.min(map.height, (vs.length ? Math.max(...vs) + pad : map.height)) - y0, Math.min(200, map.height))
+  // Uploaded rasters differ in size, so markers scale with the view rather than with image pixels.
+  const unit = Math.max(w, h) / 700
   return (
     <section className={`${panelClass} overflow-hidden`} aria-label="Bản đồ POI">
       <div className="flex items-center justify-between border-b border-[#eef1f4] px-3.5 py-2.5"><h2 className="text-[13px] font-semibold text-[#0f172a]">Bản đồ {map.mapKey}</h2><span className="text-[11.5px] text-[#64748b]">bấm một điểm để mở</span></div>
-      <svg viewBox={`${x0} ${y0} ${Math.max(w, 200)} ${Math.max(h, 200)}`} className="block max-h-[560px] w-full bg-[#e2eaf2]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
+      <svg viewBox={`${x0} ${y0} ${w} ${h}`} className="block max-h-[560px] w-full bg-[#e2eaf2]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
         <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: 'pixelated' }} opacity={0.85} />
         {points.map(({ p, at }) => (
           <g key={p.id} role="link" tabIndex={0} aria-label={`${p.revision.name}, ${STATUS[statusOf(p)].label}`} onClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id) }} className="cursor-pointer focus:outline-2 focus:outline-[#173b59]">
-            <circle cx={at.u} cy={at.v} r={12} fill={STATUS[statusOf(p)].pin} stroke="#fff" strokeWidth={4} />
-            <text x={at.u} y={at.v + 34} textAnchor="middle" fontSize={22} fontWeight={600} fill="#0f172a" stroke="#fff" strokeWidth={7} paintOrder="stroke">{p.revision.name}</text>
+            <circle cx={at.u} cy={at.v} r={12 * unit} fill={STATUS[statusOf(p)].pin} stroke="#fff" strokeWidth={4 * unit} />
+            <text x={at.u} y={at.v + 34 * unit} textAnchor="middle" fontSize={22 * unit} fontWeight={600} fill="#0f172a" stroke="#fff" strokeWidth={7 * unit} paintOrder="stroke">{p.revision.name}</text>
           </g>
         ))}
       </svg>

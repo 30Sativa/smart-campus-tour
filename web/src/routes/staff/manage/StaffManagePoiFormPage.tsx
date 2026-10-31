@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, MapPinned, MapPinOff } from 'lucide-react'
@@ -11,8 +11,7 @@ import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { cameraPresetLabel, mapCheckLabel, poiStatus } from '../../../features/technical/poi-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
-import { parseVersionedMapPackage, rasterPngBlob } from '../../../features/administration/pois/map/versioned-package'
-import type { OccupancyMap } from '../../../features/administration/pois/map/catalog'
+import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
 type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
 const empty: Draft = { mapVersionId: '', name: '', purpose: '', description: '', narrationText: '', fallbackVideoUrl: '', x: null, y: null, yaw: null, cameraPreset: 'FRONT' }
@@ -33,8 +32,6 @@ export default function StaffManagePoiFormPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [poseMode, setPoseMode] = useState<PickerMode>('position')
-  const [mapState, setMapState] = useState<{ id: string; map: OccupancyMap; url: string } | null>(null)
-  const [mapError, setMapError] = useState<string | null>(null)
   const current = saved ?? proposalQuery.data ?? null
   const draft = draftOverride ?? (proposalQuery.data ? asDraft(proposalQuery.data) : empty)
   const mapMissingFromList = Boolean(poiId && current && !maps.data?.some(item => item.map.id === current.revision.mapVersionId))
@@ -46,29 +43,10 @@ export default function StaffManagePoiFormPage() {
   const selectedItem = maps.data?.find(item => item.map.id === draft.mapVersionId)
     ?? (mapDetailsQuery.data?.map.id === draft.mapVersionId ? mapDetailsQuery.data : undefined)
   const eligibleMaps = (maps.data ?? []).filter(item => item.canUseForPoiPreparation)
-  const pickerMap = mapState?.id === draft.mapVersionId ? mapState.map : null
+  const { map: pickerMap, error: mapError, retry: retryMap } = useMapRaster(draft.mapVersionId)
   const mapEligible = Boolean(selectedItem?.canUseForPoiPreparation)
   const historicalReadOnly = Boolean(current && selectedItem && !mapEligible)
   const pose: PickerPose = { x: draft.x, y: draft.y, yaw: draft.yaw }
-
-  useEffect(() => {
-    let active = true
-    let objectUrl: string | null = null
-    if (!selectedItem) return
-    void (async () => {
-      try {
-        const bytes = await technicalApi.getMapPackage(selectedItem.map.id)
-        const raster = await parseVersionedMapPackage(await bytes.arrayBuffer(), selectedItem.map.imageFileName)
-        const blob = await rasterPngBlob(raster)
-        objectUrl = URL.createObjectURL(blob)
-        const map: OccupancyMap = { schemaVersion: 1, mapKey: selectedItem.map.mapKey, frameId: selectedItem.map.frameId,
-          imageUrl: objectUrl, imageSha256: raster.imageSha256, fingerprint: selectedItem.map.packageSha256,
-          sourceYaml: raster.sourceYaml, width: raster.width, height: raster.height, resolution: raster.resolution, origin: raster.origin }
-        if (active) { setMapState({ id: selectedItem.map.id, map, url: objectUrl }); setMapError(null) }
-      } catch (cause) { if (active) setMapError(cause instanceof Error ? cause.message : 'Không tải được package map.') }
-    })()
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [selectedItem])
 
   const history = useQuery({ queryKey: ['technical', 'poi-history', poiId], queryFn: () => technicalApi.getPoiHistory(poiId!), enabled: Boolean(poiId) })
   const update = (values: Partial<Draft>) => { setDraftOverride(value => ({ ...draft, ...value, ...values })); setError(null) }
@@ -141,8 +119,8 @@ export default function StaffManagePoiFormPage() {
           {selectedItem && <p className="flex flex-wrap items-center gap-2 text-xs text-[#64748b]"><span className="font-mono">{selectedItem.map.mapKey}</span>{selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">Robot đang triển khai: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}</p>}
           {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
         </section>
-        {mapError && <p role="alert" className="text-sm text-red-700">{mapError}</p>}
-        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} /> : <div className={`${panelClass} grid min-h-[320px] place-items-center p-5 text-center text-sm text-[#64748b]`}><div><MapPinned size={26} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
+        {mapError && <div role="alert"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
+        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} /> : <div className={`${panelClass} grid min-h-[320px] place-items-center p-5 text-center text-sm text-[#64748b]`}><div><MapPinned size={26} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
         <details className={`${panelClass} px-4 py-3 text-sm`}>
           <summary className="cursor-pointer font-medium text-[#334155]">Nhập toạ độ thủ công <span className="font-normal text-[#64748b]">{draft.x != null && draft.y != null ? `· ${draft.x.toFixed(2)}, ${draft.y.toFixed(2)}${yawDeg != null ? ` · ${yawDeg}°` : ''}` : '· chưa đặt vị trí'}</span></summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
