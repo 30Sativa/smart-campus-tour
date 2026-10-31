@@ -185,7 +185,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByLabelText('Chọn khu vực')).toHaveValue('library')
     expect(screen.queryByLabelText('Mã khu vực')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Tên khu vực')).not.toBeInTheDocument()
-    const fileInput = screen.getByLabelText('Package map (.zip)') as HTMLInputElement
+    const fileInput = screen.getByLabelText('Tệp bản đồ (.zip)') as HTMLInputElement
     const file = new File(['zip'], 'new-map.zip', { type: 'application/zip' })
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] })
     fireEvent.change(fileInput)
@@ -335,7 +335,7 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText('Chưa có robot vật lý được đăng ký.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Đăng ký robot' }))
     const dialog = within(screen.getByRole('dialog'))
-    expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS2 được thực hiện riêng.')
+    expect(dialog.getByText(/Đăng ký tạo danh tính robot trong hệ thống/)).toHaveTextContent('Thiết lập kết nối ROS 2 được thực hiện riêng trên robot.')
     const codeInput = dialog.getByLabelText('Mã robot')
     fireEvent.change(codeInput, { target: { value: ' amr-new ' } })
     fireEvent.blur(codeInput)

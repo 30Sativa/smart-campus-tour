@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManagePoiFormPage from '../../../routes/staff/manage/StaffManagePoiFormPage'
+import StaffManagePoisPage from '../../../routes/staff/manage/StaffManagePoisPage'
 import { useAuthStore } from '../../../stores/auth-store'
 import { installSvgLayout, pointerAt } from './map/picker-test-support'
 
@@ -24,6 +25,7 @@ let restoreLayout: () => void
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
+    <Route path="/staff/manage/pois" element={<StaffManagePoisPage />} />
     <Route path="/staff/manage/pois/new" element={<StaffManagePoiFormPage />} />
     <Route path="/staff/manage/pois/:poiId" element={<StaffManagePoiFormPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
@@ -62,7 +64,7 @@ describe('Staff versioned POI workflow', () => {
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library entry' } })
     fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
     fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Giới thiệu thư viện.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu và gửi kiểm chứng' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/submit')).toBe(true))
     const create = requests.find(r => r.url.pathname === '/api/staff/poi-proposals' && r.init?.method === 'POST')!
     const body = JSON.parse(String(create.init?.body))
@@ -71,6 +73,23 @@ describe('Staff versioned POI workflow', () => {
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion })
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
+  })
+
+  it('blocks creating a POI from the list until a map has passed its technical check', async () => {
+    const pendingMap = { ...eligibleMap, technicalCheckStatus: 'PENDING', canUseForPoiPreparation: false }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new NativeURL(String(input), 'http://localhost')
+      if (url.pathname === '/api/maps/versions') return response([pendingMap])
+      if (url.pathname === '/api/staff/poi-proposals') return response([])
+      return response(null)
+    }))
+
+    renderAt('/staff/manage/pois')
+    expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
+    expect(screen.getByText('Library · v1')).toBeInTheDocument()
+    expect(screen.getByText('Chờ kỹ thuật kiểm tra')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
+    expect(screen.queryByRole('link', { name: 'Tạo điểm mới' })).not.toBeInTheDocument()
   })
 
   it('warns when no robot is currently on a passed map but keeps that map selectable', async () => {
@@ -88,16 +107,16 @@ describe('Staff versioned POI workflow', () => {
 
     expect(await screen.findByText('Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.')).toBeInTheDocument()
     expect(picker.selectedOptions[0].disabled).toBe(false)
-    expect(screen.getByRole('button', { name: 'Lưu revision nháp' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
   })
 
   it('revises with the current revision and rowversion and shows rejection reason/history', async () => {
     renderAt('/staff/manage/pois/proposal-1')
-    expect(await screen.findByText(/Revision 1 · FAIL/)).toBeInTheDocument()
+    expect((await screen.findAllByText(/Phiên bản 1 · Không đạt/)).length).toBeGreaterThan(0)
     expect(await screen.findByText(/Lý do: POI chưa tới được/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library updated' } })
     fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung đã cập nhật.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu revision nháp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname.endsWith('/draft') && r.init?.method === 'PUT')).toBe(true))
     const revise = requests.find(r => r.url.pathname.endsWith('/draft'))!
     expect(JSON.parse(String(revise.init?.body))).toMatchObject({ expectedCurrentRevision: 1, expectedRowVersion: proposal.rowVersion, draft: { mapVersionId: 'map-v1', name: 'Library updated', narrationText: 'Nội dung đã cập nhật.' } })
@@ -115,14 +134,13 @@ describe('Staff versioned POI workflow', () => {
       return response(null)
     }))
     renderAt('/staff/manage/pois/proposal-1')
-    expect(await screen.findByText(/Map của đề xuất hiện không đủ điều kiện/)).toBeInTheDocument()
+    expect(await screen.findByText(/Bản đồ của điểm này hiện không đủ điều kiện/)).toBeInTheDocument()
     expect((screen.getByLabelText('Bản đồ') as HTMLSelectElement).selectedOptions[0].disabled).toBe(true)
     const name = screen.getByLabelText('Tên POI')
     fireEvent.change(name, { target: { value: 'Bản nháp người dùng giữ lại' } })
-    expect(screen.getByRole('button', { name: 'Lưu revision nháp' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
     expect(name).toHaveValue('Bản nháp người dùng giữ lại')
     expect(screen.getAllByText(/Không có robot nào có kết quả kiểm tra kỹ thuật mới nhất đạt/).length).toBeGreaterThan(0)
-    expect(screen.getByText(/Chưa có bản đồ được kỹ thuật xác nhận đạt/)).toBeInTheDocument()
   })
 
   it('loads an exact historical map missing from the capped list and keeps its POI preview read-only', async () => {
@@ -140,11 +158,11 @@ describe('Staff versioned POI workflow', () => {
     renderAt('/staff/manage/pois/proposal-1')
     expect(await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })).toBeInTheDocument()
     expect(requests.some(request => request.url.pathname === '/api/maps/versions/map-v1')).toBe(true)
-    expect(screen.getByText(/Map của đề xuất hiện không đủ điều kiện/)).toBeInTheDocument()
+    expect(screen.getByText(/Bản đồ của điểm này hiện không đủ điều kiện/)).toBeInTheDocument()
     expect(screen.getByLabelText('X (m)')).toBeDisabled()
     expect(screen.getByLabelText('Y (m)')).toBeDisabled()
-    expect(screen.getByLabelText('Yaw (rad)')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Lưu revision nháp' })).toBeDisabled()
+    expect(screen.getByLabelText('Hướng (độ)')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled()
     expect(screen.getByLabelText('Tên POI')).toHaveValue('Library entry')
     expect(screen.getByLabelText('Bản đồ')).toHaveValue('map-v1')
   })
@@ -165,8 +183,8 @@ describe('Staff versioned POI workflow', () => {
     fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung giới thiệu.' } })
     fireEvent.change(screen.getByLabelText('X (m)'), { target: { value: '10.25' } })
     fireEvent.change(screen.getByLabelText('Y (m)'), { target: { value: '20.75' } })
-    fireEvent.change(screen.getByLabelText('Yaw (rad)'), { target: { value: '0' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu revision nháp' }))
+    fireEvent.change(screen.getByLabelText('Hướng (độ)'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
     await waitFor(() => expect(requests.some(request => request.url.pathname === '/api/staff/poi-proposals' && request.init?.method === 'POST')).toBe(true))
     expect(screen.getAllByRole('alert').at(-1)).toHaveTextContent('Map vừa mất điều kiện kỹ thuật.')
     expect(screen.getByLabelText('Tên POI')).toHaveValue('Draft to keep')
