@@ -1099,6 +1099,7 @@ public sealed class SchemaV11Tests
             services.AddScoped<IInvitationRepository, EfInvitationRepository>();
             services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
             return services.BuildServiceProvider(validateScopes: true);
         }

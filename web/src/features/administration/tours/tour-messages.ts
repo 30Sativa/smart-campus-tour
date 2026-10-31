@@ -26,21 +26,39 @@ const CONFLICTS: Record<string, string> = {
   IDEMPOTENCY_CONFLICT: 'Yêu cầu trùng với một thao tác trước đó. Tải lại trang rồi thử lại.',
 }
 
+type ErrorBody = { message?: unknown; errors?: { code?: string } | Record<string, string[]> }
+function errorBody(error: ApiError): ErrorBody {
+  try {
+    const decoded: unknown = JSON.parse(error.body)
+    return decoded && typeof decoded === 'object' ? decoded as ErrorBody : {}
+  } catch { return {} }
+}
+
+/** The backend's own explanation of a 4xx; null when it sent none, which is what a route the server lacks looks like. */
+export function backendMessage(error: ApiError): string | null {
+  if (error.status < 400 || error.status >= 500) return null
+  const { message } = errorBody(error)
+  return typeof message === 'string' && message.trim() ? message.trim() : null
+}
+
+export const MISSING_ENDPOINT_MESSAGE = 'Không kết nối được chức năng này, có thể máy chủ chưa cập nhật.'
+
 export function tourError(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không thể kết nối máy chủ. Hãy thử lại.'
   if (error.status === 401) return 'Phiên đăng nhập hết hạn. Hãy đăng nhập lại.'
   if (error.status === 403) return 'Tài khoản không có quyền quản lý Tour.'
-  if (error.status === 404) return 'Không tìm thấy Tour hoặc tuyến. Hãy tải lại danh sách.'
-  let body: { message?: string; errors?: { code?: string } | Record<string, string[]> } = {}
-  try {
-    const decoded: unknown = JSON.parse(error.body)
-    if (decoded && typeof decoded === 'object') body = decoded as typeof body
-  } catch { /* Use the status message below. */ }
+  const body = errorBody(error)
   const code = (body.errors as { code?: string } | undefined)?.code
-  if (error.status === 409) return (code && CONFLICTS[code]) ?? 'Dữ liệu đang được cập nhật đồng thời. Tải lại rồi thử lại.'
+  if (error.status === 409 && code && CONFLICTS[code]) return CONFLICTS[code]
   if (error.status === 400) {
     const messages = Object.values(body.errors ?? {}).flat().filter((v): v is string => typeof v === 'string')
-    return messages.length ? [...new Set(messages)].join(' ') : 'Dữ liệu chưa hợp lệ. Kiểm tra tên, lịch, tuyến và video dự phòng.'
+    if (messages.length) return [...new Set(messages)].join(' ')
   }
+  const message = backendMessage(error)
+  if (message) return message
+  // An empty 404 never reached our API code; a JSON one did, and only lacks the wording.
+  if (error.status === 404) return error.body.trim() ? 'Không tìm thấy Tour hoặc tuyến. Hãy tải lại danh sách.' : MISSING_ENDPOINT_MESSAGE
+  if (error.status === 409) return 'Dữ liệu đang được cập nhật đồng thời. Tải lại rồi thử lại.'
+  if (error.status === 400) return 'Dữ liệu chưa hợp lệ. Kiểm tra tên, lịch, tuyến và video dự phòng.'
   return 'Máy chủ chưa xử lý được yêu cầu. Hãy thử lại.'
 }

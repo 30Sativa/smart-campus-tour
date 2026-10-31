@@ -44,7 +44,7 @@ export function buildRepNotices(rows: readonly RegistrationSummary[], now: numbe
 
     if (r.tourState === 'CANCELLED') {
       notices.push({ id: `${r.id}:tour-cancelled`, tone: 'bad', title: 'Buổi tham quan đã bị hủy', subject,
-        detail: 'Nhà trường đã hủy buổi này. Bạn có thể chọn một buổi khác để đăng ký lại.', at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
+        detail: `Nhà trường đã hủy buổi này${r.tourCancelReason?.trim() ? `: ${r.tourCancelReason.trim()}` : ''}. Bạn có thể chọn một buổi khác để đăng ký lại.`, at: r.updatedAt, to: '/dai-dien/buoi', toLabel: 'Xem buổi khác' })
       continue
     }
     if (r.state === 'REJECTED') {

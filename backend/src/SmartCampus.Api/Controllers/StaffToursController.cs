@@ -25,13 +25,13 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters,
-        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken ct)
+        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? phase, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(parameters.Expand))
             throw new ValidationException([new ValidationFailure("Expand", "Tour expansion is not supported.")]);
         var page = await sender.Send(new GetToursQuery(new(parameters.Search,
             string.IsNullOrWhiteSpace(parameters.Sort) ? "scheduledStartAt" : parameters.Sort.Trim(),
-            parameters.Page, parameters.Size, state, from, to)), ct);
+            parameters.Page, parameters.Size, state, from, to, phase)), ct);
         return Ok(new PagedResponse<TourSummary> { Success = true, Message = "Tours retrieved.", Data = page.Items,
             Pagination = new PaginationMetadata(page.Page, page.PageSize, page.TotalItems, page.TotalPages) });
     }

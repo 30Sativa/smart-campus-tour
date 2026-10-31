@@ -48,14 +48,17 @@ source exists and row/email decisions can be rechecked.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. |
 | GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days), optional `time=HH:mm` to judge a typed start beside the slots (ADR-0036). Returns `customStartEarliest`/`customStartLatest`. Per day and configured slot: `available`, or `reasonCode` (`OUTSIDE_START_HOURS`, `LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
 | GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
 | GET | `/api/staff/manage/tours/operators` | Active single-role Staff accounts a new Tour can name as Operator (ADR-0034). |
 | POST | `/api/staff/manage/tours` | `{requestId, configuration}` with `routeRevisionId`, `robotCode`, `operatorUserId`, schedule and metadata. The schedule must be a configured slot or a whole minute inside the custom hours (409 `TOUR_SLOT_NOT_ALLOWED`), at least 72 hours ahead (409 `TOUR_LEAD_TIME_TOO_SHORT`); a run without a measurement basis returns 409 `ROUTE_TEST_REMEASURE_REQUIRED`. Creates a SCHEDULED Tour on one exact tested revision and reserves the robot; 409 `ROUTE_TEST_PASS_REQUIRED`, `ROBOT_RESERVATION_CONFLICT`, `OPERATOR_REQUIRED` or a map-evidence code otherwise (ADR-0034). |
 | PUT | `/api/staff/manage/tours/{id}` | `{requestId, expectedRowVersion, expectedRouteVersion?, configuration}`; metadata-only eligible edits remain available; schedule or route changes return 409 `TOUR_DURATION_UNAVAILABLE`; cancel and recreate instead. Cancelling releases the reservation. |
-| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. |
+| POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
+| POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
+| POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
+| GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
 
 `configuration` is `{name, description?, routeId, scheduledStartAt,
 fallbackVideoUrl?}`. Name <=150, description <=1000, fallback URL <=1000 and
@@ -2073,7 +2076,9 @@ new endpoints are documented in
 Staff writes immutable `RouteRevisions` and ordered stops linked to exact map
 and POI revisions plus source POI PASS evidence. `GET /api/routes` lists only
 current VERSIONED revisions, including drafts, with search, sort, paging and
-optional exact map-version filtering; the legacy catalog remains separate.
+optional exact map-version and `isActive` filtering; the legacy catalog remains separate.
+Each view carries `isActive` and an opaque `rowVersion` (ADR-0037). Tour create and
+slots refuse an inactive route with 409 `ROUTE_UNAVAILABLE`.
 Submission receipts are separate from draft creation. Technical Staff appends
 manual whole-route test runs with an explicit distinct active Staff participant
 whose single persisted role resolves through `ApplicationRoles`. The technical

@@ -14,6 +14,10 @@ export type VersionedRoute = {
   endMode: 'POSE' | 'LAST_POI'; endX: number | null; endY: number | null; endYaw: number | null
   configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null
   durationStatus: string; dwellDurationSeconds: number; stops: Array<{ poiRevisionId: string; sourcePoiVerificationRecordId: string; stopOrder: number; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }>; name: string; x: number; y: number; yaw: number; cameraPreset: string }>
+  /** Open for new Tours. Off does not affect Tours already scheduled. */
+  isActive: boolean
+  /** Opaque concurrency token for deactivate/activate. */
+  rowVersion: string
   testRuns: RouteTestRun[]; revisionHistory: Array<{ revisionId: string; revisionNumber: number; mapVersionId: string; mapPackageSha256: string; configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null; createdAt: string }>; eligibilityIssues: string[]
 }
 export type VersionedRouteDraft = {
@@ -23,8 +27,14 @@ export type VersionedRouteDraft = {
   stops: Array<{ poiRevisionId: string; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }> }>
 }
 
+export type RouteScheduledTour = { id: string; name: string; scheduledStartAt: string; state: 'SCHEDULED' | 'READY' }
+export type RouteAvailabilityResult = { routeId: string; isActive: boolean; scheduledTours: RouteScheduledTour[] }
+
 export const versionedRoutesApi = {
-  list: (page = 1) => apiClient<PagedApiResponse<VersionedRoute>>(`/api/routes?page=${page}&size=100&sort=name`),
+  list: (page = 1, isActive?: boolean) => apiClient<PagedApiResponse<VersionedRoute>>(`/api/routes?page=${page}&size=100&sort=name${isActive === undefined ? '' : `&isActive=${isActive}`}`),
+  scheduledTours: (routeId: string) => apiClient<ApiResponse<RouteScheduledTour[]>>(`/api/staff/routes/${routeId}/scheduled-tours`).then(result => result.data ?? []),
+  setAvailability: (route: Pick<VersionedRoute, 'routeId' | 'rowVersion'>, requestId: string, active: boolean) =>
+    apiClient<ApiResponse<RouteAvailabilityResult>>(`/api/staff/routes/${route.routeId}/${active ? 'activate' : 'deactivate'}`, { method: 'POST', json: { requestId, expectedRowVersion: route.rowVersion } }).then(result => result.data!),
   get: (routeId: string, revisionId?: string) => apiClient<ApiResponse<VersionedRoute>>(`/api/routes/${routeId}/revisions${revisionId ? `?revisionId=${revisionId}` : ''}`).then(result => result.data!),
   create: (draft: VersionedRouteDraft) => apiClient<ApiResponse<VersionedRoute>>('/api/staff/routes', { method: 'POST', json: draft }).then(result => result.data!),
   revise: (routeId: string, draft: VersionedRouteDraft) => apiClient<ApiResponse<VersionedRoute>>(`/api/staff/routes/${routeId}/revisions`, { method: 'POST', json: draft }).then(result => result.data!),

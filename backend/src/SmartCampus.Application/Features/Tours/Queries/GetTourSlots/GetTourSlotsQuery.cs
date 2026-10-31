@@ -31,7 +31,7 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
 {
     public async Task<TourSlotsView> Handle(GetTourSlotsQuery query, CancellationToken ct)
     {
-        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, query.RouteRevisionId, lockMap: false, ct);
+        var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, query.RouteRevisionId, lockTarget: false, ct);
         var robot = await revisions.FindPhysicalRobotAsync(query.RobotCode.Trim(), ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);

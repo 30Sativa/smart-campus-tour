@@ -213,6 +213,70 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task ListPhases_GroupStatesAndHideOnlyWhatTheyShould()
+    {
+        await using var f = await Fixture.Create();
+        await using (var db = f.Context())
+        {
+            void Add(string name, string state, DateTimeOffset start) => db.Tours.Add(new Tour { Id = Guid.NewGuid(), Name = name, RouteId = f.Route.Id, ActiveRouteId = f.Route.Id,
+                ScheduledStartAt = start, State = state, CreatedByUserId = f.AdminId, CreatedAt = f.Now });
+            Add("scheduled", "SCHEDULED", f.Now.AddDays(5));
+            Add("ready", "READY", f.Now.AddDays(6));
+            Add("overdue", "SCHEDULED", f.Now.AddDays(-1));
+            Add("running", "RUNNING", f.Now.AddHours(-1));
+            Add("completed", "COMPLETED", f.Now.AddDays(-2));
+            Add("cancelled", "CANCELLED", f.Now.AddDays(4));
+            await db.SaveChangesAsync();
+        }
+        async Task<string[]> Names(string query) => (await f.Send(HttpMethod.Get, "/api/staff/manage/tours" + query))
+            .EnumerateArray().Select(tour => tour.GetProperty("name").GetString()!).Order().ToArray();
+        Assert.Equal(["ready", "scheduled"], await Names("?phase=UPCOMING"));
+        Assert.Equal(["running"], await Names("?phase=RUNNING"));
+        Assert.Equal(["cancelled", "completed"], await Names("?phase=FINISHED"));
+        Assert.Equal(6, (await Names("")).Length);
+        Assert.Equal(["overdue", "scheduled"], await Names("?state=SCHEDULED"));
+        await f.Send(HttpMethod.Get, "/api/staff/manage/tours?phase=ARCHIVED", expected: HttpStatusCode.BadRequest);
+    }
+
+    [SchemaV11Fact]
+    public async Task CancelledTour_StaysVisibleToItsRepresentative_WithTheReason_AndClosedToChanges()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var registration = await f.Submit(id);
+        await f.ApproveAndJoin(id, registration);
+        var detail = await f.Detail(id);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/cancel", new CancelTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "Robot cần bảo trì"));
+
+        var listed = Assert.Single((await f.Send(HttpMethod.Get, "/api/representative/registrations?group=closed", token: f.Representative)).EnumerateArray());
+        Assert.Equal("CANCELLED", listed.GetProperty("tourState").GetString());
+        Assert.Equal("APPROVED", listed.GetProperty("state").GetString());
+        Assert.Equal("Robot cần bảo trì", listed.GetProperty("tourCancelReason").GetString());
+        var read = await f.Send(HttpMethod.Get, $"/api/representative/registrations/{registration}", token: f.Representative);
+        Assert.Equal("Robot cần bảo trì", read.GetProperty("summary").GetProperty("tourCancelReason").GetString());
+        Assert.False(read.GetProperty("allowedActions").GetProperty("edit").GetProperty("allowed").GetBoolean());
+        var tour = await f.Send(HttpMethod.Get, $"/api/representative/tours/{id}", token: f.Representative);
+        Assert.Equal("CANCELLED", tour.GetProperty("state").GetString());
+        Assert.Equal("Robot cần bảo trì", tour.GetProperty("cancelReason").GetString());
+        Assert.False(tour.GetProperty("register").GetProperty("allowed").GetBoolean());
+    }
+
+    [SchemaV11Fact]
+    public async Task VersionedAvailabilityEndpoints_LeaveLegacyRoutesAlone()
+    {
+        await using var f = await Fixture.Create();
+        var token = new string('A', 64);
+        foreach (var action in new[] { "deactivate", "activate" })
+            await f.Send(HttpMethod.Post, $"/api/staff/routes/{f.Route.Id}/{action}", new RouteAvailabilityRequest(Guid.NewGuid(), token), HttpStatusCode.NotFound);
+        await f.Send(HttpMethod.Get, $"/api/staff/routes/{f.Route.Id}/scheduled-tours", expected: HttpStatusCode.NotFound);
+        await using var db = f.Context();
+        var route = await db.Routes.SingleAsync(r => r.Id == f.Route.Id);
+        Assert.True(route.IsActive);
+        Assert.Null(route.UpdatedAt);
+        Assert.Equal(0, await db.AuditLogs.CountAsync(a => a.EntityType == "Route"));
+    }
+
+    [SchemaV11Fact]
     public async Task CancellationAuditFailure_RollsBackTourInvitationsSessionsAndReceipt()
     {
         await using var f = await Fixture.Create();

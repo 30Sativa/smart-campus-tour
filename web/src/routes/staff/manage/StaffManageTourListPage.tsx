@@ -9,7 +9,7 @@ import { formatSlot } from '../../../features/administration/admin-format'
 import { useDebouncedValue } from '../../../features/administration/use-debounced-value'
 import { useTours } from '../../../features/administration/tours/hooks'
 import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
-import type { TourState } from '../../../features/administration/tours/types'
+import type { TourPhase, TourState } from '../../../features/administration/tours/types'
 
 const PAGE_SIZE = 20
 const STATE_TONE: Record<TourState, string> = {
@@ -20,22 +20,37 @@ const STATE_TONE: Record<TourState, string> = {
   CANCELLED: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]',
 }
 
+const TABS: { phase: TourPhase; label: string; sort?: string }[] = [
+  { phase: 'UPCOMING', label: 'Sắp diễn ra' },
+  { phase: 'RUNNING', label: 'Đang chạy' },
+  { phase: 'FINISHED', label: 'Đã kết thúc / Đã hủy', sort: '-scheduledStartAt' },
+]
+
 export default function StaffManageTourListPage() {
   const [search, setSearch] = useState('')
   const [params, setParams] = useSearchParams()
   const requestedState = params.get('state')?.toUpperCase()
-  const state: TourState | '' = requestedState === 'ALL' ? '' : requestedState && requestedState in TOUR_STATE_LABEL ? requestedState as TourState : 'SCHEDULED'
+  // A state or "all" pick steps outside the tabs: it is how dashboard links land, and how to reach a Tour past its start that never ran.
+  const state: TourState | '' = requestedState && requestedState in TOUR_STATE_LABEL ? requestedState as TourState : ''
+  const everything = requestedState === 'ALL'
+  const tab = state || everything ? null : TABS.find(item => item.phase === params.get('tab')) ?? TABS[0]
   const [page, setPage] = useState(1)
   const term = useDebouncedValue(search, 300)
-  const tours = useTours({ search: term, state: state || undefined, page, size: PAGE_SIZE })
+  const tours = useTours({ search: term, state: state || undefined, phase: tab?.phase, sort: tab?.sort, page, size: PAGE_SIZE })
+  const pickTab = (phase: TourPhase) => { setParams({ tab: phase }, { replace: true }); setPage(1) }
   return <AdminPage>
     <PageHeader eyebrow="Chuẩn bị Tour" title="Quản lý Tour" description="Tour đã tạo theo thời gian, kèm số đoàn đăng ký và số đoàn đã nhận thư mời. Tour đang diễn ra và đã kết thúc chỉ xem."
       action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo Tour mới</Link>} />
     <section className={panelClass} aria-label="Danh sách Tour">
       <div className="flex flex-wrap items-center gap-3 border-b border-[#eef1f4] px-3 py-2.5">
         <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" />
-        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={state} onChange={e => { setParams(current => { const next = new URLSearchParams(current); next.set('state', e.target.value || 'ALL'); return next }, { replace: true }); setPage(1) }}>
-          <option value="">Tất cả</option>
+        <div role="group" aria-label="Nhóm Tour" className="inline-flex flex-wrap gap-0.5 rounded-[10px] bg-[#eef2f6] p-[3px]">
+          {TABS.map(item => <button key={item.phase} type="button" aria-pressed={tab?.phase === item.phase} onClick={() => pickTab(item.phase)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${tab?.phase === item.phase ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{item.label}</button>)}
+        </div>
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={everything ? 'ALL' : state} onChange={e => { const value = e.target.value; setParams(value ? { state: value } : {}, { replace: true }); setPage(1) }}>
+          <option value="">Theo nhóm đang chọn</option>
+          <option value="ALL">Tất cả</option>
           {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_LABEL[s]}</option>)}
         </select></label>
       </div>

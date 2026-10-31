@@ -17,6 +17,8 @@ links SRS requirements to code/schema, dependencies and acceptance.
   report or proof of advisor approval.
 - [Scope summary](requirements/campus-tour-scope-summary.md) — short version for
   group/advisor discussion. It does not override the detailed scope.
+- [Business flow notes](business-flow.md) — Tour cancellation, Tour history and
+  Route deactivation rules that cross several screens.
 - [CampusTour UI flow](requirements/campus-tour-ui-flow.md) — screen and user
   flow projection. The detailed scope is authoritative when business rules
   differ.

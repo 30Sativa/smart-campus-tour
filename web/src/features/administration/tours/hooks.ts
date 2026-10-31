@@ -39,7 +39,7 @@ export function useTourOperators() {
 }
 /** Revisions a new Tour can use; the server rechecks this when the Tour is created. */
 export function useTestedRoutes() {
-  return useQuery({ queryKey: [...tourKeys.all, 'tested-routes'], queryFn: () => versionedRoutesApi.list(),
+  return useQuery({ queryKey: [...tourKeys.all, 'tested-routes'], queryFn: () => versionedRoutesApi.list(1, true),
     select: page => page.data.filter(route => route.isSubmitted && route.verificationStatus === 'PASS') })
 }
 function useInvalidateTours() {

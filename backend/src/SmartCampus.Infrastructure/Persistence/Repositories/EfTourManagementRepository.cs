@@ -45,6 +45,13 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             query = query.Where(t => t.Name.Contains(search) || (t.Description != null && t.Description.Contains(search)) || t.Route.Name.Contains(search));
         }
         if (request.State is not null) query = query.Where(t => t.State == request.State);
+        query = request.Phase switch
+        {
+            TourPhases.Upcoming => query.Where(t => (t.State == "SCHEDULED" || t.State == "READY") && t.ScheduledStartAt > request.Now),
+            TourPhases.Running => query.Where(t => t.State == "RUNNING"),
+            TourPhases.Finished => query.Where(t => t.State == "COMPLETED" || t.State == "ENDED" || t.State == "CANCELLED"),
+            _ => query
+        };
         if (request.From.HasValue) query = query.Where(t => t.ScheduledStartAt >= request.From.Value);
         if (request.To.HasValue) query = query.Where(t => t.ScheduledStartAt <= request.To.Value);
         var count = await query.LongCountAsync(ct);
