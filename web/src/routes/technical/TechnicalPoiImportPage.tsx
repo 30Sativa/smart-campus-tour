@@ -5,9 +5,10 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { CheckRow, DetailFact, Note, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { cameraPresetLabel } from '../../features/technical/poi-labels'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
-import { usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
+import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
 
 type PoiFilter = 'pending' | 'retry' | 'passed'
@@ -39,6 +40,13 @@ export default function TechnicalPoiImportPage() {
   const allProposals = usePoiProposals()
   // Holds the row itself: saving moves it between lists, and the dialog must not unmount mid-save.
   const [selected, setSelected] = useState<PoiRow | null>(null)
+  const [viewing, setViewing] = useState<PoiRow | null>(null)
+  const maps = useMapVersions()
+  // People read the area and version; the map key is only a fallback while the list loads.
+  const mapName = (mapKey: string) => {
+    const map = maps.data?.find(item => item.map.mapKey === mapKey)?.map
+    return map ? `${map.areaName} · v${map.versionNumber}` : mapKey
+  }
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
   const rows = useMemo(() => toRows(proposals.data ?? [], allProposals.data ?? []), [proposals.data, allProposals.data])
@@ -66,24 +74,24 @@ export default function TechnicalPoiImportPage() {
         {filter !== 'pending' && allProposals.isError && <div role="alert" className="space-y-2 border-b border-[#eef1f4] p-4 text-[13px] text-[#b23e31]"><p>{errorText(allProposals.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void allProposals.refetch()}>Tải lại danh sách POI</button></div>}
         {proposals.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : proposals.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(proposals.error)}</p> : (
           <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
-              <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Map</th><th className={thClass}>Tọa độ</th><th className={thClass}>Trạng thái</th><th className={thClass}>Đã gửi</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
+            <table className="w-full min-w-[640px] text-left">
+              <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>POI</th><th className={thClass}>Bản đồ</th><th className={thClass}>Trạng thái</th><th className={thClass}>Đã gửi</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
               <tbody className="divide-y divide-[#eef1f4]">
                 {visible.map((item) => <tr key={`${item.proposalId}:${item.revision.revisionNumber}`} className={rowClass}>
-                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{item.revision.name}</span><p className="text-[11.5px] text-[#64748b]">{item.revision.purpose}</p><p className="mt-1 max-w-xl whitespace-pre-wrap text-xs text-[#475569]">{item.revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p></td>
-                  <td className={`${tdClass} font-mono text-xs`}>{item.revision.mapKey} · r{item.revision.revisionNumber}</td>
-                  <td className={`${tdClass} font-mono text-xs text-[#64748b]`}>{item.revision.x}, {item.revision.y}, {item.revision.yaw}</td>
+                  <td className={tdClass}><span className="font-semibold text-[#0f172a]">{item.revision.name}</span><p className="text-[11.5px] text-[#64748b]">{item.revision.purpose}</p></td>
+                  <td className={tdClass}>{mapName(item.revision.mapKey)}</td>
                   <td className={tdClass}><PoiStatus row={item} /></td>
                   <td className={`${tdClass} text-xs text-[#64748b]`}>{stamp(item.revision.submittedAt)}</td>
-                  <td className={`${tdClass} text-right`}><button className={buttonClass(item.recordable ? 'primary' : 'secondary', 'sm')} type="button" onClick={() => setSelected(item)}>{item.recordable ? 'Ghi kết quả' : 'Xem kết quả'}</button></td>
+                  <td className={tdClass}><div className="flex items-center justify-center gap-2"><button className={buttonClass(item.recordable ? 'primary' : 'secondary', 'sm')} type="button" onClick={() => setSelected(item)}>{item.recordable ? 'Ghi kết quả' : 'Xem kết quả'}</button><ViewDetailButton label={`Xem chi tiết ${item.revision.name}`} onClick={() => setViewing(item)} /></div></td>
                 </tr>)}
-                {!visible.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={6}>{filterText[filter].empty}</td></tr>}
+                {!visible.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}>{filterText[filter].empty}</td></tr>}
               </tbody>
             </table>
           </div>
         )}
       </section>
 
+      {viewing && <PoiDetailModal row={viewing} mapName={mapName(viewing.revision.mapKey)} onClose={() => setViewing(null)} onRecord={() => { setViewing(null); setSelected(viewing) }} />}
       {selected?.recordable && <VerifyModal key={selected.proposalId} proposal={selected} onClose={() => setSelected(null)} />}
       {selected && !selected.recordable && <PoiResultModal key={selected.proposalId} proposalId={selected.proposalId} revision={selected.revision} onClose={() => setSelected(null)} />}
     </TechnicalPage>
@@ -95,6 +103,27 @@ function PoiStatus({ row }: { row: PoiRow }) {
   if (row.filter === 'passed') return <ToneBadge tone="ok">Đã đạt</ToneBadge>
   if (row.recordable) return <ToneBadge tone="danger">Cần kiểm tra lại</ToneBadge>
   return <><ToneBadge tone="danger">Không đạt</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">Chờ Staff sửa và gửi lại</p></>
+}
+
+/** What the table leaves out: where the robot must go and what it will say there. */
+function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapName: string; onClose: () => void; onRecord: () => void }) {
+  const { revision } = row
+  return (
+    <Modal open title={revision.name} onClose={onClose}
+      footer={<div className="flex justify-end"><button type="button" className={buttonClass('primary')} onClick={onRecord}>{row.recordable ? 'Ghi kết quả' : 'Xem kết quả'}</button></div>}>
+      <dl className="divide-y divide-[#f1f5f9]">
+        <DetailFact label="Trạng thái"><PoiStatus row={row} /></DetailFact>
+        <DetailFact label="Mục đích">{revision.purpose}</DetailFact>
+        {revision.description && <DetailFact label="Mô tả">{revision.description}</DetailFact>}
+        <DetailFact label="Bản đồ">{mapName}</DetailFact>
+        <DetailFact label="Phiên bản POI">{revision.revisionNumber}</DetailFact>
+        <DetailFact label="Tọa độ"><span className="font-mono">x {revision.x}, y {revision.y}, yaw {revision.yaw}</span></DetailFact>
+        <DetailFact label="Hướng camera">{cameraPresetLabel[revision.cameraPreset] ?? revision.cameraPreset}</DetailFact>
+        <DetailFact label="Thuyết minh"><span className="whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</span></DetailFact>
+        {revision.fallbackVideoUrl && <DetailFact label="Video dự phòng"><span className="break-all">{revision.fallbackVideoUrl}</span></DetailFact>}
+      </dl>
+    </Modal>
+  )
 }
 
 function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem; onClose: () => void }) {

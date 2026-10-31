@@ -49,14 +49,14 @@ export default function TechnicalRobotsPage() {
         <PanelHead title="Robot đã đăng ký" description="Robot xuất hiện trong danh sách chọn khi ghi kết quả kiểm tra map." action={!robots.isPending && !robots.isError ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button> : undefined} />
         {robots.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" role="status" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải danh sách robot…</p> : robots.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div> : (
           <div className="relative overflow-x-auto"><table className="w-full min-w-[760px] text-left">
-            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
+            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {robots.data?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
                 <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · v{robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
-                <td className={`${tdClass} text-right`}><button type="button" aria-label={`Chi tiết ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Chi tiết</button></td>
+                <td className={`${tdClass} text-center`}><button type="button" aria-label={`Chi tiết ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Chi tiết</button></td>
               </tr>)}
               {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
             </tbody>
@@ -71,11 +71,11 @@ export default function TechnicalRobotsPage() {
   )
 }
 
-function DetailSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+function DetailSection({ title, subject, action, children }: { title: string; subject?: string; action?: ReactNode; children?: ReactNode }) {
   return (
     <section aria-label={title} className="rounded-lg border border-[#e2e8f0] p-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="text-[13px] font-semibold text-[#0f172a]">{title}</h3>{action}</div>
-      {children}
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-[13px] font-semibold text-[#0f172a]">{title}{subject && <span className="font-normal text-[#64748b]"> · {subject}</span>}</h3>{action}</div>
+      {children && <div className="mt-2">{children}</div>}
     </section>
   )
 }
@@ -89,7 +89,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
     await navigator.clipboard?.writeText(value)
     notify({ title: `Đã sao chép ${label}`, detail: value })
   }
-  return <div className="flex items-center justify-between gap-2"><span className="min-w-0 break-all font-mono text-[13px] text-[#334155]">{value}</span><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void copy()}><Copy size={13} aria-hidden="true" />Sao chép {label}</button></div>
+  return <span className="flex items-center gap-1.5"><span className="min-w-0 break-all font-mono">{value}</span><button type="button" title={`Sao chép ${label}`} aria-label={`Sao chép ${label}`} className="grid size-6 shrink-0 place-items-center rounded-md text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" onClick={() => void copy()}><Copy size={13} aria-hidden="true" /></button></span>
 }
 
 function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot: PhysicalRobotOption; onAssignMap: () => void; onManageKey: () => void; onClose: () => void }) {
@@ -107,11 +107,12 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           ]} />
           {robot.connectionStatus === 'AWAITING_DATA' && <p className="mt-2 text-xs text-[#64748b]">Chưa nhận dữ liệu sau khi hệ thống khởi động.</p>}
         </DetailSection>
-        <DetailSection title="Bản đồ được gán" action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
+        <DetailSection title="Bản đồ được gán" subject={assigned ? `${robot.assignedAreaName} v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
           {assigned ? <div className="space-y-2">
-            <p className="text-[13px] text-[#334155]">{robot.assignedAreaName} · v{robot.assignedVersionNumber}</p>
-            <CopyValue label="MapKey" value={robot.assignedMapKey!} />
-            <CopyValue label="FrameId" value={robot.assignedFrameId!} />
+            <Facts items={[
+              ['MapKey', <CopyValue key="map" label="MapKey" value={robot.assignedMapKey!} />],
+              ['FrameId', <CopyValue key="frame" label="FrameId" value={robot.assignedFrameId!} />],
+            ]} />
             <p className="text-xs text-[#64748b]">Nhập hai giá trị này trên MiniPC.{robot.mapAssignedAt ? ` Gán lúc ${stamp(robot.mapAssignedAt)}${robot.mapAssignedByName ? ` bởi ${robot.mapAssignedByName}` : ''}.` : ''}</p>
           </div> : <p className="text-[13px] text-amber-800">Chưa gán bản đồ.</p>}
         </DetailSection>
@@ -119,9 +120,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           {robot.latestDeployedMapKey ? <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[13px] text-[#334155]">{robot.latestDeployedMapKey} · {robot.latestDeployedFrameId}</span><DeploymentBadge robot={robot} /></div> : <p className="text-[13px] text-[#64748b]">Chưa ghi nhận.</p>}
           {contextMismatch(robot) && <div className="mt-2"><Note tone="warn">Robot được gán map {robot.assignedMapKey} · {robot.assignedFrameId} nhưng lần triển khai gần nhất là {robot.latestDeployedMapKey} · {robot.latestDeployedFrameId}. Kiểm tra cấu hình MiniPC và triển khai map đúng.</Note></div>}
         </DetailSection>
-        <DetailSection title="Khóa Fleet Sync" action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Quản lý khóa</button>}>
-          <p className="text-[13px] text-[#64748b]">Cấp, cấp lại hoặc thu hồi khóa kết nối của MiniPC.</p>
-        </DetailSection>
+        <DetailSection title="Khóa kết nối MiniPC" action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Quản lý khóa</button>} />
       </div>
     </Modal>
   )

@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../../api/client'
 import { Activity, CircleCheck, CircleX, FileArchive, Layers, LoaderCircle, Upload } from 'lucide-react'
-import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
+import { PageHeader, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
-import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
+import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-classes'
+import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { CheckRow, TechnicalPage } from '../../features/technical/TechnicalUi'
 import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
-import { errorText, mapUploadFieldErrors, stamp } from '../../features/technical/technical-format'
+import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
 
 const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha.slice(-4)}` : sha)
@@ -46,36 +47,10 @@ export default function TechnicalMapsPage() {
         </div>
       )}
 
-      <section className={panelClass} aria-label="Danh sách phiên bản bản đồ">
-        <PanelHead title="Danh sách phiên bản bản đồ" description="Mỗi lần tải lên tạo một phiên bản mới của khu vực." />
-        {maps.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p> : maps.error ? <p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p> : (
-          <div className="relative overflow-x-auto">
-            <table className="w-full min-w-[1280px] text-left">
-              <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Khu vực</th><th className={thClass}>Mã khu vực</th><th className={thClass}>Phiên bản</th><th className={thClass}>Tệp</th><th className={thClass}>Tình trạng tệp</th><th className={thClass}>Kiểm tra kỹ thuật</th><th className={thClass}>Điều kiện tạo POI</th><th className={thClass}>Robot đang triển khai</th><th className={thClass}><span className="sr-only">Thao tác</span></th></tr></thead>
-              <tbody className="divide-y divide-[#eef1f4]">
-                {items.map((item) => {
-                  const { map, preparationEvidence } = item
-                  return (
-                    <tr key={map.id} className={rowClass}>
-                      <td className={tdClass}>{map.areaName}</td>
-                      <td className={`${tdClass} font-mono`}>{map.areaKey}</td>
-                      <td className={`${tdClass} font-mono`}>v{map.versionNumber}</td>
-                      <td className={tdClass}>{map.packageFileName}<details className="mt-1 text-[11.5px] text-[#64748b]"><summary className="cursor-pointer">Chi tiết package</summary><p className="mt-1 font-mono" title={map.packageSha256}>SHA-256 {map.packageSha256}</p><p>{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô · {map.frameId}</p></details></td>
-                      <td className={tdClass}><ToneBadge tone={map.validationStatus === 'VALID' ? 'ok' : 'danger'}>{map.validationStatus === 'VALID' ? 'Tệp hợp lệ' : 'Tệp không hợp lệ'}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">{stamp(map.uploadedAt)}</p></td>
-                      <td className={tdClass}>{preparationEvidence ? <><ToneBadge tone={item.technicalCheckStatus === 'PASSED' ? 'ok' : 'danger'}>{item.technicalCheckStatus === 'PASSED' ? 'Đạt' : 'Không đạt'}</ToneBadge><p className="mt-0.5 text-[11.5px] text-[#64748b]">{preparationEvidence.robotCode} · {stamp(preparationEvidence.checkedAt)}</p></> : <ToneBadge tone="warn">Chưa có kết quả kiểm tra</ToneBadge>}</td>
-                      <td className={tdClass}><ToneBadge tone={item.canUseForPoiPreparation ? 'ok' : 'warn'}>{item.canUseForPoiPreparation ? 'Đã có kiểm tra kỹ thuật đạt' : item.technicalCheckStatus === 'FAILED' ? 'Kiểm tra chưa đạt' : 'Chờ kỹ thuật kiểm tra'}</ToneBadge>{item.preparationBlockReason && <p className="mt-0.5 text-[11.5px] text-[#64748b]">{item.preparationBlockReason}</p>}</td>
-                      <td className={tdClass}>{item.currentlyDeployedOn.length ? <div className="flex flex-wrap gap-1">{item.currentlyDeployedOn.map(robot => <ToneBadge key={robot.robotCode} tone="ok">Robot đang triển khai: {robot.robotCode}</ToneBadge>)}</div> : <span className="text-xs text-[#64748b]">Chưa có robot đang triển khai</span>}</td>
-                      <td className={`${tdClass} text-right`}><div className="flex justify-end gap-2"><button className={buttonClass('secondary', 'sm')} type="button" onClick={() => { setUploadArea({ areaKey: map.areaKey, displayName: map.areaName }); setUploading(true) }}>Tải phiên bản mới</button><button className={buttonClass('secondary', 'sm')} type="button" onClick={() => setChecking(item)}>Ghi kết quả kiểm tra</button></div></td>
-                    </tr>
-                  )
-                })}
-                {!items.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={9}>Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      <div className="mt-3"><Note>Quy trình: tải bản đồ lên → nạp đúng phiên bản lên robot (thao tác trên robot) → ghi kết quả kiểm tra tại đây. Bản đồ đạt kiểm tra mới dùng được để tạo POI.</Note></div>
+      {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
+        : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
+        : items.length ? <MapVersionTable items={items} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
+        : <section className={panelClass}><p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</p></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
       <DeploymentModal key={checking?.map.id ?? 'closed'} item={checking} onClose={() => setChecking(null)} />
