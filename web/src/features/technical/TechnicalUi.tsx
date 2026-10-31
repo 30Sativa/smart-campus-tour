@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
 
 export function TechnicalPage({ children }: { children: ReactNode }) {
@@ -7,6 +8,16 @@ export function TechnicalPage({ children }: { children: ReactNode }) {
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
   return <span className={`inline-flex items-center rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${toneClass[tone]}`}>{children}</span>
+}
+
+/** The eye on a table row: the row stays short and the rest opens on demand. */
+export function ViewDetailButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" title="Xem chi tiết" aria-label={label} onClick={onClick} className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#e2e8f0] text-[#475569] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]"><Eye size={15} aria-hidden="true" /></button>
+}
+
+/** One labelled line of a detail dialog; wrap several in a divided `dl`. */
+export function DetailFact({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="grid gap-0.5 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-3"><dt className="text-[13px] text-[#64748b]">{label}</dt><dd className="min-w-0 text-[13px] text-[#1e293b]">{children}</dd></div>
 }
 
 /** A short statement with a tone: the colour carries how much it matters, the words carry the rule. */
