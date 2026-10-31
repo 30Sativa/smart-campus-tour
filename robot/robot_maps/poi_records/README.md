@@ -9,12 +9,12 @@ production Route data.
 
 | Record | Status in source | Pose `(x, y, yaw)` | Notes |
 |---|---|---|---|
-| [POI_02](poi_02.yaml) | Provisional; `verified: false` | `(30.211, -5.690, -0.364)` | AMCL had not converged; the source note recommends recording again with good localization. |
+| [POI_02](poi_02.yaml) | Owner-confirmed; `verified: true` | `(29.692, -5.439, -0.291)` | Source originally marked it rejected due to poor AMCL/scan-match readings; the owner confirmed this pose is correct on 2026-10-31. |
+| [Provisional POI_02](poi_02_provisional_20261019.yaml) | Provisional; `verified: false` | `(30.211, -5.690, -0.364)` | AMCL had not converged; the source note recommends recording again with good localization. |
 | [POI_03](poi_03.yaml) | Unverified; `verified: false` | `(42.460, -23.038, -1.613)` | Recorded with scan match 0.76; still needs verification before use. |
-| [Rejected POI_02](rejected/poi_02_amcl_wide_20261019.yaml) | Rejected | `(29.692, -5.439, -0.291)` | Source reports poor AMCL sigma and scan match; retained only as rejected history. |
 
-The MiniPC archive contained all three records above. The other saved points
-already in the repository are `robot/robot_maps/poi_start.yaml` and
+The MiniPC archive contained both POI_02 captures and POI_03. The other saved
+points already in the repository are `robot/robot_maps/poi_start.yaml` and
 `robot/robot_maps/poi_01.yaml`. Both currently have `verified: false`.
 The separate MiniPC backup of POI_01 matched the repository file byte-for-byte,
 so it is represented by that existing file instead of a duplicate copy.
