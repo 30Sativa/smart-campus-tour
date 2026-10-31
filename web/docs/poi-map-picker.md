@@ -68,6 +68,12 @@ outside this slice.
 
 ## Source and geometry contract
 
+Staff POI screens draw uploaded map versions through `useMapRaster(mapVersionId)`
+in `web/src/features/administration/pois/map/use-map-raster.ts`, which reads the
+version's package from `/api/maps/versions/{id}/package`. The static snapshots
+below are not a source for those screens; they only feed the legacy `map2-v1`
+and `map2-v2` presentation entries in `web/src/features/digital-twin/map-config.ts`.
+
 Source: `robot/robot_maps/map2.yaml` referencing `robot/robot_maps/map_fix.pgm`.
 Current package key: `map2-v2`; frame: `map`. `map2-v1` remains available for
 existing POIs. These are explicit registration values,

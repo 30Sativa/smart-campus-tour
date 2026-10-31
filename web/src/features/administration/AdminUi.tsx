@@ -67,12 +67,12 @@ export function InvitationStatus({ registration }: { registration: Pick<AdminReg
 }
 
 /** A load that failed, with the one way out. */
-export function AdminErrorPanel({ title, onRetry }: { title: string; onRetry?: () => void }) {
+export function AdminErrorPanel({ title, description = 'Kiểm tra kết nối với máy chủ rồi thử lại.', onRetry }: { title: string; description?: string; onRetry?: () => void }) {
   return (
     <div className={`${panelClass} flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center`} role="alert">
       <AlertCircle className="text-[#bd473a]" size={24} aria-hidden="true" />
       <p className="text-[15px] font-semibold text-[#1e293b]">{title}</p>
-      <p className="max-w-md text-sm text-[#64748b]">Kiểm tra kết nối với máy chủ rồi thử lại.</p>
+      <p className="max-w-md text-sm text-[#64748b]">{description}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className={buttonClass('secondary', 'sm')}>
           <RotateCcw size={15} aria-hidden="true" />Thử lại

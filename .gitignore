@@ -470,3 +470,6 @@ skills-lock.json
 
 # Native miniPC version reports are machine-local
 /robot/.native-state/
+
+# Claude Code local state and worktrees
+.claude/
