@@ -47,10 +47,16 @@ phải luôn giữ E-stop.
 
 Copy `route.example.yaml`. File tuyến chỉ chứa `route_id`, `map_yaml`, `frame_id`,
 `start`, `pois`, `default_dwell_s` (tùy chọn, mặc định 0), `end_mode`
-(`return_to_start` hoặc `none`). Mỗi POI có `poi_file`, `dwell_s` và `timeout_s`
-tùy chọn. **Tọa độ chỉ lấy từ `robot/robot_maps/poi_*.yaml`.** Hiện chỉ có
-`poi_start.yaml` và `poi_01.yaml`; POI_02, POI_03 đang comment trong file mẫu, bỏ
-comment khi đã có file đúng format.
+(`return_to_start` hoặc `none`), `end_timeout_s` (tùy chọn, timeout chặng về START).
+Mỗi POI có `poi_file`, `dwell_s` và `timeout_s` tùy chọn. **File tuyến không chứa
+tọa độ**, tọa độ chỉ lấy từ file POI: `robot/robot_maps/poi_start.yaml`, `poi_01.yaml`
+và `robot/robot_maps/poi_records/poi_02.yaml`, `poi_03.yaml`.
+
+`poi_records/` là bản ghi khôi phục từ MiniPC, xem `robot/robot_maps/poi_records/README.md`
+trước khi chạy: `poi_03.yaml` vẫn `verified: false`. Script không đọc trường `verified`.
+
+Với Nav2 V2 (0,20 m/s), chặng POI_03 -> START dài ít nhất 48 m nên cần hơn 240 s; file
+mẫu đặt `end_timeout_s: 600` để không bị hủy giữa đường khi robot vẫn đang chạy tốt.
 
 Script từ chối file tuyến khi: file POI thiếu, `map_yaml`/`frame_id` khác tuyến,
 `yaw` lệch `quaternion` quá 0,02 rad, quaternion không phải pose 2D chuẩn hóa, id

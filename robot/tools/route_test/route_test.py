@@ -44,7 +44,8 @@ END_MODES = ('return_to_start', 'none')
 STATUS_NAMES = {0: 'UNKNOWN', 1: 'ACCEPTED', 2: 'EXECUTING', 3: 'CANCELING',
                 4: 'SUCCEEDED', 5: 'CANCELED', 6: 'ABORTED'}
 STATUS_TERMINAL = (4, 5, 6)
-ROUTE_KEYS = {'route_id', 'map_yaml', 'frame_id', 'start', 'pois', 'default_dwell_s', 'end_mode'}
+ROUTE_KEYS = {'route_id', 'map_yaml', 'frame_id', 'start', 'pois', 'default_dwell_s', 'end_mode',
+              'end_timeout_s'}
 START_KEYS = {'poi_file'}
 POI_KEYS = {'poi_file', 'dwell_s', 'timeout_s'}
 QUAT_YAW_TOLERANCE = 0.02  # rad; yaw vs quaternion trong file POI
@@ -196,6 +197,12 @@ def load_route(path):
     end = None
     if end_mode == 'return_to_start':
         end = dict(start, id=f'END:{start["id"]}', dwell_s=0.0)
+    if 'end_timeout_s' in data:
+        if end is None:
+            raise RouteError('end_timeout_s chi dung voi end_mode return_to_start')
+        end['timeout_s'] = _num(data['end_timeout_s'], 'end_timeout_s')
+        if end['timeout_s'] <= 0:
+            raise RouteError('end_timeout_s phai > 0')
     return {'route_id': route_id, 'map_yaml': map_yaml, 'frame_id': frame_id,
             'start': start, 'pois': pois, 'end_mode': end_mode, 'end': end,
             'path': os.path.abspath(path)}
