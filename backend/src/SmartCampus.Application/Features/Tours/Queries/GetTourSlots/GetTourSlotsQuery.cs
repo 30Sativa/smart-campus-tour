@@ -34,6 +34,7 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, query.RouteRevisionId, lockTarget: false, ct);
         var robot = await revisions.FindPhysicalRobotAsync(query.RobotCode.Trim(), ct)
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
+        await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
         var dates = Enumerable.Range(query.From.DayNumber, query.To.DayNumber - query.From.DayNumber + 1).Select(DateOnly.FromDayNumber).ToArray();
         var times = (query.Time is { } custom ? settings.StartSlots.Append(custom) : settings.StartSlots).Distinct().Order().ToArray();

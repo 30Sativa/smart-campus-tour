@@ -19,7 +19,8 @@ GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.Robots TO campus_tour_app;
 GRANT UPDATE (CredentialHash, CredentialIssuedAt, CredentialIssuedByUserId, CredentialHint,
     CredentialRevokedAt, CredentialRevokedByUserId, FirstAcceptedSyncAt, FirstAcceptedMapKey,
-    FirstAcceptedFrameId, AssignedMapVersionId, MapAssignedAt, MapAssignedByUserId) ON OBJECT::dbo.Robots TO campus_tour_app;
+    FirstAcceptedFrameId, AssignedMapVersionId, MapAssignedAt, MapAssignedByUserId, AssignedAreaKey,
+    DeactivatedAt, DeactivatedByUserId, DeactivationReason) ON OBJECT::dbo.Robots TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.TourAllowedBranches TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.BranchRequests TO campus_tour_app;
 GO

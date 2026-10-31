@@ -71,6 +71,7 @@ public sealed class RecordPoiVerificationCommandHandler(
         var robot = await mapRepository.FindPhysicalRobotAsync(request.RobotCode.Trim(), cancellationToken)
             ?? throw new NotFoundException("Physical robot", request.RobotCode.Trim());
         await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
+        RobotLifecycleRules.EnsureActive(robot);
         var latestDeployment = await mapRepository.GetLatestDeploymentCheckForRobotAsync(robot.Id, cancellationToken);
         var map = await mapRepository.FindMapVersionAsync(revision.MapVersionId, includePackage: true, cancellationToken)
             ?? throw new NotFoundException("Map version", revision.MapVersionId);

@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.11 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.12 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -11,6 +11,7 @@ DECLARE @v16 nvarchar(64) = N'$(SchemaHashV16)';
 DECLARE @v17 nvarchar(64) = N'$(SchemaHashV17)';
 DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
+DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v19 nvarchar(64) = N'$(SchemaHashV19)';
 DECLARE @schemaVersion nvarchar(32) = (
     SELECT CONVERT(nvarchar(32), value) FROM sys.extended_properties
@@ -53,6 +54,7 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v18,
     @v19,
     @v110,
+    @v111,
     @v17,
     @v16,
     @v14,
@@ -108,10 +110,22 @@ DECLARE @v111ObjectsPresent bit = CASE WHEN @v110ObjectsPresent = 1 AND
     EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.PoiVerificationRecords') AND name=N'CK_PoiVerificationRecords_MethodEvidence' AND is_disabled=0 AND is_not_trusted=0)
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.11' AND @v111ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+DECLARE @v112ObjectsPresent bit = CASE WHEN @v111ObjectsPresent = 1 AND
+    COL_LENGTH(N'dbo.Robots', N'AssignedAreaKey') IS NOT NULL AND
+    COL_LENGTH(N'dbo.Robots', N'DeactivatedAt') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name=N'UX_Robots_AssignedArea' AND is_unique=1) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_AssignedArea_Complete' AND is_disabled=0 AND is_not_trusted=0) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.Robots') AND name=N'CK_Robots_Deactivation_Complete' AND is_disabled=0 AND is_not_trusted=0)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.12' AND @v112ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.12'
+    THROW 51001, 'Database schema version marker is 1.12 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.11' AND @v111ObjectsPresent = 1 AND (@hash = @v111 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.11'
-    THROW 51001, 'Database schema version marker is 1.11 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+    THROW 51006, 'Database schema version marker is 1.11 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.10' AND @v110ObjectsPresent = 1 AND (@hash = @v110 OR @knownPriorHash = 1)
     SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.10'

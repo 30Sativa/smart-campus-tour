@@ -6,8 +6,8 @@ import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { useAssignRobotMap, useClearRobotMap, useMapAreas, useMapVersions, usePhysicalRobots, useRegisterPhysicalRobot } from '../../features/technical/technical-hooks'
-import type { PhysicalRobotConnectionStatus, PhysicalRobotOption } from '../../features/technical/api/technical'
+import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours } from '../../features/technical/technical-hooks'
+import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, stamp } from '../../features/technical/technical-format'
 import { RobotCredentialPanel } from './RobotCredentialPanel'
 
@@ -34,31 +34,39 @@ function DeploymentBadge({ robot }: { robot: PhysicalRobotOption }) {
  * dialogs replace and then return to.
  */
 export default function TechnicalRobotsPage() {
-  const robots = usePhysicalRobots()
+  const robots = useAllPhysicalRobots()
+  const [showDeactivated, setShowDeactivated] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [dialog, setDialog] = useState<{ view: 'detail' | 'map' | 'credential'; robotId: string } | null>(null)
   // By id, so an open dialog follows refetches (row version, assignment, connection).
   const selected = robots.data?.find(robot => robot.id === dialog?.robotId)
   const showDetail = () => setDialog(current => current && { ...current, view: 'detail' })
+  const visibleRobots = robots.data?.filter(robot => Boolean(robot.deactivatedAt) === showDeactivated)
+  const deactivatedCount = robots.data?.filter(robot => robot.deactivatedAt).length ?? 0
 
   return (
     <TechnicalPage>
       <PageHeader eyebrow="Robot" title="Robot vật lý" description="Robot đã đăng ký sẽ xuất hiện khi ghi kết quả kiểm tra bản đồ. Kết nối ROS 2 được thiết lập riêng trên robot."
         action={<button type="button" className={buttonClass('primary')} onClick={() => setRegistering(true)}><Plus size={15} aria-hidden="true" />Đăng ký robot</button>} />
+      <div role="group" aria-label="Lọc robot" className="mb-3 flex gap-2">
+        <button type="button" aria-pressed={!showDeactivated} className={buttonClass(showDeactivated ? 'secondary' : 'primary', 'sm')} onClick={() => setShowDeactivated(false)}>Đang sử dụng</button>
+        <button type="button" aria-pressed={showDeactivated} className={buttonClass(showDeactivated ? 'primary' : 'secondary', 'sm')} onClick={() => setShowDeactivated(true)}>Ngừng sử dụng ({deactivatedCount})</button>
+      </div>
       <section className={panelClass} aria-label="Danh sách robot vật lý">
         <PanelHead title="Robot đã đăng ký" description="Robot xuất hiện trong danh sách chọn khi ghi kết quả kiểm tra map." action={!robots.isPending && !robots.isError ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button> : undefined} />
         {robots.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" role="status" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải danh sách robot…</p> : robots.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div> : (
           <div className="relative overflow-x-auto"><table className="w-full min-w-[760px] text-left">
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
-              {robots.data?.map(robot => <tr key={robot.id} className={rowClass}>
+              {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
                 <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · v{robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
                 <td className={`${tdClass} text-center`}><button type="button" aria-label={`Chi tiết ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Chi tiết</button></td>
               </tr>)}
-              {!robots.data?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
+              {showDeactivated && !visibleRobots?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}>Không có robot nào ngừng sử dụng.</td></tr>}
+              {!showDeactivated && !visibleRobots?.length && <tr><td className={`${tdClass} py-8 text-center text-[#64748b]`} colSpan={5}><Bot size={20} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />Chưa có robot vật lý được đăng ký.</td></tr>}
             </tbody>
           </table></div>
         )}
@@ -98,6 +106,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
     <Modal open size="lg" title={robot.displayName || robot.robotCode} description={`Mã robot ${robot.robotCode}.`} onClose={onClose}
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
+        {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {stamp(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
         <DetailSection title="Kết nối">
           <Facts items={[
             ['Trạng thái', <ConnectionBadge key="status" robot={robot} />],
@@ -121,9 +130,42 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           {contextMismatch(robot) && <div className="mt-2"><Note tone="warn">Robot được gán map {robot.assignedMapKey} · {robot.assignedFrameId} nhưng lần triển khai gần nhất là {robot.latestDeployedMapKey} · {robot.latestDeployedFrameId}. Kiểm tra cấu hình MiniPC và triển khai map đúng.</Note></div>}
         </DetailSection>
         <DetailSection title="Khóa kết nối MiniPC" action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Quản lý khóa</button>} />
+        <RobotLifecycleSection robot={robot} />
       </div>
     </Modal>
   )
+}
+
+function AffectedTours({ title, tours }: { title: string; tours: { isPending: boolean; isError: boolean; error: unknown; data?: RobotAffectedTour[] } }) {
+  if (tours.isPending) return <p role="status" className="text-sm text-[#64748b]">Đang kiểm tra Tour đã xếp lịch…</p>
+  if (tours.isError) return <p role="alert" className="text-sm text-[#b23e31]">{errorText(tours.error)}</p>
+  if (!tours.data?.length) return null
+  return <div role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><p className="font-medium">{title}</p>
+    <ul className="mt-1 list-inside list-disc">{tours.data.map(tour => <li key={tour.tourId}>{tour.name} · {stamp(tour.scheduledStartAt)}</li>)}</ul>
+    <p className="mt-1 text-xs">Các Tour này không bị tự hủy.</p></div>
+}
+
+function RobotLifecycleSection({ robot }: { robot: PhysicalRobotOption }) {
+  const deactivate = useDeactivateRobot()
+  const activate = useActivateRobot()
+  const [confirming, setConfirming] = useState(false)
+  const tours = useRobotAffectedTours(robot.id, undefined, confirming && !robot.deactivatedAt)
+  const input = { id: robot.id, requestId: crypto.randomUUID(), expectedRowVersion: robot.rowVersion }
+  return <>
+    <DetailSection title="Trạng thái sử dụng" subject={robot.deactivatedAt ? 'Ngừng sử dụng' : 'Đang sử dụng'}
+      action={robot.deactivatedAt
+        ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={activate.isPending} onClick={() => activate.mutate(input)}>Kích hoạt lại</button>
+        : <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => setConfirming(true)}>Ngừng sử dụng</button>}>
+      {activate.isError && <p role="alert" className="text-sm text-[#b23e31]">{errorText(activate.error)}</p>}
+    </DetailSection>
+    {confirming && <ConfirmationDialog open tone="danger" requireReason reasonLabel="Lý do ngừng sử dụng" title={`Ngừng sử dụng ${robot.robotCode}?`}
+      description="Khóa kết nối bị thu hồi, bản đồ được gỡ gán và robot biến mất khỏi mọi danh sách chọn. Lịch sử vẫn được giữ."
+      confirmLabel="Ngừng sử dụng" busy={deactivate.isPending} busyLabel="Đang lưu…" error={deactivate.isError ? errorText(deactivate.error) : undefined}
+      onConfirm={reason => deactivate.mutate({ ...input, reason }, { onSuccess: () => setConfirming(false) })}
+      onCancel={() => { setConfirming(false); deactivate.reset() }}>
+      <AffectedTours title="Các Tour sau đang giữ robot này:" tours={tours} />
+    </ConfirmationDialog>}
+  </>
 }
 
 function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOption; onClose: () => void }) {
@@ -136,6 +178,7 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
   const [confirming, setConfirming] = useState<'assign' | 'clear' | null>(null)
   const areaMaps = useMemo(() => (maps.data ?? []).filter(item => item.map.areaKey === areaKey), [maps.data, areaKey])
   const selected = areaMaps.find(item => item.map.id === mapVersionId)
+  const tours = useRobotAffectedTours(robot.id, confirming === 'assign' ? mapVersionId : undefined, Boolean(confirming))
   // Escape reaches both overlays; while the confirmation is up it only closes that.
   const close = () => { if (!assign.isPending && !clear.isPending && !confirming) onClose() }
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -159,7 +202,9 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
   {confirming && <ConfirmationDialog open withReason={false} tone={confirming === 'clear' ? 'danger' : 'default'}
     title={confirming === 'clear' ? `Gỡ bản đồ khỏi ${robot.robotCode}?` : `Gán bản đồ cho ${robot.robotCode}?`}
     description={confirming === 'clear' ? 'Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.' : `Gán ${selected?.map.mapKey} · ${selected?.map.frameId}. MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.`}
-    confirmLabel={confirming === 'clear' ? 'Gỡ gán' : 'Gán bản đồ'} onConfirm={confirm} onCancel={() => setConfirming(null)} />}
+    confirmLabel={confirming === 'clear' ? 'Gỡ gán' : 'Gán bản đồ'} onConfirm={confirm} onCancel={() => setConfirming(null)}>
+    <AffectedTours title="Các Tour sau sẽ không chạy được với bản đồ mới:" tours={tours} />
+  </ConfirmationDialog>}
   </>
 }
 

@@ -34,9 +34,12 @@ public sealed record PhysicalRobotStatus(
     string? MapAssignedByName,
     string? LatestDeployedMapKey,
     string? LatestDeployedFrameId,
-    bool? LatestDeploymentPassed);
+    bool? LatestDeploymentPassed,
+    DateTimeOffset? DeactivatedAt,
+    string? DeactivationReason);
 
-public sealed record ListPhysicalRobotsQuery : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
+/// <summary>Pickers never see a deactivated robot; only the robot page asks for them.</summary>
+public sealed record ListPhysicalRobotsQuery(bool IncludeDeactivated = false) : IRequest<IReadOnlyList<PhysicalRobotStatus>>;
 
 public sealed class ListPhysicalRobotsQueryHandler(
     IPhysicalRobotRepository repository,
@@ -53,7 +56,7 @@ public sealed class ListPhysicalRobotsQueryHandler(
         var latestByRobot = telemetryStore.GetLatest()
             .ToDictionary(snapshot => snapshot.Robot.RobotCode, StringComparer.Ordinal);
         var now = timeProvider.GetUtcNow();
-        return robots.Select(robot =>
+        return robots.Where(robot => query.IncludeDeactivated || !robot.IsDeactivated).Select(robot =>
         {
             latestByRobot.TryGetValue(robot.RobotCode, out var latest);
             var connectionStatus = robot.FirstAcceptedSyncAt is null
@@ -78,7 +81,8 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 robot.AssignedMapVersion?.VersionNumber, robot.AssignedMapVersion?.MapKey,
                 robot.AssignedMapVersion?.FrameId, robot.MapAssignedAt, robot.MapAssignedByUser?.FullName,
                 latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId,
-                latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed);
+                latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed,
+                robot.DeactivatedAt, robot.DeactivationReason);
         }).ToArray();
     }
 }

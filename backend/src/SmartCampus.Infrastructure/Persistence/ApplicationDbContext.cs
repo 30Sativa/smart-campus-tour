@@ -604,6 +604,14 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_Robots_MapAssignedByUserId");
             entity.HasIndex(e => e.RobotCode, "UQ_Robots_RobotCode").IsUnique();
 
+            entity.HasIndex(e => e.AssignedAreaKey, "UX_Robots_AssignedArea")
+                .IsUnique()
+                .HasFilter("([AssignedAreaKey] IS NOT NULL)");
+
+            entity.Property(e => e.AssignedAreaKey).HasMaxLength(100);
+            entity.Property(e => e.DeactivatedAt).HasPrecision(3);
+            entity.Property(e => e.DeactivationReason).HasMaxLength(500);
+
             entity.HasIndex(e => e.CurrentTourId, "UX_Robots_CurrentTour")
                 .IsUnique()
                 .HasFilter("([CurrentTourId] IS NOT NULL)");
@@ -637,6 +645,16 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.CredentialRevokedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Robots_CredentialRevokedByUserId");
+
+            entity.HasOne(d => d.AssignedAreaKeyNavigation).WithMany()
+                .HasForeignKey(d => d.AssignedAreaKey)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_AssignedAreaKey");
+
+            entity.HasOne(d => d.DeactivatedByUser).WithMany()
+                .HasForeignKey(d => d.DeactivatedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Robots_DeactivatedByUserId");
 
             entity.HasOne(d => d.CurrentTour).WithOne(p => p.Robot)
                 .HasForeignKey<Robot>(d => d.CurrentTourId)

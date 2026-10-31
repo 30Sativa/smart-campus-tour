@@ -34,6 +34,21 @@ internal static class TourTarget
         return (revision, run);
     }
 
+    /// <summary>Null when this robot can run the revision. Create, slots and the robot list all ask here.</summary>
+    public static string? RobotBlockReason(Robot robot, MapDeploymentCheck? latestDeployment, MapVersion map, RouteRevision revision) =>
+        robot.IsDeactivated ? "Robot đã ngừng sử dụng."
+        : robot.FirstAcceptedSyncAt is null ? "Robot chưa xác nhận kết nối."
+        : RouteRobotDeployment.IsCurrent(latestDeployment, map, revision) ? null
+        : "Robot chưa triển khai đúng bản đồ của tuyến.";
+
+    public static async Task RequireUsableRobotAsync(IRouteRevisionRepository revisions, Robot robot, RouteRevision revision, CancellationToken ct)
+    {
+        var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
+        var deployment = await revisions.GetLatestDeploymentForRobotAsync(robot.Id, ct);
+        if (RobotBlockReason(robot, deployment, map, revision) is { } reason)
+            throw new ConflictException(reason, "ROBOT_NOT_READY_FOR_ROUTE");
+    }
+
     /// <summary>Null when the effective run predates the measurement definition, so it cannot size a reservation.</summary>
     public static async Task<TourReservationPlan?> PlanReservationAsync(IRouteRevisionRepository revisions, Guid revisionId,
         RouteTestRunView run, CancellationToken ct)

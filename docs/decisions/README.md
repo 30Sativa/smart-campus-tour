@@ -77,6 +77,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0036](0036-tour-custom-start-time.md) | Staff may type a Tour start inside configured hours; slots become quick choices | owner-authorized; amends ADR-0035; no schema change |
 | [0037](0037-versioned-route-availability.md) | Deactivate and reopen versioned Routes for new Tours through Routes.IsActive; rows never touched stay open | owner-authorized; no schema change |
 | [0038](0038-poi-pose-capture-import.md) | Import POIs from robot pose-capture files as honest POSE_CAPTURE evidence; content stays with Staff and the route test stays mandatory | owner-authorized 2026-11-01 |
+| [0039](0039-robot-area-tour-readiness-and-deactivation.md) | One robot per map area as a current-phase limit, only usable robots for Tours, and robot deactivation through DeactivatedAt | owner-authorized 2026-11-01 |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend
