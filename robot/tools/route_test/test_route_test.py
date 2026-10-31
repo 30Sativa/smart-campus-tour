@@ -96,6 +96,9 @@ def test_end_mode_none_is_full_without_end_leg(tmp_path):
     ({'start': {'poi_file': 'poi_start.yaml', 'dwell_s': 3}}, 'dwell_s'),
     ({'revision': 3}, 'revision'),
     ({'default_dwell_s': -1}, 'default_dwell_s'),
+    ({'end_timeout_s': 0}, 'end_timeout_s'),
+    ({'end_timeout_s': 'abc'}, 'end_timeout_s'),
+    ({'end_mode': 'none', 'end_timeout_s': 600}, 'end_timeout_s'),
     ({'default_dwell_s': '.nan'}, 'default_dwell_s'),
     ({'default_dwell_s': True}, 'default_dwell_s'),
     # Khong co duong nao khai bao toa do truc tiep trong file tuyen.
@@ -150,8 +153,16 @@ def test_broken_yaml_is_route_error(tmp_path):
 
 def test_example_route_loads_against_repo_pois():
     plan = rt.build_plan(rt.load_route(EXAMPLE))
-    assert plan['legs'][0]['id'] == 'POI_01' and plan['legs'][-1]['id'] == 'END:START'
+    assert [leg['id'] for leg in plan['legs']] == ['POI_01', 'POI_02', 'POI_03', 'END:START']
     assert plan['legs'][0]['x'] == 8.164 and plan['legs'][-1]['x'] == -0.319
+    assert plan['legs'][2]['x'] == 42.460 and plan['scope'] == 'full_route'
+    assert rt.leg_timeout(plan['legs'][-1], 300) == 600
+    assert rt.leg_timeout(plan['legs'][0], 300) == 300
+
+
+def test_end_timeout_applies_to_end_leg_only(tmp_path):
+    route = rt.load_route(route_file(tmp_path, end_timeout_s=450))
+    assert route['end']['timeout_s'] == 450 and 'timeout_s' not in route['start']
 
 
 def test_pose_error_wraps_angle():

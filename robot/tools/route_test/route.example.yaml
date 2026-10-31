@@ -1,4 +1,4 @@
-# Tuyen mau cho route_test.py — map2: START -> POI_01 -> (POI_02 -> POI_03) -> ve START.
+# Tuyen mau cho route_test.py — map2: START -> POI_01 -> POI_02 -> POI_03 -> ve START.
 # Copy file nay thanh tuyen cua ban (vd. route_campus.yaml) roi sua.
 #
 # File tuyen KHONG chua toa do: moi diem tro toi mot robot_maps/poi_*.yaml, duong
@@ -15,12 +15,13 @@ start:                      # robot dung o day khi bat dau
 pois:                       # chay dung thu tu nay
   - poi_file: ../../robot_maps/poi_01.yaml
     dwell_s: 10
-  # Bo comment khi da co file POI that (chua co trong robot_maps/):
-  # - poi_file: ../../robot_maps/poi_02.yaml
-  #   dwell_s: 10
-  #   timeout_s: 240        # tuy chon, ghi de --leg-timeout
-  # - poi_file: ../../robot_maps/poi_03.yaml
-  #   dwell_s: 10
+  - poi_file: ../../robot_maps/poi_records/poi_02.yaml
+    dwell_s: 10
+  - poi_file: ../../robot_maps/poi_records/poi_03.yaml
+    dwell_s: 10
+    # timeout_s: 240        # tuy chon, ghi de --leg-timeout
 
 # return_to_start: chay them chang ve START | none: dung o POI cuoi
 end_mode: return_to_start
+# POI_03 -> START dai it nhat 48 m; 0.20 m/s (Nav2 V2) la tren 240 s du di thang.
+end_timeout_s: 600
