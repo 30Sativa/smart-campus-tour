@@ -1,5 +1,6 @@
-# PROVISIONAL: scan-to-map match 0.46 at this pose (0.86 when shifted +0.50/-0.25 m, +3 deg). AMCL had not converged (set by hand, robot stationary). Re-record when passing with good localization.
-# Recorded 2026-10-19 18:01:41 from the robot's actual pose after reaching the spot, amcl sigma 0.48/0.47 m 15 deg.
+# At capture, AMCL sigma was 1.84/3.91 m and scan match was 0.47 here (0.82 after a +1.0/-0.5 m shift).
+# The source marked this candidate rejected based on those measurements; the owner later confirmed this pose is correct.
+# Recorded 2026-10-19 17:58:31 from the robot's actual pose after reaching the spot, amcl sigma 1.84/3.91 m 24 deg.
 # Staging copy: review, then add to robot/robot_maps/ through a PR.
 id: POI_02
 name: POI 02
@@ -7,14 +8,14 @@ map_yaml: map2.yaml
 frame_id: map
 
 pose:
-  x: 30.211
-  y: -5.690
-  yaw: -0.364
+  x: 29.692
+  y: -5.439
+  yaw: -0.291
 
   quaternion:
     x: 0.0
     y: 0.0
-    z: -0.18098
-    w: 0.98349
+    z: -0.14493
+    w: 0.98944
 
-verified: false
+verified: true
