@@ -16,7 +16,7 @@ public sealed class PreviewPoiImportQueryValidator : AbstractValidator<PreviewPo
     }
 }
 
-public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapRepository, IPoiImportRepository importRepository)
+public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapRepository, IPoiImportRepository importRepository, MapPoiSettings settings)
     : IRequestHandler<PreviewPoiImportQuery, PoiImportPreview>
 {
     public async Task<PoiImportPreview> Handle(PreviewPoiImportQuery query, CancellationToken cancellationToken)
@@ -31,7 +31,7 @@ public sealed class PreviewPoiImportQueryHandler(IMapVersionRepository mapReposi
         RobotLifecycleRules.EnsureActive(robot);
 
         var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot,
-            PoiImportPlanner.Parse(sources), cancellationToken);
+            PoiImportPlanner.Parse(sources), settings, cancellationToken);
         return new PoiImportPreview(map.Id, robot.RobotCode, planned.All(file => file.ErrorCode is null),
             planned.Select(file => file.ToPreview()).ToArray());
     }

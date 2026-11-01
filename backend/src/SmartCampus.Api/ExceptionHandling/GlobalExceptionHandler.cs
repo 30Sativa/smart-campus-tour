@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Diagnostics;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Exceptions;
 
 namespace SmartCampus.Api.ExceptionHandling;
@@ -26,6 +27,14 @@ public sealed class GlobalExceptionHandler(
                 StatusCodes.Status409Conflict,
                 "Mã robot đã được đăng ký. Kiểm tra lại mã robot trước khi thử lại.",
                 (object?)new { code = "ROBOT_CODE_CONFLICT" }),
+            _ when IsMapPackageUniqueViolation(exception) => (
+                StatusCodes.Status409Conflict,
+                "Gói này đã được tải lên ở khu vực này.",
+                (object?)new { code = "MAP_PACKAGE_DUPLICATE" }),
+            ValidationException validationException when UnprocessableFailure(validationException) is { } failure => (
+                StatusCodes.Status422UnprocessableEntity,
+                failure.ErrorMessage,
+                (object?)new { code = failure.ErrorCode }),
             ValidationException validationException => (
                 StatusCodes.Status400BadRequest,
                 "One or more validation errors occurred.",
@@ -104,6 +113,15 @@ public sealed class GlobalExceptionHandler(
         (error is SqlException { Number: 2601 or 2627 } sql &&
          sql.Message.Contains("UX_RosterEmailChangeRequests_OnePending", StringComparison.Ordinal)) ||
         (error.InnerException is not null && IsPendingEmailChangeUniqueViolation(error.InnerException));
+
+    private static bool IsMapPackageUniqueViolation(Exception error) =>
+        (error is SqlException { Number: 2601 or 2627 } sql &&
+         sql.Message.Contains("UX_MapVersions_Area_PackageSha256", StringComparison.Ordinal)) ||
+        (error.InnerException is not null && IsMapPackageUniqueViolation(error.InnerException));
+
+    private static FluentValidation.Results.ValidationFailure? UnprocessableFailure(ValidationException exception) =>
+        exception.Errors.FirstOrDefault(failure =>
+            failure.ErrorCode is MapPoiErrorCodes.CameraPresetInvalid or MapPoiErrorCodes.PoseClearanceInsufficient);
 
     private static bool IsRobotCodeUniqueViolation(Exception error) =>
         (error is SqlException { Number: 2601 or 2627 } sql &&

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using SmartCampus.Api.ExceptionHandling;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Domain.Exceptions;
 
 namespace SmartCampus.IntegrationTests;
@@ -32,6 +33,23 @@ public sealed class GlobalExceptionHandlerTests
 
         using var response = await ReadResponseAsync(context);
         Assert.False(response.RootElement.GetProperty("success").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(MapPoiErrorCodes.CameraPresetInvalid, PoiCameraPresets.InvalidMessage)]
+    [InlineData(MapPoiErrorCodes.PoseClearanceInsufficient, "Điểm quá sát vật cản (cần trống bán kính 0,30 m).")]
+    public async Task TryHandleAsync_MapPoiInputFailure_Returns422WithItsOwnMessageAndCode(string code, string message)
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context,
+            new ValidationException([new ValidationFailure("position", message) { ErrorCode = code }]), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, context.Response.StatusCode);
+        using var response = await ReadResponseAsync(context);
+        Assert.Equal(message, response.RootElement.GetProperty("message").GetString());
+        Assert.Equal(code, response.RootElement.GetProperty("errors").GetProperty("code").GetString());
     }
 
     [Fact]

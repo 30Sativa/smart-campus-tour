@@ -101,12 +101,71 @@ public static class MapPackageValidator
 
         var column = (int)decimal.Floor(columnPosition);
         var row = metadata.ImageHeight - 1 - (int)decimal.Floor(rowFromBottom);
-        var gray = map.Pixels[(row * metadata.ImageWidth) + column] / 255m;
-        var occupancy = metadata.Negate ? gray : 1m - gray;
+        var occupancy = Occupancy(metadata, map.Pixels[(row * metadata.ImageWidth) + column]);
         if (occupancy >= metadata.OccupiedThreshold)
             throw Invalid("position", "POI coordinates land in an occupied cell.");
         if (occupancy >= metadata.FreeThreshold)
             throw Invalid("position", "POI coordinates land in an unknown occupancy cell.");
+    }
+
+    /// <summary>
+    /// The check for every newly written POI or route pose: its own cell is free, and so is every cell the
+    /// clearance circle touches, including one it reaches at exactly the radius. A cell counts by its nearest
+    /// point rather than its center, so the circle drawn on the map is exactly what is checked.
+    /// </summary>
+    public static void EnsureClearPosition(ValidatedMapPackage map, decimal x, decimal y, decimal yaw, decimal clearanceMeters)
+    {
+        EnsureFreePosition(map, x, y, yaw);
+
+        var metadata = map.Metadata;
+        var resolution = metadata.Resolution;
+        // Whatever lies past a map edge is not free, and it is nearest straight along the axis.
+        if (x - metadata.OriginX <= clearanceMeters || y - metadata.OriginY <= clearanceMeters ||
+            metadata.OriginX + metadata.ImageWidth * resolution - x <= clearanceMeters ||
+            metadata.OriginY + metadata.ImageHeight * resolution - y <= clearanceMeters)
+            throw TooClose(clearanceMeters);
+
+        var firstColumn = Math.Max(0, (int)decimal.Ceiling((x - clearanceMeters - metadata.OriginX) / resolution) - 1);
+        var lastColumn = Math.Min(metadata.ImageWidth - 1, (int)decimal.Floor((x + clearanceMeters - metadata.OriginX) / resolution));
+        var firstRow = Math.Max(0, (int)decimal.Ceiling((y - clearanceMeters - metadata.OriginY) / resolution) - 1);
+        var lastRow = Math.Min(metadata.ImageHeight - 1, (int)decimal.Floor((y + clearanceMeters - metadata.OriginY) / resolution));
+        var freePixel = new bool[256];
+        for (var value = 0; value < freePixel.Length; value++)
+            freePixel[value] = Occupancy(metadata, (byte)value) < metadata.FreeThreshold;
+
+        var radiusSquared = clearanceMeters * clearanceMeters;
+        for (var rowFromBottom = firstRow; rowFromBottom <= lastRow; rowFromBottom++)
+        {
+            var rowOffset = (metadata.ImageHeight - 1 - rowFromBottom) * metadata.ImageWidth;
+            for (var column = firstColumn; column <= lastColumn; column++)
+            {
+                if (freePixel[map.Pixels[rowOffset + column]]) continue;
+                var dx = DistanceToCell(x, metadata.OriginX, column, resolution);
+                var dy = DistanceToCell(y, metadata.OriginY, rowFromBottom, resolution);
+                if (dx * dx + dy * dy <= radiusSquared) throw TooClose(clearanceMeters);
+            }
+        }
+    }
+
+    private static decimal DistanceToCell(decimal position, decimal origin, int cell, decimal resolution)
+    {
+        var low = origin + cell * resolution;
+        return Math.Max(0m, Math.Max(low - position, position - (low + resolution)));
+    }
+
+    private static decimal Occupancy(MapPackageMetadata metadata, byte pixel)
+    {
+        var gray = pixel / 255m;
+        return metadata.Negate ? gray : 1m - gray;
+    }
+
+    private static ValidationException TooClose(decimal clearanceMeters)
+    {
+        var radius = clearanceMeters.ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
+        return new([new FluentValidation.Results.ValidationFailure("position", $"Điểm quá sát vật cản (cần trống bán kính {radius} m).")
+        {
+            ErrorCode = MapPoiErrorCodes.PoseClearanceInsufficient
+        }]);
     }
 
     private static MapPackageMetadata ParseYaml(byte[] bytes)

@@ -86,6 +86,7 @@ export type MapVersionItem = {
   preparationBlockReason: string | null
   preparationEvidence: DeploymentCheck | null
   currentlyDeployedOn: Array<{ robotCode: string; checkedAt: string }>
+  poiClearanceMeters: number
 }
 
 export type PoiVerificationMethod = 'MANUAL_CHECK' | 'POSE_CAPTURE'

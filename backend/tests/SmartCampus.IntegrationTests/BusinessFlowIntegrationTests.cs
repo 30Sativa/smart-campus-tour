@@ -356,7 +356,14 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(first.GetProperty("id").GetGuid(), replay.GetProperty("id").GetGuid());
         Assert.Equal(1, await database.CountRowsAsync("dbo.MapVersions"));
 
-        using var nextUpload = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", Guid.NewGuid(), package);
+        using var duplicateUpload = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", Guid.NewGuid(), package);
+        Assert.Equal(HttpStatusCode.Conflict, duplicateUpload.StatusCode);
+        var duplicateBody = await Body(duplicateUpload);
+        Assert.Equal("MAP_PACKAGE_DUPLICATE", duplicateBody.GetProperty("errors").GetProperty("code").GetString());
+        Assert.Equal("Gói này đã được tải lên ở Catalog Main · v1.", duplicateBody.GetProperty("message").GetString());
+        Assert.Equal(1, await database.CountRowsAsync("dbo.MapVersions"));
+
+        using var nextUpload = await UploadMap(host.Client, technical, "catalog-main", "Catalog Main", Guid.NewGuid(), CreateMapPackage("catalog second version"));
         Assert.Equal(HttpStatusCode.OK, nextUpload.StatusCode);
         var second = (await Body(nextUpload)).GetProperty("data");
         Assert.Equal("catalog-main", second.GetProperty("areaKey").GetString());
@@ -486,6 +493,19 @@ public sealed class BusinessFlowIntegrationTests
             new { requestId = Guid.NewGuid(), robotCode = "mapgate-physical", packageSha256 = packageSha,
                 localizationPassed = true, displayPassed = true, evidenceNote = "SIMULATED BACKEND TEST; not a physical robot result." });
         Assert.Equal(HttpStatusCode.OK, passingCheck.StatusCode);
+
+        object Draft(decimal x, string camera) => new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Library", purpose = "Entry",
+            description = (string?)null, x, y = 0.5m, yaw = 0m, cameraPreset = camera, narrationText = "Thông tin điểm tham quan.", fallbackVideoUrl = (string?)null } };
+        using var badCamera = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, Draft(0.5m, "UP"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, badCamera.StatusCode);
+        var badCameraBody = await Body(badCamera);
+        Assert.Equal("Hướng camera chỉ được là Phía trước, Bên trái hoặc Bên phải.", badCameraBody.GetProperty("message").GetString());
+        Assert.Equal("POI_CAMERA_PRESET_INVALID", badCameraBody.GetProperty("errors").GetProperty("code").GetString());
+        using var tooClose = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staff, Draft(0.1m, "FRONT"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, tooClose.StatusCode);
+        var tooCloseBody = await Body(tooClose);
+        Assert.Equal("Điểm quá sát vật cản (cần trống bán kính 0,30 m).", tooCloseBody.GetProperty("message").GetString());
+        Assert.Equal("POSE_CLEARANCE_INSUFFICIENT", tooCloseBody.GetProperty("errors").GetProperty("code").GetString());
 
         var createRequestId = Guid.NewGuid();
         var createBody = new { requestId = createRequestId, draft = new { mapVersionId = mapId, name = "Library", purpose = "Entry",
@@ -1007,14 +1027,14 @@ public sealed class BusinessFlowIntegrationTests
         return document.RootElement.Clone();
     }
 
-    private static byte[] CreateMapPackage()
+    private static byte[] CreateMapPackage(string marker = "pilot map")
     {
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
             var yaml = archive.CreateEntry("pilot.yaml");
             using (var yamlStream = yaml.Open())
-                yamlStream.Write(Encoding.UTF8.GetBytes("image: pilot.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n"));
+                yamlStream.Write(Encoding.UTF8.GetBytes($"# {marker}\nimage: pilot.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n"));
             var pgm = archive.CreateEntry("pilot.pgm");
             using var output = pgm.Open();
             output.Write(Encoding.ASCII.GetBytes("P2\n2 2\n255\n255 255 255 255\n"));

@@ -34,6 +34,7 @@ public sealed class ImportPoiFilesCommandHandler(
     IPoiVerificationRepository verificationRepository,
     IPoiImportRepository importRepository,
     IMapPoiRequestLock requestLock,
+    MapPoiSettings settings,
     TimeProvider timeProvider)
     : IRequestHandler<ImportPoiFilesCommand, PoiImportResult>
 {
@@ -80,7 +81,7 @@ public sealed class ImportPoiFilesCommandHandler(
         await mapRepository.LockRobotDeploymentStateAsync(robot.Id, cancellationToken);
         RobotLifecycleRules.EnsureActive(robot);
 
-        var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot, parsed, cancellationToken);
+        var planned = await PoiImportPlanner.PlanAsync(importRepository, mapRepository, map, robot, parsed, settings, cancellationToken);
         var failures = planned.Where(file => file.ErrorCode is not null).ToArray();
         if (failures.Length > 0)
             throw new ConflictException($"Không nhập tệp nào vì {failures.Length} tệp lỗi. Sửa các tệp lỗi rồi thử lại.", "POI_IMPORT_INVALID",

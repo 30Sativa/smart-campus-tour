@@ -104,3 +104,13 @@ diagrams are not yet redrawn or accepted.
 - The Technical UI consumes the verification queue with proposal ID, current revision, rowversion and revision detail, then records per-revision reach/stop/localization/camera observations, evidence or failure reason through the versioned API.
 - Route preparation uses versioned Route revisions and only selectable POI revisions that are PASS for the exact map version. Legacy mutable POI/Route authoring endpoints and Admin aliases were retired under ADR-0027; legacy SQL rows remain intact for Tour projections.
 - Project-defined POI YAML templates (robot pose-capture import is ADR-0038), non-zero-yaw pixel transform, physical route testing, scheduling/READY, whole-route certification workflow, robot deployment control and actual hardware evidence are not claimed. Project YAML/frame mapping remains pending.
+
+## Input limits (ADR-0040)
+
+| Rule | Where | Refusal |
+|---|---|---|
+| One version per package within an area | `POST /api/technical/map-versions` | 409 `MAP_PACKAGE_DUPLICATE`, naming the area and version |
+| Camera preset is `FRONT`, `LEFT` or `RIGHT`, any case, stored upper | POI create and draft; pose file for a POI holding another value | 422 `POI_CAMERA_PRESET_INVALID`; per file in preview and import |
+| Every cell within `Maps:PoiClearanceMeters` (default 0.30) is inside the map and free | POI create and draft, pose file preview and import, route start and end | 422 `POSE_CLEARANCE_INSUFFICIENT`; per file in preview and import |
+
+`GET /api/maps/versions` and `GET /api/maps/versions/{id}` return `poiClearanceMeters`, so the picker draws the circle the server checks. A revision keeping its predecessor's map and X/Y, a route revision keeping a pose on the same map, and a verification record are not new pose writes and keep the single-cell check.

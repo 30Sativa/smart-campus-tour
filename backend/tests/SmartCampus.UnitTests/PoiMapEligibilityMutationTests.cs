@@ -32,7 +32,7 @@ public sealed class PoiMapEligibilityMutationTests
                 nameof(IPoiProposalRepository.AddAuditLog) => CountWrite(ref writes),
                 _ => throw new NotImplementedException(method.Name)
             }),
-            VerificationRepository(), RequestLock(), DatabaseContext(), TimeProvider.System);
+            VerificationRepository(), RequestLock(), DatabaseContext(), new MapPoiSettings(null), TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new CreatePoiProposalCommand(ActorId, new CreatePoiProposalRequest(Guid.NewGuid(), Draft())), default));
@@ -56,7 +56,7 @@ public sealed class PoiMapEligibilityMutationTests
                 nameof(IPoiProposalRepository.AddAuditLog) => CountWrite(ref writes),
                 _ => throw new NotImplementedException(method.Name)
             }),
-            VerificationRepository(), RequestLock(), DatabaseContext(), TimeProvider.System);
+            VerificationRepository(), RequestLock(), DatabaseContext(), new MapPoiSettings(null), TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new CreatePoiRevisionCommand(ActorId, ProposalId,
@@ -83,7 +83,7 @@ public sealed class PoiMapEligibilityMutationTests
                 nameof(IPoiVerificationRepository.FindVerificationAsync) => Task.FromResult<PoiVerificationRecord?>(null),
                 nameof(IPoiVerificationRepository.FindLatestVerificationByFingerprintAsync) => Task.FromResult<PoiVerificationRecord?>(null),
                 _ => throw new NotImplementedException(method.Name)
-            }), RequestLock(), DatabaseContext(), TimeProvider.System);
+            }), RequestLock(), DatabaseContext(), new MapPoiSettings(null), TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new CreatePoiRevisionCommand(ActorId, ProposalId,

@@ -151,7 +151,7 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.12; the current snapshot
+The backend persistence baseline has advanced through v1.13; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
@@ -162,7 +162,7 @@ and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.9.sql`, scheduling inputs in
 `backend/database/smart-campus-tour-schema-v1.10.sql`, POI pose-capture import in
 `backend/database/smart-campus-tour-schema-v1.11.sql`, and robot area and deactivation columns in
-`backend/database/smart-campus-tour-schema-v1.12.sql`.
+`backend/database/smart-campus-tour-schema-v1.13.sql`.
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -690,6 +690,14 @@ TechnicalStaff imports robot pose-capture files through multipart
 `sourceFileSha256`, their four observation fields are null for `POSE_CAPTURE`, revisions add the
 effective `verificationMethod`, and proposals add `sourcePoiId`. Route save returns 409
 `POI_NARRATION_REQUIRED` for a stop without narration. See ADR-0038.
+
+Map and pose input limits (ADR-0040): `POST /api/technical/map-versions` returns 409
+`MAP_PACKAGE_DUPLICATE` for a package already in that area. POI create and draft return 422
+`POI_CAMERA_PRESET_INVALID` unless the preset is `FRONT`, `LEFT` or `RIGHT` in any case. A newly
+written POI or route pose returns 422 `POSE_CLEARANCE_INSUFFICIENT` unless every cell within
+`Maps:PoiClearanceMeters` (default 0.30) is inside the map and free, and import preview reports it
+per file. Both 422s carry the Vietnamese message in `message` and the code in `errors.code`.
+`GET /api/maps/versions` and `/{id}` add `poiClearanceMeters`.
 
 Robot integrity (ADR-0039): map assignment returns `affectedTours` and 409
 `MAP_AREA_ALREADY_ASSIGNED`; TechnicalStaff `POST /api/technical/physical-robots/{id}/deactivate`

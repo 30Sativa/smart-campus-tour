@@ -13,6 +13,8 @@ export type OccupancyMap = GridGeometry & {
   imageSha256: string
   fingerprint: string
   sourceYaml: string
+  /** Decoded raster of an uploaded map version; the retained snapshots load theirs in the picker. */
+  pixels?: Uint8ClampedArray
 }
 
 

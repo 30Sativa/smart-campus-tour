@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_POI_MAP, occupancyMapFor } from './catalog'
-import { cellAtPose, headingFromPoints, imageToRos, quantizePosition, quantizeYaw, rosToImage, sampleCell, screenToImage } from './occupancy-grid'
+import { cellAtPose, clearanceMessage, headingFromPoints, imageToRos, poseClearance, quantizePosition, quantizeYaw, rosToImage, sampleCell, screenToImage } from './occupancy-grid'
 
 describe('occupancy-grid coordinates', () => {
   const map = DEFAULT_POI_MAP
@@ -71,5 +71,40 @@ describe('occupancy-grid coordinates', () => {
     expect(occupancyMapFor('demo-poi-baseline-v1', 'map')).toBeNull()
     expect(occupancyMapFor('campus_v1', 'map')).toBeNull()
     expect(occupancyMapFor('map2-v1', 'odom')).toBeNull()
+  })
+})
+
+describe('pose clearance', () => {
+  // 2 x 2 m at 0.1 m per cell, the same fixture as the server's MapPoseClearanceTests.
+  const grid = { width: 20, height: 20, resolution: 0.1, origin: [0, 0, 0] as const }
+  function raster(...cells: Array<[column: number, rowFromBottom: number, gray: number]>) {
+    const pixels = new Uint8ClampedArray(grid.width * grid.height * 4).fill(255)
+    for (const [column, rowFromBottom, gray] of cells)
+      pixels.fill(gray, ((grid.height - 1 - rowFromBottom) * grid.width + column) * 4, ((grid.height - 1 - rowFromBottom) * grid.width + column) * 4 + 3)
+    return pixels
+  }
+
+  it('counts a wall cell up to and including the radius', () => {
+    const pixels = raster([14, 10, 0])
+    expect(poseClearance(grid, pixels, { x: 1.1, y: 1.05 }, 0.3)).toBe('blocked')
+    expect(poseClearance(grid, pixels, { x: 1.0999, y: 1.05 }, 0.3)).toBe('clear')
+  })
+
+  it('measures to the nearest corner of a cell and refuses unknown cells', () => {
+    expect(poseClearance(grid, raster([13, 13, 0]), { x: 1.1, y: 1.1 }, 0.3)).toBe('blocked')
+    expect(poseClearance(grid, raster([13, 13, 0]), { x: 1.05, y: 1.05 }, 0.3)).toBe('clear')
+    expect(poseClearance(grid, raster([10, 12, 128]), { x: 1.05, y: 1.05 }, 0.3)).toBe('blocked')
+  })
+
+  it('counts the map edge as not free and says when it cannot tell', () => {
+    const pixels = raster()
+    expect(poseClearance(grid, pixels, { x: 0.3, y: 1.05 }, 0.3)).toBe('blocked')
+    expect(poseClearance(grid, pixels, { x: 0.3001, y: 1.05 }, 0.3)).toBe('clear')
+    expect(poseClearance(grid, pixels, { x: 1.05, y: 1.7 }, 0.3)).toBe('blocked')
+    expect(poseClearance(grid, null, { x: 1.05, y: 1.05 }, 0.3)).toBe('unavailable')
+  })
+
+  it('words the radius the way the server does', () => {
+    expect(clearanceMessage(0.3)).toBe('Điểm quá sát vật cản (cần trống bán kính 0,30 m).')
   })
 })

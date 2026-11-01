@@ -9,6 +9,7 @@ export type ImagePoint = { u: number; v: number }
 export type RosPoint = { x: number; y: number }
 export type RosPose = RosPoint & { yaw: number }
 export type CellState = 'free' | 'occupied' | 'unknown' | 'outside' | 'unavailable'
+export type ClearanceState = 'clear' | 'blocked' | 'unavailable'
 
 /** Image edge coordinates are continuous; cell centers are (column+.5, row+.5). */
 export function imageToRos(grid: GridGeometry, point: ImagePoint): RosPoint {
@@ -74,4 +75,41 @@ export function sampleCell(grid: GridGeometry, pixels: Uint8ClampedArray | null,
   const value = pixels[offset]
   if (pixels[offset + 3] !== 255 || pixels[offset + 1] !== value || pixels[offset + 2] !== value) return 'unavailable'
   return value === 0 ? 'occupied' : value === 255 ? 'free' : value === 128 ? 'unknown' : 'unavailable'
+}
+
+function distanceToCell(position: number, origin: number, cell: number, resolution: number) {
+  const low = origin + cell * resolution
+  return Math.max(0, low - position, position - (low + resolution))
+}
+
+/**
+ * Early warning only; the server decides. Same reading as the server: every cell the
+ * circle touches must be free, measured to the cell's nearest point, and past the map
+ * edge counts as not free. Zero-yaw origins only, as the map package contract requires.
+ */
+export function poseClearance(grid: GridGeometry, pixels: Uint8ClampedArray | null, point: RosPoint, radius: number): ClearanceState {
+  if (!pixels || pixels.length !== grid.width * grid.height * 4) return 'unavailable'
+  const { width, height, resolution } = grid
+  const [originX, originY] = grid.origin
+  // Decimal metres on the server, binary floats here: keep an exact touch counted as a touch.
+  const reach = radius + 1e-9
+  if (point.x - originX <= reach || point.y - originY <= reach ||
+      originX + width * resolution - point.x <= reach || originY + height * resolution - point.y <= reach) return 'blocked'
+  const firstColumn = Math.max(0, Math.ceil((point.x - radius - originX) / resolution) - 1)
+  const lastColumn = Math.min(width - 1, Math.floor((point.x + radius - originX) / resolution))
+  const firstRow = Math.max(0, Math.ceil((point.y - radius - originY) / resolution) - 1)
+  const lastRow = Math.min(height - 1, Math.floor((point.y + radius - originY) / resolution))
+  for (let rowFromBottom = firstRow; rowFromBottom <= lastRow; rowFromBottom++) {
+    for (let column = firstColumn; column <= lastColumn; column++) {
+      if (pixels[((height - 1 - rowFromBottom) * width + column) * 4] === 255) continue
+      const dx = distanceToCell(point.x, originX, column, resolution)
+      const dy = distanceToCell(point.y, originY, rowFromBottom, resolution)
+      if (Math.hypot(dx, dy) <= reach) return 'blocked'
+    }
+  }
+  return 'clear'
+}
+
+export function clearanceMessage(radius: number) {
+  return `Điểm quá sát vật cản (cần trống bán kính ${radius.toFixed(2).replace('.', ',')} m).`
 }

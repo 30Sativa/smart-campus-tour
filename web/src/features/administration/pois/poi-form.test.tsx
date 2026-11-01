@@ -20,6 +20,7 @@ const NativeURL = URL
 const proposal = { id: 'proposal-1', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'revision-1', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Library entry', purpose: 'Entrance', description: null, narrationText: 'Giới thiệu thư viện.', fallbackVideoUrl: null, x: 10.25, y: 20.75, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-27T10:00:00Z', isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
+let mapItem: object = eligibleMap
 let restoreLayout: () => void
 
 function renderAt(path: string) {
@@ -35,10 +36,11 @@ describe('Staff versioned POI workflow', () => {
   beforeEach(() => {
     restoreLayout = installSvgLayout()
     requests = []
+    mapItem = eligibleMap
     useAuthStore.setState({ accessToken: 'staff-token', isAuthenticated: true, isAuthReady: true, user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new NativeURL(String(input), 'http://localhost'); requests.push({ url, init })
-      if (url.pathname === '/api/maps/versions') return response([eligibleMap])
+      if (url.pathname === '/api/maps/versions') return response([mapItem])
       if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
       if (url.pathname === '/api/staff/poi-proposals' && init?.method === 'POST') return response(proposal)
       if (url.pathname === '/api/staff/poi-proposals/proposal-1/submit') return response({ ...proposal, revision: { ...proposal.revision, isSubmitted: true, submittedAt: '2026-10-27T10:02:00Z' } })
@@ -73,6 +75,48 @@ describe('Staff versioned POI workflow', () => {
     const submit = requests.find(r => r.url.pathname.endsWith('/submit'))!
     expect(JSON.parse(String(submit.init?.body))).toMatchObject({ expectedRevisionNumber: 1, expectedRowVersion: proposal.rowVersion })
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
+  })
+
+  it('shows the clearance message before submit and sends nothing for a pose too close to the map edge', async () => {
+    mapItem = { ...eligibleMap, poiClearanceMeters: 0.3 }
+    renderAt('/staff/manage/pois/new')
+    fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
+    const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
+    fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
+    fireEvent.pointerDown(svg, pointerAt(svg, 1.5, 0.5))
+    fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library entry' } })
+    fireEvent.change(screen.getByLabelText('Mục đích'), { target: { value: 'Entrance' } })
+    fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Giới thiệu thư viện.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi kiểm chứng' }))
+
+    expect(await screen.findByText('Điểm quá sát vật cản (cần trống bán kính 0,30 m).', { selector: '[role="alert"]' })).toBeInTheDocument()
+    expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals' && r.init?.method === 'POST')).toBe(false)
+  })
+
+  it('lets a content edit through when the pose is kept from the current revision', async () => {
+    mapItem = { ...eligibleMap, poiClearanceMeters: 0.3 }
+    renderAt('/staff/manage/pois/proposal-1')
+    fireEvent.change(await screen.findByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung mới.' } })
+    await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+
+    await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/poi-proposals/proposal-1/draft')).toBe(true))
+  })
+
+  it('asks Staff to choose again when a revision holds an older camera value', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new NativeURL(String(input), 'http://localhost')
+      if (url.pathname === '/api/maps/versions') return response([eligibleMap])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(new Blob(['zip']))
+      if (url.pathname === '/api/staff/poi-proposals/proposal-1') return response({ ...proposal, revision: { ...proposal.revision, cameraPreset: 'HEAD_LEFT' } })
+      return response(null)
+    }))
+    renderAt('/staff/manage/pois/proposal-1')
+
+    const camera = await screen.findByLabelText('Góc camera') as HTMLSelectElement
+    expect(camera.value).toBe('HEAD_LEFT')
+    expect(screen.getByRole('option', { name: 'Hướng cũ HEAD_LEFT, cần chọn lại' })).toBeDisabled()
   })
 
   it('blocks creating a POI from the list until a map has passed its technical check', async () => {

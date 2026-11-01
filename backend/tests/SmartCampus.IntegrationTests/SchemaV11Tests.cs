@@ -384,7 +384,7 @@ public sealed class SchemaV11Tests
 
         // A later deployment of map B must block a route test for map A until A is deployed again.
         var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
-            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage())));
+            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage(marker: "map B"))));
         await sender.Send(new RecordMapDeploymentCommand(Guid.Parse(Id(1)), mapB.Id,
             new(Guid.NewGuid(), "physical_1", mapB.PackageSha256, true, true, "Manual check after deploying map B.")));
         var mapMismatch = await Assert.ThrowsAsync<ConflictException>(() => sender.Send(new RecordRouteTestRunCommand(technicalStaffId, draft1.RouteId, draft1.RevisionId,
@@ -680,6 +680,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.10-to-v1.11-poi-pose-import.sql");
         await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
         await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
+        await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
+        await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -690,7 +692,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.12", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.13", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name='DeactivatedAt' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourRobotReservations';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteTestRuns') AND name='MeasurementBasis' AND is_nullable=1;"));
@@ -754,6 +756,53 @@ public sealed class SchemaV11Tests
         Assert.Equal("1.11", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Robots WHERE RobotCode LIKE N'upgrade[_]%' AND AssignedMapVersionId IS NOT NULL;"));
     }
+
+    [SchemaV17Fact]
+    public async Task MapPackageUniquenessUpgrade_AppliesOnce_AndThenAreaAndPackagePairsAreUnique()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.12';");
+        await db.ExecuteAsync(MapVersionFixture(Id(94), 1, 'A'));
+        await db.ExecuteAsync(MapVersionFixture(Id(95), 2, 'B'));
+
+        await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
+        await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
+
+        Assert.Equal("1.13", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        await db.ExpectErrorAsync(2601, MapVersionInsert(Id(96), 3, 'A'));
+        await db.ExecuteAsync("INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'other',N'Other','" + Id(1) + "',SYSDATETIMEOFFSET());");
+        await db.ExecuteAsync(MapVersionInsert(Id(96), 1, 'A', "other"));
+    }
+
+    [SchemaV17Fact]
+    public async Task MapPackageUniquenessUpgrade_StopsListingTheDuplicates_AndChangesNothing()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.12';");
+        await db.ExecuteAsync(MapVersionFixture(Id(94), 1, 'A'));
+        await db.ExecuteAsync(MapVersionInsert(Id(95), 2, 'A'));
+        await db.ExecuteAsync(MapVersionInsert(Id(96), 3, 'B'));
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql"));
+
+        Assert.Contains("pilot (v1, v2)", error.Message);
+        Assert.Contains(new string('A', 64), error.Message);
+        Assert.DoesNotContain("v3", error.Message);
+        Assert.Equal("1.12", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions WHERE AreaKey=N'pilot';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.indexes WHERE name=N'UX_MapVersions_Area_PackageSha256';"));
+    }
+
+    private static string MapVersionFixture(string id, int version, char sha) => $"""
+        IF NOT EXISTS (SELECT 1 FROM dbo.MapAreas WHERE AreaKey=N'pilot')
+            INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'pilot',N'Pilot','{Id(1)}',SYSDATETIMEOFFSET());
+        {MapVersionInsert(id, version, sha)}
+        """;
+
+    private static string MapVersionInsert(string id, int version, char sha, string area = "pilot") => $"""
+        INSERT dbo.MapVersions(Id,AreaKey,VersionNumber,MapKey,PackageFileName,PackageSha256,RequestHash,PackageBytes,ImageFileName,ImageWidth,ImageHeight,Resolution,OriginX,OriginY,OriginYaw,Negate,OccupiedThreshold,FreeThreshold,FrameId,ValidationStatus,UploadedByUserId,UploadRequestId,UploadedAt)
+            VALUES('{id}',N'{area}',{version},N'{area}-v{version}',N'map.zip',0x{new string(sha, 64)},0x{new string(sha, 64)},0x01,N'map.pgm',1,1,1,0,0,0,0,0.65,0.196,N'map','VALID','{Id(1)}',NEWID(),SYSDATETIMEOFFSET());
+        """;
 
     private static string RobotFixture(string marker) => $"""
         INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,CreatedAt)
@@ -821,7 +870,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -928,16 +977,15 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<ISender>();
-        var package = CreateMapPackage();
         var mapA = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
-            new("pilot", "Pilot Area", Guid.NewGuid(), package)));
+            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage())));
         var mapB = await sender.Send(new CreateMapVersionCommand(Guid.Parse(Id(1)),
-            new("pilot", "Pilot Area", Guid.NewGuid(), package)));
+            new("pilot", "Pilot Area", Guid.NewGuid(), CreateMapPackage(marker: "map B"))));
         await RecordDeploymentAsync(sender, mapA);
 
         var proposal = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
@@ -964,12 +1012,11 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.12.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
-        var package = CreateMapPackage();
-        var mapA = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package);
-        var mapB = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package);
+        var mapA = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), CreateMapPackage());
+        var mapB = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), CreateMapPackage(marker: "map B"));
         await SendDeploymentAsync(services, mapA);
         var proposal = await SendCreateAndSubmitProposalAsync(services, mapA.Id);
 
@@ -1001,10 +1048,31 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions;"));
 
         var parallel = await Task.WhenAll(
-            SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package),
-            SendMapUploadAsync(services, Guid.Parse(Id(2)), Guid.NewGuid(), package));
+            SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), CreateMapPackage(marker: "parallel one")),
+            SendMapUploadAsync(services, Guid.Parse(Id(2)), Guid.NewGuid(), CreateMapPackage(marker: "parallel two")));
         Assert.Equal(new[] { 2, 3 }, parallel.Select(item => item.VersionNumber).Order().ToArray());
         Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions WHERE AreaKey=N'pilot';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task ConcurrentUploads_OfTheSamePackageInOneArea_LeaveOneVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        await using var services = db.BuildFeatureServiceProvider();
+        await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), CreateMapPackage());
+        var package = CreateMapPackage(marker: "raced");
+
+        var uploads = new[]
+        {
+            SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), package),
+            SendMapUploadAsync(services, Guid.Parse(Id(2)), Guid.NewGuid(), package)
+        };
+        await Task.WhenAll(uploads.Select(upload => upload.ContinueWith(_ => { }, TaskScheduler.Default)));
+
+        var loser = Assert.IsType<ConflictException>(Assert.Single(uploads, upload => upload.IsFaulted).Exception!.InnerException);
+        Assert.Equal("MAP_PACKAGE_DUPLICATE", loser.Code);
+        Assert.Equal("Gói này đã được tải lên ở Pilot Area · v2.", loser.Message);
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.MapVersions WHERE AreaKey=N'pilot';"));
     }
 
     [SchemaV11Fact]
@@ -1166,7 +1234,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.12.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.13.sql")
         {
             var db = new TestDatabase();
             try
@@ -1212,6 +1280,7 @@ public sealed class SchemaV11Tests
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
+            services.AddSingleton(new MapPoiSettings(null));
             return services.BuildServiceProvider(validateScopes: true);
         }
 
@@ -1316,14 +1385,14 @@ public sealed class SchemaV11Tests
         }
     }
 
-    private static byte[] CreateMapPackage(string origin = "0, 0, 0")
+    private static byte[] CreateMapPackage(string origin = "0, 0, 0", string marker = "pilot map")
     {
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
             var yaml = archive.CreateEntry("pilot.yaml");
             using (var yamlStream = yaml.Open())
-                yamlStream.Write(Encoding.UTF8.GetBytes($"image: pilot.pgm\nmode: trinary\nresolution: 1\norigin: [{origin}]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n"));
+                yamlStream.Write(Encoding.UTF8.GetBytes($"# {marker}\nimage: pilot.pgm\nmode: trinary\nresolution: 1\norigin: [{origin}]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n"));
             var pgm = archive.CreateEntry("pilot.pgm");
             using var output = pgm.Open();
             output.Write(Encoding.ASCII.GetBytes("P2\n2 2\n255\n255 255 255 255\n"));

@@ -10,6 +10,7 @@ public interface IMapVersionRepository
     Task<MapArea?> GetAreaAsync(string areaKey, CancellationToken cancellationToken);
     Task<MapVersion?> FindMapUploadRequestAsync(Guid actorUserId, Guid requestId, CancellationToken cancellationToken);
     Task<int> GetNextMapVersionAsync(string areaKey, CancellationToken cancellationToken);
+    Task<int?> FindVersionNumberByPackageAsync(string areaKey, byte[] packageSha256, CancellationToken cancellationToken);
     Task<MapVersion?> FindMapVersionAsync(Guid id, bool includePackage, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapVersion>> ListMapVersionsAsync(string? areaKey, int take, CancellationToken cancellationToken);
     Task<IReadOnlyList<MapDeploymentCheck>> ListLatestDeploymentChecksForPhysicalRobotsAsync(CancellationToken cancellationToken);

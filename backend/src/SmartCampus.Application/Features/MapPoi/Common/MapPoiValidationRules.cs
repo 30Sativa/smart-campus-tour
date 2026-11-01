@@ -26,10 +26,9 @@ internal static class MapPoiValidationRules
                             Uri.TryCreate(draft.FallbackVideoUrl.Trim(), UriKind.Absolute, out var uri) &&
                             uri.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(uri.UserInfo))
             .WithMessage("POI fallback video URL must be an HTTPS URL.");
-        rules.Must(draft => !string.IsNullOrWhiteSpace(draft.CameraPreset) &&
-                            draft.CameraPreset.Trim().Length <= 80 &&
-                            draft.CameraPreset.Trim().All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.'))
-            .WithMessage("Camera preset must be a bounded identifier containing letters, digits, '.', '_' or '-'.");
+        rules.Must(draft => PoiCameraPresets.IsValid(draft.CameraPreset))
+            .WithMessage(PoiCameraPresets.InvalidMessage)
+            .WithErrorCode(MapPoiErrorCodes.CameraPresetInvalid);
     }
 
     public static PoiProposalDraft Normalize(PoiProposalDraft draft) => draft with
