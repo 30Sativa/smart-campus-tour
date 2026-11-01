@@ -450,8 +450,11 @@ public sealed class PoiImportSqlTests
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
             foreach (var (name, text) in new[] { ("map.yaml", yaml), ("map.pgm", pgm) })
             {
-                using var entry = archive.CreateEntry(name).Open();
-                entry.Write(Encoding.ASCII.GetBytes(text));
+                // A ZIP entry records its write time, which would give each rebuild of this package a new SHA-256.
+                var entry = archive.CreateEntry(name);
+                entry.LastWriteTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                using var output = entry.Open();
+                output.Write(Encoding.ASCII.GetBytes(text));
             }
         return stream.ToArray();
     }

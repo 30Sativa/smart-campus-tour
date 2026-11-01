@@ -350,6 +350,63 @@ public sealed class DeploymentDatabaseTests
         return await command.ExecuteScalarAsync();
     }
 
+    [SchemaV17Fact]
+    public async Task CheckOnly_AcceptsExactlyWhatTheReviewedGrantScriptsApply()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+
+        Assert.Equal("COMPATIBLE", await RunCheckOnlyGrantsAsync(database));
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesAProvisionerColumnOutsideTheReviewedGrants()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("GRANT SELECT (IsDispatchEnabled) ON OBJECT::dbo.Robots TO campus_fleet_provisioner;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51007, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesAProvisionerThatCannotSeeDeactivation()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("REVOKE SELECT (DeactivatedAt) ON OBJECT::dbo.Robots FROM campus_fleet_provisioner;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51007, error.Number);
+    }
+
+    // Same order as apply_runtime_grants in deploy/upgrade-db.sh.
+    private static async Task<InitialAdminSeederTests.EmptySchemaDatabase> DatabaseWithReviewedGrantsAsync()
+    {
+        var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await Apply(database, "permissions.sql");
+        await Apply(database, "map-poi-permissions.sql");
+        await Apply(database, "route-revision-permissions.sql");
+        await Apply(database, "runtime-permissions.sql");
+        await Apply(database, "fleet-credential-provisioning-permissions.sql");
+        await database.ExecuteAsync("CREATE USER smartcampus_api WITHOUT LOGIN; ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
+        return database;
+    }
+
+    // Runs the query deploy/init-db.sh itself sends, so this test cannot drift from the deployment gate.
+    private static async Task<object?> RunCheckOnlyGrantsAsync(InitialAdminSeederTests.EmptySchemaDatabase database)
+    {
+        var script = (await File.ReadAllTextAsync(Schema("init-db.sh"))).Replace("\r\n", "\n");
+        const string opening = "if ! permissions=$(\"${sql[@]}\" -d SmartCampusTourV11 -h -1 -W -Q \"";
+        var start = script.IndexOf(opening, StringComparison.Ordinal) + opening.Length;
+        var end = script.IndexOf("\" | tr -d", start, StringComparison.Ordinal);
+        Assert.True(start >= opening.Length && end > start, "init-db.sh no longer has the read-only grant check.");
+        await using var connection = new SqlConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(script[start..end], connection);
+        return await command.ExecuteScalarAsync();
+    }
+
     private static async Task<string> SnapshotHashAsync(string snapshot) =>
         Hash((await File.ReadAllTextAsync(Schema(snapshot))).Replace("\r\n", "\n"));
 
