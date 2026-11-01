@@ -1,6 +1,7 @@
 using System.Reflection;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -20,7 +21,7 @@ public sealed class RouteMapEligibilityTests
     public async Task Save_is_rejected_before_any_write_when_map_has_no_check()
     {
         var calls = new List<string>();
-        var handler = new SaveRouteRevisionHandler(RouteRepository(calls), MapRepository([], calls), TimeProvider.System);
+        var handler = new SaveRouteRevisionHandler(RouteRepository(calls), MapRepository([], calls), new MapPoiSettings(null), TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new SaveRouteRevisionCommand(ActorId, null, Draft()), default));
@@ -34,7 +35,7 @@ public sealed class RouteMapEligibilityTests
     [Fact]
     public async Task Save_is_rejected_when_the_latest_check_on_the_map_failed()
     {
-        var handler = new SaveRouteRevisionHandler(RouteRepository([]), MapRepository([Check(passed: false)], []), TimeProvider.System);
+        var handler = new SaveRouteRevisionHandler(RouteRepository([]), MapRepository([Check(passed: false)], []), new MapPoiSettings(null), TimeProvider.System);
 
         var error = await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(
             new SaveRouteRevisionCommand(ActorId, null, Draft()), default));

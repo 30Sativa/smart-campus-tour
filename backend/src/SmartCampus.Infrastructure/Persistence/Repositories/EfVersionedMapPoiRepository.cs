@@ -47,6 +47,12 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         dbContext.MapVersions.Include(map => map.AreaKeyNavigation)
             .SingleOrDefaultAsync(map => map.UploadedByUserId == actorUserId && map.UploadRequestId == requestId, cancellationToken);
 
+    public async Task<int?> FindVersionNumberByPackageAsync(string areaKey, byte[] packageSha256, CancellationToken cancellationToken) =>
+        await dbContext.MapVersions.AsNoTracking()
+            .Where(map => map.AreaKey == areaKey && map.PackageSha256 == packageSha256)
+            .Select(map => (int?)map.VersionNumber)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<int> GetNextMapVersionAsync(string areaKey, CancellationToken cancellationToken)
     {
         var current = await dbContext.MapVersions.Where(map => map.AreaKey == areaKey)
@@ -251,6 +257,15 @@ public sealed class EfVersionedMapPoiRepository(ApplicationDbContext dbContext) 
         await dbContext.PoiProposals.AsNoTracking()
             .Where(proposal => proposal.SourceAreaKey == areaKey && sourcePoiIds.Contains(proposal.SourcePoiId!))
             .ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, string>> ListCurrentCameraPresetsAsync(IReadOnlyCollection<Guid> proposalIds, CancellationToken cancellationToken) =>
+        await dbContext.PoiProposals.AsNoTracking()
+            .Where(proposal => proposalIds.Contains(proposal.Id))
+            .Join(dbContext.PoiProposalRevisions,
+                proposal => new { ProposalId = proposal.Id, RevisionNumber = proposal.CurrentRevision },
+                revision => new { revision.ProposalId, revision.RevisionNumber },
+                (proposal, revision) => new { proposal.Id, revision.CameraPreset })
+            .ToDictionaryAsync(row => row.Id, row => row.CameraPreset, cancellationToken);
 
     public void Add(PoiImportReceipt receipt) => dbContext.PoiImportReceipts.Add(receipt);
     public void Add(MapArea area) => dbContext.MapAreas.Add(area);

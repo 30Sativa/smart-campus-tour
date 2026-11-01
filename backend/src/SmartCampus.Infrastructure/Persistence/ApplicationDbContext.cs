@@ -316,6 +316,8 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_Robots_AssignedMapVersionId");
             entity.HasIndex(e => new { e.AreaKey, e.UploadedAt, e.Id }, "IX_MapVersions_AreaUploaded").IsDescending(false, true, false);
 
+            entity.HasIndex(e => new { e.AreaKey, e.PackageSha256 }, "UX_MapVersions_Area_PackageSha256").IsUnique();
+
             entity.HasIndex(e => new { e.AreaKey, e.VersionNumber }, "UQ_MapVersions_AreaVersion").IsUnique();
 
             entity.HasIndex(e => new { e.Id, e.PackageSha256 }, "UQ_MapVersions_ExactPackage").IsUnique();

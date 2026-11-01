@@ -5,7 +5,7 @@ using SmartCampus.Application.Common.Exceptions;
 namespace SmartCampus.Application.Features.MapPoi;
 
 public sealed record ListMapVersionsQuery(string? AreaKey, int Take) : IRequest<IReadOnlyList<MapVersionListItem>>;
-public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository)
+public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository, MapPoiSettings settings)
     : IRequestHandler<ListMapVersionsQuery, IReadOnlyList<MapVersionListItem>>
 {
     public async Task<IReadOnlyList<MapVersionListItem>> Handle(ListMapVersionsQuery query, CancellationToken ct)
@@ -21,7 +21,7 @@ public sealed class ListMapVersionsQueryHandler(IMapVersionRepository repository
                 eligibility.LatestDeployment is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.LatestDeployment), eligibility.TechnicalCheckStatus,
                 eligibility.CanUseForPoiPreparation, eligibility.BlockReasonCode, eligibility.BlockReason,
                 eligibility.Evidence is null ? null : MapPoiReadModelMapper.ToDeploymentView(eligibility.Evidence),
-                MapCurrentlyDeployedOn.ForMap(map, currentDeployments)));
+                MapCurrentlyDeployedOn.ForMap(map, currentDeployments), settings.PoiClearanceMeters));
         }
         return result;
     }

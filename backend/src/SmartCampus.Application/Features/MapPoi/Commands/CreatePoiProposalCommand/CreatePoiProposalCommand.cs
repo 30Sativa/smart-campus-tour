@@ -28,6 +28,7 @@ public sealed class CreatePoiProposalCommandHandler(
     IPoiVerificationRepository verificationRepository,
     IMapPoiRequestLock requestLock,
     IApplicationDbContext dbContext,
+    MapPoiSettings settings,
     TimeProvider timeProvider)
     : IRequestHandler<CreatePoiProposalCommand, PoiProposalView>
 {
@@ -50,7 +51,7 @@ public sealed class CreatePoiProposalCommandHandler(
             ?? throw new NotFoundException("Map version", draft.MapVersionId);
         await mapRepository.LockMapPreparationStateAsync(map.Id, cancellationToken);
         (await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken)).EnsureCanUse();
-        PoiProposalRules.ValidatePosition(map, draft);
+        PoiProposalRules.ValidateWrittenPosition(map, draft, settings);
         var now = timeProvider.GetUtcNow();
         var proposal = new PoiProposal
         {

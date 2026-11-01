@@ -10,12 +10,12 @@ vi.mock('./load-map-image', () => ({ loadMapImage: vi.fn() }))
 const map = { ...DEFAULT_POI_MAP, width: 40, height: 30, origin: [-1, -1, 0] as const }
 let restoreLayout: () => void
 
-function renderPicker({ editable = true, initialPose = { x: 0, y: 0, yaw: 0 } as PickerPose } = {}) {
+function renderPicker({ editable = true, initialPose = { x: 0, y: 0, yaw: 0 } as PickerPose, clearanceMeters = undefined as number | undefined } = {}) {
   const onPose = vi.fn()
   function Harness() {
     const [pose, setPose] = useState(initialPose)
     const [mode, setMode] = useState<PickerMode>('pan')
-    return <PoiPosePicker map={map} pose={pose} mode={mode} editable={editable} onModeChange={setMode} onPoseChange={(next) => { onPose(next); setPose(next) }} />
+    return <PoiPosePicker map={map} pose={pose} mode={mode} editable={editable} onModeChange={setMode} onPoseChange={(next) => { onPose(next); setPose(next) }} clearanceMeters={clearanceMeters} />
   }
   render(<Harness />)
   return onPose
@@ -48,6 +48,28 @@ describe('POI pose picker', () => {
     fireEvent.pointerDown(svg, pointerAt(svg, 20, 8))
     expect(onPose).toHaveBeenLastCalledWith({ x: 0, y: 0, yaw: 1.570796 })
     expect(screen.getByRole('button', { name: 'Di chuyển bản đồ' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('draws the required free radius and warns before submit when an obstacle is inside it', async () => {
+    const pixels = new Uint8ClampedArray(map.width * map.height * 4).fill(255)
+    vi.mocked(loadMapImage).mockResolvedValue({ pixels })
+    const { unmount } = render(<PoiPosePicker map={map} pose={{ x: 0, y: 0, yaw: 0 }} mode="pan" editable onModeChange={() => {}} onPoseChange={() => {}} clearanceMeters={0.3} />)
+    const circle = await screen.findByTestId('clearance-circle')
+    expect(circle).toHaveAttribute('r', String(0.3 / map.resolution))
+    expect(screen.getByRole('status')).toHaveTextContent(/^Ô trống trên bản đồ/)
+    unmount()
+
+    const cell = (Math.round((map.height - 1) - 1 / map.resolution) * map.width + Math.round(1.1 / map.resolution)) * 4
+    pixels.fill(0, cell, cell + 3)
+    render(<PoiPosePicker map={map} pose={{ x: 0, y: 0, yaw: 0 }} mode="pan" editable onModeChange={() => {}} onPoseChange={() => {}} clearanceMeters={0.3} />)
+    await screen.findByTestId('clearance-circle')
+    expect(screen.getByRole('status')).toHaveTextContent('Điểm quá sát vật cản (cần trống bán kính 0,30 m).')
+  })
+
+  it('shows no circle when the screen has no required radius', async () => {
+    renderPicker()
+    await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' })
+    expect(screen.queryByTestId('clearance-circle')).not.toBeInTheDocument()
   })
 
   it('keeps locked pose unchanged while allowing view controls', async () => {

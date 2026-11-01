@@ -55,7 +55,7 @@ public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRev
     }
 }
 
-public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, TimeProvider clock)
+public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, MapPoiSettings settings, TimeProvider clock)
     : IRequestHandler<SaveRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SaveRouteRevisionCommand c, CancellationToken ct)
@@ -72,10 +72,11 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         }
 
         Route? route;
+        RouteRevision? current = null;
         if (c.RouteId.HasValue)
         {
             route = await repo.LockRouteAsync(c.RouteId.Value, ct) ?? throw new NotFoundException("Versioned route", c.RouteId.Value);
-            var current = await repo.GetCurrentRevisionAsync(route.Id, ct);
+            current = await repo.GetCurrentRevisionAsync(route.Id, ct);
             if (current?.RevisionNumber != i.ExpectedCurrentRevision)
                 throw new ConflictException("Route revision changed; reload history before saving.", "STALE_ROUTE_REVISION");
         }
@@ -106,13 +107,14 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
         var package = MapPackageValidator.Validate(map.PackageBytes);
-        MapPackageValidator.EnsureFreePosition(package, i.StartX, i.StartY, i.StartYaw);
+        var previous = current?.MapVersionId == map.Id ? current : null;
+        EnsureWrittenPose(package, i.StartX, i.StartY, i.StartYaw, previous?.StartX, previous?.StartY);
         if (i.EndMode == "POSE")
         {
             var endX = i.EndX ?? throw new ValidationException("End pose X is required.");
             var endY = i.EndY ?? throw new ValidationException("End pose Y is required.");
             var endYaw = i.EndYaw ?? throw new ValidationException("End pose yaw is required.");
-            MapPackageValidator.EnsureFreePosition(package, endX, endY, endYaw);
+            EnsureWrittenPose(package, endX, endY, endYaw, previous?.EndX, previous?.EndY);
         }
 
         var now = clock.GetUtcNow();
@@ -176,6 +178,13 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], []);
+    }
+
+    // A pose kept from the current revision on the same map may predate the clearance rule; see PoiProposalRules.
+    private void EnsureWrittenPose(ValidatedMapPackage package, decimal x, decimal y, decimal yaw, decimal? previousX, decimal? previousY)
+    {
+        if (x == previousX && y == previousY) MapPackageValidator.EnsureFreePosition(package, x, y, yaw);
+        else MapPackageValidator.EnsureClearPosition(package, x, y, yaw, settings.PoiClearanceMeters);
     }
 
     internal static string Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null! : value.Trim();

@@ -21,18 +21,20 @@ internal sealed record PoiImportPlannedFile(
 internal static class PoiImportPlanner
 {
     public const double MaxYawDifference = 0.01d;
-    public const string DefaultCameraPreset = "FRONT";
+    public const string DefaultCameraPreset = PoiCameraPresets.Front;
 
     public static IReadOnlyList<PoiImportParsedFile> Parse(IReadOnlyList<PoiImportSource> sources) =>
         sources.Select(ParseFile).ToArray();
 
     public static async Task<IReadOnlyList<PoiImportPlannedFile>> PlanAsync(
         IPoiImportRepository importRepository, IMapVersionRepository mapRepository, MapVersion map, Robot robot,
-        IReadOnlyList<PoiImportParsedFile> files, CancellationToken cancellationToken)
+        IReadOnlyList<PoiImportParsedFile> files, MapPoiSettings settings, CancellationToken cancellationToken)
     {
         var sourceIds = files.Where(file => file.Capture is not null).Select(file => file.Capture!.Id).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var proposals = sourceIds.Length == 0 ? [] : await importRepository.ListProposalsBySourceAsync(map.AreaKey, sourceIds, cancellationToken);
         var proposalBySource = proposals.ToDictionary(proposal => proposal.SourcePoiId!, StringComparer.OrdinalIgnoreCase);
+        var currentCameras = proposals.Count == 0 ? new Dictionary<Guid, string>() :
+            await importRepository.ListCurrentCameraPresetsAsync(proposals.Select(proposal => proposal.Id).ToArray(), cancellationToken);
         var applied = (await importRepository.ListAppliedImportReceiptsAsync(map.Id, cancellationToken))
             .ToDictionary(receipt => Convert.ToHexString(receipt.FileSha256));
         var eligibility = await MapPreparationEligibility.LoadAsync(mapRepository, map, cancellationToken);
@@ -41,7 +43,7 @@ internal static class PoiImportPlanner
 
         var sourceCounts = files.Where(file => file.Capture is not null).GroupBy(file => file.Capture!.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
-        return files.Select(file => PlanFile(file, map, package, eligibility, deployed, sourceCounts, proposalBySource, applied)).ToArray();
+        return files.Select(file => PlanFile(file, map, package, settings, eligibility, deployed, sourceCounts, proposalBySource, currentCameras, applied)).ToArray();
     }
 
     private static PoiImportParsedFile ParseFile(PoiImportSource source)
@@ -61,9 +63,10 @@ internal static class PoiImportPlanner
         }
     }
 
-    private static PoiImportPlannedFile PlanFile(PoiImportParsedFile file, MapVersion map, ValidatedMapPackage package,
+    private static PoiImportPlannedFile PlanFile(PoiImportParsedFile file, MapVersion map, ValidatedMapPackage package, MapPoiSettings settings,
         MapPreparationEligibility eligibility, bool deployed, Dictionary<string, int> sourceCounts,
-        Dictionary<string, PoiProposal> proposalBySource, Dictionary<string, PoiImportReceipt> applied)
+        Dictionary<string, PoiProposal> proposalBySource, IReadOnlyDictionary<Guid, string> currentCameras,
+        Dictionary<string, PoiImportReceipt> applied)
     {
         if (file.Capture is not { } capture)
             return new(file, null, null, null, null, file.ErrorCode, file.ErrorMessage, null, null);
@@ -88,7 +91,11 @@ internal static class PoiImportPlanner
             return Failed("YAW_QUATERNION_MISMATCH", "yaw trong tệp không khớp với quaternion.");
         try
         {
-            MapPackageValidator.EnsureFreePosition(package, x, y, yaw);
+            MapPackageValidator.EnsureClearPosition(package, x, y, yaw, settings.PoiClearanceMeters);
+        }
+        catch (ValidationException exception) when (exception.Errors.Any(failure => failure.ErrorCode == MapPoiErrorCodes.PoseClearanceInsufficient))
+        {
+            return Failed(MapPoiErrorCodes.PoseClearanceInsufficient, exception.Errors.First().ErrorMessage);
         }
         catch (ValidationException)
         {
@@ -98,6 +105,9 @@ internal static class PoiImportPlanner
             return Failed("MAP_NOT_DEPLOYED", "Robot đã chọn chưa có kiểm tra triển khai đạt mới nhất trên đúng phiên bản bản đồ này.");
 
         var proposal = proposalBySource.GetValueOrDefault(capture.Id);
+        // A new capture carries the current camera preset forward, and a file cannot choose one.
+        if (proposal is not null && !PoiCameraPresets.IsValid(currentCameras.GetValueOrDefault(proposal.Id)))
+            return Failed(MapPoiErrorCodes.CameraPresetInvalid, $"{PoiCameraPresets.InvalidMessage} Staff cần chọn lại hướng camera của POI này trước khi nhập tệp.");
         return new(file, x, y, yaw, proposal is null ? PoiImportActions.Create : PoiImportActions.NewRevision, null, null, null, proposal);
     }
 

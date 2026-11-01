@@ -9,12 +9,34 @@ internal static class PoiProposalRules
 {
     public static void ValidatePosition(MapVersion map, PoiProposalDraft draft)
     {
+        EnsurePersistedPrecision(draft);
+        var package = MapPackageValidator.Validate(map.PackageBytes);
+        MapPackageValidator.EnsureFreePosition(package, draft.X, draft.Y, draft.Yaw);
+    }
+
+    /// <summary>
+    /// A revision that keeps its predecessor's map and position writes no new pose. Such a pose may predate the
+    /// clearance rule, and refusing it would stop Staff editing the content of a POI whose PASS still stands.
+    /// </summary>
+    public static void ValidateWrittenPosition(MapVersion map, PoiProposalDraft draft, MapPoiSettings settings,
+        PoiProposalRevision? previous = null)
+    {
+        if (previous is not null && previous.MapVersionId == draft.MapVersionId && previous.X == draft.X && previous.Y == draft.Y)
+        {
+            ValidatePosition(map, draft);
+            return;
+        }
+        EnsurePersistedPrecision(draft);
+        var package = MapPackageValidator.Validate(map.PackageBytes);
+        MapPackageValidator.EnsureClearPosition(package, draft.X, draft.Y, draft.Yaw, settings.PoiClearanceMeters);
+    }
+
+    private static void EnsurePersistedPrecision(PoiProposalDraft draft)
+    {
         if (draft.X != decimal.Round(draft.X, 4) || draft.Y != decimal.Round(draft.Y, 4) ||
             draft.Yaw != decimal.Round(draft.Yaw, 6) || draft.X is < -999999.9999m or > 999999.9999m ||
             draft.Y is < -999999.9999m or > 999999.9999m)
             throw new ValidationException("POI coordinates must fit the persisted meter/radian precision.");
-        var package = MapPackageValidator.Validate(map.PackageBytes);
-        MapPackageValidator.EnsureFreePosition(package, draft.X, draft.Y, draft.Yaw);
     }
 
     /// <summary>The robot's newest check across all maps must be a pass on this exact version and package.</summary>

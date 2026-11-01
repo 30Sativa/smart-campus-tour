@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -278,17 +280,172 @@ public sealed class PoiImportSqlTests
         Assert.Equal("NOT_CHECKED", moved.Revision.NavigationStatus);
     }
 
+    [SchemaV11Fact]
+    public async Task ClearanceFailure_IsShownPerFileInPreview_AndImportRefusesTheWholeSet()
+    {
+        await using var h = await Harness.Create();
+        var nearWall = File("near.yaml", "POI_NEAR", x: 1.1m, y: 0.5m);
+        var open = File("open.yaml", "POI_OPEN");
+
+        var preview = await h.Preview(nearWall, open);
+
+        Assert.False(preview.CanImport);
+        Assert.Equal(MapPoiErrorCodes.PoseClearanceInsufficient, preview.Files[0].ErrorCode);
+        Assert.Equal(ClearanceMessage, preview.Files[0].ErrorMessage);
+        Assert.Null(preview.Files[1].ErrorCode);
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => h.Import([nearWall, open]));
+        Assert.Equal("POI_IMPORT_INVALID", refused.Code);
+        Assert.Contains(ClearanceMessage, Assert.Single(refused.FieldErrors!["near.yaml"]));
+        await h.AssertNothingImported();
+    }
+
+    [SchemaV11Fact]
+    public async Task NewCapture_OfAPoiWithAnOlderCameraValue_IsRefusedUntilStaffPicksAValidOne()
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A")])).CreatedProposalIds[0];
+        await h.Database.ExecuteAsync($"UPDATE dbo.PoiProposalRevisions SET CameraPreset=N'HEAD_LEFT' WHERE ProposalId='{proposalId}';");
+        var recapture = File("a2.yaml", "POI_A", x: 2.5m);
+
+        var preview = await h.Preview(recapture);
+
+        var file = Assert.Single(preview.Files);
+        Assert.Equal(MapPoiErrorCodes.CameraPresetInvalid, file.ErrorCode);
+        Assert.Contains(PoiCameraPresets.InvalidMessage, file.ErrorMessage);
+        var refused = await Assert.ThrowsAsync<ConflictException>(() => h.Import([recapture]));
+        Assert.Equal("POI_IMPORT_INVALID", refused.Code);
+        await h.AssertCounts(1, 1, 1);
+
+        var staffStillBlocked = await Assert.ThrowsAsync<ValidationException>(() => h.ReviseCamera(proposalId, "HEAD_LEFT"));
+        Assert.Equal(MapPoiErrorCodes.CameraPresetInvalid, Assert.Single(staffStillBlocked.Errors).ErrorCode);
+        var fixedCamera = await h.ReviseCamera(proposalId, "right");
+        Assert.Equal("RIGHT", fixedCamera.Revision.CameraPreset);
+        Assert.Equal(PoiImportActions.NewRevision, (await h.Import([recapture])).Files.Single().Action);
+    }
+
+    [SchemaV11Fact]
+    public async Task HistoryIsNotRewritten_WhenARevisionHoldsAnOlderCameraValue()
+    {
+        await using var h = await Harness.Create();
+        var proposalId = (await h.Import([File("a.yaml", "POI_A")])).CreatedProposalIds[0];
+        await h.Database.ExecuteAsync($"UPDATE dbo.PoiProposalRevisions SET CameraPreset=N'HEAD_LEFT' WHERE ProposalId='{proposalId}';");
+
+        var read = await h.Send(new GetPoiProposalQuery(proposalId));
+
+        Assert.Equal("HEAD_LEFT", read.Revision.CameraPreset);
+    }
+
+    [SchemaV11Fact]
+    public async Task StaffPose_TooCloseToAWall_IsRefusedOnCreateAndOnAMove()
+    {
+        await using var h = await Harness.Create();
+
+        var created = await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(),
+            new(h.MapId, "Sát tường", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT", "Nội dung.")))));
+        AssertClearanceFailure(created);
+
+        var proposal = await h.Send(new CreatePoiProposalCommand(h.StaffId, new(Guid.NewGuid(),
+            new(h.MapId, "Thoáng", "Giới thiệu", null, 2.5m, 2.5m, 0m, "front", "Nội dung."))));
+        Assert.Equal("FRONT", proposal.Revision.CameraPreset);
+        var moved = await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiRevisionCommand(h.StaffId, proposal.Id,
+            new(Guid.NewGuid(), 1, proposal.RowVersion, new(h.MapId, "Thoáng", "Giới thiệu", null, 1.1m, 0.5m, 0m, "FRONT", "Nội dung.")))));
+        AssertClearanceFailure(moved);
+    }
+
+    [SchemaV11Fact]
+    public async Task RoutePose_TooCloseToAWall_IsRefusedForStartAndEnd()
+    {
+        await using var h = await Harness.Create();
+        var poi = await h.ContentPoi("POI_A");
+
+        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(poi, startX: 1.1m, startY: 0.5m)));
+        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(poi, endX: 1.1m, endY: 0.5m)));
+
+        var route = await h.SaveRoute(poi, endX: 3.5m, endY: 3.5m);
+        Assert.Equal(3.5m, route.EndX);
+    }
+
+    [SchemaV11Fact]
+    public async Task PosesThatPredateTheRule_KeepTheirPass_AndContentEditsStayPossible()
+    {
+        await using var h = await Harness.Create(clearanceMeters: 0.01m);
+        var proposalId = (await h.Import([File("a.yaml", "POI_A", x: 1.1m, y: 0.5m)])).CreatedProposalIds[0];
+        var earlierPoi = await h.AddStaffContent(proposalId, "Thư viện", "Đây là thư viện.");
+        var route = await h.SaveRoute(earlierPoi.Revision.Id, startX: 1.1m, startY: 1.5m);
+
+        h.UseClearance(0.30m);
+
+        Assert.Equal("PASS", (await h.Send(new GetPoiProposalQuery(proposalId))).Revision.NavigationStatus);
+        var edited = await h.AddStaffContent(proposalId, "Thư viện", "Nội dung mới.");
+        Assert.Equal("PASS", edited.Revision.NavigationStatus);
+        var nextRoute = await h.SaveRoute(edited.Revision.Id, startX: 1.1m, startY: 1.5m, routeId: route.RouteId, expectedRevision: 1);
+        Assert.Equal(1.1m, nextRoute.StartX);
+
+        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId,
+            new(Guid.NewGuid(), edited.CurrentRevision, edited.RowVersion, new(h.MapId, "Thư viện", "Giới thiệu", null, 1.15m, 0.5m, 0m, "FRONT", "Nội dung mới."))))));
+        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(edited.Revision.Id, startX: 1.15m, startY: 0.5m,
+            routeId: route.RouteId, expectedRevision: 2)));
+    }
+
+    [SchemaV11Fact]
+    public async Task AVerificationOfASubmittedRevision_IsNotAPoseWrite()
+    {
+        await using var h = await Harness.Create(clearanceMeters: 0.01m);
+        var proposalId = (await h.Import([File("a.yaml", "POI_A", x: 1.1m, y: 0.5m, verified: false)])).CreatedProposalIds[0];
+        h.UseClearance(0.30m);
+        var submitted = await h.Send(new GetPoiProposalQuery(proposalId));
+
+        var result = await h.Send(new RecordPoiVerificationCommand(h.TechnicalId, proposalId, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot,
+            "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+
+        Assert.Equal("PASS", result.ResultCode);
+    }
+
+    [SchemaV11Fact]
+    public async Task MapPackage_IsRefusedTwiceInOneArea_AllowedInAnother_AndReplayReturnsTheOriginal()
+    {
+        await using var h = await Harness.Create();
+        var requestId = Guid.NewGuid();
+        var second = await h.UploadMap("pilot", "Pilot", Marked("v2"), requestId);
+        Assert.Equal(2, second.VersionNumber);
+
+        var duplicate = await Assert.ThrowsAsync<ConflictException>(() => h.UploadMap("pilot", "Pilot", Marked("v2"), Guid.NewGuid()));
+        Assert.Equal("MAP_PACKAGE_DUPLICATE", duplicate.Code);
+        Assert.Equal("Gói này đã được tải lên ở Pilot · v2.", duplicate.Message);
+        var first = await Assert.ThrowsAsync<ConflictException>(() => h.UploadMap("pilot", "Pilot", MapPackage(), Guid.NewGuid()));
+        Assert.Equal("Gói này đã được tải lên ở Pilot · v1.", first.Message);
+
+        var replay = await h.UploadMap("pilot", "Pilot", Marked("v2"), requestId);
+        Assert.Equal(second.Id, replay.Id);
+        Assert.Equal(2, replay.VersionNumber);
+
+        var elsewhere = await h.UploadMap("khac", "Khu khác", Marked("v2"), Guid.NewGuid());
+        Assert.Equal(1, elsewhere.VersionNumber);
+        Assert.Equal(second.PackageSha256, elsewhere.PackageSha256);
+        await using var db = h.Context();
+        Assert.Equal(3, await db.MapVersions.CountAsync());
+    }
+
+    private const string ClearanceMessage = "Điểm quá sát vật cản (cần trống bán kính 0,30 m).";
+
+    private static void AssertClearanceFailure(ValidationException error)
+    {
+        var failure = Assert.Single(error.Errors);
+        Assert.Equal(MapPoiErrorCodes.PoseClearanceInsufficient, failure.ErrorCode);
+        Assert.Equal(ClearanceMessage, failure.ErrorMessage);
+    }
+
     private static PoiImportUpload File(string fileName, string id, string name = "POI nhập", string mapYaml = "map.yaml", string frame = "map",
         decimal x = 1.5m, decimal y = 1.5m, string? quaternion = null, bool verified = true) =>
         new(fileName, Encoding.UTF8.GetBytes(
             $"# recorded on the robot\nid: {id}\nname: {name}\nmap_yaml: {mapYaml}\nframe_id: {frame}\n" +
             $"pose: {{ x: {x}, y: {y}, yaw: 0.0{(quaternion is null ? "" : $", quaternion: {quaternion}")} }}\nverified: {(verified ? "true" : "false")}\n"));
 
-    private static byte[] MapPackage()
+    private static byte[] MapPackage(string? marker = null)
     {
         // A 4x4 metre map: the bottom-left cell is occupied, the rest are free.
         var pgm = "P2\n4 4\n255\n254 254 254 254\n254 254 254 254\n254 254 254 254\n0 254 254 254\n";
-        const string yaml = "image: map.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n";
+        var yaml = $"{(marker is null ? "" : $"# {marker}\n")}image: map.pgm\nmode: trinary\nresolution: 1\norigin: [0, 0, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n";
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
             foreach (var (name, text) in new[] { ("map.yaml", yaml), ("map.pgm", pgm) })
@@ -298,6 +455,8 @@ public sealed class PoiImportSqlTests
             }
         return stream.ToArray();
     }
+
+    private static byte[] Marked(string marker) => MapPackage(marker);
 
     private sealed class Harness(InitialAdminSeederTests.EmptySchemaDatabase database, ServiceProvider provider, Guid technicalId, Guid staffId, MapVersionView map)
         : IAsyncDisposable
@@ -309,21 +468,12 @@ public sealed class PoiImportSqlTests
         public Guid MapId => map.Id;
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
 
-        public static async Task<Harness> Create(bool deployed = true)
+        public static async Task<Harness> Create(bool deployed = true, decimal? clearanceMeters = null)
         {
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
             var technical = await database.InsertUserAsync(true, username: "import.technical", roles: ["TECHNICAL_STAFF"]);
             var staff = await database.InsertUserAsync(true, username: "import.staff", roles: ["STAFF"]);
-            var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
-            settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
-            settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
-            var services = new ServiceCollection();
-            services.AddLogging();
-            services.AddApplication();
-            services.AddSingleton<IConfiguration>(configuration);
-            services.AddInfrastructure(configuration);
-            var provider = services.BuildServiceProvider();
+            var provider = BuildProvider(database, clearanceMeters);
 
             MapVersionView map;
             await using (var scope = provider.CreateAsyncScope())
@@ -334,6 +484,41 @@ public sealed class PoiImportSqlTests
             await harness.AddRobot("amr_backup");
             if (deployed) await harness.RecordDeployment(passed: true);
             return harness;
+        }
+
+        private static ServiceProvider BuildProvider(InitialAdminSeederTests.EmptySchemaDatabase database, decimal? clearanceMeters)
+        {
+            var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
+            settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
+            settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
+            if (clearanceMeters is { } clearance) settings["Maps:PoiClearanceMeters"] = clearance.ToString(CultureInfo.InvariantCulture);
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddApplication();
+            services.AddSingleton<IConfiguration>(configuration);
+            services.AddInfrastructure(configuration);
+            return services.BuildServiceProvider();
+        }
+
+        /// <summary>Stands in for the clearance rule arriving after these rows were written.</summary>
+        public void UseClearance(decimal clearanceMeters) => provider = BuildProvider(database, clearanceMeters);
+
+        public Task<MapVersionView> UploadMap(string area, string areaName, byte[] package, Guid requestId) =>
+            Send(new CreateMapVersionCommand(technicalId, new(area, areaName, requestId, package)));
+
+        public async Task<PoiProposalView> ReviseCamera(Guid proposalId, string camera)
+        {
+            var current = await Send(new GetPoiProposalQuery(proposalId));
+            var revision = current.Revision;
+            return await Send(new CreatePoiRevisionCommand(staffId, proposalId, new(Guid.NewGuid(), current.CurrentRevision, current.RowVersion,
+                new(MapId, revision.Name, revision.Purpose, null, revision.X, revision.Y, revision.Yaw, camera, "Nội dung thuyết minh."))));
+        }
+
+        public async Task<Guid> ContentPoi(string sourceId)
+        {
+            var proposalId = (await Import([File($"{sourceId}.yaml", sourceId)])).CreatedProposalIds[0];
+            return (await AddStaffContent(proposalId, "Thư viện", "Đây là thư viện.")).Revision.Id;
         }
 
         public async Task<TResponse> Send<TResponse>(IRequest<TResponse> request)
@@ -359,9 +544,11 @@ public sealed class PoiImportSqlTests
                 new(MapId, name, "Giới thiệu điểm tham quan", null, revision.X, revision.Y, revision.Yaw, revision.CameraPreset, narration))));
         }
 
-        public Task<RouteRevisionView> SaveRoute(Guid poiRevisionId) =>
-            Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến nhập", null, MapId,
-                2.5m, 2.5m, 0m, "LAST_POI", null, null, null, [new(poiRevisionId, 30, [new("FRONT", 10)])])));
+        public Task<RouteRevisionView> SaveRoute(Guid poiRevisionId, decimal startX = 2.5m, decimal startY = 2.5m,
+            decimal? endX = null, decimal? endY = null, Guid? routeId = null, int expectedRevision = 0) =>
+            Send(new SaveRouteRevisionCommand(staffId, routeId, new(Guid.NewGuid(), expectedRevision, "Tuyến nhập", null, MapId,
+                startX, startY, 0m, endX is null ? "LAST_POI" : "POSE", endX, endY, endX is null ? null : 0m,
+                [new(poiRevisionId, 30, [new("FRONT", 10)])])));
 
         public async Task AssertNothingImported() => await AssertCounts(0, 0, 0);
 

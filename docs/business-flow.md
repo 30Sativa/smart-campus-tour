@@ -42,6 +42,15 @@ Decision: ADR-0038.
 - Staff sees "Cần bổ sung nội dung thuyết minh" on imported POIs and adds name and narration through a normal edit. Keeping the pose keeps the PASS. Moving it or changing the camera needs a new check.
 - A route cannot use a stop without narration (`POI_NARRATION_REQUIRED`), and the whole-route test run is still required.
 
+## Input limits for maps and poses
+
+Decision: ADR-0040.
+
+- A package already uploaded to an area is refused with the version that holds it. The same package in another area is fine, and retrying the same upload returns the original version.
+- The camera can only be Phía trước, Bên trái or Bên phải. A POI revision that still holds an older value keeps it as history, and the next revision must pick one of the three. A new pose file for such a POI waits until Staff has done that.
+- A newly written pose needs free floor around it, 0,30 m by default: every cell the circle touches must be inside the map and free, not occupied or unknown. This covers Staff POI edits, pose file preview and import, and route start and end poses. The picker draws the circle and shows the same message before submit, and preview shows it per file.
+- Poses already stored stay valid. A content edit that keeps the map and position is not checked again, so its PASS still stands. Moving the pose or changing the map is.
+
 ## Setting up a robot and its life cycle
 
 Decision: ADR-0039.

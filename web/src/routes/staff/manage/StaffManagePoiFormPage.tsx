@@ -11,6 +11,7 @@ import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
 import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
+import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
 type Draft = { mapVersionId: string; name: string; purpose: string; description: string; narrationText: string; fallbackVideoUrl: string; x: number | null; y: number | null; yaw: number | null; cameraPreset: string }
@@ -53,6 +54,13 @@ export default function StaffManagePoiFormPage() {
   const mutate = async (action: 'save' | 'submit') => {
     if (!mapEligible || historicalReadOnly || !draft.mapVersionId || !draft.name.trim() || !draft.purpose.trim() || !draft.narrationText.trim() || draft.x == null || draft.y == null || draft.yaw == null) {
       setError('Cần chọn bản đồ, nhập tên, mục đích, nội dung thuyết minh và đặt vị trí cùng hướng trên bản đồ.')
+      return
+    }
+    // The server skips this for a pose kept from the current revision, so a content edit stays possible.
+    const poseKept = current?.revision.mapVersionId === draft.mapVersionId && current.revision.x === draft.x && current.revision.y === draft.y
+    const clearanceMeters = selectedItem?.poiClearanceMeters
+    if (!poseKept && pickerMap && clearanceMeters != null && poseClearance(pickerMap, pickerMap.pixels ?? null, { x: draft.x, y: draft.y }, clearanceMeters) === 'blocked') {
+      setError(clearanceMessage(clearanceMeters))
       return
     }
     const body = { ...draft, x: draft.x!, y: draft.y!, yaw: draft.yaw!, name: draft.name.trim(), purpose: draft.purpose.trim(), description: draft.description.trim() || null, narrationText: draft.narrationText.trim(), fallbackVideoUrl: draft.fallbackVideoUrl.trim() || null }
@@ -122,7 +130,7 @@ export default function StaffManagePoiFormPage() {
           {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
         </section>
         {mapError && <div role="alert"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
-        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} /> : <div className={`${panelClass} grid min-h-[320px] place-items-center p-5 text-center text-sm text-[#64748b]`}><div><MapPinned size={26} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
+        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className={`${panelClass} grid min-h-[320px] place-items-center p-5 text-center text-sm text-[#64748b]`}><div><MapPinned size={26} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
         <details className={`${panelClass} px-4 py-3 text-sm`}>
           <summary className="cursor-pointer font-medium text-[#334155]">Nhập toạ độ thủ công <span className="font-normal text-[#64748b]">{draft.x != null && draft.y != null ? `· ${draft.x.toFixed(2)}, ${draft.y.toFixed(2)}${yawDeg != null ? ` · ${yawDeg}°` : ''}` : '· chưa đặt vị trí'}</span></summary>
           <div className="mt-3 grid gap-3 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
@@ -134,7 +142,7 @@ export default function StaffManagePoiFormPage() {
         <label className="block text-sm">Mô tả<textarea className={`${inputClass} mt-1`} rows={3} maxLength={1000} value={draft.description} onChange={e => update({ description: e.target.value })} /></label>
         <label className="block text-sm">Nội dung thuyết minh<textarea className={`${inputClass} mt-1`} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} /></label>
         <label className="block text-sm">Video dự phòng (HTTPS, không bắt buộc)<input className={`${inputClass} mt-1`} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} /></label>
-        <label className="block text-sm">Góc camera<select className={`${inputClass} mt-1`} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{Object.entries(cameraPresetLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="block text-sm">Góc camera<select className={`${inputClass} mt-1`} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{!(draft.cameraPreset in cameraPresetLabel) && <option value={draft.cameraPreset} disabled>Hướng cũ {draft.cameraPreset}, cần chọn lại</option>}{Object.entries(cameraPresetLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         <div className="flex flex-col gap-2 border-t border-[#eef1f4] pt-3">
           <button type="button" disabled={busy || locked} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Gửi kiểm chứng'}</button>

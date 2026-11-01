@@ -5,7 +5,7 @@ import type { OccupancyMap } from './catalog'
 import '../poi-form.css'
 import { loadMapImage, type MapRaster } from './load-map-image'
 import {
-  cellAtPose, headingFromPoints, imageToRos, quantizePosition, quantizeYaw,
+  cellAtPose, clearanceMessage, headingFromPoints, imageToRos, poseClearance, quantizePosition, quantizeYaw,
   rosToImage, sampleCell, screenToImage, type ImagePoint, type RosPoint,
 } from './occupancy-grid'
 
@@ -19,6 +19,8 @@ type Props = {
   mode: PickerMode
   onModeChange: (mode: PickerMode) => void
   onPoseChange: (pose: PickerPose) => void
+  /** Free radius the server requires around a pose; the map shows it as a circle. */
+  clearanceMeters?: number
 }
 
 type Viewport = { u: number; v: number; width: number; height: number }
@@ -49,7 +51,7 @@ function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: 
   return { u: focus.u - (focus.u - current.u) * width / current.width, v: focus.v - (focus.v - current.v) * height / current.height, width, height }
 }
 
-export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange }: Props) {
+export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseChange, clearanceMeters }: Props) {
   const helpId = useId()
   const [rasterState, setRasterState] = useState<RasterState>({ status: 'loading' })
   const [retry, setRetry] = useState(0)
@@ -65,7 +67,10 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const headingPreview = actualMode === 'heading' && hover && position
     ? headingFromPoints(position, imageToRos(map, hover)) : null
   const yaw = headingPreview ?? pose.yaw
-  const cellState = position ? sampleCell(map, rasterState.status === 'ready' ? rasterState.raster.pixels : null, position) : null
+  const pixels = rasterState.status === 'ready' ? rasterState.raster.pixels : null
+  const cellState = position ? sampleCell(map, pixels, position) : null
+  const tooClose = cellState === 'free' && clearanceMeters != null && poseClearance(map, pixels, position!, clearanceMeters) === 'blocked'
+  const clearanceRadius = clearanceMeters == null ? null : clearanceMeters / map.resolution
   const ready = rasterState.status === 'ready'
   const markerRadius = view.height / 100
   const arrowLength = view.height / 22
@@ -222,10 +227,12 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             <title>Chọn vị trí và hướng thân POI trong ROS map frame</title>
             <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: view.height <= 420 ? 'pixelated' : 'auto' }} />
             {ghost && <g pointerEvents="none" opacity={0.55}>
+              {clearanceRadius != null && <circle data-testid="clearance-preview" cx={ghost.u} cy={ghost.v} r={clearanceRadius} fill="rgba(37,99,235,0.1)" stroke="#2563eb" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
               <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 0.8} fill="#2563eb" />
               <circle cx={ghost.u} cy={ghost.v} r={markerRadius * 2} fill="none" stroke="#2563eb" strokeWidth={1.5} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
             </g>}
             {marker && <g aria-label="Pose POI" transform={`translate(${marker.u} ${marker.v})`}>
+              {clearanceRadius != null && <circle data-testid="clearance-circle" pointerEvents="none" r={clearanceRadius} fill={tooClose ? 'rgba(217,119,6,0.16)' : 'rgba(37,99,235,0.1)'} stroke={tooClose ? '#b45309' : '#2563eb'} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
               {yaw != null && Number.isFinite(yaw) && <g transform={`rotate(${-(yaw - map.origin[2]) * 180 / Math.PI})`}>
                 <path d={`M 0 0 L ${arrowLength * 1.05} ${-arrowLength * 0.45} A ${arrowLength * 1.14} ${arrowLength * 1.14} 0 0 1 ${arrowLength * 1.05} ${arrowLength * 0.45} Z`} fill="rgba(37,99,235,0.12)" />
                 <path d={arrow} fill="none" stroke="white" strokeWidth={6} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
@@ -257,14 +264,15 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
 
       <div className="space-y-2.5 border-t border-[#e2e8f0] bg-[#fbfdff] px-4 py-3 text-xs leading-5 text-[#54738a]">
         <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>
-        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' ? 'bg-[#ecfdf3] text-[#2f7a5b]' : 'bg-[#fffaf0] text-[#7d5310]'}`}>
-          {cellState === 'free' ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{CELL_LABELS[cellState]}
+        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[#ecfdf3] text-[#2f7a5b]' : 'bg-[#fffaf0] text-[#7d5310]'}`}>
+          {cellState === 'free' && !tooClose ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{tooClose ? clearanceMessage(clearanceMeters!) : CELL_LABELS[cellState]}
         </p>}
         {interactionError && <p role="alert" className="font-semibold text-[#b23e31]">{interactionError}</p>}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] border border-[#94a3b8] bg-white" aria-hidden="true" />Trắng: ô trống</span>
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#111]" aria-hidden="true" />Đen: vật cản</span>
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#9aa5b1]" aria-hidden="true" />Xám: chưa biết</span>
+          {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[#2563eb] bg-[#2563eb]/10" aria-hidden="true" />Vòng tròn: vùng phải trống quanh robot</span>}
           <span>Yaw 0 = +X, chiều dương quay về +Y</span>
         </div>
         <p id={helpId} className="text-[#7c94a7]">{help}</p>

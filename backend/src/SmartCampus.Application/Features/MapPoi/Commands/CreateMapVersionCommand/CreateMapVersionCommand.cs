@@ -69,6 +69,10 @@ public sealed class CreateMapVersionCommandHandler(
         {
             throw new ConflictException("Mã khu vực này đã được dùng với tên khác. Chọn khu vực đã có hoặc dùng mã mới.", "MAP_AREA_NAME_CONFLICT");
         }
+        else if (await repository.FindVersionNumberByPackageAsync(areaKey, package.Sha256, cancellationToken) is { } duplicate)
+        {
+            throw new ConflictException($"Gói này đã được tải lên ở {area.DisplayName} · v{duplicate}.", "MAP_PACKAGE_DUPLICATE");
+        }
 
         var version = await repository.GetNextMapVersionAsync(areaKey, cancellationToken);
         var mapKey = $"{areaKey}-v{version}";

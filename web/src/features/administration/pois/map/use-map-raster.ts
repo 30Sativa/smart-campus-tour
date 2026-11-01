@@ -23,7 +23,7 @@ async function loadRaster({ id, mapKey, frameId, imageFileName, packageSha256 }:
   const raster = await parseVersionedMapPackage(await bytes.arrayBuffer(), imageFileName)
   const imageUrl = await pngDataUrl(await rasterPngBlob(raster))
   return { schemaVersion: 1, mapKey, frameId, imageUrl, imageSha256: raster.imageSha256, fingerprint: packageSha256,
-    sourceYaml: raster.sourceYaml, width: raster.width, height: raster.height, resolution: raster.resolution, origin: raster.origin }
+    sourceYaml: raster.sourceYaml, pixels: raster.pixels, width: raster.width, height: raster.height, resolution: raster.resolution, origin: raster.origin }
 }
 
 function failureText(cause: unknown) {
