@@ -8,10 +8,7 @@ import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '..
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { cameraPresetLabel, mapCheckLabel } from '../../../features/technical/poi-labels'
-
 import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
-import { occupancyMapFor } from '../../../features/administration/pois/map/catalog'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
