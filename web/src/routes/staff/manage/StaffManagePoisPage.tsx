@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, FileText, Maximize2, MapPinOff, Minus, Pencil, Plus, Send } from 'lucide-react'
+import { FileText, Maximize2, MapPinOff, Minus, Pencil, Plus, Send } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -32,11 +32,10 @@ const STATUS: Record<Status, { label: string; chip: string; pin: string }> = {
 const ORDER: Status[] = ['DRAFT', 'WAIT', 'PASS', 'FAIL']
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
-const column = 'text-xs font-semibold text-[#718096]'
 
 /**
- * POI proposals on one map version: a status filter, the numbered list, the
- * same numbers on the map, and the chosen point's facts below the map. Staff
+ * POI proposals on one map version: one toolbar, the map, and a numbered list
+ * whose chosen row opens its facts and next step. Same numbers on map and list. Staff
  * proposes; only Technical Staff records a check.
  */
 export default function StaffManagePoisPage() {
@@ -66,80 +65,74 @@ export default function StaffManagePoisPage() {
   const currentKey = maps.find(map => map.id === mapVersionId)?.key
 
   return <AdminPage>
-    <header className="mb-5">
-      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Điểm tham quan (POI)</h1>
-      <p className="mt-1 text-sm text-[#718096]">Chọn điểm để xem vị trí, nội dung và tình trạng kiểm chứng. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
-    </header>
-
-    <div className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`}>
-      {maps.length > 0 && <label className="flex flex-wrap items-center gap-3 text-sm text-[#718096]">Bản đồ / Phiên bản
-        <select aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`}>
-          {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
-        </select>
-      </label>}
-      <span aria-hidden="true" className="hidden h-6 w-px bg-[#e2e8f0] sm:block" />
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
-        <input type="checkbox" checked={deployedOnly} onChange={e => setDeployedOnly(e.target.checked)} className="size-4 rounded border-[#cbd5e1] accent-[#3b82f6]" />
-        Chỉ bản đồ đang chạy trên robot
-      </label>
-      <span className="ml-auto">{blocked
+    <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Điểm tham quan (POI)</h1>
+        <p className="mt-1 text-sm text-[#718096]">Chọn điểm trên bản đồ hoặc trong danh sách. Chỉ điểm đã đạt mới dùng được khi tạo tuyến.</p>
+      </div>
+      {blocked
         // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
         ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
-        : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}</span>
+        : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}
+    </header>
+
+    {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
+    <div className={`${card} mb-4 px-4 py-3`}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+        {maps.length > 0 && <select aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`}>
+          {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
+        </select>}
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
+          <input type="checkbox" checked={deployedOnly} onChange={e => setDeployedOnly(e.target.checked)} className="size-4 rounded border-[#cbd5e1] accent-[#3b82f6]" />
+          Chỉ bản đồ đang chạy trên robot
+        </label>
+        <SearchField value={search} onChange={setSearch} label="Tìm POI" placeholder="Tìm tên, mục đích POI…" className="w-full sm:ml-auto sm:w-64" />
+      </div>
+      <div role="group" aria-label="Lọc theo trạng thái" className="mt-2.5 flex flex-wrap gap-1.5 border-t border-[#eef2f6] pt-2.5">
+        {([['all', 'Tất cả', scoped.length], ...ORDER.map(key => [key, STATUS[key].label, count(key)] as const)] as const).map(([key, label, n]) => (
+          <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as Filter)}
+            className={`inline-flex min-h-8 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${focus} ${filter === key ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-[#f8fafc] hover:text-[#2d3748]'}`}>
+            {label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${filter === key ? 'bg-white text-[#4a6fa5]' : 'bg-[#eef2f6] text-[#718096]'}`}>{n}</span>
+          </button>
+        ))}
+      </div>
     </div>
     {deployedOnly && mapVersions.isError && <div className="mb-3"><Notice tone="danger">Không tải được thông tin triển khai bản đồ.</Notice></div>}
 
-    <div role="group" aria-label="Lọc theo trạng thái" className="mb-4 flex flex-wrap gap-1.5">
-      {([['all', 'Tất cả', scoped.length], ...ORDER.map(key => [key, STATUS[key].label, count(key)] as const)] as const).map(([key, label, n]) => (
-        <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as Filter)}
-          className={`inline-flex min-h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${focus} ${filter === key ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-white hover:text-[#2d3748]'}`}>
-          {label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${filter === key ? 'bg-white text-[#4a6fa5]' : 'bg-[#eef2f6] text-[#718096]'}`}>{n}</span>
-        </button>
-      ))}
-    </div>
-
-    {/* List and the chosen point on the left, the map on its own on the right, so neither column runs empty. */}
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <div className="flex min-w-0 flex-col gap-4">
-      <section className={card} aria-label="Danh sách đề xuất POI">
-        <div className="flex flex-wrap items-center gap-3 px-5 pt-4 pb-3">
-          <h2 className="text-lg font-bold text-[#2d3748]">Danh sách điểm</h2>
-          <SearchField value={search} onChange={setSearch} label="Tìm POI" placeholder="Tìm tên, mục đích POI…" className="ml-auto w-full sm:w-64" />
-        </div>
-        {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
-          (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} />) :
-          <>
-            <div aria-hidden="true" className="hidden grid-cols-[44px_minmax(0,1fr)_96px_128px_20px] gap-x-4 border-y border-[#e2e8f0] bg-[#f8fafc] px-5 py-2.5 md:grid">
-              <span className={column}>POI</span><span /><span className={column}>Camera</span><span className={column}>Trạng thái</span><span />
-            </div>
-            <ul aria-label="Điểm tham quan" className="divide-y divide-[#eef2f6]">{rows.map((p) => {
-              const st = STATUS[statusOf(p)]
-              const active = p.id === selected?.id
-              return <li key={p.id} className={`grid grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-x-4 gap-y-1.5 px-5 py-3 transition-colors md:grid-cols-[44px_minmax(0,1fr)_96px_128px_20px] ${active ? 'bg-[#f5f9ff]' : 'hover:bg-[#f8fafc]'}`}>
-                <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
-                  className={`grid size-9 place-items-center rounded-full text-sm font-bold tabular-nums transition-colors ${focus} ${active ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'bg-[#f1f5f9] text-[#2d3748]'}`}>{number.get(p.id)}</button>
-                <button type="button" onClick={() => setChosen(p.id)} className={`min-w-0 rounded-md text-left ${focus}`}>
-                  <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
-                  <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
-                  {p.sourcePoiId && !p.revision.narrationText && <span className="mt-1 block"><ToneBadge tone="warn">{NARRATION_NEEDED}</ToneBadge></span>}
-                </button>
-                <span className="col-start-2 text-sm text-[#2d3748] md:col-start-auto">{cameraPresetLabel[p.revision.cameraPreset] ?? p.revision.cameraPreset}</span>
-                <span className="col-start-2 md:col-start-auto">
-                  <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${st.chip}`}>{st.label}</span>
-                  {p.revision.verificationMethod && <span className="mt-0.5 block text-[11px] text-[#718096]">{verificationMethodLabel[p.revision.verificationMethod]}</span>}
-                </span>
-                <Link to={`/staff/manage/pois/${p.id}`} aria-label={`Mở ${p.revision.name}`} className={`col-start-3 row-start-1 grid size-7 place-items-center rounded-lg text-[#a0aec0] hover:bg-[#eef2f6] hover:text-[#2d3748] md:col-start-auto md:row-start-auto ${focus}`}><ChevronRight size={18} aria-hidden="true" /></Link>
-              </li>
-            })}</ul>
-          </>}
-        {proposals.isSuccess && <p className="border-t border-[#eef2f6] px-5 py-3.5 text-xs text-[#718096]">{scoped.length} điểm trên bản đồ đang chọn{rows.length !== scoped.length ? `, đang hiển thị ${rows.length}` : ''}</p>}
-      </section>
-      {proposals.isSuccess && selected && <SelectedPoi proposal={selected} index={number.get(selected.id) ?? 0} />}
-      </div>
-
+    {/* The map leads because POIs are places; the chosen point opens inside the list instead of a card below it. */}
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       {proposals.isSuccess && <div className="min-w-0 xl:sticky xl:top-4">
         <PoiMap mapVersionId={mapVersionId} mapLabel={mapName(mapVersionId, currentKey ?? '')} proposals={rows} number={number} selectedId={selected?.id} onSelect={setChosen} />
       </div>}
+
+      <section className={`${card} min-w-0`} aria-label="Danh sách đề xuất POI">
+        <div className="flex items-baseline justify-between gap-3 px-4 pt-4 pb-2">
+          <h2 className="text-base font-bold text-[#2d3748]">Danh sách điểm</h2>
+          {proposals.isSuccess && <span className="text-xs text-[#718096]">{scoped.length} điểm{rows.length !== scoped.length ? `, đang hiện ${rows.length}` : ''}</span>}
+        </div>
+        {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
+          (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} />) :
+          <ul aria-label="Điểm tham quan" className="divide-y divide-[#eef2f6] border-t border-[#eef2f6]">{rows.map((p) => {
+            const st = STATUS[statusOf(p)]
+            const active = p.id === selected?.id
+            return <li key={p.id} className={active ? 'bg-[#f5f9ff]' : ''}>
+              <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${focus} ${active ? '' : 'hover:bg-[#f8fafc]'}`}>
+                <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold tabular-nums ${active ? 'bg-[#3b82f6] text-white' : 'bg-[#f1f5f9] text-[#2d3748]'}`}>{number.get(p.id)}</span>
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
+                  <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
+                  {p.sourcePoiId && !p.revision.narrationText && <span className="mt-1 block"><ToneBadge tone="warn">{NARRATION_NEEDED}</ToneBadge></span>}
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className={`inline-flex rounded-lg px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${st.chip}`}>{st.label}</span>
+                  {p.revision.verificationMethod && <span className="mt-0.5 block text-[11px] text-[#718096]">{verificationMethodLabel[p.revision.verificationMethod]}</span>}
+                </span>
+              </button>
+              {active && <PoiDetail proposal={p} />}
+            </li>
+          })}</ul>}
+      </section>
     </div>
   </AdminPage>
 }
@@ -153,38 +146,23 @@ const NEXT_STEP: Record<Status, { text: string; action: string; icon: typeof Sen
 }
 const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]', WAIT: 'bg-[#fbf5e8] text-[#7a5c22]', PASS: 'bg-[#edf3fc] text-[#3f62a0]', FAIL: 'bg-[#fbeeec] text-[#a4473d]' }
 
-/** The chosen point: what it is, where its check stands, and the next step. */
-function SelectedPoi({ proposal, index }: { proposal: PoiProposal; index: number }) {
+/** The chosen point, opened under its own row: its facts and the next step. */
+function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const status = statusOf(proposal)
-  const st = STATUS[status]
   const next = NEXT_STEP[status]
   const facts: Array<[string, string]> = [
-    ['Phiên bản POI', `${proposal.currentRevision}`],
     ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
+    ['Phiên bản POI', `${proposal.currentRevision}`],
     ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
     ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]
   return (
-    <section className={`${card} p-5`} aria-label="Điểm đang chọn">
-      <h2 className="text-base font-bold text-[#2d3748]">Điểm đang chọn</h2>
-      <div className="mt-3 flex items-start gap-3.5">
-        <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#edf3fb] text-base font-bold text-[#4a6fa5] tabular-nums">{index}</span>
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2"><b className="text-base font-bold text-[#2d3748]">{proposal.revision.name}</b><span className={`rounded-lg px-2.5 py-0.5 text-xs font-semibold ${st.chip}`}>{st.label}</span></p>
-          <p className="mt-0.5 text-sm text-[#718096]">{proposal.revision.purpose}</p>
-        </div>
-      </div>
-      <dl className="mt-4 grid overflow-hidden rounded-xl border border-[#e2e8f0] text-[13px] sm:grid-cols-2">
-        {facts.map(([label, value], i) => (
-          <div key={label} className={`flex gap-3 px-3.5 py-2.5 ${i % 2 ? 'sm:border-l sm:border-[#e2e8f0]' : ''} ${i > 1 ? 'border-t border-[#e2e8f0]' : i === 1 ? 'border-t border-[#e2e8f0] sm:border-t-0' : ''}`}>
-            <dt className="w-28 shrink-0 text-[#718096]">{label}</dt><dd className="min-w-0 font-semibold text-[#2d3748]">{value}</dd>
-          </div>
-        ))}
+    <section aria-label="Điểm đang chọn" className="space-y-3 px-4 pb-4 pl-15">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
+        {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="truncate font-semibold text-[#2d3748]">{value}</dd></div>)}
       </dl>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <p className={`min-w-0 flex-1 rounded-xl px-3.5 py-2.5 text-[13px] ${NEXT_TONE[status]}`}>{next.text}</p>
-        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary')}><next.icon size={15} aria-hidden="true" />{next.action}</Link>
-      </div>
+      <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${NEXT_TONE[status]}`}>{next.text}</p>
+      <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary', 'sm')}><next.icon size={14} aria-hidden="true" />{next.action}</Link>
     </section>
   )
 }
@@ -213,14 +191,16 @@ function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelec
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
   const points = proposals.map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
   const us = points.map((pt) => pt.at.u), vs = points.map((pt) => pt.at.v)
-  const pad = 140
+  // Crop to the POIs with a margin proportional to their spread, so unexplored grey does not fill the frame.
+  const spread = us.length ? Math.max(Math.max(...us) - Math.min(...us), Math.max(...vs) - Math.min(...vs)) : 0
+  const pad = Math.max(40, spread * 0.2)
   const x0 = Math.max(0, (us.length ? Math.min(...us) - pad : 0)), y0 = Math.max(0, (vs.length ? Math.min(...vs) - pad : 0))
   const w = Math.max(Math.min(map.width, (us.length ? Math.max(...us) + pad : map.width)) - x0, Math.min(200, map.width))
   const h = Math.max(Math.min(map.height, (vs.length ? Math.max(...vs) + pad : map.height)) - y0, Math.min(200, map.height))
   // Zoom keeps the centre of the fitted view.
   const zw = w / zoom, zh = h / zoom, zx = x0 + (w - zw) / 2, zy = y0 + (h - zh) / 2
   // Uploaded rasters differ in size, so markers scale with the view rather than with image pixels.
-  const unit = Math.max(zw, zh) / 640
+  const unit = Math.max(zw, zh) / 560
   const tool = `grid size-9 place-items-center rounded-xl border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:bg-[#f8fafc] disabled:opacity-40 ${focus}`
   return (
     <section ref={frame} className={`${card} overflow-hidden p-4`} aria-label="Bản đồ POI">
@@ -230,7 +210,7 @@ function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelec
         <button type="button" className={tool} aria-label="Phóng to" disabled={zoom >= 4} onClick={() => setZoom(z => Math.min(4, z * 1.5))}><Plus size={16} aria-hidden="true" /></button>
         <button type="button" className={tool} aria-label="Thu nhỏ" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z / 1.5))}><Minus size={16} aria-hidden="true" /></button>
       </div>
-      <svg viewBox={`${zx} ${zy} ${zw} ${zh}`} className="block max-h-[460px] w-full rounded-xl bg-[#eef2f6]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
+      <svg viewBox={`${zx} ${zy} ${zw} ${zh}`} className="block h-[min(70vh,620px)] w-full rounded-xl bg-[#eef2f6]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
         <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: 'pixelated' }} opacity={0.9} />
         {points.map(({ p, at }) => {
           const active = p.id === selectedId

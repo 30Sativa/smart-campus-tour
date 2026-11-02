@@ -156,8 +156,24 @@ describe('staff preparation UI', () => {
     expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
     expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(within(list).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
-    expect(within(list).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+    expect(within(within(list).getByRole('button', { name: 'Chọn POI 02' })).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    expect(within(within(list).getByRole('button', { name: 'Chọn Thư viện' })).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+  })
+
+  it('opens the chosen point under its own row, one at a time, from the list or the map', async () => {
+    const second = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), second]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const rowOf = (name: string) => within(list).getByRole('button', { name: `Chọn ${name}` }).closest('li')!
+    await within(list).findByRole('button', { name: 'Chọn Điểm A' })
+    expect(within(rowOf('Điểm A')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
+    fireEvent.click(within(list).getByRole('button', { name: 'Chọn Điểm C' }))
+    expect(within(rowOf('Điểm C')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
+    expect(screen.getAllByRole('region', { name: 'Điểm đang chọn' })).toHaveLength(1)
+    const map = await screen.findByRole('img', { name: /với 2 POI/ })
+    fireEvent.click(within(map).getByRole('button', { name: /Điểm A/ }))
+    expect(within(rowOf('Điểm A')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
   })
 
   it('tells Staff the next step for the chosen POI, with one action and no map key noise', async () => {
