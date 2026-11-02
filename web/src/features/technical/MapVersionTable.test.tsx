@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { MapVersionTable } from './MapVersionTable'
-import type { MapVersionItem } from './api/technical'
+import type { MapVersionItem, PhysicalRobotOption } from './api/technical'
 
 const raster = vi.hoisted(() => ({ state: { map: null as { imageUrl: string; width: number; height: number } | null, error: null as string | null, retry: vi.fn() } }))
 vi.mock('../administration/pois/map/use-map-raster', () => ({ useMapRaster: () => raster.state }))
@@ -15,10 +16,11 @@ const version = (areaKey: string, areaName: string, versionNumber: number, overr
 const passed = { technicalCheckStatus: 'PASSED', canUseForPoiPreparation: true, preparationBlockReasonCode: null, preparationBlockReason: null,
   preparationEvidence: { robotCode: 'amr_01', checkedAt: '2026-10-30T08:14:00Z' } } as unknown as Partial<MapVersionItem>
 const onRobot = { currentlyDeployedOn: [{ robotCode: 'amr_01', checkedAt: '2026-10-30T08:14:00Z' }] }
-const show = (items: MapVersionItem[]) => {
+const noRobots = { data: [] as PhysicalRobotOption[], isPending: false, isError: false }
+const show = (items: MapVersionItem[], robots = noRobots) => {
   const onUpload = vi.fn()
   const onCheck = vi.fn()
-  render(<MapVersionTable items={items} onUpload={onUpload} onCheck={onCheck} />)
+  render(<MemoryRouter><MapVersionTable items={items} robots={robots} onUpload={onUpload} onCheck={onCheck} /></MemoryRouter>)
   return { onUpload, onCheck }
 }
 const dataRows = () => screen.getAllByRole('row').slice(1)
@@ -51,6 +53,24 @@ describe('MapVersionTable', () => {
     expect(screen.getByRole('dialog', { name: 'A v1' })).toHaveTextContent('phiên bản cũ, mới nhất là v2')
     fireEvent.click(screen.getByRole('button', { name: 'Tải phiên bản mới' }))
     expect(onUpload).toHaveBeenCalledWith({ areaKey: 'a', displayName: 'A' })
+  })
+
+  it('says which robot holds the area, read-only, and links to that robot to change it', () => {
+    const robot = { id: 'robot-7', robotCode: 'amr_07', displayName: 'AMR 07', assignedMapVersionId: 'a-1', assignedVersionNumber: 1 } as PhysicalRobotOption
+    const elsewhere = { id: 'robot-8', robotCode: 'amr_08', displayName: null, assignedMapVersionId: 'b-1', assignedVersionNumber: 1 } as PhysicalRobotOption
+    show([version('a', 'A', 2, passed), version('a', 'A', 1)], { data: [robot, elsewhere], isPending: false, isError: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A v2' }))
+    const detail = screen.getByRole('dialog', { name: 'A v2' })
+    expect(within(detail).getByRole('link', { name: 'AMR 07 · amr_07 · v1' })).toHaveAttribute('href', '/technical/robots?robot=robot-7')
+    expect(detail).not.toHaveTextContent('amr_08')
+    expect(detail).toHaveTextContent('Gán hoặc đổi bản đồ ở trang Robot.')
+    expect(within(detail).queryByRole('button', { name: /Gán bản đồ|Thay đổi bản đồ/ })).not.toBeInTheDocument()
+  })
+
+  it('says when no robot holds the area', () => {
+    show([version('a', 'A', 1)])
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A v1' }))
+    expect(screen.getByRole('dialog', { name: 'A v1' })).toHaveTextContent('Chưa có robot nào được gán khu vực này')
   })
 
   it('shows the uploaded floor plan in the detail, and says so when it cannot load', () => {

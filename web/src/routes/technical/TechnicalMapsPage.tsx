@@ -19,6 +19,7 @@ const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha
  */
 export default function TechnicalMapsPage() {
   const maps = useMapVersions()
+  const robots = usePhysicalRobots()
   const [uploading, setUploading] = useState(false)
   const [uploadArea, setUploadArea] = useState<MapAreaOption | null>(null)
   const [checking, setChecking] = useState<MapVersionItem | null>(null)
@@ -49,7 +50,7 @@ export default function TechnicalMapsPage() {
 
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
-        : items.length ? <MapVersionTable items={items} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
+        : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
         : <section className={panelClass}><p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</p></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
