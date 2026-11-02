@@ -4,6 +4,7 @@ import { Modal } from '../../components/ui/Drawer'
 import type { StatusTone } from '../../components/ui/status-tone'
 import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { usePagination } from '../../components/ui/use-pagination'
+import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapVersionItem } from './api/technical'
 import { stamp } from './technical-format'
@@ -44,17 +45,26 @@ function SortHeading({ field, label, sort, onSort }: { field: SortField; label: 
   )
 }
 
+/** The uploaded raster itself, so the technician can see which floor plan this version is before loading it on a robot. */
+function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: string }) {
+  const { map, error, retry } = useMapRaster(mapVersionId)
+  if (error) return <div role="alert" className="flex flex-col items-center gap-2 rounded-xl bg-[#fff6f4] px-4 py-8 text-center text-[13px] text-[#b23e18]"><p>{error}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={retry}>Tải lại bản đồ</button></div>
+  if (!map) return <p role="status" className="flex h-64 items-center justify-center rounded-xl bg-[#f1f5f9] text-[13px] text-[#64748b]">Đang tải bản đồ…</p>
+  return <img src={map.imageUrl} alt={`Bản đồ ${label}`} width={map.width} height={map.height} className="mx-auto block h-auto max-h-[420px] w-auto max-w-full rounded-xl border border-[#e2e8f0] bg-[#eef2f6]" style={{ imageRendering: 'pixelated' }} />
+}
+
 /** What the table leaves out. The checksum is here so the file on the robot can be compared with the one uploaded. */
 function MapVersionDetail({ item, onClose, onUpload, onCheck }: { item: MapVersionItem; onClose: () => void } & Actions) {
   const { map, preparationEvidence: evidence, currentlyDeployedOn: robots } = item
   const status = versionStatus(item)
   return (
-    <Modal open title={`${map.areaName} v${map.versionNumber}`} onClose={onClose}
+    <Modal open size="lg" title={`${map.areaName} v${map.versionNumber}`} description={map.areaKey} onClose={onClose}
       footer={<div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={buttonClass('secondary')} onClick={() => { onClose(); onUpload({ areaKey: map.areaKey, displayName: map.areaName }) }}>Tải phiên bản mới</button>
         <button type="button" className={buttonClass('primary')} onClick={() => { onClose(); onCheck(item) }}>Ghi kết quả kiểm tra</button>
       </div>}>
-      <dl className="divide-y divide-[#f1f5f9]">
+      <MapPreview mapVersionId={map.id} label={`${map.areaName} v${map.versionNumber}`} />
+      <dl className="mt-3 divide-y divide-[#f1f5f9]">
         <DetailFact label="Trạng thái"><ToneBadge tone={status.tone}>{status.label}</ToneBadge>{status.detail && <span className="mt-1 block text-xs text-[#64748b]">{status.detail}</span>}</DetailFact>
         <DetailFact label="Kiểm tra gần nhất">{evidence ? stamp(evidence.checkedAt) : 'Chưa có'}</DetailFact>
         <DetailFact label="Robot đang triển khai">{robots.length ? robots.map(robot => robot.robotCode).join(', ') : 'Chưa có'}</DetailFact>

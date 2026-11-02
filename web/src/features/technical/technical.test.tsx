@@ -505,7 +505,7 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText('Library')).toBeInTheDocument()
     expect(screen.queryByText('Giới thiệu thư viện.')).not.toBeInTheDocument()
     expect(screen.queryByText(/^1, 2, 0$/)).not.toBeInTheDocument()
-    expect(await screen.findByText('Library · v1')).toBeInTheDocument()
+    expect(await screen.findByText('Library · v1 · library')).toBeInTheDocument()
     expect(screen.queryByText(/library-v1/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library' }))
     const detail = within(screen.getByRole('dialog', { name: 'Library' }))
