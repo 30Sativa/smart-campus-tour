@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, Clock, FileText, Maximize2, MapPinOff, Minus, Pencil, Plus } from 'lucide-react'
+import { ChevronRight, FileText, Maximize2, MapPinOff, Minus, Pencil, Plus, Send } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
@@ -23,11 +23,11 @@ const NEUTRAL_CHIP = 'bg-[#f1f5f9] text-[#475569]'
 const NEUTRAL_PIN = '#7c8ba1'
 const FAIL_PIN = '#e05a4f'
 const SELECTED_PIN = '#3b82f6'
-const STATUS: Record<Status, { label: string; legend: string; chip: string; pin: string }> = {
-  DRAFT: { label: 'Bản nháp', legend: 'Nháp', chip: NEUTRAL_CHIP, pin: NEUTRAL_PIN },
-  WAIT: { label: 'Chờ kỹ thuật', legend: 'Chờ kiểm chứng', chip: 'bg-[#fbf5e8] text-[#8a6a2e]', pin: NEUTRAL_PIN },
-  PASS: { label: 'Đã đạt', legend: 'Đạt', chip: 'bg-[#edf3fc] text-[#3f62a0]', pin: NEUTRAL_PIN },
-  FAIL: { label: 'Cần sửa', legend: 'Không đạt', chip: 'bg-[#fbeeec] text-[#a4473d]', pin: FAIL_PIN },
+const STATUS: Record<Status, { label: string; chip: string; pin: string }> = {
+  DRAFT: { label: 'Bản nháp', chip: NEUTRAL_CHIP, pin: NEUTRAL_PIN },
+  WAIT: { label: 'Chờ kỹ thuật', chip: 'bg-[#fbf5e8] text-[#8a6a2e]', pin: NEUTRAL_PIN },
+  PASS: { label: 'Đã đạt', chip: 'bg-[#edf3fc] text-[#3f62a0]', pin: NEUTRAL_PIN },
+  FAIL: { label: 'Cần sửa', chip: 'bg-[#fbeeec] text-[#a4473d]', pin: FAIL_PIN },
 }
 const ORDER: Status[] = ['DRAFT', 'WAIT', 'PASS', 'FAIL']
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
@@ -77,14 +77,14 @@ export default function StaffManagePoisPage() {
           {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
         </select>
       </label>}
-      {currentKey && <span className="rounded-lg bg-[#f1f5f9] px-2.5 py-1 font-mono text-xs text-[#475569]">{currentKey}</span>}
       <span aria-hidden="true" className="hidden h-6 w-px bg-[#e2e8f0] sm:block" />
       <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
         <input type="checkbox" checked={deployedOnly} onChange={e => setDeployedOnly(e.target.checked)} className="size-4 rounded border-[#cbd5e1] accent-[#3b82f6]" />
-        Chỉ bản đồ đang triển khai
+        Chỉ bản đồ đang chạy trên robot
       </label>
       <span className="ml-auto">{blocked
-        ? <span title="Cần ít nhất một bản đồ đạt kiểm tra kỹ thuật"><button type="button" disabled className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
+        // The reason is printed, not a hover tooltip, so it reaches touch screens and screen readers too.
+        ? <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"><span id="poi-create-blocked" className="text-xs text-[#b7791f]">Chưa có bản đồ nào đạt kiểm tra kỹ thuật</span><button type="button" disabled aria-describedby="poi-create-blocked" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</button></span>
         : <Link to="/staff/manage/pois/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo điểm mới</Link>}</span>
     </div>
     {deployedOnly && mapVersions.isError && <div className="mb-3"><Notice tone="danger">Không tải được thông tin triển khai bản đồ.</Notice></div>}
@@ -98,7 +98,9 @@ export default function StaffManagePoisPage() {
       ))}
     </div>
 
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    {/* List and the chosen point on the left, the map on its own on the right, so neither column runs empty. */}
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="flex min-w-0 flex-col gap-4">
       <section className={card} aria-label="Danh sách đề xuất POI">
         <div className="flex flex-wrap items-center gap-3 px-5 pt-4 pb-3">
           <h2 className="text-lg font-bold text-[#2d3748]">Danh sách điểm</h2>
@@ -132,23 +134,35 @@ export default function StaffManagePoisPage() {
           </>}
         {proposals.isSuccess && <p className="border-t border-[#eef2f6] px-5 py-3.5 text-xs text-[#718096]">{scoped.length} điểm trên bản đồ đang chọn{rows.length !== scoped.length ? `, đang hiển thị ${rows.length}` : ''}</p>}
       </section>
+      {proposals.isSuccess && selected && <SelectedPoi proposal={selected} index={number.get(selected.id) ?? 0} />}
+      </div>
 
-      {proposals.isSuccess && <div className="flex min-w-0 flex-col gap-4">
+      {proposals.isSuccess && <div className="min-w-0 xl:sticky xl:top-4">
         <PoiMap mapVersionId={mapVersionId} mapLabel={mapName(mapVersionId, currentKey ?? '')} proposals={rows} number={number} selectedId={selected?.id} onSelect={setChosen} />
-        {selected && <SelectedPoi proposal={selected} index={number.get(selected.id) ?? 0} />}
       </div>}
     </div>
   </AdminPage>
 }
 
-/** The chosen point: what it is, its check, and where to change it. */
+/** What the status means for Staff, and the one thing to do next. Every action opens the proposal page. */
+const NEXT_STEP: Record<Status, { text: string; action: string; icon: typeof Send }> = {
+  DRAFT: { text: 'Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.', action: 'Mở để gửi kiểm chứng', icon: Send },
+  WAIT: { text: 'Đã gửi, đang chờ kỹ thuật viên kiểm tra trên robot.', action: 'Xem đề xuất', icon: FileText },
+  PASS: { text: 'Đã đạt kiểm chứng, dùng được khi tạo tuyến.', action: 'Xem đề xuất', icon: FileText },
+  FAIL: { text: 'Kỹ thuật viên ghi không đạt. Xem lý do, sửa rồi gửi lại.', action: 'Xem lý do và sửa', icon: Pencil },
+}
+const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]', WAIT: 'bg-[#fbf5e8] text-[#7a5c22]', PASS: 'bg-[#edf3fc] text-[#3f62a0]', FAIL: 'bg-[#fbeeec] text-[#a4473d]' }
+
+/** The chosen point: what it is, where its check stands, and the next step. */
 function SelectedPoi({ proposal, index }: { proposal: PoiProposal; index: number }) {
-  const st = STATUS[statusOf(proposal)]
+  const status = statusOf(proposal)
+  const st = STATUS[status]
+  const next = NEXT_STEP[status]
   const facts: Array<[string, string]> = [
-    ['Phiên bản POI', `v${proposal.currentRevision}`],
-    ['Kiểm chứng', st.legend],
+    ['Phiên bản POI', `${proposal.currentRevision}`],
     ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
     ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
+    ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]
   return (
     <section className={`${card} p-5`} aria-label="Điểm đang chọn">
@@ -167,11 +181,9 @@ function SelectedPoi({ proposal, index }: { proposal: PoiProposal; index: number
           </div>
         ))}
       </dl>
-      <Link to={`/staff/manage/pois/${proposal.id}`} className={`mt-3 inline-flex items-center gap-1.5 rounded-md text-sm font-semibold text-[#2d3748] hover:underline ${focus}`}><FileText size={15} aria-hidden="true" className="text-[#718096]" />Xem kết quả kiểm chứng<ChevronRight size={15} aria-hidden="true" /></Link>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary')}><Pencil size={15} aria-hidden="true" />Chỉnh sửa đề xuất</Link>
-        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('secondary')}><Clock size={15} aria-hidden="true" />Xem lịch sử</Link>
-        <span className="text-xs text-[#a0aec0] sm:ml-auto">Staff chuẩn bị đề xuất; kỹ thuật viên kiểm chứng.</span>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <p className={`min-w-0 flex-1 rounded-xl px-3.5 py-2.5 text-[13px] ${NEXT_TONE[status]}`}>{next.text}</p>
+        <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary')}><next.icon size={15} aria-hidden="true" />{next.action}</Link>
       </div>
     </section>
   )

@@ -155,19 +155,31 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
     expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
-    expect(screen.getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
-    expect(screen.getByText('Kiểm tra thủ công')).toBeInTheDocument()
+    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
+    expect(within(list).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    expect(within(list).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+  })
+
+  it('tells Staff the next step for the chosen POI, with one action and no map key noise', async () => {
+    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    proposals = [{ ...draft, revision: { ...draft.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_TESTED' } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.')
+    expect(within(chosen).getAllByRole('link')).toHaveLength(1)
+    expect(within(chosen).getByRole('link', { name: 'Mở để gửi kiểm chứng' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    expect(screen.queryByText('test123-v1', { selector: 'span' })).not.toBeInTheDocument()
   })
 
   it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' })).not.toBeChecked()
     expect(within(list).getByText('Điểm A')).toBeInTheDocument()
     await waitFor(() => expect(requests.some(url => url.pathname === '/api/maps/versions')).toBe(true))
     await waitFor(() => {
-      if (!screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }).matches(':checked')) fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }))
+      if (!screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' }).matches(':checked')) fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' }))
       expect(within(list).getByText('Điểm B')).toBeInTheDocument()
     })
     expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()
