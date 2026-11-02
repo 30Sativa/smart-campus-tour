@@ -1,8 +1,9 @@
 export type ButtonKind = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 const BUTTON_KIND: Record<ButtonKind, string> = {
+  // `ct-btn-primary` is a hook: the Staff shell softens it to a light-blue button.
   primary:
-    'bg-[#2d719e] text-white shadow-xs hover:bg-[#245e84] active:scale-[0.98] disabled:bg-[#e3edf4] disabled:text-[#8fa8bb] disabled:shadow-none',
+    'ct-btn-primary bg-[#2d719e] text-white shadow-xs hover:bg-[#245e84] active:scale-[0.98] disabled:bg-[#e3edf4] disabled:text-[#8fa8bb] disabled:shadow-none',
   secondary:
     'border border-[#d9e9f5] bg-white text-[#285c7d] hover:bg-[#f1f8fe] hover:border-[#a8cde6] active:scale-[0.98] disabled:text-[#94a3b8] disabled:hover:bg-white',
   danger:
@@ -52,7 +53,7 @@ export const rowClass = 'transition-colors duration-150 hover:bg-[#fafcfe]'
 
 /** White card on the off-white page; two soft shadows give depth without a hard border. */
 export const cardClass =
-  'rounded-2xl border border-[#e2e8f0] bg-white shadow-xs'
+  'ct-panel rounded-2xl border border-[#e2e8f0] bg-white shadow-xs'
 
 /** A quieter tile inside a card: one reading (telemetry value, note). */
 export const tileClass = 'rounded-xl border border-[#edf2f7] bg-[#f8fafc]'

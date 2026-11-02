@@ -7,7 +7,8 @@ import { buttonClass, inputClass } from './ui-classes'
 
 
 export const panelClass =
-  'overflow-hidden rounded-xl border border-[#e2e8f0] bg-white transition-[box-shadow,border-color] duration-200'
+  // `ct-panel` is a hook, not a style: the Staff shell turns it into a Purity card.
+  'ct-panel overflow-hidden rounded-xl border border-[#e2e8f0] bg-white transition-[box-shadow,border-color] duration-200'
 
 
 

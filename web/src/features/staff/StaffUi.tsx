@@ -55,7 +55,7 @@ export function StaffPage({
   className?: string
 }) {
   return (
-    <div className={`min-h-full bg-[#f6f7f9] px-4 py-4 sm:px-6 lg:px-8 lg:py-6 ${className}`}>
+    <div className={`min-h-full bg-transparent px-4 py-4 sm:px-6 lg:px-8 lg:py-6 ${className}`}>
       <div
         className={`mx-auto w-full ${
           wide ? 'max-w-[1600px]' : 'max-w-[1440px]'

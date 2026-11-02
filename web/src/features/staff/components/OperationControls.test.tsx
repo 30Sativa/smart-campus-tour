@@ -27,6 +27,8 @@ function needingHelp(): TourOperation {
 describe('OperationControls incident order', () => {
   it('lists the four incident steps in SRS order', () => {
     render(<OperationControls tour={needingHelp()} />)
+    // The steps sit in a folded "Quy trình xử lý sự cố" section.
+    fireEvent.click(screen.getByText('Quy trình xử lý sự cố'))
     const steps = within(screen.getByRole('list', { name: 'Trình tự xử lý sự cố' })).getAllByRole('listitem')
     expect(steps.map((item) => item.textContent)).toEqual([
       expect.stringContaining('Dừng an toàn'),

@@ -11,7 +11,7 @@ import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
-import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, activeNavPath } from './staff-nav'
+import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
 import { StaffBell } from './StaffBell'
 import { REASON_SHORT } from './reason'
@@ -55,6 +55,7 @@ export default function StaffShell() {
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
   const pendingCount = usePendingReviewCount() ?? 0
   const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
+  const section = location.pathname.startsWith('/staff/profile') ? 'Tài khoản' : STAFF_NAV_SECTIONS.find(({ items }) => items.some(({ path }) => path === currentPath))?.label ?? 'Vận hành'
   useEffect(() => {
     if (!menuOpen) return
     const menuButton = menuButtonRef.current
@@ -69,11 +70,12 @@ export default function StaffShell() {
   }, [toast])
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-[#f6f7f9] text-[#173b59]">
+    <div className="flex h-[100dvh] overflow-hidden bg-[#f4f7fb] bg-[radial-gradient(38rem_30rem_at_-6%_-8%,rgba(96,165,250,0.30),transparent_70%),radial-gradient(30rem_26rem_at_8%_105%,rgba(147,197,253,0.32),transparent_70%),radial-gradient(40rem_30rem_at_100%_0%,rgba(191,219,254,0.35),transparent_70%)] text-[#2d3748]">
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
       <GroupedSidebar
         id="staff-navigation"
+        look="soft"
         label="Khu vực vận hành"
         navLabel="Điều hướng vận hành"
         homePath="/staff"
@@ -96,9 +98,13 @@ export default function StaffShell() {
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="flex h-13 items-center gap-3 border-b border-[#e5e7eb]">
-            <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
+        {/* Purity-style navbar: a frosted card floating over the page, breadcrumb above the page name. */}
+        <header className="sticky top-0 z-20 shrink-0 px-4 pt-3 sm:px-6 lg:px-8">
+          <div className="flex min-h-[62px] items-center gap-3 rounded-[15px] border border-white/80 bg-white/75 px-4 shadow-[0_7px_23px_rgba(0,0,0,0.05)] backdrop-blur-xl">
+            <div className="min-w-0">
+              <p className="truncate text-[12px] text-[#a0aec0]">{section} <span className="mx-1">/</span> <span className="text-[#2d3748]">{title}</span></p>
+              <p className="truncate text-sm font-bold text-[#2d3748]">{title}</p>
+            </div>
             {!onLiveSqlPage && <span
               role="status"
               className={`hidden shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold sm:inline-flex ${
@@ -117,9 +123,10 @@ export default function StaffShell() {
           </div>
         </header>
 
-        {!onLiveSqlPage && <p role="note" className="border-b border-[#e2e8f0] px-4 py-2 text-xs text-[#64748b] sm:px-6 lg:px-8">Chế độ mô phỏng · Số liệu minh họa</p>}
+        {!onLiveSqlPage && <p role="note" className="mx-4 mt-3 w-fit rounded-full bg-[#eff6ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8] sm:mx-6 lg:mx-8">Chế độ mô phỏng · Số liệu minh họa</p>}
 
-        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
+        {/* Every panel on a Staff page becomes a Purity card: 15px corners, no border, a soft lift. */}
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 [&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#e6efff] [&_.ct-btn-primary]:text-[#1d4ed8] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#d8e6ff] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]">
           <RouteView />
         </main>
 
@@ -140,13 +147,13 @@ function RunningCard({ tour, rail, onNavigate }: { tour: TourOperation; rail: bo
   return (
     <Link to={`/staff/live/${tour.id}`} onClick={onNavigate} title={rail ? `Đang chạy ${tour.code}` : undefined}
       aria-label={`Đang chạy ${tour.code}${assist ? ', cần hỗ trợ' : ''}. Mở điều hành trực tiếp`}
-      className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-xl px-3 py-2 text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#b23e31] hover:bg-[#9c3328]' : 'bg-[#173b59] hover:bg-[#1f4b70]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
+      className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-[15px] px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#fdecea] text-[#b23e31] ring-1 ring-[#f5c8c2] hover:bg-[#fbe0dc]' : 'bg-[#e6efff] text-[#1d4ed8] hover:bg-[#d8e6ff]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
       {rail ? <MonitorPlay size={17} aria-hidden="true" className="hidden shrink-0 lg:block" /> : null}
       <span className={`${rail ? 'lg:hidden' : ''} flex min-w-0 items-center gap-2.5`}>
         <LiveDot tone={assist ? 'warn' : 'ok'} />
         <span className="min-w-0">
           <span className="block truncate text-[12.5px] font-semibold">Đang chạy {tour.code}{assist ? ', cần hỗ trợ' : ''}</span>
-          <span className="block truncate text-[11px] text-white/80">{where}</span>
+          <span className="block truncate text-[11px] opacity-75">{where}</span>
         </span>
       </span>
     </Link>
@@ -166,7 +173,7 @@ function AccountMenu({ username, role, onLogout }: { username?: string; role?: s
   const name = username || 'Nhân viên vận hành'
   const item = 'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-semibold transition-colors'
   return (
-    <div ref={ref} role="group" aria-label="Tài khoản đang đăng nhập" className="relative ml-1 border-l border-[#e5e7eb] pl-2">
+    <div ref={ref} role="group" aria-label="Tài khoản đang đăng nhập" className="relative ml-1 border-l border-[#e2e8f0] pl-2">
       <button
         type="button"
         aria-haspopup="menu"
@@ -175,7 +182,7 @@ function AccountMenu({ username, role, onLogout }: { username?: string; role?: s
         onClick={() => setOpen((value) => !value)}
         className={`flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-2 pl-1.5 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-white' : ''}`}
       >
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-[#2d719e] text-[11.5px] font-extrabold text-white">{initialsOf(name)}</span>
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#e6efff] text-[11.5px] font-extrabold text-[#1d4ed8]">{initialsOf(name)}</span>
         <span className="hidden min-w-0 text-left sm:block">
           <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{name}</span>
           <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(role)}</span>

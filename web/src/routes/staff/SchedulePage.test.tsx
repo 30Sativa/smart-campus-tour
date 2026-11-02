@@ -26,7 +26,7 @@ describe('Staff Tour calendar', () => {
 
   it('reads the week from the live Tour API, in campus time', async () => {
     show()
-    expect(await screen.findByText('09:00 Tour sáng thật')).toBeInTheDocument()
+    expect(await within(await screen.findByRole('region', { name: 'Lịch tuần' })).findByRole('button', { name: /^09:00 - 09:22 Tour sáng thật/ })).toBeInTheDocument()
     const url = urls[0]
     expect(url.pathname).toBe('/api/staff/manage/tours')
     expect(url.searchParams.get('from')).toBe('2099-01-04T17:00:00.000Z')
@@ -36,7 +36,7 @@ describe('Staff Tour calendar', () => {
 
   it('shows one calendar representation at a time', async () => {
     show()
-    expect(screen.getByRole('region', { name: 'Lịch tuần' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Lịch tuần' })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Ngày' }))
     const robots = await screen.findByRole('list', { name: 'Robot trong ngày' })

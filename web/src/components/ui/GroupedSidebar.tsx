@@ -28,7 +28,7 @@ const EASE = 'duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:tran
  * A badge fades into a dot on its icon, and choosing a group unfolds the
  * sidebar with that group open.
  */
-export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], highlight, onNavigate, onLogout, open, panelRef, closeRef }: {
+export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entries, currentPath, badges = {}, secondary = [], highlight, onNavigate, onLogout, open, panelRef, closeRef, look = 'line' }: {
   id: string
   label: string
   navLabel: string
@@ -45,7 +45,14 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   open: boolean
   panelRef: Ref<HTMLElement>
   closeRef?: Ref<HTMLButtonElement>
+  /**
+   * `line` (Admin, Technical): white rail, tinted active row with an inset bar.
+   * `soft` (Staff): the rail sits on the page ground, each page has a 30px icon
+   * tile, the active page lifts onto a white card and its tile fills blue.
+   */
+  look?: 'line' | 'soft'
 }) {
+  const soft = look === 'soft'
   const [toggled, setToggled] = useState<Record<string, boolean>>({})
   const hasHeadings = entries.some((entry) => entry.kind === 'heading')
   const rail = useSidebarStore((state) => state.collapsed)
@@ -54,7 +61,19 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
 
   /** Fades on the rail (wide screens only: the phone drawer is always full). */
   const fade = `transition-opacity ${EASE} ${rail ? 'lg:pointer-events-none lg:opacity-0' : ''}`
-  const row = `relative flex min-h-8 items-center gap-[11px] rounded-lg px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
+  const row = soft
+    ? `relative flex min-h-[44px] items-center gap-3 rounded-[12px] px-2 text-[14px] whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${focusRing}`
+    : `relative flex min-h-8 items-center gap-[11px] rounded-lg px-3 text-[13px] whitespace-nowrap transition-colors ${focusRing}`
+  /** Width of the item column on the rail: the icon stays put while the sidebar folds. */
+  const railWidth = soft ? 'lg:w-[46px]' : 'lg:w-10'
+  const navPad = soft ? 'px-[11px]' : 'px-3.5'
+  const heading = soft ? 'px-2 pt-3 pb-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-[#64748b]' : 'px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280]'
+  const activeRow = soft ? 'bg-[#3b82f6]/12 font-semibold text-[#1d4ed8] ring-1 ring-white/70' : `${tinted} font-semibold text-[#0f172a]`
+  const idleRow = soft ? 'font-medium text-[#334155] hover:bg-white/60 hover:text-[#0f172a]' : 'font-medium text-[#374151] hover:text-[#0f172a]'
+  /** The page's icon: bare in `line`, on its own tile in `soft`. */
+  const glyph = (Icon: LucideIcon, active: boolean) => soft
+    ? <span aria-hidden="true" className={`grid size-[30px] shrink-0 place-items-center rounded-xl transition-colors duration-200 ${active ? 'bg-white/80 text-[#2563eb]' : 'bg-white/60 text-[#64748b]'}`}><Icon size={15} strokeWidth={2.1} /></span>
+    : <Icon size={16} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${active ? 'text-[#2d719e]' : 'text-[#9ca3af]'}`} />
 
   const pill = (badge?: Badge) => {
     if (!badge || badge.value <= 0) return null
@@ -62,7 +81,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
     return (
       <>
         <span className={`ml-auto grid h-[18px] min-w-5 place-items-center rounded-md px-1.5 text-[11px] font-bold text-white tabular-nums ${color} ${fade}`} aria-label={badge.label}>{badge.value}</span>
-        <span aria-hidden="true" className={`absolute top-1.5 left-[29px] size-2 scale-0 rounded-full opacity-0 ring-2 ring-white transition-[opacity,scale] ${EASE} ${color} ${rail ? 'lg:scale-100 lg:opacity-100' : ''}`} />
+        <span aria-hidden="true" className={`absolute ${soft ? 'top-1.5 left-[34px]' : 'top-1.5 left-[29px]'} size-2 scale-0 rounded-full opacity-0 ring-2 ring-white transition-[opacity,scale] ${EASE} ${color} ${rail ? 'lg:scale-100 lg:opacity-100' : ''}`} />
       </>
     )
   }
@@ -74,7 +93,7 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
       tabIndex={-1}
       aria-label={label}
       data-collapsed={rail || undefined}
-      className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-[248px] shrink-0 flex-col overflow-hidden bg-white shadow-[1px_0_0_#eceef1] transition-[transform,width] ${EASE} lg:sticky lg:translate-x-0 focus-visible:outline-none ${rail ? 'lg:w-[68px]' : ''} ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)]' : '-translate-x-full'}`}
+      className={`fixed top-0 left-0 z-40 flex h-[100dvh] w-[248px] shrink-0 flex-col overflow-hidden ${soft ? 'border-r border-white/70 bg-white/55 backdrop-blur-2xl backdrop-saturate-150' : 'bg-white shadow-[1px_0_0_#eceef1]'} transition-[transform,width] ${EASE} lg:sticky lg:translate-x-0 focus-visible:outline-none ${rail ? 'lg:w-[68px]' : ''} ${open ? 'translate-x-0 shadow-[16px_0_40px_rgba(31,49,77,0.12)]' : '-translate-x-full'}`}
     >
       <div className="relative flex h-14 w-[248px] shrink-0 items-center px-[15px]">
         <Link to={homePath} onClick={onNavigate} tabIndex={rail ? -1 : undefined} className={`group flex min-w-0 flex-1 items-center gap-3 rounded-xl pr-9 ${focusRing} ${fade}`}>
@@ -100,16 +119,17 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
         </button>
         <button ref={closeRef} type="button" onClick={onNavigate} className="absolute top-1/2 right-4 grid size-9 -translate-y-1/2 place-items-center rounded-xl text-[#94a3b8] transition-colors hover:bg-[#f1f5f9] lg:hidden" aria-label="Đóng menu"><X size={19} /></button>
       </div>
+      {soft && <div aria-hidden="true" className={`mx-[15px] mb-2 h-px w-[218px] shrink-0 bg-[linear-gradient(90deg,rgba(224,225,226,0)_0%,#e0e1e2_50%,rgba(224,225,226,0.16)_100%)] ${fade}`} />}
 
-      <nav className="w-[248px] flex-1 overflow-x-hidden overflow-y-auto px-3.5 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={navLabel}>
+      <nav className={`w-[248px] flex-1 overflow-x-hidden overflow-y-auto ${navPad} pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`} aria-label={navLabel}>
         {highlight && <div className="mt-1">{highlight(rail)}</div>}
-        {!hasHeadings && <p className={`mt-3 mb-1 px-3 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Trang</p>}
-        <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
+        {!hasHeadings && <p className={`mt-3 mb-1 ${heading} ${fade}`}>Trang</p>}
+        <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? railWidth : 'w-full'}`}>
           {entries.map((entry, index) => {
             if (entry.kind === 'heading') {
               return (
-                <div key={entry.key} className={index === 0 ? 'pt-1' : 'mt-1.5 border-t border-[#eef1f4] pt-1.5'}>
-                  <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>{entry.label}</p>
+                <div key={entry.key} className={index === 0 || soft ? 'pt-1' : 'mt-1.5 border-t border-[#eef1f4] pt-1.5'}>
+                  <p className={`${heading} ${fade}`}>{entry.label}</p>
                 </div>
               )
             }
@@ -118,8 +138,8 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
               const active = currentPath === path
               return (
                 <Link key={path} to={path} onClick={onNavigate} aria-current={active ? 'page' : undefined} title={rail ? name : undefined}
-                  className={`${row} ${active ? `${tinted} font-semibold text-[#0f172a]` : 'font-medium text-[#374151] hover:text-[#0f172a]'}`}>
-                  <Icon size={16} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${active ? 'text-[#2d719e]' : 'text-[#9ca3af]'}`} />
+                  className={`${row} ${active ? activeRow : idleRow}`}>
+                  {glyph(Icon, active)}
                   <span className={`min-w-0 flex-1 truncate ${fade}`}>{name}</span>
                   {pill(badges[path])}
                 </Link>
@@ -142,10 +162,10 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
               setToggled((value) => ({ ...value, [entry.key]: !expanded }))
             }
             return (
-              <div key={entry.key} className={`rounded-[10px] transition-colors duration-200 ${holds ? tinted : ''}`}>
+              <div key={entry.key} className={`${soft ? 'rounded-[15px]' : 'rounded-[10px]'} transition-colors duration-200 ${holds ? (soft ? 'bg-[#3b82f6]/12' : tinted) : ''}`}>
                 <button type="button" aria-expanded={shown} aria-controls={subId} onClick={onGroup} title={rail ? entry.label : undefined}
-                  className={`${row} w-full text-left ${holds ? 'font-semibold text-[#0f172a]' : 'font-medium text-[#374151] hover:text-[#0f172a]'}`}>
-                  <Icon size={16} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${holds ? 'text-[#2d719e]' : 'text-[#9ca3af]'}`} />
+                  className={`${row} w-full text-left ${holds ? (soft ? 'font-semibold text-[#1d4ed8]' : 'font-semibold text-[#0f172a]') : idleRow}`}>
+                  {glyph(Icon, holds)}
                   <span className={`min-w-0 flex-1 truncate ${fade}`}>{entry.label}</span>
                   {!shown && pill(folded ? { value: folded, label: `${folded} việc trong ${entry.label}`, tone: foldedTone } : undefined)}
                   <ChevronDown size={14} aria-hidden="true" className={`shrink-0 text-[#9ca3af] transition-[rotate,opacity] ${EASE} ${expanded ? 'rotate-180' : ''} ${rail ? 'lg:opacity-0' : ''}`} />
@@ -174,14 +194,14 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
 
         {secondary.length > 0 && (
           <>
-            <div className="mt-2 border-t border-[#f1f3f5] pt-2">
-              <p className={`px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280] ${fade}`}>Khu vực khác</p>
+            <div className={soft ? 'mt-2' : 'mt-2 border-t border-[#f1f3f5] pt-2'}>
+              <p className={`${heading} ${fade}`}>Khu vực khác</p>
             </div>
-            <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
+            <div className={`space-y-0.5 transition-[width] ${EASE} ${rail ? railWidth : 'w-full'}`}>
               {secondary.map(({ to, label: name, icon: Icon, current }) => (
                 <Link key={to} to={to} onClick={onNavigate} aria-current={current ? 'page' : undefined} title={rail ? name : undefined}
-                  className={`${row} ${current ? `${tinted} font-semibold text-[#0f172a]` : 'font-medium text-[#374151] hover:text-[#0f172a]'}`}>
-                  <Icon size={16} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${current ? 'text-[#2d719e]' : 'text-[#9ca3af]'}`} />
+                  className={`${row} ${current ? activeRow : idleRow}`}>
+                  {glyph(Icon, Boolean(current))}
                   <span className={fade}>{name}</span>
                 </Link>
               ))}
@@ -190,13 +210,28 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
         )}
       </nav>
 
-      <div className="w-[248px] border-t border-[#eceef1] px-3.5 py-3">
-        <div className={`transition-[width] ${EASE} ${rail ? 'lg:w-10' : 'w-full'}`}>
-          <button type="button" onClick={onLogout} title={rail ? 'Đăng xuất' : undefined} className={`${row} w-full font-medium text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#0f172a]`}>
-            <LogOut size={16} aria-hidden="true" className="shrink-0 text-[#9ca3af]" /><span className={fade}>Đăng xuất</span>
-          </button>
+      {soft ? (
+        // The ground-coloured sidebar ends on one blue card, the way out of the shift.
+        <div className={`w-[248px] ${navPad} pt-2 pb-4`}>
+          <div className={`transition-[width] ${EASE} ${rail ? railWidth : 'w-full'}`}>
+            <button type="button" onClick={onLogout} title={rail ? 'Đăng xuất' : undefined} className={`${row} w-full overflow-hidden bg-[#3b82f6]/10 font-semibold text-[#1d4ed8] ring-1 ring-white/70 hover:bg-[#3b82f6]/16`}>
+              <span aria-hidden="true" className="grid size-[30px] shrink-0 place-items-center rounded-xl bg-white/80 text-[#2563eb]"><LogOut size={15} strokeWidth={2.1} /></span>
+              <span className={`min-w-0 text-left ${fade}`}>
+                <span className="block">Đăng xuất</span>
+                <span className="block text-[11.5px] font-normal text-[#64748b]">Kết thúc phiên làm việc</span>
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="w-[248px] border-t border-[#eceef1] px-3.5 py-3">
+          <div className={`transition-[width] ${EASE} ${rail ? railWidth : 'w-full'}`}>
+            <button type="button" onClick={onLogout} title={rail ? 'Đăng xuất' : undefined} className={`${row} w-full font-medium text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#0f172a]`}>
+              <LogOut size={16} aria-hidden="true" className="shrink-0 text-[#9ca3af]" /><span className={fade}>Đăng xuất</span>
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }

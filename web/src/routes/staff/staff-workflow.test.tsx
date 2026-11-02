@@ -92,19 +92,17 @@ describe('staff session workflow', () => {
     expect(screen.getByRole('button', { name: /Lọc buổi theo trạng thái: Sẵn sàng/ })).toBeInTheDocument()
   })
 
-  it('keeps the agenda available beside the inspector on wide screens and closes with Escape', async () => {
-    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('1536'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
+  it('docks the detail of the session that matters now beside the list on wide screens', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('1280'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
     renderAt('/staff/tours', <ToursTodayPage />, '/staff/tours')
     const agenda = await screen.findByRole('list', { name: 'Buổi hôm nay' })
-    const opener = within(agenda).getByText('T-02', { selector: 'span' }).closest('button') as HTMLElement
-    opener.focus()
-    fireEvent.click(opener)
-    expect(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).toBeInTheDocument()
+    // Nothing chosen yet: the running session is shown.
+    const panel = screen.getByRole('complementary', { name: 'Chi tiết buổi' })
+    expect(within(panel).getByText('T-01')).toBeInTheDocument()
+    fireEvent.click(within(agenda).getByText('T-02', { selector: 'span' }).closest('button') as HTMLElement)
+    expect(within(screen.getByRole('complementary', { name: 'Chi tiết buổi' })).getByText('T-02')).toBeInTheDocument()
+    expect(within(agenda).getByText('T-02', { selector: 'span' }).closest('button')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(agenda).toBeInTheDocument()
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(screen.queryByRole('complementary', { name: 'Chi tiết buổi' })).not.toBeInTheDocument()
-    expect(opener).toHaveFocus()
   })
 
   it('keeps Start disabled with the server reason while the robot serves another session', async () => {
