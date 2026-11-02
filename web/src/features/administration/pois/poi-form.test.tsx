@@ -58,7 +58,7 @@ describe('Staff versioned POI workflow', () => {
   it('loads the selected map package, converts a picked cell to world coordinates and creates/submits a proposal', async () => {
     renderAt('/staff/manage/pois/new')
     fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
-    expect(screen.getByText('Robot đang triển khai: amr-01')).toBeInTheDocument()
+    expect(screen.getByText('Robot kiểm tra đạt: amr-01')).toBeInTheDocument()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
     fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))

@@ -28,7 +28,7 @@ const dataRows = () => screen.getAllByRole('row').slice(1)
 describe('MapVersionTable', () => {
   it('keeps each row to what decides the next step and hides the file facts', () => {
     show([version('tang-6', 'Tầng 6', 1, { ...passed, ...onRobot })])
-    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Khu vực↕', 'Phiên bản↕', 'Tải lên lúc↕', 'Trạng thái↕', 'Robot đang triển khai↕', 'Thao tác'])
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Khu vực↕', 'Phiên bản↕', 'Tải lên lúc↕', 'Trạng thái↕', 'Robot kiểm tra đạt↕', 'Thao tác'])
     const row = dataRows()[0]
     expect(row).toHaveTextContent('Tầng 6')
     expect(row).toHaveTextContent('Đạt kiểm tra')
@@ -116,7 +116,7 @@ describe('MapVersionTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Trạng thái' }))
     expect(areas()[0]).toBe('Tầng 2')
     expect(heading).toHaveAttribute('aria-sort', 'none')
-    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Robot đang triển khai' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Robot kiểm tra đạt' }))
     expect(areas()[0]).toBe('Áo')
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Phiên bản' }))
     expect(areas()[2]).toBe('Tầng 2')

@@ -199,11 +199,11 @@ export default function StaffManageRouteFormPage() {
       </section>}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <SaveBlockedHint lead={last ? 'Chưa lưu được' : 'Chưa sang bước tiếp được'} missing={last ? (firstOpen === -1 ? [] : [`còn thiếu ở bước ${firstOpen + 1}`]) : missingHere} />
+        <SaveBlockedHint id="route-step-missing" lead={last ? 'Chưa lưu được' : 'Chưa sang bước tiếp được'} missing={last ? (firstOpen === -1 ? [] : [`còn thiếu ở bước ${firstOpen + 1}`]) : missingHere} />
         {step > 0 && <button type="button" className={buttonClass('secondary')} onClick={() => goTo(step - 1)}><ChevronLeft size={15} aria-hidden="true" />Quay lại</button>}
         {last
-          ? <button disabled={busy || firstOpen !== -1} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
-          : <button type="button" disabled={missingHere.length > 0} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
+          ? <button disabled={busy || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+          : <button type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
       </div>
     </form>
   </AdminPage>
