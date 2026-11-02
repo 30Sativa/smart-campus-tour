@@ -283,16 +283,18 @@ describe('Technical Staff API integration', () => {
     renderPage(<TechnicalRobotsPage />)
     await openRobotDetail()
     fireEvent.click(await screen.findByRole('button', { name: 'Gán bản đồ' }))
-    await screen.findByRole('option', { name: 'Library · library' })
+    await screen.findByRole('option', { name: 'Library' })
     fireEvent.change(await screen.findByLabelText('Khu vực'), { target: { value: 'library' } })
-    await screen.findByRole('option', { name: /library-v1/ })
-    fireEvent.change(await screen.findByLabelText('Phiên bản bản đồ'), { target: { value: map.id } })
-    expect(screen.getByText('MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.')).toBeInTheDocument()
+    // The newest version starts selected and reads as a version, not a MapKey.
+    expect(await screen.findByRole('option', { name: /^Phiên bản 1 \(mới nhất\) · tải lên .* · Chờ kỹ thuật kiểm tra$/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Phiên bản bản đồ')).toHaveValue(map.id)
+    expect(screen.getByText(/Sau khi lưu, nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
+    expect(screen.getByText('library-v1', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu bản đồ' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồ' }))
     expect(requests.some(item => item.url.pathname.endsWith('/map-assignment'))).toBe(false)
     const confirmation = within(screen.getByRole('dialog', { name: 'Gán bản đồ cho amr-01?' }))
-    expect(confirmation.getByText(/MiniPC phải dùng đúng MapKey\/FrameId này/)).toBeInTheDocument()
+    expect(confirmation.getByText(/Gán Library phiên bản 1\. Trên MiniPC nhập MapKey library-v1, FrameId map\./)).toBeInTheDocument()
     fireEvent.click(confirmation.getByRole('button', { name: 'Gán bản đồ' }))
     await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')).toBe(true))
     const request = requests.find(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')!
@@ -300,6 +302,17 @@ describe('Technical Staff API integration', () => {
     expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
+  })
+
+  it('names the robot already holding an area and does not offer that area', async () => {
+    physicalRobots = [
+      makePhysicalRobot({ assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null }),
+      makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02' }),
+    ]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Gán bản đồ' }))
+    expect(await screen.findByRole('option', { name: 'Library (robot amr-02 đang dùng)' })).toBeDisabled()
   })
 
   it('warns about Tours a map change strands and leaves them scheduled', async () => {
@@ -310,7 +323,7 @@ describe('Technical Staff API integration', () => {
     const dialog = within(await screen.findByRole('dialog'))
     await dialog.findByRole('option', { name: /Library/ })
     fireEvent.change(dialog.getByLabelText('Khu vực'), { target: { value: 'library' } })
-    await dialog.findByRole('option', { name: /v1/ })
+    await dialog.findByRole('option', { name: /Phiên bản 1 .* · đang gán$/ })
     fireEvent.change(dialog.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     fireEvent.submit(document.getElementById('robot-map-assignment-form') as HTMLFormElement)
 

@@ -10,6 +10,7 @@ import { Note, TechnicalPage, ToneBadge } from '../../features/technical/Technic
 import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, stamp } from '../../features/technical/technical-format'
+import { mapCheckLabel } from '../../features/technical/poi-labels'
 import { RobotCredentialPanel } from './RobotCredentialPanel'
 
 const connectionTone: Record<PhysicalRobotConnectionStatus, 'ok' | 'warn' | 'danger'> = {
@@ -80,7 +81,7 @@ export default function TechnicalRobotsPage() {
       <RegisterRobotModal open={registering} onClose={() => setRegistering(false)} />
       {selected && dialog?.view === 'detail' && <RobotDetailModal robot={selected} onAssignMap={() => setDialog({ view: 'map', robotId: selected.id })} onManageKey={() => setDialog({ view: 'credential', robotId: selected.id })} onClose={() => setDialog(null)} />}
       {selected && dialog?.view === 'credential' && <RobotCredentialPanel robotCode={selected.robotCode} onClose={showDetail} />}
-      {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} onClose={showDetail} />}
+      {selected && dialog?.view === 'map' && <RobotMapAssignmentModal robot={selected} otherRobots={robots.data ?? []} onClose={showDetail} />}
     </TechnicalPage>
   )
 }
@@ -174,7 +175,7 @@ function RobotLifecycleSection({ robot }: { robot: PhysicalRobotOption }) {
   </>
 }
 
-function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOption; onClose: () => void }) {
+function RobotMapAssignmentModal({ robot, otherRobots, onClose }: { robot: PhysicalRobotOption; otherRobots: PhysicalRobotOption[]; onClose: () => void }) {
   const areas = useMapAreas()
   const maps = useMapVersions()
   const assign = useAssignRobotMap()
@@ -182,8 +183,17 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
   const [areaKey, setAreaKey] = useState('')
   const [mapVersionId, setMapVersionId] = useState('')
   const [confirming, setConfirming] = useState<'assign' | 'clear' | null>(null)
-  const areaMaps = useMemo(() => (maps.data ?? []).filter(item => item.map.areaKey === areaKey), [maps.data, areaKey])
+  const areaMaps = useMemo(() => (maps.data ?? []).filter(item => item.map.areaKey === areaKey).sort((a, b) => b.map.versionNumber - a.map.versionNumber), [maps.data, areaKey])
   const selected = areaMaps.find(item => item.map.id === mapVersionId)
+  // One area holds one robot; naming the holder in the list saves a refused save (MAP_AREA_ALREADY_ASSIGNED).
+  const holderOf = (key: string) => otherRobots.find(other => other.id !== robot.id && !other.deactivatedAt
+    && maps.data?.some(item => item.map.areaKey === key && item.map.id === other.assignedMapVersionId))
+  const chooseArea = (key: string) => {
+    setAreaKey(key)
+    // The newest version is almost always the one wanted, so it starts selected.
+    const newest = (maps.data ?? []).filter(item => item.map.areaKey === key).sort((a, b) => b.map.versionNumber - a.map.versionNumber)[0]
+    setMapVersionId(newest?.map.id ?? '')
+  }
   const tours = useRobotAffectedTours(robot.id, confirming === 'assign' ? mapVersionId : undefined, Boolean(confirming))
   // Escape reaches both overlays; while the confirmation is up it only closes that.
   const close = () => { if (!assign.isPending && !clear.isPending && !confirming) onClose() }
@@ -197,17 +207,24 @@ function RobotMapAssignmentModal({ robot, onClose }: { robot: PhysicalRobotOptio
     else clear.mutate(input, { onSuccess: onClose })
     setConfirming(null)
   }
-  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn một phiên bản map đã tải lên. Không yêu cầu map phải PASS." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ đạt kiểm tra, nhưng robot chỉ nhận Tour khi đã kiểm tra đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
-      <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => { setAreaKey(event.target.value); setMapVersionId('') }}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => <option key={area.areaKey} value={area.areaKey}>{area.displayName} · {area.areaKey}</option>)}</select></div>
-      <div><label className={labelClass} htmlFor="robot-map-version">Phiên bản bản đồ</label><select id="robot-map-version" className={`${inputClass} mt-1`} value={mapVersionId} onChange={event => setMapVersionId(event.target.value)} disabled={!areaKey}><option value="">Chọn phiên bản</option>{areaMaps.map(item => <option key={item.map.id} value={item.map.id}>{item.map.mapKey} · {item.map.frameId} · {item.technicalCheckStatus === 'PASSED' ? 'Đã đạt' : item.technicalCheckStatus === 'FAILED' ? 'Chưa đạt' : 'Chưa kiểm tra'}</option>)}</select></div>
-      <p className="rounded-lg bg-[#eff6ff] p-3 text-sm">MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.</p>
+      <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select title="" id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => chooseArea(event.target.value)}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => {
+        const holder = holderOf(area.areaKey)
+        return <option key={area.areaKey} value={area.areaKey} disabled={Boolean(holder)}>{area.displayName}{holder ? ` (robot ${holder.robotCode} đang dùng)` : ''}</option>
+      })}</select>{areaKey && <p className="mt-1 text-xs text-[#64748b]">Mã khu vực: <span className="font-mono">{areaKey}</span></p>}</div>
+      <div><label className={labelClass} htmlFor="robot-map-version">Phiên bản bản đồ</label><select title="" id="robot-map-version" className={`${inputClass} mt-1`} value={mapVersionId} onChange={event => setMapVersionId(event.target.value)} disabled={!areaKey}><option value="">Chọn phiên bản</option>{areaMaps.map((item, index) => <option key={item.map.id} value={item.map.id}>
+        Phiên bản {item.map.versionNumber}{index === 0 ? ' (mới nhất)' : ''} · tải lên {stamp(item.map.uploadedAt)} · {mapCheckLabel(item.technicalCheckStatus)}{item.map.id === robot.assignedMapVersionId ? ' · đang gán' : ''}
+      </option>)}</select></div>
+      {selected
+        ? <div className="rounded-lg bg-[#eff6ff] p-3 text-sm"><p>Sau khi lưu, nhập hai giá trị này trên MiniPC. Sai giá trị thì dữ liệu của robot sẽ bị từ chối.</p><p className="mt-1">MapKey <span className="font-mono font-semibold">{selected.map.mapKey}</span> · FrameId <span className="font-mono font-semibold">{selected.map.frameId}</span></p></div>
+        : <p className="rounded-lg bg-[#eff6ff] p-3 text-sm">Chọn khu vực để xem MapKey và FrameId cần nhập trên MiniPC.</p>}
       {(maps.isError || areas.isError || assign.isError || clear.isError) && <p role="alert" className="text-sm text-[#b23e31]">{errorText(assign.error ?? clear.error ?? maps.error ?? areas.error)}</p>}
     </form>
   </Modal>
   {confirming && <ConfirmationDialog open withReason={false} tone={confirming === 'clear' ? 'danger' : 'default'}
     title={confirming === 'clear' ? `Gỡ bản đồ khỏi ${robot.robotCode}?` : `Gán bản đồ cho ${robot.robotCode}?`}
-    description={confirming === 'clear' ? 'Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.' : `Gán ${selected?.map.mapKey} · ${selected?.map.frameId}. MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.`}
+    description={confirming === 'clear' ? 'Fleet Sync sẽ từ chối báo cáo của robot cho đến khi được gán lại bản đồ.' : `Gán ${selected?.map.areaName} phiên bản ${selected?.map.versionNumber}. Trên MiniPC nhập MapKey ${selected?.map.mapKey}, FrameId ${selected?.map.frameId}. Sai giá trị thì dữ liệu của robot sẽ bị từ chối.`}
     confirmLabel={confirming === 'clear' ? 'Gỡ gán' : 'Gán bản đồ'} onConfirm={confirm} onCancel={() => setConfirming(null)}>
     <AffectedTours title="Các Tour sau sẽ không chạy được với bản đồ mới:" tours={tours} />
   </ConfirmationDialog>}
