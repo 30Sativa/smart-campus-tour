@@ -2,11 +2,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { strToU8, zipSync } from 'fflate'
 import StaffManageRouteCatalogPage from '../../../routes/staff/manage/StaffManageRouteCatalogPage'
 import StaffManageRouteDetailsPage from '../../../routes/staff/manage/StaffManageRouteDetailsPage'
 import StaffManageRouteFormPage from '../../../routes/staff/manage/StaffManageRouteFormPage'
 import { versionedRoutesApi } from './versioned-api'
 import { useAuthStore } from '../../../stores/auth-store'
+
+// jsdom has no canvas; the package itself still goes through the real reader.
+vi.mock('../../administration/pois/map/versioned-package', async importActual => ({
+  ...await importActual<typeof import('../../administration/pois/map/versioned-package')>(),
+  rasterPngBlob: vi.fn(async () => new Blob(['png'], { type: 'image/png' })),
+}))
+/** 4x4 cells of 0.5 m from (10, 20), every cell occupied, so any newly written pose lacks clearance. */
+const occupiedPackage = () => zipSync({
+  'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [10, 20, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
+  'map.pgm': strToU8(`P2\n4 4\n255\n${Array(16).fill(0).join(' ')}\n`),
+})
 
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
 const proposals = [
@@ -22,6 +34,7 @@ let mapEligible = true
 let extraProposals: unknown[] = []
 let submissionFailureBody: unknown = null
 let currentRoute = structuredClone(route)
+let clearanceMeters: number | undefined
 
 function renderAt(path: string, client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}><Routes>
@@ -44,10 +57,12 @@ describe('Staff versioned Route workflow', () => {
     extraProposals = []
     submissionFailureBody = null
     currentRoute = structuredClone(route)
+    clearanceMeters = undefined
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
-      if (url.pathname === '/api/maps/versions') return response([{ map: { ...map, id: 'map-empty', mapKey: 'map-without-poi', versionNumber: 3 }, latestDeployment: null, canUseForPoiPreparation: true }, { map, latestDeployment: null, canUseForPoiPreparation: mapEligible }])
+      if (url.pathname === '/api/maps/versions') return response([{ map: { ...map, id: 'map-empty', mapKey: 'map-without-poi', versionNumber: 3 }, latestDeployment: null, canUseForPoiPreparation: true }, { map, latestDeployment: null, canUseForPoiPreparation: mapEligible, poiClearanceMeters: clearanceMeters, currentlyDeployedOn: [] }])
+      if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(occupiedPackage())
       if (url.pathname === '/api/staff/poi-proposals') return response([...proposals, ...extraProposals])
       if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
       if (url.pathname === '/api/staff/routes' && init?.method === 'POST') return response(route)
@@ -138,6 +153,21 @@ describe('Staff versioned Route workflow', () => {
     expect(review.getAllByText('x 10.20 m · y 20.40 m · hướng 0.00 rad')).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }))
     expect(screen.getByRole('button', { name: /Bước 3/ })).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('lets a kept start skip the clearance check, as the server does, but flags a newly placed one', async () => {
+    clearanceMeters = 0.3
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 3/ }))
+    // The check needs the map package; the picker appears once it is parsed (jsdom never decodes the image itself).
+    await within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).findByText(/Độ phân giải bản đồ/)
+    expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/quá sát vật cản/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
+    startFromPoi('poi-rev-pass')
+    expect(await screen.findByText('Chưa sang bước tiếp được: điểm bắt đầu quá sát vật cản.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
   })
 
   it('opens every step of an existing route and keeps its saved start', async () => {

@@ -68,16 +68,21 @@ export default function StaffManageRouteFormPage() {
   const clearance = chosenMap?.poiClearanceMeters
   const startPose = { x: draft.startX, y: draft.startY, yaw: draft.startYaw }
   const endPose = { x: draft.endX, y: draft.endY, yaw: draft.endYaw }
-  // ADR-0040: the server refuses a start or end pose without free floor around it; say so before Next.
+  // ADR-0040: the server refuses a newly written start or end pose without free floor around it; say so before Next.
+  // Like the server (SaveRouteRevision), a pose kept unchanged on the same map is exempt: it may predate the rule.
+  const saved = source.data && source.data.mapVersionId === draft.mapVersionId ? source.data : null
+  const kept = (pose: PickerPose, savedX?: number | null, savedY?: number | null) => saved != null && pose.x === savedX && pose.y === savedY
   const tooClose = (pose: PickerPose) => Boolean(raster.map && clearance != null && pose.x != null && pose.y != null
     && poseClearance(raster.map, raster.map.pixels ?? null, { x: pose.x, y: pose.y }, clearance) === 'blocked')
+  const startTooClose = tooClose(startPose) && !kept(startPose, saved?.startX, saved?.startY)
+  const endTooClose = tooClose(endPose) && !kept(endPose, saved?.endX, saved?.endY)
   const poiName = (id: string) => available.find(proposal => proposal.revision.id === id)?.revision.name ?? id
 
   const missingByStep: string[][] = [
     [!draft.name.trim() && 'nhập tên tuyến', !draft.mapVersionId && 'chọn bản đồ', mapNotReady && 'chọn bản đồ còn đạt kiểm tra kỹ thuật'],
     [stops.length === 0 && 'chọn ít nhất một điểm dừng', stops.some(stop => !Number.isInteger(stop.dwellSeconds) || stop.dwellSeconds < 1 || stop.dwellSeconds > 3600) && 'thời gian dừng từ 1 đến 3600 giây'],
-    [!placed(startPose) && 'chọn điểm bắt đầu và hướng', tooClose(startPose) && 'điểm bắt đầu quá sát vật cản',
-      draft.endMode === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', draft.endMode === 'POSE' && tooClose(endPose) && 'điểm kết thúc quá sát vật cản'],
+    [!placed(startPose) && 'chọn điểm bắt đầu và hướng', startTooClose && 'điểm bắt đầu quá sát vật cản',
+      draft.endMode === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', draft.endMode === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản'],
     [],
   ].map(list => list.filter((item): item is string => Boolean(item)))
   const firstOpen = missingByStep.findIndex(list => list.length > 0)
@@ -169,7 +174,7 @@ export default function StaffManageRouteFormPage() {
       {step === 2 && <div className="space-y-4">
         <PoseStep title="Điểm bắt đầu" help="Nơi robot đứng chờ trước khi Tour bắt đầu, ví dụ chỗ đỗ. Không bắt buộc trùng một POI."
           pose={startPose} onChange={pose => updateDraft({ startX: pose.x, startY: pose.y, startYaw: pose.yaw })}
-          raster={raster} clearance={clearance} tooClose={tooClose(startPose)} pois={available} />
+          raster={raster} clearance={clearance} tooClose={startTooClose} pois={available} />
         <section aria-label="Điểm kết thúc" className={`${panelClass} space-y-3 p-4`}>
           <div><h2 className="font-semibold">Điểm kết thúc</h2><p className="mt-1 text-xs text-[#64748b]">Robot dừng ở đâu khi hết tuyến.</p></div>
           <div role="radiogroup" aria-label="Điểm kết thúc" className="grid gap-2 sm:grid-cols-2">
@@ -183,7 +188,7 @@ export default function StaffManageRouteFormPage() {
         </section>
         {draft.endMode === 'POSE' && <PoseStep title="Vị trí kết thúc" help="Robot đi tới đây sau điểm dừng cuối."
           pose={endPose} onChange={pose => updateDraft({ endX: pose.x, endY: pose.y, endYaw: pose.yaw })}
-          raster={raster} clearance={clearance} tooClose={tooClose(endPose)} pois={available} copyStart={placed(startPose) ? startPose : undefined} />}
+          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} copyStart={placed(startPose) ? startPose : undefined} />}
       </div>}
 
       {step === 3 && <section aria-label={STEPS[3]} className={`${panelClass} p-4`}>
