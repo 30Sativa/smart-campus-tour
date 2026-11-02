@@ -1,5 +1,10 @@
 # Nav2 Baseline V1 (robot AMR, chốt 2026-10-16)
 
+> **Lịch sử (2026-11-02):** file params V1, `nav2_params_wide_global_inflation.yaml`,
+> `test_nav2_baseline_v1_contract.py` và `test_nav2_smooth_contract.py` đã gỡ khỏi repo.
+> Lấy lại bằng tag `nav2-baseline-v1`. Baseline hiện hành:
+> [robot-baseline-2026-11-02.md](robot-baseline-2026-11-02.md).
+
 > **2026-10-22:** superseded as the *development* baseline by
 > [Nav2 Baseline V2](nav2-baseline-v2.md). V1 stays frozen (file, hash and tests
 > unchanged) for A/B comparison and rollback.

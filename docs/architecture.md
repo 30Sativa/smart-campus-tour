@@ -291,8 +291,10 @@ ADR-0007 records the original 0.20 m/s baseline. The current supervised speed
 trial sets RPP/smoother forward to 0.24 m/s and RPP heading/Spin/smoother
 rotation to 0.45 rad/s. Acceleration, braking, wheel caps and safety mechanisms
 are unchanged; combined forward/turn commands can still be wheel-pair scaled.
-This is READY FOR HARDWARE TEST, not measured robot performance; procedure and
-rollback are in [robot/docs/nav2-turn-test.md](../robot/docs/nav2-turn-test.md).
+On the robot 0.24 m/s made the bridge scale 39–50 % of the wheel pairs, so the
+real-robot baseline runs 0.20 m/s (Nav2 V2,
+[robot/docs/robot-baseline-2026-11-02.md](../robot/docs/robot-baseline-2026-11-02.md));
+`nav2_params.yaml` keeps the trial values as the simulation/auto-explore default.
 
 RPP does path tracking plus collision checking against the local costmap. It is
 not a local trajectory planner and does not search for detours. So: an obstacle
