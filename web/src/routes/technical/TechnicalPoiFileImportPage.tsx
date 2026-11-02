@@ -8,8 +8,8 @@ import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { mapCheckLabel, mapVersionLabel, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
-import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePreviewPoiImport } from '../../features/technical/technical-hooks'
-import type { PoiImportResult } from '../../features/technical/api/technical'
+import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePoiProposals, usePreviewPoiImport } from '../../features/technical/technical-hooks'
+import type { MapVersionItem, PoiImportResult, PoiProposal } from '../../features/technical/api/technical'
 
 const mapCheckTone = (status: string) => status === 'PASSED' ? 'ok' : status === 'FAILED' ? 'danger' : 'warn'
 const verifiedLabel = (verified: boolean | null) => verified === null ? '-' : verified ? verificationMethodLabel.POSE_CAPTURE : 'Chờ kiểm chứng'
@@ -124,12 +124,77 @@ export default function TechnicalPoiFileImportPage() {
         </section>
       )}
 
-      {imported && (
-        <section className={`${panelClass} mt-3 p-4 text-sm text-[#334155]`} aria-label="Kết quả nhập POI">
-          <p className="font-semibold text-[#0f172a]">Tạo mới {imported.createdProposalIds.length} POI, thêm phiên bản cho {imported.updatedProposalIds.length} POI.</p>
-          <Link className={`${buttonClass('secondary', 'sm')} mt-2`} to="/technical/poi-import">Mở danh sách POI</Link>
-        </section>
-      )}
+      {imported && <ImportResult result={imported} />}
+
+      <ImportedPoiList maps={maps.data ?? []} />
     </TechnicalPage>
+  )
+}
+
+/** What one import did, file by file, and where each POI goes next for Technical and for Staff. */
+function ImportResult({ result }: { result: PoiImportResult }) {
+  const waiting = result.files.filter(file => !file.verified).length
+  return (
+    <section className={`${panelClass} mt-3`} aria-label="Kết quả nhập POI">
+      <PanelHead title="Đã nhập" description={`Tạo mới ${result.createdProposalIds.length} POI, thêm phiên bản cho ${result.updatedProposalIds.length} POI.`} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[620px] text-left">
+          <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã POI</th><th className={thClass}>Tệp</th><th className={thClass}>Thay đổi</th><th className={thClass}>Kiểm chứng</th></tr></thead>
+          <tbody className="divide-y divide-[#eef1f4]">
+            {result.files.map(file => <tr key={`${file.fileName}:${file.proposalRevisionId}`} className={rowClass}>
+              <td className={`${tdClass} font-mono text-xs`}>{file.poiId}</td>
+              <td className={`${tdClass} break-all`}>{file.fileName}</td>
+              <td className={tdClass}>{poiImportActionLabel[file.action] ?? file.action}</td>
+              <td className={tdClass}>{file.verified ? <ToneBadge tone="ok">Đạt · {verificationMethodLabel.POSE_CAPTURE}</ToneBadge> : <ToneBadge tone="warn">Chờ kiểm chứng</ToneBadge>}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="space-y-2 border-t border-[#eef1f4] p-4 text-sm text-[#334155]">
+        {waiting > 0 && <p>{waiting} POI chờ kiểm chứng nằm ở trang Kiểm chứng POI, cần cho robot chạy tới điểm rồi ghi kết quả.</p>}
+        <p>Tour Staff thấy các POI này ở Quản lý POI, trên đúng phiên bản bản đồ đã chọn, để đặt tên và viết thuyết minh. Chưa có thuyết minh thì POI chưa đưa vào tuyến được.</p>
+        {waiting > 0 && <Link className={buttonClass('secondary', 'sm')} to="/technical/poi-import">Mở hàng chờ kiểm chứng</Link>}
+      </div>
+    </section>
+  )
+}
+
+const importedStatus = (proposal: PoiProposal): { tone: 'ok' | 'warn' | 'danger'; label: string } =>
+  proposal.revision.navigationStatus === 'PASS' ? { tone: 'ok', label: proposal.revision.verificationMethod ? `Đạt · ${verificationMethodLabel[proposal.revision.verificationMethod] ?? ''}` : 'Đạt' }
+    : proposal.revision.navigationStatus === 'FAIL' ? { tone: 'danger', label: 'Không đạt' }
+    : { tone: 'warn', label: 'Chờ kiểm chứng' }
+
+/** Every POI that came from a robot pose file, so Technical can see what each import left behind. */
+function ImportedPoiList({ maps }: { maps: MapVersionItem[] }) {
+  const proposals = usePoiProposals()
+  const imported = (proposals.data ?? []).filter(proposal => proposal.sourcePoiId)
+  const mapName = (id: string, fallback: string) => {
+    const found = maps.find(item => item.map.id === id)?.map
+    return found ? mapVersionLabel(found) : fallback
+  }
+  return (
+    <section className={`${panelClass} mt-3`} aria-label="POI đã nhập từ file">
+      <PanelHead title="POI đã nhập từ file" description="Mỗi mã POI là một điểm trong khu vực bản đồ. Nhập lại cùng mã sẽ thêm phiên bản mới cho điểm đó." />
+      {proposals.isPending ? <p role="status" className="px-4 py-6 text-center text-[13px] text-[#64748b]">Đang tải…</p>
+        : proposals.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(proposals.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void proposals.refetch()}>Tải lại</button></div>
+        : !imported.length ? <p className="px-4 py-6 text-center text-[13px] text-[#64748b]">Chưa có POI nào được nhập từ file.</p>
+        : <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left">
+            <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Mã POI</th><th className={thClass}>Tên</th><th className={thClass}>Bản đồ</th><th className={thClass}>Kiểm chứng</th><th className={thClass}>Thuyết minh</th></tr></thead>
+            <tbody className="divide-y divide-[#eef1f4]">
+              {imported.map(proposal => {
+                const status = importedStatus(proposal)
+                return <tr key={proposal.id} className={rowClass}>
+                  <td className={`${tdClass} font-mono text-xs`}>{proposal.sourcePoiId}</td>
+                  <td className={tdClass}>{proposal.revision.name}<span className="block text-[11.5px] text-[#64748b]">Phiên bản POI {proposal.currentRevision}</span></td>
+                  <td className={tdClass}>{mapName(proposal.revision.mapVersionId, proposal.revision.mapKey)}</td>
+                  <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
+                  <td className={tdClass}>{proposal.revision.narrationText ? 'Staff đã bổ sung' : <span className="text-amber-800">Chờ Staff bổ sung</span>}</td>
+                </tr>
+              })}
+            </tbody>
+          </table>
+        </div>}
+    </section>
   )
 }
