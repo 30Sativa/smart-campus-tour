@@ -34,8 +34,8 @@ const DONE: Record<TourCommand, { title: string; detail: string }> = {
  * outlined button, and End Early is the only red one, alone under "Kết thúc phiên".
  */
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
-const START_CLASS = `flex min-h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-[#e6efff] px-5 text-base font-bold text-[#1d4ed8] transition-[background-color,transform] hover:bg-[#d8e6ff] active:scale-[0.99] ${FOCUS}`
-const NEXT_CLASS = `flex min-h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-[#e6efff] px-4 text-[15px] font-bold text-[#1d4ed8] transition-[background-color,transform] hover:bg-[#d8e6ff] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#f1f5f9] disabled:text-[#a0aec0] disabled:active:scale-100 ${FOCUS}`
+const START_CLASS = `flex min-h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-[#edf3fb] px-5 text-base font-bold text-[#4a6fa5] transition-[background-color,transform] hover:bg-[#e3ecf8] active:scale-[0.99] ${FOCUS}`
+const NEXT_CLASS = `flex min-h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-[#edf3fb] px-4 text-[15px] font-bold text-[#4a6fa5] transition-[background-color,transform] hover:bg-[#e3ecf8] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#f1f5f9] disabled:text-[#a0aec0] disabled:active:scale-100 ${FOCUS}`
 const HOLD_CLASS = `flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-4 text-sm font-semibold text-[#2d3748] transition-[background-color,transform] hover:bg-[#f8fafc] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#f1f5f9] disabled:text-[#a0aec0] disabled:active:scale-100 ${FOCUS}`
 const END_CLASS = `flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#f0b4ab] bg-white px-4 text-sm font-bold text-[#c53030] transition-[background-color,transform] hover:bg-[#fff4f2] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100 ${FOCUS}`
 

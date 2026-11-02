@@ -30,7 +30,6 @@ import { homePathForRole } from '../../auth/roles'
  */
 const PublicHomePage = lazy(() => import('../../routes/public/PublicHomePage'))
 const QuestAudioPage = lazy(() => import('../../routes/public/QuestAudioPage'))
-const QuestIntercomPage = lazy(() => import('../../routes/staff/QuestIntercomPage'))
 
 
 // SQL GUID Tours use personal access-code/cookie entry; non-GUID IDs retain the legacy fixture flow.
@@ -221,7 +220,6 @@ export const routes = [
     element: <StaffArea />,
     children: [
       { index: true, element: <OverviewPage /> },
-      { path: 'intercom', element: <QuestIntercomPage /> },
       // Sessions (remote-tour scope): today's list, any day, detail & log,
       // and the pre-start check for a Ready one.
       { path: 'tours', element: <ToursTodayPage /> },

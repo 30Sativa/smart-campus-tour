@@ -54,7 +54,7 @@ export function TodayDetailPanel({ tour }: { tour: TourOperation }) {
             const done = stop.status === 'Completed' || stop.status === 'Skipped'
             const current = stop.status === 'Current'
             return <li key={stop.id} className={`flex items-center gap-2.5 text-[13px] ${current ? 'font-semibold text-[#2d3748]' : 'text-[#718096]'}`}>
-              <span aria-hidden="true" className={`grid size-4 shrink-0 place-items-center rounded-full ${done ? 'bg-[#93b8f5] text-white' : current ? 'border-[3px] border-[#bfd6fb] bg-[#2563eb]' : 'border-[1.5px] border-[#cbd5e1] bg-white'}`}>{done && <Check size={10} strokeWidth={3.5} />}</span>
+              <span aria-hidden="true" className={`grid size-4 shrink-0 place-items-center rounded-full ${done ? 'bg-[#93b8f5] text-white' : current ? 'border-[3px] border-[#d6e4f8] bg-[#2563eb]' : 'border-[1.5px] border-[#cbd5e1] bg-white'}`}>{done && <Check size={10} strokeWidth={3.5} />}</span>
               <span className="min-w-0 truncate">{stop.name} · Điểm {i + 1}{current ? '' : done ? (stop.status === 'Skipped' ? ' · Đã bỏ qua' : ' · Đã qua') : ' · Chưa tới'}</span>
             </li>
           })}

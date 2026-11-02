@@ -19,7 +19,7 @@ import { groupSummary, tourAction } from '../attention'
 const STATE_LOOK: Record<TourState, { icon: LucideIcon | null; className: string }> = {
   Scheduled: { icon: CalendarClock, className: 'border-dashed border-[#94a3b8] bg-white text-[#475569]' },
   Ready: { icon: Lock, className: 'border-[#9cc7e4] bg-[#eaf4fc] text-[#1f5f8b]' },
-  Running: { icon: null, className: 'border-[#bfd6fb] bg-[#e6efff] text-[#1d4ed8]' },
+  Running: { icon: null, className: 'border-[#d6e4f8] bg-[#edf3fb] text-[#4a6fa5]' },
   Completed: { icon: CircleCheck, className: 'border-[#bfe6d2] bg-[#effbf5] text-[#1f7a55]' },
   Cancelled: { icon: CircleX, className: 'border-[#e2e8f0] bg-[#f1f5f9] text-[#64748b]' },
 }
