@@ -607,10 +607,28 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText(/Robot này chưa có kiểm tra triển khai đạt mới nhất/)).toBeInTheDocument()
   })
 
-  it('warns when the chosen robot was last checked on another map', async () => {
+  it('blocks saving while the chosen robot was last checked on another map, for either result', async () => {
     physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2' })]
     await openPoiCheck()
     expect(await screen.findByText(/không phải kết quả đạt trên library-v1/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: robot chưa kiểm tra triển khai đạt trên map này.')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
+    fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
+    fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    fireEvent.submit(document.getElementById('poi-verify-form')!)
+    expect(verificationCalls()).toHaveLength(0)
+  })
+
+  it('says what is missing when Không đạt cannot be saved yet', async () => {
+    await openPoiCheck()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
+    fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
+    expect(screen.queryByText(/Chưa lưu được/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
   })
 
@@ -658,7 +676,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByRole('button', { name: 'Sao chép MapKey' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Quản lý khóa' })).not.toBeInTheDocument()
     await openRobotDetail()
-    expect(screen.getAllByText(/Library/).filter(item => item.textContent === ' · Library v1')).toHaveLength(1)
+    expect(screen.getAllByText(/Library/).filter(item => item.textContent === ' · Library · phiên bản 1')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép MapKey' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('library-v1'))
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép FrameId' }))
@@ -758,7 +776,7 @@ describe('Technical Staff API integration', () => {
 
   it('requires a reason and a failed observation for a failed run', async () => {
     await openRouteTest()
-    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAIL' } })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch điểm 2.' } })

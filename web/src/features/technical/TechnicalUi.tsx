@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { Eye } from 'lucide-react'
+import { CircleCheck, CircleX, Eye } from 'lucide-react'
 import { toneClass, type StatusTone } from '../../components/ui/status-tone'
+import { labelClass } from '../../components/ui/ui-classes'
 
 export function TechnicalPage({ children }: { children: ReactNode }) {
   return <div className="min-h-full bg-[#f6f7f9] px-4 py-5 sm:px-6 lg:px-8 lg:py-6"><div className="mx-auto w-full max-w-[1360px]">{children}</div></div>
@@ -26,6 +27,36 @@ export function Note({ tone = 'info', children }: { tone?: StatusTone; children:
 }
 
 /** A labelled checkbox row, large enough to hit on a tablet in the field. */
+const RESULT_CHOICES = [
+  { value: 'PASS' as const, label: 'Đạt', icon: CircleCheck, selectedClass: 'border-[#15803d] bg-[#f0fdf4] text-[#166534]' },
+  { value: 'FAIL' as const, label: 'Không đạt', icon: CircleX, selectedClass: 'border-[#b23e18] bg-[#fff1ef] text-[#b23e18]' },
+]
+
+/** Đạt / Không đạt as two visible buttons, so recording a failure is as obvious as recording a pass. */
+export function ResultToggle({ id, value, onChange, hint }: { id: string; value: 'PASS' | 'FAIL'; onChange: (value: 'PASS' | 'FAIL') => void; hint?: ReactNode }) {
+  return (
+    <div>
+      <p id={id} className={labelClass}>Kết quả</p>
+      <div role="group" aria-labelledby={id} className="mt-1 grid grid-cols-2 gap-2">
+        {RESULT_CHOICES.map(choice => {
+          const selected = value === choice.value
+          return <button key={choice.value} type="button" aria-pressed={selected} onClick={() => onChange(choice.value)}
+            className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] motion-reduce:transition-none ${selected ? choice.selectedClass : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1]'}`}>
+            <choice.icon size={15} aria-hidden="true" />{choice.label}
+          </button>
+        })}
+      </div>
+      {value === 'FAIL' && hint && <p className="mt-1 text-xs text-[#64748b]">{hint}</p>}
+    </div>
+  )
+}
+
+/** Beside a disabled save button: what is still missing, so a greyed-out button never leaves the reader guessing. */
+export function SaveBlockedHint({ missing }: { missing: string[] }) {
+  if (!missing.length) return null
+  return <p role="status" className="mr-auto text-xs text-[#b23e18]">Chưa lưu được: {missing.join(', ')}.</p>
+}
+
 export function CheckRow({ checked, onChange, children }: { checked: boolean; onChange: (value: boolean) => void; children: ReactNode }) {
   return (
     <label className="flex min-h-9 cursor-pointer items-center gap-2.5 rounded-lg border border-[#e2e8f0] px-3 text-[13px] text-[#334155] transition-colors hover:bg-[#fafcfe] has-[:checked]:border-[#cde9dc] has-[:checked]:bg-[#effbf5]">

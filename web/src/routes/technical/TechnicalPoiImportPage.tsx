@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { CircleCheck, CircleX, Clock3, LoaderCircle, RotateCcw } from 'lucide-react'
+import { CircleCheck, Clock3, LoaderCircle, RotateCcw } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, DetailFact, Note, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { CheckRow, DetailFact, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
 import { cameraPresetLabel, mapVersionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
@@ -130,11 +130,6 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
   )
 }
 
-const resultChoices = [
-  { value: 'PASS' as const, label: 'Đạt', icon: CircleCheck, selectedClass: 'border-[#15803d] bg-[#f0fdf4] text-[#166534]' },
-  { value: 'FAIL' as const, label: 'Không đạt', icon: CircleX, selectedClass: 'border-[#b23e18] bg-[#fff1ef] text-[#b23e18]' },
-]
-
 function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem; onClose: () => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
@@ -158,14 +153,22 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
   const passBlocked = resultCode === 'PASS' && missing.length > 0
   const failBlocked = resultCode === 'FAIL' && missing.length === 0
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // Advisory only: the server decides from the robot's latest deployment check.
+  // The server refuses this either way (MAP_NOT_DEPLOYED), so save waits for a fresh robot list that shows a pass on this map.
   const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== revision.mapKey || selectedRobot.latestDeploymentPassed === false)
+  const missingToSave = [
+    !robotCode && 'chọn robot',
+    robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
+    passBlocked && 'tick đủ bốn mục để ghi Đạt',
+    failBlocked && 'bỏ tick mục không đạt',
+    resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
+    !evidence.trim() && 'nhập ghi chú bằng chứng',
+  ].filter((item): item is string => Boolean(item))
   const errors = verify.error ? poiVerifyErrors(verify.error) : {}
   const changed = () => { if (verify.error) verify.reset() }
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (passBlocked || failBlocked) return
+    if (missingToSave.length) return
     verify.mutate({
       proposalId: proposal.proposalId,
       revisionNumber: revision.revisionNumber,
@@ -183,27 +186,14 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
 
   return (
     <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${revision.mapKey}, revision ${revision.revisionNumber} · camera ${revision.cameraPreset}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} disabled={verify.isPending || !robotCode || !evidence.trim() || passBlocked || failBlocked || (resultCode === 'FAIL' && !reason.trim())}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
           <RobotPicker id="verify-robot" label="Robot vật lý" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Máy chủ sẽ từ chối cho tới khi có kiểm tra đạt đúng map này.</p>}
+          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
-        <div>
-          <p id="verify-result" className={labelClass}>Kết quả</p>
-          {/* Two visible choices instead of a select, so rejecting a POI is as obvious as passing it. */}
-          <div role="group" aria-labelledby="verify-result" className="mt-1 grid grid-cols-2 gap-2">
-            {resultChoices.map(choice => {
-              const selected = resultCode === choice.value
-              return <button key={choice.value} type="button" aria-pressed={selected} onClick={() => { setResultCode(choice.value); changed() }}
-                className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] motion-reduce:transition-none ${selected ? choice.selectedClass : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1]'}`}>
-                <choice.icon size={15} aria-hidden="true" />{choice.label}
-              </button>
-            })}
-          </div>
-          {resultCode === 'FAIL' && <p className="mt-1 text-xs text-[#64748b]">Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại revision mới.</p>}
-        </div>
+        <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại revision mới." />
         <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}

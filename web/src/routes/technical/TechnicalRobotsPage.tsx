@@ -68,7 +68,7 @@ export default function TechnicalRobotsPage() {
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
-                <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · v{robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
+                <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · phiên bản {robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
                 <td className={`${tdClass} text-center`}><button type="button" aria-label={`Chi tiết ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Chi tiết</button></td>
               </tr>)}
@@ -123,7 +123,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           ]} />
           {robot.connectionStatus === 'AWAITING_DATA' && <p className="mt-2 text-xs text-[#64748b]">Chưa nhận dữ liệu sau khi hệ thống khởi động.</p>}
         </DetailSection>
-        <DetailSection title="Bản đồ được gán" subject={assigned ? `${robot.assignedAreaName} v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
+        <DetailSection title="Bản đồ được gán" subject={assigned ? `${robot.assignedAreaName} · phiên bản ${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
           {assigned ? <div className="space-y-2">
             <Facts items={[
               ['MapKey', <CopyValue key="map" label="MapKey" value={robot.assignedMapKey!} />],
@@ -207,7 +207,7 @@ function RobotMapAssignmentModal({ robot, otherRobots, onClose }: { robot: Physi
     else clear.mutate(input, { onSuccess: onClose })
     setConfirming(null)
   }
-  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ đạt kiểm tra, nhưng robot chỉ nhận Tour khi đã kiểm tra đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ đạt kiểm tra, nhưng robot chỉ nhận Tour khi đã kiểm tra đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
       <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select title="" id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => chooseArea(event.target.value)}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => {
         const holder = holderOf(area.areaKey)

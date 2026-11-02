@@ -86,8 +86,8 @@ describe('Staff versioned Route workflow', () => {
   it('only offers maps that already have a passed POI', async () => {
     renderAt('/staff/manage/routes/new')
     const select = await screen.findByLabelText('Phiên bản bản đồ')
-    expect(within(select).getByRole('option', { name: /library-v1/ })).toBeEnabled()
-    const otherMap = within(select).getByRole('option', { name: /map-without-poi/ })
+    expect(within(select).getByRole('option', { name: /Library · phiên bản 1/ })).toBeEnabled()
+    const otherMap = within(select).getByRole('option', { name: /Library · phiên bản 3/ })
     expect(otherMap).toBeDisabled()
     expect(otherMap).toHaveTextContent('chưa có POI đạt')
   })
@@ -96,7 +96,7 @@ describe('Staff versioned Route workflow', () => {
     mapEligible = false
     renderAt('/staff/manage/routes/new')
     const select = await screen.findByLabelText('Phiên bản bản đồ')
-    const option = within(select).getByRole('option', { name: /library-v1/ })
+    const option = within(select).getByRole('option', { name: /Library · phiên bản 1/ })
     expect(option).toBeDisabled()
     expect(option).toHaveTextContent('chưa đạt kiểm tra kỹ thuật')
     fireEvent.change(select, { target: { value: 'map-v1' } })

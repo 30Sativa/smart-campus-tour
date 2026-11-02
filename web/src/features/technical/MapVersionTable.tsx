@@ -8,6 +8,7 @@ import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
 import type { MapAreaOption, MapVersionItem, PhysicalRobotOption } from './api/technical'
+import { mapVersionLabel } from './poi-labels'
 import { stamp } from './technical-format'
 
 type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void }
@@ -82,18 +83,18 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
   // Read-only here: assignment is changed only on the robot page, so it has one place to edit.
   const assigned = robotList.data?.filter(robot => area.versions.some(version => version.map.id === robot.assignedMapVersionId)) ?? []
   return (
-    <Modal open size="lg" title={`${map.areaName} v${map.versionNumber}`} description={isLatest ? `${map.areaKey} · phiên bản mới nhất` : `${map.areaKey} · phiên bản cũ, mới nhất là v${area.latest.map.versionNumber}`} onClose={onClose}
+    <Modal open size="lg" title={mapVersionLabel(map)} description={isLatest ? `${map.areaKey} · phiên bản mới nhất` : `${map.areaKey} · phiên bản cũ, mới nhất là phiên bản ${area.latest.map.versionNumber}`} onClose={onClose}
       footer={<div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={buttonClass('secondary')} onClick={() => { onClose(); onUpload({ areaKey: map.areaKey, displayName: map.areaName }) }}>Tải phiên bản mới</button>
         <button type="button" className={buttonClass('primary')} onClick={() => { onClose(); onCheck(item) }}>Ghi kết quả kiểm tra</button>
       </div>}>
-      <MapPreview mapVersionId={map.id} label={`${map.areaName} v${map.versionNumber}`} />
+      <MapPreview mapVersionId={map.id} label={mapVersionLabel(map)} />
       <dl className="mt-3 divide-y divide-[#f1f5f9]">
         <DetailFact label="Trạng thái"><ToneBadge tone={status.tone}>{status.label}</ToneBadge>{status.detail && <span className="mt-1 block text-xs text-[#64748b]">{status.detail}</span>}</DetailFact>
         <DetailFact label="Kiểm tra gần nhất">{evidence ? stamp(evidence.checkedAt) : 'Chưa có'}</DetailFact>
         <DetailFact label="Robot được gán">
           {robotList.isPending ? 'Đang tải…' : robotList.isError ? 'Không tải được danh sách robot' : assigned.length
-            ? <span className="flex flex-wrap gap-x-3 gap-y-1">{assigned.map(robot => <Link key={robot.id} to={`/technical/robots?robot=${robot.id}`} className="font-semibold text-[#1d4ed8] underline">{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · v{robot.assignedVersionNumber}</Link>)}</span>
+            ? <span className="flex flex-wrap gap-x-3 gap-y-1">{assigned.map(robot => <Link key={robot.id} to={`/technical/robots?robot=${robot.id}`} className="font-semibold text-[#1d4ed8] underline">{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · phiên bản {robot.assignedVersionNumber}</Link>)}</span>
             : 'Chưa có robot nào được gán khu vực này'}
           <span className="mt-1 block text-xs text-[#64748b]">Gán hoặc đổi bản đồ ở trang Robot.</span>
         </DetailFact>
@@ -111,13 +112,13 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
             const current = version.map.id === map.id
             return (
               <li key={version.map.id} className={`flex items-center gap-3 px-3 py-2 text-[13px] ${current ? 'bg-[#eff6ff]' : ''}`}>
-                <span className="w-10 font-mono font-semibold text-[#0f172a]">v{version.map.versionNumber}</span>
+                <span className="w-24 font-semibold text-[#0f172a]">Phiên bản {version.map.versionNumber}</span>
                 <span className="text-[#64748b]">{stamp(version.map.uploadedAt)}</span>
                 <ToneBadge tone={versionState.tone}>{versionState.label}</ToneBadge>
                 {version.currentlyDeployedOn.length > 0 && <span className="text-xs text-[#1f7a55]">{version.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
                 <span className="ml-auto">{current
                   ? <span className="text-xs font-semibold text-[#2563eb]">Đang xem</span>
-                  : <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onSelect(version.map.id)}>Xem v{version.map.versionNumber}</button>}</span>
+                  : <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onSelect(version.map.id)}>Xem phiên bản {version.map.versionNumber}</button>}</span>
               </li>
             )
           })}
@@ -158,15 +159,15 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
                 return (
                   <tr key={map.areaKey} className={rowClass}>
                     <td className={tdClass}><span className="font-semibold text-[#0f172a]">{map.areaName}</span><p className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</p></td>
-                    <td className={tdClass}><span className="font-mono">v{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
+                    <td className={tdClass}><span className="font-semibold">{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
                     <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#64748b]`}>{stamp(map.uploadedAt)}</td>
                     <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
                     <td className={tdClass}>{robots.length ? <span className="flex flex-wrap gap-1">{robots.map(robot => robot.versionNumber === map.versionNumber
                       ? <ToneBadge key={robot.robotCode} tone="ok">{robot.robotCode}</ToneBadge>
-                      : <ToneBadge key={robot.robotCode} tone="warn">{robot.robotCode} · bản cũ v{robot.versionNumber}</ToneBadge>)}</span> : <span className="text-[#94a3b8]">-</span>}</td>
+                      : <ToneBadge key={robot.robotCode} tone="warn">{robot.robotCode} · đang ở phiên bản {robot.versionNumber}</ToneBadge>)}</span> : <span className="text-[#94a3b8]">-</span>}</td>
                     <td className={tdClass}><div className="flex items-center justify-center gap-2">
                       <button type="button" className={buttonClass(latest.technicalCheckStatus === 'PENDING' ? 'primary' : 'secondary', 'sm')} onClick={() => onCheck(latest)}>Ghi kết quả kiểm tra</button>
-                      <ViewDetailButton label={`Xem chi tiết ${map.areaName} v${map.versionNumber}`} onClick={() => setViewing({ areaKey: map.areaKey, itemId: map.id })} />
+                      <ViewDetailButton label={`Xem chi tiết ${mapVersionLabel(map)}`} onClick={() => setViewing({ areaKey: map.areaKey, itemId: map.id })} />
                     </div></td>
                   </tr>
                 )
