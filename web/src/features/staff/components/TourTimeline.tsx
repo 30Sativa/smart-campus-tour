@@ -34,7 +34,7 @@ function Cap({ label, sub, reached, active = false, last = false }: { label: str
   return (
     <li className="relative flex gap-3 pb-3 last:pb-0">
       {!last && <Rail done={reached} />}
-      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#e6efff] text-[#1d4ed8]' : active ? 'bg-[#2563eb] text-white' : 'border-2 border-[#d5dfec] bg-white text-[#a8b6c9]'}`} aria-hidden="true">
+      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#edf3fb] text-[#4a6fa5]' : active ? 'bg-[#2563eb] text-white' : 'border-2 border-[#d5dfec] bg-white text-[#a8b6c9]'}`} aria-hidden="true">
         <Flag size={12} />
       </span>
       <span className="min-w-0 pt-0.5">
@@ -54,7 +54,7 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const done = stop.status === 'Completed'
   const skipped = stop.status === 'Skipped'
   const marker = done ? (
-    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#e6efff] text-[#1d4ed8]"><Check size={14} strokeWidth={3} /></span>
+    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#edf3fb] text-[#4a6fa5]"><Check size={14} strokeWidth={3} /></span>
   ) : skipped ? (
     <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#eef2f8] text-[#8a98ac]"><SkipForward size={13} /></span>
   ) : current ? (

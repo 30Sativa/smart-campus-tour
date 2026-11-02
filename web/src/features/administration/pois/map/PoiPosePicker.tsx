@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react'
-import { CircleCheck, Crosshair, Hand, LocateFixed, Maximize, Minus, MoveUpRight, Plus, RotateCcw, TriangleAlert } from 'lucide-react'
+import { CircleCheck, Crosshair, Hand, Info, LocateFixed, Maximize, Minus, MoveUpRight, Plus, RotateCcw, TriangleAlert } from 'lucide-react'
 import { buttonClass } from '../../../../components/ui/ui-classes'
 import type { OccupancyMap } from './catalog'
 import '../poi-form.css'
@@ -41,7 +41,7 @@ const MODES = [
   { key: 'pan', label: 'Di chuyển bản đồ', shortcut: 'Esc', icon: Hand },
 ] as const
 
-const zoomButton = 'grid size-8.5 place-items-center rounded-lg text-[#285c7d] transition-colors hover:bg-[#f1f8fe] disabled:cursor-not-allowed disabled:text-[#c2cfda] disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
+const zoomButton = 'grid size-8.5 place-items-center rounded-lg text-[#475569] transition-colors hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:text-[#c2cfda] disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]'
 
 /** Zoom around the view centre, or keep `focus` fixed under the cursor. */
 function zoomView(map: OccupancyMap, current: Viewport, factor: number, focus?: ImagePoint): Viewport {
@@ -181,30 +181,32 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
   const arrow = `M 0 0 L ${arrowLength} 0 M ${arrowLength * 0.72} ${-arrowLength * 0.2} L ${arrowLength} 0 L ${arrowLength * 0.72} ${arrowLength * 0.2}`
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e2e8f0] px-3 py-2.5">
-        <div className="pl-1"><p className="text-sm font-semibold text-[#1e293b]">Bản đồ ROS</p><p className="mt-0.5 font-mono text-xs text-[#64748b]">{map.mapKey} · {map.resolution} m/ô</p></div>
-        <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-1 rounded-xl bg-[#f1f7fc] p-1">
-          {MODES.map(({ key, label, shortcut, icon: Icon }) => {
-            const disabled = key === 'pan' ? !ready : !editable || !ready || (key === 'heading' && !inside)
-            const pressed = actualMode === key
-            return (
-              <button
-                key={key} type="button" aria-label={label} aria-pressed={pressed} disabled={disabled}
-                onClick={() => chooseMode(key)}
-                className={`inline-flex min-h-8.5 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] disabled:cursor-not-allowed disabled:opacity-45 ${
-                  pressed ? 'bg-white text-[#174b70] shadow-[0_4px_12px_-6px_rgba(23,59,89,0.4)]' : 'text-[#54738a] hover:text-[#174b70]'
-                }`}
-              >
-                <Icon size={15} aria-hidden="true" />{label}
-                <kbd aria-hidden="true" className="hidden rounded border border-current px-1 font-mono text-[10px] leading-4 font-semibold opacity-55 sm:inline">{shortcut}</kbd>
-              </button>
-            )
-          })}
-        </div>
+    <div className="min-w-0">
+      <div role="group" aria-label="Chế độ thao tác bản đồ" className="flex flex-wrap gap-2 rounded-xl border border-[#e2e8f0] p-1.5">
+        {MODES.map(({ key, label, shortcut, icon: Icon }) => {
+          const disabled = key === 'pan' ? !ready : !editable || !ready || (key === 'heading' && !inside)
+          const pressed = actualMode === key
+          return (
+            <button
+              key={key} type="button" aria-label={label} aria-pressed={pressed} disabled={disabled}
+              onClick={() => chooseMode(key)}
+              className={`inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] disabled:cursor-not-allowed disabled:opacity-45 sm:flex-none sm:px-5 ${
+                pressed ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-[#f8fafc] hover:text-[#2d3748]'
+              }`}
+            >
+              <Icon size={16} aria-hidden="true" />{key === 'pan' ? 'Di chuyển' : label}
+              <kbd aria-hidden="true" className="hidden rounded border border-current px-1 font-mono text-[10px] leading-4 font-semibold opacity-55 sm:inline">{shortcut}</kbd>
+            </button>
+          )
+        })}
       </div>
 
-      <div className="relative bg-[#eef3f8] bg-[linear-gradient(#e4ecf4_1px,transparent_1px),linear-gradient(90deg,#e4ecf4_1px,transparent_1px)] bg-[length:24px_24px]">
+      <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-[13px]">
+        <p aria-hidden="true" className="flex items-center gap-2 text-[#475569]"><Info size={15} className="shrink-0 text-[#718096]" />{coach?.text ?? (editable ? 'Kéo để di chuyển bản đồ; phím 1 đặt vị trí, phím 2 chọn hướng.' : 'Vị trí đã khóa, chỉ xem và di chuyển bản đồ.')}</p>
+        <p className="text-xs text-[#718096]">Độ phân giải bản đồ: <span className="font-mono">{map.resolution} m/ô</span></p>
+      </div>
+
+      <div className="relative overflow-hidden rounded-xl border border-[#e2e8f0] bg-[#f8fafc] bg-[linear-gradient(#eef2f6_1px,transparent_1px),linear-gradient(90deg,#eef2f6_1px,transparent_1px)] bg-[length:24px_24px]">
         {rasterState.status === 'loading' && <div className="flex h-[460px] items-center justify-center text-sm text-[#64748b]" role="status">Đang tải bản đồ…</div>}
         {rasterState.status === 'error' && <div className="flex h-[460px] flex-col items-center justify-center gap-3 px-3.5 text-center" role="alert"><p className="text-sm text-[#334155]">Không tải được ảnh đúng kích thước bản đồ. Tọa độ trong form vẫn được giữ.</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { setRasterState({ status: 'loading' }); setRetry((value) => value + 1) }}><RotateCcw size={14} aria-hidden="true" />Tải lại bản đồ</button></div>}
         {ready && <>
@@ -243,18 +245,14 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
             </g>}
           </svg>
 
-          {coach && <p aria-hidden="true" className="pointer-events-none absolute top-3 left-3 flex max-w-[calc(100%-5.5rem)] items-center gap-2.5 rounded-xl bg-[#173b59]/92 px-3 py-2 text-[12.5px] font-semibold text-white shadow-lg transition-opacity duration-300 starting:opacity-0">
-            <span className="grid size-5.5 shrink-0 place-items-center rounded-md bg-[#9fd0f5] font-mono text-[11px] text-[#173b59]">{coach.step}</span>{coach.text}
-          </p>}
-
-          <div className="absolute top-3 right-3 flex flex-col gap-1 rounded-xl border border-[#e2e8f0] bg-white p-1 shadow-[0_8px_20px_-14px_rgba(23,59,89,0.5)]">
+          <div className="absolute top-3 right-3 flex flex-col gap-1 rounded-xl border border-[#e2e8f0] bg-white p-1 shadow-[0_3.5px_5.5px_rgba(0,0,0,0.06)]">
             <button type="button" aria-label="Phóng to" disabled={view.height <= map.height / 32} onClick={() => zoom(2)} className={zoomButton}><Plus size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Thu nhỏ" disabled={view.height >= map.height} onClick={() => zoom(0.5)} className={zoomButton}><Minus size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Vừa bản đồ" onClick={fitMap} className={zoomButton}><Maximize size={16} aria-hidden="true" /></button>
             <button type="button" aria-label="Đưa POI vào giữa" disabled={!marker} onClick={() => { if (marker) setView((current) => ({ ...current, u: marker.u - current.width / 2, v: marker.v - current.height / 2 })) }} className={zoomButton}><LocateFixed size={16} aria-hidden="true" /></button>
           </div>
 
-          <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[#173b59]">
+          <div aria-hidden="true" className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-1.5 font-mono text-[11.5px] text-[#475569]">
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">X {shown ? shown.x.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Y {shown ? shown.y.toFixed(4) : '—'} m</span>
             <span className="rounded-lg border border-[#e2e8f0] bg-white/92 px-2 py-1">Yaw {yaw == null ? '—' : yaw.toFixed(6)} rad</span>
@@ -262,9 +260,9 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
         </>}
       </div>
 
-      <div className="space-y-2.5 border-t border-[#e2e8f0] bg-[#fbfdff] px-4 py-3 text-xs leading-5 text-[#54738a]">
+      <div className="space-y-2.5 pt-3 text-xs leading-5 text-[#718096]">
         <p className="sr-only">X: {pose.x == null ? 'chưa chọn' : `${pose.x.toFixed(4)} m`}, Y: {pose.y == null ? 'chưa chọn' : `${pose.y.toFixed(4)} m`}, Yaw: {pose.yaw == null ? 'chưa chọn' : `${pose.yaw.toFixed(6)} rad`}</p>
-        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[#ecfdf3] text-[#2f7a5b]' : 'bg-[#fffaf0] text-[#7d5310]'}`}>
+        {cellState && <p role="status" className={`flex items-start gap-2 rounded-lg px-3 py-2 font-semibold ${cellState === 'free' && !tooClose ? 'bg-[#f1f5f9] text-[#475569]' : 'bg-[#fbf5e8] text-[#8a6a2e]'}`}>
           {cellState === 'free' && !tooClose ? <CircleCheck size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> : <TriangleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />}{tooClose ? clearanceMessage(clearanceMeters!) : CELL_LABELS[cellState]}
         </p>}
         {interactionError && <p role="alert" className="font-semibold text-[#b23e31]">{interactionError}</p>}
@@ -272,10 +270,10 @@ export function PoiPosePicker({ map, pose, editable, mode, onModeChange, onPoseC
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] border border-[#94a3b8] bg-white" aria-hidden="true" />Trắng: ô trống</span>
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#111]" aria-hidden="true" />Đen: vật cản</span>
           <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-[3px] bg-[#9aa5b1]" aria-hidden="true" />Xám: chưa biết</span>
-          {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[#2563eb] bg-[#2563eb]/10" aria-hidden="true" />Vòng tròn: vùng phải trống quanh robot</span>}
+          {clearanceMeters != null && <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-dashed border-[#2563eb] bg-[#2563eb]/10" aria-hidden="true" />Vòng tròn: khoảng trống quanh robot</span>}
           <span>Yaw 0 = +X, chiều dương quay về +Y</span>
         </div>
-        <p id={helpId} className="text-[#7c94a7]">{help}</p>
+        <p id={helpId} className="sr-only">{help}</p>
       </div>
     </div>
   )

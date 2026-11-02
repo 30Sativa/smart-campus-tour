@@ -68,11 +68,11 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
   const railWidth = soft ? 'lg:w-[46px]' : 'lg:w-10'
   const navPad = soft ? 'px-[11px]' : 'px-3.5'
   const heading = soft ? 'px-2 pt-3 pb-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-[#64748b]' : 'px-3 pb-1 text-[11.5px] font-semibold text-[#6b7280]'
-  const activeRow = soft ? 'bg-[#3b82f6]/12 font-semibold text-[#1d4ed8] ring-1 ring-white/70' : `${tinted} font-semibold text-[#0f172a]`
+  const activeRow = soft ? 'bg-[#eef2f7]/90 font-semibold text-[#1e293b] ring-1 ring-white/70' : `${tinted} font-semibold text-[#0f172a]`
   const idleRow = soft ? 'font-medium text-[#334155] hover:bg-white/60 hover:text-[#0f172a]' : 'font-medium text-[#374151] hover:text-[#0f172a]'
   /** The page's icon: bare in `line`, on its own tile in `soft`. */
   const glyph = (Icon: LucideIcon, active: boolean) => soft
-    ? <span aria-hidden="true" className={`grid size-[30px] shrink-0 place-items-center rounded-xl transition-colors duration-200 ${active ? 'bg-white/80 text-[#2563eb]' : 'bg-white/60 text-[#64748b]'}`}><Icon size={15} strokeWidth={2.1} /></span>
+    ? <span aria-hidden="true" className={`grid size-[30px] shrink-0 place-items-center rounded-xl transition-colors duration-200 ${active ? 'bg-white/90 text-[#5b7fbf]' : 'bg-white/60 text-[#64748b]'}`}><Icon size={15} strokeWidth={2.1} /></span>
     : <Icon size={16} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${active ? 'text-[#2d719e]' : 'text-[#9ca3af]'}`} />
 
   const pill = (badge?: Badge) => {
@@ -162,9 +162,9 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
               setToggled((value) => ({ ...value, [entry.key]: !expanded }))
             }
             return (
-              <div key={entry.key} className={`${soft ? 'rounded-[15px]' : 'rounded-[10px]'} transition-colors duration-200 ${holds ? (soft ? 'bg-[#3b82f6]/12' : tinted) : ''}`}>
+              <div key={entry.key} className={`${soft ? 'rounded-[15px]' : 'rounded-[10px]'} transition-colors duration-200 ${holds ? (soft ? 'bg-[#eef2f7]/90' : tinted) : ''}`}>
                 <button type="button" aria-expanded={shown} aria-controls={subId} onClick={onGroup} title={rail ? entry.label : undefined}
-                  className={`${row} w-full text-left ${holds ? (soft ? 'font-semibold text-[#1d4ed8]' : 'font-semibold text-[#0f172a]') : idleRow}`}>
+                  className={`${row} w-full text-left ${holds ? (soft ? 'font-semibold text-[#1e293b]' : 'font-semibold text-[#0f172a]') : idleRow}`}>
                   {glyph(Icon, holds)}
                   <span className={`min-w-0 flex-1 truncate ${fade}`}>{entry.label}</span>
                   {!shown && pill(folded ? { value: folded, label: `${folded} việc trong ${entry.label}`, tone: foldedTone } : undefined)}
@@ -214,8 +214,8 @@ export function GroupedSidebar({ id, label, navLabel, homePath, subtitle, entrie
         // The ground-coloured sidebar ends on one blue card, the way out of the shift.
         <div className={`w-[248px] ${navPad} pt-2 pb-4`}>
           <div className={`transition-[width] ${EASE} ${rail ? railWidth : 'w-full'}`}>
-            <button type="button" onClick={onLogout} title={rail ? 'Đăng xuất' : undefined} className={`${row} w-full overflow-hidden bg-[#3b82f6]/10 font-semibold text-[#1d4ed8] ring-1 ring-white/70 hover:bg-[#3b82f6]/16`}>
-              <span aria-hidden="true" className="grid size-[30px] shrink-0 place-items-center rounded-xl bg-white/80 text-[#2563eb]"><LogOut size={15} strokeWidth={2.1} /></span>
+            <button type="button" onClick={onLogout} title={rail ? 'Đăng xuất' : undefined} className={`${row} w-full overflow-hidden bg-[#eef2f7]/90 font-semibold text-[#1e293b] ring-1 ring-white/70 hover:bg-[#e5eaf1]`}>
+              <span aria-hidden="true" className="grid size-[30px] shrink-0 place-items-center rounded-xl bg-white/90 text-[#5b7fbf]"><LogOut size={15} strokeWidth={2.1} /></span>
               <span className={`min-w-0 text-left ${fade}`}>
                 <span className="block">Đăng xuất</span>
                 <span className="block text-[11.5px] font-normal text-[#64748b]">Kết thúc phiên làm việc</span>

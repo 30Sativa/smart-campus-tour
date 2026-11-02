@@ -1,4 +1,4 @@
-import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, ListChecks, MapPinned, MonitorPlay, Route, ShieldCheck, Headset } from 'lucide-react'
+import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, ListChecks, MapPinned, MonitorPlay, Route, ShieldCheck } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -22,7 +22,6 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
       { label: 'Lịch buổi', path: '/staff/schedule', icon: CalendarDays },
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
-      { label: 'Đàm thoại Quest', path: '/staff/intercom', icon: Headset },
     ],
   },
   {

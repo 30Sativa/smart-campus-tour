@@ -92,8 +92,8 @@ export default function StaffManagePoisPage() {
     <div role="group" aria-label="Lọc theo trạng thái" className="mb-4 flex flex-wrap gap-1.5">
       {([['all', 'Tất cả', scoped.length], ...ORDER.map(key => [key, STATUS[key].label, count(key)] as const)] as const).map(([key, label, n]) => (
         <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as Filter)}
-          className={`inline-flex min-h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${focus} ${filter === key ? 'bg-[#e6efff] text-[#1d4ed8]' : 'text-[#718096] hover:bg-white hover:text-[#2d3748]'}`}>
-          {label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${filter === key ? 'bg-white text-[#1d4ed8]' : 'bg-[#eef2f6] text-[#718096]'}`}>{n}</span>
+          className={`inline-flex min-h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors ${focus} ${filter === key ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:bg-white hover:text-[#2d3748]'}`}>
+          {label}<span className={`rounded-full px-1.5 text-xs tabular-nums ${filter === key ? 'bg-white text-[#4a6fa5]' : 'bg-[#eef2f6] text-[#718096]'}`}>{n}</span>
         </button>
       ))}
     </div>
@@ -115,7 +115,7 @@ export default function StaffManagePoisPage() {
               const active = p.id === selected?.id
               return <li key={p.id} className={`grid grid-cols-[44px_minmax(0,1fr)_20px] items-center gap-x-4 gap-y-1.5 px-5 py-3 transition-colors md:grid-cols-[44px_minmax(0,1fr)_96px_128px_20px] ${active ? 'bg-[#f5f9ff]' : 'hover:bg-[#f8fafc]'}`}>
                 <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
-                  className={`grid size-9 place-items-center rounded-full text-sm font-bold tabular-nums transition-colors ${focus} ${active ? 'bg-[#e6efff] text-[#1d4ed8]' : 'bg-[#f1f5f9] text-[#2d3748]'}`}>{number.get(p.id)}</button>
+                  className={`grid size-9 place-items-center rounded-full text-sm font-bold tabular-nums transition-colors ${focus} ${active ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'bg-[#f1f5f9] text-[#2d3748]'}`}>{number.get(p.id)}</button>
                 <button type="button" onClick={() => setChosen(p.id)} className={`min-w-0 rounded-md text-left ${focus}`}>
                   <b className="block truncate text-sm font-semibold text-[#2d3748]">{p.revision.name}</b>
                   <span className="block truncate text-xs text-[#718096]">{p.revision.purpose}</span>
@@ -154,7 +154,7 @@ function SelectedPoi({ proposal, index }: { proposal: PoiProposal; index: number
     <section className={`${card} p-5`} aria-label="Điểm đang chọn">
       <h2 className="text-base font-bold text-[#2d3748]">Điểm đang chọn</h2>
       <div className="mt-3 flex items-start gap-3.5">
-        <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#e6efff] text-base font-bold text-[#1d4ed8] tabular-nums">{index}</span>
+        <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#edf3fb] text-base font-bold text-[#4a6fa5] tabular-nums">{index}</span>
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2"><b className="text-base font-bold text-[#2d3748]">{proposal.revision.name}</b><span className={`rounded-lg px-2.5 py-0.5 text-xs font-semibold ${st.chip}`}>{st.label}</span></p>
           <p className="mt-0.5 text-sm text-[#718096]">{proposal.revision.purpose}</p>

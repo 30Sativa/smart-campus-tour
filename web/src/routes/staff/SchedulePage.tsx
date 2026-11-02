@@ -38,7 +38,7 @@ const control = `min-h-10 rounded-xl border border-[#e2e8f0] bg-white px-3 text-
 const CHIP: Record<TourState, string> = {
   SCHEDULED: 'border-[#f3e2b8] bg-[#fff8e8] text-[#2d3748]',
   READY: 'border-[#cfe0fb] bg-[#eef4ff] text-[#2d3748]',
-  RUNNING: 'border-[#bfd6fb] bg-[#e3eeff] text-[#2d3748]',
+  RUNNING: 'border-[#d6e4f8] bg-[#e3eeff] text-[#2d3748]',
   COMPLETED: 'border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]',
   CANCELLED: 'border-[#e2e8f0] bg-white text-[#94a3b8] line-through',
 }
@@ -112,7 +112,7 @@ export default function SchedulePage() {
             <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] p-1">
               {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
                 <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value })}
-                  className={`min-h-8 rounded-lg px-4 text-sm font-semibold transition-colors ${focus} ${view === value ? 'bg-[#e6efff] text-[#1d4ed8]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
+                  className={`min-h-8 rounded-lg px-4 text-sm font-semibold transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
               ))}
             </div>
           </div>
@@ -188,7 +188,7 @@ function WeekGrid({ week, today, inDay, selectedId, onSelect, onDay }: { week: s
             className={`flex flex-col items-center gap-0.5 border-b border-l border-[#e2e8f0] px-1 py-2.5 transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${isToday ? 'bg-[#f2f7ff]' : 'bg-[#f8fafc]'}`}>
             <b className="text-sm text-[#2d3748]">{WEEKDAY[date.getDay()]}</b>
             <span className="text-xs text-[#718096] tabular-nums">{String(date.getDate()).padStart(2, '0')}/{String(date.getMonth() + 1).padStart(2, '0')}</span>
-            {isToday && <span className="mt-0.5 rounded-full bg-[#e6efff] px-2 text-[11px] font-semibold text-[#1d4ed8]">Hôm nay</span>}
+            {isToday && <span className="mt-0.5 rounded-full bg-[#edf3fb] px-2 text-[11px] font-semibold text-[#4a6fa5]">Hôm nay</span>}
           </button>
         })}
 

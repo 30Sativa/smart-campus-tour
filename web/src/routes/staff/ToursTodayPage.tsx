@@ -140,7 +140,7 @@ export default function ToursTodayPage() {
 
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-5 py-4 text-xs text-[#a0aec0]">
               <p>Đang hiển thị {shown.length} / {all.length} buổi</p>
-              <Link to="/staff/schedule" className={`inline-flex items-center gap-1 rounded-md text-sm font-bold text-[#2d3748] hover:text-[#1d4ed8] ${focus}`}>Xem lịch đầy đủ<ArrowRight size={15} aria-hidden="true" /></Link>
+              <Link to="/staff/schedule" className={`inline-flex items-center gap-1 rounded-md text-sm font-bold text-[#2d3748] hover:text-[#4a6fa5] ${focus}`}>Xem lịch đầy đủ<ArrowRight size={15} aria-hidden="true" /></Link>
             </div>
           </section>
 
@@ -166,7 +166,7 @@ function TodayRows({ tours, now, selectedId, onSelect, label }: { tours: TourOpe
         const hint = running ? 'Đang diễn ra' : timeHint(tour, now)
         const schools = tour.registrations.filter((reg) => reg.state === 'Approved').map((reg) => reg.schoolName).filter(Boolean)
         return (
-          <li key={tour.id} className={`relative overflow-hidden rounded-xl border transition-[border-color,background-color,box-shadow] duration-200 ${selected ? 'border-[#bfd6fb] bg-[#f5f9ff]' : 'border-[#edf2f7] bg-white hover:border-[#dbe7f7]'}`}>
+          <li key={tour.id} className={`relative overflow-hidden rounded-xl border transition-[border-color,background-color,box-shadow] duration-200 ${selected ? 'border-[#d6e4f8] bg-[#f5f9ff]' : 'border-[#edf2f7] bg-white hover:border-[#dbe7f7]'}`}>
             <button type="button" onClick={() => onSelect(tour.id)} aria-pressed={selected}
               className="grid w-full grid-cols-[88px_minmax(0,1fr)_20px] items-center gap-x-4 gap-y-2 px-4 py-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] md:grid-cols-[96px_minmax(0,1fr)_190px_20px]">
               <span className="self-start md:self-center">

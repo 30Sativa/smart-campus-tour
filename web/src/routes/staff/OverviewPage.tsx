@@ -105,7 +105,7 @@ export default function OverviewPage() {
             <strong className={`mt-0.5 block text-lg leading-tight font-bold tabular-nums ${alarm ? 'text-[#b23e31]' : 'text-[#2d3748]'}`}>{known ? item.value : '-'}</strong>
             <span className={`mt-0.5 block truncate text-xs font-bold ${alarm ? 'text-[#b23e31]' : item.filter === 'Completed' && known ? 'text-[#2f8f6b]' : 'text-[#a0aec0]'}`}>{known ? item.note : tours.isError ? 'Không tải được dữ liệu' : 'Đang tải dữ liệu…'}</span>
           </span>
-          <span aria-hidden="true" className={`grid size-[45px] shrink-0 place-items-center rounded-xl ${alarm ? 'bg-[#fdecea] text-[#c9534a]' : 'bg-[#e6efff] text-[#2563eb]'}`}><item.icon size={20} strokeWidth={2.1} /></span>
+          <span aria-hidden="true" className={`grid size-[45px] shrink-0 place-items-center rounded-xl ${alarm ? 'bg-[#fdecea] text-[#c9534a]' : 'bg-[#edf3fb] text-[#2563eb]'}`}><item.icon size={20} strokeWidth={2.1} /></span>
         </button>
       })}
     </section>
@@ -124,7 +124,7 @@ export default function OverviewPage() {
         </>}
       </section>
 
-      <section aria-label="Tình trạng robot" className="relative flex min-h-[220px] flex-col overflow-hidden rounded-[15px] bg-[linear-gradient(135deg,#eef4ff_0%,#e3edff_55%,#d6e6ff_100%)] p-5 text-[#1e3a8a] shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] sm:p-6">
+      <section aria-label="Tình trạng robot" className="relative flex min-h-[220px] flex-col overflow-hidden rounded-[15px] bg-[linear-gradient(135deg,#eef4ff_0%,#e3edff_55%,#d6e6ff_100%)] p-5 text-[#2d3748] shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] sm:p-6">
         <span aria-hidden="true" className="pointer-events-none absolute -top-16 -right-14 size-56 rounded-full border-[28px] border-white/50" />
         <span aria-hidden="true" className="pointer-events-none absolute -right-6 -bottom-20 size-44 rounded-full bg-white/40" />
         <p className="relative text-sm font-bold text-[#64748b]">Robot dẫn tour</p>
@@ -134,10 +134,10 @@ export default function OverviewPage() {
             <h2 className="flex items-center gap-2 text-lg font-bold"><Bot size={18} aria-hidden="true" />{robot.name}</h2>
             <p className="mt-1 text-sm text-[#475569]">{statusLabel(robot.connectionState)}</p>
             <div className="mt-4 max-w-72">
-              <p className="flex items-center justify-between text-xs font-bold text-[#64748b]"><span className="inline-flex items-center gap-1.5"><BatteryMedium size={14} aria-hidden="true" />Pin</span><span className="text-[#1e3a8a] tabular-nums">{formatBattery(robot.batteryPercent)}</span></p>
+              <p className="flex items-center justify-between text-xs font-bold text-[#64748b]"><span className="inline-flex items-center gap-1.5"><BatteryMedium size={14} aria-hidden="true" />Pin</span><span className="text-[#2d3748] tabular-nums">{formatBattery(robot.batteryPercent)}</span></p>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/80"><div className="h-full rounded-full bg-[#60a5fa]" style={{ width: `${Math.max(0, Math.min(100, robot.batteryPercent ?? 0))}%` }} /></div>
             </div>
-            <Link to="/staff/robot" className="group mt-auto inline-flex items-center gap-1.5 self-start rounded-md pt-5 text-sm font-bold text-[#1d4ed8] hover:text-[#1e40af] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Robot & thiết bị<ArrowRight size={15} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" /></Link>
+            <Link to="/staff/robot" className="group mt-auto inline-flex items-center gap-1.5 self-start rounded-md pt-5 text-sm font-bold text-[#4a6fa5] hover:text-[#1e40af] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">Robot & thiết bị<ArrowRight size={15} aria-hidden="true" className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" /></Link>
           </div>
           : <p className="relative mt-2 text-sm text-[#475569]">Chưa có dữ liệu robot.</p>}
       </section>
@@ -161,7 +161,7 @@ export default function OverviewPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 sm:px-6">
         <div role="group" aria-label="Lọc buổi tổng quan" className="flex flex-wrap gap-1">
           {(['all', 'Running', 'Ready', 'Scheduled', 'Completed', 'Cancelled', ...(assistance || filter === 'assistance' ? ['assistance'] : [])] as OverviewFilter[]).map(value => <button key={value} type="button" aria-pressed={filter === value} onClick={() => selectFilter(value)}
-            className={`min-h-8 rounded-xl px-3 text-xs font-bold transition-colors ${focus} ${filter === value ? 'bg-[#e6efff] text-[#1d4ed8]' : 'text-[#a0aec0] hover:bg-[#f8f9fa] hover:text-[#2d3748]'}`}>
+            className={`min-h-8 rounded-xl px-3 text-xs font-bold transition-colors ${focus} ${filter === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#a0aec0] hover:bg-[#f8f9fa] hover:text-[#2d3748]'}`}>
             {value === 'all' ? 'Tất cả' : value === 'assistance' ? 'Cần hỗ trợ' : statusLabel(value)}
           </button>)}
         </div>

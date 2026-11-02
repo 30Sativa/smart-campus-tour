@@ -51,7 +51,7 @@ export default function StaffShell() {
 
   const currentPath = activeNavPath(location.pathname)
   // Preparation pages use live APIs; operational pages still use labelled simulations.
-  const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/intercom' || location.pathname === '/staff/profile'
+  const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/profile'
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
   const pendingCount = usePendingReviewCount() ?? 0
   const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
@@ -123,10 +123,10 @@ export default function StaffShell() {
           </div>
         </header>
 
-        {!onLiveSqlPage && <p role="note" className="mx-4 mt-3 w-fit rounded-full bg-[#eff6ff] px-3 py-1 text-xs font-semibold text-[#1d4ed8] sm:mx-6 lg:mx-8">Chế độ mô phỏng · Số liệu minh họa</p>}
+        {!onLiveSqlPage && <p role="note" className="mx-4 mt-3 w-fit rounded-full bg-[#eff6ff] px-3 py-1 text-xs font-semibold text-[#4a6fa5] sm:mx-6 lg:mx-8">Chế độ mô phỏng · Số liệu minh họa</p>}
 
         {/* Every panel on a Staff page becomes a Purity card: 15px corners, no border, a soft lift. */}
-        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 [&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#e6efff] [&_.ct-btn-primary]:text-[#1d4ed8] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#d8e6ff] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]">
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 [&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#edf3fb] [&_.ct-btn-primary]:text-[#4a6fa5] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#e3ecf8] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]">
           <RouteView />
         </main>
 
@@ -147,7 +147,7 @@ function RunningCard({ tour, rail, onNavigate }: { tour: TourOperation; rail: bo
   return (
     <Link to={`/staff/live/${tour.id}`} onClick={onNavigate} title={rail ? `Đang chạy ${tour.code}` : undefined}
       aria-label={`Đang chạy ${tour.code}${assist ? ', cần hỗ trợ' : ''}. Mở điều hành trực tiếp`}
-      className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-[15px] px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#fdecea] text-[#b23e31] ring-1 ring-[#f5c8c2] hover:bg-[#fbe0dc]' : 'bg-[#e6efff] text-[#1d4ed8] hover:bg-[#d8e6ff]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
+      className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-[15px] px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#fdecea] text-[#b23e31] ring-1 ring-[#f5c8c2] hover:bg-[#fbe0dc]' : 'bg-[#eef2f7] text-[#1e293b] hover:bg-[#e5eaf1]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
       {rail ? <MonitorPlay size={17} aria-hidden="true" className="hidden shrink-0 lg:block" /> : null}
       <span className={`${rail ? 'lg:hidden' : ''} flex min-w-0 items-center gap-2.5`}>
         <LiveDot tone={assist ? 'warn' : 'ok'} />
@@ -182,7 +182,7 @@ function AccountMenu({ username, role, onLogout }: { username?: string; role?: s
         onClick={() => setOpen((value) => !value)}
         className={`flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-2 pl-1.5 transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${open ? 'bg-white' : ''}`}
       >
-        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#e6efff] text-[11.5px] font-extrabold text-[#1d4ed8]">{initialsOf(name)}</span>
+        <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#edf3fb] text-[11.5px] font-extrabold text-[#4a6fa5]">{initialsOf(name)}</span>
         <span className="hidden min-w-0 text-left sm:block">
           <span className="block max-w-40 truncate text-[13px] leading-tight font-semibold text-[#0f172a]">{name}</span>
           <span className="block max-w-40 truncate text-[11px] leading-tight text-[#9ca3af]">{roleLabel(role)}</span>
