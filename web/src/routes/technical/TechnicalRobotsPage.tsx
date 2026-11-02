@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router'
 import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
@@ -37,7 +38,12 @@ export default function TechnicalRobotsPage() {
   const robots = useAllPhysicalRobots()
   const [showDeactivated, setShowDeactivated] = useState(false)
   const [registering, setRegistering] = useState(false)
-  const [dialog, setDialog] = useState<{ view: 'detail' | 'map' | 'credential'; robotId: string } | null>(null)
+  // `?robot=<id>` opens that robot, so the map page can send someone here to change an assignment.
+  const [searchParams] = useSearchParams()
+  const [dialog, setDialog] = useState<{ view: 'detail' | 'map' | 'credential'; robotId: string } | null>(() => {
+    const robotId = searchParams.get('robot')
+    return robotId ? { view: 'detail', robotId } : null
+  })
   // By id, so an open dialog follows refetches (row version, assignment, connection).
   const selected = robots.data?.find(robot => robot.id === dialog?.robotId)
   const showDetail = () => setDialog(current => current && { ...current, view: 'detail' })

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { Pagination, SearchField, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import type { StatusTone } from '../../components/ui/status-tone'
@@ -6,10 +7,12 @@ import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-
 import { usePagination } from '../../components/ui/use-pagination'
 import { useMapRaster } from '../administration/pois/map/use-map-raster'
 import { DetailFact, ToneBadge, ViewDetailButton } from './TechnicalUi'
-import type { MapAreaOption, MapVersionItem } from './api/technical'
+import type { MapAreaOption, MapVersionItem, PhysicalRobotOption } from './api/technical'
 import { stamp } from './technical-format'
 
 type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void }
+/** Registered robots, only to say which one holds an area; the assignment itself is edited on the robot page. */
+type RobotList = { data?: PhysicalRobotOption[]; isPending: boolean; isError: boolean }
 
 /** One area: its newest version leads the row; older versions stay reachable from the detail. */
 type AreaRow = { latest: MapVersionItem; versions: MapVersionItem[]; robots: { robotCode: string; versionNumber: number }[] }
@@ -71,11 +74,13 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
  * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
  * can be compared with the one uploaded; the version list switches which version the dialog shows.
  */
-function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onCheck }: { area: AreaRow; itemId: string; onSelect: (id: string) => void; onClose: () => void } & Actions) {
+function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload, onCheck }: { area: AreaRow; itemId: string; robotList: RobotList; onSelect: (id: string) => void; onClose: () => void } & Actions) {
   const item = area.versions.find(version => version.map.id === itemId) ?? area.latest
   const { map, preparationEvidence: evidence, currentlyDeployedOn: robots } = item
   const status = versionStatus(item)
   const isLatest = item === area.latest
+  // Read-only here: assignment is changed only on the robot page, so it has one place to edit.
+  const assigned = robotList.data?.filter(robot => area.versions.some(version => version.map.id === robot.assignedMapVersionId)) ?? []
   return (
     <Modal open size="lg" title={`${map.areaName} v${map.versionNumber}`} description={isLatest ? `${map.areaKey} · phiên bản mới nhất` : `${map.areaKey} · phiên bản cũ, mới nhất là v${area.latest.map.versionNumber}`} onClose={onClose}
       footer={<div className="flex flex-wrap justify-end gap-2">
@@ -86,6 +91,12 @@ function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onCheck }
       <dl className="mt-3 divide-y divide-[#f1f5f9]">
         <DetailFact label="Trạng thái"><ToneBadge tone={status.tone}>{status.label}</ToneBadge>{status.detail && <span className="mt-1 block text-xs text-[#64748b]">{status.detail}</span>}</DetailFact>
         <DetailFact label="Kiểm tra gần nhất">{evidence ? stamp(evidence.checkedAt) : 'Chưa có'}</DetailFact>
+        <DetailFact label="Robot được gán">
+          {robotList.isPending ? 'Đang tải…' : robotList.isError ? 'Không tải được danh sách robot' : assigned.length
+            ? <span className="flex flex-wrap gap-x-3 gap-y-1">{assigned.map(robot => <Link key={robot.id} to={`/technical/robots?robot=${robot.id}`} className="font-semibold text-[#1d4ed8] underline">{robot.displayName ? `${robot.displayName} · ` : ''}{robot.robotCode} · v{robot.assignedVersionNumber}</Link>)}</span>
+            : 'Chưa có robot nào được gán khu vực này'}
+          <span className="mt-1 block text-xs text-[#64748b]">Gán hoặc đổi bản đồ ở trang Robot.</span>
+        </DetailFact>
         <DetailFact label="Robot đang triển khai">{robots.length ? robots.map(robot => robot.robotCode).join(', ') : 'Chưa có'}</DetailFact>
         <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span></DetailFact>
         <DetailFact label="Thông số bản đồ">{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô</DetailFact>
@@ -117,7 +128,7 @@ function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onCheck }
 }
 
 /** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
-export function MapVersionTable({ items, onUpload, onCheck }: { items: MapVersionItem[] } & Actions) {
+export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: MapVersionItem[]; robots: RobotList } & Actions) {
   const [search, setSearch] = useState('')
   const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
@@ -165,7 +176,7 @@ export function MapVersionTable({ items, onUpload, onCheck }: { items: MapVersio
         </div>
         <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang danh sách bản đồ" />
       </>}
-      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} />}
+      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} robotList={robots} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} />}
     </section>
   )
 }

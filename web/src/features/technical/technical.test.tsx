@@ -53,8 +53,8 @@ let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_
 
 const openRobotDetail = async () => fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết amr-01' }))
 
-function renderPage(page: React.ReactNode) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>{page}</MemoryRouter></QueryClientProvider>)
+function renderPage(page: React.ReactNode, path = '/') {
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}>{page}</MemoryRouter></QueryClientProvider>)
 }
 
 describe('Technical Staff API integration', () => {
@@ -249,6 +249,12 @@ describe('Technical Staff API integration', () => {
     await openRobotDetail()
     expect(await screen.findByText(/Robot được gán map library-v1 · map nhưng lần triển khai gần nhất là library-v2 · map_v2/)).toBeInTheDocument()
     expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
+  })
+
+  it('opens the robot named in the link from the map page, where its map is assigned', async () => {
+    renderPage(<TechnicalRobotsPage />, '/technical/robots?robot=robot-1')
+    const detail = await screen.findByRole('dialog', { name: 'AMR 01' })
+    expect(within(detail).getByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
   })
 
   it('shows an achieved badge when the latest deployment check passed', async () => {
@@ -552,7 +558,11 @@ describe('Technical Staff API integration', () => {
 
   it('requires a failed observation and a reason for Không đạt', async () => {
     await openPoiCheck()
-    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAIL' } })
+    const result = within(screen.getByRole('group', { name: 'Kết quả' }))
+    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(result.getByRole('button', { name: 'Không đạt' }))
+    expect(result.getByRole('button', { name: 'Không đạt' })).toHaveAttribute('aria-pressed', 'true')
+    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('alert')).toHaveTextContent('Không đạt cần ít nhất một mục chưa đạt')
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

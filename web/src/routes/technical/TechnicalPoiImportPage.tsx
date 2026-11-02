@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { CircleCheck, Clock3, LoaderCircle, RotateCcw } from 'lucide-react'
+import { CircleCheck, CircleX, Clock3, LoaderCircle, RotateCcw } from 'lucide-react'
 import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
@@ -130,6 +130,11 @@ function PoiDetailModal({ row, mapName, onClose, onRecord }: { row: PoiRow; mapN
   )
 }
 
+const resultChoices = [
+  { value: 'PASS' as const, label: 'Đạt', icon: CircleCheck, selectedClass: 'border-[#15803d] bg-[#f0fdf4] text-[#166534]' },
+  { value: 'FAIL' as const, label: 'Không đạt', icon: CircleX, selectedClass: 'border-[#b23e18] bg-[#fff1ef] text-[#b23e18]' },
+]
+
 function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem; onClose: () => void }) {
   const verify = useVerifyPoi()
   const robots = usePhysicalRobots()
@@ -185,12 +190,25 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
           {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Máy chủ sẽ từ chối cho tới khi có kiểm tra đạt đúng map này.</p>}
         </div>
-        <div><label className={labelClass} htmlFor="verify-result">Kết quả</label><select id="verify-result" className={`${inputClass} mt-1`} value={resultCode} onChange={(event) => { setResultCode(event.target.value as 'PASS' | 'FAIL'); changed() }}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
+        <div>
+          <p id="verify-result" className={labelClass}>Kết quả</p>
+          {/* Two visible choices instead of a select, so rejecting a POI is as obvious as passing it. */}
+          <div role="group" aria-labelledby="verify-result" className="mt-1 grid grid-cols-2 gap-2">
+            {resultChoices.map(choice => {
+              const selected = resultCode === choice.value
+              return <button key={choice.value} type="button" aria-pressed={selected} onClick={() => { setResultCode(choice.value); changed() }}
+                className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] motion-reduce:transition-none ${selected ? choice.selectedClass : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1]'}`}>
+                <choice.icon size={15} aria-hidden="true" />{choice.label}
+              </button>
+            })}
+          </div>
+          {resultCode === 'FAIL' && <p className="mt-1 text-xs text-[#64748b]">Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại revision mới.</p>}
+        </div>
         <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
-          {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc đổi Kết quả thành Không đạt.</p>}
-          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc đổi Kết quả thành Đạt.</p>}
+          {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc chọn Không đạt.</p>}
+          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc chọn Đạt.</p>}
         </div>
         {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>
