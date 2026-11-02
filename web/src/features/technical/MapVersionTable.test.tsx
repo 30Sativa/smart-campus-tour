@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { MapVersionTable } from './MapVersionTable'
 import type { MapVersionItem } from './api/technical'
 
+const raster = vi.hoisted(() => ({ state: { map: null as { imageUrl: string; width: number; height: number } | null, error: null as string | null, retry: vi.fn() } }))
+vi.mock('../administration/pois/map/use-map-raster', () => ({ useMapRaster: () => raster.state }))
+
 const version = (areaKey: string, areaName: string, versionNumber: number, overrides: Partial<MapVersionItem> = {}) => ({
   map: { id: `${areaKey}-${versionNumber}`, areaKey, areaName, versionNumber, packageFileName: `${areaKey}-v${versionNumber}.zip`, packageSha256: 'a'.repeat(64),
     imageWidth: 100, imageHeight: 80, resolution: 0.05, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-29T03:00:00Z' },
@@ -46,6 +49,21 @@ describe('MapVersionTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A v1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Tải phiên bản mới' }))
     expect(onUpload).toHaveBeenCalledWith({ areaKey: 'a', displayName: 'A' })
+  })
+
+  it('shows the uploaded floor plan in the detail, and says so when it cannot load', () => {
+    raster.state = { map: { imageUrl: 'data:image/png;base64,AA==', width: 100, height: 80 }, error: null, retry: vi.fn() }
+    show([version('tang-6', 'Tầng 6', 1)])
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 v1' }))
+    expect(screen.getByRole('img', { name: 'Bản đồ Tầng 6 v1' })).toHaveAttribute('src', 'data:image/png;base64,AA==')
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+    const retry = vi.fn()
+    raster.state = { map: null, error: 'Máy chủ không trả về được bản đồ này.', retry }
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 v1' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Máy chủ không trả về được bản đồ này.')
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại bản đồ' }))
+    expect(retry).toHaveBeenCalled()
+    raster.state = { map: null, error: null, retry: vi.fn() }
   })
 
   it('reads the file, the check and POI eligibility as one status', () => {

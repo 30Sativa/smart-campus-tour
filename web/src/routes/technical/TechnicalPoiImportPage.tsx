@@ -6,7 +6,7 @@ import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, DetailFact, Note, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { cameraPresetLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { cameraPresetLabel, mapVersionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
@@ -45,7 +45,7 @@ export default function TechnicalPoiImportPage() {
   // People read the area and version; the map key is only a fallback while the list loads.
   const mapName = (mapKey: string) => {
     const map = maps.data?.find(item => item.map.mapKey === mapKey)?.map
-    return map ? `${map.areaName} · v${map.versionNumber}` : mapKey
+    return map ? mapVersionLabel(map) : mapKey
   }
   const [filter, setFilter] = useState<PoiFilter>('pending')
 

@@ -7,7 +7,7 @@ import TechnicalPoiImportPage from '../../routes/technical/TechnicalPoiImportPag
 import { useAuthStore } from '../../stores/auth-store'
 import { useToastStore } from '../../components/ui/toast-store'
 
-const map = { id: 'map-v1', areaName: 'Tầng 6', versionNumber: 2, mapKey: 'floor6-v2' }
+const map = { id: 'map-v1', areaKey: 'floor6', areaName: 'Tầng 6', versionNumber: 2, mapKey: 'floor6-v2' }
 const robot = { id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', connectionStatus: 'CONNECTED', latestDeployedMapKey: 'floor6-v2', latestDeploymentPassed: true }
 const okFile = { fileName: 'poi_02.yaml', fileSha256: 'a'.repeat(64), poiId: 'POI_02', name: 'POI 02', x: 29.692, y: -5.439, yaw: -0.291, verified: true, action: 'CREATE', errorCode: null, errorMessage: null }
 const badFile = { ...okFile, fileName: 'poi_03.yaml', fileSha256: 'b'.repeat(64), poiId: 'POI_03', action: null, errorCode: 'FRAME_MISMATCH', errorMessage: 'Tệp dùng frame odom, phiên bản bản đồ dùng frame map.' }
@@ -23,7 +23,7 @@ function renderPage() {
 
 async function pickEverything() {
   renderPage()
-  await screen.findByRole('option', { name: 'Tầng 6 · v2' })
+  await screen.findByRole('option', { name: 'Tầng 6 · v2 · floor6' })
   fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
   await screen.findByRole('option', { name: /amr-01/ })
   fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-01' } })
