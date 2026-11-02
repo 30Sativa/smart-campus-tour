@@ -27,7 +27,21 @@ function nextStep(route: VersionedRoute) {
   return 'Đã gửi kiểm chứng. Đang chờ Kỹ thuật chạy thử toàn tuyến trên robot và ghi kết quả.'
 }
 
-const formatDuration = (seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
+/**
+ * Whether Staff can start a Tour from this revision, in the order Tour create checks it
+ * (ADR-0037 availability, ADR-0034 effective PASS, ADR-0035 measurement basis). Guidance only:
+ * create still checks the map, robot and slot. `durationStatus` is not used, because the server
+ * always reports it as incomplete and it no longer decides scheduling.
+ */
+function tourReadiness(route: VersionedRoute): { tone: 'warn' | 'success'; text: string } {
+  if (!route.isActive) return { tone: 'warn', text: 'Tuyến đang ngừng sử dụng nên chưa tạo được Tour mới. Mở lại tuyến để dùng.' }
+  if (route.verificationStatus !== 'PASS') return { tone: 'warn', text: 'Chưa tạo được Tour: tuyến cần một lần chạy thử toàn tuyến đạt.' }
+  const effective = route.testRuns.find(run => run.id === route.effectiveTestRunId)
+  if (effective && !effective.measurementBasis) return { tone: 'warn', text: 'Chưa tạo được Tour: lần chạy thử đạt được đo theo định nghĩa cũ. Nhờ Kỹ thuật chạy thử lại toàn tuyến.' }
+  return { tone: 'success', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và khung giờ.' }
+}
+
+const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
 
 function RevisionChip({ submitted, status }: { submitted: boolean; status: string }) {
   const tone = revisionTone(submitted, status)
@@ -50,6 +64,7 @@ export default function StaffManageRouteDetailsPage() {
   if (route.error || !value) return <AdminPage><p role="alert" className="p-4 text-sm text-red-700">Không tải được tuyến.</p></AdminPage>
   const latestRevisionNumber = Math.max(...value.revisionHistory.map(revision => revision.revisionNumber), value.revisionNumber)
   const isCurrentRevision = value.revisionNumber === latestRevisionNumber && value.revisionHistory.some(revision => revision.revisionId === value.revisionId && revision.revisionNumber === latestRevisionNumber)
+  const readiness = isCurrentRevision ? tourReadiness(value) : null
   const hasUnverifiedPoi = value.eligibilityIssues.some(issue => issue.startsWith('POI_VERIFICATION_REQUIRED:'))
   const canSubmit = isCurrentRevision && !value.isSubmitted && !hasUnverifiedPoi && !submitMutation.isPending
   const reload = async () => { submitMutation.reset(); await route.refetch() }
@@ -61,7 +76,7 @@ export default function StaffManageRouteDetailsPage() {
       {isCurrentRevision && hasUnverifiedPoi && <Notice tone="warn">Chưa gửi kiểm chứng được vì có POI không còn kết quả đạt. Tạo phiên bản mới với các POI đã đạt.</Notice>}
       {isCurrentRevision && !hasUnverifiedPoi && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note>{nextStep(value)}</Note></div>}
       {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại phiên bản</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}
-      <Notice tone="warn">{value.durationStatus === 'INCOMPLETE_CONTENT_AUDIO_DATA' ? 'Chưa xếp lịch Tour được: hệ thống chưa có thời lượng nội dung/audio đã duyệt.' : 'Chưa xếp lịch Tour được: tuyến chưa đủ các điều kiện lập lịch.'}</Notice>
+      {readiness && <Notice tone={readiness.tone} action={readiness.tone === 'success' ? <Link to="/staff/manage/tours/new" className={buttonClass('secondary', 'sm')}>Tạo Tour</Link> : undefined}>{readiness.text}</Notice>}
     </div>
     <section className={`${panelClass} p-4`} aria-label="Tổng quan tuyến">
       <dl className="grid gap-3 sm:grid-cols-4">

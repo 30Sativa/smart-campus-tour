@@ -230,7 +230,7 @@ function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelec
         })}
       </svg>
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[#718096]">
-        {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, 'Không đạt, cần sửa'], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
+        {([[NEUTRAL_PIN, 'Điểm tham quan'], [FAIL_PIN, STATUS.FAIL.label], [SELECTED_PIN, 'Đang chọn']] as const).map(([color, label]) => <span key={label} className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: color }} />{label}</span>)}
         <span className="ml-auto">Chọn điểm trên bản đồ hoặc trong danh sách</span>
       </div>
     </section>

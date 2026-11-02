@@ -123,7 +123,7 @@ export default function StaffManageRouteFormPage() {
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
     <PageHeader eyebrow="Tuyến" title={routeId ? 'Tạo phiên bản mới của tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một phiên bản bản đồ và chỉ gồm các POI đã đạt kiểm chứng trên bản đồ đó." />
-    <div className="mb-4"><Notice tone="warn">Tuyến lưu xong chưa xếp lịch Tour được: hệ thống chưa có thời lượng nội dung/audio đã duyệt và chức năng xếp lịch còn đang chờ.</Notice></div>
+    <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
 
     <nav aria-label="Các bước tạo tuyến" className="mb-4">
       <ol className="grid gap-2 sm:grid-cols-4">{STEPS.map((label, index) => {
