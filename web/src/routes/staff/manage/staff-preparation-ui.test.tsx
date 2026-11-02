@@ -105,8 +105,8 @@ describe('staff preparation UI', () => {
     expect(map.querySelector('image')!.getAttribute('href')).toMatch(/^data:image\/png;base64,/)
     expect(map.querySelector('image')).toHaveAttribute('width', '10')
     // ROS (0, 0) is 1m/2m from the origin: (2, 4) cells, counted up from the 20-cell bottom edge.
-    expect(within(map).getByRole('link', { name: /Điểm A/ }).querySelector('circle')).toHaveAttribute('cx', '2')
-    expect(within(map).getByRole('link', { name: /Điểm A/ }).querySelector('circle')).toHaveAttribute('cy', '16')
+    expect(within(map).getByRole('button', { name: /Điểm A/ }).querySelector('circle')).toHaveAttribute('cx', '2')
+    expect(within(map).getByRole('button', { name: /Điểm A/ }).querySelector('circle')).toHaveAttribute('cy', '16')
   })
 
   it('changes the image with the map version and downloads each package once', async () => {
@@ -163,11 +163,11 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(screen.getByRole('button', { name: 'Tất cả' , pressed: true })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' })).not.toBeChecked()
     expect(within(list).getByText('Điểm A')).toBeInTheDocument()
     await waitFor(() => expect(requests.some(url => url.pathname === '/api/maps/versions')).toBe(true))
     await waitFor(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Trên bản đồ robot đang triển khai' }))
+      if (!screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }).matches(':checked')) fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }))
       expect(within(list).getByText('Điểm B')).toBeInTheDocument()
     })
     expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()

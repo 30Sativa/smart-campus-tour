@@ -46,18 +46,18 @@ export function OverviewCompletedChart({ days, selectedDate, onDate }: {
         <text x={left - 10} y={y(tick) + 4} textAnchor="end" fontSize={11} fill="#64748b">{tick}</text>
       </g>)}
       {days.length > 0 && <>
-        <polygon points={`${x(0)},${y(0)} ${points} ${x(days.length - 1)},${y(0)}`} fill="#2d719e" fillOpacity={0.055} />
-        <polyline points={points} fill="none" stroke="#2d719e" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        <polygon points={`${x(0)},${y(0)} ${points} ${x(days.length - 1)},${y(0)}`} fill="#2563eb" fillOpacity={0.055} />
+        <polyline points={points} fill="none" stroke="#2563eb" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
       </>}
       {days.map((day, index) => <g key={day.date}>
-        <circle cx={x(index)} cy={y(day.completed)} r={day.date === selectedDate ? 4.5 : 3.5} fill={day.date === selectedDate ? '#2d719e' : '#fff'} stroke="#2d719e" strokeWidth={2} />
-        <text x={x(index)} y={y(day.completed) - 12} textAnchor="middle" fontSize={12} fontWeight={600} fill="#173b59">{day.completed}</text>
+        <circle cx={x(index)} cy={y(day.completed)} r={day.date === selectedDate ? 4.5 : 3.5} fill={day.date === selectedDate ? '#2563eb' : '#fff'} stroke="#2563eb" strokeWidth={2} />
+        <text x={x(index)} y={y(day.completed) - 12} textAnchor="middle" fontSize={12} fontWeight={600} fill="#2d3748">{day.completed}</text>
       </g>)}
     </svg>
     </div>
     <div role="group" aria-label="Chọn ngày từ biểu đồ" className="mr-2 ml-6 grid grid-cols-7 gap-1">
       {days.map((day, index) => <button key={day.date} type="button" aria-label={`Xem ngày ${day.label}`} aria-pressed={day.date === selectedDate}
-        onClick={() => onDate(day.date)} className={`min-h-8 rounded-lg px-0.5 text-xs tabular-nums transition-colors ${focus} ${day.date === selectedDate ? 'bg-[#e5f3ff] font-semibold text-[#2d719e]' : 'text-[#64748b] hover:bg-[#f1f8fe]'}`}>
+        onClick={() => onDate(day.date)} className={`min-h-8 rounded-lg px-0.5 text-xs tabular-nums transition-colors ${focus} ${day.date === selectedDate ? 'bg-[#dbeafe] font-semibold text-[#2563eb]' : 'text-[#64748b] hover:bg-[#eff6ff]'}`}>
         <span className="sm:hidden">{index === 0 ? day.label : day.label.slice(0, 2)}</span><span className="hidden sm:inline">{day.label}</span>
       </button>)}
     </div>
@@ -77,7 +77,7 @@ export function OverviewStateRing({ tours, filter, onFilter }: { tours: TourOper
   return <div className="px-4 pb-4 sm:px-5">
     <div className="relative mx-auto mb-2 size-[146px]">
       <svg viewBox="0 0 130 130" className="size-full -rotate-90" role="img" aria-label={`Trạng thái ${total} buổi: ${parts.map(part => `${part.label}: ${part.count}`).join(', ')}`}>
-        <circle cx={65} cy={65} r={45} fill="none" stroke="#f1f8fe" strokeWidth={12} />
+        <circle cx={65} cy={65} r={45} fill="none" stroke="#eff6ff" strokeWidth={12} />
         {parts.map((part, index) => {
           if (!part.count || !total) return null
           const offset = parts.slice(0, index).reduce((sum, item) => sum + item.count, 0) / total * circle
@@ -87,16 +87,16 @@ export function OverviewStateRing({ tours, filter, onFilter }: { tours: TourOper
         })}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <strong className="text-[28px] leading-tight font-semibold tracking-tight text-[#173b59] tabular-nums">{center}</strong>
+        <strong className="text-[28px] leading-tight font-semibold tracking-tight text-[#2d3748] tabular-nums">{center}</strong>
         <span className="mt-1 max-w-24 text-xs text-[#64748b]">{label}</span>
       </div>
     </div>
     <div role="group" aria-label="Lọc từ biểu đồ trạng thái" className="mx-auto grid max-w-sm grid-cols-2 gap-x-4 gap-y-1">
       {parts.map(part => <button key={part.state} type="button" onClick={() => onFilter(part.state)} aria-pressed={filter === part.state}
         aria-label={`Lọc ${part.label}: ${part.count} buổi`}
-        className={`flex min-h-8 min-w-0 items-center gap-2 rounded-md text-left text-xs ${focus} ${filter === part.state ? 'font-semibold text-[#173b59]' : 'text-[#64748b] hover:text-[#173b59]'}`}>
+        className={`flex min-h-8 min-w-0 items-center gap-2 rounded-md text-left text-xs ${focus} ${filter === part.state ? 'font-semibold text-[#2d3748]' : 'text-[#64748b] hover:text-[#2d3748]'}`}>
         <span className="size-2 shrink-0 rounded-full" style={{ background: part.color }} aria-hidden="true" />
-        <span className="min-w-0 flex-1">{part.label}</span><b className="font-semibold text-[#173b59] tabular-nums">{part.count}</b>
+        <span className="min-w-0 flex-1">{part.label}</span><b className="font-semibold text-[#2d3748] tabular-nums">{part.count}</b>
       </button>)}
     </div>
     {total === 0 && <p className="mt-3 text-center text-xs text-[#64748b]">Không có buổi trong ngày đã chọn.</p>}

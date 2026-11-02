@@ -34,11 +34,11 @@ function Cap({ label, sub, reached, active = false, last = false }: { label: str
   return (
     <li className="relative flex gap-3 pb-3 last:pb-0">
       {!last && <Rail done={reached} />}
-      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#1f314d] text-white' : active ? 'bg-[#5b91ed] text-white' : 'border-2 border-[#d5dfec] bg-white text-[#a8b6c9]'}`} aria-hidden="true">
+      <span className={`relative z-10 grid size-7 shrink-0 place-items-center rounded-full ${reached ? 'bg-[#e6efff] text-[#1d4ed8]' : active ? 'bg-[#2563eb] text-white' : 'border-2 border-[#d5dfec] bg-white text-[#a8b6c9]'}`} aria-hidden="true">
         <Flag size={12} />
       </span>
       <span className="min-w-0 pt-0.5">
-        <span className={`block text-[13px] font-bold ${active ? 'text-[#1f314d]' : 'text-[#40546f]'}`}>{label}</span>
+        <span className={`block text-[13px] font-bold ${active ? 'text-[#2d3748]' : 'text-[#475569]'}`}>{label}</span>
         <span className="block truncate text-xs text-[#8a98ac]">{sub}</span>
       </span>
     </li>
@@ -46,7 +46,7 @@ function Cap({ label, sub, reached, active = false, last = false }: { label: str
 }
 
 function Rail({ done }: { done: boolean }) {
-  return <span aria-hidden="true" className={`absolute top-7 bottom-0 left-[13px] w-0.5 transition-colors duration-500 ${done ? 'bg-[#5b91ed]' : 'bg-[#e1e8f2]'}`} />
+  return <span aria-hidden="true" className={`absolute top-7 bottom-0 left-[13px] w-0.5 transition-colors duration-500 ${done ? 'bg-[#bfd6fb]' : 'bg-[#e2e8f0]'}`} />
 }
 
 function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: RouteStop; index: number; step?: string; selected: boolean; onSelect?: (id: string) => void; compact: boolean }) {
@@ -54,13 +54,13 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const done = stop.status === 'Completed'
   const skipped = stop.status === 'Skipped'
   const marker = done ? (
-    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#2f8f6b] text-white"><Check size={14} strokeWidth={3} /></span>
+    <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#e6efff] text-[#1d4ed8]"><Check size={14} strokeWidth={3} /></span>
   ) : skipped ? (
     <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full bg-[#eef2f8] text-[#8a98ac]"><SkipForward size={13} /></span>
   ) : current ? (
     <span className="relative z-10 grid size-7 shrink-0 place-items-center">
-      <span className="absolute inset-0 animate-ping rounded-full bg-[#5b91ed]/30 [animation-duration:2.4s] motion-reduce:hidden" />
-      <span className="relative grid size-7 place-items-center rounded-full bg-[#5b91ed] text-white"><MapPinned size={13} /></span>
+      <span className="absolute inset-0 animate-ping rounded-full bg-[#93b8f5]/30 [animation-duration:2.4s] motion-reduce:hidden" />
+      <span className="relative grid size-7 place-items-center rounded-full bg-[#2563eb] text-white"><MapPinned size={13} /></span>
     </span>
   ) : (
     <span className="relative z-10 grid size-7 shrink-0 place-items-center rounded-full border-2 border-[#d5dfec] bg-white text-[11px] font-bold text-[#8a98ac]">{index + 1}</span>
@@ -75,8 +75,8 @@ function StopRow({ stop, index, step, selected, onSelect, compact }: { stop: Rou
   const content = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className={`truncate text-[14px] ${current ? 'font-bold text-[#1f314d]' : done ? 'font-semibold text-[#40546f]' : 'font-semibold text-[#71819a]'} ${skipped ? 'line-through decoration-[#b9c6d8]' : ''}`}>{stop.name}</span>
-        {current && step && <span className="shrink-0 rounded-full bg-[#eaf4ff] px-2 py-0.5 text-[10px] font-bold text-[#2f62b8]">{stepLabel(step)}</span>}
+        <span className={`truncate text-[14px] ${current ? 'font-bold text-[#2d3748]' : done ? 'font-semibold text-[#475569]' : 'font-semibold text-[#718096]'} ${skipped ? 'line-through decoration-[#b9c6d8]' : ''}`}>{stop.name}</span>
+        {current && step && <span className="shrink-0 rounded-full bg-[#eef4ff] px-2 py-0.5 text-[10px] font-bold text-[#475569]">{stepLabel(step)}</span>}
       </span>
       {!compact && (
         <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#8a98ac]">
