@@ -23,7 +23,7 @@ function renderPage() {
 
 async function pickEverything() {
   renderPage()
-  await screen.findByRole('option', { name: 'Tầng 6 · v2 · floor6' })
+  await screen.findByRole('option', { name: 'Tầng 6 · phiên bản 2' })
   fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
   await screen.findByRole('option', { name: /amr-01/ })
   fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-01' } })
