@@ -11,6 +11,9 @@ import { stamp } from './technical-format'
 
 type Actions = { onUpload: (area: MapAreaOption) => void; onCheck: (item: MapVersionItem) => void }
 
+/** One area: its newest version leads the row; older versions stay reachable from the detail. */
+type AreaRow = { latest: MapVersionItem; versions: MapVersionItem[]; robots: { robotCode: string; versionNumber: number }[] }
+
 type SortField = 'area' | 'version' | 'uploaded' | 'status' | 'robot'
 
 const PAGE_SIZE = 10
@@ -25,13 +28,24 @@ function versionStatus(item: MapVersionItem): { tone: StatusTone; label: string;
   return { tone: 'ok', label: 'Đạt kiểm tra', detail: item.canUseForPoiPreparation ? 'Dùng được để tạo POI' : item.preparationBlockReason }
 }
 
+/** Groups versions by area in the order the API first lists each area. */
+function groupByArea(items: MapVersionItem[]): AreaRow[] {
+  const areas = new Map<string, MapVersionItem[]>()
+  for (const item of items) areas.set(item.map.areaKey, [...(areas.get(item.map.areaKey) ?? []), item])
+  return [...areas.values()].map(group => {
+    const versions = [...group].sort((a, b) => b.map.versionNumber - a.map.versionNumber)
+    const robots = versions.flatMap(item => item.currentlyDeployedOn.map(robot => ({ robotCode: robot.robotCode, versionNumber: item.map.versionNumber })))
+    return { latest: versions[0], versions, robots }
+  })
+}
+
 /** Ascending order of each column; status starts with what needs attention. */
-const COMPARE: Record<SortField, (a: MapVersionItem, b: MapVersionItem) => number> = {
-  area: (a, b) => byName.compare(a.map.areaName, b.map.areaName) || b.map.versionNumber - a.map.versionNumber,
-  version: (a, b) => a.map.versionNumber - b.map.versionNumber,
-  uploaded: (a, b) => a.map.uploadedAt.localeCompare(b.map.uploadedAt),
-  status: (a, b) => (TONE_RANK[versionStatus(a).tone] ?? 3) - (TONE_RANK[versionStatus(b).tone] ?? 3),
-  robot: (a, b) => byName.compare(a.currentlyDeployedOn[0]?.robotCode ?? '\uffff', b.currentlyDeployedOn[0]?.robotCode ?? '\uffff'),
+const COMPARE: Record<SortField, (a: AreaRow, b: AreaRow) => number> = {
+  area: (a, b) => byName.compare(a.latest.map.areaName, b.latest.map.areaName) || byName.compare(a.latest.map.areaKey, b.latest.map.areaKey),
+  version: (a, b) => a.latest.map.versionNumber - b.latest.map.versionNumber,
+  uploaded: (a, b) => a.latest.map.uploadedAt.localeCompare(b.latest.map.uploadedAt),
+  status: (a, b) => (TONE_RANK[versionStatus(a.latest).tone] ?? 3) - (TONE_RANK[versionStatus(b.latest).tone] ?? 3),
+  robot: (a, b) => byName.compare(a.robots[0]?.robotCode ?? '￿', b.robots[0]?.robotCode ?? '￿'),
 }
 
 function SortHeading({ field, label, sort, onSort }: { field: SortField; label: string; sort: { field: SortField; descending: boolean } | null; onSort: (field: SortField) => void }) {
@@ -53,12 +67,17 @@ function MapPreview({ mapVersionId, label }: { mapVersionId: string; label: stri
   return <img src={map.imageUrl} alt={`Bản đồ ${label}`} width={map.width} height={map.height} className="mx-auto block h-auto max-h-[420px] w-auto max-w-full rounded-xl border border-[#e2e8f0] bg-[#eef2f6]" style={{ imageRendering: 'pixelated' }} />
 }
 
-/** What the table leaves out. The checksum is here so the file on the robot can be compared with the one uploaded. */
-function MapVersionDetail({ item, onClose, onUpload, onCheck }: { item: MapVersionItem; onClose: () => void } & Actions) {
+/**
+ * What the table leaves out, for one version of the area. The checksum is here so the file on the robot
+ * can be compared with the one uploaded; the version list switches which version the dialog shows.
+ */
+function MapVersionDetail({ area, itemId, onSelect, onClose, onUpload, onCheck }: { area: AreaRow; itemId: string; onSelect: (id: string) => void; onClose: () => void } & Actions) {
+  const item = area.versions.find(version => version.map.id === itemId) ?? area.latest
   const { map, preparationEvidence: evidence, currentlyDeployedOn: robots } = item
   const status = versionStatus(item)
+  const isLatest = item === area.latest
   return (
-    <Modal open size="lg" title={`${map.areaName} v${map.versionNumber}`} description={map.areaKey} onClose={onClose}
+    <Modal open size="lg" title={`${map.areaName} v${map.versionNumber}`} description={isLatest ? `${map.areaKey} · phiên bản mới nhất` : `${map.areaKey} · phiên bản cũ, mới nhất là v${area.latest.map.versionNumber}`} onClose={onClose}
       footer={<div className="flex flex-wrap justify-end gap-2">
         <button type="button" className={buttonClass('secondary')} onClick={() => { onClose(); onUpload({ areaKey: map.areaKey, displayName: map.areaName }) }}>Tải phiên bản mới</button>
         <button type="button" className={buttonClass('primary')} onClick={() => { onClose(); onCheck(item) }}>Ghi kết quả kiểm tra</button>
@@ -72,25 +91,48 @@ function MapVersionDetail({ item, onClose, onUpload, onCheck }: { item: MapVersi
         <DetailFact label="Thông số bản đồ">{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô</DetailFact>
         <DetailFact label="Checksum tệp"><span className="font-mono text-xs break-all">{map.packageSha256}</span><span className="mt-1 block text-xs text-[#64748b]">Dùng để đối chiếu tệp ZIP đã nạp lên robot với tệp đã tải lên.</span></DetailFact>
       </dl>
+      {area.versions.length > 1 && <section className="mt-4" aria-label="Lịch sử phiên bản">
+        <h3 className="text-[13px] font-semibold text-[#334155]">Lịch sử phiên bản</h3>
+        <p className="text-xs text-[#64748b]">Phiên bản cũ được giữ lại vì POI và kết quả kiểm tra gắn với đúng tệp đã dùng.</p>
+        <ul className="mt-2 divide-y divide-[#f1f5f9] rounded-xl border border-[#e2e8f0]">
+          {area.versions.map(version => {
+            const versionState = versionStatus(version)
+            const current = version.map.id === map.id
+            return (
+              <li key={version.map.id} className={`flex items-center gap-3 px-3 py-2 text-[13px] ${current ? 'bg-[#eff6ff]' : ''}`}>
+                <span className="w-10 font-mono font-semibold text-[#0f172a]">v{version.map.versionNumber}</span>
+                <span className="text-[#64748b]">{stamp(version.map.uploadedAt)}</span>
+                <ToneBadge tone={versionState.tone}>{versionState.label}</ToneBadge>
+                {version.currentlyDeployedOn.length > 0 && <span className="text-xs text-[#1f7a55]">{version.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
+                <span className="ml-auto">{current
+                  ? <span className="text-xs font-semibold text-[#2563eb]">Đang xem</span>
+                  : <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => onSelect(version.map.id)}>Xem v{version.map.versionNumber}</button>}</span>
+              </li>
+            )
+          })}
+        </ul>
+      </section>}
     </Modal>
   )
 }
 
-/** One line per version, only what decides the next step. The rest opens from the eye. */
+/** One line per area, led by its newest version: only what decides the next step. The rest opens from the eye. */
 export function MapVersionTable({ items, onUpload, onCheck }: { items: MapVersionItem[] } & Actions) {
   const [search, setSearch] = useState('')
-  const [viewing, setViewing] = useState<MapVersionItem | null>(null)
+  const [viewing, setViewing] = useState<{ areaKey: string; itemId: string } | null>(null)
   const [sort, setSort] = useState<{ field: SortField; descending: boolean } | null>(null)
   const term = search.trim().toLowerCase()
-  const rows = items.filter(({ map }) => map.areaName.toLowerCase().includes(term) || map.areaKey.toLowerCase().includes(term))
+  const areas = groupByArea(items)
+  const rows = areas.filter(({ latest: { map } }) => map.areaName.toLowerCase().includes(term) || map.areaKey.toLowerCase().includes(term))
   const sorted = sort ? [...rows].sort((a, b) => (sort.descending ? -1 : 1) * COMPARE[sort.field](a, b)) : rows
   const paged = usePagination(sorted, PAGE_SIZE, `${term}|${sort?.field}|${sort?.descending}`)
   const toggleSort = (field: SortField) => setSort(sort?.field === field ? { field, descending: !sort.descending } : { field, descending: false })
+  const viewedArea = viewing && areas.find(area => area.latest.map.areaKey === viewing.areaKey)
 
   return (
-    <section className={panelClass} aria-label="Danh sách phiên bản bản đồ">
+    <section className={panelClass} aria-label="Danh sách bản đồ theo khu vực">
       <div className="flex flex-col gap-3 border-b border-[#f1f5f9] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách phiên bản bản đồ</h2><p className="text-xs text-[#64748b]">Mỗi lần tải lên tạo một phiên bản mới của khu vực.</p></div>
+        <div><h2 className="text-[15px] font-semibold text-[#0f172a]">Danh sách bản đồ</h2><p className="text-xs text-[#64748b]">Mỗi khu vực một dòng, hiện phiên bản mới nhất. Phiên bản cũ xem trong chi tiết.</p></div>
         <SearchField value={search} onChange={setSearch} label="Tìm khu vực" placeholder="Tìm theo khu vực" className="sm:w-64" />
       </div>
       {rows.length === 0 ? <p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Không có khu vực nào phù hợp.</p> : <>
@@ -98,19 +140,22 @@ export function MapVersionTable({ items, onUpload, onCheck }: { items: MapVersio
           <table className="w-full min-w-[760px] text-left">
             <thead className="border-b border-[#e2e8f0]"><tr><SortHeading field="area" label="Khu vực" sort={sort} onSort={toggleSort} /><SortHeading field="version" label="Phiên bản" sort={sort} onSort={toggleSort} /><SortHeading field="uploaded" label="Tải lên lúc" sort={sort} onSort={toggleSort} /><SortHeading field="status" label="Trạng thái" sort={sort} onSort={toggleSort} /><SortHeading field="robot" label="Robot đang triển khai" sort={sort} onSort={toggleSort} /><th scope="col" className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
-              {paged.rows.map(item => {
-                const { map, currentlyDeployedOn: robots } = item
-                const status = versionStatus(item)
+              {paged.rows.map(area => {
+                const { latest, versions, robots } = area
+                const { map } = latest
+                const status = versionStatus(latest)
                 return (
-                  <tr key={map.id} className={rowClass}>
+                  <tr key={map.areaKey} className={rowClass}>
                     <td className={tdClass}><span className="font-semibold text-[#0f172a]">{map.areaName}</span><p className="font-mono text-[11.5px] text-[#64748b]">{map.areaKey}</p></td>
-                    <td className={`${tdClass} font-mono`}>v{map.versionNumber}</td>
+                    <td className={tdClass}><span className="font-mono">v{map.versionNumber}</span>{versions.length > 1 && <p className="text-[11.5px] text-[#64748b]">{versions.length - 1} bản cũ</p>}</td>
                     <td className={`${tdClass} whitespace-nowrap text-[13px] text-[#64748b]`}>{stamp(map.uploadedAt)}</td>
                     <td className={tdClass}><ToneBadge tone={status.tone}>{status.label}</ToneBadge></td>
-                    <td className={tdClass}>{robots.length ? <span className="flex flex-wrap gap-1">{robots.map(robot => <ToneBadge key={robot.robotCode} tone="ok">{robot.robotCode}</ToneBadge>)}</span> : <span className="text-[#94a3b8]">-</span>}</td>
+                    <td className={tdClass}>{robots.length ? <span className="flex flex-wrap gap-1">{robots.map(robot => robot.versionNumber === map.versionNumber
+                      ? <ToneBadge key={robot.robotCode} tone="ok">{robot.robotCode}</ToneBadge>
+                      : <ToneBadge key={robot.robotCode} tone="warn">{robot.robotCode} · bản cũ v{robot.versionNumber}</ToneBadge>)}</span> : <span className="text-[#94a3b8]">-</span>}</td>
                     <td className={tdClass}><div className="flex items-center justify-center gap-2">
-                      <button type="button" className={buttonClass(item.technicalCheckStatus === 'PENDING' ? 'primary' : 'secondary', 'sm')} onClick={() => onCheck(item)}>Ghi kết quả kiểm tra</button>
-                      <ViewDetailButton label={`Xem chi tiết ${map.areaName} v${map.versionNumber}`} onClick={() => setViewing(item)} />
+                      <button type="button" className={buttonClass(latest.technicalCheckStatus === 'PENDING' ? 'primary' : 'secondary', 'sm')} onClick={() => onCheck(latest)}>Ghi kết quả kiểm tra</button>
+                      <ViewDetailButton label={`Xem chi tiết ${map.areaName} v${map.versionNumber}`} onClick={() => setViewing({ areaKey: map.areaKey, itemId: map.id })} />
                     </div></td>
                   </tr>
                 )
@@ -118,9 +163,9 @@ export function MapVersionTable({ items, onUpload, onCheck }: { items: MapVersio
             </tbody>
           </table>
         </div>
-        <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang phiên bản bản đồ" />
+        <Pagination page={paged.page} pageCount={paged.pageCount} total={paged.total} pageSize={paged.pageSize} onPage={paged.setPage} label="Phân trang danh sách bản đồ" />
       </>}
-      {viewing && <MapVersionDetail item={viewing} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} />}
+      {viewedArea && viewing && <MapVersionDetail area={viewedArea} itemId={viewing.itemId} onSelect={itemId => setViewing({ ...viewing, itemId })} onClose={() => setViewing(null)} onUpload={onUpload} onCheck={onCheck} />}
     </section>
   )
 }
