@@ -1,13 +1,13 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours } from '../../features/technical/technical-hooks'
+import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
+import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours, useRobotCredential } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, stamp } from '../../features/technical/technical-format'
 import { mapCheckLabel } from '../../features/technical/poi-labels'
@@ -114,6 +114,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
         {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {stamp(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
+        {!robot.deactivatedAt && <RobotSetupChecklist robot={robot} onAssignMap={onAssignMap} onManageKey={onManageKey} />}
         <DetailSection title="Kết nối">
           <Facts items={[
             ['Trạng thái', <ConnectionBadge key="status" robot={robot} />],
@@ -141,6 +142,26 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
       </div>
     </Modal>
   )
+}
+
+/**
+ * The setup order from ADR-0039 as a checklist. It only reads what the robot list and key status
+ * already return; whether a Tour may use the robot is still decided by the server per route.
+ */
+function RobotSetupChecklist({ robot, onAssignMap, onManageKey }: { robot: PhysicalRobotOption; onAssignMap: () => void; onManageKey: () => void }) {
+  const credential = useRobotCredential(robot.robotCode)
+  const deployedOnAssigned = Boolean(robot.assignedMapKey && robot.latestDeploymentPassed && robot.latestDeployedMapKey === robot.assignedMapKey && robot.latestDeployedFrameId === robot.assignedFrameId)
+  const steps: SetupStep[] = [
+    { label: 'Đăng ký robot', done: true, hint: '' },
+    { label: 'Cấp khóa kết nối MiniPC', done: credential.data?.status === 'ACTIVE', hint: credential.isError ? 'Không tải được trạng thái khóa.' : 'Cấp khóa rồi nhập khóa đó trên MiniPC.',
+      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Cấp khóa</button> },
+    { label: 'Gán bản đồ', done: Boolean(robot.assignedMapVersionId), hint: 'Chọn khu vực và phiên bản bản đồ robot sẽ dùng, rồi nhập MapKey và FrameId trên MiniPC.',
+      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />Chọn bản đồ</button> },
+    { label: 'Robot kết nối lần đầu', done: Boolean(robot.firstAcceptedSyncAt), hint: 'Bật robot với khóa, MapKey và FrameId ở trên. Khi máy chủ nhận dữ liệu đầu tiên, bấm Cập nhật trạng thái.' },
+    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: deployedOnAssigned, hint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra localization và hiển thị, rồi ghi kết quả ở trang Quản lý bản đồ.',
+      action: <Link to="/technical/maps" className={buttonClass('secondary', 'sm')}>Mở Quản lý bản đồ</Link> },
+  ]
+  return <SetupSteps title="Thiết lập robot" steps={steps} />
 }
 
 function AffectedTours({ title, tours }: { title: string; tours: { isPending: boolean; isError: boolean; error: unknown; data?: RobotAffectedTour[] } }) {

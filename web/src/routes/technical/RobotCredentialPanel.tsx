@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Copy, KeyRound, RotateCcw, ShieldAlert } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { Modal } from '../../components/ui/Drawer'
 import { errorText, stamp } from '../../features/technical/technical-format'
 import { technicalApi, type RobotCredentialSecret } from '../../features/technical/api/technical'
+import { useRobotCredential } from '../../features/technical/technical-hooks'
 
 export function RobotCredentialPanel({ robotCode, onClose }: { robotCode: string; onClose: () => void }) {
   const queryClient = useQueryClient()
-  const credential = useQuery({ queryKey: ['technical', 'robot-credential', robotCode], queryFn: () => technicalApi.getRobotCredential(robotCode) })
+  const credential = useRobotCredential(robotCode)
   const [pending, setPending] = useState(false)
   const [confirming, setConfirming] = useState<'rotate' | 'revoke' | null>(null)
   const [error, setError] = useState<string | null>(null)

@@ -251,6 +251,36 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
   })
 
+  it('walks a new robot through setup in order, showing only the next step', async () => {
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null, latestDeployedMapKey: null, latestDeployedFrameId: null, latestDeploymentPassed: null })]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    const checklist = within(await screen.findByRole('region', { name: 'Thiết lập robot' }))
+    expect(checklist.getByText('1/5 bước')).toBeInTheDocument()
+    await waitFor(() => expect(checklist.getByRole('listitem', { current: 'step' })).toHaveTextContent('Cấp khóa kết nối MiniPC'))
+    expect(checklist.getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(checklist.getByRole('button', { name: 'Cấp khóa' }))
+    expect(await screen.findByRole('dialog', { name: /khóa/i })).toBeInTheDocument()
+  })
+
+  it('points a connected robot with a key to the deployment check on its assigned map', async () => {
+    credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'ab12' }
+    physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2', latestDeploymentPassed: true })]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    const checklist = within(await screen.findByRole('region', { name: 'Thiết lập robot' }))
+    await waitFor(() => expect(checklist.getByText('4/5 bước')).toBeInTheDocument())
+    expect(checklist.getByRole('listitem', { current: 'step' })).toHaveTextContent('Kiểm tra triển khai đạt trên bản đồ được gán')
+    expect(checklist.getByRole('link', { name: 'Mở Quản lý bản đồ' })).toHaveAttribute('href', '/technical/maps')
+  })
+
+  it('says setup is complete once every step is done', async () => {
+    credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'ab12' }
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    expect(await screen.findByText('Đã xong các bước thiết lập.')).toBeInTheDocument()
+  })
+
   it('opens the robot named in the link from the map page, where its map is assigned', async () => {
     renderPage(<TechnicalRobotsPage />, '/technical/robots?robot=robot-1')
     const detail = await screen.findByRole('dialog', { name: 'AMR 01' })
