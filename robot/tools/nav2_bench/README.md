@@ -65,7 +65,7 @@ Quy trình đầy đủ: [nav2-baseline-v2.md §6](../../docs/nav2-baseline-v2.m
 
 | Script | Việc |
 |---|---|
-| `verify_params.sh V1\|V2 [lidar_yaw]` | Sau khi launch: đọc tham số **đang chạy** (`--no-daemon`), báo PASS/FAIL |
+| `verify_params.sh V1\|V2 [lidar_yaw]` | Sau khi launch: đọc tham số **đang chạy** (client rclpy có chờ service; `ros2 param get --no-daemon` không trả lời dưới Discovery Server), báo PASS/FAIL |
 | `session_meta.sh CFG DIR` | Ghi lệnh launch, sha256 file params, tải ngoài, kết quả verify vào `DIR/session_meta.txt` |
 | `go.sh POI_01\|START\|POI_03` | Gửi goal **chỉ khi** đang ghi bag (bag lớn lên) và Quest không stream |
 | `analyze_ab.py --ref V1 --cand V2 DIR...` | Chấm PASS/FAIL theo 8 tiêu chí, có tính dao động nội tại của cấu hình tham chiếu (ABBA) |

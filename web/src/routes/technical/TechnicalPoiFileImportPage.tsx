@@ -6,7 +6,7 @@ import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePr
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { mapCheckLabel, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { mapCheckLabel, mapVersionLabel, poiImportActionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText } from '../../features/technical/technical-format'
 import { useImportPoiFiles, useMapVersions, usePhysicalRobots, usePreviewPoiImport } from '../../features/technical/technical-hooks'
 import type { PoiImportResult } from '../../features/technical/api/technical'
@@ -66,7 +66,7 @@ export default function TechnicalPoiFileImportPage() {
             <label className={labelClass} htmlFor="import-map">Phiên bản bản đồ</label>
             <select title="" id="import-map" className={`${inputClass} mt-1`} required value={mapVersionId} disabled={maps.isPending || maps.isError} onChange={event => { setMapVersionId(event.target.value); changed() }}>
               <option value="">Chọn phiên bản</option>
-              {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{item.map.areaName} · v{item.map.versionNumber}</option>)}
+              {maps.data?.map(item => <option key={item.map.id} value={item.map.id}>{mapVersionLabel(item.map)}</option>)}
             </select>
             {maps.isError && <p role="alert" className="mt-1 text-sm text-[#b23e18]">{errorText(maps.error)}</p>}
             {selectedMap && <p className="mt-1.5"><ToneBadge tone={mapCheckTone(selectedMap.technicalCheckStatus)}>{mapCheckLabel(selectedMap.technicalCheckStatus)}</ToneBadge></p>}

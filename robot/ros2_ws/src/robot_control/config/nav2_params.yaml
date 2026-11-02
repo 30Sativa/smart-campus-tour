@@ -122,7 +122,7 @@ controller_server:
       rotate_to_heading_min_angle: 0.785
       # Supervised turn test: ~26 deg/s. RPP, Recovery Spin and the smoother
       # share a 0.45 rad/s ceiling; acceleration and braking stay unchanged.
-      # Acceptance and rollback: robot/docs/nav2-turn-test.md.
+      # Outcome (wheel-pair scaling at 0.24 m/s): robot/docs/robot-baseline-2026-11-02.md section 7.
       rotate_to_heading_angular_vel: 0.45
       # Match smoother acceleration: +0.05 rad/s per controller tick at 10 Hz.
       # Actual smoothness still needs hardware measurement.

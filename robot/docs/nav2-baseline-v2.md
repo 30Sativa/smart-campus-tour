@@ -1,5 +1,11 @@
 # Nav2 Baseline V2 (development baseline, chốt 2026-10-22)
 
+> **Cập nhật 2026-11-02:** V2 là Nav2 params của baseline robot hiện hành. Cách launch,
+> góc LiDAR mới (`lidar_yaw:=-3.0695`), bằng chứng và giới hạn an toàn:
+> [robot-baseline-2026-11-02.md](robot-baseline-2026-11-02.md). File V1
+> (`nav2_params_smooth.yaml`) và test khoá V1 đã gỡ khỏi repo; lấy lại bằng tag
+> `nav2-baseline-v1`. Các mục bên dưới giữ nguyên như lúc chốt V2.
+
 **Mức:** **development baseline**, nền cho các lần tối ưu tiếp theo (V3, V4…).
 - **Chưa HARDWARE VALIDATED hoàn toàn.** Hướng cải thiện độ mượt đã đo trên robot thật,
   nhưng chưa có rosbag cho bám đường, độ chính xác đích và khoảng hở (§5).

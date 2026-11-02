@@ -12,7 +12,7 @@ set +u; source /opt/ros/humble/setup.bash; source $HOME/smart-campus-tour/robot/
 cfg=$1 route=$2 seed=$3 obst=$4
 case $cfg in
   *.yaml) PFILE=$(readlink -f $cfg); cfg=$(basename $cfg .yaml);;
-  V1) PFILE=$CFGDIR/nav2_params_smooth.yaml;;
+  V1) echo "V1 params were removed on 2026-11-02: git show nav2-baseline-v1:robot/ros2_ws/src/robot_control/config/nav2_params_smooth.yaml > /tmp/V1.yaml, then pass /tmp/V1.yaml"; exit 2;;
   V2) PFILE=$CFGDIR/nav2_params_v2.yaml;;
   *) PFILE=$B/params/$cfg.yaml;;
 esac

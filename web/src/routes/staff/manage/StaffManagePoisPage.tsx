@@ -7,7 +7,7 @@ import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '..
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, mapVersionLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 
@@ -61,7 +61,7 @@ export default function StaffManagePoisPage() {
   const blocked = !mapVersions.isPending && !mapVersions.error && !mapItems.some(item => item.canUseForPoiPreparation)
   const mapName = (id: string, fallback: string) => {
     const found = mapItems.find(item => item.map.id === id)?.map
-    return found ? `${found.areaName} · v${found.versionNumber}` : fallback
+    return found ? mapVersionLabel(found) : fallback
   }
   const currentKey = maps.find(map => map.id === mapVersionId)?.key
 
@@ -185,7 +185,7 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
     <p className="mx-auto mt-1 max-w-md text-sm text-[#64748b]">Cần ít nhất một bản đồ đã được kỹ thuật viên kiểm tra đạt.</p>
     {maps.length > 0
       ? <ul className="mx-auto mt-4 max-w-md divide-y divide-[#eef1f4] rounded-xl border border-[#e2e8f0] text-left text-sm">
-        {maps.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{item.map.areaName} · v{item.map.versionNumber}</span><ToneBadge tone={item.technicalCheckStatus === 'FAILED' ? 'danger' : 'warn'}>{mapCheckLabel(item.technicalCheckStatus)}</ToneBadge></li>)}
+        {maps.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapVersionLabel(item.map)}</span><ToneBadge tone={item.technicalCheckStatus === 'FAILED' ? 'danger' : 'warn'}>{mapCheckLabel(item.technicalCheckStatus)}</ToneBadge></li>)}
       </ul>
       : <p className="mt-3 text-sm text-[#64748b]">Hệ thống chưa có bản đồ nào được tải lên.</p>}
   </div>

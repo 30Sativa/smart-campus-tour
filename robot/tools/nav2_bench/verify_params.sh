@@ -4,10 +4,32 @@
 cfg=$1; ly=${2:-}
 case $cfg in V1) LA=0.6; DEC="-2.5";; V2|C1) LA=0.8; DEC="-1.2";; *) echo "usage: $0 V1|V2 [lidar_yaw]  (add V3 here when it exists)"; exit 2;; esac
 export ROS_SUPER_CLIENT=TRUE
-la=$(ros2 param get --no-daemon /robot_01/controller_server FollowPath.lookahead_dist 2>/dev/null | grep -oE '[-0-9.]+$')
-dec=$(ros2 param get --no-daemon /robot_01/velocity_smoother max_decel 2>/dev/null | grep -oE -- '-?[0-9]+\.?[0-9]*' | tail -1)
-vel=$(ros2 param get --no-daemon /robot_01/controller_server FollowPath.desired_linear_vel 2>/dev/null | grep -oE '[-0-9.]+$')
-coll=$(ros2 param get --no-daemon /robot_01/controller_server FollowPath.use_collision_detection 2>/dev/null | grep -oE '(True|False)$')
+# Read the parameters through rclpy with a service wait. `ros2 param get --no-daemon` answers
+# nothing under the S3 Discovery Server (the CLI gives up before discovery completes), which
+# made every check FAIL on 2026-11-02 even though Nav2 had loaded V2.
+read -r la dec vel coll < <(timeout 30 python3 - <<'PY' 2>/dev/null
+import rclpy
+from rcl_interfaces.srv import GetParameters
+rclpy.init(); n = rclpy.create_node('verify_params_ro')
+def get(node, name):
+    c = n.create_client(GetParameters, node + '/get_parameters')
+    if not c.wait_for_service(timeout_sec=5.0):
+        return '-'
+    f = c.call_async(GetParameters.Request(names=[name])); rclpy.spin_until_future_complete(n, f, timeout_sec=5.0)
+    if not f.result() or not f.result().values:
+        return '-'
+    v = f.result().values[0]
+    if v.type == 1: return str(v.bool_value)
+    if v.type == 3: return repr(v.double_value)
+    if v.type == 8 and len(v.double_array_value): return repr(v.double_array_value[-1])
+    return '-'
+print(get('/robot_01/controller_server', 'FollowPath.lookahead_dist'),
+      get('/robot_01/velocity_smoother', 'max_decel'),
+      get('/robot_01/controller_server', 'FollowPath.desired_linear_vel'),
+      get('/robot_01/controller_server', 'FollowPath.use_collision_detection'))
+PY
+)
+for v in la dec vel coll; do [ "${!v}" = "-" ] && printf -v "$v" ''; done
 ok=1
 chk() { if python3 -c "import sys; sys.exit(0 if abs(float('$2' or 'nan') - float('$3')) < 1e-6 else 1)" 2>/dev/null; then echo "PASS $1 = $2"; else echo "FAIL $1 = '${2:-<no answer>}' (expected $3)"; ok=0; fi; }
 chk "lookahead_dist" "$la" "$LA"

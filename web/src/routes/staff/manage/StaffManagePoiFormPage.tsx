@@ -9,7 +9,7 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, mapVersionLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
@@ -109,7 +109,7 @@ export default function StaffManagePoiFormPage() {
       <h2 className="mt-3 text-[15px] font-semibold text-[#0f172a]">Chưa có bản đồ được kỹ thuật xác nhận đạt</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-[#64748b]">Điểm tham quan phải được đặt trên một bản đồ đã kiểm tra đạt. Hãy liên hệ kỹ thuật viên trước khi tạo POI.</p>
       {(maps.data?.length ?? 0) > 0 && <ul className="mx-auto mt-4 max-w-md divide-y divide-[#eef1f4] rounded-xl border border-[#e2e8f0] text-left text-sm">
-        {maps.data!.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{item.map.areaName} · v{item.map.versionNumber}</span><span className="text-xs font-semibold text-[#7d5310]">{mapCheckLabel(item.technicalCheckStatus)}</span></li>)}
+        {maps.data!.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapVersionLabel(item.map)}</span><span className="text-xs font-semibold text-[#7d5310]">{mapCheckLabel(item.technicalCheckStatus)}</span></li>)}
       </ul>}
     </section>
   </AdminPage>
@@ -173,6 +173,20 @@ export default function StaffManagePoiFormPage() {
         <details className="group mt-3 rounded-xl border border-[#e2e8f0] text-sm">
           <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Nhập tọa độ thủ công <span className="font-normal text-[#718096]">(không bắt buộc){placed && yawDeg != null ? ` · ${yawDeg}°` : ''}</span></summary>
           <div className="grid gap-3 border-t border-[#e2e8f0] p-3.5 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
+
+    <form className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
+      <div className="min-w-0 space-y-3">
+        <section className={`${panelClass} space-y-2 p-4`}>
+          <label className="block text-sm font-medium" htmlFor="poi-map">Bản đồ</label>
+          <select title="" id="poi-map" className={inputClass} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapVersionLabel(map)}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapVersionLabel(selectedItem.map)} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
+          {selectedItem && <p className="flex flex-wrap items-center gap-2 text-xs text-[#64748b]"><span className="font-mono">{selectedItem.map.mapKey}</span>{selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">Robot đang triển khai: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}</p>}
+          {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
+        </section>
+        {mapError && <div role="alert"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
+        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className={`${panelClass} grid min-h-[320px] place-items-center p-5 text-center text-sm text-[#64748b]`}><div><MapPinned size={26} className="mx-auto mb-2 text-[#94a3b8]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
+        <details className={`${panelClass} px-4 py-3 text-sm`}>
+          <summary className="cursor-pointer font-medium text-[#334155]">Nhập toạ độ thủ công <span className="font-normal text-[#64748b]">{draft.x != null && draft.y != null ? `· ${draft.x.toFixed(2)}, ${draft.y.toFixed(2)}${yawDeg != null ? ` · ${yawDeg}°` : ''}` : '· chưa đặt vị trí'}</span></summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
         </details>
       </section>
 
