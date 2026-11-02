@@ -160,6 +160,35 @@ describe('staff preparation UI', () => {
     expect(within(within(list).getByRole('button', { name: 'Chọn Thư viện' })).getByText('Kiểm tra thủ công')).toBeInTheDocument()
   })
 
+  it('asks Staff to add narration first for a POI imported from a pose file', async () => {
+    const imported = proposal('poi-a', 'map-a', 'test123-v1', 'POI 02')
+    proposals = [{ ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, navigationStatus: 'NOT_TESTED', narrationText: null } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến. Kỹ thuật vẫn đang kiểm tra vị trí.')
+    expect(within(chosen).getByRole('link', { name: 'Bổ sung thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+  })
+
+  it('draws the chosen pin on top of another pin at the same spot', async () => {
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const map = await screen.findByRole('img', { name: /với 2 POI/ })
+    const pins = () => within(map).getAllByRole('button').map(pin => pin.getAttribute('aria-label'))
+    expect(pins().at(-1)).toMatch(/Điểm A/)
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn Điểm C' }))
+    expect(pins().at(-1)).toMatch(/Điểm C/)
+  })
+
+  it('keeps the map frame when a status tab hides some points', async () => {
+    const draft = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const before = (await screen.findByRole('img', { name: /với 2 POI/ })).getAttribute('viewBox')
+    fireEvent.click(screen.getByRole('button', { name: /^Bản nháp/ }))
+    const after = await screen.findByRole('img', { name: /với 1 POI/ })
+    expect(after.getAttribute('viewBox')).toBe(before)
+  })
+
   it('opens the chosen point under its own row, one at a time, from the list or the map', async () => {
     const second = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
     proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), second]

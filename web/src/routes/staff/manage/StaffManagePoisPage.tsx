@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { FileText, Maximize2, MapPinOff, Minus, Pencil, Plus, Send } from 'lucide-react'
 import { SearchField } from '../../../components/ui/ConsolePrimitives'
-import { buttonClass } from '../../../components/ui/ui-classes'
+import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
@@ -56,6 +56,9 @@ export default function StaffManagePoisPage() {
   const count = (f: Status) => scoped.filter((p) => statusOf(p) === f).length
   const rows = scoped.filter((p) => (filter === 'all' || statusOf(p) === filter) && `${p.revision.name} ${p.revision.purpose}`.toLowerCase().includes(search.trim().toLowerCase()))
   const selected = rows.find(p => p.id === chosen) ?? rows[0]
+  const listRef = useRef<HTMLUListElement>(null)
+  // A point chosen on the map may sit below the fold of the list, so bring its row into view.
+  useEffect(() => { listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView?.({ block: 'nearest' }) }, [selected?.id])
   const mapItems = mapVersions.data ?? []
   const blocked = !mapVersions.isPending && !mapVersions.error && !mapItems.some(item => item.canUseForPoiPreparation)
   const mapName = (id: string, fallback: string) => {
@@ -79,7 +82,7 @@ export default function StaffManagePoisPage() {
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
     <div className={`${card} mb-4 px-4 py-3`}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        {maps.length > 0 && <select aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`}>
+        {maps.length > 0 && <select title="" aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`${inputClass} font-semibold sm:w-64`}>
           {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
         </select>}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
@@ -102,20 +105,21 @@ export default function StaffManagePoisPage() {
     {/* The map leads because POIs are places; the chosen point opens inside the list instead of a card below it. */}
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       {proposals.isSuccess && <div className="min-w-0 xl:sticky xl:top-4">
-        <PoiMap mapVersionId={mapVersionId} mapLabel={mapName(mapVersionId, currentKey ?? '')} proposals={rows} number={number} selectedId={selected?.id} onSelect={setChosen} />
+        <PoiMap mapVersionId={mapVersionId} mapLabel={mapName(mapVersionId, currentKey ?? '')} proposals={rows} framed={scoped} number={number} selectedId={selected?.id} onSelect={setChosen} />
       </div>}
 
-      <section className={`${card} min-w-0`} aria-label="Danh sách đề xuất POI">
+      {/* Beside the map the list is as tall as the map card and scrolls inside, so many POIs never stretch the page. */}
+      <section className={`${card} flex min-w-0 flex-col xl:max-h-[calc(min(70vh,620px)+8.75rem)]`} aria-label="Danh sách đề xuất POI">
         <div className="flex items-baseline justify-between gap-3 px-4 pt-4 pb-2">
           <h2 className="text-base font-bold text-[#2d3748]">Danh sách điểm</h2>
           {proposals.isSuccess && <span className="text-xs text-[#718096]">{scoped.length} điểm{rows.length !== scoped.length ? `, đang hiện ${rows.length}` : ''}</span>}
         </div>
         {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
           (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} />) :
-          <ul aria-label="Điểm tham quan" className="divide-y divide-[#eef2f6] border-t border-[#eef2f6]">{rows.map((p) => {
+          <ul ref={listRef} aria-label="Điểm tham quan" className="min-h-0 divide-y divide-[#eef2f6] overflow-y-auto border-t border-[#eef2f6]">{rows.map((p) => {
             const st = STATUS[statusOf(p)]
             const active = p.id === selected?.id
-            return <li key={p.id} className={active ? 'bg-[#f5f9ff]' : ''}>
+            return <li key={p.id} data-active={active} className={active ? 'bg-[#f5f9ff]' : ''}>
               <button type="button" onClick={() => setChosen(p.id)} aria-pressed={active} aria-label={`Chọn ${p.revision.name}`}
                 className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${focus} ${active ? '' : 'hover:bg-[#f8fafc]'}`}>
                 <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold tabular-nums ${active ? 'bg-[#3b82f6] text-white' : 'bg-[#f1f5f9] text-[#2d3748]'}`}>{number.get(p.id)}</span>
@@ -149,7 +153,12 @@ const NEXT_TONE: Record<Status, string> = { DRAFT: 'bg-[#f8fafc] text-[#475569]'
 /** The chosen point, opened under its own row: its facts and the next step. */
 function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const status = statusOf(proposal)
-  const next = NEXT_STEP[status]
+  // An imported POI is Staff's to finish whatever its check says: a route cannot use it without narration (ADR-0038).
+  const needsNarration = Boolean(proposal.sourcePoiId && !proposal.revision.narrationText)
+  const next = needsNarration
+    ? { text: `Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến.${status === 'WAIT' ? ' Kỹ thuật vẫn đang kiểm tra vị trí.' : ''}`, action: 'Bổ sung thuyết minh', icon: Pencil }
+    : NEXT_STEP[status]
+  const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
   const facts: Array<[string, string]> = [
     ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
     ['Phiên bản POI', `${proposal.currentRevision}`],
@@ -161,7 +170,7 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
         {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="truncate font-semibold text-[#2d3748]">{value}</dd></div>)}
       </dl>
-      <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${NEXT_TONE[status]}`}>{next.text}</p>
+      <p className={`rounded-xl px-3.5 py-2.5 text-[13px] ${tone}`}>{next.text}</p>
       <Link to={`/staff/manage/pois/${proposal.id}`} className={buttonClass('primary', 'sm')}><next.icon size={14} aria-hidden="true" />{next.action}</Link>
     </section>
   )
@@ -182,7 +191,7 @@ function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
 }
 
 /** The listed POIs on their map, numbered like the list and coloured by check state; a point selects it. */
-function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelect }: { proposals: PoiProposal[]; mapVersionId: string; mapLabel: string; number: Map<string, number>; selectedId?: string; onSelect: (id: string) => void }) {
+function PoiMap({ proposals, framed, mapVersionId, mapLabel, number, selectedId, onSelect }: { proposals: PoiProposal[]; framed: PoiProposal[]; mapVersionId: string; mapLabel: string; number: Map<string, number>; selectedId?: string; onSelect: (id: string) => void }) {
   const { map, error, retry } = useMapRaster(mapVersionId)
   const [zoom, setZoom] = useState(1)
   const frame = useRef<HTMLElement>(null)
@@ -190,7 +199,9 @@ function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelec
   if (error) return <section aria-label="Bản đồ POI"><AdminErrorPanel title="Không tải được bản đồ." description={error} onRetry={retry} /></section>
   if (!map) return <section className={`${card} overflow-hidden`} aria-label="Bản đồ POI"><SkeletonRows rows={6} label="Đang tải bản đồ" /></section>
   const points = proposals.map((p) => ({ p, at: rosToImage(map, { x: p.revision.x, y: p.revision.y }) }))
-  const us = points.map((pt) => pt.at.u), vs = points.map((pt) => pt.at.v)
+  // The frame fits every POI on this version, not just the filtered ones, so changing tab or search never re-zooms the map.
+  const framePoints = framed.map((p) => rosToImage(map, { x: p.revision.x, y: p.revision.y }))
+  const us = framePoints.map((pt) => pt.u), vs = framePoints.map((pt) => pt.v)
   // Crop to the POIs with a margin proportional to their spread, so unexplored grey does not fill the frame.
   const spread = us.length ? Math.max(Math.max(...us) - Math.min(...us), Math.max(...vs) - Math.min(...vs)) : 0
   const pad = Math.max(40, spread * 0.2)
@@ -212,7 +223,8 @@ function PoiMap({ proposals, mapVersionId, mapLabel, number, selectedId, onSelec
       </div>
       <svg viewBox={`${zx} ${zy} ${zw} ${zh}`} className="block h-[min(70vh,620px)] w-full rounded-xl bg-[#eef2f6]" role="img" aria-label={`Bản đồ ${map.mapKey} với ${points.length} POI`}>
         <image href={map.imageUrl} x={0} y={0} width={map.width} height={map.height} style={{ imageRendering: 'pixelated' }} opacity={0.9} />
-        {points.map(({ p, at }) => {
+        {/* The chosen pin is drawn last so a point at the same spot never covers it. */}
+        {[...points].sort((a, b) => Number(a.p.id === selectedId) - Number(b.p.id === selectedId)).map(({ p, at }) => {
           const active = p.id === selectedId
           const n = number.get(p.id) ?? 0
           const r = (active ? 15 : 12) * unit
