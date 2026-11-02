@@ -149,10 +149,10 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   return (
     <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="route-test-robot" label="Robot vật lý" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
+          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
           {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>

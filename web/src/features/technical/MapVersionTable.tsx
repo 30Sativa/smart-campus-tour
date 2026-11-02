@@ -98,7 +98,7 @@ function MapVersionDetail({ area, itemId, robotList, onSelect, onClose, onUpload
             : 'Chưa có robot nào được gán khu vực này'}
           <span className="mt-1 block text-xs text-[#64748b]">Gán hoặc đổi bản đồ ở trang Robot.</span>
         </DetailFact>
-        <DetailFact label="Robot đang triển khai">{robots.length ? robots.map(robot => robot.robotCode).join(', ') : 'Chưa có'}</DetailFact>
+        <DetailFact label="Robot kiểm tra đạt">{robots.length ? robots.map(robot => robot.robotCode).join(', ') : 'Chưa có'}<span className="mt-1 block text-xs text-[#64748b]">Lần kiểm tra triển khai gần nhất của robot đạt trên phiên bản này. Khác với robot được gán.</span></DetailFact>
         <DetailFact label="Tệp"><span className="break-all">{map.packageFileName}</span></DetailFact>
         <DetailFact label="Thông số bản đồ">{map.imageWidth}×{map.imageHeight} · {map.resolution} m/ô</DetailFact>
         <DetailFact label="Checksum tệp"><span className="font-mono text-xs break-all">{map.packageSha256}</span><span className="mt-1 block text-xs text-[#64748b]">Dùng để đối chiếu tệp ZIP đã nạp lên robot với tệp đã tải lên.</span></DetailFact>
@@ -150,7 +150,7 @@ export function MapVersionTable({ items, robots, onUpload, onCheck }: { items: M
       {rows.length === 0 ? <p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Không có khu vực nào phù hợp.</p> : <>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left">
-            <thead className="border-b border-[#e2e8f0]"><tr><SortHeading field="area" label="Khu vực" sort={sort} onSort={toggleSort} /><SortHeading field="version" label="Phiên bản" sort={sort} onSort={toggleSort} /><SortHeading field="uploaded" label="Tải lên lúc" sort={sort} onSort={toggleSort} /><SortHeading field="status" label="Trạng thái" sort={sort} onSort={toggleSort} /><SortHeading field="robot" label="Robot đang triển khai" sort={sort} onSort={toggleSort} /><th scope="col" className={`${thClass} text-center`}>Thao tác</th></tr></thead>
+            <thead className="border-b border-[#e2e8f0]"><tr><SortHeading field="area" label="Khu vực" sort={sort} onSort={toggleSort} /><SortHeading field="version" label="Phiên bản" sort={sort} onSort={toggleSort} /><SortHeading field="uploaded" label="Tải lên lúc" sort={sort} onSort={toggleSort} /><SortHeading field="status" label="Trạng thái" sort={sort} onSort={toggleSort} /><SortHeading field="robot" label="Robot kiểm tra đạt" sort={sort} onSort={toggleSort} /><th scope="col" className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {paged.rows.map(area => {
                 const { latest, versions, robots } = area

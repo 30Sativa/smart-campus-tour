@@ -72,7 +72,7 @@ export default function TechnicalPoiFileImportPage() {
             {selectedMap && <p className="mt-1.5"><ToneBadge tone={mapCheckTone(selectedMap.technicalCheckStatus)}>{mapCheckLabel(selectedMap.technicalCheckStatus)}</ToneBadge></p>}
           </div>
           <div>
-            <RobotPicker id="import-robot" label="Robot đã ghi pose" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký." />
+            <RobotPicker id="import-robot" label="Robot đã ghi pose" mapKey={selectedMap?.map.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký." />
           </div>
         </div>
 

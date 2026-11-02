@@ -637,6 +637,20 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText(/Robot này chưa có kiểm tra triển khai đạt mới nhất/)).toBeInTheDocument()
   })
 
+  it('lists robots ready on the POI map first and says why the others are not', async () => {
+    physicalRobots = [
+      makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02', latestDeployedMapKey: 'library-v2' }),
+      makePhysicalRobot(),
+    ]
+    renderPage(<TechnicalPoiImportPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
+    await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
+    const options = within(screen.getByLabelText('Robot vật lý')).getAllByRole('option').slice(1).map(option => option.textContent)
+    expect(options[0]).toMatch(/^AMR 01 · amr-01/)
+    expect(options[0]).not.toMatch(/chưa kiểm tra đạt/)
+    expect(options[1]).toMatch(/^AMR 02 · amr-02 .* · chưa kiểm tra đạt trên map này$/)
+  })
+
   it('blocks saving while the chosen robot was last checked on another map, for either result', async () => {
     physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2' })]
     await openPoiCheck()
