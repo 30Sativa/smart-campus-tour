@@ -259,8 +259,9 @@ Baseline thử nghiệm có giám sát: tiến RPP/smoother `0.24 m/s`, quay că
 RPP và recovery/smoother cùng trần `0.45 rad/s`; gia tốc tăng tốc góc giữ
 `0.50 rad/s²`. Giữ wheel cap `250 mm/s`: mức tiến/quay riêng đạt được về
 lệnh, nhưng vừa tiến vừa quay có thể bị bridge scale cả cặp bánh. Cách nạp, xác nhận
-parameter runtime, test và rollback: [robot/docs/nav2-turn-test.md](../../../docs/nav2-turn-test.md).
-Trạng thái **READY FOR HARDWARE TEST**, chưa xác nhận quay êm trên xe thật.
+Kết quả trên xe: ở 0.24 m/s bridge phải scale 39–50 % cặp lệnh bánh, nên robot thật
+chạy Nav2 V2 (0.20 m/s). Cách launch baseline hiện hành:
+[robot/docs/robot-baseline-2026-11-02.md](../../../docs/robot-baseline-2026-11-02.md).
 
 ### RPP làm gì và KHÔNG làm gì
 

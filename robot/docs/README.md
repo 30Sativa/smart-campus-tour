@@ -29,15 +29,18 @@ permission to execute it.
 - [Localization V2 (candidate)](localization-v2.md) — odometry distance scale
   and AMCL update thresholds for long low-feature corridors; offline evidence,
   calibration procedure and rollback. Not the default.
-- [Nav2 Baseline V2](nav2-baseline-v2.md) — **current development baseline**
-  (V1 + RPP lookahead 0.8 + angular decel −1.2): offline and on-robot evidence,
-  limits, how to run/rollback and the criteria to call it hardware validated.
-  Tools: [nav2_bench](../tools/nav2_bench/README.md).
-- [Nav2 Baseline V1](nav2-baseline-v1.md) — frozen previous baseline, kept for
-  comparison and rollback.
+- [Robot baseline 2026-11-02](robot-baseline-2026-11-02.md) — **current
+  baseline and how to launch it**: Nav2 V2 + `lidar_yaw:=-3.0695`, launch/verify/
+  route/stop steps, rollback, evidence, known limits (not safe with people close
+  to the path), next optimisations and the history of removed Nav2 configs.
+- [Nav2 Baseline V2](nav2-baseline-v2.md) — definition of the V2 params (V1 + RPP
+  lookahead 0.8 + angular decel −1.2), offline and on-robot evidence and the
+  criteria to call it hardware validated. Tools: [nav2_bench](../tools/nav2_bench/README.md).
+- [Nav2 Baseline V1](nav2-baseline-v1.md) — record of the previous baseline; its
+  params file was removed on 2026-11-02 (git tag `nav2-baseline-v1`).
 - [DDS isolation and RViz over SSH](dds-isolation.md) — R3 design, viewer,
   bridge, safeguards and staged transition.
-- [Robot status 2026-10-22](robot-status-2026-10-22.md) — **latest**: LiDAR mount
+- [Robot status 2026-10-22](robot-status-2026-10-22.md) — LiDAR mount
   moved (yaw now about −4.8°, `lidar_yaw:=-0.0833` arg), START↔POI_03 done,
   Nav2 Baseline V2, sessions without rosbag and the `go.sh` guard, next steps.
 - [Robot status 2026-10-20](robot-status-2026-10-20.md) — firmware
@@ -65,10 +68,6 @@ permission to execute it.
 
 ## Test and design records
 
-- [Nav2 smoothness trial](nav2-smooth-trial.md) — historical experiment that
-  informed Baseline V1.
-- [Nav2 turn test](nav2-turn-test.md) — separate hardware-test plan; check its
-  stated readiness and prerequisites before relying on it.
 - [Camera mounts](cad-sensor-mounts.md) — measured CAD positions.
 - [Docker dependencies and targets](docker-dependencies.md) — CI, laptop
   debug and simulation image boundaries.
