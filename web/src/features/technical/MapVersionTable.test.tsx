@@ -46,7 +46,9 @@ describe('MapVersionTable', () => {
     fireEvent.click(within(detail).getByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     expect(onCheck).toHaveBeenCalledWith(later)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A v1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A v2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem v1' }))
+    expect(screen.getByRole('dialog', { name: 'A v1' })).toHaveTextContent('phiên bản cũ, mới nhất là v2')
     fireEvent.click(screen.getByRole('button', { name: 'Tải phiên bản mới' }))
     expect(onUpload).toHaveBeenCalledWith({ areaKey: 'a', displayName: 'A' })
   })
@@ -67,7 +69,7 @@ describe('MapVersionTable', () => {
   })
 
   it('reads the file, the check and POI eligibility as one status', () => {
-    show([version('a', 'A', 3), version('a', 'A', 2, { technicalCheckStatus: 'FAILED' }), version('a', 'A', 1, { map: { ...version('a', 'A', 1).map, validationStatus: 'INVALID' } as MapVersionItem['map'] })])
+    show([version('a', 'A', 3), version('b', 'B', 2, { technicalCheckStatus: 'FAILED' }), version('c', 'C', 1, { map: { ...version('c', 'C', 1).map, validationStatus: 'INVALID' } as MapVersionItem['map'] })])
     expect(dataRows().map(row => within(row).getAllByRole('cell')[3].textContent)).toEqual(['Chờ kiểm tra', 'Kiểm tra chưa đạt', 'Tệp không hợp lệ'])
   })
 
@@ -101,8 +103,8 @@ describe('MapVersionTable', () => {
   })
 
   it('shows when a version was uploaded and sorts by it', () => {
-    const at = (uploadedAt: string) => ({ map: { ...version('x', 'x', 1).map, uploadedAt } }) as Partial<MapVersionItem>
-    show([{ ...version('a', 'A', 1), ...at('2026-10-28T03:00:00Z') }, { ...version('b', 'B', 1), ...at('2026-10-29T03:00:00Z') }])
+    const at = (item: MapVersionItem, uploadedAt: string) => ({ ...item, map: { ...item.map, uploadedAt } })
+    show([at(version('a', 'A', 1), '2026-10-28T03:00:00Z'), at(version('b', 'B', 1), '2026-10-29T03:00:00Z')])
     expect(within(dataRows()[0]).getAllByRole('cell')[2]).toHaveTextContent(/\d{2}:\d{2} 28-10/)
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Tải lên lúc' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Tải lên lúc' }))
@@ -111,16 +113,29 @@ describe('MapVersionTable', () => {
 
   it('goes back to the first page when the sort changes', () => {
     show(Array.from({ length: 12 }, (_, index) => version(`area-${index}`, `Khu ${index}`, 1)))
-    const pages = () => screen.getByRole('navigation', { name: 'Phân trang phiên bản bản đồ' })
+    const pages = () => screen.getByRole('navigation', { name: 'Phân trang danh sách bản đồ' })
     fireEvent.click(within(pages()).getByRole('button', { name: /sau/i }))
     expect(pages()).toHaveTextContent('11-12 trên 12')
     fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp theo Khu vực' }))
     expect(pages()).toHaveTextContent('1-10 trên 12')
   })
 
+  it('shows one row per area led by its newest version, and flags a robot still on an older one', () => {
+    show([version('tang-6', 'Tầng 6', 1, { ...passed, ...onRobot }), version('tang-6', 'Tầng 6', 3), version('tang-6', 'Tầng 6', 2), version('test123', 'Tầng 6', 1)])
+    expect(dataRows()).toHaveLength(2)
+    const [tang6, test123] = dataRows()
+    expect(within(tang6).getAllByRole('cell')[1]).toHaveTextContent('v32 bản cũ')
+    expect(within(tang6).getAllByRole('cell')[3]).toHaveTextContent('Chờ kiểm tra')
+    expect(within(tang6).getAllByRole('cell')[4]).toHaveTextContent('amr_01 · bản cũ v1')
+    expect(within(test123).getAllByRole('cell')[1]).toHaveTextContent(/^v1$/)
+    fireEvent.click(within(tang6).getByRole('button', { name: 'Xem chi tiết Tầng 6 v3' }))
+    const history = within(screen.getByRole('dialog', { name: 'Tầng 6 v3' })).getByRole('region', { name: 'Lịch sử phiên bản' })
+    expect(within(history).getAllByRole('listitem').map(item => item.textContent?.slice(0, 2))).toEqual(['v3', 'v2', 'v1'])
+  })
+
   it('pages ten versions at a time', () => {
     show(Array.from({ length: 12 }, (_, index) => version(`area-${index}`, `Khu ${index}`, 1)))
     expect(dataRows()).toHaveLength(10)
-    expect(screen.getByRole('navigation', { name: 'Phân trang phiên bản bản đồ' })).toHaveTextContent('1-10 trên 12')
+    expect(screen.getByRole('navigation', { name: 'Phân trang danh sách bản đồ' })).toHaveTextContent('1-10 trên 12')
   })
 })
