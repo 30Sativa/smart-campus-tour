@@ -32,6 +32,10 @@ function renderAt(path: string, client = new QueryClient({ defaultOptions: { que
   </Routes></MemoryRouter></QueryClientProvider>)
 }
 
+const next = () => fireEvent.click(screen.getByRole('button', { name: /^Tiếp/ }))
+// The pose picker needs the raster, which these tests do not serve; copying a POI's pose is the same draft change.
+const startFromPoi = (poiRevisionId: string) => fireEvent.change(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByLabelText('Lấy vị trí có sẵn'), { target: { value: poiRevisionId } })
+
 describe('Staff versioned Route workflow', () => {
   beforeEach(() => {
     requests = []
@@ -63,15 +67,19 @@ describe('Staff versioned Route workflow', () => {
     renderAt('/staff/manage/routes/new')
     fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    next()
     expect(await screen.findByText('Verified entrance')).toBeInTheDocument()
     expect(screen.queryByText('Pending POI')).not.toBeInTheDocument()
     expect(screen.queryByText('Other map POI')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('checkbox'))
+    next()
+    startFromPoi('poi-rev-pass')
+    next()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
     const create = requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!
     const createBody = JSON.parse(String(create.init?.body))
-    expect(createBody).toMatchObject({ mapVersionId: 'map-v1', expectedCurrentRevision: 0, stops: [{ poiRevisionId: 'poi-rev-pass', dwellSeconds: 30 }] })
+    expect(createBody).toMatchObject({ mapVersionId: 'map-v1', expectedCurrentRevision: 0, startX: 10.2, startY: 20.4, startYaw: 0, endMode: 'LAST_POI', stops: [{ poiRevisionId: 'poi-rev-pass', dwellSeconds: 30 }] })
     expect(createBody.requestId).toBeTruthy()
     expect(requests.some(r => r.url.pathname === '/api/technical/poi-verifications')).toBe(false)
     expect(screen.getByText(/Chưa xếp lịch Tour được/)).toBeInTheDocument()
@@ -86,8 +94,8 @@ describe('Staff versioned Route workflow', () => {
   it('only offers maps that already have a passed POI', async () => {
     renderAt('/staff/manage/routes/new')
     const select = await screen.findByLabelText('Phiên bản bản đồ')
-    expect(within(select).getByRole('option', { name: /library-v1/ })).toBeEnabled()
-    const otherMap = within(select).getByRole('option', { name: /map-without-poi/ })
+    expect(within(select).getByRole('option', { name: /Library · phiên bản 1/ })).toBeEnabled()
+    const otherMap = within(select).getByRole('option', { name: /Library · phiên bản 3/ })
     expect(otherMap).toBeDisabled()
     expect(otherMap).toHaveTextContent('chưa có POI đạt')
   })
@@ -96,12 +104,49 @@ describe('Staff versioned Route workflow', () => {
     mapEligible = false
     renderAt('/staff/manage/routes/new')
     const select = await screen.findByLabelText('Phiên bản bản đồ')
-    const option = within(select).getByRole('option', { name: /library-v1/ })
+    const option = within(select).getByRole('option', { name: /Library · phiên bản 1/ })
     expect(option).toBeDisabled()
     expect(option).toHaveTextContent('chưa đạt kiểm tra kỹ thuật')
     fireEvent.change(select, { target: { value: 'map-v1' } })
     expect(await screen.findByText(/không lưu được tuyến/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    expect(screen.getByText(/chọn bản đồ còn đạt kiểm tra kỹ thuật/)).toBeInTheDocument()
+  })
+
+  it('walks a new route step by step and says what is missing before each next step', async () => {
+    renderAt('/staff/manage/routes/new')
+    await screen.findByLabelText('Tên tuyến')
+    expect(screen.getByRole('button', { name: /Bước 1/ })).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByRole('button', { name: /Bước 3/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    expect(screen.getByText('Chưa sang bước tiếp được: nhập tên tuyến, chọn bản đồ.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Steps' } })
+    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    next()
+    expect(screen.getByText('Chưa sang bước tiếp được: chọn ít nhất một điểm dừng.')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+    next()
+    // A new route has no start until one is placed; nothing defaults to 0, 0, 0.
+    expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByText('Chưa chọn')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
+    expect(screen.getByText('Chưa sang bước tiếp được: chọn điểm bắt đầu và hướng, chọn điểm kết thúc và hướng.')).toBeInTheDocument()
+    startFromPoi('poi-rev-pass')
+    fireEvent.change(within(screen.getByRole('region', { name: 'Vị trí kết thúc' })).getByLabelText('Lấy vị trí có sẵn'), { target: { value: 'start' } })
+    next()
+    const review = within(screen.getByRole('region', { name: 'Xem lại và lưu' }))
+    expect(review.getAllByText('x 10.20 m · y 20.40 m · hướng 0.00 rad')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }))
+    expect(screen.getByRole('button', { name: /Bước 3/ })).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('opens every step of an existing route and keeps its saved start', async () => {
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    expect(screen.getByRole('button', { name: /Bước 4/ })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
+    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 10.00 m · y 20.00 m · hướng 0.00 rad')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeEnabled()
   })
 
   it('explains a submit refused because the map lost its technical check', async () => {
@@ -118,11 +163,16 @@ describe('Staff versioned Route workflow', () => {
     renderAt('/staff/manage/routes/new')
     fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Ordered' } })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    next()
     fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Second stop/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Đưa Second stop lên' }))
     fireEvent.change(screen.getByLabelText('Thời gian dừng Second stop (giây)'), { target: { value: '45' } })
     expect(screen.getAllByRole('checkbox').map(box => box.closest('label')?.textContent)).toEqual([expect.stringContaining('Second stop'), expect.stringContaining('Verified entrance')])
+    next()
+    startFromPoi('poi-rev-second')
+    next()
+    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Second stop · dừng 45 giây', 'Verified entrance · dừng 30 giây'])
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')).toBe(true))
     const body = JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!.init?.body))

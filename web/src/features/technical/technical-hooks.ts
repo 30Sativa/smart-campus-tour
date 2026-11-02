@@ -27,6 +27,11 @@ export function useAllPhysicalRobots() {
   return useQuery({ queryKey: [...keys.physicalRobots, 'all'], queryFn: technicalApi.listAllPhysicalRobots })
 }
 
+/** The robot's MiniPC key status; the key panel invalidates this same key after issue, rotate or revoke. */
+export function useRobotCredential(robotCode: string, enabled = true) {
+  return useQuery({ queryKey: ['technical', 'robot-credential', robotCode], queryFn: () => technicalApi.getRobotCredential(robotCode), enabled })
+}
+
 export function useRobotAffectedTours(robotId: string, mapVersionId: string | undefined, enabled: boolean) {
   return useQuery({ queryKey: [...keys.physicalRobots, 'affected-tours', robotId, mapVersionId ?? ''], queryFn: () => technicalApi.listRobotAffectedTours(robotId, mapVersionId), enabled })
 }

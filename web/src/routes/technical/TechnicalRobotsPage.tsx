@@ -1,13 +1,13 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
-import { Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours } from '../../features/technical/technical-hooks'
+import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
+import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours, useRobotCredential } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
 import { connectionStatusLabel, errorText, stamp } from '../../features/technical/technical-format'
 import { mapCheckLabel } from '../../features/technical/poi-labels'
@@ -68,7 +68,7 @@ export default function TechnicalRobotsPage() {
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
                 <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
-                <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · v{robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
+                <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · phiên bản {robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
                 <td className={`${tdClass} text-center`}><button type="button" aria-label={`Chi tiết ${robot.robotCode}`} className={buttonClass('secondary', 'sm')} onClick={() => setDialog({ view: 'detail', robotId: robot.id })}>Chi tiết</button></td>
               </tr>)}
@@ -114,6 +114,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
         {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {stamp(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
+        {!robot.deactivatedAt && <RobotSetupChecklist robot={robot} onAssignMap={onAssignMap} onManageKey={onManageKey} />}
         <DetailSection title="Kết nối">
           <Facts items={[
             ['Trạng thái', <ConnectionBadge key="status" robot={robot} />],
@@ -123,7 +124,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
           ]} />
           {robot.connectionStatus === 'AWAITING_DATA' && <p className="mt-2 text-xs text-[#64748b]">Chưa nhận dữ liệu sau khi hệ thống khởi động.</p>}
         </DetailSection>
-        <DetailSection title="Bản đồ được gán" subject={assigned ? `${robot.assignedAreaName} v${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
+        <DetailSection title="Bản đồ được gán" subject={assigned ? `${robot.assignedAreaName} · phiên bản ${robot.assignedVersionNumber}` : undefined} action={<button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />{assigned ? 'Thay đổi bản đồ' : 'Gán bản đồ'}</button>}>
           {assigned ? <div className="space-y-2">
             <Facts items={[
               ['MapKey', <CopyValue key="map" label="MapKey" value={robot.assignedMapKey!} />],
@@ -141,6 +142,26 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
       </div>
     </Modal>
   )
+}
+
+/**
+ * The setup order from ADR-0039 as a checklist. It only reads what the robot list and key status
+ * already return; whether a Tour may use the robot is still decided by the server per route.
+ */
+function RobotSetupChecklist({ robot, onAssignMap, onManageKey }: { robot: PhysicalRobotOption; onAssignMap: () => void; onManageKey: () => void }) {
+  const credential = useRobotCredential(robot.robotCode)
+  const deployedOnAssigned = Boolean(robot.assignedMapKey && robot.latestDeploymentPassed && robot.latestDeployedMapKey === robot.assignedMapKey && robot.latestDeployedFrameId === robot.assignedFrameId)
+  const steps: SetupStep[] = [
+    { label: 'Đăng ký robot', done: true, hint: '' },
+    { label: 'Cấp khóa kết nối MiniPC', done: credential.data?.status === 'ACTIVE', hint: credential.isError ? 'Không tải được trạng thái khóa.' : 'Cấp khóa rồi nhập khóa đó trên MiniPC.',
+      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onManageKey}><KeyRound size={13} aria-hidden="true" />Cấp khóa</button> },
+    { label: 'Gán bản đồ', done: Boolean(robot.assignedMapVersionId), hint: 'Chọn khu vực và phiên bản bản đồ robot sẽ dùng, rồi nhập MapKey và FrameId trên MiniPC.',
+      action: <button type="button" className={buttonClass('secondary', 'sm')} onClick={onAssignMap}><MapIcon size={13} aria-hidden="true" />Chọn bản đồ</button> },
+    { label: 'Robot kết nối lần đầu', done: Boolean(robot.firstAcceptedSyncAt), hint: 'Bật robot với khóa, MapKey và FrameId ở trên. Khi máy chủ nhận dữ liệu đầu tiên, bấm Cập nhật trạng thái.' },
+    { label: 'Kiểm tra triển khai đạt trên bản đồ được gán', done: deployedOnAssigned, hint: 'Nạp đúng tệp bản đồ lên robot, kiểm tra localization và hiển thị, rồi ghi kết quả ở trang Quản lý bản đồ.',
+      action: <Link to="/technical/maps" className={buttonClass('secondary', 'sm')}>Mở Quản lý bản đồ</Link> },
+  ]
+  return <SetupSteps title="Thiết lập robot" steps={steps} />
 }
 
 function AffectedTours({ title, tours }: { title: string; tours: { isPending: boolean; isError: boolean; error: unknown; data?: RobotAffectedTour[] } }) {
@@ -207,7 +228,7 @@ function RobotMapAssignmentModal({ robot, otherRobots, onClose }: { robot: Physi
     else clear.mutate(input, { onSuccess: onClose })
     setConfirming(null)
   }
-  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ đạt kiểm tra, nhưng robot chỉ nhận Tour khi đã kiểm tra đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap justify-between gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><div className="flex flex-wrap gap-2">{robot.assignedMapVersionId && <button type="button" className={buttonClass('secondary')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}<button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
+  return <><Modal open onClose={close} title={`Bản đồ của ${robot.robotCode}`} description="Chọn khu vực và phiên bản bản đồ robot sẽ dùng. Có thể gán trước khi bản đồ đạt kiểm tra, nhưng robot chỉ nhận Tour khi đã kiểm tra đạt trên đúng phiên bản này." footer={<div className="flex flex-wrap items-center justify-between gap-2"><div>{robot.assignedMapVersionId && <button type="button" className={buttonClass('danger')} onClick={() => setConfirming('clear')} disabled={clear.isPending || assign.isPending}>{clear.isPending ? 'Đang gỡ…' : 'Gỡ gán bản đồ'}</button>}</div><div className="ml-auto flex flex-wrap gap-2"><button type="button" className={buttonClass('secondary')} onClick={close}>Đóng</button><button type="submit" form="robot-map-assignment-form" className={buttonClass('primary')} disabled={!mapVersionId || assign.isPending || clear.isPending}>{assign.isPending ? 'Đang lưu…' : 'Lưu bản đồ'}</button></div></div>}>
     <form id="robot-map-assignment-form" className="space-y-3.5" onSubmit={submit}>
       <div><label className={labelClass} htmlFor="robot-map-area">Khu vực</label><select title="" id="robot-map-area" className={`${inputClass} mt-1`} value={areaKey} onChange={event => chooseArea(event.target.value)}><option value="">Chọn khu vực</option>{(areas.data ?? []).map(area => {
         const holder = holderOf(area.areaKey)
