@@ -1,9 +1,9 @@
-# Fleet Commands v1 (proposed)
+# Fleet Commands v1
 
-**Status: Proposed by [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md); not implemented.**
-No backend endpoint, DTO, table or bridge code exists for this contract. Until
-ADR-0042 is accepted and M2.2 implements it, Fleet Sync v1 stays telemetry-only
-and returns `commands: []`.
+**Status: Accepted in [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (03/11/2026); not implemented until M2.2.**
+No backend endpoint, DTO, table or bridge code exists for this contract yet.
+Fleet Sync v1 stays telemetry-only and always returns `commands: []`. Dispatch
+stays off until the M2.3 safety evidence.
 
 The robot pulls its one current movement command over HTTPS and reports results
 per command. Fleet Sync v1 ([`../../fleet-sync/v1/`](../../fleet-sync/v1/)) is
@@ -22,7 +22,7 @@ Request: [`poll-request.json`](poll-request.json).
 
 | Field | Rule |
 |---|---|
-| `streamId` | UUID of the bridge's current Fleet Sync stream. Must equal the stream of the robot's latest accepted telemetry report, received by the server ≤ 2 s ago (SRS §7; not Fleet Sync's 30 s `SyncFreshness`), otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. |
+| `streamId` | UUID of the bridge's current Fleet Sync stream. Must equal the stream of the robot's latest accepted telemetry report, received by the server no more than `FleetCommands:MaxTelemetryAgeSeconds` ago (default 2, SRS §7; Fleet Sync `SyncFreshness` is not used), otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. |
 
 Response `data.command` is `null` ([`poll-response-empty.json`](poll-response-empty.json)),
 a GoTo ([`poll-response-goto.json`](poll-response-goto.json)) or a Cancel

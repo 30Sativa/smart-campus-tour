@@ -114,8 +114,9 @@ while its pose, camera and map are unchanged, Technical Staff cannot lower it
 and a content-only revision does not re-enter the queue. Do not add a withdrawal
 flow without an owner decision; route evidence depends on POI PASS being stable.
 
-F-14, branch cutoff, YAML schema/frame conversion and command transport remain
-blocked on decisions; no stub may make them appear enabled. Other open source
+F-14, branch cutoff and YAML schema/frame conversion remain blocked on
+decisions; no stub may make them appear enabled. Command transport is selected
+by ADR-0042 and is implemented from M2.2. Other open source
 items: invalid-code defaults, speech provider/terms, research delivery/freshness
 thresholds, pilot network/camera/safety evidence. Source SRS integrity wording
 about unrecoverable tokens must be reconciled with NFR-SEC-01 recoverably protected

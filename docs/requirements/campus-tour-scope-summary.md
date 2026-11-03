@@ -40,9 +40,10 @@ Prior Review 1 text remains in Git at `e70fb52`; no advisor approval is implied.
   two baselines; p95 <1s is evaluated per tested load before dashboard render.
   No advance claim for N=20. Publish 40-point capacity only after the declared
   two-Tour/viewer/Q&A test passes.
-- **Pending:** F-14, conflicting branch cutoff, YAML/frame mapping, M2 command
-  transport, invalid-code defaults, voice-provider terms, research
-  delivery/freshness thresholds and physical evidence.
+- **Pending:** F-14, conflicting branch cutoff, YAML/frame mapping,
+  invalid-code defaults, voice-provider terms, research
+  delivery/freshness thresholds and physical evidence. M2 command transport is
+  selected by ADR-0042 and is implemented from M2.2.
 
 Current delivery implements TechnicalStaff account create/list/lifecycle,
 login/refresh and isolation of its role only. All other target changes remain
