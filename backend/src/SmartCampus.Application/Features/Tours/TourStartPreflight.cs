@@ -53,7 +53,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         }
         var robot = reservation is null ? null : await TourTarget.FindReservedRobotAsync(revisions, reservation.RobotId, ct);
         var robotIssue = robot is null || revision is null ? null : await TourTarget.ReservedRobotIssueAsync(revisions, robot, revision, ct);
-        var holder = robot?.CurrentTourId is { } holderId ? await repository.FindAsync(holderId, ct) : null;
+        var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
         var snapshot = robot is null ? null
             : telemetry.GetLatest().FirstOrDefault(item => string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal));
@@ -109,13 +109,10 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         }
         else
         {
-            // ADR-0042 open decision 3: no incident table, so NeedsInspection and the holding Tour stand in for it.
-            var holderKnown = robot.CurrentTourId is null || holder is not null;
-            var incident = robot.NeedsInspection || holder?.OperationalStatus == "NEEDS_ASSISTANCE";
-            list.Add("noOpenIncident", "DB", holderKnown && !incident,
-                !holderKnown ? "Không đọc được Tour đang giữ robot."
-                : robot.NeedsInspection ? "Robot đang chờ kiểm tra tại chỗ."
-                : incident ? "Tour đang giữ robot cần hỗ trợ (NEEDS_ASSISTANCE)." : "Không có sự cố đang mở.");
+            // ADR-0042 open decision 3 (refined): no incident table, so a Tour holding the robot in NEEDS_ASSISTANCE stands
+            // in for it. NeedsInspection is its own check (robotNotNeedsInspection) and is not reported twice.
+            list.Add("noOpenIncident", "DB", !incident,
+                incident ? "Một Tour đang giữ robot cần hỗ trợ (NEEDS_ASSISTANCE)." : "Không có sự cố đang mở.");
             list.Add("noUnresolvedCommand", "DB", true, "Chưa có command store (M2.2); chưa lệnh nào được ghi cho robot.");
             EvaluateTelemetry(list, snapshot, map, now);
         }

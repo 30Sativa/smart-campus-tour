@@ -104,6 +104,10 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct) =>
         db.TourRobotReservations.SingleOrDefaultAsync(r => r.TourId == id && r.ReleasedAt == null, ct);
 
+    public Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, CancellationToken ct) =>
+        db.Tours.AsNoTracking().AnyAsync(t => t.OperationalStatus == "NEEDS_ASSISTANCE" &&
+            (db.Robots.Any(r => r.Id == robotId && r.CurrentTourId == t.Id) || (t.AssignedRobotId == robotId && t.State == "RUNNING")), ct);
+
     public async Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct)
     {
         var operatorUser = await db.Tours.AsNoTracking().Where(t => t.Id == id && t.OperatorUserId != null)

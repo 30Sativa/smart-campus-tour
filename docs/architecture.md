@@ -61,7 +61,7 @@ is implemented here.
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
 | POST | `/api/staff/manage/tours/{id}/ready` | `{requestId, expectedRowVersion}`; any Staff (Admin/TechnicalStaff/Representative 403). SCHEDULED → READY when every READY condition of §3.2 passes under the Tour lock, then the map preparation, robot deployment and robot reservation locks (Tour create order). Otherwise 409 `READY_PRECONDITION_FAILED` with `errors.blockers` listing every failing condition; `STALE_VERSION`, `IDEMPOTENCY_CONFLICT`. Commits a `TOUR_READY` TourEvent and receipt. No robot claim, `CurrentTourId`, Start or command. |
 | POST | `/api/staff/manage/tours/{id}/reopen` | `{requestId, expectedRowVersion, reason}`; any Staff. READY without execution state → SCHEDULED, else 409 `TOUR_STATE_INVALID`; blank reason 400. Commits a `TOUR_REOPENED` TourEvent (actor, reason) and receipt; reservation, registrations and invitations unchanged. READY/Reopen events do not count as operational history. |
-| GET | `/api/staff/manage/tours/{id}/start-checks` | Any Staff. `{checks: [{id, passed, source, detail}], canStart, blockedBy}`: the Start conditions of §3.2 evaluated now without locks (`source` DB, TELEMETRY, CONFIG, CONSOLE), with `callerIsOperator` and without the on-site confirmations. `canStart` = every returned check passed; `blockedBy` lists root causes only. |
+| GET | `/api/staff/manage/tours/{id}/start-checks` | Any Staff. `{checks: [{id, passed, source, detail}], canStart, blockedBy}`: the Start conditions of §3.2 evaluated now without locks (`source` DB, TELEMETRY, CONFIG, CONSOLE), with `callerIsOperator` and without the on-site confirmations. `canStart` = every returned check passed, so it is the caller's own answer (false for any Staff who is not the Operator); `blockedBy` lists root causes only. |
 | POST | `/api/staff/manage/tours/{id}/start` | `{requestId, expectedRowVersion, confirmation: {robotPlaced, areaClear, attendantPresent, previewChecked}}`; only `Tours.OperatorUserId` (other Staff 403). Re-runs every Start check under the READY lock order. Any failing check: 409 `START_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`; all pass but `FleetCommands:Enabled = false`: 409 `COMMAND_TRANSPORT_DISABLED` with the checks; `STALE_VERSION`. **M2.1 always refuses and writes nothing**: no state, StartedAt, robot claim, TourEvent, receipt or command. |
 | POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
 | POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
@@ -1058,7 +1058,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
 | `Robots.IsDispatchEnabled = 1` (no writer yet, so always fails today) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
 | No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
-| No open incident: `Robots.NeedsInspection = 0` and no Tour holding this robot has `OperationalStatus = NEEDS_ASSISTANCE`; replace when an incident store exists | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | missing data fails | `noOpenIncident` |
+| No open incident: no Tour holding this robot (`Robots.CurrentTourId`, or a RUNNING Tour with `AssignedRobotId` = robot) has `OperationalStatus = NEEDS_ASSISTANCE`. `NeedsInspection` is the separate `robotNotNeedsInspection` check (refined 03/11/2026, no duplicate report); replace when an incident store exists | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | missing data fails | `noOpenIncident` |
 | No unresolved command for the robot | SRS §7 | DB (`RobotCommands`, M2.2) | M2.1: pass, detail "chưa có command store" | `noUnresolvedCommand` |
 | Latest telemetry received by server ≤ `FleetCommands:MaxTelemetryAgeSeconds` (default 2) ago; not Fleet Sync `SyncFreshness` | SRS §7 | TELEMETRY + CONFIG | fail ("robot chưa báo") | `telemetryFresh` |
 | Reported `mapKey`/`frameId` = revision's MapVersion | Design (§3.5) | TELEMETRY + DB | fail | `mapContextMatches` |
@@ -1082,8 +1082,10 @@ robot, incident, command and telemetry row needs `reservationActive`;
 `mapContextMatches`, `executionIdle`, `robotLocalized` and `motionReady` need
 `telemetryFresh`. Independent rows (`tourReady`, `withinStartWindow`,
 `revisionStillSchedulable`, `noPendingDecisions`, console, confirmations,
-transport) always run. `NeedsInspection = 1` fails both `robotNotNeedsInspection`
-and `noOpenIncident` (open decision 3 defines the latter through it).
+transport) always run. `NeedsInspection = 1` fails only `robotNotNeedsInspection`;
+`noOpenIncident` fails only for a holding Tour in NEEDS_ASSISTANCE. `callerIsOperator`
+is independent: a non-Operator viewer gets every other check evaluated in full, and
+`canStart` answers whether the caller can Start now.
 `batteryInfo` always passes and never enters `blockedBy`. Configuration section
 `FleetCommands`: `Enabled` (default false; `true` stops startup in M2.1),
 `MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15).

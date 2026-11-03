@@ -21,6 +21,11 @@ public interface ITourManagementRepository
     Task<IReadOnlyList<TourReservationHold>> GetActiveReservationsAsync(Guid robotId, DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct);
     /// <summary>Tracked; caller must hold the Tour root lock.</summary>
     Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct);
+    /// <summary>
+    /// True when a Tour holding the robot is in NEEDS_ASSISTANCE: the Tour named by <c>Robots.CurrentTourId</c>, or a RUNNING
+    /// Tour assigned to it (the open-incident stand-in of ADR-0042 open decision 3).
+    /// </summary>
+    Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, CancellationToken ct);
     Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct);
     void Add(Tour tour);
     void Add(TourRobotReservation reservation);
