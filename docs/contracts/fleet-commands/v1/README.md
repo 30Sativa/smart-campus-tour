@@ -22,7 +22,7 @@ Request: [`poll-request.json`](poll-request.json).
 
 | Field | Rule |
 |---|---|
-| `streamId` | UUID of the bridge's current Fleet Sync stream. Must equal the stream of the robot's latest accepted, fresh telemetry report, otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. |
+| `streamId` | UUID of the bridge's current Fleet Sync stream. Must equal the stream of the robot's latest accepted telemetry report, received by the server ≤ 2 s ago (SRS §7; not Fleet Sync's 30 s `SyncFreshness`), otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. |
 
 Response `data.command` is `null` ([`poll-response-empty.json`](poll-response-empty.json)),
 a GoTo ([`poll-response-goto.json`](poll-response-goto.json)) or a Cancel

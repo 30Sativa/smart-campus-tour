@@ -1036,7 +1036,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
 | `Robots.IsDispatchEnabled = 1` (no writer yet, so always fails today) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
 | No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
-| No open incident | SRS §7 (FR-36/46) | none yet | proposed pass with detail "chưa có incident store" — open decision 3 | `noOpenIncident` |
+| No open incident: `Robots.NeedsInspection = 0` and no Tour holding the robot is RUNNING with `OperationalStatus = NEEDS_ASSISTANCE` (no incident table yet) | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | fail | `noOpenIncident` |
 | No unresolved command for the robot | SRS §7 | DB (`RobotCommands`, M2.2) | M2.1: pass, detail "chưa có command store" | `noUnresolvedCommand` |
 | Latest telemetry received by server ≤ 2 s ago | SRS §7 | TELEMETRY | fail ("robot chưa báo") | `telemetryFresh` |
 | Reported `mapKey`/`frameId` = revision's MapVersion | Design (§3.5) | TELEMETRY + DB | fail | `mapContextMatches` |
