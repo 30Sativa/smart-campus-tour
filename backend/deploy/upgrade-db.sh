@@ -2,8 +2,8 @@
 # Explicit, backed-up Database First upgrade path. Never called by API startup/deploy.
 set -euo pipefail
 
-[[ ${1:-} == --upgrade-to-v1.13 && $# == 1 ]] || {
-  echo 'Usage: upgrade-db.sh --upgrade-to-v1.13' >&2
+[[ ${1:-} == --upgrade-to-v1.14 && $# == 1 ]] || {
+  echo 'Usage: upgrade-db.sh --upgrade-to-v1.14' >&2
   exit 2
 }
 : "${SQLCMDPASSWORD:?SQL admin password is required}"
@@ -38,22 +38,37 @@ v110_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.10.sql | sha256s
 v111_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.11.sql | sha256sum | cut -d ' ' -f 1)
 v112_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.12.sql | sha256sum | cut -d ' ' -f 1)
 v113_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.13.sql | sha256sum | cut -d ' ' -f 1)
+v114_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.14.sql | sha256sum | cut -d ' ' -f 1)
 v16_hash=$(sed 's/\r$//' /database/smart-campus-tour-schema-v1.6.sql | sha256sum | cut -d ' ' -f 1)
 recognized_snapshot=false
 case "$bootstrap_hash" in
-  "$v14_hash"|"$v15_hash"|"$v16_hash"|"$v17_hash"|"$v18_hash"|"$v19_hash"|"$v110_hash"|"$v111_hash"|"$v112_hash"|96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68|2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43)
+  "$v14_hash"|"$v15_hash"|"$v16_hash"|"$v17_hash"|"$v18_hash"|"$v19_hash"|"$v110_hash"|"$v111_hash"|"$v112_hash"|"$v113_hash"|96d459f6b9570d6773bf31f880095d13e7800b76ef657843314d2a04e8d79d68|2762f3c0fbb080031bb841a6061ae73858b0c6e28f17307ebb63339ec5217b67|b34aa0c3369ce44c8fb09957b69a5b8edde648ae56063c0b29eaa664411daf43)
     recognized_snapshot=true ;;
 esac
+
+if [[ "$schema_version" == 1.14 ]]; then
+  [[ "$bootstrap_hash" == "$v114_hash" || "$recognized_snapshot" == true ]] || {
+    echo 'Schema version marker reports 1.14 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
+    exit 1
+  }
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+    -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
+  [[ "$structure" == READY ]] || { echo 'Schema version marker reports 1.14 but the required structure is incomplete; refusing to complete grants.' >&2; exit 1; }
+  echo 'Schema version marker reports 1.14 and the v1.14 structure is present; completing runtime and credential-provisioning grants only, no DDL or backfill.'
+  apply_runtime_grants
+  exec /bin/bash /deployment/init-db.sh --check-only
+fi
 
 if [[ "$schema_version" == 1.13 ]]; then
   [[ "$bootstrap_hash" == "$v113_hash" || "$recognized_snapshot" == true ]] || {
     echo 'Schema version marker reports 1.13 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
-  [[ "$structure" == READY ]] || { echo 'Schema version marker reports 1.13 but the required structure is incomplete; refusing to complete grants.' >&2; exit 1; }
-  echo 'Schema version marker reports 1.13 and the v1.13 structure is present; completing runtime and credential-provisioning grants only, no DDL or backfill.'
+  [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.13 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
+  echo 'Schema version marker reports 1.13; applying additive v1.13-to-v1.14 robot commands patch.'
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -63,11 +78,12 @@ if [[ "$schema_version" == 1.12 ]]; then
     echo 'Schema version marker reports 1.12 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.12 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.12; applying additive v1.12-to-v1.13 map package uniqueness patch.'
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -77,12 +93,13 @@ if [[ "$schema_version" == 1.11 ]]; then
     echo 'Schema version marker reports 1.11 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.11 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.11; applying additive v1.11-to-v1.12 robot lifecycle patch.'
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -92,13 +109,14 @@ if [[ "$schema_version" == 1.10 ]]; then
     echo 'Schema version marker reports 1.10 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.10 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.10; applying additive v1.10-to-v1.11 POI pose-import patch.'
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -108,7 +126,7 @@ if [[ "$schema_version" == 1.9 ]]; then
     echo 'Schema version marker reports 1.9 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.9 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.9; applying additive v1.9-to-v1.10 Tour scheduling patch.'
@@ -116,6 +134,7 @@ if [[ "$schema_version" == 1.9 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -125,7 +144,7 @@ if [[ "$schema_version" == 1.8 ]]; then
     echo 'Schema version marker reports 1.8 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.8 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.8; applying additive v1.8-to-v1.9 Tour route revision patch.'
@@ -134,6 +153,7 @@ if [[ "$schema_version" == 1.8 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -143,7 +163,7 @@ if [[ "$schema_version" == 1.7 ]]; then
     echo 'Schema version marker reports 1.7 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.7 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.7; applying additive v1.7-to-v1.8 robot map assignment patch.'
@@ -153,6 +173,7 @@ if [[ "$schema_version" == 1.7 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -162,7 +183,7 @@ if [[ "$schema_version" == 1.6 ]]; then
     echo 'Schema version marker reports 1.6 but the snapshot marker is unknown or absent; refusing upgrade.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || { echo 'Schema version marker reports 1.6 but the required structure is incomplete; refusing upgrade.' >&2; exit 1; }
   echo 'Schema version marker reports 1.6; applying additive v1.6-to-v1.7 POI narration patch.'
@@ -173,6 +194,7 @@ if [[ "$schema_version" == 1.6 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -182,7 +204,7 @@ if [[ "$schema_version" == 1.5 ]]; then
     echo 'Schema version marker reports 1.5 but the snapshot marker is unknown or absent; refusing to complete grants.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || {
     echo 'Schema version marker reports 1.5 but the required v1.5 structure is incomplete; refusing upgrade. Inspect and repair from a verified backup.' >&2
@@ -197,6 +219,7 @@ if [[ "$schema_version" == 1.5 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -206,7 +229,7 @@ if [[ "$schema_version" == 1.4 ]]; then
     echo 'Schema version marker reports 1.4 but the snapshot marker is unknown or absent; refusing upgrade.' >&2
     exit 1
   }
-  structure=$(SchemaHash="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
+  structure=$(SchemaHash="$v114_hash" SchemaHashV113="$v113_hash" SchemaHashV112="$v112_hash" SchemaHashV111="$v111_hash" SchemaHashV110="$v110_hash" SchemaHashV19="$v19_hash" SchemaHashV18="$v18_hash" SchemaHashV17="$v17_hash" SchemaHashV16="$v16_hash" SchemaHashV15="$v15_hash" SchemaHashV14="$v14_hash" "${sql[@]}" -d SmartCampusTourV11 -h -1 -W \
     -i /database/smart-campus-tour-bootstrap-check.sql | tr -d '\r\n ') || structure=INCOMPLETE
   [[ "$structure" == UPGRADE_REQUIRED ]] || {
     echo 'Schema version marker reports 1.4 but the required v1.4 structure is incomplete; refusing upgrade. Inspect and repair from a verified backup.' >&2
@@ -222,6 +245,7 @@ if [[ "$schema_version" == 1.4 ]]; then
   apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
   apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
   apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+  apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
   apply_runtime_grants
   exec /bin/bash /deployment/init-db.sh --check-only
 fi
@@ -245,5 +269,6 @@ apply patches/upgrade-v1.9-to-v1.10-tour-scheduling.sql
 apply patches/upgrade-v1.10-to-v1.11-poi-pose-import.sql
 apply patches/upgrade-v1.11-to-v1.12-robot-lifecycle.sql
 apply patches/upgrade-v1.12-to-v1.13-map-package-uniqueness.sql
+apply patches/upgrade-v1.13-to-v1.14-robot-commands.sql
 apply_runtime_grants
 exec /bin/bash /deployment/init-db.sh --check-only

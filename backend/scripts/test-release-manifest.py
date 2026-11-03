@@ -19,7 +19,7 @@ VALID_MANIFEST = {
     "api_image": "ghcr.io/30sativa/smart-campus-tour/backend@sha256:" + "b" * 64,
     "db_init_image": "ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:" + "c" * 64,
     "db_init_source_sha": "9" * 40,
-    "database_schema_version": "1.13",
+    "database_schema_version": "1.14",
     "sdk_image": "mcr.microsoft.com/dotnet/sdk@sha256:" + "d" * 64,
     "runtime_image": "mcr.microsoft.com/dotnet/aspnet@sha256:" + "e" * 64,
     "sqlserver_image": "mcr.microsoft.com/mssql/server@sha256:" + "f" * 64,
@@ -46,7 +46,7 @@ class ReleaseManifestTests(unittest.TestCase):
             "api_image=" + VALID_MANIFEST["api_image"] + "\n" +
             "db_init_image=" + VALID_MANIFEST["db_init_image"] + "\n" +
             "db_init_source_sha=" + VALID_MANIFEST["db_init_source_sha"] + "\n" +
-            "database_schema_version=1.13\n" +
+            "database_schema_version=1.14\n" +
             "sqlserver_image=" + VALID_MANIFEST["sqlserver_image"] + "\n",
             output,
         )

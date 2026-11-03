@@ -45,6 +45,20 @@ public sealed class TourManagementTests
     }
 
     [Fact]
+    public void VersionedStopFields_AreExecutionState()
+    {
+        var route = Guid.NewGuid();
+        var tour = new Tour { State = "READY", RouteId = route, ActiveRouteId = route };
+        Assert.True(tour.CanReopenBeforeStart);
+        tour.CurrentRevisionStopId = Guid.NewGuid();
+        Assert.True(tour.HasExecutionState);
+        Assert.False(tour.CanReopenBeforeStart);
+        tour.CurrentRevisionStopId = null;
+        tour.LastArrivedRevisionStopId = Guid.NewGuid();
+        Assert.False(tour.CanCancelBeforeStart);
+    }
+
+    [Fact]
     public void Commands_RejectMissingPayloadsVersionsAndUnsafeUrls()
     {
         var actor = Guid.NewGuid();
