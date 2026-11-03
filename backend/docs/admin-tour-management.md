@@ -97,7 +97,8 @@ moves a SCHEDULED Tour to READY. Any Staff may call it; Admin, Technical Staff a
 Representative get 403. Under the Tour lock (then the map preparation, robot
 deployment and robot reservation locks, in the order Tour create uses) it checks
 every row of the READY conditions table in `docs/architecture.md` §3.2:
-SCHEDULED with no execution state, an exact RouteRevision with Operator, an active
+SCHEDULED with no execution state, robot ownership or operational history (the
+Cancel/Edit test), an exact RouteRevision with Operator, an active
 single-role Staff Operator, the revision still schedulable (submitted, effective
 PASS, POI evidence, map gate; route deactivation does not count, ADR-0037), an
 active reservation, the ADR-0039 robot rule, no pending row or email-change
@@ -112,8 +113,10 @@ decision, and a start still in the future. Any failure is 409
 Codes: `TOUR_STATE_INVALID`, `ROUTE_VERSION_REQUIRED`, `OPERATOR_REQUIRED`, the
 create-time revision codes (`ROUTE_NOT_SUBMITTED`, `ROUTE_TEST_PASS_REQUIRED`,
 `POI_VERIFICATION_STALE`, map gate codes), `RESERVATION_MISSING`,
-`ROBOT_NOT_READY_FOR_ROUTE`, `PENDING_DECISIONS`, `START_TIME_PASSED`. A Tour without
-a reservation also fails the robot rule, since it has no robot. Success writes a
+`ROBOT_NOT_READY_FOR_ROUTE`, `PENDING_DECISIONS`, `START_TIME_PASSED`. Only root
+causes are listed: a legacy Tour reports only `ROUTE_VERSION_REQUIRED`, a Tour
+without a reservation only `RESERVATION_MISSING` (the robot check is skipped);
+state, pending decisions and start time are always reported. Success writes a
 `TOUR_READY` TourEvent (actor) and the request receipt in the same commit. READY
 does not claim the robot, set `Robots.CurrentTourId`, start the Tour or send a command.
 

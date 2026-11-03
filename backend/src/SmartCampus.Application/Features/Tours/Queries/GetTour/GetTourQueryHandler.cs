@@ -16,7 +16,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var summary = await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         var usage = await repository.GetUsageAsync(query.Id, ct);
         // The same checks Mark READY runs, without its locks; the write rechecks them all.
-        var blockers = await TourReadiness.EvaluateAsync(tour, repository, registrations, revisions, maps, clock, lockTarget: false, ct);
+        var blockers = await TourReadiness.EvaluateAsync(tour, usage, repository, registrations, revisions, maps, clock, lockTarget: false, ct);
         var permissions = TourPreparation.Permissions(tour, usage) with
         {
             CanMarkReady = blockers.Count == 0, CanReopen = tour.CanReopenBeforeStart, ReadyBlockers = blockers

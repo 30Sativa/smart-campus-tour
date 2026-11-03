@@ -409,17 +409,22 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
-    public async Task LegacyTour_IsRefusedReady_WithEveryBlocker_AndDetailShowsTheSameList()
+    public async Task LegacyTour_IsRefusedReady_WithOnlyItsRootCause_AndDetailShowsTheSameList()
     {
         await using var f = await Fixture.Create();
         var id = await f.CreateTour();
         var detail = await f.Detail(id);
         Assert.False(detail.Permissions.CanMarkReady);
         Assert.False(detail.Permissions.CanReopen);
-        var expected = new[] { "ROUTE_VERSION_REQUIRED", "OPERATOR_REQUIRED", "RESERVATION_MISSING", "ROBOT_NOT_READY_FOR_ROUTE" };
-        Assert.Equal(expected, detail.Permissions.ReadyBlockers!.Select(b => b.Code));
+        // Operator, revision, reservation and robot all need the exact revision, so they are not reported.
+        Assert.Equal(["ROUTE_VERSION_REQUIRED"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
         Assert.All(detail.Permissions.ReadyBlockers!, b => Assert.False(string.IsNullOrWhiteSpace(b.Message)));
 
+        // An independent check still reports next to the root cause.
+        await f.Submit(id);
+        detail = await f.Detail(id);
+        var expected = new[] { "ROUTE_VERSION_REQUIRED", "PENDING_DECISIONS" };
+        Assert.Equal(expected, detail.Permissions.ReadyBlockers!.Select(b => b.Code));
         var body = await f.SendBody(HttpMethod.Post, $"/api/staff/manage/tours/{id}/ready",
             new MarkTourReadyRequest(Guid.NewGuid(), detail.Tour.RowVersion), HttpStatusCode.Conflict);
         var errors = body.GetProperty("errors");

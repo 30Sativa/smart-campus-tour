@@ -68,12 +68,15 @@ public sealed class TourReadySqlTests
             $"UPDATE dbo.Users SET IsActive = 0 WHERE Id = '{h.OperatorId}';",
             $"UPDATE dbo.Users SET IsActive = 1 WHERE Id = '{h.OperatorId}';");
         await h.AssertBlocked(["PENDING_DECISIONS"], h.PendingRowSql(), "UPDATE dbo.RosterRows SET ParticipationState = 'REJECTED';");
-        // Without a reservation the Tour has no robot, so the robot rule cannot pass either (fail-closed).
-        await h.AssertBlocked(["RESERVATION_MISSING", "ROBOT_NOT_READY_FOR_ROUTE"],
+        // The robot rule needs the reserved robot, so only the root cause is reported.
+        await h.AssertBlocked(["RESERVATION_MISSING"],
             $"UPDATE dbo.TourRobotReservations SET ReleasedAt = SYSDATETIMEOFFSET(), ReleasedByUserId = '{h.StaffId}';",
             "UPDATE dbo.TourRobotReservations SET ReleasedAt = NULL, ReleasedByUserId = NULL;");
         await h.AssertBlocked(["TOUR_STATE_INVALID"],
             "UPDATE dbo.Tours SET State = 'CANCELLED';", "UPDATE dbo.Tours SET State = 'SCHEDULED';");
+        // A robot already holding the Tour is ownership, the same test Cancel and Edit apply.
+        await h.AssertBlocked(["TOUR_STATE_INVALID"],
+            $"UPDATE dbo.Robots SET CurrentTourId = '{h.TourId}';", "UPDATE dbo.Robots SET CurrentTourId = NULL;");
         Assert.True((await h.Detail()).Permissions.CanMarkReady);
 
         await h.FailRouteTest();
@@ -160,10 +163,15 @@ public sealed class TourReadySqlTests
             Assert.Equal((h.StaffId, "Cần duyệt dòng mới"), (reopened.ActorUserId, reopened.ReasonNote));
         }
         var detail = await h.Detail();
+        // Its own READY/Reopen events are not operational history, so the second READY is not refused.
+        Assert.False(detail.Usage.HasOperationalHistory);
         Assert.True(detail.Permissions.CanEditMetadata);
         Assert.True(detail.Permissions.CanMarkReady);
         await h.Ready(new(Guid.NewGuid(), detail.Tour.RowVersion));
         Assert.Equal("READY", (await h.Detail()).Tour.State);
+        await using var after = h.Context();
+        Assert.Equal(["TOUR_READY", "TOUR_REOPENED", "TOUR_READY"],
+            await after.TourEvents.AsNoTracking().OrderBy(e => e.Id).Select(e => e.EventType).ToArrayAsync());
     }
 
     private static async Task<Exception?> Capture(Task task)

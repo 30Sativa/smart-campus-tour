@@ -21,7 +21,8 @@ public sealed class MarkTourReadyCommandHandler(ITourManagementRepository reposi
         // Every registration, row-review and email-change writer owns this same lock, so no decision can appear before commit.
         var tour = await registrations.LockTourAsync(command.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedRowVersion);
-        var blockers = await TourReadiness.EvaluateAsync(tour, repository, registrations, revisions, maps, clock, lockTarget: true, ct);
+        var usage = await repository.GetUsageAsync(tour.Id, ct);
+        var blockers = await TourReadiness.EvaluateAsync(tour, usage, repository, registrations, revisions, maps, clock, lockTarget: true, ct);
         if (blockers.Count > 0)
             throw new ConflictException("Tour chưa đủ điều kiện READY.", TourReadiness.FailedCode, blockers: blockers);
         var now = clock.GetUtcNow();

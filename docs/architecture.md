@@ -1014,7 +1014,7 @@ decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Flee
 
 | Condition | Source | Data | When null / no source | Blocker code |
 |---|---|---|---|---|
-| `State = SCHEDULED` and no execution state (`Tour.HasExecutionState = false`) | SRS §4 | DB | fail | `TOUR_STATE_INVALID` |
+| `State = SCHEDULED`, no execution state (`Tour.HasExecutionState = false`) and no operational use: `TourUsage.HasOperationalHistory = false` and `TourUsage.HasRobotOwnership = false` (no `Robots.CurrentTourId` pointing at the Tour); the same test Cancel/Edit use. READY/Reopen events are not operational history | SRS §4 | DB | fail | `TOUR_STATE_INVALID` |
 | Versioned Tour: `RouteRevisionId` and `OperatorUserId` set | ADR-0034 | DB | fail | `ROUTE_VERSION_REQUIRED` |
 | Operator is an active Staff account with exactly one role | SRS §2, ADR-0034 | DB | fail | `OPERATOR_REQUIRED` |
 | Revision still schedulable: effective PASS run, POI evidence, map gate | ADR-0034 ("READY must recheck") | DB | fail | existing codes, e.g. `ROUTE_TEST_PASS_REQUIRED`, `POI_VERIFICATION_STALE` |
@@ -1022,6 +1022,19 @@ decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Flee
 | Robot passes the ADR-0039 usable-robot rule for the revision's map version/SHA | ADR-0039 | DB | fail | `ROBOT_NOT_READY_FOR_ROUTE` |
 | No pending row or email-change decision | SRS §4 (FR-16) | DB | fail | `PENDING_DECISIONS` |
 | `ScheduledStartAt > now` | Design | DB + clock | fail | `START_TIME_PASSED` |
+
+Only root causes are reported. Fail-closed applies to the READY decision (any
+blocker is 409), not to listing checks that could not be evaluated: a check B
+that needs the input of check A runs only when A passed. A Tour without
+`RouteRevisionId`/`OperatorUserId` (legacy; `CK_Tours_VersionedTarget_Complete`
+keeps both null together) reports only `ROUTE_VERSION_REQUIRED`, skipping the
+Operator, revision, reservation and robot rows. A Tour without an active
+reservation reports only `RESERVATION_MISSING`, skipping the robot row. The
+independent rows (`TOUR_STATE_INVALID`, `PENDING_DECISIONS`, `START_TIME_PASSED`)
+always run and are all reported.
+
+A deactivated route does not block READY: ADR-0037 §5/§7 stops only Tour create
+and slots, and existing Tours keep their route.
 
 **Start conditions (preflight).** Only the assigned Operator may Start (SRS §7);
 another Staff gets `403`. Any failing check returns
