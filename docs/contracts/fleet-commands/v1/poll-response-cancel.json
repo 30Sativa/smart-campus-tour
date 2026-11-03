@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "message": "Current command.",
+  "data": {
+    "command": {
+      "commandId": "9e8d7c6b-5a49-4382-a1b0-c9d8e7f6a502",
+      "kind": "Cancel",
+      "legId": "7a3e9c12-4b6d-4f1e-8c2a-9d0b1e2f3a41",
+      "issuedAt": "2026-11-10T02:01:30.000+00:00"
+    }
+  },
+  "errors": null
+}

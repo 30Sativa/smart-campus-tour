@@ -996,6 +996,65 @@ the schema explicitly retains `Robot.CurrentTourId` through End Early until
 release confirmation. `NeedsInspection` additionally prevents redispatch.
 `Tour.AssignedRobotId` may remain as history after release.
 
+#### READY and Start conditions (ADR-0042, proposed)
+
+Proposed by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md);
+not implemented. Every condition is evaluated on the server, fail-closed: a
+condition without a data source fails. "Design" means an ADR-0042 proposal, not
+an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Fleet Sync store),
+`OPERATOR_CONFIRMATION` (Start request body), `CONFIG`.
+
+**READY conditions.** Any Staff may mark READY (SRS §2). Failure returns
+`409 READY_PRECONDITION_FAILED` with every failing blocker, not only the first.
+
+| Condition | Source | Data | When null / no source | Blocker code |
+|---|---|---|---|---|
+| `State = SCHEDULED` and no execution state (`Tour.HasExecutionState = false`) | SRS §4 | DB | fail | `TOUR_STATE_INVALID` |
+| Versioned Tour: `RouteRevisionId` and `OperatorUserId` set | ADR-0034 | DB | fail | `ROUTE_VERSION_REQUIRED` |
+| Operator is an active Staff account with exactly one role | SRS §2, ADR-0034 | DB | fail | `OPERATOR_REQUIRED` |
+| Revision still schedulable: effective PASS run, POI evidence, map gate | ADR-0034 ("READY must recheck") | DB | fail | existing codes, e.g. `ROUTE_TEST_PASS_REQUIRED`, `POI_VERIFICATION_STALE` |
+| Active reservation (`ReleasedAt IS NULL`) for this Tour on its robot | SRS §4, ADR-0034 | DB | fail | `RESERVATION_MISSING` |
+| Robot passes the ADR-0039 usable-robot rule for the revision's map version/SHA | ADR-0039 | DB | fail | `ROBOT_NOT_READY_FOR_ROUTE` |
+| No pending row or email-change decision | SRS §4 (FR-16) | DB | fail | `PENDING_DECISIONS` |
+| `ScheduledStartAt > now` | Design | DB + clock | fail | `START_TIME_PASSED` |
+
+**Start conditions (preflight).** Only the assigned Operator may Start (SRS §7);
+another Staff gets `403`. Any failing check returns
+`409 START_PRECONDITION_FAILED` with the full checklist. If every check passes
+while `FleetCommands:Enabled = false`, Start returns
+`409 COMMAND_TRANSPORT_DISABLED` and writes nothing.
+
+| Condition | Source | Data | When null / no source | Check id |
+|---|---|---|---|---|
+| Tour is READY | SRS §4 | DB | fail | `tourReady` |
+| Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | `403` | `callerIsOperator` |
+| `now` in `[ScheduledStartAt, ScheduledStartAt + StartLateLimit]`, default 15 min | Lower bound SRS §4; upper bound Design (D2) | DB + CONFIG | fail | `withinStartWindow` |
+| Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
+| Robot still passes the ADR-0039 rule | ADR-0039 | DB | fail | `robotEligibleForRoute` |
+| `Robots.AssignedMapVersionId = RouteRevisions.MapVersionId` | Design (§3.5 map binding) | DB | fail | `robotMapMatchesRoute` |
+| `Robots.NeedsInspection = 0` | §3.2 / schema | DB | fail | `robotNotNeedsInspection` |
+| `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
+| `Robots.IsDispatchEnabled = 1` (no writer yet, so always fails today) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
+| No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
+| No open incident | SRS §7 (FR-36/46) | none yet | proposed pass with detail "chưa có incident store" — open decision 3 | `noOpenIncident` |
+| No unresolved command for the robot | SRS §7 | DB (`RobotCommands`, M2.2) | M2.1: pass, detail "chưa có command store" | `noUnresolvedCommand` |
+| Latest telemetry received by server ≤ 2 s ago | SRS §7 | TELEMETRY | fail ("robot chưa báo") | `telemetryFresh` |
+| Reported `mapKey`/`frameId` = revision's MapVersion | Design (§3.5) | TELEMETRY + DB | fail | `mapContextMatches` |
+| Reported `executionStatus = IDLE` | Design | TELEMETRY | fail | `executionIdle` |
+| Reported `localized = true` | Design (D4) | TELEMETRY | null fails | `robotLocalized` |
+| Reported `motionReady = true` | Design (D4) | TELEMETRY | null fails | `motionReady` |
+| Operator console connected | SRS §7 | none yet (Hub has no per-user tracking) | "chưa có nguồn → fail" | `operatorConsoleConnected` |
+| `robotPlaced = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `robotPlaced` |
+| `areaClear = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `areaClear` |
+| `attendantPresent = true` (not yet in web) | SRS §7 | OPERATOR_CONFIRMATION | missing fails | `attendantPresent` |
+| `previewChecked = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `previewChecked` |
+| `FleetCommands:Enabled = true` | Design (ADR-0042 §6) | CONFIG | false → `COMMAND_TRANSPORT_DISABLED` | `commandTransportEnabled` |
+| Battery (shown only, never blocks) | Design (D3, §3.4) | TELEMETRY | informational | `batteryInfo` |
+
+Not in this preflight, still required before a full Tour (ADR-0042 open
+decisions 1 and 5): head FRONT (ADR-0008), live stream, FR-49 camera preset and
+FR-50 guide narration receipt.
+
 Persisted intent is necessary but insufficient for safe retries: a bridge
 restart may lose in-memory idempotency state. Reconcile before replay. Late
 results for an old leg may be recorded, but must not advance a new leg or
@@ -1454,6 +1513,12 @@ fleet state is single-process memory; multiple instances need shared-state and
 routing design.
 
 ### 3.4 M2 execution and command-result semantics
+
+[ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
+(Proposed) selects a separate robot-polled command contract
+(`docs/contracts/fleet-commands/v1/`), a persisted command lifecycle and the
+`RobotCommands` table. If accepted, it refines this section: results correlate
+by `commandId`, and a leg's terminal outcome is reported on its GoTo command.
 
 Fleet Sync v1 implements telemetry state reporting as described in §3.1.2.
 The per-leg result/command rules below are retained for M2 design; no
