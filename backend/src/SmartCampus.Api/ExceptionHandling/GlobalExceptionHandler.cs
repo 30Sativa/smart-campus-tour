@@ -55,6 +55,14 @@ public sealed class GlobalExceptionHandler(
                 StatusCodes.Status404NotFound,
                 notFoundException.Message,
                 null),
+            ConflictException { Blockers: not null } conflictException => (
+                StatusCodes.Status409Conflict,
+                conflictException.Message,
+                (object?)new
+                {
+                    code = conflictException.Code,
+                    blockers = conflictException.Blockers.Select(b => new { code = b.Code, message = b.Message })
+                }),
             ConflictException conflictException => (
                 StatusCodes.Status409Conflict,
                 conflictException.Message,

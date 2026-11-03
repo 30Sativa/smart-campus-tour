@@ -25,5 +25,6 @@ public interface ITourManagementRepository
     void Add(Tour tour);
     void Add(TourRobotReservation reservation);
     void AddAudit(AuditLog audit);
+    void AddEvent(TourEvent tourEvent);
     void AddRouteChangeEvent(Tour tour, Guid previousRouteId, Guid actor, DateTimeOffset now);
 }

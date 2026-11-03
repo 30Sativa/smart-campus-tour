@@ -1,3 +1,4 @@
+using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Routes;
 
 namespace SmartCampus.Application.Features.Tours;
@@ -23,7 +24,9 @@ public sealed record TourUsage(bool HasRegistrations, bool HasAllowedBranches, b
 {
     public bool LocksScheduleAndRoute => HasRegistrations || HasAllowedBranches || HasOperationalHistory || HasRobotOwnership;
 }
-public sealed record TourPermissions(bool CanEditMetadata, bool CanChangeScheduleAndRoute, bool CanCancel, bool CanDelete = false);
+/// <summary><see cref="ReadyBlockers"/> lists every READY condition the Tour fails now; empty when it can be marked READY.</summary>
+public sealed record TourPermissions(bool CanEditMetadata, bool CanChangeScheduleAndRoute, bool CanCancel, bool CanDelete = false,
+    bool CanMarkReady = false, bool CanReopen = false, IReadOnlyList<ConflictBlocker>? ReadyBlockers = null);
 public sealed record TourReservationView(string RobotCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     int MeasuredDurationSeconds, DateTimeOffset? ReleasedAt, int ExpectedDurationSeconds);
 public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Available, string? ReasonCode, string? Reason,
@@ -38,3 +41,9 @@ public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDet
     TourUsage Usage, TourPermissions Permissions, RouteRevisionView? RouteRevision,
     RouteTestParticipantView? Operator, TourReservationView? Reservation);
 public sealed record TourMutationResult(Guid Id);
+/// <summary>Staff lifecycle decisions recorded as TourEvents and receipts; they are not operational use of the Tour.</summary>
+public static class TourLifecycleEvents
+{
+    public const string Ready = "TOUR_READY";
+    public const string Reopened = "TOUR_REOPENED";
+}

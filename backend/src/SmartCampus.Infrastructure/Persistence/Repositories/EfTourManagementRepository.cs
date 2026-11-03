@@ -34,7 +34,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
 
     public Task<AuditLog?> FindRequestAsync(Guid actor, Guid requestId, CancellationToken ct) =>
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actor && a.CorrelationId == requestId &&
-            a.EntityType == "Tour" && (a.Action == "TOUR_CREATED" || a.Action == "TOUR_UPDATED" || a.Action == "TOUR_CANCELLED"), ct);
+            a.EntityType == "Tour" && (a.Action == "TOUR_CREATED" || a.Action == "TOUR_UPDATED" || a.Action == "TOUR_CANCELLED" ||
+            a.Action == TourLifecycleEvents.Ready || a.Action == TourLifecycleEvents.Reopened), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {
@@ -75,7 +76,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<TourUsage> GetUsageAsync(Guid id, CancellationToken ct) => new(
         await db.GroupRegistrations.AnyAsync(r => r.TourId == id, ct),
         await db.TourAllowedBranches.AnyAsync(b => b.TourId == id, ct),
-        await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED", ct) ||
+        // READY and Reopen are Staff decisions before Start; they must not lock the Tour as if it had run.
+        await db.TourEvents.AnyAsync(e => e.TourId == id && e.EventType != "TOUR_ROUTE_CHANGED" &&
+            e.EventType != TourLifecycleEvents.Ready && e.EventType != TourLifecycleEvents.Reopened, ct) ||
             await db.BranchRequests.AnyAsync(b => b.TourId == id, ct),
         await db.Robots.AnyAsync(r => r.CurrentTourId == id, ct));
 
@@ -118,6 +121,7 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public void Add(Tour tour) => db.Tours.Add(tour);
     public void Add(TourRobotReservation reservation) => db.TourRobotReservations.Add(reservation);
     public void AddAudit(AuditLog audit) => db.AuditLogs.Add(audit);
+    public void AddEvent(TourEvent tourEvent) => db.TourEvents.Add(tourEvent);
     public void AddRouteChangeEvent(Tour tour, Guid previousRouteId, Guid actor, DateTimeOffset now) => db.TourEvents.Add(new TourEvent
     {
         TourId = tour.Id, RouteId = previousRouteId, ActorUserId = actor, OccurredAt = now,

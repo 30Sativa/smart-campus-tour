@@ -11,6 +11,8 @@ using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
+using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
@@ -68,6 +70,14 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelTourRequest request, CancellationToken ct) =>
         Success(await sender.Send(new CancelTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour cancelled before Start.");
+
+    [HttpPost("{id:guid}/ready")]
+    public async Task<IActionResult> MarkReady(Guid id, [FromBody] MarkTourReadyRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new MarkTourReadyCommand(id, User.GetRequiredUserId(), request), ct), "Tour marked READY.");
+
+    [HttpPost("{id:guid}/reopen")]
+    public async Task<IActionResult> Reopen(Guid id, [FromBody] ReopenTourRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new ReopenTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour reopened to SCHEDULED.");
 
     private OkObjectResult Success(TourMutationResult result, string message) =>
         Ok(new BaseResponse<TourMutationResult> { Success = true, Message = message, Data = result });
