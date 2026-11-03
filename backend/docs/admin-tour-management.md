@@ -150,9 +150,11 @@ GET `/api/staff/manage/tours/{id}/start-checks` (any Staff) returns
 `{checks: [{id, passed, source, detail}], canStart, blockedBy}`, evaluated now
 without locks. `source` is `DB`, `TELEMETRY` (in-memory Fleet Sync store),
 `CONFIG` or `CONSOLE`. It includes `callerIsOperator` (is the viewer the Tour's
-Operator) and leaves out the four on-site confirmations. `canStart` is true only
-when every returned check passed, so it is always false while
-`FleetCommands:Enabled` is false.
+Operator) and leaves out the four on-site confirmations. `callerIsOperator` is
+independent: for another Staff it is a root cause in `blockedBy`, and every other
+check is still evaluated in full. `canStart` belongs to the caller: true only when
+every returned check passed, so false for any Staff who is not the Operator, and
+always false while `FleetCommands:Enabled` is false.
 
 POST `/api/staff/manage/tours/{id}/start` with
 `{requestId, expectedRowVersion, confirmation: {robotPlaced, areaClear, attendantPresent, previewChecked}}`:

@@ -48,11 +48,16 @@ public sealed class TourStartPreflightSqlTests
             "UPDATE dbo.Robots SET FirstAcceptedSyncAt = SYSDATETIMEOFFSET(), FirstAcceptedMapKey = 'pilot', FirstAcceptedFrameId = 'map';");
         await w.AssertBlocked(["robotMapMatchesRoute"],
             "UPDATE dbo.Robots SET AssignedMapVersionId = NULL, AssignedAreaKey = NULL, MapAssignedAt = NULL, MapAssignedByUserId = NULL;", w.AssignMapSql);
-        // ADR-0042 open decision 3: inspection is also the open-incident stand-in, so both report.
-        await w.AssertBlocked(["robotNotNeedsInspection", "noOpenIncident"],
+        // Inspection is its own check; the open-incident stand-in does not report it again (ADR-0042 open decision 3, refined).
+        await w.AssertBlocked(["robotNotNeedsInspection"],
             "UPDATE dbo.Robots SET NeedsInspection = 1;", "UPDATE dbo.Robots SET NeedsInspection = 0;");
         await w.AssertBlocked(["robotNotHeldByOtherTour"],
             $"UPDATE dbo.Robots SET CurrentTourId = '{w.OtherTourId}';", "UPDATE dbo.Robots SET CurrentTourId = NULL;");
+        // A RUNNING Tour assigned to the robot needing assistance is an open incident even without CurrentTourId.
+        await w.AssertBlocked(["noOpenIncident"],
+            $"UPDATE dbo.Tours SET State = 'RUNNING', AssignedRobotId = (SELECT Id FROM dbo.Robots), OperationalStatus = 'NEEDS_ASSISTANCE' WHERE Id = '{w.OtherTourId}';",
+            $"UPDATE dbo.Tours SET State = 'SCHEDULED', AssignedRobotId = NULL, OperationalStatus = NULL WHERE Id = '{w.OtherTourId}';");
+        // Held by another Tour that needs assistance: two independent facts, each reported once.
         await w.AssertBlocked(["robotNotHeldByOtherTour", "noOpenIncident"],
             $"""
             UPDATE dbo.Tours SET OperationalStatus = 'NEEDS_ASSISTANCE' WHERE Id = '{w.OtherTourId}';
@@ -179,6 +184,10 @@ public sealed class TourStartPreflightSqlTests
         var checks = await w.H.Send(new GetTourStartChecksQuery(w.H.TourId, w.H.StaffId));
         Assert.False(Assert.Single(checks.Checks, c => c.Id == "callerIsOperator").Passed);
         Assert.Equal(["callerIsOperator", Transport], checks.BlockedBy);
+        // Independent: every other check still runs and reads exactly as the Operator sees it.
+        var own = await w.Checks();
+        Assert.Equal(own.Checks.Where(c => c.Id != "callerIsOperator").Select(c => (c.Id, c.Passed, c.Source)),
+            checks.Checks.Where(c => c.Id != "callerIsOperator").Select(c => (c.Id, c.Passed, c.Source)));
 
         var before = await w.State();
         var version = await w.H.Version();
