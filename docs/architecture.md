@@ -1090,6 +1090,10 @@ is independent: a non-Operator viewer gets every other check evaluated in full, 
 `FleetCommands`: `Enabled` (default false; `true` stops startup in M2.1),
 `MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15).
 
+M2.1 stores no `requestId` receipt because Start never commits. Follow-up M2.2:
+Start thật phải có receipt requestId (TourRequestReceipt) để chống Start lặp, theo
+SRS §4 (ADR-0042 §5 step 1).
+
 Not in this preflight, still required before a full Tour (ADR-0042 open
 decisions 1 and 5): head FRONT (ADR-0008), live stream, FR-49 camera preset and
 FR-50 guide narration receipt.
