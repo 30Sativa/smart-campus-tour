@@ -51,6 +51,17 @@ internal static class TourTarget
         : RouteRobotDeployment.IsCurrent(latestDeployment, map, revision) ? null
         : "Robot chưa triển khai đúng bản đồ của tuyến.";
 
+    /// <summary>The physical robot a reservation holds; null when it cannot be found.</summary>
+    public static async Task<Robot?> FindReservedRobotAsync(IRouteRevisionRepository revisions, Guid robotId, CancellationToken ct) =>
+        await revisions.GetRobotCodeAsync(robotId, ct) is { } robotCode ? await revisions.FindPhysicalRobotAsync(robotCode, ct) : null;
+
+    /// <summary>Null when the reserved robot can run the revision. READY and the Start preflight both ask here.</summary>
+    public static async Task<string?> ReservedRobotIssueAsync(IRouteRevisionRepository revisions, Robot? robot, RouteRevision revision,
+        CancellationToken ct) =>
+        robot is not null && await revisions.GetMapAsync(revision.MapVersionId, ct) is { } map
+            ? RobotBlockReason(robot, await revisions.GetLatestDeploymentForRobotAsync(robot.Id, ct), map, revision)
+            : "Không xác định được robot hoặc bản đồ của Tour.";
+
     public static async Task RequireUsableRobotAsync(IRouteRevisionRepository revisions, Robot robot, RouteRevision revision, CancellationToken ct)
     {
         var map = await revisions.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");

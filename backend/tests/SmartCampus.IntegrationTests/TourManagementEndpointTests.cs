@@ -409,6 +409,46 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task StartChecksAndStart_OverHttp_StaffOnly_OperatorOnly_AndWriteNothing()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var version = (await f.Detail(id)).Tour.RowVersion;
+        var start = new { requestId = Guid.NewGuid(), expectedRowVersion = version,
+            confirmation = new { robotPlaced = true, areaClear = true, attendantPresent = true, previewChecked = true } };
+        foreach (var token in new string?[] { null, f.SystemAdmin, f.Representative, f.Technical })
+        {
+            var expected = token is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
+            using var read = new HttpRequestMessage(HttpMethod.Get, $"/api/staff/manage/tours/{id}/start-checks");
+            using var write = new HttpRequestMessage(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start") { Content = JsonContent.Create(start) };
+            foreach (var request in new[] { read, write })
+            {
+                if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                using var response = await f.Client.SendAsync(request);
+                Assert.Equal(expected, response.StatusCode);
+            }
+        }
+
+        // A legacy Tour has no Operator: any Staff may read the checklist, nobody may Start.
+        var checks = await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{id}/start-checks");
+        Assert.False(checks.GetProperty("canStart").GetBoolean());
+        var list = checks.GetProperty("checks").EnumerateArray().ToArray();
+        Assert.All(list, c => Assert.False(string.IsNullOrWhiteSpace(c.GetProperty("detail").GetString())));
+        Assert.False(list.Single(c => c.GetProperty("id").GetString() == "callerIsOperator").GetProperty("passed").GetBoolean());
+        Assert.DoesNotContain(list, c => c.GetProperty("source").GetString() == "OPERATOR_CONFIRMATION");
+        var blockedBy = checks.GetProperty("blockedBy").EnumerateArray().Select(b => b.GetString()).ToArray();
+        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "operatorConsoleConnected",
+            "commandTransportEnabled"], blockedBy.Where(b => b != "withinStartWindow"));
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start", start, HttpStatusCode.Forbidden);
+        await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{Guid.NewGuid()}/start-checks", expected: HttpStatusCode.NotFound);
+
+        await using var db = f.Context();
+        var tour = await db.Tours.SingleAsync();
+        Assert.Equal(("SCHEDULED", (DateTimeOffset?)null, (Guid?)null), (tour.State, tour.StartedAt, tour.AssignedRobotId));
+        Assert.Empty(await db.TourEvents.ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
     public async Task LegacyTour_IsRefusedReady_WithOnlyItsRootCause_AndDetailShowsTheSameList()
     {
         await using var f = await Fixture.Create();

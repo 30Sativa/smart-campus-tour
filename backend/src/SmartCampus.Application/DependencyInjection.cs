@@ -28,6 +28,7 @@ namespace SmartCampus.Application
 
             services.AddValidatorsFromAssembly(assembly);
             services.AddScoped<SmartCampus.Application.Features.Invitations.InvitationIssuer>();
+            services.AddScoped<SmartCampus.Application.Features.Tours.TourStartPreflight>();
             services.AddSingleton<SmartCampus.Application.Features.StudentQuestions.StudentQuestionGate>();
             services.AddSingleton<SmartCampus.Application.Features.Auth.LoginAttemptGate>();
 

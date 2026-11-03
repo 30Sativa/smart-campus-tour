@@ -15,6 +15,7 @@ using SmartCampus.Infrastructure.Persistence.Seeding;
 using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
@@ -43,6 +44,11 @@ public static class DependencyInjection
         services.AddScoped<IRobotMapAssignmentManager, EfRobotMapAssignmentManager>();
         services.AddScoped<IPhysicalRobotCredentialManager, EfPhysicalRobotCredentialManager>();
         services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
+        services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
+        // Built here, not lazily: FleetCommands:Enabled = true must stop startup (ADR-0042 §6; M2.1 has no transport).
+        services.AddSingleton(new FleetCommandSettings(configuration.GetValue<bool?>("FleetCommands:Enabled") ?? false,
+            configuration.GetValue<int?>("FleetCommands:MaxTelemetryAgeSeconds") ?? 2,
+            configuration.GetValue<int?>("FleetCommands:StartLateLimitMinutes") ?? 15));
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);

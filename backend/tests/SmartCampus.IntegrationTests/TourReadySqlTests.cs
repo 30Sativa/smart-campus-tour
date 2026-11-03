@@ -25,7 +25,7 @@ namespace SmartCampus.IntegrationTests;
 /// <summary>READY and Reopen on a Tour scheduled from a tested revision (ADR-0042, architecture §3.2).</summary>
 public sealed class TourReadySqlTests
 {
-    private const string Robot = "amr_ready";
+    internal const string Robot = "amr_ready";
 
     [SchemaV11Fact]
     public async Task MarkReady_LocksTheTour_RecordsEventAndReceipt_AndTouchesNoRobot()
@@ -194,19 +194,22 @@ public sealed class TourReadySqlTests
         return stream.ToArray();
     }
 
-    private sealed class Harness(InitialAdminSeederTests.EmptySchemaDatabase database, ServiceProvider provider,
+    /// <summary>A versioned SCHEDULED Tour on a tested revision with its robot reserved; also used by the Start preflight tests.</summary>
+    internal sealed class Harness(InitialAdminSeederTests.EmptySchemaDatabase database, ServiceProvider provider,
         Guid technicalId, Guid staffId, Guid operatorId) : IAsyncDisposable
     {
         public InitialAdminSeederTests.EmptySchemaDatabase Database => database;
         public Guid StaffId => staffId;
         public Guid OperatorId => operatorId;
+        public Guid TechnicalId => technicalId;
         public Guid TourId { get; private set; }
         public RouteRevisionView Route { get; private set; } = null!;
         public DateTimeOffset Start { get; } =
             new(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(9, 0)), TimeSpan.FromHours(7));
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
 
-        public static async Task<Harness> Create()
+        /// <summary><paramref name="configure"/> replaces services after the real registrations, e.g. the clock.</summary>
+        public static async Task<Harness> Create(Action<IServiceCollection>? configure = null)
         {
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
             var technical = await database.InsertUserAsync(true, username: "ready.technical", roles: ["TECHNICAL_STAFF"]);
@@ -225,6 +228,7 @@ public sealed class TourReadySqlTests
             services.AddSingleton<IConfiguration>(configuration);
             services.AddInfrastructure(configuration);
             services.AddSingleton(new FleetSyncSettings(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)));
+            configure?.Invoke(services);
             var harness = new Harness(database, services.BuildServiceProvider(), technical.Id, staff.Id, operatorUser.Id);
             await harness.Prepare();
             return harness;
@@ -261,6 +265,8 @@ public sealed class TourReadySqlTests
             await using var scope = provider.CreateAsyncScope();
             return await scope.ServiceProvider.GetRequiredService<ISender>().Send(request);
         }
+
+        public T Service<T>() where T : notnull => provider.GetRequiredService<T>();
 
         public Task<TourDetails> Detail() => Send(new GetTourQuery(TourId));
         public async Task<string> Version() => (await Detail()).Tour.RowVersion;

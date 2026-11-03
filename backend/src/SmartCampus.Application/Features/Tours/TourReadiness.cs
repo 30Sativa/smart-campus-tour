@@ -69,15 +69,13 @@ internal static class TourReadiness
             await revisions.LockRobotDeploymentStateAsync(reservation.RobotId, ct);
             await repository.LockRobotReservationsAsync(reservation.RobotId, ct);
         }
-        var robotIssue = "Không xác định được robot hoặc bản đồ của Tour.";
-        if (await revisions.GetRobotCodeAsync(reservation.RobotId, ct) is { } robotCode &&
-            await revisions.FindPhysicalRobotAsync(robotCode, ct) is { } robot &&
-            await revisions.GetMapAsync(revision.MapVersionId, ct) is { } map)
-            robotIssue = TourTarget.RobotBlockReason(robot, await revisions.GetLatestDeploymentForRobotAsync(robot.Id, ct), map, revision);
-        if (robotIssue is not null) fail("ROBOT_NOT_READY_FOR_ROUTE", robotIssue);
+        var robot = await TourTarget.FindReservedRobotAsync(revisions, reservation.RobotId, ct);
+        if (await TourTarget.ReservedRobotIssueAsync(revisions, robot, revision, ct) is { } robotIssue)
+            fail("ROBOT_NOT_READY_FOR_ROUTE", robotIssue);
     }
 
-    private static async Task<ConflictBlocker?> Failure(Func<Task> check)
+    /// <summary>The conflict a requirement check throws, as a blocker; null when it passed.</summary>
+    internal static async Task<ConflictBlocker?> Failure(Func<Task> check)
     {
         try
         {

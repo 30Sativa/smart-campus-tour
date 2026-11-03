@@ -45,8 +45,9 @@ Tour create stores the exact RouteRevisionId, assigned Operator and robot
 reservation (ADR-0034); legacy Tours store none of them. No immutable READY
 snapshot is stored: the Tour pins its exact revision. READY and Reopen are
 implemented under ADR-0042 (conditions in §3.2) for versioned Tours; a legacy
-Tour is refused READY. No Finalize, Start, Staff operation or branch-request
-endpoint is implemented here.
+Tour is refused READY. The M2.1 Start preflight is implemented and always refuses
+(no command transport). No Finalize, Staff operation or branch-request endpoint
+is implemented here.
 
 | Method | Path | Behavior |
 |---|---|---|
@@ -60,6 +61,8 @@ endpoint is implemented here.
 | POST | `/api/staff/manage/tours/{id}/cancel` | `{requestId, expectedRowVersion, reason}`; cancel SCHEDULED/READY before Start, revoke invitation access and close sessions atomically. The commit also queues one notice for representatives of SUBMITTED/APPROVED registrations; the email worker sends it after commit and audits `TOUR_CANCEL_NOTICE_SENT`/`TOUR_CANCEL_NOTICE_FAILED`. Email outcome never changes the response, and a replay queues nothing. |
 | POST | `/api/staff/manage/tours/{id}/ready` | `{requestId, expectedRowVersion}`; any Staff (Admin/TechnicalStaff/Representative 403). SCHEDULED → READY when every READY condition of §3.2 passes under the Tour lock, then the map preparation, robot deployment and robot reservation locks (Tour create order). Otherwise 409 `READY_PRECONDITION_FAILED` with `errors.blockers` listing every failing condition; `STALE_VERSION`, `IDEMPOTENCY_CONFLICT`. Commits a `TOUR_READY` TourEvent and receipt. No robot claim, `CurrentTourId`, Start or command. |
 | POST | `/api/staff/manage/tours/{id}/reopen` | `{requestId, expectedRowVersion, reason}`; any Staff. READY without execution state → SCHEDULED, else 409 `TOUR_STATE_INVALID`; blank reason 400. Commits a `TOUR_REOPENED` TourEvent (actor, reason) and receipt; reservation, registrations and invitations unchanged. READY/Reopen events do not count as operational history. |
+| GET | `/api/staff/manage/tours/{id}/start-checks` | Any Staff. `{checks: [{id, passed, source, detail}], canStart, blockedBy}`: the Start conditions of §3.2 evaluated now without locks (`source` DB, TELEMETRY, CONFIG, CONSOLE), with `callerIsOperator` and without the on-site confirmations. `canStart` = every returned check passed; `blockedBy` lists root causes only. |
+| POST | `/api/staff/manage/tours/{id}/start` | `{requestId, expectedRowVersion, confirmation: {robotPlaced, areaClear, attendantPresent, previewChecked}}`; only `Tours.OperatorUserId` (other Staff 403). Re-runs every Start check under the READY lock order. Any failing check: 409 `START_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`; all pass but `FleetCommands:Enabled = false`: 409 `COMMAND_TRANSPORT_DISABLED` with the checks; `STALE_VERSION`. **M2.1 always refuses and writes nothing**: no state, StartedAt, robot claim, TourEvent, receipt or command. |
 | POST | `/api/staff/routes/{id}/deactivate` | Staff only. `{requestId, expectedRowVersion}`; `expectedRowVersion` is the route view's opaque `rowVersion`. Stops new Tours on a VERSIONED route (ADR-0037); returns `{routeId, isActive, scheduledTours}`. 409 `STALE_ROUTE` or `IDEMPOTENCY_CONFLICT`; 404 for a legacy or missing Route. |
 | POST | `/api/staff/routes/{id}/activate` | Same body and result. Only lifts the stop; Tour create still requires an effective PASS. |
 | GET | `/api/staff/routes/{id}/scheduled-tours` | Staff only. SCHEDULED/READY Tours on a VERSIONED route, shown before deactivating. |
@@ -1004,10 +1007,10 @@ release confirmation. `NeedsInspection` additionally prevents redispatch.
 
 Accepted in [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md).
 The READY table is implemented (Tour Management API, M2.1-a); the Start preflight
-is not. Every condition is evaluated on the server, fail-closed: a
+is implemented as a check that always refuses (M2.1-b: no command transport, no write). Every condition is evaluated on the server, fail-closed: a
 condition without a data source fails. "Design" means an ADR-0042 design
 decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Fleet Sync store),
-`OPERATOR_CONFIRMATION` (Start request body), `CONFIG`.
+`OPERATOR_CONFIRMATION` (Start request body), `CONFIG`, `CONSOLE` (operator console presence).
 
 **READY conditions.** Any Staff may mark READY (SRS §2). Failure returns
 `409 READY_PRECONDITION_FAILED` with every failing blocker, not only the first.
@@ -1045,9 +1048,10 @@ while `FleetCommands:Enabled = false`, Start returns
 | Condition | Source | Data | When null / no source | Check id |
 |---|---|---|---|---|
 | Tour is READY | SRS §4 | DB | fail | `tourReady` |
-| Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | `403` | `callerIsOperator` |
+| Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | POST: `403`, not a check; GET start-checks: a check telling the viewer | `callerIsOperator` |
 | `now` in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, default 15 | Lower bound SRS §4; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
 | Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
+| Revision still schedulable: effective PASS run, POI evidence, map gate (the READY check, `TourTarget.RequireSchedulableRevisionAsync`); route deactivation not considered (ADR-0037) | ADR-0034 | DB | fail; detail carries the code, e.g. `ROUTE_TEST_PASS_REQUIRED` | `revisionStillSchedulable` |
 | Robot still passes the ADR-0039 rule | ADR-0039 | DB | fail | `robotEligibleForRoute` |
 | `Robots.AssignedMapVersionId = RouteRevisions.MapVersionId` | Design (§3.5 map binding) | DB | fail | `robotMapMatchesRoute` |
 | `Robots.NeedsInspection = 0` | §3.2 / schema | DB | fail | `robotNotNeedsInspection` |
@@ -1061,13 +1065,28 @@ while `FleetCommands:Enabled = false`, Start returns
 | Reported `executionStatus = IDLE` | Design | TELEMETRY | fail | `executionIdle` |
 | Reported `localized = true` | Design (D4) | TELEMETRY | null fails | `robotLocalized` |
 | Reported `motionReady = true` | Design (D4) | TELEMETRY | null fails | `motionReady` |
-| Operator console connected | SRS §7 | none yet (Hub has no per-user tracking) | "chưa có nguồn → fail" | `operatorConsoleConnected` |
+| Operator console connected | SRS §7 | CONSOLE: `IOperatorConsolePresence`; production has no source yet (Hub has no per-user tracking) | "chưa có nguồn → fail" | `operatorConsoleConnected` |
 | `robotPlaced = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `robotPlaced` |
 | `areaClear = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `areaClear` |
 | `attendantPresent = true` (not yet in web) | SRS §7 | OPERATOR_CONFIRMATION | missing fails | `attendantPresent` |
 | `previewChecked = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `previewChecked` |
 | `FleetCommands:Enabled = true` | Design (ADR-0042 §6) | CONFIG | false → `COMMAND_TRANSPORT_DISABLED` | `commandTransportEnabled` |
 | Battery (shown only, never blocks) | Design (D3, §3.4) | TELEMETRY | informational | `batteryInfo` |
+
+Start reports the whole checklist (`checks`, passed rows included) and root causes
+(`blockedBy`), with the READY root-cause rule: a check that needs another check's
+input runs only when that check passed, otherwise it is `passed: false` with detail
+"Chưa kiểm tra vì <id> chưa đạt" and is not in `blockedBy`. Dependencies: every
+robot, incident, command and telemetry row needs `reservationActive`;
+`robotEligibleForRoute`/`robotMapMatchesRoute` also need the Tour's revision;
+`mapContextMatches`, `executionIdle`, `robotLocalized` and `motionReady` need
+`telemetryFresh`. Independent rows (`tourReady`, `withinStartWindow`,
+`revisionStillSchedulable`, `noPendingDecisions`, console, confirmations,
+transport) always run. `NeedsInspection = 1` fails both `robotNotNeedsInspection`
+and `noOpenIncident` (open decision 3 defines the latter through it).
+`batteryInfo` always passes and never enters `blockedBy`. Configuration section
+`FleetCommands`: `Enabled` (default false; `true` stops startup in M2.1),
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15).
 
 Not in this preflight, still required before a full Tour (ADR-0042 open
 decisions 1 and 5): head FRONT (ADR-0008), live stream, FR-49 camera preset and
