@@ -14,8 +14,10 @@ the legacy POI catalog API, legacy Route authoring writes, aggregate registratio
 review, and direct Admin email correction have been removed from HTTP routing.
 Read-only legacy Route projections remain for the Tour slice that cannot yet
 consume RouteRevision. Admin account management remains available.
-F-14, conflicting branch cutoff, project YAML/frame mapping and M2 command transport remain pending.
-Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled.
+F-14, conflicting branch cutoff and project YAML/frame mapping remain pending.
+M2 command transport is selected by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
+and is implemented from M2.2; dispatch stays off until M2.3 safety evidence.
+Repo ADR-0019 HTTPS Fleet Sync stays telemetry-only; no command endpoint is enabled yet.
 
 ## API ownership and retired compatibility routes (2026-10-28)
 
@@ -996,12 +998,12 @@ the schema explicitly retains `Robot.CurrentTourId` through End Early until
 release confirmation. `NeedsInspection` additionally prevents redispatch.
 `Tour.AssignedRobotId` may remain as history after release.
 
-#### READY and Start conditions (ADR-0042, proposed)
+#### READY and Start conditions (ADR-0042)
 
-Proposed by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md);
-not implemented. Every condition is evaluated on the server, fail-closed: a
-condition without a data source fails. "Design" means an ADR-0042 proposal, not
-an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Fleet Sync store),
+Accepted in [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md);
+not implemented yet. Every condition is evaluated on the server, fail-closed: a
+condition without a data source fails. "Design" means an ADR-0042 design
+decision, not an SRS requirement. Data source: `DB`, `TELEMETRY` (in-memory Fleet Sync store),
 `OPERATOR_CONFIRMATION` (Start request body), `CONFIG`.
 
 **READY conditions.** Any Staff may mark READY (SRS §2). Failure returns
@@ -1028,7 +1030,7 @@ while `FleetCommands:Enabled = false`, Start returns
 |---|---|---|---|---|
 | Tour is READY | SRS §4 | DB | fail | `tourReady` |
 | Caller is `Tours.OperatorUserId` | SRS §7 (FR-36/46) | DB | `403` | `callerIsOperator` |
-| `now` in `[ScheduledStartAt, ScheduledStartAt + StartLateLimit]`, default 15 min | Lower bound SRS §4; upper bound Design (D2) | DB + CONFIG | fail | `withinStartWindow` |
+| `now` in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, default 15 | Lower bound SRS §4; upper bound Design (D2, ADR-0042 §7) | DB + CONFIG | fail | `withinStartWindow` |
 | Active reservation for this Tour on the same robot | SRS §4, ADR-0034 | DB | fail | `reservationActive` |
 | Robot still passes the ADR-0039 rule | ADR-0039 | DB | fail | `robotEligibleForRoute` |
 | `Robots.AssignedMapVersionId = RouteRevisions.MapVersionId` | Design (§3.5 map binding) | DB | fail | `robotMapMatchesRoute` |
@@ -1036,9 +1038,9 @@ while `FleetCommands:Enabled = false`, Start returns
 | `Robots.CurrentTourId IS NULL` | SRS §4 (atomic claim) | DB | fail | `robotNotHeldByOtherTour` |
 | `Robots.IsDispatchEnabled = 1` (no writer yet, so always fails today) | Design (ADR-0042 §6) | DB | fail | `robotDispatchEnabled` |
 | No pending row/email decision (recheck) | SRS §4 | DB | fail | `noPendingDecisions` |
-| No open incident: `Robots.NeedsInspection = 0` and no Tour holding the robot is RUNNING with `OperationalStatus = NEEDS_ASSISTANCE` (no incident table yet) | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | fail | `noOpenIncident` |
+| No open incident: `Robots.NeedsInspection = 0` and no Tour holding this robot has `OperationalStatus = NEEDS_ASSISTANCE`; replace when an incident store exists | SRS §7 (FR-36/46); definition is Design (ADR-0042 open decision 3) | DB | missing data fails | `noOpenIncident` |
 | No unresolved command for the robot | SRS §7 | DB (`RobotCommands`, M2.2) | M2.1: pass, detail "chưa có command store" | `noUnresolvedCommand` |
-| Latest telemetry received by server ≤ 2 s ago | SRS §7 | TELEMETRY | fail ("robot chưa báo") | `telemetryFresh` |
+| Latest telemetry received by server ≤ `FleetCommands:MaxTelemetryAgeSeconds` (default 2) ago; not Fleet Sync `SyncFreshness` | SRS §7 | TELEMETRY + CONFIG | fail ("robot chưa báo") | `telemetryFresh` |
 | Reported `mapKey`/`frameId` = revision's MapVersion | Design (§3.5) | TELEMETRY + DB | fail | `mapContextMatches` |
 | Reported `executionStatus = IDLE` | Design | TELEMETRY | fail | `executionIdle` |
 | Reported `localized = true` | Design (D4) | TELEMETRY | null fails | `robotLocalized` |
@@ -1515,9 +1517,9 @@ routing design.
 ### 3.4 M2 execution and command-result semantics
 
 [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
-(Proposed) selects a separate robot-polled command contract
-(`docs/contracts/fleet-commands/v1/`), a persisted command lifecycle and the
-`RobotCommands` table. If accepted, it refines this section: results correlate
+(Accepted 2026-11-03, implemented from M2.2) selects a separate robot-polled
+command contract (`docs/contracts/fleet-commands/v1/`), a persisted command
+lifecycle and the `RobotCommands` table. It refines this section: results correlate
 by `commandId`, and a leg's terminal outcome is reported on its GoTo command.
 
 Fleet Sync v1 implements telemetry state reporting as described in §3.1.2.

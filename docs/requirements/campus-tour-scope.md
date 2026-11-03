@@ -236,5 +236,6 @@ and research datasets; no student data to AI and no routine recording.
 
 Acceptance targets AC-01..11 are defined by the SRS and linked in the gap register.
 They are not test results. Voice-provider/data terms, YAML/frame mapping,
-F-14, branch cutoff, command transport, invalid-code defaults, research
-delivery/freshness thresholds and physical pilot evidence remain open.
+F-14, branch cutoff, invalid-code defaults, research delivery/freshness
+thresholds and physical pilot evidence remain open. Navigation command
+transport is selected by ADR-0042 and is implemented from M2.2.

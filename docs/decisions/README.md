@@ -80,7 +80,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0039](0039-robot-area-tour-readiness-and-deactivation.md) | One robot per map area as a current-phase limit, only usable robots for Tours, and robot deactivation through DeactivatedAt | owner-authorized 2026-11-01 |
 | [0040](0040-map-package-uniqueness-camera-enum-pose-clearance.md) | One version per package within a map area, camera preset limited to FRONT, LEFT and RIGHT, and a free radius around every newly written POI or route pose | owner-authorized 2026-11-01 |
 | [0041](0041-map-version-retirement.md) | Retire a map version with "Ngừng sử dụng" instead of deleting it; refused while a robot is assigned to it, keeps all history | proposed 2026-11-02, pending owner approval, not implemented |
-| [0042](0042-m2-command-transport-and-start-readiness.md) | M2 command transport as a separate robot-polled endpoint, persisted command lifecycle, `RobotCommands` design and READY/Start condition tables | proposed 2026-11-03, pending group review, not implemented |
+| [0042](0042-m2-command-transport-and-start-readiness.md) | M2 command transport as a separate robot-polled endpoint, persisted command lifecycle, `RobotCommands` design and READY/Start condition tables | accepted by the repository owner 2026-11-03; implemented from M2.2; dispatch off until M2.3 safety evidence |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

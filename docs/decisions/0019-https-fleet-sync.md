@@ -27,7 +27,7 @@ not implement navigation, cancellation, tour runtime, or the ROS Fleet Bridge.
 - A robot initiates HTTPS `POST /api/fleet/v1/sync` reports. The endpoint
   accepts telemetry and returns reconciliation metadata with an empty
   `commands` array. It cannot send GoTo, Cancel, E-stop, or `/cmd_vel`.
-  Proposed supersession: see ADR-0042 (a separate command endpoint; the `commands` array would stay empty). v1 behavior is unchanged.
+  Superseded for commands by ADR-0042 (accepted 2026-11-03): v1 `commands` is always empty; commands go through `docs/contracts/fleet-commands/v1/`. v1 behavior is unchanged.
 - The backend remains authoritative for POI/map context, assignment, and tour
   progression. A future ROS 2 Fleet Bridge translates backend-approved
   per-leg work; it does not own the tour state machine.

@@ -1,10 +1,14 @@
 # ADR-0042: M2 command transport, command lifecycle and Start readiness
 
-- **Status:** Proposed, 2026-11-03. Not accepted; nothing here is implemented. Until the group accepts it, root `AGENTS.md` and ADR-0020 still treat M2 command transport as pending, and Fleet Sync v1 keeps returning `commands: []`.
+- **Status:** Accepted by the repository owner, 03/11/2026. Nothing here is implemented yet; implementation starts in M2.2.
+  - The refinements to ADR-0008 / architecture §3.4 are accepted: results correlate by `commandId`, a leg's outcome is reported only on its GoTo command, and the `RECONCILED` state closes an UNKNOWN command without inventing an outcome.
+  - The remaining open decisions (D8 FRONT, `CurrentRouteStopId` vs `RouteRevisionStops`, Gazebo Start testing, the `IsDispatchEnabled` procedure, web contract drift) must be closed before M2.2.
+  - Accepting the transport and lifecycle does **not** permit enabling dispatch or running a physical robot through the fleet path. That still needs the M2.3 safety evidence in §6.
+  - Fleet Sync v1 keeps returning `commands: []`.
 - **Supplements:** ADR-0005 (backend-owned per-leg orchestration), ADR-0008 (command/result semantics, reconnect/idempotency; its transport is already superseded), ADR-0019 (HTTPS Fleet Sync, telemetry only).
 - **Related:** ADR-0020 (SRS v0.2 baseline), ADR-0034/0035 (Tour from tested revision, reservation), ADR-0039 (usable robot for a Tour), `docs/architecture.md` §3.1.2, §3.2, §3.4–§3.6, §6.
 
-Labels used below: **[SRS]** is required by `docs/requirements/campus-tour-scope.md` / the gap register; **[ADR-n]** restates an accepted decision; **[Design]** is a proposal of this ADR and becomes binding only on acceptance.
+Labels used below: **[SRS]** is required by `docs/requirements/campus-tour-scope.md` / the gap register; **[ADR-n]** restates an accepted decision; **[Design]** is a design decision of this ADR, not an SRS requirement.
 
 ## Context
 
@@ -35,7 +39,7 @@ Model: each robot has **at most one open movement command**. The robot pulls it.
 
 Path reasoning: `/api/fleet/` keeps the robot authentication scheme and rate-limit grouping of Fleet Sync; `commands/v1` versions this contract independently, and avoids `/api/fleet/v1/commands`, which would read as "Fleet Sync v1 gained commands". Both endpoints use the Fleet Sync robot scheme unchanged (`Authorization: Bearer`, `X-Robot-Code`; ADR-0019); user JWTs are refused.
 
-**[Design]** Poll is bound to telemetry: `streamId` must be the robot's current Fleet Sync stream, and that stream's latest accepted report must have been received by the server ≤ 2 s ago **[SRS §7]**, the same threshold as the Start check `telemetryFresh`. Fleet Sync's `SyncFreshness` (default 30 s) is not used. Otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. This keeps delivery to the one bridge process the backend can currently see, and makes a backend restart self-healing (the bridge's next sync rebuilds the store).
+**[Design]** Poll is bound to telemetry: `streamId` must be the robot's current Fleet Sync stream, and that stream's latest accepted report must have been received by the server no more than `FleetCommands:MaxTelemetryAgeSeconds` ago (default 2). That default is the SRS §7 limit: a movement command requires telemetry ≤ 2 s old, and delivering a GoTo is sending a movement command. It is its own setting; Fleet Sync's `SyncFreshness` is not used. Otherwise `409 STREAM_NOT_CURRENT` and nothing is delivered. A refused poll costs nothing: the robot just polls again, so the strict threshold does no harm. This keeps delivery to the one bridge process the backend can currently see, and makes a backend restart self-healing (the bridge's next sync rebuilds the store).
 
 ### 2. Envelope
 
@@ -53,7 +57,7 @@ Adjustments to the starting point, and why:
 
 - `kind` is `GoTo`/`Cancel`, the exact ADR-0008 / §3.4 `commandKind` values, not `GOTO`/`CANCEL`.
 - `x, y, yaw` are flat as in ADR-0005 and §3.1, not nested under `target`.
-- `stopId` is optional metadata (ADR-0005); proposed value is `RouteRevisionStops.Id`, never a robot-local lookup key. `null` for the end leg.
+- `stopId` is optional metadata (ADR-0005); its value is `RouteRevisionStops.Id`, never a robot-local lookup key. `null` for the end leg.
 - `outcome` is required only when `phase = TERMINAL`; `reason` is an UPPER_SNAKE code (e.g. `MAP_MISMATCH`, `BUSY`, `EXPIRED`, `UNKNOWN_LEG`, §3.5).
 - **Refinement of §3.4:** results correlate by `commandId` (robot identity from auth), instead of `(robot, legId, commandKind)`. `legId` stays in the body and must match. The leg's terminal outcome is reported **once per leg on the GoTo command**; a `Cancel` reports only `ACCEPTED`/`REJECTED`. §3.4 shows a `TERMINAL` result on `Cancel`; this replaces that shape, not its meaning (the outcome is still the actual Nav2 outcome).
 
@@ -175,14 +179,16 @@ Lock order must match ADR-0039 (deployment and reservation locks taken by Tour c
 
 ### 7. Start window (D2)
 
-**[Design]** Start is accepted only in `[ScheduledStartAt, ScheduledStartAt + StartLateLimit]`, `StartLateLimit` configurable, default 15 minutes. **This is not an SRS requirement.** The SRS and scope say only "at/after published time" (scope §4); the schema comment on `Tours.ScheduledStartAt` gives the lower bound only. The upper bound is derived from the 15-minute after-buffer of the reservation (ADR-0034/0035). No other SRS source for an upper bound was found.
+**[Design, decided 03/11/2026]** Start is accepted only in `[ScheduledStartAt, ScheduledStartAt + StartLateLimitMinutes]`, configurable, default 15. **This is a design proposal, not an SRS requirement.** The SRS and scope say only "at/after published time" (scope §4); the schema comment on `Tours.ScheduledStartAt` gives the lower bound only. No other SRS source for an upper bound was found.
+
+Why 15: the reservation ends at `ScheduledStartAt + expected duration + 15 min` (ADR-0034/0035). A Start at the latest allowed moment ends exactly at that `EndsAt`, so the next Tour on the robot still has its own 15-minute before-buffer. Remaining risk: a Tour that runs longer than its measured duration eats into the next Tour's buffer.
 
 ## Open decisions
 
 1. **D8 — FRONT before the first leg.** ADR-0008 and §3.2 keep "confirm head FRONT before the first GoTo" as the current orchestration baseline, but no head command contract exists and the SRS does not state it. Decide before M2.2: keep (Start inserts a head step before the GoTo; needs the head contract) or drop for the first leg.
-2. **D2 has no SRS source**, and at `T+15` the run ends at the reservation's `EndsAt` with zero buffer. What happens to a READY Tour after the window (stays READY until cancelled; no automatic transition proposed) needs confirmation.
-3. **No incident table.** SRS §7 requires "no open incident", but there is no incident table or code. **[Design]** Until one exists, "no open incident" means: `Robots.NeedsInspection = 0` **and** no Tour holding the robot is `RUNNING` with `OperationalStatus = NEEDS_ASSISTANCE`. Both come from the DB; there is no default pass. Open point: whether a dedicated incident record is still needed later (e.g. for FR-21 incident order).
-4. **No operator-console source.** SRS §7 requires the Operator's console connected; `FleetOperationsHub` does not track connections per user. M2.1: "chưa có nguồn → fail". Proposal for M2.2: count the Operator's open `/hubs/operations` connections in memory (single instance, ADR-0019).
+2. **Resolved 03/11/2026 — Start window (D2).** Keep `[ScheduledStartAt, ScheduledStartAt + 15 min]`, `StartLateLimitMinutes` configurable; design proposal, not SRS. The reasoning and remaining overrun risk are in §7. A READY Tour past the window stays READY until Staff cancels it; there is no automatic transition.
+3. **Resolved 03/11/2026 — open incident.** There is no incident table. `noOpenIncident` passes when `Robots.NeedsInspection = 0` **and** no Tour holding this robot has `OperationalStatus = NEEDS_ASSISTANCE`. Source: DB. Missing data fails; there is no default pass. Replace this definition when a real incident store exists.
+4. **No operator-console source.** SRS §7 requires the Operator's console connected; `FleetOperationsHub` does not track connections per user. M2.1: "chưa có nguồn → fail". Suggested for M2.2: count the Operator's open `/hubs/operations` connections in memory (single instance, ADR-0019).
 5. **SRS pre-Start items outside M2.1:** FR-50 approved narration delivered to the Quest guide with receipt before Start; FR-49 camera preset; head FRONT (D8); live stream (web `StartCheck.streamLive`). All have no data source. They must be decided before M2.4 (first real POI), not silently dropped.
 6. **Telemetry ≤2 s [SRS §7] vs Fleet Sync defaults.** Fleet Sync `SyncFreshness` defaults to 30 s and the bridge cadence is not measured. The Start check and poll stream binding (`STREAM_NOT_CURRENT`) both use their own 2 s threshold on server receipt time; the bridge must report faster than that for either to pass reliably. Cadence is an M2.3 measurement.
 7. **Versioned stops vs legacy FKs.** `Tours.CurrentRouteStopId`/`LastArrivedRouteStopId` reference legacy `RouteStops`, and `TourEvents.TargetPoiId` references `Pois`; versioned Tours use `RouteRevisionStops`. M2.2 needs a schema decision (new nullable `RouteRevisionStops` references, or snapshot only).
@@ -190,11 +196,11 @@ Lock order must match ADR-0039 (deployment and reservation locks taken by Tour c
 9. **`IsDispatchEnabled` writer.** Who enables it, with what evidence and audit, is undecided (ADR-0039 notes no writer).
 10. **Web contract drift** (web change out of scope here): `StartConfirmation` lacks `attendantPresent` [SRS §7]; `StartCheck` ids differ (`groupsApproved`, `robotConnected`, `headAtFront`, `batteryMeasured`, `streamLive`); `staffApi` uses `/api/staff/tours/{id}` while the backend convention is `/api/staff/manage/tours/{id}`; `confirmRobotReady` contradicts D4; its header comment "never reserved earlier" predates ADR-0034 reservations.
 11. **ADR-0008 refinements to accept explicitly:** correlation by `commandId`; leg outcome only on the GoTo command; the added `RECONCILED` state for Operator closure without a robot outcome.
-12. **Pending markers.** Accepting this ADR still requires updating root `AGENTS.md` ("M2 transport ... pending") and ADR-0020 ("M2 command transport is unselected"). Not changed here.
+12. **Resolved 03/11/2026 — pending markers.** Root `AGENTS.md`, ADR-0020, `docs/architecture.md` (SRS v0.2 adoption), `docs/README.md` and the requirement status lines now say: transport selected by ADR-0042, implemented from M2.2, dispatch off until M2.3 safety evidence. Historical ADR-0023/0024 keep their original wording.
 
 ## Consequences
 
-- Fleet Sync v1 is unchanged; its reserved `commands` array is expected to stay empty if this ADR is accepted.
+- Fleet Sync v1 is unchanged; its `commands` array always stays empty. Commands go through `docs/contracts/fleet-commands/v1/`.
 - M2.1 can implement READY/Reopen and a Start preflight that always refuses, with no schema change. M2.2 adds `RobotCommands` (schema v1.14), the Start transaction, both robot endpoints and a fake/Gazebo bridge.
 - The single-API-instance limit of ADR-0019 applies to poll stream binding and console tracking.
 - No code, schema, ROS interface or web file is changed by this ADR.

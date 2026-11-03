@@ -79,8 +79,9 @@ design/ADR and reviewed SQL process before generated code changes.
 Do not implement F-14 until advisor review. Preserve both conflicting branch
 cutoffs (before Tour departure vs before leaving branch point) pending decision.
 Project YAML schema and frame/unit conversion require template-owner validation.
-M2 command transport is unselected/unimplemented: telemetry sync must continue
-returning no commands. Invalid-code default threshold/cooldown, voice provider
+M2 command transport is selected by ADR-0042 (accepted 2026-11-03) and is
+implemented from M2.2; dispatch stays off until M2.3 safety evidence. Telemetry
+sync must continue returning no commands. Invalid-code default threshold/cooldown, voice provider
 terms, research delivery/freshness thresholds and physical safety evidence
 also remain explicit open items. This ADR does not close them.
 
