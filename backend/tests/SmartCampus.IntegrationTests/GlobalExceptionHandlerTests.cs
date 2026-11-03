@@ -118,6 +118,29 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_StartChecklistConflict_ReturnsChecksAndRootCauses()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, new ConflictException("Tour chưa đủ điều kiện Start.", "START_PRECONDITION_FAILED",
+            checks: [new("reservationActive", false, "DB", "Tour chưa giữ robot."),
+                new("telemetryFresh", false, "TELEMETRY", "Chưa kiểm tra vì reservationActive chưa đạt."),
+                new("tourReady", true, "DB", "Tour đang READY.")],
+            blockedBy: ["reservationActive"]), CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        using var response = await ReadResponseAsync(context);
+        var errors = response.RootElement.GetProperty("errors");
+        Assert.Equal("START_PRECONDITION_FAILED", errors.GetProperty("code").GetString());
+        var checks = errors.GetProperty("checks").EnumerateArray().ToArray();
+        Assert.Equal(["reservationActive", "telemetryFresh", "tourReady"], checks.Select(c => c.GetProperty("id").GetString()));
+        Assert.Equal(("TELEMETRY", false), (checks[1].GetProperty("source").GetString(), checks[1].GetProperty("passed").GetBoolean()));
+        Assert.Equal("Tour đang READY.", checks[2].GetProperty("detail").GetString());
+        Assert.Equal(["reservationActive"], errors.GetProperty("blockedBy").EnumerateArray().Select(id => id.GetString()));
+    }
+
+    [Fact]
     public async Task TryHandleAsync_AssistantErrors_ReturnTheirCodes()
     {
         var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);

@@ -13,9 +13,11 @@ using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
 using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
+using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
+using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
 using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 
@@ -78,6 +80,16 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/reopen")]
     public async Task<IActionResult> Reopen(Guid id, [FromBody] ReopenTourRequest request, CancellationToken ct) =>
         Success(await sender.Send(new ReopenTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour reopened to SCHEDULED.");
+
+    [HttpGet("{id:guid}/start-checks")]
+    public async Task<IActionResult> StartChecks(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<TourStartChecks> { Success = true, Message = "Tour start checks retrieved.",
+            Data = await sender.Send(new GetTourStartChecksQuery(id, User.GetRequiredUserId()), ct) });
+
+    /// <summary>M2.1 always refuses: 409 START_PRECONDITION_FAILED or COMMAND_TRANSPORT_DISABLED (ADR-0042).</summary>
+    [HttpPost("{id:guid}/start")]
+    public async Task<IActionResult> Start(Guid id, [FromBody] StartTourRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new StartTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour started.");
 
     private OkObjectResult Success(TourMutationResult result, string message) =>
         Ok(new BaseResponse<TourMutationResult> { Success = true, Message = message, Data = result });
