@@ -177,6 +177,10 @@ commits: no State, StartedAt, `CurrentTourId`, `AssignedRobotId`, TourEvent,
 receipt or command. `requestId` is required but no receipt is stored in M2.1. The
 refusal is logged with Tour id, actor id, code and `blockedBy` only.
 
+Follow-up M2.2: Start thật phải có receipt requestId (TourRequestReceipt) để chống
+Start lặp, theo SRS §4 (ADR-0042 §5 step 1: a replay of the same `requestId`
+returns the stored receipt).
+
 Root causes: a check that needs another check's input runs only when that check
 passed; otherwise it is `passed: false` with detail "Chưa kiểm tra vì <id> chưa đạt"
 and is not in `blockedBy`. Without an active reservation no robot or telemetry
