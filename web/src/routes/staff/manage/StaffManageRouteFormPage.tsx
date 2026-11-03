@@ -23,6 +23,9 @@ const moveButton = 'grid size-8 shrink-0 place-items-center rounded-lg text-[#2d
 const empty: Draft = { name: '', description: '', mapVersionId: '', startX: null, startY: null, startYaw: null, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null }
 const STEPS = ['Bản đồ và tên', 'Điểm dừng', 'Điểm bắt đầu và kết thúc', 'Xem lại và lưu'] as const
 const placed = (pose: PickerPose) => pose.x != null && pose.y != null && pose.yaw != null
+const samePose = (a: PickerPose, b: PickerPose) => a.x === b.x && a.y === b.y && a.yaw === b.yaw
+// START is still saved as endMode POSE; it only keeps the end pose following the start.
+type EndChoice = 'LAST_POI' | 'START' | 'POSE'
 const poseText = (pose: PickerPose) => placed(pose) ? `x ${pose.x!.toFixed(2)} m · y ${pose.y!.toFixed(2)} m · hướng ${pose.yaw!.toFixed(2)} rad` : 'Chưa chọn'
 
 /**
@@ -40,6 +43,7 @@ export default function StaffManageRouteFormPage() {
   const [step, setStep] = useState(0)
   // An existing route already has every step filled in, so all of them can be opened directly.
   const [furthest, setFurthest] = useState(routeId ? STEPS.length - 1 : 0)
+  const [endChoiceOverride, setEndChoice] = useState<EndChoice | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const draft: Draft = draftOverride ?? (source.data ? {
@@ -68,6 +72,8 @@ export default function StaffManageRouteFormPage() {
   const clearance = chosenMap?.poiClearanceMeters
   const startPose = { x: draft.startX, y: draft.startY, yaw: draft.startYaw }
   const endPose = { x: draft.endX, y: draft.endY, yaw: draft.endYaw }
+  const endChoice: EndChoice = endChoiceOverride
+    ?? (draft.endMode === 'LAST_POI' ? 'LAST_POI' : placed(startPose) && samePose(endPose, startPose) ? 'START' : 'POSE')
   // ADR-0040: the server refuses a newly written start or end pose without free floor around it; say so before Next.
   // Like the server (SaveRouteRevision), a pose kept unchanged on the same map is exempt: it may predate the rule.
   const saved = source.data && source.data.mapVersionId === draft.mapVersionId ? source.data : null
@@ -82,7 +88,7 @@ export default function StaffManageRouteFormPage() {
     [!draft.name.trim() && 'nhập tên tuyến', !draft.mapVersionId && 'chọn bản đồ', mapNotReady && 'chọn bản đồ còn đạt kiểm tra kỹ thuật'],
     [stops.length === 0 && 'chọn ít nhất một điểm dừng', stops.some(stop => !Number.isInteger(stop.dwellSeconds) || stop.dwellSeconds < 1 || stop.dwellSeconds > 3600) && 'thời gian dừng từ 1 đến 3600 giây'],
     [!placed(startPose) && 'chọn điểm bắt đầu và hướng', startTooClose && 'điểm bắt đầu quá sát vật cản',
-      draft.endMode === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', draft.endMode === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản'],
+      endChoice === 'POSE' && !placed(endPose) && 'chọn điểm kết thúc và hướng', endChoice === 'POSE' && endTooClose && 'điểm kết thúc quá sát vật cản'],
     [],
   ].map(list => list.filter((item): item is string => Boolean(item)))
   const firstOpen = missingByStep.findIndex(list => list.length > 0)
@@ -173,22 +179,31 @@ export default function StaffManageRouteFormPage() {
 
       {step === 2 && <div className="space-y-4">
         <PoseStep title="Điểm bắt đầu" help="Nơi robot đứng chờ trước khi Tour bắt đầu, ví dụ chỗ đỗ. Không bắt buộc trùng một POI."
-          pose={startPose} onChange={pose => updateDraft({ startX: pose.x, startY: pose.y, startYaw: pose.yaw })}
+          pose={startPose} onChange={pose => updateDraft({ startX: pose.x, startY: pose.y, startYaw: pose.yaw, ...(endChoice === 'START' && { endX: pose.x, endY: pose.y, endYaw: pose.yaw }) })}
           raster={raster} clearance={clearance} tooClose={startTooClose} pois={available} />
         <section aria-label="Điểm kết thúc" className={`${panelClass} space-y-3 p-4`}>
           <div><h2 className="font-semibold">Điểm kết thúc</h2><p className="mt-1 text-xs text-[#64748b]">Robot dừng ở đâu khi hết tuyến.</p></div>
-          <div role="radiogroup" aria-label="Điểm kết thúc" className="grid gap-2 sm:grid-cols-2">
-            {([['LAST_POI', 'Dừng tại điểm dừng cuối', stops.length ? poiName(stops[stops.length - 1].poiRevisionId) : '-'], ['POSE', 'Về một vị trí riêng', 'Chọn trên bản đồ, ví dụ quay về chỗ đỗ']] as const).map(([value, label, detail]) => (
-              <label key={value} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-sm ${draft.endMode === value ? 'border-[#2563eb] bg-[#eff6ff]' : 'border-[#e2e8f0]'}`}>
-                <input type="radio" name="route-end-mode" className="mt-0.5 accent-[#2563eb]" checked={draft.endMode === value} onChange={() => updateDraft({ endMode: value, endX: null, endY: null, endYaw: null })} />
+          <div role="radiogroup" aria-label="Điểm kết thúc" className="grid gap-2 sm:grid-cols-3">
+            {([
+              ['LAST_POI', 'Dừng tại điểm dừng cuối', stops.length ? poiName(stops[stops.length - 1].poiRevisionId) : '-'],
+              ['START', 'Quay về điểm bắt đầu', placed(startPose) ? 'Robot về lại đúng vị trí và hướng lúc xuất phát' : 'Chọn điểm bắt đầu trước'],
+              ['POSE', 'Về một vị trí riêng', 'Chọn trên bản đồ hoặc lấy từ một POI'],
+            ] as const).map(([value, label, detail]) => (
+              <label key={value} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-sm ${endChoice === value ? 'border-[#2563eb] bg-[#eff6ff]' : 'border-[#e2e8f0]'}`}>
+                <input type="radio" name="route-end-mode" className="mt-0.5 accent-[#2563eb]" checked={endChoice === value} onChange={() => {
+                  setEndChoice(value)
+                  updateDraft(value === 'LAST_POI' ? { endMode: 'LAST_POI', endX: null, endY: null, endYaw: null }
+                    : value === 'START' ? { endMode: 'POSE', endX: draft.startX, endY: draft.startY, endYaw: draft.startYaw }
+                      : { endMode: 'POSE', endX: null, endY: null, endYaw: null })
+                }} />
                 <span><span className="block font-medium text-[#0f172a]">{label}</span><span className="text-xs text-[#64748b]">{detail}</span></span>
               </label>
             ))}
           </div>
         </section>
-        {draft.endMode === 'POSE' && <PoseStep title="Vị trí kết thúc" help="Robot đi tới đây sau điểm dừng cuối."
+        {endChoice === 'POSE' && <PoseStep title="Vị trí kết thúc" help="Robot đi tới đây sau điểm dừng cuối."
           pose={endPose} onChange={pose => updateDraft({ endX: pose.x, endY: pose.y, endYaw: pose.yaw })}
-          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} copyStart={placed(startPose) ? startPose : undefined} />}
+          raster={raster} clearance={clearance} tooClose={endTooClose} pois={available} />}
       </div>}
 
       {step === 3 && <section aria-label={STEPS[3]} className={`${panelClass} p-4`}>
@@ -198,7 +213,7 @@ export default function StaffManageRouteFormPage() {
           <ReviewRow label="Bản đồ" onEdit={() => goTo(0)}>{chosenMap ? mapVersionLabel(chosenMap.map) : '-'}</ReviewRow>
           <ReviewRow label={`Điểm dừng (${stops.length})`} onEdit={() => goTo(1)}><ol className="list-inside list-decimal">{stops.map(stop => <li key={stop.poiRevisionId}>{poiName(stop.poiRevisionId)} · dừng {stop.dwellSeconds} giây</li>)}</ol></ReviewRow>
           <ReviewRow label="Điểm bắt đầu" onEdit={() => goTo(2)}><span className="font-mono text-xs">{poseText(startPose)}</span></ReviewRow>
-          <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{draft.endMode === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : <span className="font-mono text-xs">{poseText(endPose)}</span>}</ReviewRow>
+          <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{endChoice === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : endChoice === 'START' ? 'Quay về điểm bắt đầu' : <span className="font-mono text-xs">{poseText(endPose)}</span>}</ReviewRow>
         </dl>
         {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
       </section>}
@@ -206,9 +221,11 @@ export default function StaffManageRouteFormPage() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <SaveBlockedHint id="route-step-missing" lead={last ? 'Chưa lưu được' : 'Chưa sang bước tiếp được'} missing={last ? (firstOpen === -1 ? [] : [`còn thiếu ở bước ${firstOpen + 1}`]) : missingHere} />
         {step > 0 && <button type="button" className={buttonClass('secondary')} onClick={() => goTo(step - 1)}><ChevronLeft size={15} aria-hidden="true" />Quay lại</button>}
+        {/* Distinct keys: if React reused the Next button as the submit button, the click that opens
+            the review step would finish as a submit and save before anyone reviewed it. */}
         {last
-          ? <button disabled={busy || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
-          : <button type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
+          ? <button key="save" disabled={busy || firstOpen !== -1} aria-describedby={firstOpen === -1 ? undefined : 'route-step-missing'} type="submit" className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Lưu bản nháp'}</button>
+          : <button key="next" type="button" disabled={missingHere.length > 0} aria-describedby={missingHere.length ? 'route-step-missing' : undefined} className={buttonClass('primary')} onClick={() => goTo(step + 1)}>Tiếp<ChevronRight size={15} aria-hidden="true" /></button>}
       </div>
     </form>
   </AdminPage>
@@ -222,22 +239,22 @@ function ReviewRow({ label, onEdit, children }: { label: string; onEdit: () => v
   </div>
 }
 
-/** One pose on the route's map: pick it on the map, or copy a POI's pose (or the start) as a shortcut. */
-function PoseStep({ title, help, pose, onChange, raster, clearance, tooClose, pois, copyStart }: {
+/** One pose on the route's map: pick it on the map, or copy a POI's pose as a shortcut. */
+function PoseStep({ title, help, pose, onChange, raster, clearance, tooClose, pois }: {
   title: string; help: string; pose: PickerPose; onChange: (pose: PickerPose) => void
-  raster: ReturnType<typeof useMapRaster>; clearance: number | undefined; tooClose: boolean; pois: PoiProposal[]; copyStart?: PickerPose
+  raster: ReturnType<typeof useMapRaster>; clearance: number | undefined; tooClose: boolean; pois: PoiProposal[]
 }) {
   const [mode, setMode] = useState<PickerMode>('position')
   const copy = (value: string) => {
-    if (value === 'start' && copyStart) return onChange(copyStart)
     const poi = pois.find(proposal => proposal.revision.id === value)
     if (poi) onChange({ x: poi.revision.x, y: poi.revision.y, yaw: poi.revision.yaw })
   }
+  // The select shows which POI the pose came from; once moved on the map it no longer matches one.
+  const source = pois.find(poi => samePose(pose, poi.revision))?.revision.id ?? ''
   return <section aria-label={title} className={`${panelClass} space-y-3 p-4`}>
     <div><h2 className="font-semibold">{title}</h2><p className="mt-1 text-xs text-[#64748b]">{help}</p></div>
-    <label className="block text-sm">Lấy vị trí có sẵn<select title="" className={`${inputClass} mt-1`} value="" onChange={e => copy(e.target.value)}>
-      <option value="">— Chọn để chép vị trí và hướng —</option>
-      {copyStart && <option value="start">Giống điểm bắt đầu</option>}
+    <label className="block text-sm">Lấy vị trí có sẵn<select title="" className={`${inputClass} mt-1`} value={source} onChange={e => copy(e.target.value)}>
+      <option value="">{placed(pose) ? 'Vị trí tự chọn trên bản đồ' : '— Chọn để chép vị trí và hướng —'}</option>
       {pois.map(poi => <option key={poi.revision.id} value={poi.revision.id}>POI {poi.revision.name}</option>)}
     </select></label>
     {raster.error
