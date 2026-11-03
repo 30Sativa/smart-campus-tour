@@ -1,6 +1,8 @@
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
+using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 using SmartCampus.Domain.Entities;
@@ -57,6 +59,38 @@ public sealed class TourManagementTests
         Assert.False(validator.Validate(input with { FallbackVideoUrl = "file:///etc/passwd" }).IsValid);
         Assert.False(validator.Validate(input with { FallbackVideoUrl = "https://user:password@example.test/video" }).IsValid);
         Assert.False(new CancelTourCommandValidator().Validate(new CancelTourCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), "bad", " "))).IsValid);
+    }
+
+    [Theory]
+    [InlineData("SCHEDULED", false)]
+    [InlineData("READY", true)]
+    [InlineData("RUNNING", false)]
+    [InlineData("CANCELLED", false)]
+    public void Reopen_IsOnlyForReadyBeforeStart(string state, bool reopen)
+    {
+        var route = Guid.NewGuid();
+        var tour = new Tour { State = state, RouteId = route, ActiveRouteId = route };
+        Assert.Equal(reopen, tour.CanReopenBeforeStart);
+        tour.AssignedRobotId = Guid.NewGuid();
+        Assert.False(tour.CanReopenBeforeStart);
+    }
+
+    [Fact]
+    public void ReadyAndReopen_RejectMissingPayloadsVersionsAndReasons()
+    {
+        var actor = Guid.NewGuid();
+        var version = Convert.ToBase64String(new byte[8]);
+        var ready = new MarkTourReadyCommandValidator();
+        Assert.True(ready.Validate(new MarkTourReadyCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), version))).IsValid);
+        Assert.False(ready.Validate(new MarkTourReadyCommand(Guid.NewGuid(), actor, null!)).IsValid);
+        Assert.False(ready.Validate(new MarkTourReadyCommand(Guid.NewGuid(), actor, new(Guid.Empty, version))).IsValid);
+        Assert.False(ready.Validate(new MarkTourReadyCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), "bad"))).IsValid);
+        var reopen = new ReopenTourCommandValidator();
+        Assert.True(reopen.Validate(new ReopenTourCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), version, "Sửa danh sách"))).IsValid);
+        Assert.False(reopen.Validate(new ReopenTourCommand(Guid.NewGuid(), actor, null!)).IsValid);
+        Assert.False(reopen.Validate(new ReopenTourCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), version, " "))).IsValid);
+        Assert.False(reopen.Validate(new ReopenTourCommand(Guid.NewGuid(), actor, new(Guid.NewGuid(), version, new string('x', 1001)))).IsValid);
+        Assert.False(reopen.Validate(new ReopenTourCommand(Guid.Empty, actor, new(Guid.NewGuid(), version, "Sửa"))).IsValid);
     }
 
     [Fact]

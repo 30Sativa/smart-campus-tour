@@ -9,8 +9,9 @@ assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-rou
 lead time and the reservation formula are in [ADR-0035](../../docs/decisions/0035-tour-slots-lead-time-and-measured-reservation.md);
 slots are configured in `Tours:StartSlots`, and typed times in
 `Tours:CustomStartEarliest` and `Tours:CustomStartLatest` ([ADR-0036](../../docs/decisions/0036-tour-custom-start-time.md)).
-Existing legacy Tours keep their legacy Route. READY snapshots stay blocked by
-[ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
+Existing legacy Tours keep their legacy Route and cannot be marked READY. READY and
+Reopen follow [ADR-0042](../../docs/decisions/0042-m2-command-transport-and-start-readiness.md);
+no immutable READY snapshot is stored: the Tour already pins its exact revision.
 
 ## Create a Tour from a tested Route revision
 
@@ -89,6 +90,47 @@ robot ownership, or grant post-Start fallback rights.
 No hard DELETE endpoint exists. RUNNING, terminal and anomalous execution rows
 must use later lifecycle/operational workflows instead of this cancellation API.
 
+## READY and Reopen (ADR-0042)
+
+POST `/api/staff/manage/tours/{id}/ready` with `{requestId, expectedRowVersion}`
+moves a SCHEDULED Tour to READY. Any Staff may call it; Admin, Technical Staff and
+Representative get 403. Under the Tour lock (then the map preparation, robot
+deployment and robot reservation locks, in the order Tour create uses) it checks
+every row of the READY conditions table in `docs/architecture.md` §3.2:
+SCHEDULED with no execution state, an exact RouteRevision with Operator, an active
+single-role Staff Operator, the revision still schedulable (submitted, effective
+PASS, POI evidence, map gate; route deactivation does not count, ADR-0037), an
+active reservation, the ADR-0039 robot rule, no pending row or email-change
+decision, and a start still in the future. Any failure is 409
+`READY_PRECONDITION_FAILED` with every failing condition:
+
+```json
+{ "errors": { "code": "READY_PRECONDITION_FAILED",
+  "blockers": [ { "code": "PENDING_DECISIONS", "message": "Còn dòng đăng ký ..." } ] } }
+```
+
+Codes: `TOUR_STATE_INVALID`, `ROUTE_VERSION_REQUIRED`, `OPERATOR_REQUIRED`, the
+create-time revision codes (`ROUTE_NOT_SUBMITTED`, `ROUTE_TEST_PASS_REQUIRED`,
+`POI_VERIFICATION_STALE`, map gate codes), `RESERVATION_MISSING`,
+`ROBOT_NOT_READY_FOR_ROUTE`, `PENDING_DECISIONS`, `START_TIME_PASSED`. A Tour without
+a reservation also fails the robot rule, since it has no robot. Success writes a
+`TOUR_READY` TourEvent (actor) and the request receipt in the same commit. READY
+does not claim the robot, set `Robots.CurrentTourId`, start the Tour or send a command.
+
+POST `/api/staff/manage/tours/{id}/reopen` with `{requestId, expectedRowVersion, reason}`
+returns a READY Tour without execution state to SCHEDULED; another state is 409
+`TOUR_STATE_INVALID`, a blank reason 400. It writes a `TOUR_REOPENED` TourEvent
+(actor, reason) and the receipt; reservation, registrations and invitations are
+unchanged. READY/Reopen events are not operational history, so a reopened Tour
+stays editable and cancellable.
+
+While READY, Representative create/replace/resubmit/cancel, Staff row review and
+aggregate approve/reject, email-change request/review and Tour metadata PUT are
+refused with `TOUR_LOCKED`; invitation support and Viewer access follow
+`InvitationPolicy` and still work. Both endpoints use the receipt rules below.
+`GET /api/staff/manage/tours/{id}` adds `permissions.canMarkReady`, `canReopen` and
+`readyBlockers` (same list, evaluated without locks).
+
 Matching committed retries replay before stale-version/state checks. A new
 requestId with an old RowVersion conflicts. Key reuse for another payload,
 action or Tour also conflicts. Audit stores hashes and changed field names,
@@ -119,9 +161,9 @@ source is available for the 15-minute-buffer reservation and the existing
 registration path can report row-level and email-change decisions. Current
 versioned Route views return `INCOMPLETE_CONTENT_AUDIO_DATA`; measured route-test
 duration is not substituted for configured total duration. Physical attendant
-and operational safety-console evidence also has no current source, so READY
-must remain blocked/unknown for those checks. No target reservation, READY,
-Finalize/Reopen or Start endpoint is currently available. Branch preparation,
+and operational safety-console evidence also has no current source; ADR-0042 makes
+them Start checks, not READY checks. No Finalize or Start endpoint is currently
+available. Branch preparation,
 coordinated registered rescheduling and participant notification/expiry updates
 remain separate work.
 
@@ -133,8 +175,8 @@ remain separate work.
 | Configured total path duration | Route view reports `INCOMPLETE_CONTENT_AUDIO_DATA`; only dwell subtotal is known | **Blocked**; do not substitute measured navigation-test duration |
 | Explicit assigned Operator | User can be validated as one active `Staff` role, but Tour has no Operator field or API | **Unavailable** |
 | Robot interval and overlap | No versioned reservation table or interval query; legacy Tours have no reservation duration/robot link suitable for exclusion | **Unknown**; do not claim a conflict-free slot |
-| Registration-row/email decisions | Current registration is aggregate; there is no row email-change request workflow | **Unknown** when deciding READY |
-| Safety attendant/operations-console preflight | No persisted check source in backend | **Unknown**; READY must remain blocked |
+| Registration-row/email decisions | `HasPendingDecisionsAsync`: active PENDING rows and PENDING email-change requests | READY refuses with `PENDING_DECISIONS` |
+| Safety attendant/operations-console preflight | No persisted check source in backend | **Unknown**; a Start check under ADR-0042, fails until a source exists |
 
 Target role/action boundary: Tour scheduling, configuration, readiness and
 pre-Start cancellation belong to `Staff` (product label Tour Staff). The assigned

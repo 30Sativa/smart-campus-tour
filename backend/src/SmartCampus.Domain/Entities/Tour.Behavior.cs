@@ -10,4 +10,5 @@ public partial class Tour
 
     public bool CanEditPreparation => State == "SCHEDULED" && !HasExecutionState;
     public bool CanCancelBeforeStart => State is "SCHEDULED" or "READY" && !HasExecutionState;
+    public bool CanReopenBeforeStart => State == "READY" && !HasExecutionState;
 }

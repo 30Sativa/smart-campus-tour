@@ -19,6 +19,16 @@ internal static class TourTarget
         var route = await (lockTarget ? revisions.LockRouteAsync(revision.RouteId, ct) : revisions.FindRouteAsync(revision.RouteId, ct));
         if (route is not { IsOpenForNewTours: true })
             throw new ConflictException("Tuyến đã ngừng sử dụng nên không dùng được cho Tour mới.", "ROUTE_UNAVAILABLE");
+        return (revision, await RequireSchedulableRevisionAsync(revisions, maps, revision, lockTarget, ct));
+    }
+
+    /// <summary>
+    /// The part of the create check that READY repeats (ADR-0034). Route availability is left out: a deactivated
+    /// route keeps the Tours already scheduled on it (ADR-0037).
+    /// </summary>
+    public static async Task<RouteTestRunView> RequireSchedulableRevisionAsync(IRouteRevisionRepository revisions,
+        IMapVersionRepository maps, RouteRevision revision, bool lockTarget, CancellationToken ct)
+    {
         if (await revisions.GetSubmissionsAsync(revision.Id, ct) is not { Count: > 0 })
             throw new ConflictException("Phiên bản tuyến chưa được gửi kiểm chứng.", "ROUTE_NOT_SUBMITTED");
         var view = await RouteRevisionMapper.Load(revisions, revision.RouteId, revision.Id, false, ct);
@@ -31,7 +41,7 @@ internal static class TourTarget
             ?? throw new NotFoundException("Không tìm thấy phiên bản bản đồ.");
         if (lockTarget) await maps.LockMapPreparationStateAsync(map.Id, ct);
         (await MapPreparationEligibility.LoadAsync(maps, map, ct)).EnsureCanUse();
-        return (revision, run);
+        return run;
     }
 
     /// <summary>Null when this robot can run the revision. Create, slots and the robot list all ask here.</summary>

@@ -99,6 +99,25 @@ public sealed class GlobalExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_ChecklistConflict_ReturnsEveryBlocker()
+    {
+        var context = CreateHttpContext();
+        var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);
+
+        await handler.TryHandleAsync(context, new ConflictException("Tour chưa đủ điều kiện READY.", "READY_PRECONDITION_FAILED",
+            blockers: [new("OPERATOR_REQUIRED", "Người vận hành phải là Staff."), new("START_TIME_PASSED", "Đã qua giờ.")]),
+            CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        using var response = await ReadResponseAsync(context);
+        var errors = response.RootElement.GetProperty("errors");
+        Assert.Equal("READY_PRECONDITION_FAILED", errors.GetProperty("code").GetString());
+        var blockers = errors.GetProperty("blockers").EnumerateArray().ToArray();
+        Assert.Equal(["OPERATOR_REQUIRED", "START_TIME_PASSED"], blockers.Select(b => b.GetProperty("code").GetString()));
+        Assert.Equal("Đã qua giờ.", blockers[1].GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task TryHandleAsync_AssistantErrors_ReturnTheirCodes()
     {
         var handler = new GlobalExceptionHandler(NullLogger<GlobalExceptionHandler>.Instance);

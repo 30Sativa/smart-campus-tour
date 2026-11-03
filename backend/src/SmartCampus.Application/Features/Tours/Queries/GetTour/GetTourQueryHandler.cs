@@ -6,7 +6,8 @@ using SmartCampus.Application.Features.Routes;
 namespace SmartCampus.Application.Features.Tours.Queries.GetTour;
 
 public sealed class GetTourQueryHandler(ITourManagementRepository repository, IRouteManagementRepository routes,
-    IRouteRevisionRepository revisions) : IRequestHandler<GetTourQuery, TourDetails>
+    IRouteRevisionRepository revisions, IRegistrationRepository registrations, IMapVersionRepository maps, TimeProvider clock)
+    : IRequestHandler<GetTourQuery, TourDetails>
 {
     public async Task<TourDetails> Handle(GetTourQuery query, CancellationToken ct)
     {
@@ -14,7 +15,12 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
         var tour = await repository.FindAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         var summary = await repository.GetSummaryAsync(query.Id, ct) ?? throw new NotFoundException("Không tìm thấy Tour.");
         var usage = await repository.GetUsageAsync(query.Id, ct);
-        var permissions = TourPreparation.Permissions(tour, usage);
+        // The same checks Mark READY runs, without its locks; the write rechecks them all.
+        var blockers = await TourReadiness.EvaluateAsync(tour, repository, registrations, revisions, maps, clock, lockTarget: false, ct);
+        var permissions = TourPreparation.Permissions(tour, usage) with
+        {
+            CanMarkReady = blockers.Count == 0, CanReopen = tour.CanReopenBeforeStart, ReadyBlockers = blockers
+        };
         if (tour.RouteRevisionId is { } revisionId)
         {
             var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct);
