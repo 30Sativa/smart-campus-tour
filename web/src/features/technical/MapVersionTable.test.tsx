@@ -40,17 +40,17 @@ describe('MapVersionTable', () => {
   it('opens the left-out facts from the eye, and acts on that version from there', () => {
     const later = version('a', 'A', 2, passed)
     const { onUpload, onCheck } = show([later, version('a', 'A', 1)])
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · phiên bản 2' }))
-    const detail = screen.getByRole('dialog', { name: 'A · phiên bản 2' })
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 2' }))
+    const detail = screen.getByRole('dialog', { name: 'A · a · phiên bản 2' })
     expect(detail).toHaveTextContent('Dùng được để tạo POI')
     expect(detail).toHaveTextContent('a-v2.zip')
     expect(detail).toHaveTextContent('a'.repeat(64))
     fireEvent.click(within(detail).getByRole('button', { name: 'Ghi kết quả kiểm tra' }))
     expect(onCheck).toHaveBeenCalledWith(later)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · phiên bản 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 2' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xem phiên bản 1' }))
-    expect(screen.getByRole('dialog', { name: 'A · phiên bản 1' })).toHaveTextContent('phiên bản cũ, mới nhất là phiên bản 2')
+    expect(screen.getByRole('dialog', { name: 'A · a · phiên bản 1' })).toHaveTextContent('phiên bản cũ, mới nhất là phiên bản 2')
     fireEvent.click(screen.getByRole('button', { name: 'Tải phiên bản mới' }))
     expect(onUpload).toHaveBeenCalledWith({ areaKey: 'a', displayName: 'A' })
   })
@@ -59,8 +59,8 @@ describe('MapVersionTable', () => {
     const robot = { id: 'robot-7', robotCode: 'amr_07', displayName: 'AMR 07', assignedMapVersionId: 'a-1', assignedVersionNumber: 1 } as PhysicalRobotOption
     const elsewhere = { id: 'robot-8', robotCode: 'amr_08', displayName: null, assignedMapVersionId: 'b-1', assignedVersionNumber: 1 } as PhysicalRobotOption
     show([version('a', 'A', 2, passed), version('a', 'A', 1)], { data: [robot, elsewhere], isPending: false, isError: false })
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · phiên bản 2' }))
-    const detail = screen.getByRole('dialog', { name: 'A · phiên bản 2' })
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 2' }))
+    const detail = screen.getByRole('dialog', { name: 'A · a · phiên bản 2' })
     expect(within(detail).getByRole('link', { name: 'AMR 07 · amr_07 · phiên bản 1' })).toHaveAttribute('href', '/technical/robots?robot=robot-7')
     expect(detail).not.toHaveTextContent('amr_08')
     expect(detail).toHaveTextContent('Gán hoặc đổi bản đồ ở trang Robot.')
@@ -69,19 +69,19 @@ describe('MapVersionTable', () => {
 
   it('says when no robot holds the area', () => {
     show([version('a', 'A', 1)])
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · phiên bản 1' }))
-    expect(screen.getByRole('dialog', { name: 'A · phiên bản 1' })).toHaveTextContent('Chưa có robot nào được gán khu vực này')
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết A · a · phiên bản 1' }))
+    expect(screen.getByRole('dialog', { name: 'A · a · phiên bản 1' })).toHaveTextContent('Chưa có robot nào được gán khu vực này')
   })
 
   it('shows the uploaded floor plan in the detail, and says so when it cannot load', () => {
     raster.state = { map: { imageUrl: 'data:image/png;base64,AA==', width: 100, height: 80 }, error: null, retry: vi.fn() }
     show([version('tang-6', 'Tầng 6', 1)])
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 · phiên bản 1' }))
-    expect(screen.getByRole('img', { name: 'Bản đồ Tầng 6 · phiên bản 1' })).toHaveAttribute('src', 'data:image/png;base64,AA==')
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 1' }))
+    expect(screen.getByRole('img', { name: 'Bản đồ Tầng 6 · tang-6 · phiên bản 1' })).toHaveAttribute('src', 'data:image/png;base64,AA==')
     fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
     const retry = vi.fn()
     raster.state = { map: null, error: 'Máy chủ không trả về được bản đồ này.', retry }
-    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 · phiên bản 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 1' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Máy chủ không trả về được bản đồ này.')
     fireEvent.click(screen.getByRole('button', { name: 'Tải lại bản đồ' }))
     expect(retry).toHaveBeenCalled()
@@ -148,8 +148,8 @@ describe('MapVersionTable', () => {
     expect(within(tang6).getAllByRole('cell')[3]).toHaveTextContent('Chờ kiểm tra')
     expect(within(tang6).getAllByRole('cell')[4]).toHaveTextContent('amr_01 · đang ở phiên bản 1')
     expect(within(test123).getAllByRole('cell')[1]).toHaveTextContent(/^1$/)
-    fireEvent.click(within(tang6).getByRole('button', { name: 'Xem chi tiết Tầng 6 · phiên bản 3' }))
-    const history = within(screen.getByRole('dialog', { name: 'Tầng 6 · phiên bản 3' })).getByRole('region', { name: 'Lịch sử phiên bản' })
+    fireEvent.click(within(tang6).getByRole('button', { name: 'Xem chi tiết Tầng 6 · tang-6 · phiên bản 3' }))
+    const history = within(screen.getByRole('dialog', { name: 'Tầng 6 · tang-6 · phiên bản 3' })).getByRole('region', { name: 'Lịch sử phiên bản' })
     expect(within(history).getAllByRole('listitem').map(item => item.textContent?.slice(0, 11))).toEqual(['Phiên bản 3', 'Phiên bản 2', 'Phiên bản 1'])
   })
 

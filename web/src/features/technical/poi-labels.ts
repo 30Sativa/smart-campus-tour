@@ -20,6 +20,6 @@ export const NARRATION_NEEDED = 'Cần bổ sung nội dung thuyết minh'
 export const cameraPresetLabel: Record<string, string> = { FRONT: 'Phía trước', LEFT: 'Bên trái', RIGHT: 'Bên phải' }
 
 /** Two areas may share a display name, so the area key keeps map choices apart. */
-export const mapVersionLabel = (map: { areaName: string; versionNumber: number }) => `${map.areaName} · phiên bản ${map.versionNumber}`
+export const mapVersionLabel = (map: { areaName: string; areaKey: string; versionNumber: number }) => `${map.areaName} · ${map.areaKey} · phiên bản ${map.versionNumber}`
 
 export const mapCheckLabel = (status: string) => status === 'PASSED' ? 'Đạt kiểm tra' : status === 'FAILED' ? 'Kiểm tra không đạt' : 'Chờ kỹ thuật kiểm tra'

@@ -82,7 +82,7 @@ export default function StaffManagePoisPage() {
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
     <div className={`${card} mb-4 px-4 py-3`}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        {maps.length > 0 && <select title="" aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`${inputClass} font-semibold sm:w-64`}>
+        {maps.length > 0 && <select title="" aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`${inputClass} font-semibold sm:w-auto sm:min-w-64 sm:max-w-full`}>
           {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
         </select>}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
