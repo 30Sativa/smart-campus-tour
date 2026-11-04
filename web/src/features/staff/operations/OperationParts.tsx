@@ -1,13 +1,12 @@
-import { ShieldAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { toneClass, type StatusTone } from '../../../components/ui/status-tone'
-import type { TourCommand, TourDetails, TourStartCheck, TourState } from '../../administration/tours/types'
+import type { TourCommand, TourDetails, TourState } from '../../administration/tours/types'
 import { TOUR_STATE_LABEL } from '../../administration/tours/tour-messages'
 import { formatTime } from '../formatters'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
 import {
-  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, SYSTEM_GATES, assistanceInfo, checkInfo, commandStateInfo, robotReasonText,
+  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, assistanceInfo, commandStateInfo, robotReasonText,
 } from './operation-labels'
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
@@ -22,28 +21,6 @@ export function TourStateBadge({ state }: { state: TourState }) {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="flex items-baseline justify-between gap-3 py-1.5 text-[13px]"><dt className="text-[#64748b]">{label}</dt><dd className="min-w-0 text-right font-semibold break-words text-[#0f172a]">{children}</dd></div>
-}
-
-/**
- * Says plainly when the system itself does not allow a Tour to move a robot yet:
- * the command transport is off or the robot is not enabled for dispatch. Read
- * from the checks the server returned, never assumed; nothing here bypasses them.
- */
-export function SystemGateNotice({ checks }: { checks: TourStartCheck[] }) {
-  const closed = checks.filter(check => (SYSTEM_GATES as readonly string[]).includes(check.id) && !check.passed)
-  if (!closed.length) return null
-  return (
-    <div role="status" className="flex gap-3 rounded-xl border border-[#f1dcb0] bg-[#fffaf0] p-4 text-[13px] leading-5 text-[#7d5310]">
-      <ShieldAlert size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="font-bold">Hệ thống chưa cho phép robot di chuyển theo Tour</p>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4">
-          {closed.map(check => <li key={check.id}><span className="font-semibold">{checkInfo(check.id).label}:</span> chưa đạt. {check.detail}</li>)}
-        </ul>
-        <p className="mt-1.5">Đây là giới hạn của giai đoạn hiện tại (điều khiển robot thật chờ bằng chứng an toàn M2.3), không phải lỗi thao tác. Máy chủ sẽ từ chối và không có lệnh nào được gửi tới robot.</p>
-      </div>
-    </div>
-  )
 }
 
 /** The robot command of the current leg: its own lifecycle, separate from the Tour's state. */

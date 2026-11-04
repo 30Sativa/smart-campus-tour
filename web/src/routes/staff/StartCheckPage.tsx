@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, Play } from 'lucide-react'
+import { ArrowLeft, CircleCheck, Play, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
@@ -7,30 +7,43 @@ import { notify } from '../../components/ui/toast-store'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { formatSlot } from '../../features/administration/admin-format'
 import { useRequestId } from '../../features/administration/tours/hooks'
-import type { StartConfirmation } from '../../features/administration/tours/types'
+import type { StartConfirmation, TourStartChecks } from '../../features/administration/tours/types'
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
-import { checkInfo, checkVerdict } from '../../features/staff/operations/operation-labels'
+import { SYSTEM_GATES, checkVerdict } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
-import { RobotTelemetryPanel, RouteStopList, SystemGateNotice, TourStateBadge } from '../../features/staff/operations/OperationParts'
-import { StartCheckList } from '../../features/staff/operations/StartCheckList'
+import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
+import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
-  { key: 'robotPlaced', label: 'Robot đặt đúng điểm xuất phát của tuyến', hint: 'Vị trí robot báo khớp vị trí thực tế.' },
-  { key: 'areaClear', label: 'Khu vực xuất phát và chặng đầu thông thoáng', hint: 'Không có người hay vật cản trên đường đi đầu tiên.' },
-  { key: 'attendantPresent', label: 'Người phụ trách an toàn đứng cạnh robot', hint: 'Đi kèm robot suốt buổi, sẵn sàng bấm nút dừng khẩn cấp trên robot.' },
-  { key: 'previewChecked', label: 'Đã xem hình camera của robot', hint: 'Hình rõ, đúng hướng trước khi học sinh vào xem.' },
+  { key: 'robotPlaced', label: 'Robot ở đúng điểm xuất phát', hint: 'Vị trí robot báo khớp thực tế.' },
+  { key: 'areaClear', label: 'Đường đi đầu tiên thông thoáng', hint: 'Không có người hay vật cản.' },
+  { key: 'attendantPresent', label: 'Người phụ trách an toàn cạnh robot', hint: 'Sẵn sàng bấm nút dừng khẩn cấp trên robot.' },
+  { key: 'previewChecked', label: 'Đã xem hình camera', hint: 'Hình rõ, đúng hướng.' },
 ]
 const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false }
 
+type Verdict = { tone: 'ok' | 'info' | 'warn'; title: string; note: string }
+function verdictOf(result: TourStartChecks, confirmed: boolean): Verdict {
+  const causes = result.checks.filter(check => checkVerdict(check, result.blockedBy) === 'failed').length
+  if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: `Còn ${causes} nguyên nhân cần xử lý, xem bên dưới.` }
+  if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: 'Đánh dấu đủ 4 xác nhận tại chỗ rồi bấm Bắt đầu.' }
+  return { tone: 'ok', title: 'Sẵn sàng bắt đầu', note: 'Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.' }
+}
+const VERDICT_STYLE = {
+  ok: { box: 'border-[#b8dec9] bg-[#edf8f1] text-[#236344]', icon: CircleCheck },
+  info: { box: 'border-[#d8e5f7] bg-[#f5f9ff] text-[#35507a]', icon: CircleCheck },
+  warn: { box: 'border-[#f1dcb0] bg-[#fffaf0] text-[#7d5310]', icon: TriangleAlert },
+}
+
 /**
- * Pre-start check for one READY Tour (ADR-0042). The server evaluates every
- * Start condition from real data; the operator adds the on-site confirmations
- * and presses Start. The button follows the server's `canStart`, and the server
- * re-runs everything inside the Start transaction.
+ * Pre-start check for one READY Tour (ADR-0042). It answers one question first,
+ * "can this Tour start, and if not, why", with the root causes only; the full
+ * check list stays one click away. Start and the on-site confirmations sit in
+ * a column that stays in view. The server re-runs everything inside Start.
  */
 export default function StartCheckPage() {
   const { tourId = '' } = useParams()
@@ -48,7 +61,7 @@ export default function StartCheckPage() {
   const detail = tour.data
   const { tour: summary, reservation, operator } = detail
   const header = <>
-    <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-3 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
+    <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
     <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
       description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
       action={<TourStateBadge state={summary.state} />} />
@@ -71,60 +84,79 @@ export default function StartCheckPage() {
   const confirmed = CONFIRMATIONS.every(({ key }) => confirmation[key])
   const canStart = Boolean(result?.canStart) && confirmed
   const notOperator = blockedBy.includes('callerIsOperator')
-  const reason = !result ? (checks.isError ? 'Không tải được điều kiện bắt đầu từ máy chủ.' : 'Đang tải điều kiện từ máy chủ…')
-    : notOperator ? `Chỉ người vận hành được giao${operator ? ` (${operator.fullName})` : ''} mới bắt đầu được Tour này.`
-    : !result.canStart ? `Chưa thể bắt đầu: ${blockedBy.map(id => checkInfo(id).label).join('; ')}.`
-    : !confirmed ? 'Đánh dấu đủ 4 xác nhận tại chỗ để bắt đầu.'
-    : 'Đủ điều kiện. Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.'
+  const systemClosed = result?.checks.some(check => (SYSTEM_GATES as readonly string[]).includes(check.id) && !check.passed) ?? false
+  const verdict = result ? verdictOf(result, confirmed) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
+  const reason = !result ? null
+    : notOperator ? `Chỉ ${operator?.fullName ?? 'người vận hành được giao'} mới bắt đầu được Tour này.`
+    : !result.canStart ? 'Nút mở khi mọi nguyên nhân bên trái được xử lý.'
+    : !confirmed ? 'Đánh dấu đủ 4 xác nhận tại chỗ.'
+    : null
 
   return (
     <StaffPage wide>
       {header}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.9fr)]">
-        <div className="space-y-4">
-          {result && <SystemGateNotice checks={result.checks} />}
-          <section className={panelClass} aria-label="Điều kiện bắt đầu">
-            <PanelHead title="Điều kiện từ máy chủ" description="Đọc từ dữ liệu thật, cập nhật vài giây một lần."
-              action={result ? <span className={`rounded-full px-3 py-1 text-xs font-bold tabular-nums ${passed === counted.length ? 'bg-[#ecfdf3] text-[#15803d]' : 'bg-[#fffaf0] text-[#7d5310]'}`}>{passed}/{counted.length} đạt</span> : undefined} />
-            <div className="p-4">
-              {result ? <StartCheckList checks={result.checks} blockedBy={blockedBy} />
-                : checks.isError ? <ErrorPanel error={checks.error} onRetry={() => void checks.refetch()} />
-                : <LoadingPanel label="Đang tải điều kiện bắt đầu…" />}
-            </div>
-            <fieldset className="border-t border-[#f1f5f9] p-4">
-              <legend className="mb-2 text-xs font-semibold text-[#64748b]">Người vận hành xác nhận tại chỗ</legend>
-              <div className="space-y-2">
-                {CONFIRMATIONS.map(({ key, label, hint }) => (
-                  <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
-                    <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
-                    <span><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-xs text-[#64748b]">{hint}</span></span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <div className="border-t border-[#f1f5f9] p-4">
-              <button type="button" disabled={!canStart || start.isPending} onClick={() => { start.reset(); setConfirming(true) }} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby="start-reason">
-                <Play size={18} aria-hidden="true" />Bắt đầu Tour
-              </button>
-              <p id="start-reason" className={`mt-3 text-[13px] leading-5 ${canStart ? 'font-semibold text-[#15803d]' : 'text-[#7d5310]'}`}>{reason}</p>
-            </div>
-          </section>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-4">
+          {!result ? <section className={`${panelClass} p-4`}>{checks.isError ? <ErrorPanel error={checks.error} onRetry={() => void checks.refetch()} /> : <LoadingPanel label="Đang tải điều kiện bắt đầu…" />}</section>
+            : <>
+              <section className={panelClass} aria-label="Kết luận">
+                {verdict && (() => {
+                  const style = VERDICT_STYLE[verdict.tone]
+                  return <div className={`m-3 flex items-start gap-3 rounded-xl border px-4 py-3 ${style.box}`} role="status">
+                    <style.icon size={20} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-bold">{verdict.title}</p>
+                      <p className="text-[13px] leading-5">{verdict.note}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold tabular-nums">{passed}/{counted.length} đạt</span>
+                  </div>
+                })()}
+                {systemClosed && <p className="mx-4 -mt-1 mb-3 flex gap-2 text-xs leading-5 text-[#7d5310]"><ShieldAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  Hệ thống chưa cho phép robot di chuyển theo Tour (điều khiển robot thật chờ bằng chứng an toàn M2.3). Đây không phải lỗi thao tác và không có cách bỏ qua.</p>}
+                {!result.canStart && <div className="border-t border-[#f1f5f9] px-4 pt-3 pb-4">
+                  <h2 className="mb-2 text-xs font-semibold text-[#64748b]">Cần xử lý</h2>
+                  <BlockerList checks={result.checks} blockedBy={blockedBy} />
+                </div>}
+              </section>
+              <section className={panelClass} aria-label="Toàn bộ điều kiện">
+                <PanelHead title="Toàn bộ điều kiện" description="Đọc từ dữ liệu thật, cập nhật vài giây một lần. Mở từng nhóm để xem chi tiết." />
+                <div className="px-3 py-1.5"><CheckGroups checks={result.checks} blockedBy={blockedBy} /></div>
+              </section>
+            </>}
         </div>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-4">
+          <section className={panelClass} aria-label="Bắt đầu Tour">
+            <PanelHead title="Bắt đầu Tour" description={notOperator ? undefined : 'Người vận hành xác nhận tại chỗ'} />
+            <div className="p-4">
+              {!notOperator && <fieldset className="mb-3 space-y-1.5">
+                <legend className="sr-only">Xác nhận tại chỗ</legend>
+                {CONFIRMATIONS.map(({ key, label, hint }) => (
+                  <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
+                    <input type="checkbox" checked={confirmation[key]} onChange={event => setConfirmation(value => ({ ...value, [key]: event.target.checked }))} className="mt-0.5 size-4 accent-[#2563eb]" />
+                    <span className="min-w-0"><span className="block text-[13px] font-semibold text-[#0f172a]">{label}</span><span className="block text-[11.5px] text-[#64748b]">{hint}</span></span>
+                  </label>
+                ))}
+              </fieldset>}
+              <button type="button" disabled={!canStart || start.isPending} onClick={() => { start.reset(); setConfirming(true) }} className={`${buttonClass('primary', 'lg')} w-full`} aria-describedby={reason ? 'start-reason' : undefined}>
+                <Play size={18} aria-hidden="true" />Bắt đầu Tour
+              </button>
+              {reason && <p id="start-reason" className="mt-2 text-xs leading-5 text-[#7d5310]">{reason}</p>}
+            </div>
+          </section>
           <section className={panelClass} aria-label="Telemetry robot">
-            <PanelHead title="Robot Tour đang giữ" description="Robot tự báo qua kênh telemetry." />
+            <PanelHead title="Robot" description="Robot tự báo qua kênh telemetry." />
             <div className="p-4"><RobotTelemetryPanel robotCode={reservation?.robotCode} /></div>
           </section>
           <section className={panelClass} aria-label="Hình camera">
             <PanelHead title="Hình camera" />
-            <div className="p-4">{QUEST_WHEP_URL ? <QuestLiveVideo label={reservation?.robotCode} />
-              : <p className="text-[13px] leading-5 text-[#64748b]">Trang này chưa được cấu hình luồng camera (VITE_QUEST_WHEP_URL). Xem hình trực tiếp trên thiết bị trước khi xác nhận.</p>}</div>
+            <div className="p-3">{QUEST_WHEP_URL ? <QuestLiveVideo label={reservation?.robotCode} />
+              : <p className="text-[13px] leading-5 text-[#64748b]">Chưa cấu hình luồng camera (VITE_QUEST_WHEP_URL). Xem hình trên thiết bị trước khi xác nhận.</p>}</div>
           </section>
           <section className={panelClass} aria-label="Tuyến của Tour">
             <PanelHead title="Tuyến" description={`${summary.registrationCount} đoàn đăng ký · ${summary.invitationCount} lời mời`} />
-            <div className="p-4"><RouteStopList detail={detail} /></div>
+            <div className="px-4 py-2"><RouteStopList detail={detail} /></div>
           </section>
         </aside>
       </div>

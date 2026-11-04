@@ -23,7 +23,7 @@ Two vocabularies are kept apart on every screen:
 | `/staff` | Tổng quan vận hành: today's Tours, running Tours with step and command state, Tours needing assistance, robot telemetry | `GET /api/staff/manage/tours` (today, `phase=RUNNING`), Tour detail, `/hubs/operations` |
 | `/staff/tours` | Buổi hôm nay: today's Tours, one next step per state | `GET /api/staff/manage/tours?from&to` |
 | `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
-| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: server checks grouped (Tour, robot, telemetry, system), 4 on-site confirmations, camera preview, Start | `GET …/start-checks` (polled 3 s), `POST …/start` |
+| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first, then only the root causes tagged by who can clear them (system limit, permission, schedule, robot, telemetry); the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
 | `/staff/live[/:id]` | Điều hành trực tiếp: Tour state, command card, route, robot telemetry, Next | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next`, `/hubs/operations` |
 | `/staff/manage/tours/:id` | Tour preparation, now with **Chốt Tour (READY)** and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
 | `/staff/robot`, `/staff/schedule`, `/staff/history` | unchanged, already API-backed | — |
