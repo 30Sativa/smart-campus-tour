@@ -27,8 +27,42 @@ export type TourDetails = {
   routeRevision: VersionedRoute | null; operator: TourOperator | null; reservation: TourReservation | null
   fallbackVideoUrl: string | null; startedAt: string | null; endedAt: string | null; endReason: string | null
   usage: { hasRegistrations: boolean; hasAllowedBranches: boolean; hasOperationalHistory: boolean; hasRobotOwnership: boolean }
-  permissions: { canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean }
+  /** `canMarkReady`/`canReopen`/`readyBlockers` come from servers with READY (ADR-0042); an older response omits them. */
+  permissions: {
+    canEditMetadata: boolean; canChangeScheduleAndRoute: boolean; canCancel: boolean
+    canMarkReady?: boolean; canReopen?: boolean; readyBlockers?: TourBlocker[] | null
+  }
+  /** The run state; every field but `state` stays null until Start (ADR-0043). */
+  execution?: TourExecution | null
+  /** Advisory for the caller; Start and Next recheck under the server's locks. */
+  allowedActions?: TourAllowedActions | null
 }
+/** One failing READY condition, in the backend's words. */
+export type TourBlocker = { code: string; message: string }
+export type TourOperationalStatus = 'NORMAL' | 'NEEDS_ASSISTANCE'
+export type TourStep = 'NAVIGATING' | 'OBSERVING' | 'RETURNING_TO_END'
+export type TourLegKind = 'TO_POI' | 'TO_END'
+/** ADR-0042 §3 command lifecycle, persisted on `RobotCommands.State`. */
+export type RobotCommandState = 'PENDING' | 'DELIVERED' | 'ACCEPTED' | 'ARRIVED' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'REJECTED' | 'UNKNOWN' | 'RECONCILED'
+export type TourCommand = { id: string; kind: 'GoTo' | 'Cancel'; state: RobotCommandState; outcome: string | null; reasonCode: string | null }
+export type TourExecution = {
+  state: TourState; operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
+  currentLegId: string | null; currentLegKind: TourLegKind | null
+  /** `RouteRevisionStops.Id`. The revision's stop view carries no such id yet, so the UI cannot match it to a stop. */
+  currentRevisionStopId: string | null; lastArrivedRevisionStopId: string | null
+  /** Display only: the Tour never leaves a POI by itself (ADR-0043 D12). */
+  dwellDeadlineAt: string | null
+  /** The command of the current leg, if any. */
+  command: TourCommand | null
+}
+/** `blockedBy` holds Start check ids, or a state reason code. */
+export type TourActionAvailability = { allowed: boolean; reason: string | null; blockedBy: string[] }
+export type TourAllowedActions = { start: TourActionAvailability; next: TourActionAvailability }
+export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
+/** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
+export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[] }
+/** The four on-site confirmations of a Start request (SRS §7). */
+export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean }
 export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
 export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
 export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'

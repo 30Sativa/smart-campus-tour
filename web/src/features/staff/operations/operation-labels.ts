@@ -1,0 +1,127 @@
+import type { StatusTone } from '../../../components/ui/status-tone'
+import type { RobotCommandState, TourLegKind, TourOperationalStatus, TourStep } from '../../administration/tours/types'
+
+/**
+ * The words of Tour operation (ADR-0042/0043), translated once. The API keeps its
+ * English/UPPER_SNAKE values; nothing below lets one reach a screen untranslated.
+ * A Tour's state and the state of the robot command it sent are separate
+ * vocabularies on purpose: a RUNNING Tour can hold a command nobody has picked up.
+ */
+
+export type CheckGroup = 'tour' | 'robot' | 'telemetry' | 'system' | 'onsite' | 'other'
+
+export const CHECK_GROUP_LABEL: Record<CheckGroup, string> = {
+  tour: 'Tour và lịch',
+  robot: 'Robot',
+  telemetry: 'Telemetry robot',
+  system: 'Hệ thống điều khiển',
+  onsite: 'Xác nhận tại chỗ',
+  other: 'Điều kiện khác',
+}
+
+/** Start check ids of `TourStartPreflight`, in the order an operator reads them. */
+const CHECKS: Record<string, { label: string; group: CheckGroup }> = {
+  tourReady: { label: 'Tour đã chốt (READY)', group: 'tour' },
+  callerIsOperator: { label: 'Bạn là người vận hành của Tour', group: 'tour' },
+  withinStartWindow: { label: 'Trong khung giờ được bắt đầu', group: 'tour' },
+  reservationActive: { label: 'Tour đang giữ chỗ robot', group: 'tour' },
+  revisionStillSchedulable: { label: 'Tuyến vẫn còn kết quả chạy thử đạt', group: 'tour' },
+  noPendingDecisions: { label: 'Không còn đăng ký chờ duyệt', group: 'tour' },
+  robotEligibleForRoute: { label: 'Robot dùng được cho tuyến', group: 'robot' },
+  robotMapMatchesRoute: { label: 'Robot được gán đúng bản đồ của tuyến', group: 'robot' },
+  robotNotNeedsInspection: { label: 'Robot không chờ kiểm tra tại chỗ', group: 'robot' },
+  robotNotHeldByOtherTour: { label: 'Robot không bị Tour khác giữ', group: 'robot' },
+  robotDispatchEnabled: { label: 'Robot được bật điều phối', group: 'robot' },
+  noOpenIncident: { label: 'Không có sự cố đang mở trên robot', group: 'robot' },
+  noUnresolvedCommand: { label: 'Robot không còn lệnh đang mở', group: 'robot' },
+  telemetryFresh: { label: 'Telemetry robot còn mới', group: 'telemetry' },
+  mapContextMatches: { label: 'Robot báo đúng bản đồ của tuyến', group: 'telemetry' },
+  executionIdle: { label: 'Robot đang rảnh', group: 'telemetry' },
+  robotLocalized: { label: 'Robot đã định vị', group: 'telemetry' },
+  motionReady: { label: 'Robot sẵn sàng di chuyển', group: 'telemetry' },
+  batteryInfo: { label: 'Pin robot (chỉ hiển thị, không chặn)', group: 'telemetry' },
+  operatorConsoleConnected: { label: 'Console của người vận hành đang kết nối', group: 'system' },
+  commandTransportEnabled: { label: 'Kênh lệnh robot đang bật', group: 'system' },
+  robotPlaced: { label: 'Robot đặt đúng điểm xuất phát', group: 'onsite' },
+  areaClear: { label: 'Khu vực xuất phát thông thoáng', group: 'onsite' },
+  attendantPresent: { label: 'Người phụ trách an toàn có mặt cạnh robot', group: 'onsite' },
+  previewChecked: { label: 'Đã xem hình camera', group: 'onsite' },
+}
+
+export function checkInfo(id: string): { label: string; group: CheckGroup } {
+  return CHECKS[id] ?? { label: CHECK_GROUP_LABEL.other, group: 'other' }
+}
+
+/** Informational rows always pass and never block (ADR-0042 D3). */
+export const INFO_CHECKS = new Set(['batteryInfo'])
+
+/** A check the server did not run because a prerequisite failed is not a root cause. */
+export type CheckVerdict = 'passed' | 'failed' | 'notRun' | 'info'
+export function checkVerdict(check: { id: string; passed: boolean }, blockedBy: readonly string[]): CheckVerdict {
+  if (INFO_CHECKS.has(check.id)) return 'info'
+  if (check.passed) return 'passed'
+  return blockedBy.includes(check.id) ? 'failed' : 'notRun'
+}
+
+/**
+ * The checks that say the system itself may not move a robot yet, whatever the
+ * operator does: the command transport switch and the per-robot dispatch flag
+ * (ADR-0042 §6, ADR-0043 D11, M2.3 safety evidence).
+ */
+export const SYSTEM_GATES = ['commandTransportEnabled', 'robotDispatchEnabled'] as const
+
+export const STEP_LABEL: Record<TourStep, string> = {
+  NAVIGATING: 'Đang di chuyển tới POI',
+  OBSERVING: 'Đang dừng tại POI',
+  RETURNING_TO_END: 'Đang về điểm kết thúc',
+}
+
+export const LEG_LABEL: Record<TourLegKind, string> = { TO_POI: 'Chặng tới POI', TO_END: 'Chặng về điểm kết thúc' }
+
+export const OPERATIONAL_LABEL: Record<TourOperationalStatus, { label: string; tone: StatusTone }> = {
+  NORMAL: { label: 'Bình thường', tone: 'ok' },
+  NEEDS_ASSISTANCE: { label: 'Cần hỗ trợ', tone: 'danger' },
+}
+
+const ASSISTANCE: Record<string, { label: string; hint: string }> = {
+  NavigationFailed: { label: 'Lỗi điều hướng', hint: 'Robot báo không tới được đích. Kiểm tra đường đi tại chỗ.' },
+  CommandRejected: { label: 'Robot từ chối lệnh', hint: 'Robot không nhận lệnh di chuyển. Xem lý do robot báo bên dưới.' },
+  CommandUnknown: { label: 'Chưa rõ kết quả lệnh', hint: 'Không biết robot đã làm gì với lệnh. Kiểm tra robot tại chỗ trước khi làm gì tiếp.' },
+  RobotDisconnected: { label: 'Mất kết nối robot', hint: 'Máy chủ không nhận telemetry mới. Robot tự dừng tại chỗ khi mất kết nối.' },
+  BackendRestarted: { label: 'Máy chủ vừa khởi động lại', hint: 'Không có gì tự chạy tiếp sau khi máy chủ khởi động lại.' },
+}
+export function assistanceInfo(reason: string | null | undefined): { label: string; hint: string } {
+  return (reason && ASSISTANCE[reason]) || { label: 'Cần nhân viên kiểm tra', hint: 'Xem trạng thái lệnh robot bên dưới.' }
+}
+
+/** What each persisted command state means to a person watching it (ADR-0042 §3). */
+export const COMMAND_STATE: Record<RobotCommandState, { label: string; tone: StatusTone; meaning: string }> = {
+  PENDING: { label: 'Chờ robot lấy lệnh', tone: 'muted', meaning: 'Lệnh đã lưu trên máy chủ, robot chưa lấy về. Robot chưa di chuyển vì lệnh này.' },
+  DELIVERED: { label: 'Robot đã lấy lệnh', tone: 'info', meaning: 'Robot đã lấy lệnh nhưng chưa báo nhận.' },
+  ACCEPTED: { label: 'Robot đang thực hiện', tone: 'info', meaning: 'Robot đã nhận lệnh và đang thực hiện.' },
+  ARRIVED: { label: 'Đã tới nơi', tone: 'ok', meaning: 'Robot báo đã tới đích.' },
+  FAILED: { label: 'Thất bại', tone: 'danger', meaning: 'Robot báo không hoàn thành lệnh.' },
+  CANCELLED: { label: 'Đã hủy', tone: 'muted', meaning: 'Lệnh đã bị hủy trước khi tới đích.' },
+  EXPIRED: { label: 'Hết hạn', tone: 'warn', meaning: 'Robot không lấy lệnh kịp thời hạn nên lệnh không còn hiệu lực. Robot chưa nhận lệnh này.' },
+  REJECTED: { label: 'Robot từ chối', tone: 'danger', meaning: 'Robot không nhận lệnh.' },
+  UNKNOWN: { label: 'Chưa rõ kết quả', tone: 'danger', meaning: 'Robot có thể đã bắt đầu, nhưng máy chủ không biết kết quả. Lệnh vẫn chặn robot.' },
+  RECONCILED: { label: 'Đã đối soát', tone: 'muted', meaning: 'Người vận hành đã đóng lệnh chưa rõ kết quả; robot cần kiểm tra tại chỗ.' },
+}
+export function commandStateInfo(state: string) {
+  return COMMAND_STATE[state as RobotCommandState] ?? { label: 'Trạng thái lệnh khác', tone: 'muted' as const, meaning: 'Máy chủ báo một trạng thái lệnh chưa được mô tả.' }
+}
+
+export const COMMAND_KIND_LABEL: Record<string, string> = { GoTo: 'Lệnh di chuyển', Cancel: 'Lệnh hủy' }
+
+const ROBOT_REASON: Record<string, string> = {
+  MAP_MISMATCH: 'Robot đang dùng bản đồ khác bản đồ của lệnh',
+  BUSY: 'Robot đang bận một lệnh khác',
+  EXPIRED: 'Robot nhận lệnh sau thời hạn',
+  UNKNOWN_LEG: 'Robot không nhận ra chặng này',
+  WITHDRAWN: 'Lệnh đã được rút trước khi robot lấy',
+}
+/** A robot/backend reason code in words; an unlisted one is shown as a code, labelled as such. */
+export function robotReasonText(code: string | null | undefined): string | null {
+  if (!code) return null
+  return ROBOT_REASON[code] ?? `Mã lý do từ robot: ${code}`
+}
