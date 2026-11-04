@@ -897,7 +897,8 @@ public sealed class SchemaV11Tests
         await Refused("CK_RobotCommands_Target", Row(new() { ["MapKey"] = "NULL" }));
         await Refused("CK_RobotCommands_IsOpen", Row(new() { ["IsOpen"] = "0" }));
         await Refused("CK_RobotCommands_Outcome", Row(new() { ["Outcome"] = "'ARRIVED'" }));
-        await Refused("CK_RobotCommands_Outcome", Row(Closed("ARRIVED", outcome: "NULL")));
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+            await Refused("CK_RobotCommands_Outcome", Row(Closed(state, outcome: "NULL")));
         await Refused("CK_RobotCommands_Outcome", Row(Closed("ARRIVED", outcome: "'FAILED'")));
         await Refused("CK_RobotCommands_Delivery", Row(new() { ["DeliveredStreamId"] = "NEWID()", ["DeliveredAt"] = "SYSDATETIMEOFFSET()" }));
         await Refused("CK_RobotCommands_Delivery", Row(new() { ["State"] = "'DELIVERED'", ["DeliveredAt"] = "SYSDATETIMEOFFSET()" }));
@@ -914,9 +915,67 @@ public sealed class SchemaV11Tests
         await Refused("CK_RobotCommands_CancelState", Cancel(Id(397), Id(82), Id(398), Id(399), Closed("ARRIVED")));
 
         // Valid closed rows are accepted, including a reconciled one with its resolution.
-        await db.ExecuteAsync(Row(Closed("FAILED")));
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+            await db.ExecuteAsync(Row(Closed(state)));
         await db.ExecuteAsync(Row(Closed("RECONCILED", extra: new()
             { ["ResolvedByUserId"] = $"'{Id(1)}'", ["ResolvedAt"] = "SYSDATETIMEOFFSET()", ["ResolutionNote"] = "N'Đã kiểm tra.'" })));
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommandOutcomeUpgrade_RejectsMissingOutcomes_PreservesHistory_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.14';");
+        const string bootstrapHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+        await db.ExecuteAsync(Command(Id(501), Id(81), Id(502), Closed("ARRIVED")));
+        var before = await db.ScalarAsync<byte[]>($"SELECT RowVersion FROM dbo.RobotCommands WHERE Id='{Id(501)}';");
+
+        await db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql");
+        var constraintId = await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');");
+        await db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql");
+
+        Assert.Equal(constraintId, await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');"));
+        Assert.Equal(before, await db.ScalarAsync<byte[]>($"SELECT RowVersion FROM dbo.RobotCommands WHERE Id='{Id(501)}';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("1.15", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string check = "SELECT definition FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RobotCommands') AND name=N'CK_RobotCommands_Outcome' AND is_disabled=0 AND is_not_trusted=0;";
+        Assert.Equal(await snapshot.ScalarAsync<string>(check), await db.ScalarAsync<string>(check));
+        var n = 510;
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+        {
+            var id = Id(++n); var leg = Id(++n);
+            await db.ExpectErrorAsync(547, Command(id, Id(81), leg, Closed(state, outcome: "NULL")));
+            await db.ExpectErrorAsync(547, Command(id, Id(81), leg, Closed(state, outcome: "'INVALID'")));
+            await db.ExecuteAsync(Command(id, Id(81), leg, Closed(state)));
+            await db.ExpectErrorAsync(547, $"UPDATE dbo.RobotCommands SET Outcome=NULL WHERE Id='{id}';");
+        }
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommandOutcomeUpgrade_ListsInvalidHistory_AndChangesNothing()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.14';");
+        var n = 550;
+        var invalidIds = new List<string>();
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+        {
+            var id = Id(++n); var leg = Id(++n);
+            invalidIds.Add(id);
+            await db.ExecuteAsync(Command(id, Id(81), leg, Closed(state, outcome: "NULL")));
+        }
+        const string check = "SELECT definition FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RobotCommands') AND name=N'CK_RobotCommands_Outcome';";
+        var original = await db.ScalarAsync<string>(check);
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql"));
+
+        Assert.Equal(51142, error.Number);
+        foreach (var id in invalidIds) Assert.Contains(id, error.Message);
+        Assert.Equal(original, await db.ScalarAsync<string>(check));
+        Assert.Equal("1.14", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RobotCommands WHERE Outcome IS NULL;"));
     }
 
     [SchemaV17Fact]
@@ -1425,7 +1484,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.14.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.15.sql")
         {
             var db = new TestDatabase();
             try

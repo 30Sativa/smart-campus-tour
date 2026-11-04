@@ -83,6 +83,8 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0042](0042-m2-command-transport-and-start-readiness.md) | M2 command transport as a separate robot-polled endpoint, persisted command lifecycle, `RobotCommands` design and READY/Start condition tables | accepted by the repository owner 2026-11-03; implemented from M2.2; dispatch off until M2.3 safety evidence |
 | [0043](0043-m2-2-tour-orchestration-scope.md) | M2.2 scope: no FRONT until M2.5, versioned stop columns, fake-bridge testing, manual Next, release rules, End Early without FR-48; schema v1.14 `RobotCommands` | accepted by the repository owner 2026-11-03; storage in schema v1.14 |
 
+| [0044](0044-robot-command-terminal-outcome-check.md) | Close the NULL outcome CHECK hole for terminal robot commands; preserve v1.14 and upgrade through v1.15 | corrective implementation of ADR-0042/0043, 2026-11-04 |
+
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend
      - monorepo vs multi-repo (nếu muốn ghi lại lý do gộp)
