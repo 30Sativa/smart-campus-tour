@@ -15,7 +15,7 @@ import { ADMIN_ENTITY_STATUS, REGISTRATION_STATE, TOUR_STATE } from './admin-sta
 /** Frame of every admin page: the operations page frame, so both consoles share gutters and width. */
 export function AdminPage({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-full bg-[#f6f7f9] px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+    <div className="min-h-full bg-transparent px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
       <div className="mx-auto w-full max-w-[1440px]">
         {children}
       </div>

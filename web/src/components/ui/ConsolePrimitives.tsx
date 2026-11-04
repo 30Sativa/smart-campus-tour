@@ -89,15 +89,15 @@ export function FilterChips<T extends string>({
           aria-pressed={value === option.value}
           className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold transition-[background-color,color,border-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${
             value === option.value
-              ? 'border-[#173b59] bg-[#173b59] text-white'
-              : 'border-[#e2e8f0] bg-white text-[#334155] hover:border-[#cbd5e1] hover:text-[#0f172a]'
+              ? 'border-[#d6e4f8] bg-[#edf3fb] text-[#4a6fa5]'
+              : 'border-[#e2e8f0] bg-white text-[#475569] hover:border-[#cbd5e1] hover:text-[#2d3748]'
           }`}
         >
           {option.label}
           {option.count != null && (
             <span
               className={`text-[11px] font-semibold tabular-nums ${
-                value === option.value ? 'text-white/80' : 'text-[#94a3b8]'
+                value === option.value ? 'text-[#4a6fa5]/75' : 'text-[#94a3b8]'
               }`}
             >
               {option.count}
@@ -314,7 +314,7 @@ export function Pagination({ page, pageCount, total, pageSize, onPage, label }: 
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} className={buttonClass('ghost', 'sm')} aria-label="Trang trước"><ChevronLeft size={16} aria-hidden="true" /></button>
         {pageWindow(page, pageCount).map((n, i) => n == null ? <span key={`gap-${i}`} className="px-1 text-[13px] text-[#94a3b8]" aria-hidden="true">…</span> : (
-          <button key={n} type="button" onClick={() => onPage(n)} aria-current={n === page ? 'page' : undefined} className={`grid size-7 place-items-center rounded-[7px] border text-xs font-medium tabular-nums transition-colors ${n === page ? 'border-[#173b59] bg-[#173b59] text-white' : 'border-[#e2e8f0] bg-white text-[#475569] hover:bg-[#f1f5f9]'}`}>{n}</button>
+          <button key={n} type="button" onClick={() => onPage(n)} aria-current={n === page ? 'page' : undefined} className={`grid size-7 place-items-center rounded-[7px] border text-xs font-medium tabular-nums transition-colors ${n === page ? 'border-[#d6e4f8] bg-[#edf3fb] font-semibold text-[#4a6fa5]' : 'border-[#e2e8f0] bg-white text-[#475569] hover:bg-[#f1f5f9]'}`}>{n}</button>
         ))}
         <button type="button" onClick={() => onPage(page + 1)} disabled={page >= pageCount} className={buttonClass('ghost', 'sm')} aria-label="Trang sau"><ChevronRight size={16} aria-hidden="true" /></button>
       </div>
