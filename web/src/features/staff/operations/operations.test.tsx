@@ -14,11 +14,13 @@ type Handler = (...args: unknown[]) => void
 const hub = vi.hoisted(() => ({
   handlers: new Map<string, Handler>(),
   tokenFactory: null as null | (() => string),
+  failCreate: false,
   start: vi.fn(() => Promise.resolve()),
   stop: vi.fn(() => Promise.resolve()),
 }))
 vi.mock('../../../api/signalr', () => ({
   createHubConnection: (_path: string, options: { accessTokenFactory: () => string }) => {
+    if (hub.failCreate) throw new Error("Cannot resolve '/hubs/operations'.")
     hub.tokenFactory = options.accessTokenFactory
     return {
       on: (name: string, handler: Handler) => hub.handlers.set(name, handler),
@@ -42,6 +44,7 @@ function Probe() {
 
 afterEach(() => {
   hub.handlers.clear()
+  hub.failCreate = false
   useAuthStore.getState().logout()
   useFleetConnection.setState({ state: 'connecting' })
 })
@@ -60,6 +63,16 @@ describe('fleet telemetry from /hubs/operations', () => {
     view.unmount()
     expect(hub.stop).toHaveBeenCalled()
     expect(hub.handlers.has('FleetUpdated')).toBe(false)
+  })
+})
+
+describe('a hub that cannot be created', () => {
+  it('is reported as disconnected and does not take the page down', async () => {
+    hub.failCreate = true
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    render(<QueryClientProvider client={new QueryClient()}><Probe /></QueryClientProvider>)
+    expect(await screen.findByText(/Mất kết nối telemetry/)).toBeInTheDocument()
+    expect(useFleetConnection.getState().state).toBe('disconnected')
   })
 })
 
