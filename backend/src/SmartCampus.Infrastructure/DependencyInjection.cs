@@ -45,10 +45,10 @@ public static class DependencyInjection
         services.AddScoped<IPhysicalRobotCredentialManager, EfPhysicalRobotCredentialManager>();
         services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
         services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
-        // Built here, not lazily: FleetCommands:Enabled = true must stop startup (ADR-0042 §6; M2.1 has no transport).
         services.AddSingleton(new FleetCommandSettings(configuration.GetValue<bool?>("FleetCommands:Enabled") ?? false,
             configuration.GetValue<int?>("FleetCommands:MaxTelemetryAgeSeconds") ?? 2,
-            configuration.GetValue<int?>("FleetCommands:StartLateLimitMinutes") ?? 15));
+            configuration.GetValue<int?>("FleetCommands:StartLateLimitMinutes") ?? 15,
+            configuration.GetValue<int?>("FleetCommands:AcceptWindowSeconds") ?? 30));
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);

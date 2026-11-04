@@ -26,6 +26,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
 {
     public const string FailedCode = "START_PRECONDITION_FAILED";
     public const string TransportDisabledCode = "COMMAND_TRANSPORT_DISABLED";
+    public const string MovementFailedCode = "MOVE_PRECONDITION_FAILED";
     public const string TransportCheck = "commandTransportEnabled";
 
     /// <summary>
@@ -54,6 +55,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         var robot = reservation is null ? null : await TourTarget.FindReservedRobotAsync(revisions, reservation.RobotId, ct);
         var robotIssue = robot is null || revision is null ? null : await TourTarget.ReservedRobotIssueAsync(revisions, robot, revision, ct);
         var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, ct);
+        var openCommand = robot is not null && await repository.HasOpenCommandAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
         var snapshot = robot is null ? null
             : telemetry.GetLatest().FirstOrDefault(item => string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal));
@@ -109,19 +111,12 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         }
         else
         {
-            // ADR-0042 open decision 3 (refined): no incident table, so a Tour holding the robot in NEEDS_ASSISTANCE stands
-            // in for it. NeedsInspection is its own check (robotNotNeedsInspection) and is not reported twice.
-            list.Add("noOpenIncident", "DB", !incident,
-                incident ? "Một Tour đang giữ robot cần hỗ trợ (NEEDS_ASSISTANCE)." : "Không có sự cố đang mở.");
-            list.Add("noUnresolvedCommand", "DB", true, "Chưa có command store (M2.2); chưa lệnh nào được ghi cho robot.");
+            AddIncident(list, incident);
+            AddOpenCommand(list, openCommand);
             EvaluateTelemetry(list, snapshot, map, now);
         }
 
-        var consoleConnected = tour.OperatorUserId is { } operatorId ? consoles.IsConnected(operatorId) : null;
-        list.Add("operatorConsoleConnected", "CONSOLE", consoleConnected == true,
-            tour.OperatorUserId is null ? "Tour chưa có người vận hành."
-            : consoleConnected is null ? "Chưa có nguồn theo dõi console của người vận hành."
-            : consoleConnected.Value ? "Console của người vận hành đang kết nối." : "Console của người vận hành chưa kết nối.");
+        AddConsole(list, tour);
 
         if (includeConfirmation)
         {
@@ -131,13 +126,58 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
             Confirm(list, "previewChecked", confirmation?.PreviewChecked);
         }
 
-        list.Add(TransportCheck, "CONFIG", settings.Enabled,
-            settings.Enabled ? "Command transport đang bật." : "FleetCommands:Enabled = false; M2.1 chưa có command transport.");
+        AddTransport(list);
         // D3: battery is shown, never blocks.
         list.Info("batteryInfo", "TELEMETRY", snapshot?.Report.BatteryPercent is { } battery
             ? $"Pin {battery:0.#}% (chỉ hiển thị, không chặn Start)." : "Robot chưa báo pin (chỉ hiển thị, không chặn Start).");
         return list.Result();
     }
+
+    /// <summary>
+    /// The SRS §7 checks that still apply to a new command during a Tour (Next, and Retry leg). The Tour holds its robot, so
+    /// the Start-only rows (READY, window, reservation, revision, map assignment, robot not held) no longer say anything:
+    /// a later route test FAIL or a closed window must not strand a running Tour. Anything about the robot now stays.
+    /// </summary>
+    public async Task<TourStartChecks> EvaluateMovementAsync(Tour tour, Robot robot, MapVersion map, CancellationToken ct)
+    {
+        var incident = await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, ct);
+        var openCommand = await repository.HasOpenCommandAsync(robot.Id, ct);
+        var list = new Checklist();
+        list.Add("robotNotNeedsInspection", "DB", !robot.NeedsInspection,
+            robot.NeedsInspection ? "Robot đang chờ kiểm tra tại chỗ." : "Robot không chờ kiểm tra.");
+        list.Add("robotDispatchEnabled", "DB", robot.IsDispatchEnabled,
+            robot.IsDispatchEnabled ? "Robot được phép điều phối." : "Robot chưa được bật điều phối (IsDispatchEnabled = 0).");
+        AddIncident(list, incident);
+        AddOpenCommand(list, openCommand);
+        EvaluateTelemetry(list, telemetry.GetLatest().FirstOrDefault(item =>
+            string.Equals(item.Robot.RobotCode, robot.RobotCode, StringComparison.Ordinal)), map, clock.GetUtcNow());
+        AddConsole(list, tour);
+        AddTransport(list);
+        return list.Result();
+    }
+
+    // ADR-0042 open decision 3 (refined): no incident table, so a Tour holding the robot in NEEDS_ASSISTANCE stands
+    // in for it. NeedsInspection is its own check (robotNotNeedsInspection) and is not reported twice.
+    private static void AddIncident(Checklist list, bool incident) =>
+        list.Add("noOpenIncident", "DB", !incident,
+            incident ? "Một Tour đang giữ robot cần hỗ trợ (NEEDS_ASSISTANCE)." : "Không có sự cố đang mở.");
+
+    private static void AddOpenCommand(Checklist list, bool openCommand) =>
+        list.Add("noUnresolvedCommand", "DB", !openCommand,
+            openCommand ? "Robot còn lệnh đang mở hoặc chưa rõ kết quả." : "Robot không còn lệnh đang mở.");
+
+    private void AddConsole(Checklist list, Tour tour)
+    {
+        var connected = tour.OperatorUserId is { } operatorId ? consoles.IsConnected(operatorId) : null;
+        list.Add("operatorConsoleConnected", "CONSOLE", connected == true,
+            tour.OperatorUserId is null ? "Tour chưa có người vận hành."
+            : connected is null ? "Chưa có nguồn theo dõi console của người vận hành."
+            : connected.Value ? "Console của người vận hành đang kết nối." : "Console của người vận hành chưa kết nối.");
+    }
+
+    private void AddTransport(Checklist list) =>
+        list.Add(TransportCheck, "CONFIG", settings.Enabled,
+            settings.Enabled ? "Command transport đang bật." : "FleetCommands:Enabled = false nên backend không tạo lệnh cho robot.");
 
     private bool Window(DateTimeOffset start, DateTimeOffset now, out string detail)
     {

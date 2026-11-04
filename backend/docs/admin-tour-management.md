@@ -141,10 +141,11 @@ not raw input text/rosters/access codes. Mutations use the existing Tour-first
 lock convention; reference/availability reads and access revocation stay in
 their transaction. No external email HTTP is inside that transaction.
 
-## Start preflight (M2.1, ADR-0042): always refused
+## Start and Next (ADR-0042, ADR-0043)
 
-M2.1 has no command transport. These endpoints read the Start conditions table of
-`docs/architecture.md` §3.2 from real data and never start a Tour.
+These endpoints read the Start conditions table of `docs/architecture.md` §3.2 from
+real data. No robot endpoint exists yet, so a command waits as PENDING and nothing
+moves. `FleetCommands:Enabled` is false by default: Start then refuses and writes nothing.
 
 GET `/api/staff/manage/tours/{id}/start-checks` (any Staff) returns
 `{checks: [{id, passed, source, detail}], canStart, blockedBy}`, evaluated now
@@ -163,6 +164,7 @@ POST `/api/staff/manage/tours/{id}/start` with
 - RowVersion differs → 409 `STALE_VERSION`.
 - Any failing check → 409 `START_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`.
 - Every check passes except `commandTransportEnabled` → 409 `COMMAND_TRANSPORT_DISABLED` with the checks.
+- Everything passes → the Tour runs (below). A robot that changed in the last moment is 409 `ROBOT_CLAIM_FAILED`.
 
 ```json
 { "errors": { "code": "START_PRECONDITION_FAILED",
@@ -172,14 +174,25 @@ POST `/api/staff/manage/tours/{id}/start` with
 ```
 
 Start runs inside the Tour transaction and takes the READY lock order (Tour, map
-preparation, robot deployment, robot reservations), then always throws, so nothing
-commits: no State, StartedAt, `CurrentTourId`, `AssignedRobotId`, TourEvent,
-receipt or command. `requestId` is required but no receipt is stored in M2.1. The
-refusal is logged with Tour id, actor id, code and `blockedBy` only.
+preparation, robot deployment, robot reservations). A refusal throws, so nothing
+commits, and is logged with Tour id, actor id, code and `blockedBy` only. A Start that
+passes claims the robot in one conditional UPDATE, moves READY to RUNNING (`NORMAL`,
+`NAVIGATING`, `TO_POI`, the first stop), inserts the first GoTo as PENDING with
+`AcceptBy = now + AcceptWindowSeconds`, and writes `TOUR_STARTED`,
+`LEG_DISPATCH_REQUESTED` and the receipt. A repeat with the same `requestId` returns
+the earlier result and creates nothing (SRS §4); other content under that id is
+`IDEMPOTENCY_CONFLICT`.
 
-Follow-up M2.2: Start thật phải có receipt requestId (TourRequestReceipt) để chống
-Start lặp, theo SRS §4 (ADR-0042 §5 step 1: a replay of the same `requestId`
-returns the stored receipt).
+POST `/api/staff/manage/tours/{id}/next` with `{requestId, expectedRowVersion}` is
+Operator only and needs RUNNING, NORMAL, OBSERVING (else `TOUR_STATE_INVALID`) and no
+open command (`TOUR_COMMAND_OPEN`). It closes the visit once, then sends a GoTo to the
+next stop or the end pose, or with `EndMode = LAST_POI` completes the Tour and releases
+the robot. A new command needs the movement checks of ADR-0043, else 409
+`MOVE_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`. Nothing leaves a
+POI by itself: `dwellDeadlineAt` is display only (D12).
+
+`GET /api/staff/manage/tours/{id}` adds `execution` and `allowedActions` (`start`,
+`next`: `{allowed, reason, blockedBy}`) for the caller; both are advisory.
 
 Root causes: a check that needs another check's input runs only when that check
 passed; otherwise it is `passed: false` with detail "Chưa kiểm tra vì <id> chưa đạt"
@@ -188,8 +201,8 @@ check runs; without fresh telemetry the other telemetry checks do not run.
 `batteryInfo` is informational and always passes.
 
 Configuration section `FleetCommands`: `Enabled` (default false),
-`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15). `Enabled = true`
-stops startup ("M2.1 chưa có command transport"). `operatorConsoleConnected` has
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `AcceptWindowSeconds` (30,
+initial value, not measured). `operatorConsoleConnected` has
 no source yet (`IOperatorConsolePresence` returns unknown) and always fails;
 `robotDispatchEnabled` always fails because nothing sets `IsDispatchEnabled`.
 
@@ -217,8 +230,7 @@ registration path can report row-level and email-change decisions. Current
 versioned Route views return `INCOMPLETE_CONTENT_AUDIO_DATA`; measured route-test
 duration is not substituted for configured total duration. Physical attendant
 and operational safety-console evidence also has no current source; ADR-0042 makes
-them Start checks, not READY checks. The M2.1 Start endpoint always refuses;
-no Finalize endpoint exists. Branch preparation,
+them Start checks, not READY checks. No Finalize endpoint exists. Branch preparation,
 coordinated registered rescheduling and participant notification/expiry updates
 remain separate work.
 
@@ -238,6 +250,6 @@ pre-Start cancellation belong to `Staff` (product label Tour Staff). The assigne
 Operator is an explicitly selected active Staff account; CreatedByUserId cannot
 stand in for that assignment. Admin has no routine Tour-management permission;
 F-14 remains pending. Technical Staff, Representatives and Viewers have no Tour
-scheduling action. Start is preflight-only and always refused (M2.1);
-assigned-Operator runtime actions have no endpoint. These are target boundaries, not claims that the
+scheduling action. Start and Next belong to the assigned Operator; End Early, Retry
+and Reconcile are M2.2-c. These are target boundaries, not claims that the
 versioned API is implemented.

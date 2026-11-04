@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCampus.Application.Common.Abstractions.FleetSync;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
@@ -27,7 +28,7 @@ public sealed class TourStartPreflightSqlTests
         Assert.Contains(checks.Checks, c => c is { Id: "callerIsOperator", Passed: true });
         Assert.DoesNotContain(checks.Checks, c => c.Source == "OPERATOR_CONFIRMATION");
         Assert.Equal(["DB", "TELEMETRY", "CONSOLE", "CONFIG"], checks.Checks.Select(c => c.Source).Distinct().OrderBy(Order));
-        Assert.Contains(checks.Checks, c => c is { Id: "noUnresolvedCommand", Passed: true } && c.Detail.Contains("command store"));
+        Assert.Contains(checks.Checks, c => c is { Id: "noUnresolvedCommand", Passed: true });
         Assert.Contains(checks.Checks, c => c is { Id: "batteryInfo", Passed: true, Source: "TELEMETRY" } && c.Detail.Contains("80"));
 
         var before = await w.State();
@@ -220,20 +221,20 @@ public sealed class TourStartPreflightSqlTests
 
     private static int Order(string source) => Array.IndexOf(["DB", "TELEMETRY", "CONSOLE", "CONFIG"], source);
 
-    private sealed class MutableClock : TimeProvider
+    internal sealed class MutableClock : TimeProvider
     {
         public DateTimeOffset? Now { get; set; }
         public override DateTimeOffset GetUtcNow() => Now ?? base.GetUtcNow();
     }
 
-    private sealed class FakeConsole : IOperatorConsolePresence
+    internal sealed class FakeConsole : IOperatorConsolePresence
     {
         public bool? Connected { get; set; } = true;
         public bool? IsConnected(Guid userId) => Connected;
     }
 
     /// <summary>A READY Tour in its start window, with a dispatch-enabled robot on the route's map reporting idle.</summary>
-    private sealed class World(TourReadySqlTests.Harness harness, MutableClock clock, FakeConsole console) : IAsyncDisposable
+    internal sealed class World(TourReadySqlTests.Harness harness, MutableClock clock, FakeConsole console) : IAsyncDisposable
     {
         private readonly Guid stream = Guid.NewGuid();
         private long seq;
@@ -251,7 +252,7 @@ public sealed class TourStartPreflightSqlTests
         private string mapKey = null!;
         private string frameId = null!;
 
-        public static async Task<World> Create(bool report = true)
+        public static async Task<World> Create(bool report = true, bool enabled = false, bool twoStopsToEndPose = false)
         {
             var clock = new MutableClock();
             var console = new FakeConsole();
@@ -259,7 +260,8 @@ public sealed class TourStartPreflightSqlTests
             {
                 services.AddSingleton<TimeProvider>(clock);
                 services.AddSingleton<IOperatorConsolePresence>(console);
-            });
+                services.AddSingleton(new FleetCommandSettings(enabled));
+            }, twoStopsToEndPose);
             var world = new World(harness, clock, console);
             // Created now, before the clock moves to the start: Tour create requires its lead time.
             world.OtherTourId = await harness.CreateTour(harness.Start.AddDays(1));

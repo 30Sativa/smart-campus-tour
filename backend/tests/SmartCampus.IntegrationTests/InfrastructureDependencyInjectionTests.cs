@@ -47,7 +47,7 @@ public sealed class InfrastructureDependencyInjectionTests
     }
 
     [Fact]
-    public void AddInfrastructure_FleetCommandsEnabled_FailsFast_BecauseM21HasNoCommandTransport()
+    public void AddInfrastructure_ReadsFleetCommandsEnabled_OnlyWhenConfigured()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -57,9 +57,9 @@ public sealed class InfrastructureDependencyInjectionTests
             })
             .Build();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddInfrastructure(configuration));
+        using var provider = new ServiceCollection().AddInfrastructure(configuration).BuildServiceProvider();
 
-        Assert.Contains("M2.1 chưa có command transport", exception.Message);
+        Assert.True(provider.GetRequiredService<FleetCommandSettings>().Enabled);
     }
 
     [Fact]
@@ -77,6 +77,7 @@ public sealed class InfrastructureDependencyInjectionTests
         Assert.False(settings.Enabled);
         Assert.Equal(TimeSpan.FromSeconds(2), settings.MaxTelemetryAge);
         Assert.Equal(TimeSpan.FromMinutes(15), settings.StartLateLimit);
+        Assert.Equal(TimeSpan.FromSeconds(30), settings.AcceptWindow);
         // No per-user console tracking yet: presence is unknown, never connected.
         Assert.Null(provider.GetRequiredService<IOperatorConsolePresence>().IsConnected(Guid.NewGuid()));
     }
