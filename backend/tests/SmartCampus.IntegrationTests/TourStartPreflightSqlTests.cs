@@ -102,8 +102,8 @@ public sealed class TourStartPreflightSqlTests
     public async Task Telemetry_MissingStaleOrWrong_FailsItsOwnCheck()
     {
         await using var w = await World.Create();
-        await w.AssertTelemetry(["robotLocalized"], localized: null);
-        Assert.Equal("Robot chưa báo.", Assert.Single((await w.Checks()).Checks, c => c.Id == "robotLocalized").Detail);
+        var missingLocalization = await w.AssertTelemetry(["robotLocalized"], localized: null);
+        Assert.Equal("Robot chưa báo.", Assert.Single(missingLocalization.Checks, c => c.Id == "robotLocalized").Detail);
         await w.AssertTelemetry(["robotLocalized"], localized: false);
         await w.AssertTelemetry(["motionReady"], motionReady: null);
         await w.AssertTelemetry(["motionReady"], motionReady: false);
@@ -299,12 +299,13 @@ public sealed class TourStartPreflightSqlTests
         /// Reports telemetry with one value changed, expects exactly these root causes (plus the transport) from the
         /// read and from Start, then reports the passing values again.
         /// </summary>
-        public async Task AssertTelemetry(string[] ids, bool? localized = true, bool? motionReady = true, string? mapKey = null,
+        public async Task<TourStartChecks> AssertTelemetry(string[] ids, bool? localized = true, bool? motionReady = true, string? mapKey = null,
             string? frameId = null, string status = "IDLE", double? battery = 80)
         {
             await Report(localized, motionReady, mapKey, frameId, status, battery);
-            await AssertBlocked(ids);
+            var checks = await AssertBlocked(ids);
             await Report();
+            return checks;
         }
 
         /// <summary>
