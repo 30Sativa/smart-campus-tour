@@ -12,10 +12,19 @@ export function createHubConnection(
   options?: signalR.IHttpConnectionOptions,
 ): signalR.HubConnection {
   return new signalR.HubConnectionBuilder()
-    .withUrl(apiUrl(hubPath), options ?? {})
+    .withUrl(hubUrl(hubPath), options ?? {})
     .withAutomaticReconnect()
     .configureLogging(
       import.meta.env.DEV ? signalR.LogLevel.Information : signalR.LogLevel.Warning,
     )
     .build()
+}
+
+/**
+ * An absolute hub URL. With an empty VITE_API_BASE_URL (same-origin deploy, CI)
+ * `apiUrl` is a bare path, which SignalR refuses to resolve outside a real
+ * browser ("Cannot resolve '/hubs/operations'"), so resolve it against the page.
+ */
+export function hubUrl(hubPath: string): string {
+  return new URL(apiUrl(hubPath), window.location.href).href
 }

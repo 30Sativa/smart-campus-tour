@@ -61,7 +61,16 @@ export function useFleetTelemetrySync() {
   useEffect(() => {
     let disposed = false
     let restart: number | undefined
-    const connection = createHubConnection(FLEET_HUB_PATH, { accessTokenFactory: () => useAuthStore.getState().accessToken ?? '' })
+    let connection: ReturnType<typeof createHubConnection>
+    try {
+      connection = createHubConnection(FLEET_HUB_PATH, { accessTokenFactory: () => useAuthStore.getState().accessToken ?? '' })
+    } catch (error) {
+      // Telemetry is one panel of the console: a hub that cannot even be built
+      // is reported as disconnected, never allowed to take the whole area down.
+      console.error('[fleet-telemetry] cannot create the operations hub connection', error)
+      setState('disconnected')
+      return
+    }
     const schedule = () => { restart = window.setTimeout(start, RESTART_MS) }
     const start = () => {
       setState('connecting')
