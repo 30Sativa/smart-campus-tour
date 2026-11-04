@@ -1,33 +1,15 @@
 /**
- * Transport contract for the operations console (Staff).
+ * Vocabulary types of the earlier operations-console design (scope 19/09/2026).
  *
- * Types and endpoint calls only: no React, no query hooks, no fixtures. The
- * feature that consumes this lives in `src/features/staff/`.
+ * Types only. They still describe the local Digital Twin workbench and robot
+ * fixtures (`features/digital-twin`). The operations console itself now reads
+ * the real Tour API (`features/administration/tours/api/tours.ts`, ADR-0042/0043)
+ * and `/hubs/operations` telemetry (`features/staff/operations/`). The former
+ * unwired `staffApi` proposal (`/api/staff/tours/*`) was removed with the mock
+ * console: it never matched the backend (ADR-0042 open decision 10).
  *
- * The TYPES here are live - the fixtures and every screen are written against
- * them. `staffApi`, the HTTP implementation at the bottom, is NOT wired to
- * anything: `/api/staff/*` does not exist, so `staff-hooks.ts` binds the
- * mock implementation of this same type instead. It is kept as the written
- * record of the endpoints this frontend expects. Do not delete it to satisfy a
- * dead-code sweep.
- *
- * Model: "CampusTour DT-AMR — Đặc tả phạm vi" (19/09/2026), remote tours.
- *
- *   TourState          Scheduled → Ready → Running → Completed | Cancelled
- *                      (Ready is Admin "Chốt buổi"; Start is Staff; one run per Tour)
- *   OperationalStatus  Normal | NeedsAssistance (+ Reason), only while Running
- *   Hold               a flag at a POI that stops the automatic Next; not a state
- *
- * One physical robot runs at most one Tour at a time; many school groups watch
- * the same run remotely. The robot is taken at Start, never reserved earlier,
- * and never swapped mid-Tour. Every decision - may this Tour start, is Next
- * allowed, which recovery applies - is the server's (`allowedActions`); the
- * console renders the answer and its reason (web/AGENTS.md §3, scope §4.7/§11.5).
- *
- * The browser never sends an Emergency Stop (web/AGENTS.md §7). End Early is an
- * operational request; the physical stop stays robot-side.
+ * The browser never sends an Emergency Stop (web/AGENTS.md §7).
  */
-import { apiClient } from '../client'
 
 /* ── Vocabulary ───────────────────────────────────────────────────────────── */
 
@@ -190,11 +172,7 @@ export type TourFilters = {
   history?: boolean
 }
 
-/** What Staff may ask of a running Tour. Start is separate: it carries confirmations. */
-export type TourCommand = 'hold' | 'next' | 'endEarly' | 'retryLeg' | 'rerunPoi' | 'retryFront' | 'confirmComplete'
 
-/** Physical checks the operator confirms at Start; the server records them. */
-export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; previewChecked: boolean }
 
 /* ── Robot ────────────────────────────────────────────────────────────────── */
 
@@ -274,39 +252,4 @@ export type FeedbackReport = {
   bookingStatus: string
   rating?: number | null
   comment?: string | null
-}
-
-/* ── The contract ─────────────────────────────────────────────────────────── */
-
-export type StaffApi = {
-  tours(filters?: TourFilters): Promise<TourOperation[]>
-  tour(id: string): Promise<TourOperationDetail>
-  startTour(id: string, confirmation: StartConfirmation): Promise<TourOperation>
-  commandTour(id: string, command: TourCommand, reason?: string): Promise<TourOperation>
-  amrs(): Promise<AmrStatus[]>
-  confirmRobotReady(robotId: string, note?: string): Promise<AmrStatus>
-  alerts(): Promise<StaffAlert[]>
-  feedbackReports(filters?: FeedbackFilters): Promise<FeedbackReport[]>
-}
-
-function queryString(values: Record<string, string | undefined>) {
-  const query = new URLSearchParams()
-  for (const [key, value] of Object.entries(values)) {
-    if (value) query.set(key, value)
-  }
-  const text = query.toString()
-  return text ? `?${text}` : ''
-}
-
-const tourPath = (id: string) => `/api/staff/tours/${id}`
-
-export const staffApi: StaffApi = {
-  tours: (filters = {}) => apiClient(`/api/staff/tours${queryString({ date: filters.date, history: filters.history ? 'true' : undefined })}`),
-  tour: (id) => apiClient(tourPath(id)),
-  startTour: (id, confirmation) => apiClient(`${tourPath(id)}/start`, { method: 'POST', json: confirmation }),
-  commandTour: (id, command, reason) => apiClient(`${tourPath(id)}/commands/${command}`, { method: 'POST', json: { reason } }),
-  amrs: () => apiClient('/api/staff/robots'),
-  confirmRobotReady: (robotId, note) => apiClient(`/api/staff/robots/${robotId}/confirm-ready`, { method: 'POST', json: { note } }),
-  alerts: () => apiClient('/api/staff/alerts'),
-  feedbackReports: (filters = {}) => apiClient(`/api/staff/reports/feedback${queryString(filters)}`),
 }

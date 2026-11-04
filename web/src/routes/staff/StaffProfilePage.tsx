@@ -7,20 +7,20 @@ import { isStaffRole, roleLabel } from '../../auth/roles'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { StaffPage } from '../../features/staff/StaffUi'
-import { useTours } from '../../features/staff/staff-hooks'
-import { routeProgress, tourAction } from '../../features/staff/attention'
-import { formatCountdown, formatTime } from '../../features/staff/formatters'
+import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
+import { formatCountdown } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
-import { byStart } from '../../features/staff/today-board'
+import { useDayTours } from '../../features/staff/operations/hooks'
+import { nextStep } from '../../features/staff/operations/next-step'
 
-/** What an operator account may do, and what stays with Admin (scope: roles, ADR-0012/0013). */
+/** What a Staff account may do, and what belongs to another role (ADR-0020, ADR-0042 §6). */
 const CAN = [
-  'Kiểm tra thiết bị và bắt đầu buổi Sẵn sàng',
-  'Giữ tại POI, đi tiếp, kết thúc sớm có lý do',
-  'Xử lý yêu cầu đổi nhánh từ đại diện',
-  'Xác nhận robot sẵn sàng sau kiểm tra tại chỗ',
+  'Chuẩn bị Tour: POI, tuyến, duyệt đăng ký, tạo Tour',
+  'Chốt Tour (READY) và mở lại khi chưa bắt đầu',
+  'Kiểm tra điều kiện và bắt đầu Tour mình được giao vận hành',
+  'Đi tiếp tại POI của Tour mình được giao vận hành',
 ]
-const ADMIN_ONLY = ['Tạo lịch và chốt buổi', 'Duyệt đăng ký, gửi lời mời', 'Quản lý tài khoản, tuyến và POI']
+const ADMIN_ONLY = ['Tài khoản, vai trò và nhật ký hệ thống (Admin)', 'Bản đồ, robot và kiểm chứng tuyến (Kỹ thuật)']
 
 function initialsOf(name: string) {
   const parts = name.split(/[\s._-]+/).filter(Boolean)
@@ -50,15 +50,14 @@ function Card({ title, note, action, children }: { title: string; note?: string;
 export default function StaffProfilePage() {
   const user = useAuthStore((state) => state.user)
   const logout = useLogout()
-  const tours = useTours()
+  const tours = useDayTours(campusDay(new Date()))
   const now = useNow(30_000)
   const name = user?.username || 'Nhân viên vận hành'
 
-  const today = [...(tours.data ?? [])].sort(byStart)
-  const running = today.find((tour) => tour.state === 'Running')
-  const next = today.find((tour) => (tour.state === 'Ready' || tour.state === 'Scheduled') && new Date(tour.scheduledAt).getTime() >= now)
-  const finished = today.filter((tour) => tour.state === 'Completed' || tour.state === 'Cancelled').length
-  const progress = running ? routeProgress(running) : null
+  const today = tours.data?.data ?? []
+  const running = today.find((tour) => tour.state === 'RUNNING')
+  const next = today.find((tour) => (tour.state === 'READY' || tour.state === 'SCHEDULED') && new Date(tour.scheduledStartAt).getTime() >= now)
+  const finished = today.filter((tour) => tour.state === 'COMPLETED' || tour.state === 'CANCELLED').length
 
   return (
     <StaffPage>
@@ -76,7 +75,6 @@ export default function StaffProfilePage() {
               <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
               Đang đăng nhập
             </span>
-            {isStaffRole(user?.role) && <span className="rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-xs font-bold text-[#334155]">Vận hành mọi buổi</span>}
           </div>
         </div>
         <dl className="flex flex-wrap gap-2.5">
@@ -84,10 +82,7 @@ export default function StaffProfilePage() {
             <dt className="text-[11.5px] font-medium text-[#94a3b8]">Đang chạy</dt>
             <dd className="mt-0.5 text-lg font-bold text-[#0f172a]">
               {running ? (
-                <>
-                  {running.code}
-                  {progress && <span className="ml-1.5 text-xs font-medium text-[#64748b]">POI {Math.min(progress.done + 1, progress.total)}/{progress.total}</span>}
-                </>
+                <span className="block max-w-48 truncate text-sm">{running.name}</span>
               ) : (
                 <span className="text-sm font-semibold text-[#94a3b8]">Không có</span>
               )}
@@ -97,7 +92,7 @@ export default function StaffProfilePage() {
             <dt className="text-[11.5px] font-medium text-[#94a3b8]">Hôm nay</dt>
             <dd className="mt-0.5 text-lg font-bold text-[#0f172a]">
               {tours.data ? today.length : '–'}
-              <span className="ml-1.5 text-xs font-medium text-[#64748b]">buổi · {finished} đã xong</span>
+              <span className="ml-1.5 text-xs font-medium text-[#64748b]">Tour · {finished} đã xong</span>
             </dd>
           </div>
         </dl>
@@ -107,7 +102,7 @@ export default function StaffProfilePage() {
         <div className="grid gap-3">
           <Card
             title="Ca hôm nay"
-            note="Buổi đang chạy và buổi kế tiếp của cả đội vận hành."
+            note="Tour đang chạy và Tour kế tiếp hôm nay của cả đội."
             action={<Link to="/staff/tours" className={buttonClass('secondary', 'sm')}>Buổi hôm nay<ChevronRight size={14} aria-hidden="true" /></Link>}
           >
             {tours.isPending ? (
@@ -116,35 +111,32 @@ export default function StaffProfilePage() {
               <p className="text-sm text-[#b91c1c]">Không tải được danh sách buổi hôm nay.</p>
             ) : running || next ? (
               <ul className="divide-y divide-[#f1f4f8]">
-                {[running && { tour: running, label: 'Đang chạy', hint: running.startedAt ? `bắt đầu ${formatTime(running.startedAt)}` : '' }, next && { tour: next, label: 'Kế tiếp', hint: formatCountdown(next.scheduledAt, now) ?? 'đã tới giờ' }]
+                {[running && { tour: running, label: 'Đang chạy', hint: '' }, next && { tour: next, label: 'Kế tiếp', hint: formatCountdown(next.scheduledStartAt, now) ?? 'đã tới giờ' }]
                   .filter((row): row is { tour: NonNullable<typeof running>; label: string; hint: string } => Boolean(row))
                   .map(({ tour, label, hint }) => {
-                    const action = tourAction(tour)
+                    const action = nextStep(tour)
                     return (
                       <li key={tour.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
                         <span className="w-20 shrink-0">
                           <span className="block text-[11.5px] font-medium text-[#94a3b8]">{label}</span>
-                          <span className="block text-[15px] font-bold text-[#0f172a] tabular-nums">{formatTime(tour.scheduledAt)}</span>
+                          <span className="block text-[15px] font-bold text-[#0f172a] tabular-nums">{campusTime(tour.scheduledStartAt)}</span>
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold text-[#0f172a]">
-                            <span className="mr-1.5 font-mono text-xs text-[#2563eb]">{tour.code}</span>
-                            {tour.name}
-                          </span>
+                          <span className="block truncate text-sm font-bold text-[#0f172a]">{tour.name}</span>
                           <span className="block truncate text-xs text-[#64748b]">{tour.routeName}{hint ? ` · ${hint}` : ''}</span>
                         </span>
-                        <Link to={action.to} className={buttonClass(action.kind === 'primary' || tour.state === 'Running' ? 'primary' : 'secondary', 'sm')}>{action.label}</Link>
+                        <Link to={action.to} className={buttonClass(tour.state === 'RUNNING' || tour.state === 'READY' ? 'primary' : 'secondary', 'sm')}>{action.label}</Link>
                       </li>
                     )
                   })}
               </ul>
             ) : (
-              <p className="text-sm text-[#64748b]">Không còn buổi nào đang chạy hoặc sắp tới hôm nay.</p>
+              <p className="text-sm text-[#64748b]">Không còn Tour nào đang chạy hoặc sắp tới hôm nay.</p>
             )}
           </Card>
 
           {isStaffRole(user?.role) && (
-            <Card title="Quyền của vai trò Staff" note="Mọi Staff đang hoạt động vận hành được mọi buổi; không phân công theo buổi.">
+            <Card title="Quyền của vai trò Staff" note="Bắt đầu và đi tiếp chỉ dành cho người vận hành được giao cho từng Tour.">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <h3 className="mb-2 text-xs font-semibold text-[#15803d]">Được làm</h3>
@@ -155,7 +147,7 @@ export default function StaffProfilePage() {
                   </ul>
                 </div>
                 <div>
-                  <h3 className="mb-2 text-xs font-semibold text-[#64748b]">Thuộc Admin</h3>
+                  <h3 className="mb-2 text-xs font-semibold text-[#64748b]">Thuộc vai trò khác</h3>
                   <ul className="grid gap-2 text-[13px] text-[#64748b]">
                     {ADMIN_ONLY.map((item) => (
                       <li key={item} className="flex items-start gap-2 leading-snug"><Minus size={15} strokeWidth={2.6} aria-hidden="true" className="mt-0.5 shrink-0 text-[#94a3b8]" />{item}</li>
