@@ -10,7 +10,7 @@ api="ghcr.io/30sativa/smart-campus-tour/backend@sha256:$digest"
 db_init="ghcr.io/30sativa/smart-campus-tour/backend-db-init@sha256:$digest"
 sql="mcr.microsoft.com/mssql/server@sha256:$digest"
 export DB_INIT_SOURCE_SHA=$ops_sha
-export DB_SCHEMA_VERSION=1.14
+export DB_SCHEMA_VERSION=1.15
 bash deploy/deploy-ec2.sh --validate-only "$sha" "$api" "$db_init" "$sql" "$ops_sha" >/dev/null
 bash deploy/deploy-ec2.sh --validate-only "$sha" "$api" "$db_init" "$sql" "$ops_sha" --sql-maintenance >/dev/null
 
