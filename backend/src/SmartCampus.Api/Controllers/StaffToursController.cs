@@ -12,6 +12,7 @@ using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
 using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.NextTourStop;
 using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
@@ -59,7 +60,7 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>
-        Ok(new BaseResponse<TourDetails> { Success = true, Message = "Tour retrieved.", Data = await sender.Send(new GetTourQuery(id), ct) });
+        Ok(new BaseResponse<TourDetails> { Success = true, Message = "Tour retrieved.", Data = await sender.Send(new GetTourQuery(id, User.GetRequiredUserId()), ct) });
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTourRequest request, CancellationToken ct) =>
@@ -86,10 +87,13 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
         Ok(new BaseResponse<TourStartChecks> { Success = true, Message = "Tour start checks retrieved.",
             Data = await sender.Send(new GetTourStartChecksQuery(id, User.GetRequiredUserId()), ct) });
 
-    /// <summary>M2.1 always refuses: 409 START_PRECONDITION_FAILED or COMMAND_TRANSPORT_DISABLED (ADR-0042).</summary>
     [HttpPost("{id:guid}/start")]
     public async Task<IActionResult> Start(Guid id, [FromBody] StartTourRequest request, CancellationToken ct) =>
         Success(await sender.Send(new StartTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour started.");
+
+    [HttpPost("{id:guid}/next")]
+    public async Task<IActionResult> Next(Guid id, [FromBody] NextTourStopRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new NextTourStopCommand(id, User.GetRequiredUserId(), request), ct), "Tour moved on.");
 
     private OkObjectResult Success(TourMutationResult result, string message) =>
         Ok(new BaseResponse<TourMutationResult> { Success = true, Message = message, Data = result });

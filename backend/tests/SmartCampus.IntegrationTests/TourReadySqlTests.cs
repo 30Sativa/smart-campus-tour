@@ -209,7 +209,7 @@ public sealed class TourReadySqlTests
         public ApplicationDbContext Context() => new(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer(database.ConnectionString).Options);
 
         /// <summary><paramref name="configure"/> replaces services after the real registrations, e.g. the clock.</summary>
-        public static async Task<Harness> Create(Action<IServiceCollection>? configure = null)
+        public static async Task<Harness> Create(Action<IServiceCollection>? configure = null, bool twoStopsToEndPose = false)
         {
             var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
             var technical = await database.InsertUserAsync(true, username: "ready.technical", roles: ["TECHNICAL_STAFF"]);
@@ -230,11 +230,11 @@ public sealed class TourReadySqlTests
             services.AddSingleton(new FleetSyncSettings(TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1), TimeSpan.FromSeconds(5)));
             configure?.Invoke(services);
             var harness = new Harness(database, services.BuildServiceProvider(), technical.Id, staff.Id, operatorUser.Id);
-            await harness.Prepare();
+            await harness.Prepare(twoStopsToEndPose);
             return harness;
         }
 
-        private async Task Prepare()
+        private async Task Prepare(bool twoStopsToEndPose)
         {
             var map = await Send(new CreateMapVersionCommand(technicalId, new("pilot", "Pilot", Guid.NewGuid(), MapPackage("ready"))));
             await using (var db = Context())
@@ -246,15 +246,23 @@ public sealed class TourReadySqlTests
                 await db.SaveChangesAsync();
             }
             await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
-            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(map.Id, "Thư viện", "Tham quan", null, 1.5m, 1.5m, 0m, "FRONT", "Đây là thư viện."))));
-            var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
-            await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
-            var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến READY", null, map.Id, 2.5m, 2.5m, 0m, "LAST_POI", null, null, null,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+            var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
+            var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]) };
+            if (twoStopsToEndPose) stops.Add(new(await VerifiedPoi(map.Id, "Phòng lab", 2.5m, 1.5m), 45, [new("FRONT", 45)]));
+            var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến READY", null, map.Id, 2.5m, 2.5m, 0m,
+                twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 1.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             Route = await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), Robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
             TourId = await CreateTour(Start);
+        }
+
+        private async Task<Guid> VerifiedPoi(Guid mapId, string name, decimal x, decimal y)
+        {
+            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(mapId, name, "Tham quan", null, x, y, 0m, "FRONT", "Đây là điểm tham quan."))));
+            var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
+            await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, Robot, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+            return proposal.Revision.Id;
         }
 
         public async Task<Guid> CreateTour(DateTimeOffset start) =>

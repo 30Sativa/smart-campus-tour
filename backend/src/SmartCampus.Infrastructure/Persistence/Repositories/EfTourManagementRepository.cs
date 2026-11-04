@@ -35,7 +35,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public Task<AuditLog?> FindRequestAsync(Guid actor, Guid requestId, CancellationToken ct) =>
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actor && a.CorrelationId == requestId &&
             a.EntityType == "Tour" && (a.Action == "TOUR_CREATED" || a.Action == "TOUR_UPDATED" || a.Action == "TOUR_CANCELLED" ||
-            a.Action == TourLifecycleEvents.Ready || a.Action == TourLifecycleEvents.Reopened), ct);
+            a.Action == TourLifecycleEvents.Ready || a.Action == TourLifecycleEvents.Reopened ||
+            a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {
@@ -108,6 +109,29 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         db.Tours.AsNoTracking().AnyAsync(t => t.OperationalStatus == "NEEDS_ASSISTANCE" &&
             (db.Robots.Any(r => r.Id == robotId && r.CurrentTourId == t.Id) || (t.AssignedRobotId == robotId && t.State == "RUNNING")), ct);
 
+    public Task<bool> HasOpenCommandAsync(Guid robotId, CancellationToken ct) =>
+        db.RobotCommands.AsNoTracking().AnyAsync(c => c.RobotId == robotId && c.IsOpen, ct);
+
+    public async Task<bool> TryClaimRobotAsync(Guid robotId, Guid tourId, DateTimeOffset now, CancellationToken ct) =>
+        await db.Robots.Where(r => r.Id == robotId && r.CurrentTourId == null && !r.NeedsInspection && r.IsDispatchEnabled && r.DeactivatedAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(r => r.CurrentTourId, tourId).SetProperty(r => r.LastAssignedAt, now), ct) == 1;
+
+    public async Task<bool> ReleaseRobotAsync(Guid robotId, Guid tourId, CancellationToken ct) =>
+        await db.Robots.Where(r => r.Id == robotId && r.CurrentTourId == tourId && !r.NeedsInspection)
+            .ExecuteUpdateAsync(set => set.SetProperty(r => r.CurrentTourId, (Guid?)null), ct) == 1;
+
+    public Task<RobotCommand?> FindCommandAsync(Guid id, CancellationToken ct) =>
+        db.RobotCommands.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public Task<RobotCommand?> LockCommandAsync(Guid id, CancellationToken ct) =>
+        db.RobotCommands.FromSqlInterpolated($"SELECT * FROM dbo.RobotCommands WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}").SingleOrDefaultAsync(ct);
+
+    public Task<RobotCommand?> FindLegCommandAsync(Guid legId, CancellationToken ct) =>
+        db.RobotCommands.AsNoTracking().SingleOrDefaultAsync(c => c.LegId == legId && c.Kind == RobotCommandKinds.GoTo, ct);
+
+    public Task<TourEvent?> FindCommandEventAsync(Guid commandId, string eventType, CancellationToken ct) =>
+        db.TourEvents.AsNoTracking().Where(e => e.CommandId == commandId && e.EventType == eventType).OrderBy(e => e.Id).FirstOrDefaultAsync(ct);
+
     public async Task<TourTargetView> GetTargetAsync(Guid id, CancellationToken ct)
     {
         var operatorUser = await db.Tours.AsNoTracking().Where(t => t.Id == id && t.OperatorUserId != null)
@@ -124,6 +148,7 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
 
     public void Add(Tour tour) => db.Tours.Add(tour);
     public void Add(TourRobotReservation reservation) => db.TourRobotReservations.Add(reservation);
+    public void Add(RobotCommand command) => db.RobotCommands.Add(command);
     public void AddAudit(AuditLog audit) => db.AuditLogs.Add(audit);
     public void AddEvent(TourEvent tourEvent) => db.TourEvents.Add(tourEvent);
     public void AddRouteChangeEvent(Tour tour, Guid previousRouteId, Guid actor, DateTimeOffset now) => db.TourEvents.Add(new TourEvent

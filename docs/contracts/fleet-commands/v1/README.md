@@ -1,7 +1,7 @@
 # Fleet Commands v1
 
-**Status: Accepted in [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (03/11/2026); not implemented until M2.2.**
-No backend endpoint, DTO, table or bridge code exists for this contract yet.
+**Status: Accepted in [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (03/11/2026). The backend stores commands and processes results from M2.2-b; the robot endpoints are M2.2-d.**
+No robot endpoint or bridge code exists for this contract yet.
 Fleet Sync v1 stays telemetry-only and always returns `commands: []`. Dispatch
 stays off until the M2.3 safety evidence.
 

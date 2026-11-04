@@ -60,10 +60,11 @@ End Early sets the Tour state, withdraws or cancels the open command and holds t
 | RUNNING / NAVIGATING | GoTo `TERMINAL ARRIVED` on a `TO_POI` leg | `CurrentStep = OBSERVING`, `LastArrivedRevisionStopId`, new `CurrentStopVisitId`, `DwellDeadlineAt` (display) | result valid for the current leg |
 | RUNNING / OBSERVING | Next (Operator) | `NAVIGATING` to the next stop, or `RETURNING_TO_END` (`EndMode = POSE`), or COMPLETED (`EndMode = LAST_POI`) | `OperationalStatus = NORMAL`, no open command, movement checks pass |
 | RUNNING / RETURNING_TO_END | GoTo `TERMINAL ARRIVED` on the `TO_END` leg | COMPLETED, `EndedAt`, robot released (D13) | result valid for the current leg |
-| RUNNING, NORMAL | GoTo `REJECTED` or `TERMINAL FAILED` | `OperationalStatus = NEEDS_ASSISTANCE`, `AssistanceReason = NavigationFailed` | current leg |
+| RUNNING, NORMAL | GoTo `TERMINAL FAILED` | `OperationalStatus = NEEDS_ASSISTANCE`, `AssistanceReason = NavigationFailed` | current leg |
+| RUNNING, NORMAL | GoTo `REJECTED` | `OperationalStatus = NEEDS_ASSISTANCE`, `AssistanceReason = CommandRejected`; the robot's reason is kept in the `TourEvent` | current leg; refines ADR-0042 §3, which used `NavigationFailed` |
 | RUNNING, NORMAL | command becomes UNKNOWN or EXPIRED | `NEEDS_ASSISTANCE` (`CommandUnknown` or `RobotDisconnected`) | ADR-0042 §3 |
 | RUNNING | backend start-up | `NEEDS_ASSISTANCE` (`BackendRestarted`) | always; nothing resumes |
-| RUNNING / NEEDS_ASSISTANCE | Retry leg (Operator) | `NORMAL`, new GoTo with a new `legId` to the same target | `AssistanceReason = NavigationFailed` and the old GoTo is terminal `FAILED` (never UNKNOWN/RECONCILED); movement checks pass |
+| RUNNING / NEEDS_ASSISTANCE | Retry leg (Operator) | `NORMAL`, new GoTo with a new `legId` to the same target | `AssistanceReason` is `NavigationFailed` with the old GoTo terminal `FAILED`, or `CommandRejected` with the old GoTo `REJECTED` (never UNKNOWN/RECONCILED); movement checks pass |
 | RUNNING (any) | End Early (Operator) | CANCELLED, `EndedAt`, `EndReason`, `NeedsInspection = 1`, robot kept | always while RUNNING |
 
 A late result for an earlier leg is recorded as a `TourEvent` and changes no Tour state.
@@ -79,11 +80,11 @@ The command lifecycle is ADR-0042 §3 unchanged (`PENDING → DELIVERED → ACCE
 | Start | Tour Operator | Tour READY, all Start checks pass, transport enabled |
 | Next | Tour Operator | RUNNING, `NORMAL`, `OBSERVING`, robot has no open command, movement checks pass |
 | End Early | Tour Operator | RUNNING (any operational status or step) |
-| Retry leg | Tour Operator | RUNNING, `NEEDS_ASSISTANCE` with `NavigationFailed`, old GoTo terminal FAILED (not UNKNOWN or RECONCILED) |
+| Retry leg | Tour Operator | RUNNING, `NEEDS_ASSISTANCE`, old GoTo FAILED (`NavigationFailed`) or REJECTED (`CommandRejected`), never UNKNOWN or RECONCILED. Movement checks must include `executionIdle` and `mapContextMatches`, so a `BUSY` or `MAP_MISMATCH` rejection cannot retry in a loop |
 | Reconcile | Tour Operator | a command of the Tour in UNKNOWN → RECONCILED; the Tour stays `NEEDS_ASSISTANCE`, robot `NeedsInspection = 1`; afterwards only End Early |
 | Release-inspection | Technical Staff | the Tour holding the robot is COMPLETED or CANCELLED, robot has no open command; reason required |
 
-"Movement checks" are the SRS §7 subset of the Start checks that apply during a Tour: telemetry ≤ 2 s, no unresolved command, no open incident, Operator console connected.
+"Movement checks" are the subset of the Start checks that apply to a new command during a Tour: `robotNotNeedsInspection`, `robotDispatchEnabled`, `noOpenIncident`, `noUnresolvedCommand`, `telemetryFresh`, `mapContextMatches`, `executionIdle`, `robotLocalized`, `motionReady`, `operatorConsoleConnected`, `commandTransportEnabled`. The Start-only rows (READY, window, reservation, revision still schedulable, map assignment, robot not held) are left out: the Tour already holds its robot, and a later route test FAIL or a passed window must not strand a running Tour. Next on the last POI of a `LAST_POI` route creates no command, so no movement check applies.
 
 ## Storage (schema v1.14)
 

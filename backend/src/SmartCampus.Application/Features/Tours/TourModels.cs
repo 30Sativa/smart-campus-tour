@@ -39,11 +39,28 @@ public sealed record TourTargetView(RouteTestParticipantView? Operator, TourRese
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,
     string? FallbackVideoUrl, DateTimeOffset? StartedAt, DateTimeOffset? EndedAt, string? EndReason,
     TourUsage Usage, TourPermissions Permissions, RouteRevisionView? RouteRevision,
-    RouteTestParticipantView? Operator, TourReservationView? Reservation);
+    RouteTestParticipantView? Operator, TourReservationView? Reservation,
+    TourExecutionView? Execution = null, TourAllowedActions? AllowedActions = null);
+/// <summary>The running state of a Tour: null fields until Start; <see cref="DwellDeadlineAt"/> is display only (ADR-0043 D12).</summary>
+public sealed record TourExecutionView(string State, string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
+    Guid? CurrentLegId, string? CurrentLegKind, Guid? CurrentRevisionStopId, Guid? LastArrivedRevisionStopId,
+    DateTimeOffset? DwellDeadlineAt, TourCommandView? Command);
+public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode);
+/// <summary>Advisory for the caller; Start and Next recheck under locks. <see cref="BlockedBy"/> holds check ids, or a state reason code.</summary>
+public sealed record TourActionAvailability(bool Allowed, string? Reason, IReadOnlyList<string> BlockedBy);
+public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next);
 public sealed record TourMutationResult(Guid Id);
-/// <summary>Staff lifecycle decisions recorded as TourEvents and receipts; they are not operational use of the Tour.</summary>
+/// <summary>TourEvent types and receipt actions. READY and Reopen are not operational use of the Tour; the rest are.</summary>
 public static class TourLifecycleEvents
 {
     public const string Ready = "TOUR_READY";
     public const string Reopened = "TOUR_REOPENED";
+    public const string Started = "TOUR_STARTED";
+    public const string Next = "TOUR_NEXT";
+    public const string Completed = "TOUR_COMPLETED";
+    public const string LegDispatchRequested = "LEG_DISPATCH_REQUESTED";
+    public const string VisitClosed = "VISIT_CLOSED";
+    public const string LegAccepted = "LEG_ACCEPTED";
+    public const string LegRejected = "LEG_REJECTED";
+    public const string LegTerminal = "LEG_TERMINAL";
 }
