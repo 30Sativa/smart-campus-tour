@@ -158,7 +158,7 @@ acceptance rules, follow the status in `docs/requirements/campus-tour-scope.md`;
 the UI flow does not override that scope. Public technical contracts and
 implementation status remain governed here and by the relevant ADR.
 
-The backend persistence baseline has advanced through v1.13; the current snapshot
+The backend persistence baseline has advanced through v1.14; the current snapshot
 includes row-registration/email-request schema in
 `backend/database/smart-campus-tour-schema-v1.4.sql` and first accepted robot
 connection context in `backend/database/smart-campus-tour-schema-v1.5.sql`,
@@ -169,7 +169,8 @@ and versioned POI narration content/route-stop snapshots in
 `backend/database/smart-campus-tour-schema-v1.9.sql`, scheduling inputs in
 `backend/database/smart-campus-tour-schema-v1.10.sql`, POI pose-capture import in
 `backend/database/smart-campus-tour-schema-v1.11.sql`, and robot area and deactivation columns in
-`backend/database/smart-campus-tour-schema-v1.13.sql`.
+`backend/database/smart-campus-tour-schema-v1.13.sql`, and robot commands with versioned Tour stops in
+`backend/database/smart-campus-tour-schema-v1.14.sql` (ADR-0042, ADR-0043).
 See [ADR-0026](decisions/0026-row-level-registration-and-email-change.md),
 [ADR-0029](decisions/0029-robot-connection-confirmation-before-map-pass.md),
 [ADR-0030](decisions/0030-robot-credential-lifecycle.md), and
@@ -931,6 +932,29 @@ from the filtered indexes; both mappings are corrected to one-to-many.
 Fleet Sync v1 keeps live pose, sync liveness, battery, localization, motion
 readiness, and reported execution state as transient telemetry, separate from
 persisted tour business state and `TourEvent`.
+
+**Robot commands and versioned stops (schema v1.14, storage only).**
+`dbo.RobotCommands` persists every navigation command under ADR-0042 §3–§4
+and ADR-0043: `Id` is the wire `commandId`; `RobotId`, `TourId`, `LegId`,
+`LegKind` (`TO_POI`/`TO_END`), `Kind` (`GoTo`/`Cancel`, the wire values) and the
+target snapshot (`MapKey`, `FrameId`, `X`, `Y`, `Yaw`, `RouteRevisionStopId`) are
+written once; `State`, `IsOpen`, `Outcome`, delivery/acceptance/completion times,
+`ReasonCode` and the RECONCILED resolution change with the lifecycle. A Cancel
+points at its GoTo through `TargetCommandId`. CHECKs keep `IsOpen` equal to "open
+for this kind" (GoTo PENDING/DELIVERED/ACCEPTED/UNKNOWN, Cancel
+PENDING/DELIVERED/ACCEPTED), `Outcome` equal to `State` only for
+ARRIVED/FAILED/CANCELLED, delivery columns present exactly from DELIVERED on,
+resolution columns only for RECONCILED, and a Cancel without target pose.
+Filtered unique indexes allow one open GoTo per robot (UNKNOWN included), one
+open Cancel per leg and one GoTo per leg (a retry is a new leg). The runtime
+role may INSERT and SELECT commands and UPDATE only the lifecycle columns; it
+never updates the target or deletes a command. It also gains column UPDATE on
+`Robots.CurrentTourId`, `LastAssignedAt` and `NeedsInspection` for claim and
+release. `Tours.CurrentRevisionStopId`/`LastArrivedRevisionStopId` reference
+`RouteRevisionStops` for versioned Tours, and a CHECK keeps legacy Tours on the
+`RouteStop` columns and versioned Tours off them (ADR-0043 D9). No handler,
+endpoint or command transport writes these rows yet; Fleet Sync v1 still returns
+`commands: []`.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through

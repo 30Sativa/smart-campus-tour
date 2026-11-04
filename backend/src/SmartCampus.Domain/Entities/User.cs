@@ -51,6 +51,10 @@ public partial class User
 
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
+    public virtual ICollection<RobotCommand> RobotCommandIssuedByUsers { get; set; } = new List<RobotCommand>();
+
+    public virtual ICollection<RobotCommand> RobotCommandResolvedByUsers { get; set; } = new List<RobotCommand>();
+
     public virtual ICollection<RouteRevisionSubmission> RouteRevisionSubmissions { get; set; } = new List<RouteRevisionSubmission>();
 
     public virtual ICollection<RouteRevision> RouteRevisions { get; set; } = new List<RouteRevision>();

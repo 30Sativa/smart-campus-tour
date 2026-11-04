@@ -306,14 +306,15 @@ public sealed class DeploymentDatabaseTests
     }
 
     [SchemaV11Fact]
-    public async Task Bootstrap_AcceptsVerifiedV113SnapshotAndMarker()
+    public async Task Bootstrap_AcceptsVerifiedV114SnapshotAndMarker()
     {
-        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.13.sql", "1.13"));
+        Assert.Equal("READY", await RunCurrentGuardAsync("snapshot-v1.14.sql", "1.14"));
     }
 
     [SchemaV11Fact]
     public async Task Bootstrap_VerifiedV19SnapshotAndMarkerRequiresUpgrade()
     {
+        Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.13.sql", "1.13"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.12.sql", "1.12"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.11.sql", "1.11"));
         Assert.Equal("UPGRADE_REQUIRED", await RunCurrentGuardAsync("snapshot-v1.10.sql", "1.10"));
@@ -327,7 +328,7 @@ public sealed class DeploymentDatabaseTests
     }
 
     // Bootstraps the snapshot with its own hash and version markers, then runs the guard with every
-    // variable bound exactly as init-db.sh binds it for the current v1.13 release.
+    // variable bound exactly as init-db.sh binds it for the current v1.14 release.
     private static async Task<object?> RunCurrentGuardAsync(string snapshot, string version)
     {
         await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync(snapshot);
@@ -343,9 +344,10 @@ public sealed class DeploymentDatabaseTests
             .Replace("$(SchemaHashV110)", await SnapshotHashAsync("snapshot-v1.10.sql"))
             .Replace("$(SchemaHashV111)", await SnapshotHashAsync("snapshot-v1.11.sql"))
             .Replace("$(SchemaHashV112)", await SnapshotHashAsync("snapshot-v1.12.sql"))
+            .Replace("$(SchemaHashV113)", await SnapshotHashAsync("snapshot-v1.13.sql"))
             .Replace("$(SchemaHashV15)", await SnapshotHashAsync("snapshot-v1.5.sql"))
             .Replace("$(SchemaHashV14)", await SnapshotHashAsync("snapshot-v1.4.sql"))
-            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.13.sql"));
+            .Replace("$(SchemaHash)", await SnapshotHashAsync("snapshot-v1.14.sql"));
         await using var command = new SqlCommand(guard, connection);
         return await command.ExecuteScalarAsync();
     }
@@ -378,6 +380,28 @@ public sealed class DeploymentDatabaseTests
         var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
 
         Assert.Equal(51007, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesRuntimeThatCanRewriteACommandTarget()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("GRANT UPDATE (X) ON OBJECT::dbo.RobotCommands TO campus_tour_app;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51005, error.Number);
+    }
+
+    [SchemaV17Fact]
+    public async Task CheckOnly_RefusesRuntimeThatCannotClaimARobot()
+    {
+        await using var database = await DatabaseWithReviewedGrantsAsync();
+        await database.ExecuteAsync("REVOKE UPDATE (CurrentTourId) ON OBJECT::dbo.Robots FROM campus_tour_app;");
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => RunCheckOnlyGrantsAsync(database));
+
+        Assert.Equal(51005, error.Number);
     }
 
     // Same order as apply_runtime_grants in deploy/upgrade-db.sh.

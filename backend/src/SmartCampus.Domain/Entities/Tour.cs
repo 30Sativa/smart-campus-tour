@@ -65,6 +65,10 @@ public partial class Tour
 
     public Guid? OperatorUserId { get; set; }
 
+    public Guid? CurrentRevisionStopId { get; set; }
+
+    public Guid? LastArrivedRevisionStopId { get; set; }
+
     public virtual Route ActiveRoute { get; set; } = null!;
 
     public virtual Robot? AssignedRobot { get; set; }
@@ -78,6 +82,12 @@ public partial class Tour
     public virtual User? OperatorUser { get; set; }
 
     public virtual RouteRevision? RouteRevision { get; set; }
+
+    public virtual RouteRevisionStop? CurrentRevisionStop { get; set; }
+
+    public virtual RouteRevisionStop? LastArrivedRevisionStop { get; set; }
+
+    public virtual ICollection<RobotCommand> RobotCommands { get; set; } = new List<RobotCommand>();
 
     public virtual ICollection<TourRobotReservation> TourRobotReservations { get; set; } = new List<TourRobotReservation>();
 

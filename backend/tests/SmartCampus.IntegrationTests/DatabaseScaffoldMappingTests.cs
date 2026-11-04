@@ -28,7 +28,7 @@ public sealed class DatabaseScaffoldMappingTests
                 "AuditLogs", "BranchRequests", "BrowserSessions", "GroupRegistrations",
                 "Invitations", "MapAreas", "MapDeploymentChecks", "MapVersions", "PoiImportReceipts", "PoiProposalRevisions",
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
-                "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
+                "RobotCommands", "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
                 "TourEvents", "TourRobotReservations", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
@@ -58,7 +58,7 @@ public sealed class DatabaseScaffoldMappingTests
                  {
                      typeof(Robot), typeof(Tour), typeof(GroupRegistration),
                      typeof(RosterRow), typeof(Invitation), typeof(BranchRequest),
-                     typeof(TourAllowedBranch), typeof(Poi)
+                     typeof(TourAllowedBranch), typeof(Poi), typeof(RobotCommand)
                  })
         {
             var rowVersion = context.Model.FindEntityType(entityType)!
@@ -125,6 +125,33 @@ public sealed class DatabaseScaffoldMappingTests
             && foreignKey.Properties.Select(property => property.Name)
                 .SequenceEqual(new[] { nameof(BrowserSession.InvitationId) }));
         Assert.False(invitationSessionRelationship.IsUnique);
+    }
+
+    [Fact]
+    public void Model_MapsRobotCommandsAsManyPerRobotTourLegAndStop()
+    {
+        using var context = new ApplicationDbContext(Options);
+        var commands = context.Model.FindEntityType(typeof(RobotCommand))!;
+
+        // The filtered unique indexes (one open GoTo per robot, one GoTo per leg) must not become one-to-one navigations.
+        foreach (var (principal, property) in new[]
+                 {
+                     (typeof(Robot), nameof(RobotCommand.RobotId)), (typeof(Tour), nameof(RobotCommand.TourId)),
+                     (typeof(RouteRevisionStop), nameof(RobotCommand.RouteRevisionStopId)),
+                     (typeof(RobotCommand), nameof(RobotCommand.TargetCommandId)),
+                     (typeof(User), nameof(RobotCommand.IssuedByUserId)), (typeof(User), nameof(RobotCommand.ResolvedByUserId))
+                 })
+        {
+            var foreignKey = Assert.Single(commands.GetForeignKeys(), key => key.PrincipalEntityType.ClrType == principal
+                && key.Properties.Select(item => item.Name).SequenceEqual(new[] { property }));
+            Assert.False(foreignKey.IsUnique, property);
+        }
+        Assert.Equal("decimal(10,4)", commands.FindProperty(nameof(RobotCommand.X))!.GetColumnType().Replace(" ", ""));
+        Assert.Equal("decimal(9,6)", commands.FindProperty(nameof(RobotCommand.Yaw))!.GetColumnType().Replace(" ", ""));
+        Assert.True(commands.FindProperty(nameof(RobotCommand.X))!.IsNullable);
+        Assert.Equal(3, commands.GetIndexes().Count(index => index.IsUnique && index.GetFilter() is not null));
+        AssertForeignKey<Tour, RouteRevisionStop>(context, nameof(Tour.CurrentRevisionStopId));
+        AssertForeignKey<Tour, RouteRevisionStop>(context, nameof(Tour.LastArrivedRevisionStopId));
     }
 
     private static void AssertForeignKey<TDependent, TPrincipal>(
