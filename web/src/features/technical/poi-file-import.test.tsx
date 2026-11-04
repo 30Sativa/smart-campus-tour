@@ -25,7 +25,7 @@ function renderPage() {
 
 async function pickEverything() {
   renderPage()
-  await screen.findByRole('option', { name: 'Tầng 6 · phiên bản 2' })
+  await screen.findByRole('option', { name: 'Tầng 6 · floor6 · phiên bản 2' })
   fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
   await screen.findByRole('option', { name: /amr-01/ })
   fireEvent.change(screen.getByLabelText('Robot đã ghi pose'), { target: { value: 'amr-01' } })
@@ -106,7 +106,7 @@ describe('Technical POI file import', () => {
     const rows = await list.findAllByRole('row')
     expect(rows).toHaveLength(3)
     expect(rows[1]).toHaveTextContent('POI_02')
-    expect(rows[1]).toHaveTextContent('Tầng 6 · phiên bản 2')
+    expect(rows[1]).toHaveTextContent('Tầng 6 · floor6 · phiên bản 2')
     expect(rows[1]).toHaveTextContent('Chờ kiểm chứng')
     expect(rows[1]).toHaveTextContent('Chờ Staff bổ sung')
     expect(rows[2]).toHaveTextContent('Đạt · Ghi pose trực tiếp trên robot')
