@@ -52,6 +52,7 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   /** Set by End Early or Reconcile (ADR-0043 D13); with `currentTourId` it means the robot is held until released on site. */
   needsInspection: boolean
   currentTourId: string | null
+  currentTourName: string | null
   currentTourState: string | null
 }
 export type ReleaseRobotInspectionInput = { id: string; requestId: string; expectedRowVersion: string; reason: string }

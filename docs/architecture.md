@@ -719,7 +719,7 @@ Robot integrity (ADR-0039): map assignment returns `affectedTours` and 409
 `MAP_AREA_ALREADY_ASSIGNED`; TechnicalStaff `POST /api/technical/physical-robots/{id}/deactivate`
 (`requestId`, `expectedRowVersion`, `reason`), `/activate` and `GET .../affected-tours?mapVersionId=`;
 `GET /api/technical/physical-robots` hides deactivated robots unless `includeDeactivated=true` and adds
-`deactivatedAt`, `deactivationReason`; it also returns `needsInspection`, `currentTourId` and
+`deactivatedAt`, `deactivationReason`; it also returns `needsInspection`, `currentTourId`, `currentTourName` and
 `currentTourState` (ADR-0043 D13) so the Technical robots page can offer release-inspection only for a
 held robot. Staff `GET /api/staff/manage/tours/robots?routeRevisionId=` lists
 robots with `usable` and `blockReason`; create and slots return 409 `ROBOT_NOT_READY_FOR_ROUTE`. Writers

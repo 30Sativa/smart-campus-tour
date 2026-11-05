@@ -54,7 +54,7 @@ public sealed class PhysicalRobotMapContextQueryTests
     [Fact]
     public async Task List_query_returns_inspection_flag_and_holding_tour_so_release_can_be_offered()
     {
-        var tour = new Tour { Id = Guid.NewGuid(), State = "CANCELLED" };
+        var tour = new Tour { Id = Guid.NewGuid(), Name = "Tour sáng", State = "CANCELLED" };
         var held = new Robot { Id = Guid.NewGuid(), RobotCode = "amr-held", SourceType = "PHYSICAL", RowVersion = new byte[8],
             NeedsInspection = true, CurrentTourId = tour.Id, CurrentTour = tour };
         var free = new Robot { Id = Guid.NewGuid(), RobotCode = "amr-free", SourceType = "PHYSICAL", RowVersion = new byte[8] };
@@ -69,9 +69,11 @@ public sealed class PhysicalRobotMapContextQueryTests
 
         Assert.True(heldView.NeedsInspection);
         Assert.Equal(tour.Id, heldView.CurrentTourId);
+        Assert.Equal("Tour sáng", heldView.CurrentTourName);
         Assert.Equal("CANCELLED", heldView.CurrentTourState);
         Assert.False(freeView.NeedsInspection);
         Assert.Null(freeView.CurrentTourId);
+        Assert.Null(freeView.CurrentTourName);
         Assert.Null(freeView.CurrentTourState);
     }
 

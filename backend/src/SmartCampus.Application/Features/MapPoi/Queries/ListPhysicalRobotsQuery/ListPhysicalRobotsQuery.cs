@@ -39,6 +39,7 @@ public sealed record PhysicalRobotStatus(
     string? DeactivationReason,
     bool NeedsInspection,
     Guid? CurrentTourId,
+    string? CurrentTourName,
     string? CurrentTourState);
 
 /// <summary>Pickers never see a deactivated robot; only the robot page asks for them.</summary>
@@ -86,7 +87,7 @@ public sealed class ListPhysicalRobotsQueryHandler(
                 latestDeployment?.MapVersion.MapKey, latestDeployment?.MapVersion.FrameId,
                 latestDeployment is null ? null : latestDeployment.LocalizationPassed && latestDeployment.DisplayPassed,
                 robot.DeactivatedAt, robot.DeactivationReason,
-                robot.NeedsInspection, robot.CurrentTourId, robot.CurrentTour?.State);
+                robot.NeedsInspection, robot.CurrentTourId, robot.CurrentTour?.Name, robot.CurrentTour?.State);
         }).ToArray();
     }
 }

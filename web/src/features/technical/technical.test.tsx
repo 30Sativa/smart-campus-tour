@@ -28,7 +28,7 @@ let requests: Array<{ url: URL; init?: RequestInit }> = []
 const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): PhysicalRobotOption => ({
   id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map',
   connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', rowVersion: 'AAAAAAAAAAA=', assignedMapVersionId: 'map-v1', assignedAreaName: 'Library', assignedVersionNumber: 1, assignedMapKey: 'library-v1', assignedFrameId: 'map', mapAssignedAt: '2026-10-27T10:00:00Z', mapAssignedByName: 'Technical', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map', latestDeploymentPassed: true,
-  needsInspection: false, currentTourId: null, currentTourState: null,
+  needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null,
   ...overrides,
 })
 let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
@@ -135,7 +135,7 @@ describe('Technical Staff API integration', () => {
       if (url.pathname.endsWith('/release-inspection') && init?.method === 'POST') {
         const refusal = releaseRefusals.shift()
         if (refusal) return new Response(JSON.stringify(refusal.body), { status: refusal.status, headers: { 'Content-Type': 'application/json' } })
-        physicalRobots = physicalRobots.map(robot => ({ ...robot, needsInspection: false, currentTourId: null, currentTourState: null, rowVersion: 'AAAAAAAAAAM=' }))
+        physicalRobots = physicalRobots.map(robot => ({ ...robot, needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null, rowVersion: 'AAAAAAAAAAM=' }))
         return response({ robotId: 'robot-1' })
       }
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
@@ -471,11 +471,12 @@ describe('Technical Staff API integration', () => {
   })
 
   it('disables release while the holding Tour has not ended', async () => {
-    physicalRobots = [makePhysicalRobot({ needsInspection: true, currentTourId: 'tour-9', currentTourState: 'RUNNING' })]
+    physicalRobots = [makePhysicalRobot({ needsInspection: true, currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'RUNNING' })]
     renderPage(<TechnicalRobotsPage />)
     await openRobotDetail()
     expect(await screen.findByRole('button', { name: 'Trả robot về sử dụng' })).toBeDisabled()
-    expect(screen.getByText(/Tour đang giữ robot chưa kết thúc/)).toBeInTheDocument()
+    expect(screen.getByText(/Tour Tham quan thư viện đang giữ robot chưa kết thúc/)).toBeInTheDocument()
+    expect(screen.getByText(/giữ bởi Tour Tham quan thư viện/)).toBeInTheDocument()
   })
 
   it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {

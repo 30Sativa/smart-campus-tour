@@ -221,11 +221,11 @@ function RobotInspectionSection({ robot }: { robot: PhysicalRobotOption }) {
       { onSuccess: () => { setConfirming(false); setAttempt(null) } })
   }
   return <>
-    <DetailSection title="Kiểm tra tại chỗ" subject="Đang chờ"
+    <DetailSection title="Kiểm tra tại chỗ" subject={robot.currentTourName ? `Đang chờ, giữ bởi Tour ${robot.currentTourName}` : 'Đang chờ'}
       action={<button type="button" className={buttonClass('primary', 'sm')} disabled={!tourEnded} onClick={() => setConfirming(true)}><ShieldCheck size={13} aria-hidden="true" />Trả robot về sử dụng</button>}>
       <div className="space-y-2">
         <Note tone="warn">Robot đang bị giữ sau khi Tour kết thúc sớm hoặc lệnh được đối soát. Robot không nhận Tour mới cho đến khi Technical Staff kiểm tra tại chỗ và trả robot.</Note>
-        {!tourEnded && <p role="status" className="text-[13px] text-amber-800">Tour đang giữ robot chưa kết thúc. Người vận hành cần kết thúc Tour trước, sau đó bấm Cập nhật trạng thái.</p>}
+        {!tourEnded && <p role="status" className="text-[13px] text-amber-800">{robot.currentTourName ? `Tour ${robot.currentTourName}` : 'Tour'} đang giữ robot chưa kết thúc. Người vận hành cần kết thúc Tour trước, sau đó bấm Cập nhật trạng thái.</p>}
       </div>
     </DetailSection>
     {confirming && <ConfirmationDialog open requireReason reasonLabel="Đã kiểm tra gì tại chỗ" reasonPlaceholder="Ví dụ: robot đứng yên ở sảnh A, không vật cản, pin 80%, localization đúng."
