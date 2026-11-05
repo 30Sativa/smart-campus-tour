@@ -1,4 +1,4 @@
-"""Bounded standard-library HTTPS client for Fleet Sync v1."""
+"""Bounded standard-library HTTPS clients for Fleet Sync v1 and Fleet Commands v1."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import ssl
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -64,8 +65,11 @@ class FleetSyncHttpClient:
         self.timeout_sec = timeout_sec
 
     def post(self, body: str) -> HttpResponse:
+        return self._post(self.url, body)
+
+    def _post(self, url: str, body: str) -> HttpResponse:
         request = urllib.request.Request(
-            self.url,
+            url,
             data=body.encode('utf-8'),
             headers={
                 'Authorization': f'Bearer {self._credential}',
@@ -103,6 +107,24 @@ class FleetSyncHttpClient:
         except (UnicodeDecodeError, json.JSONDecodeError):
             body = None
         return HttpResponse(status, body, _header(headers, 'Retry-After'))
+
+
+class FleetCommandsHttpClient(FleetSyncHttpClient):
+    """Same credential, TLS and bounds as Fleet Sync; `url` is the v1 base without a trailing slash."""
+
+    def poll(self, body: str) -> HttpResponse:
+        return self._post(f'{self.url}/poll', body)
+
+    def post_result(self, command_id: str, body: str) -> HttpResponse:
+        return self._post(f'{self.url}/{uuid.UUID(command_id)}/results', body)
+
+
+def commands_url_from_sync_url(sync_url: str) -> str:
+    """The sibling Fleet Commands base of a Fleet Sync URL, so one setting serves both."""
+    suffix = '/api/fleet/v1/sync'
+    if not sync_url.endswith(suffix):
+        raise ValueError('Set command_base_url: FLEET_SYNC_URL does not end with the Fleet Sync path')
+    return sync_url[:-len(suffix)] + '/api/fleet/commands/v1'
 
 
 def _header(headers: object, name: str) -> str | None:

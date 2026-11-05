@@ -22,7 +22,7 @@ setup(
     zip_safe=True,
     maintainer='Duy',
     maintainer_email='caoduy856@gmail.com',
-    description='Telemetry-only ROS 2 to Backend Fleet Sync v1 bridge.',
+    description='ROS 2 to Backend Fleet Sync v1 bridge, with an opt-in Fleet Commands v1 receiver.',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={

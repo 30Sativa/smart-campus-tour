@@ -12,3 +12,7 @@
     max_clock_floor_ahead_sec: 10.0
     retry_initial_sec: 1.0
     retry_max_sec: 30.0
+    # Telemetry-only unless turned on. See README.md before enabling: never on a physical robot before M2.3.
+    commands_enabled: false
+    command_base_url: ""
+    command_poll_period_sec: 0.5
