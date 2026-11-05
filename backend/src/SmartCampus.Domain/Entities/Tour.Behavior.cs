@@ -5,6 +5,7 @@ public static class TourRuntime
 {
     public const string Running = "RUNNING";
     public const string Completed = "COMPLETED";
+    public const string Cancelled = "CANCELLED";
     public const string Normal = "NORMAL";
     public const string NeedsAssistance = "NEEDS_ASSISTANCE";
     public const string Navigating = "NAVIGATING";
@@ -12,6 +13,9 @@ public static class TourRuntime
     public const string ReturningToEnd = "RETURNING_TO_END";
     public const string NavigationFailed = "NavigationFailed";
     public const string CommandRejected = "CommandRejected";
+    public const string CommandUnknown = "CommandUnknown";
+    public const string RobotDisconnected = "RobotDisconnected";
+    public const string BackendRestarted = "BackendRestarted";
 }
 
 public partial class Tour
@@ -59,6 +63,31 @@ public partial class Tour
     {
         OperationalStatus = TourRuntime.NeedsAssistance;
         AssistanceReason = reason;
+        UpdatedAt = now;
+    }
+
+    public void ClearAssistance(DateTimeOffset now)
+    {
+        OperationalStatus = TourRuntime.Normal;
+        AssistanceReason = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>Nothing here proves the robot stopped; it stays held until inspection (ADR-0043 D13).</summary>
+    public void EndEarly(string reason, DateTimeOffset now)
+    {
+        State = TourRuntime.Cancelled;
+        EndedAt = now;
+        EndReason = reason;
+        DwellDeadlineAt = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>After a restart nothing continues by itself and no dwell timer comes back.</summary>
+    public void InterruptByRestart(DateTimeOffset now)
+    {
+        DwellDeadlineAt = null;
+        if (OperationalStatus != TourRuntime.NeedsAssistance) RequireAssistance(TourRuntime.BackendRestarted, now);
         UpdatedAt = now;
     }
 

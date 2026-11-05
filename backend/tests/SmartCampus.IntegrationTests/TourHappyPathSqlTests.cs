@@ -13,8 +13,6 @@ namespace SmartCampus.IntegrationTests;
 /// <summary>Start, leg results, Next and completion through the Application handlers (ADR-0042, ADR-0043). No robot endpoint yet.</summary>
 public sealed class TourHappyPathSqlTests
 {
-    private static readonly Guid Stream = Guid.NewGuid();
-
     [SchemaV11Fact]
     public async Task Start_ClaimsTheRobot_RunsTheTour_AndLeavesOnePendingGoToWithEventsAndReceipt()
     {
@@ -194,8 +192,8 @@ public sealed class TourHappyPathSqlTests
         var command = await Delivered(w);
         Assert.Equal("RESULT_STREAM_MISMATCH", (await Refused(w, command, "ACCEPTED", stream: Guid.NewGuid())).Code);
         Assert.Equal("RESULT_CONFLICT", (await Refused(w, command, "ACCEPTED", leg: Guid.NewGuid())).Code);
-        await Assert.ThrowsAsync<NotFoundException>(() => w.H.Send(new ReportCommandResultCommand("another_robot", command.Id, command.LegId, Stream, "ACCEPTED", null, null, w.Clock.Now!.Value)));
-        await Assert.ThrowsAsync<NotFoundException>(() => w.H.Send(new ReportCommandResultCommand(TourReadySqlTests.Robot, Guid.NewGuid(), command.LegId, Stream, "ACCEPTED", null, null, w.Clock.Now!.Value)));
+        await Assert.ThrowsAsync<NotFoundException>(() => w.H.Send(new ReportCommandResultCommand("another_robot", command.Id, command.LegId, w.Stream, "ACCEPTED", null, null, w.Clock.Now!.Value)));
+        await Assert.ThrowsAsync<NotFoundException>(() => w.H.Send(new ReportCommandResultCommand(TourReadySqlTests.Robot, Guid.NewGuid(), command.LegId, w.Stream, "ACCEPTED", null, null, w.Clock.Now!.Value)));
 
         await Result(w, command, "ACCEPTED");
         Assert.Equal("RESULT_PHASE_NOT_ALLOWED", (await Refused(w, command, "REJECTED", reason: "BUSY")).Code);
@@ -431,7 +429,7 @@ public sealed class TourHappyPathSqlTests
         Assert.Single(await db.TourEvents.AsNoTracking().Where(e => e.EventType == "TOUR_COMPLETED").ToArrayAsync());
     }
 
-    private static async Task Start(World w) => await w.H.Send(new StartTourCommand(w.H.TourId, w.H.OperatorId,
+    internal static async Task Start(World w) => await w.H.Send(new StartTourCommand(w.H.TourId, w.H.OperatorId,
         new(Guid.NewGuid(), await w.H.Version(), new(true, true, true, true))));
 
     private static async Task Next(World w)
@@ -440,29 +438,29 @@ public sealed class TourHappyPathSqlTests
         await w.H.Send(new NextTourStopCommand(w.H.TourId, w.H.OperatorId, new(Guid.NewGuid(), await w.H.Version())));
     }
 
-    private static async Task<RobotCommand> Current(World w)
+    internal static async Task<RobotCommand> Current(World w)
     {
         await using var db = w.H.Context();
         return await db.RobotCommands.AsNoTracking().OrderByDescending(c => c.IsOpen).ThenByDescending(c => c.IssuedAt).FirstAsync();
     }
 
-    /// <summary>Stands in for the poll of PR-D: the open GoTo reaches <see cref="Stream"/>.</summary>
-    private static async Task<RobotCommand> Delivered(World w)
+    /// <summary>Stands in for the poll of PR-D: the open GoTo reaches the bridge's stream.</summary>
+    internal static async Task<RobotCommand> Delivered(World w)
     {
-        await w.H.Database.ExecuteAsync($"UPDATE dbo.RobotCommands SET State='DELIVERED', DeliveredAt=SYSDATETIMEOFFSET(), DeliveredStreamId='{Stream}' WHERE State='PENDING';");
+        await w.H.Database.ExecuteAsync($"UPDATE dbo.RobotCommands SET State='DELIVERED', DeliveredAt=SYSDATETIMEOFFSET(), DeliveredStreamId='{w.Stream}' WHERE State='PENDING';");
         return await Current(w);
     }
 
-    private static Task<CommandResultAck> Result(World w, RobotCommand command, string phase, string? outcome = null, string? reason = null,
+    internal static Task<CommandResultAck> Result(World w, RobotCommand command, string phase, string? outcome = null, string? reason = null,
         DateTimeOffset? reportedAt = null, Guid? stream = null, Guid? leg = null) =>
-        w.H.Send(new ReportCommandResultCommand(TourReadySqlTests.Robot, command.Id, leg ?? command.LegId, stream ?? Stream, phase, outcome, reason,
+        w.H.Send(new ReportCommandResultCommand(TourReadySqlTests.Robot, command.Id, leg ?? command.LegId, stream ?? w.Stream, phase, outcome, reason,
             reportedAt ?? w.Clock.Now!.Value));
 
     private static Task<ConflictException> Refused(World w, RobotCommand command, string phase, string? outcome = null, string? reason = null,
         DateTimeOffset? reportedAt = null, Guid? stream = null, Guid? leg = null) =>
         Assert.ThrowsAsync<ConflictException>(() => Result(w, command, phase, outcome, reason, reportedAt, stream, leg));
 
-    private static async Task<Exception?> Capture(Task task)
+    internal static async Task<Exception?> Capture(Task task)
     {
         try { await task; return null; }
         catch (Exception error) { return error; }

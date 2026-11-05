@@ -191,8 +191,33 @@ the robot. A new command needs the movement checks of ADR-0043, else 409
 `MOVE_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`. Nothing leaves a
 POI by itself: `dwellDeadlineAt` is display only (D12).
 
-`GET /api/staff/manage/tours/{id}` adds `execution` and `allowedActions` (`start`,
-`next`: `{allowed, reason, blockedBy}`) for the caller; both are advisory.
+`GET /api/staff/manage/tours/{id}` adds `execution` and `allowedActions` (`start`, `next`,
+`endEarly`, `retryLeg`, `reconcile`: `{allowed, reason, blockedBy}`) for the caller; both
+are advisory.
+
+## Recovery (M2.2-c, ADR-0043)
+
+POST `/api/staff/manage/tours/{id}/end-early` with `{requestId, expectedRowVersion, reason}`:
+Operator only, while RUNNING. The Tour becomes CANCELLED, the robot needs inspection and
+stays held. An undelivered GoTo is withdrawn, a delivered or accepted one gets a Cancel,
+and the leg's real result is recorded when it arrives. **Nothing in this flow is evidence
+that the robot stopped.** FR-48 revocation and notices are a follow-up.
+
+POST `.../retry-leg` with `{requestId, expectedRowVersion}`: Operator only, after a GoTo
+that FAILED or was REJECTED; never after UNKNOWN or RECONCILED (`TOUR_RETRY_NOT_ALLOWED`).
+The movement checks run again, so a `BUSY` or `MAP_MISMATCH` rejection cannot loop.
+
+POST `.../commands/{commandId}/reconcile` with `{requestId, reason}`: Operator only, for an
+UNKNOWN GoTo. The outcome stays unknown, the robot needs inspection, and only End Early
+remains.
+
+POST `/api/technical/physical-robots/{id}/release-inspection` with
+`{requestId, expectedRowVersion, reason}`: Technical Staff, after an on-site check. Needs an
+ended Tour and no open command; clears the hold and the flag, with an audit row.
+
+The sweeper (every `FleetCommands:SweepIntervalSeconds`, 5) expires undelivered GoTos and
+marks unconfirmed ones UNKNOWN (`LegResultTimeoutSeconds`, 600, initial value, not measured).
+Restart recovery runs before the server accepts requests. Both need `FleetCommands:Enabled`.
 
 Root causes: a check that needs another check's input runs only when that check
 passed; otherwise it is `passed: false` with detail "Chưa kiểm tra vì <id> chưa đạt"
@@ -202,7 +227,7 @@ check runs; without fresh telemetry the other telemetry checks do not run.
 
 Configuration section `FleetCommands`: `Enabled` (default false),
 `MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `AcceptWindowSeconds` (30,
-initial value, not measured). `operatorConsoleConnected` has
+initial value, not measured), `LegResultTimeoutSeconds`, `SweepIntervalSeconds`. `operatorConsoleConnected` has
 no source yet (`IOperatorConsolePresence` returns unknown) and always fails;
 `robotDispatchEnabled` always fails because nothing sets `IsDispatchEnabled`.
 
@@ -250,6 +275,6 @@ pre-Start cancellation belong to `Staff` (product label Tour Staff). The assigne
 Operator is an explicitly selected active Staff account; CreatedByUserId cannot
 stand in for that assignment. Admin has no routine Tour-management permission;
 F-14 remains pending. Technical Staff, Representatives and Viewers have no Tour
-scheduling action. Start and Next belong to the assigned Operator; End Early, Retry
-and Reconcile are M2.2-c. These are target boundaries, not claims that the
+scheduling action. Start, Next, End Early, Retry and Reconcile belong to the assigned
+Operator. These are target boundaries, not claims that the
 versioned API is implemented.

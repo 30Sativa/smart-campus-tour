@@ -449,6 +449,31 @@ public sealed class TourManagementEndpointTests
     }
 
     [SchemaV11Fact]
+    public async Task RecoveryActions_AreStaffOnly_AndReleaseIsTechnicalStaffOnly()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var version = (await f.Detail(id)).Tour.RowVersion;
+        var staffActions = new (string Path, object Body)[]
+        {
+            ($"/api/staff/manage/tours/{id}/end-early", new { requestId = Guid.NewGuid(), expectedRowVersion = version, reason = "Mưa lớn" }),
+            ($"/api/staff/manage/tours/{id}/retry-leg", new { requestId = Guid.NewGuid(), expectedRowVersion = version }),
+            ($"/api/staff/manage/tours/{id}/commands/{Guid.NewGuid()}/reconcile", new { requestId = Guid.NewGuid(), reason = "Đã xem" })
+        };
+        foreach (var token in new[] { f.SystemAdmin, f.Representative, f.Technical })
+            foreach (var (path, body) in staffActions)
+                Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body, token));
+        // A legacy Tour has no Operator, so a Staff who is not its Operator is refused too.
+        foreach (var (path, body) in staffActions)
+            Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body));
+
+        var release = new { requestId = Guid.NewGuid(), expectedRowVersion = version, reason = "Đã kiểm tra" };
+        var robot = $"/api/technical/physical-robots/{Guid.NewGuid()}/release-inspection";
+        Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, robot, release));
+        Assert.Equal(HttpStatusCode.NotFound, await f.SendStatus(HttpMethod.Post, robot, release, f.Technical));
+    }
+
+    [SchemaV11Fact]
     public async Task LegacyTour_IsRefusedReady_WithOnlyItsRootCause_AndDetailShowsTheSameList()
     {
         await using var f = await Fixture.Create();

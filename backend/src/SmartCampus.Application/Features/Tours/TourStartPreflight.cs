@@ -54,7 +54,7 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
         }
         var robot = reservation is null ? null : await TourTarget.FindReservedRobotAsync(revisions, reservation.RobotId, ct);
         var robotIssue = robot is null || revision is null ? null : await TourTarget.ReservedRobotIssueAsync(revisions, robot, revision, ct);
-        var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, ct);
+        var incident = robot is not null && await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, null, ct);
         var openCommand = robot is not null && await repository.HasOpenCommandAsync(robot.Id, ct);
         var pending = await registrations.HasPendingDecisionsAsync(tour.Id, ct);
         var snapshot = robot is null ? null
@@ -140,7 +140,8 @@ public sealed class TourStartPreflight(ITourManagementRepository repository, IRe
     /// </summary>
     public async Task<TourStartChecks> EvaluateMovementAsync(Tour tour, Robot robot, MapVersion map, CancellationToken ct)
     {
-        var incident = await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, ct);
+        // This Tour's own assistance is what Retry resolves, so it is not an incident against its own new command.
+        var incident = await repository.HasRobotTourNeedingAssistanceAsync(robot.Id, tour.Id, ct);
         var openCommand = await repository.HasOpenCommandAsync(robot.Id, ct);
         var list = new Checklist();
         list.Add("robotNotNeedsInspection", "DB", !robot.NeedsInspection,

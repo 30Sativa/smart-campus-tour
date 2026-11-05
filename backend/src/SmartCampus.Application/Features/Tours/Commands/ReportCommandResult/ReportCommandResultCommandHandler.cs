@@ -47,6 +47,9 @@ public sealed class ReportCommandResultCommandHandler(ITourManagementRepository 
             LegId = command.LegId, LegKind = command.LegKind, CommandId = command.Id, ReasonCode = result.Reason,
             DataJson = JsonSerializer.Serialize(new { result = content, applied = current })
         });
+        if (command.Kind == RobotCommandKinds.GoTo && !command.IsOpen &&
+            await repository.LockOpenCancelAsync(command.Id, ct) is { } cancel)
+            cancel.CloseCancel(now);
         if (current) await ApplyToTourAsync(tour, command, now, ct);
         return new(true, false, command.State);
     }
