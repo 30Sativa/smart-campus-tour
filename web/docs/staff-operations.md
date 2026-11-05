@@ -59,7 +59,15 @@ Rules the screens follow:
 
 | Missing | Cause | Suggested resolution |
 |---|---|---|
-| End Early, Retry leg, Reconcile, release-inspection | No endpoints yet (ADR-0043 lists them for M2.2) | Add `POST …/end-early`, `…/retry-leg`, `…/commands/{id}/reconcile` with the same `allowedActions` pattern; the console shows them disabled with a reason until then |
+| End Early, Retry leg, Reconcile | No endpoints yet (ADR-0043 lists them for M2.2) | Add `POST …/end-early`, `…/retry-leg`, `…/commands/{id}/reconcile` with the same `allowedActions` pattern; the console shows them disabled with a reason until then |
+
+Releasing a held robot is no longer missing: the Technical robots page
+(`/technical/robots`) marks robots with `needsInspection` or a holding Tour as
+"Chờ kiểm tra tại chỗ" and offers "Trả robot về sử dụng" in the robot's detail
+dialog, behind a confirmation with a required note of what was checked on site.
+It calls `POST /api/technical/physical-robots/{id}/release-inspection`
+(Technical Staff only, ADR-0043 D13) and is disabled while the holding Tour has
+not ended. The Staff console only says the robot waits for that check.
 | Marking the current stop on the route | `execution.currentRevisionStopId` is a `RouteRevisionStops.Id`, but the revision stop view has no `id` | Add `id` to `RouteRevisionStopView`, or return the stop order in `execution` |
 | Tour event log | No Tour event read API | `GET …/tours/{id}/events` (TourEvents) |
 | Push updates of Tours | `TourUpdated`/`AssistanceRequired` hub events are planned only | Emit them on the hub; screens then refetch instead of polling |

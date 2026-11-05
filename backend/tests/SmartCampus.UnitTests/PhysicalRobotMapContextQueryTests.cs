@@ -51,6 +51,30 @@ public sealed class PhysicalRobotMapContextQueryTests
         Assert.False(failedView.LatestDeploymentPassed);
     }
 
+    [Fact]
+    public async Task List_query_returns_inspection_flag_and_holding_tour_so_release_can_be_offered()
+    {
+        var tour = new Tour { Id = Guid.NewGuid(), State = "CANCELLED" };
+        var held = new Robot { Id = Guid.NewGuid(), RobotCode = "amr-held", SourceType = "PHYSICAL", RowVersion = new byte[8],
+            NeedsInspection = true, CurrentTourId = tour.Id, CurrentTour = tour };
+        var free = new Robot { Id = Guid.NewGuid(), RobotCode = "amr-free", SourceType = "PHYSICAL", RowVersion = new byte[8] };
+        var settings = new FleetSyncSettings(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        var handler = new ListPhysicalRobotsQueryHandler(new RobotRepository([held, free], []), new EmptyTelemetryStore(),
+            settings, TimeProvider.System);
+
+        var result = await handler.Handle(new ListPhysicalRobotsQuery(), default);
+        var heldView = Assert.Single(result, robot => robot.RobotCode == held.RobotCode);
+        var freeView = Assert.Single(result, robot => robot.RobotCode == free.RobotCode);
+
+        Assert.True(heldView.NeedsInspection);
+        Assert.Equal(tour.Id, heldView.CurrentTourId);
+        Assert.Equal("CANCELLED", heldView.CurrentTourState);
+        Assert.False(freeView.NeedsInspection);
+        Assert.Null(freeView.CurrentTourId);
+        Assert.Null(freeView.CurrentTourState);
+    }
+
     private sealed class RobotRepository(IReadOnlyList<Robot> robots, IReadOnlyList<MapDeploymentCheck> latest) : IPhysicalRobotRepository
     {
         public Task<IReadOnlyList<Robot>> ListPhysicalRobotsAsync(CancellationToken cancellationToken) => Task.FromResult(robots);

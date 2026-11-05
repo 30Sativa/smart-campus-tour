@@ -101,4 +101,23 @@ export function routeTestErrors(error: unknown): RouteTestErrors {
   return { form: errorText(error) }
 }
 
+const releaseInspectionRefusals: Record<string, string> = {
+  ROBOT_TOUR_ACTIVE: 'Tour đang giữ robot này chưa kết thúc. Người vận hành cần kết thúc Tour trước khi trả robot.',
+  ROBOT_COMMAND_OPEN: 'Robot còn lệnh đang mở hoặc lệnh chưa đối soát. Người vận hành cần đối soát lệnh đó trước.',
+  ROBOT_NOT_HELD: 'Robot không còn bị giữ và không chờ kiểm tra. Đóng cửa sổ này để tải lại.',
+  STALE_VERSION: 'Robot vừa thay đổi. Đóng cửa sổ này, bấm Cập nhật trạng thái rồi thử lại.',
+  IDEMPOTENCY_CONFLICT: 'Yêu cầu này đã được gửi với nội dung khác. Đóng cửa sổ này và mở lại.',
+}
+
+/** Vietnamese text for a refused release-inspection (ADR-0043 D13); unknown refusals fall back to the server message. */
+export function releaseInspectionError(error: unknown) {
+  if (!(error instanceof ApiError)) return errorText(error)
+  if (error.status === 403) return 'Chỉ Technical Staff được trả robot sau kiểm tra tại chỗ.'
+  let payload: { errors?: unknown } = {}
+  try { payload = JSON.parse(error.body) as typeof payload } catch { /* Non-JSON responses use the text below. */ }
+  const errors = typeof payload.errors === 'object' && payload.errors !== null ? payload.errors as { code?: unknown } : {}
+  if (typeof errors.code === 'string' && releaseInspectionRefusals[errors.code]) return releaseInspectionRefusals[errors.code]
+  return errorText(error)
+}
+
 export const stamp =(iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'

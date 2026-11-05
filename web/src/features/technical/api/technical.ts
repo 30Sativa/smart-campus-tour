@@ -49,7 +49,12 @@ export type PhysicalRobotOption = PhysicalRobotRegistration & {
   latestDeployedMapKey: string | null
   latestDeployedFrameId: string | null
   latestDeploymentPassed: boolean | null
+  /** Set by End Early or Reconcile (ADR-0043 D13); with `currentTourId` it means the robot is held until released on site. */
+  needsInspection: boolean
+  currentTourId: string | null
+  currentTourState: string | null
 }
+export type ReleaseRobotInspectionInput = { id: string; requestId: string; expectedRowVersion: string; reason: string }
 export type RobotMapAssignment = Pick<PhysicalRobotOption,
   'id' | 'robotCode' | 'assignedMapVersionId' | 'assignedAreaName' | 'assignedVersionNumber' |
   'assignedMapKey' | 'assignedFrameId' | 'mapAssignedAt' | 'mapAssignedByName' | 'rowVersion'>
@@ -171,6 +176,9 @@ export const technicalApi = {
     apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/deactivate`, { method: 'POST', json: input }).then(response => response.data!),
   activateRobot: ({ id, ...input }: { id: string; requestId: string; expectedRowVersion: string }) =>
     apiClient<Envelope<RobotLifecycleResult>>(`/api/technical/physical-robots/${id}/activate`, { method: 'POST', json: input }).then(response => response.data!),
+  // Picks the body fields explicitly, so a caller passing extra display fields never sends them.
+  releaseRobotInspection: ({ id, requestId, expectedRowVersion, reason }: ReleaseRobotInspectionInput) =>
+    apiClient<Envelope<{ robotId: string }>>(`/api/technical/physical-robots/${id}/release-inspection`, { method: 'POST', json: { requestId, expectedRowVersion, reason } }).then(response => response.data!),
   assignRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string; mapVersionId: string }) =>
     apiClient<Envelope<RobotMapAssignment>>(`/api/technical/physical-robots/${id}/map-assignment`, { method: 'PUT', json: input }).then(response => response.data!),
   clearRobotMap: (id: string, input: { requestId: string; expectedRowVersion: string }) =>

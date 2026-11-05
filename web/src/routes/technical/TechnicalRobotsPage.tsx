@@ -1,15 +1,15 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw } from 'lucide-react'
+import { Bot, Copy, KeyRound, LoaderCircle, Map as MapIcon, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
 import { PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { Modal } from '../../components/ui/Drawer'
 import { notify } from '../../components/ui/toast-store'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { Note, SetupSteps, TechnicalPage, ToneBadge, type SetupStep } from '../../features/technical/TechnicalUi'
-import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useRobotAffectedTours, useRobotCredential } from '../../features/technical/technical-hooks'
+import { useActivateRobot, useAllPhysicalRobots, useAssignRobotMap, useClearRobotMap, useDeactivateRobot, useMapAreas, useMapVersions, useRegisterPhysicalRobot, useReleaseRobotInspection, useRobotAffectedTours, useRobotCredential } from '../../features/technical/technical-hooks'
 import type { PhysicalRobotConnectionStatus, PhysicalRobotOption, RobotAffectedTour } from '../../features/technical/api/technical'
-import { connectionStatusLabel, errorText, stamp } from '../../features/technical/technical-format'
+import { connectionStatusLabel, errorText, releaseInspectionError, stamp } from '../../features/technical/technical-format'
 import { mapCheckLabel } from '../../features/technical/poi-labels'
 import { RobotCredentialPanel } from './RobotCredentialPanel'
 
@@ -24,6 +24,10 @@ function ConnectionBadge({ robot }: { robot: PhysicalRobotOption }) {
   const status = robot.connectionStatus in connectionTone ? robot.connectionStatus : 'UNCONFIRMED'
   return <ToneBadge tone={connectionTone[status]}>{connectionStatusLabel(status)}</ToneBadge>
 }
+
+/** End Early and Reconcile leave the robot held, flagged or both (ADR-0043 D13); either one needs an on-site release. */
+const isHeld = (robot: PhysicalRobotOption) => robot.needsInspection || Boolean(robot.currentTourId)
+const holdingTourEnded = (robot: PhysicalRobotOption) => !robot.currentTourId || robot.currentTourState === 'COMPLETED' || robot.currentTourState === 'CANCELLED'
 
 function DeploymentBadge({ robot }: { robot: PhysicalRobotOption }) {
   if (robot.latestDeploymentPassed === null) return null
@@ -50,6 +54,7 @@ export default function TechnicalRobotsPage() {
   const showDetail = () => setDialog(current => current && { ...current, view: 'detail' })
   const visibleRobots = robots.data?.filter(robot => Boolean(robot.deactivatedAt) === showDeactivated)
   const deactivatedCount = robots.data?.filter(robot => robot.deactivatedAt).length ?? 0
+  const heldCount = robots.data?.filter(robot => !robot.deactivatedAt && isHeld(robot)).length ?? 0
 
   return (
     <TechnicalPage>
@@ -59,6 +64,7 @@ export default function TechnicalRobotsPage() {
         <button type="button" aria-pressed={!showDeactivated} className={buttonClass(showDeactivated ? 'secondary' : 'primary', 'sm')} onClick={() => setShowDeactivated(false)}>Đang sử dụng</button>
         <button type="button" aria-pressed={showDeactivated} className={buttonClass(showDeactivated ? 'primary' : 'secondary', 'sm')} onClick={() => setShowDeactivated(true)}>Ngừng sử dụng ({deactivatedCount})</button>
       </div>
+      {heldCount > 0 && !showDeactivated && <div className="mb-3"><Note tone="warn">{heldCount} robot đang chờ kiểm tra tại chỗ sau khi Tour kết thúc sớm hoặc lệnh được đối soát. Đến bên robot, kiểm tra, rồi mở Chi tiết để trả robot về sử dụng.</Note></div>}
       <section className={panelClass} aria-label="Danh sách robot vật lý">
         <PanelHead title="Robot đã đăng ký" description="Robot xuất hiện trong danh sách chọn khi ghi kết quả kiểm tra map." action={!robots.isPending && !robots.isError ? <button type="button" className={buttonClass('secondary', 'sm')} disabled={robots.isFetching} onClick={() => void robots.refetch()}><RefreshCw size={13} aria-hidden="true" />{robots.isFetching ? 'Đang cập nhật…' : 'Cập nhật trạng thái'}</button> : undefined} />
         {robots.isPending ? <p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" role="status" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải danh sách robot…</p> : robots.isError ? <div role="alert" className="space-y-2 p-4 text-[13px] text-[#b23e31]"><p>{errorText(robots.error)}</p><button type="button" className={buttonClass('secondary', 'sm')} onClick={() => void robots.refetch()}>Tải lại danh sách robot</button></div> : (
@@ -66,7 +72,7 @@ export default function TechnicalRobotsPage() {
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
-                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p></td>
+                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}</td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
                 <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · phiên bản {robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>
@@ -114,6 +120,7 @@ function RobotDetailModal({ robot, onAssignMap, onManageKey, onClose }: { robot:
       footer={<div className="flex justify-end"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button></div>}>
       <div className="space-y-3">
         {robot.deactivatedAt && <Note tone="warn">Ngừng sử dụng từ {stamp(robot.deactivatedAt)}. Lý do: {robot.deactivationReason}. Sau khi kích hoạt lại cần cấp khóa mới và gán lại bản đồ.</Note>}
+        {isHeld(robot) && <RobotInspectionSection robot={robot} />}
         {!robot.deactivatedAt && <RobotSetupChecklist robot={robot} onAssignMap={onAssignMap} onManageKey={onManageKey} />}
         <DetailSection title="Kết nối">
           <Facts items={[
@@ -193,6 +200,39 @@ function RobotLifecycleSection({ robot }: { robot: PhysicalRobotOption }) {
       onCancel={() => { setConfirming(false); deactivate.reset() }}>
       <AffectedTours title="Các Tour sau đang giữ robot này:" tours={tours} />
     </ConfirmationDialog>}
+  </>
+}
+
+/**
+ * The last step of Tour recovery (ADR-0043 D13): Technical Staff, standing at the robot, record what they checked and
+ * release it. The server re-checks the holding Tour and open commands; this page never stops the robot.
+ */
+function RobotInspectionSection({ robot }: { robot: PhysicalRobotOption }) {
+  const release = useReleaseRobotInspection()
+  const [confirming, setConfirming] = useState(false)
+  // A retry of the same reason on the same robot version replays the first attempt instead of acting twice.
+  const [attempt, setAttempt] = useState<{ key: string; requestId: string } | null>(null)
+  const tourEnded = holdingTourEnded(robot)
+  const confirm = (reason: string) => {
+    const key = `${robot.rowVersion}:${reason}`
+    const requestId = attempt?.key === key ? attempt.requestId : crypto.randomUUID()
+    if (attempt?.key !== key) setAttempt({ key, requestId })
+    release.mutate({ id: robot.id, robotCode: robot.robotCode, requestId, expectedRowVersion: robot.rowVersion, reason },
+      { onSuccess: () => { setConfirming(false); setAttempt(null) } })
+  }
+  return <>
+    <DetailSection title="Kiểm tra tại chỗ" subject="Đang chờ"
+      action={<button type="button" className={buttonClass('primary', 'sm')} disabled={!tourEnded} onClick={() => setConfirming(true)}><ShieldCheck size={13} aria-hidden="true" />Trả robot về sử dụng</button>}>
+      <div className="space-y-2">
+        <Note tone="warn">Robot đang bị giữ sau khi Tour kết thúc sớm hoặc lệnh được đối soát. Robot không nhận Tour mới cho đến khi Technical Staff kiểm tra tại chỗ và trả robot.</Note>
+        {!tourEnded && <p role="status" className="text-[13px] text-amber-800">Tour đang giữ robot chưa kết thúc. Người vận hành cần kết thúc Tour trước, sau đó bấm Cập nhật trạng thái.</p>}
+      </div>
+    </DetailSection>
+    {confirming && <ConfirmationDialog open requireReason reasonLabel="Đã kiểm tra gì tại chỗ" reasonPlaceholder="Ví dụ: robot đứng yên ở sảnh A, không vật cản, pin 80%, localization đúng."
+      title={`Trả ${robot.robotCode} về sử dụng?`}
+      description="Chỉ xác nhận khi bạn đang ở bên robot và đã thấy robot đứng yên, an toàn. Trang web không phải nút dừng khẩn cấp: nếu robot còn chạy, dùng nút dừng trên robot."
+      confirmLabel="Trả robot" busy={release.isPending} busyLabel="Đang lưu…" error={release.isError ? releaseInspectionError(release.error) : undefined}
+      onConfirm={confirm} onCancel={() => { setConfirming(false); release.reset() }} />}
   </>
 }
 
