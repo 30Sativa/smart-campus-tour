@@ -25,9 +25,13 @@ function ConnectionBadge({ robot }: { robot: PhysicalRobotOption }) {
   return <ToneBadge tone={connectionTone[status]}>{connectionStatusLabel(status)}</ToneBadge>
 }
 
-/** End Early and Reconcile leave the robot held, flagged or both (ADR-0043 D13); either one needs an on-site release. */
-const isHeld = (robot: PhysicalRobotOption) => robot.needsInspection || Boolean(robot.currentTourId)
 const holdingTourEnded = (robot: PhysicalRobotOption) => !robot.currentTourId || robot.currentTourState === 'COMPLETED' || robot.currentTourState === 'CANCELLED'
+/**
+ * Held means waiting for an on-site release (ADR-0043 D13): flagged by End Early or Reconcile, or still claimed by a
+ * Tour that has ended. Start also claims the robot, so a robot in a Tour that is still going is busy, not held.
+ */
+const isHeld = (robot: PhysicalRobotOption) => robot.needsInspection || (Boolean(robot.currentTourId) && holdingTourEnded(robot))
+const isBusy = (robot: PhysicalRobotOption) => Boolean(robot.currentTourId) && !isHeld(robot)
 
 function DeploymentBadge({ robot }: { robot: PhysicalRobotOption }) {
   if (robot.latestDeploymentPassed === null) return null
@@ -72,7 +76,7 @@ export default function TechnicalRobotsPage() {
             <thead className="border-b border-[#e2e8f0]"><tr><th className={thClass}>Robot</th><th className={thClass}>Kết nối</th><th className={thClass}>Bản đồ được gán</th><th className={thClass}>Kiểm tra triển khai</th><th className={`${thClass} text-center`}>Thao tác</th></tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">
               {visibleRobots?.map(robot => <tr key={robot.id} className={rowClass}>
-                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}</td>
+                <td className={`${tdClass} min-w-52`}><span className="font-semibold text-[#0f172a]">{robot.displayName || '-'}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.robotCode}</p>{isHeld(robot) && <p className="mt-1"><ToneBadge tone="warn">Chờ kiểm tra tại chỗ</ToneBadge></p>}{isBusy(robot) && <p className="mt-1"><ToneBadge tone="info">{robot.currentTourName ? `Đang chạy Tour ${robot.currentTourName}` : 'Đang chạy Tour'}</ToneBadge></p>}</td>
                 <td className={tdClass}><ConnectionBadge robot={robot} /><p className="mt-0.5 text-[11.5px] text-[#64748b]">Dữ liệu gần nhất: {stamp(robot.lastSyncReceivedAt)}</p></td>
                 <td className={tdClass}>{robot.assignedMapKey ? <><span>{robot.assignedAreaName} · phiên bản {robot.assignedVersionNumber}</span><p className="font-mono text-[11.5px] text-[#64748b]">{robot.assignedMapKey}</p></> : <span className="text-amber-800">Chưa gán bản đồ</span>}</td>
                 <td className={tdClass}>{robot.latestDeployedMapKey ? <><DeploymentBadge robot={robot} />{contextMismatch(robot) && <p className="mt-0.5 text-[11.5px] text-amber-800">Khác bản đồ được gán</p>}</> : <span className="text-[#64748b]">Chưa ghi nhận</span>}</td>

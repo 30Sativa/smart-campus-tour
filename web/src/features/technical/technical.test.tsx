@@ -470,6 +470,27 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
   })
 
+  it('shows a robot in a running Tour as busy, not as awaiting inspection', async () => {
+    physicalRobots = [makePhysicalRobot({ currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'RUNNING' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Đang chạy Tour Tham quan thư viện')).toBeInTheDocument()
+    expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
+    expect(screen.queryByText(/robot đang chờ kiểm tra tại chỗ/)).not.toBeInTheDocument()
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Kiểm tra tại chỗ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Trả robot về sử dụng' })).not.toBeInTheDocument()
+  })
+
+  it('treats a robot still claimed by an ended Tour as held even without the inspection flag', async () => {
+    physicalRobots = [makePhysicalRobot({ currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'COMPLETED' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Chờ kiểm tra tại chỗ')).toBeInTheDocument()
+    expect(screen.queryByText(/Đang chạy Tour/)).not.toBeInTheDocument()
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Trả robot về sử dụng' })).toBeEnabled()
+  })
+
   it('disables release while the holding Tour has not ended', async () => {
     physicalRobots = [makePhysicalRobot({ needsInspection: true, currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'RUNNING' })]
     renderPage(<TechnicalRobotsPage />)
