@@ -15,6 +15,11 @@ export function tourPageId(pathname: string): string | null {
   return match && match[1] !== 'new' ? match[1] : null
 }
 
+/** Whether a page can be where a Tour was opened from: not one of its own pages, and not the create form it leaves on save. */
+export function isTourOrigin(pathname: string): boolean {
+  return tourPageId(pathname) === null && pathname !== '/staff/manage/tours/new'
+}
+
 type OriginState = { origin: string | null; remember: (path: string) => void }
 export const useTourOriginStore = create<OriginState>()(set => ({ origin: null, remember: origin => set({ origin }) }))
 
@@ -29,5 +34,5 @@ export function originNavPath(origin: string | null): string {
 export function useTourOrigin(): { to: string; label: string } {
   const origin = useTourOriginStore(state => state.origin)
   const nav = originNavPath(origin)
-  return { to: origin ?? FALLBACK, label: STAFF_NAV.find(item => item.path === nav)?.label ?? 'Lịch buổi' }
+  return { to: origin ?? FALLBACK, label: STAFF_NAV.find(item => item.path === nav)?.label ?? 'Lịch Tour' }
 }

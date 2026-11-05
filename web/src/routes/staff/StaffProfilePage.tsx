@@ -104,7 +104,7 @@ export default function StaffProfilePage() {
           <Card
             title="Ca hôm nay"
             note="Tour đang chạy và Tour kế tiếp hôm nay của cả đội."
-            action={<Link to="/staff/tours" className={buttonClass('secondary', 'sm')}>Buổi hôm nay<ChevronRight size={14} aria-hidden="true" /></Link>}
+            action={<Link to="/staff" className={buttonClass('secondary', 'sm')}>Tổng quan vận hành<ChevronRight size={14} aria-hidden="true" /></Link>}
           >
             {tours.isPending ? (
               <p className="text-sm text-[#94a3b8]">Đang tải…</p>

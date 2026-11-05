@@ -23,8 +23,9 @@ export function useTours(query: TourListQuery) {
 }
 const CALENDAR_SIZE = 100
 /** The live Tours of a campus date range, with their robot holds. */
-export function useTourCalendar(from: string, to: string) {
-  return useTours({ from: dayStart(from), to: dayEnd(to), sort: 'scheduledStartAt', page: 1, size: CALENDAR_SIZE })
+export function useTourCalendar(from: string, to: string, enabled = true) {
+  const query: TourListQuery = { from: dayStart(from), to: dayEnd(to), sort: 'scheduledStartAt', page: 1, size: CALENDAR_SIZE }
+  return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query), enabled })
 }
 /** Availability of one campus date. Refreshed when a create is refused, because a slot was taken meanwhile. */
 /** With `customTime`, the day also judges that one start, so a typed time and a slot get the same answer. */

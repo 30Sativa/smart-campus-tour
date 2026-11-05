@@ -63,6 +63,12 @@ shared rules; this file only covers what is specific to `web/`.
     redirect to `/staff/manage/...` and `/admin/history` to `/staff/history`
     (2026-10-27, ADR-0025). `/admin` itself is NOT redirected to `/staff`. Those redirects are migration scaffolding — delete them once the
     old links are gone.
+  - **Merged on 2026-11-05.** "Buổi hôm nay" (`/staff/tours`) is part of the
+    operations overview `/staff`, and "Danh sách Tour" (`/staff/manage/tours`)
+    is the list view of Lịch Tour (`/staff/schedule?view=list`). Both old
+    addresses redirect with their query. A single Tour's pages share
+    `TourStepper` and go back to the list they were opened from
+    (`web/docs/staff-operations.md`).
   - The frontend route namespace and backend API namespace remain separate;
     endpoints still follow the owning role and capability.
 - Local run: `cd web && npm install && npm run dev` (Vite, port 5173).

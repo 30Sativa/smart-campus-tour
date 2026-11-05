@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTourCalendar } from '../../features/administration/tours/hooks'
+import { TourListPanel } from '../../features/administration/tours/TourListPanel'
 import { campusDay, campusMinutes, campusTime } from '../../features/administration/tours/tour-calendar'
 import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
 import type { TourState, TourSummary } from '../../features/administration/tours/types'
@@ -65,7 +66,7 @@ export default function SchedulePage() {
   const query = params.get('q') ?? ''
   const monday = weekStart(day)
   const week = Array.from({ length: 7 }, (_, i) => shift(monday, i))
-  const tours = useTourCalendar(week[0], week[6])
+  const tours = useTourCalendar(week[0], week[6], view !== 'list')
 
   const all = useMemo(() => tours.data?.data ?? [], [tours.data])
   const robots = useMemo(() => [...new Set(all.map(tour => tour.reservation?.robotCode).filter(Boolean) as string[])].sort(), [all])
@@ -92,15 +93,32 @@ export default function SchedulePage() {
   const step = view === 'week' ? 7 : 1
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
 
+  const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div className="min-w-0">
+      <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
+      <p className="mt-1 text-sm text-[#718096]">{view === 'list' ? 'Mọi Tour theo thời gian: sắp diễn ra, đang chạy, đã kết thúc.' : 'Tour đã lên lịch và thời gian giữ robot.'}</p>
+    </div>
+    <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
+  </header>
+  const viewToggle = <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] bg-white p-1">
+    {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
+      <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value, tour: null })}
+        className={`min-h-8 rounded-lg px-4 text-sm font-semibold transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
+    ))}
+  </div>
+
+  // The list is every Tour across time, not this week: it has its own filters and paging.
+  if (view === 'list') return (
+    <StaffPage>
+      {header}
+      <div className="mb-3 flex">{viewToggle}</div>
+      <TourListPanel />
+    </StaffPage>
+  )
+
   return (
     <StaffPage>
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl leading-tight font-bold text-[#2d3748] sm:text-2xl">Lịch tour</h1>
-          <p className="mt-1 text-sm text-[#718096]">Tour đã lên lịch và thời gian giữ robot.</p>
-        </div>
-        <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
-      </header>
+      {header}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className={`${card} p-4 sm:p-5`} aria-label="Lịch">
@@ -109,12 +127,7 @@ export default function SchedulePage() {
             <h2 className="min-w-36 px-1 text-center text-base font-bold text-[#2d3748] tabular-nums first-letter:uppercase">{heading}</h2>
             <button type="button" onClick={() => setDay(shift(day, step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần sau' : 'Ngày sau'}><ChevronRight size={16} /></button>
             <button type="button" onClick={() => setDay(today)} disabled={day === today} className={`${buttonClass('secondary', 'sm')} min-h-10`}>Hôm nay</button>
-            <div role="group" aria-label="Chế độ xem lịch" className="ml-auto flex rounded-xl border border-[#e2e8f0] p-1">
-              {([['week', 'Tuần'], ['day', 'Ngày'], ['list', 'Danh sách']] as const).map(([value, label]) => (
-                <button key={value} type="button" aria-pressed={view === value} onClick={() => set({ view: value === 'week' ? null : value })}
-                  className={`min-h-8 rounded-lg px-4 text-sm font-semibold transition-colors ${focus} ${view === value ? 'bg-[#edf3fb] text-[#4a6fa5]' : 'text-[#718096] hover:text-[#2d3748]'}`}>{label}</button>
-              ))}
-            </div>
+            {viewToggle}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -139,7 +152,8 @@ export default function SchedulePage() {
               ? <WeekGrid week={week} today={today} inDay={inDay} selectedId={selected?.id} onSelect={id => set({ tour: id })} onDay={key => set({ date: key === today ? null : key, view: 'day', tour: null }, false)} />
               : <section aria-label={`Lịch tour ${heading}`} className="overflow-hidden rounded-xl border border-[#e2e8f0]">
                 {shown.length === 0 ? <div className="p-4"><EmptyPanel>Không có tour nào trong ngày này.</EmptyPanel></div>
-                  : view === 'day' ? <RobotDay tours={shown} onSelect={id => set({ tour: id })} /> : <SessionList tours={shown} onSelect={id => set({ tour: id })} selectedId={selected?.id} />}
+                  // By robot first, then every Tour of the day: one without a robot hold has no bar but still shows below.
+                  : <><RobotDay tours={shown} onSelect={id => set({ tour: id })} /><div className="border-t border-[#e2e8f0]"><SessionList tours={shown} onSelect={id => set({ tour: id })} selectedId={selected?.id} /></div></>}
               </section>}
           </div>}
 

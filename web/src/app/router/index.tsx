@@ -47,7 +47,6 @@ const RepProfilePage = lazy(() => import('../../routes/representative/RepProfile
 
 const StaffShell = lazy(() => import('../../features/staff/StaffShell'))
 const OverviewPage = lazy(() => import('../../routes/staff/OverviewPage'))
-const ToursTodayPage = lazy(() => import('../../routes/staff/ToursTodayPage'))
 const SchedulePage = lazy(() => import('../../routes/staff/SchedulePage'))
 const TourDetailPage = lazy(() => import('../../routes/staff/TourDetailPage'))
 const StartCheckPage = lazy(() => import('../../routes/staff/StartCheckPage'))
@@ -59,7 +58,6 @@ const StaffProfilePage = lazy(() => import('../../routes/staff/StaffProfilePage'
 
 const AdminShell = lazy(() => import('../../features/administration/AdminShell'))
 const StaffManageDashboardPage = lazy(() => import('../../routes/staff/manage/StaffManageDashboardPage'))
-const StaffManageTourListPage = lazy(() => import('../../routes/staff/manage/StaffManageTourListPage'))
 const StaffManageTourCreatePage = lazy(() => import('../../routes/staff/manage/StaffManageTourCreatePage'))
 const StaffManageTourDetailPage = lazy(() => import('../../routes/staff/manage/StaffManageTourDetailPage'))
 const StaffManageTourEditPage = lazy(() => import('../../routes/staff/manage/StaffManageTourEditPage'))
@@ -163,6 +161,19 @@ function MovedToStaff() {
 }
 
 /**
+ * Pages merged on 2026-11-05: "Buổi hôm nay" (`/staff/tours`) into the
+ * operations overview, and "Danh sách Tour" (`/staff/manage/tours`) into the
+ * calendar's list view. Old links and bookmarks keep their filters.
+ */
+function MergedInto({ path, view }: { path: string; view?: string }) {
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  if (view) params.set('view', view)
+  const search = params.toString()
+  return <Navigate to={`${path}${search ? `?${search}` : ''}`} replace />
+}
+
+/**
  * The route table, separate from the browser router so it can be mounted in a
  * memory router and asserted on. The guard, the legacy redirects and the
  * `/admin` precedence rule are behaviour, and behaviour that is only visible by
@@ -225,7 +236,7 @@ export const routes = [
       { index: true, element: <OverviewPage /> },
       // Sessions (remote-tour scope): today's list, any day, detail & log,
       // and the pre-start check for a Ready one.
-      { path: 'tours', element: <ToursTodayPage /> },
+      { path: 'tours', element: <MergedInto path="/staff" /> },
       { path: 'tours/:tourId', element: <TourDetailPage /> },
       { path: 'tours/:tourId/start', element: <StartCheckPage /> },
       { path: 'schedule', element: <SchedulePage /> },
@@ -239,7 +250,7 @@ export const routes = [
       // Tour preparation, moved from `/admin/*` (SRS v1.9 §3.2.c: Staff owns
       // content, registrations, Routes and scheduling).
       { path: 'manage', element: <StaffManageDashboardPage /> },
-      { path: 'manage/tours', element: <StaffManageTourListPage /> },
+      { path: 'manage/tours', element: <MergedInto path="/staff/schedule" view="list" /> },
       { path: 'manage/tours/new', element: <StaffManageTourCreatePage /> },
       { path: 'manage/tours/:tourId', element: <StaffManageTourDetailPage /> },
       { path: 'manage/tours/:tourId/edit', element: <StaffManageTourEditPage /> },

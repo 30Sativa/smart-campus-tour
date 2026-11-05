@@ -255,7 +255,6 @@ describe('route table', () => {
     }, 30_000)
 
     it.each([
-      ['/staff/manage/tours', /Quản lý Tour/],
       ['/staff/manage/tours/new', /Tạo Tour mới/],
       ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
       ['/staff/manage/registrations', /Tất cả đăng ký/],
@@ -292,7 +291,7 @@ describe('route table', () => {
 
   describe('Tour preparation URLs moved from /admin', () => {
     it.each([
-      ['/admin/tours', '/staff/manage/tours'],
+      ['/admin/tours', '/staff/schedule'],
       ['/admin/tours/new', '/staff/manage/tours/new'],
       ['/admin/tours/tour-03/edit', '/staff/manage/tours/tour-03/edit'],
       ['/admin/registrations/pending', '/staff/manage/registrations/pending'],
@@ -311,6 +310,20 @@ describe('route table', () => {
       const router = renderAt('/admin/registrations?review=abc')
       await settled(router, '/staff/manage/registrations')
       expect(router.state.location.search).toBe('?review=abc')
+    })
+  })
+
+  describe('pages merged into the overview and the calendar', () => {
+    it.each([
+      ['/staff/tours?view=READY', '/staff', '?view=READY'],
+      ['/staff/manage/tours?state=READY', '/staff/schedule', '?state=READY&view=list'],
+      ['/staff/manage/tours', '/staff/schedule', '?view=list'],
+    ])('sends %s to %s with its filters', async (from, to, search) => {
+      signIn('Staff')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))
+      const router = renderAt(from)
+      await settled(router, to)
+      expect(router.state.location.search).toBe(search)
     })
   })
 

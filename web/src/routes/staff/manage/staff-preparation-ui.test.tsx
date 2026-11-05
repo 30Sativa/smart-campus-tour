@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import StaffManageDashboardPage from './StaffManageDashboardPage'
 import StaffManagePoisPage from './StaffManagePoisPage'
-import StaffManageTourListPage from './StaffManageTourListPage'
+import SchedulePage from '../SchedulePage'
 import type { PoiProposal } from '../../../features/technical/api/technical'
 import { useAuthStore } from '../../../stores/auth-store'
 
@@ -252,7 +252,7 @@ describe('staff preparation UI', () => {
   })
 
   it('opens the Tour list on upcoming Tours and asks the API for each tab', async () => {
-    show(<StaffManageTourListPage />, '/staff/manage/tours')
+    show(<SchedulePage />, '/staff/schedule?view=list')
     expect(screen.getByRole('button', { name: 'Sắp diễn ra' })).toHaveAttribute('aria-pressed', 'true')
     const lastTourRequest = () => requests.filter(url => url.pathname === '/api/staff/manage/tours').at(-1)!.searchParams
     await waitFor(() => expect(lastTourRequest().get('phase')).toBe('UPCOMING'))
@@ -265,7 +265,7 @@ describe('staff preparation UI', () => {
   })
 
   it('reaches a Tour past its start that no tab covers through the state filter', async () => {
-    show(<StaffManageTourListPage />, '/staff/manage/tours')
+    show(<SchedulePage />, '/staff/schedule?view=list')
     fireEvent.change(screen.getByRole('combobox', { name: 'Trạng thái Tour' }), { target: { value: 'ALL' } })
     await waitFor(() => expect(requests.at(-1)!.searchParams.get('phase')).toBeNull())
     expect(requests.at(-1)!.searchParams.get('state')).toBeNull()
@@ -273,7 +273,7 @@ describe('staff preparation UI', () => {
   })
 
   it('honors the READY dashboard link when opening the Tour list', async () => {
-    show(<StaffManageTourListPage />, '/staff/manage/tours?state=READY')
+    show(<SchedulePage />, '/staff/schedule?view=list&state=READY')
     expect(screen.getByRole('combobox', { name: 'Trạng thái Tour' })).toHaveValue('READY')
     await screen.findByText('Chưa có Tour phù hợp')
     expect(requests.some(url => url.pathname.endsWith('/tours') && url.searchParams.get('state') === 'READY')).toBe(true)

@@ -17,7 +17,7 @@ import { StaffBell } from './StaffBell'
 import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
 import { useRunningTours, type RunningTour } from './operations/hooks'
 import { STEP_LABEL } from './operations/operation-labels'
-import { originNavPath, tourPageId, useTourOriginStore } from './operations/tour-origin'
+import { isTourOrigin, originNavPath, tourPageId, useTourOriginStore } from './operations/tour-origin'
 
 const CONNECTION_LABEL = {
   connecting: 'Telemetry: đang kết nối',
@@ -55,7 +55,8 @@ export default function StaffShell() {
   const origin = useTourOriginStore((state) => state.origin)
   const remember = useTourOriginStore((state) => state.remember)
   const here = `${location.pathname}${location.search}`
-  useEffect(() => { if (!onTourPage) remember(here) }, [onTourPage, here, remember])
+  const canBeOrigin = isTourOrigin(location.pathname)
+  useEffect(() => { if (canBeOrigin) remember(here) }, [canBeOrigin, here, remember])
   const currentPath = onTourPage ? originNavPath(origin) : activeNavPath(location.pathname)
   // Preparation pages do not need the telemetry state in their header.
   const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/profile'

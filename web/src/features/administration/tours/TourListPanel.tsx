@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Plus } from 'lucide-react'
-import { PageHeader, Pagination, SearchField, panelClass } from '../../../components/ui/ConsolePrimitives'
-import { buttonClass, inputClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
+import { Pagination, SearchField, panelClass } from '../../../components/ui/ConsolePrimitives'
+import { inputClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
 import { CapacityBar } from '../../../components/ui/Charts'
-import { AdminErrorPanel, AdminPage, EmptyState, SkeletonRows } from '../../../features/administration/AdminUi'
-import { formatSlot } from '../../../features/administration/admin-format'
-import { useDebouncedValue } from '../../../features/administration/use-debounced-value'
-import { useTours } from '../../../features/administration/tours/hooks'
-import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
-import type { TourPhase, TourState } from '../../../features/administration/tours/types'
+import { AdminErrorPanel, EmptyState, SkeletonRows } from '../AdminUi'
+import { formatSlot } from '../admin-format'
+import { useDebouncedValue } from '../use-debounced-value'
+import { useTours } from './hooks'
+import { TOUR_STATE_LABEL, tourError } from './tour-messages'
+import type { TourPhase, TourState } from './types'
 
 const PAGE_SIZE = 20
 const STATE_TONE: Record<TourState, string> = {
@@ -26,7 +25,13 @@ const TABS: { phase: TourPhase; label: string; sort?: string }[] = [
   { phase: 'FINISHED', label: 'Đã kết thúc / Đã hủy', sort: '-scheduledStartAt' },
 ]
 
-export default function StaffManageTourListPage() {
+/**
+ * Every Tour across time, paged: upcoming, running or finished (`?tab=`), or one
+ * state (`?state=`, `ALL` for every state), with search. The list view of the
+ * Tour calendar; it changes only its own search params, so the page's own
+ * (`view`) stay. A row opens the Tour on the page that fits its state.
+ */
+export function TourListPanel() {
   const [search, setSearch] = useState('')
   const [params, setParams] = useSearchParams()
   const requestedState = params.get('state')?.toUpperCase()
@@ -37,10 +42,9 @@ export default function StaffManageTourListPage() {
   const [page, setPage] = useState(1)
   const term = useDebouncedValue(search, 300)
   const tours = useTours({ search: term, state: state || undefined, phase: tab?.phase, sort: tab?.sort, page, size: PAGE_SIZE })
-  const pickTab = (phase: TourPhase) => { setParams({ tab: phase }, { replace: true }); setPage(1) }
-  return <AdminPage>
-    <PageHeader eyebrow="Chuẩn bị Tour" title="Quản lý Tour" description="Tour đã tạo theo thời gian, kèm số đoàn đăng ký và số đoàn đã nhận thư mời. Tour đang diễn ra và đã kết thúc chỉ xem."
-      action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo Tour mới</Link>} />
+  const update = (key: 'tab' | 'state', value: string) => { setParams(current => { const next = new URLSearchParams(current); next.delete('tab'); next.delete('state'); if (value) next.set(key, value); return next }, { replace: true }); setPage(1) }
+  const pickTab = (phase: TourPhase) => update('tab', phase)
+  return <>
     <section className={panelClass} aria-label="Danh sách Tour">
       <div className="flex flex-wrap items-center gap-3 border-b border-[#eef1f4] px-3 py-2.5">
         <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" />
@@ -48,7 +52,7 @@ export default function StaffManageTourListPage() {
           {TABS.map(item => <button key={item.phase} type="button" aria-pressed={tab?.phase === item.phase} onClick={() => pickTab(item.phase)}
             className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${tab?.phase === item.phase ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{item.label}</button>)}
         </div>
-        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={everything ? 'ALL' : state} onChange={e => { const value = e.target.value; setParams(value ? { state: value } : {}, { replace: true }); setPage(1) }}>
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={everything ? 'ALL' : state} onChange={e => update('state', e.target.value)}>
           <option value="">Theo nhóm đang chọn</option>
           <option value="ALL">Tất cả</option>
           {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_LABEL[s]}</option>)}
@@ -59,7 +63,7 @@ export default function StaffManageTourListPage() {
         <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label="Danh sách Tour">
           <thead className="border-b border-[#e2e8f0]"><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký', 'Đã gửi thư mời', 'Trạng thái'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-[#eef1f4]">{tours.data.data.map(tour => <tr key={tour.id} className={rowClass}>
-            <td className={tdClass}><Link to={`/staff/manage/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link></td>
+            <td className={tdClass}><Link to={`/staff/tours/${tour.id}`} className="font-semibold text-[#0f172a] hover:text-[#2d719e] hover:underline focus-visible:outline-2 focus-visible:outline-[#2d719e]">{tour.name}</Link></td>
             <td className={`${tdClass} whitespace-nowrap`}>{formatSlot(tour.scheduledStartAt)}</td>
             <td className={tdClass}>{tour.routeName}</td>
             <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
@@ -69,5 +73,5 @@ export default function StaffManageTourListPage() {
         </table></div>}
       {tours.data && <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Tour" />}
     </section>
-  </AdminPage>
+  </>
 }
