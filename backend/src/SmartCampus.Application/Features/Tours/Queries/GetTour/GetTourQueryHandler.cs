@@ -85,7 +85,7 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
     {
         var previous = tour.CurrentLegId is { } legId ? await repository.FindLegCommandAsync(legId, ct) : null;
         if (!RetryTourLegCommandHandler.CanRetry(tour, previous))
-            return Refused("Chỉ thử lại được chặng đã kết thúc thật sự với FAILED hoặc bị từ chối.", "TOUR_RETRY_NOT_ALLOWED");
+            return Refused("Chỉ thử lại được chặng đã kết thúc thật sự với FAILED, bị từ chối, hoặc hết hạn khi robot chưa nhận.", "TOUR_RETRY_NOT_ALLOWED");
         if (tour.OperatorUserId != viewer)
             return Refused("Chỉ người vận hành được giao cho Tour mới thử lại chặng được.", "callerIsOperator");
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct);
