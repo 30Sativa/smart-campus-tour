@@ -17,6 +17,7 @@ import { StaffBell } from './StaffBell'
 import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
 import { useRunningTours, type RunningTour } from './operations/hooks'
 import { STEP_LABEL } from './operations/operation-labels'
+import { originNavPath, tourPageId, useTourOriginStore } from './operations/tour-origin'
 
 const CONNECTION_LABEL = {
   connecting: 'Telemetry: đang kết nối',
@@ -49,7 +50,13 @@ export default function StaffShell() {
   const assistCount = needsHelp.length
   const running = needsHelp[0] ?? runningTours[0]
 
-  const currentPath = activeNavPath(location.pathname)
+  // A Tour page belongs to the list it was opened from (see tour-origin.ts).
+  const onTourPage = tourPageId(location.pathname) !== null
+  const origin = useTourOriginStore((state) => state.origin)
+  const remember = useTourOriginStore((state) => state.remember)
+  const here = `${location.pathname}${location.search}`
+  useEffect(() => { if (!onTourPage) remember(here) }, [onTourPage, here, remember])
+  const currentPath = onTourPage ? originNavPath(origin) : activeNavPath(location.pathname)
   // Preparation pages do not need the telemetry state in their header.
   const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/profile'
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
@@ -96,8 +103,8 @@ export default function StaffShell() {
         <header className="sticky top-0 z-20 shrink-0 px-4 pt-3 sm:px-6 lg:px-8">
           <div className={softConsoleHeader}>
             <div className="min-w-0">
-              <p className="truncate text-[12px] text-[#a0aec0]">{section} <span className="mx-1">/</span> <span className="text-[#2d3748]">{title}</span></p>
-              <p className="truncate text-sm font-bold text-[#2d3748]">{title}</p>
+              <p className="truncate text-[12px] text-[#a0aec0]">{section} <span className="mx-1">/</span> {onTourPage ? <>{title} <span className="mx-1">/</span> <span className="text-[#2d3748]">Tour</span></> : <span className="text-[#2d3748]">{title}</span>}</p>
+              <p className="truncate text-sm font-bold text-[#2d3748]">{onTourPage ? 'Chi tiết Tour' : title}</p>
             </div>
             {!onLiveSqlPage && <span
               role="status"

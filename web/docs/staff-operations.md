@@ -23,13 +23,24 @@ Two vocabularies are kept apart on every screen:
 | `/staff` | Tổng quan vận hành: today's Tours, running Tours with step and command state, Tours needing assistance, robot telemetry | `GET /api/staff/manage/tours` (today, `phase=RUNNING`), Tour detail, `/hubs/operations` |
 | `/staff/tours` | Buổi hôm nay: today's Tours, one next step per state, then the not-ended Tours of the next 7 days ("Sắp tới") so a READY Tour on a later day is still reachable | `GET /api/staff/manage/tours?from&to` (today, and the 7 days after) |
 | `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
-| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the back link goes to Lịch buổi for a Tour on another day; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
+| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
 | `/staff/live[/:id]` | Điều hành trực tiếp: freshness line, a situation card (what is happening and the one step it calls for: Next, Retry leg or Reconcile), Tour state, command card with the robot's own leg report, route, robot telemetry, a separate End Early panel | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next`, `…/retry-leg`, `…/end-early`, `…/commands/{commandId}/reconcile`, `/hubs/operations` |
 | `/staff/manage/tours/:id` | Tour preparation, now with **Chốt Tour (READY)** and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
 | `/staff/robot`, `/staff/schedule`, `/staff/history` | unchanged, already API-backed | — |
 
 Rules the screens follow:
 
+- One Tour, one flow. Its three pages (`/staff/manage/tours/:id`,
+  `/staff/tours/:id/start`, `/staff/live/:id`) open with the same
+  `TourStepper`: back to the list the Tour was opened from, then four steps
+  (Chuẩn bị & chốt, Kiểm tra & bắt đầu, Điều hành, Kết quả) read from the
+  Tour state only. A step links only when its page has something to show (the
+  check while READY, the console once started). The Start panel itself is two
+  steps: the server allows Start, then the four on-site confirmations.
+- "Back" is the last Staff page that is not a Tour page, remembered by the
+  shell (`operations/tour-origin.ts`); moving between a Tour's own pages keeps
+  it, and a Tour opened straight from a link goes back to Lịch buổi. The sidebar
+  and header breadcrumb light that same list while a Tour page is open.
 - Buttons follow the server: READY follows `permissions.canMarkReady`, Start
   follows `start-checks.canStart` plus the four confirmations, Next, Retry leg,
   End Early and Reconcile follow `allowedActions.next/retryLeg/endEarly/reconcile`.
