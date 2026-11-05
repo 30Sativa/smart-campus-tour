@@ -1,55 +1,57 @@
 import { Link, useParams } from 'react-router'
-import { ArrowLeft } from 'lucide-react'
 import { useRepTour, useRepRegistrations } from '../../features/representative/representative-hooks'
-import { RepPage, Panel, InfoList, GatedAction, TourStateBadge, ErrorState, PageSkeleton } from '../../features/representative/components/RepUi'
-import { RegistrationCard } from '../../features/representative/components/RegistrationCard'
+import { RepPage, RepPageHeader, Panel, InfoList, GatedAction, TourStateBadge, ErrorState, PageSkeleton, RegistrationStatusBadge, Callout } from '../../features/representative/components/RepUi'
 import { RouteMap } from '../../features/representative/components/RouteMap'
-import { dayMonth, formatDateTime, formatTime, readRepError } from '../../features/representative/rep-format'
-import { TOUR_IMAGES } from '../../features/representative/rep-classes'
+import { formatDateTime, groupLabel, readRepError } from '../../features/representative/rep-format'
+import { repButton } from '../../features/representative/rep-classes'
 import { registrationClosesAt } from '../../features/representative/registration-deadline'
 
 export default function RepTourDetailPage() {
   const { tourId = '' } = useParams()
   const query = useRepTour(tourId)
-  const registrations = useRepRegistrations({ tourId, size: 5 })
+  const registrations = useRepRegistrations({ tourId, size: 1 })
   if (query.isPending) return <PageSkeleton />
-  if (!query.data) return <RepPage><ErrorState title="Không xem được Tour" message={readRepError(query.error).message} back={{ to: '/dai-dien/buoi', label: 'Danh sách buổi' }} /></RepPage>
+  if (query.error || !query.data) return <RepPage><ErrorState title="Không xem được Tour" message={readRepError(query.error).message}
+    onRetry={() => void query.refetch()} back={{ to: '/dai-dien/buoi', label: 'Danh sách buổi' }} /></RepPage>
   const tour = query.data
-  const date = dayMonth(tour.scheduledStartAt)
-  const stops = [...tour.stops].sort((a, b) => a.order - b.order)
+  const existing = registrations.data?.data.find(registration => registration.tourId === tourId)
+  const noRegistration = registrations.isSuccess && registrations.data.pagination.totalItems === 0
+
   return <RepPage>
-    <Link to="/dai-dien/buoi" className="rep-back"><ArrowLeft size={16} aria-hidden="true" />Các buổi tham quan</Link>
+    <RepPageHeader back={{ to: '/dai-dien/buoi', label: 'Các buổi tham quan' }} title={tour.name}
+      description={tour.description} badges={<TourStateBadge state={tour.state} />} />
+    {tour.state === 'CANCELLED' && <Callout tone="warn" title="Buổi tham quan đã bị hủy" role="status">
+      <p>{tour.cancelReason?.trim() || 'Nhà trường chưa cung cấp lý do hủy.'}</p>
+    </Callout>}
     <div className="rep-detail">
-      <div style={{ minWidth: 0 }}>
-        <div className="rep-cover">
-          <img src={TOUR_IMAGES[0]} alt="" />
-          <div className="rep-cover-copy">
-            <small>{date.weekday.toUpperCase()} · {formatTime(tour.scheduledStartAt)}</small>
-            <h1>{tour.name}</h1>
-            <div className="rep-badges"><TourStateBadge state={tour.state} /></div>
-          </div>
-        </div>
-        {tour.state === 'CANCELLED' && <p role="status" className="rep-lead" style={{ marginTop: 22 }}>Buổi tham quan đã bị hủy{tour.cancelReason?.trim() ? `. Lý do: ${tour.cancelReason.trim()}` : '.'}</p>}
-        {tour.description && <p className="rep-lead" style={{ marginTop: 22 }}>{tour.description}</p>}
+      <div className="rep-stack">
+        <Panel title="Lịch tham quan">
+          <InfoList items={[
+            { label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) },
+            { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString()) },
+            { label: 'Tuyến tham quan', value: tour.routeName },
+          ]} />
+        </Panel>
         <RouteMap tour={tour} />
-        <section className="rep-section" style={{ marginTop: 40 }} aria-labelledby="rep-stops-title">
-          <span className="rep-kicker" id="rep-stops-title">Các điểm dừng</span>
-          <ol className="rep-stops">{stops.map(stop => <li key={stop.order}><b className="num">{String(stop.order).padStart(2, '0')}</b><div><h3>{stop.name}</h3>{stop.description && <p>{stop.description}</p>}</div></li>)}</ol>
-        </section>
       </div>
-      <aside className="rep-aside" aria-label="Đăng ký đoàn">
-        <h2>Đăng ký đoàn</h2>
-        <InfoList columns={1} items={[{ label: 'Thời gian dự kiến', value: formatDateTime(tour.scheduledStartAt) }, { label: 'Hạn đăng ký', value: formatDateTime(registrationClosesAt(tour.scheduledStartAt).toISOString()) }, { label: 'Tuyến tham quan', value: `${tour.routeName} · ${tour.stops.length} điểm` }]} />
-        <GatedAction gate={tour.register} label="Đăng ký đoàn" kind="primary" to={`/dai-dien/buoi/${tour.id}/dang-ky`} />
-        <p className="rep-hint">Mỗi đoàn có tên và danh sách lời mời riêng. Cá nhân dùng email của mình; điểm xem chung dùng email người phụ trách. Tối đa 10 điểm xem mỗi đăng ký.</p>
+      <aside className="rep-aside" aria-labelledby="rep-tour-registration">
+        <h2 id="rep-tour-registration">Đăng ký của bạn</h2>
+        {registrations.isPending ? <p className="rep-hint" role="status" aria-busy="true">Đang kiểm tra đăng ký của bạn…</p>
+          : registrations.error ? <ErrorState title="Không kiểm tra được đăng ký" message={readRepError(registrations.error).message} onRetry={() => void registrations.refetch()} />
+            : existing ? <div className="rep-stack">
+              <h3>{groupLabel(existing) ?? existing.schoolName}</h3>
+              <RegistrationStatusBadge state={existing.state} />
+              <p className="rep-hint">Bạn đã có đăng ký cho buổi tham quan này. Mở hồ sơ để xem thông tin và các thao tác hiện còn cho phép.</p>
+              <Link to={`/dai-dien/dang-ky/${existing.id}`} className={repButton('primary')}>Xem đăng ký</Link>
+            </div>
+              : noRegistration ? <div className="rep-stack">
+                <p className="rep-hint">Bạn chưa đăng ký buổi tham quan này.</p>
+                <GatedAction gate={tour.register} label="Đăng ký đoàn" kind="primary" to={`/dai-dien/buoi/${tour.id}/dang-ky`} />
+              </div>
+                : <ErrorState title="Chưa xác định được đăng ký" message="Không thể xác nhận đăng ký hiện có. Tải lại trước khi tiếp tục." onRetry={() => void registrations.refetch()} />}
+        <p className="rep-hint">Mỗi đại diện có một đăng ký cho mỗi buổi, tối đa 10 điểm xem. Cá nhân dùng email riêng; điểm xem chung dùng email người phụ trách.</p>
+        <Link to={`/dai-dien/dang-ky?tourId=${tour.id}`} className="rep-text-link">Tra cứu đăng ký của buổi này</Link>
       </aside>
-    </div>
-    <div className="rep-section">
-      <Panel title="Đoàn của tôi trong buổi này" action={<Link to={`/dai-dien/dang-ky?tourId=${tour.id}`}>Xem tất cả ({registrations.data?.pagination.totalItems ?? '-'})</Link>}>
-        {registrations.error ? <ErrorState title="Không tải được đăng ký" message={readRepError(registrations.error).message} onRetry={() => void registrations.refetch()} />
-          : <div className="rep-reg-list">{registrations.data?.data.map(r => <RegistrationCard key={r.id} registration={r} />)}</div>}
-        {registrations.data?.pagination.totalItems === 0 && <p className="rep-hint">Bạn chưa đăng ký đoàn nào trong buổi này.</p>}
-      </Panel>
     </div>
   </RepPage>
 }

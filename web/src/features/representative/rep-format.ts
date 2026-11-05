@@ -42,6 +42,9 @@ export const groupLabel = (r: Pick<RegistrationSummary, 'groupName'>) => r.group
 
 export type RepError = { status?: number; code?: string; message: string; fieldErrors: Record<string, string> }
 export function readRepError(error: unknown, fallback = 'Không thực hiện được. Kiểm tra kết nối rồi thử lại.'): RepError {
+  if ((error instanceof Error || error instanceof DOMException) && error.name === 'TimeoutError') return {
+    message: 'Hệ thống chưa phản hồi sau 15 giây. Kiểm tra kết nối hoặc thử tải lại dữ liệu.', fieldErrors: {},
+  }
   if (!(error instanceof ApiError)) return { message: fallback, fieldErrors: {} }
   try {
     const body = JSON.parse(error.body) as {

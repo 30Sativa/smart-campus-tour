@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
+import { Bell, CheckCheck } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useNow } from '../staff/use-now'
@@ -91,7 +91,8 @@ export function RepBell() {
               {notices.map((n) => <NoticeRow key={n.id} notice={n} unread={!readSet.has(n.id)} now={now} onOpen={() => markRead([n.id])} />)}
             </ul>
           )}
-          <Link to="/dai-dien/dang-ky" className="rep-bell-foot">Xem tất cả đơn đăng ký<ChevronRight size={14} aria-hidden="true" /></Link>
+          {registrations.data && registrations.data.pagination.totalItems > registrations.data.data.length && <p className="rep-bell-coverage">Thông báo từ các đăng ký tải về gần đây. Mở danh sách để xem đầy đủ hồ sơ.</p>}
+          <Link to="/dai-dien/dang-ky" className="rep-bell-foot">Xem tất cả đơn đăng ký</Link>
         </div>
       )}
     </div>
@@ -103,12 +104,11 @@ function NoticeRow({ notice, unread, now, onOpen }: { notice: RepNotice; unread:
   return (
     <li>
       <Link to={notice.to} className="rep-bell-item" data-tone={notice.tone} data-unread={unread || undefined} onClick={onOpen}>
-        <span className="rep-bell-dot" aria-hidden="true" />
         <span className="rep-bell-copy">
           <strong>{notice.title}{unread && <span className="sr-only"> (chưa đọc)</span>}</strong>
           <span className="rep-bell-subject">{notice.subject}</span>
           <span className="rep-bell-detail">{notice.detail}</span>
-          <span className="rep-bell-meta"><span>{when}</span><span className="rep-bell-go">{notice.toLabel}<ChevronRight size={13} aria-hidden="true" /></span></span>
+          <span className="rep-bell-meta"><span>{when}</span><span className="rep-bell-go">{notice.toLabel}</span></span>
         </span>
       </Link>
     </li>

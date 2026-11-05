@@ -38,7 +38,7 @@ function startLabel(iso: string, now: number) {
 export function buildRepNotices(rows: readonly RegistrationSummary[], now: number): RepNotice[] {
   const notices: RepNotice[] = []
   for (const r of rows) {
-    const subject = [r.tourName, groupLabel(r)].filter(Boolean).join(' · ')
+    const subject = [r.tourName, groupLabel(r)].filter(Boolean).join(', ')
     const to = `/dai-dien/dang-ky/${r.id}`
     const start = new Date(r.tourScheduledStartAt).getTime()
 
@@ -49,27 +49,27 @@ export function buildRepNotices(rows: readonly RegistrationSummary[], now: numbe
     }
     if (r.state === 'REJECTED') {
       notices.push({ id: `${r.id}:rejected:${r.updatedAt}`, tone: 'bad', title: 'Đơn đăng ký bị từ chối', subject,
-        detail: 'Xem lý do, sửa danh sách rồi gửi lại để được duyệt.', at: r.updatedAt, to, toLabel: 'Xem lý do' })
+        detail: r.tourState === 'SCHEDULED' ? 'Xem lý do và cập nhật khi buổi còn cho phép.' : 'Buổi đã khóa thay đổi. Xem lý do từ chối trong hồ sơ.', at: r.updatedAt, to, toLabel: 'Xem lý do' })
       continue
     }
     if (r.state !== 'APPROVED') continue
 
     if (r.tourState === 'COMPLETED') {
       notices.push({ id: `${r.id}:completed`, tone: 'mute', title: 'Buổi tham quan đã hoàn thành', subject,
-        detail: 'Cảm ơn đoàn đã tham gia cùng robot CampusTour.', at: r.tourScheduledStartAt, to, toLabel: 'Xem đơn' })
+        detail: 'Thông tin buổi và hồ sơ được giữ lại để tra cứu.', at: r.tourScheduledStartAt, to, toLabel: 'Xem đơn' })
       continue
     }
     if (r.tourState === 'RUNNING') {
       notices.push({ id: `${r.id}:running`, tone: 'info', title: 'Buổi tham quan đang diễn ra', subject, pinned: true,
-        detail: 'Học sinh vào xem bằng link mời đã gửi cho đoàn.', at: r.tourScheduledStartAt, to, toLabel: 'Xem chi tiết' })
+        detail: 'Người xem sử dụng lời mời riêng còn hiệu lực. Kiểm tra trạng thái tại mục Lời mời.', at: r.tourScheduledStartAt, to, toLabel: 'Xem chi tiết' })
       continue
     }
 
-    notices.push({ id: `${r.id}:approved`, tone: 'ok', title: 'Đơn đăng ký đã được duyệt', subject,
-      detail: `Đoàn ${r.rowCount} học sinh đã có chỗ trong buổi tham quan.`, at: r.updatedAt, to, toLabel: 'Xem đơn' })
+    notices.push({ id: `${r.id}:approved`, tone: 'ok', title: 'Đăng ký có dòng được chấp nhận', subject,
+      detail: 'Xem kết quả từng dòng. Quyền truy cập và trạng thái email được theo dõi riêng tại mục Lời mời.', at: r.updatedAt, to, toLabel: 'Xem đơn' })
     if (r.tourState === 'READY')
       notices.push({ id: `${r.id}:ready`, tone: 'info', title: 'Danh sách đoàn đã được chốt', subject,
-        detail: 'Nhà trường đã chốt danh sách. Gửi link mời cho học sinh trước giờ bắt đầu.', at: r.updatedAt, to, toLabel: 'Xem link mời' })
+        detail: 'Kiểm tra hiệu lực mã và trạng thái gửi email của từng lời mời trước buổi.', at: r.updatedAt, to, toLabel: 'Xem lời mời' })
     if (start > now && start - now <= DAY)
       notices.push({ id: `${r.id}:soon`, tone: 'warn', title: `Sắp diễn ra lúc ${startLabel(r.tourScheduledStartAt, now)}`, subject, pinned: true,
         detail: 'Nhắc học sinh kiểm tra máy và vào phòng chờ sớm vài phút.', at: new Date(start - DAY).toISOString(), to, toLabel: 'Xem chi tiết' })

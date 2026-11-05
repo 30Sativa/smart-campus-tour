@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRegistrationDeadline, registrationClosesAt, withRegistrationDeadline } from './registration-deadline'
+import { applyRegistrationDeadline, newRosterRowsAllowed, registrationClosesAt, withRegistrationDeadline } from './registration-deadline'
 import type { RepresentativeRegistration } from './api/types'
 
 const start = '2026-11-10T02:00:00.000Z' // 09:00 UTC+7
@@ -26,14 +26,17 @@ describe('registration deadline (48 hours before start)', () => {
     expect(applyRegistrationDeadline(server, start, Date.parse(start))).toBe(server)
   })
 
-  it('closes edit and resubmit but leaves cancel to the server', () => {
+  it('leaves existing-row edits, resubmission and cancellation to server gates after cutoff', () => {
     const registration = {
       summary: { tourScheduledStartAt: start },
       allowedActions: { edit: open, resubmit: open, cancel: open },
     } as unknown as RepresentativeRegistration
-    const late = withRegistrationDeadline(registration, Date.parse(start) - 47 * hour)
-    expect(late.allowedActions.edit.allowed).toBe(false)
-    expect(late.allowedActions.resubmit.allowed).toBe(false)
+    const late = withRegistrationDeadline(registration)
+    expect(late.allowedActions.edit.allowed).toBe(true)
+    expect(late.allowedActions.resubmit.allowed).toBe(true)
     expect(late.allowedActions.cancel).toBe(open)
+    expect(newRosterRowsAllowed(start, Date.parse(start) - 49 * hour)).toBe(true)
+    expect(newRosterRowsAllowed(start, Date.parse(start) - 48 * hour)).toBe(false)
+    expect(newRosterRowsAllowed(start, Date.parse(start) - 47 * hour)).toBe(false)
   })
 })

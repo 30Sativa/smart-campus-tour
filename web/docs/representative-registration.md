@@ -6,42 +6,45 @@ The schema is v1.1, unchanged by this feature.
 
 ## Implemented
 
-- SCHEDULED Tour catalog/detail and owned registrations, with server pagination.
-- Multiple groups per Representative/Tour; required group name.
-- Create SUBMITTED, edit SUBMITTED, resubmit REJECTED/CANCELLED using the same ID,
-  cancel SUBMITTED/REJECTED, all while SCHEDULED. Read owned records in any state.
-- XLSX/CSV import of LoaiDong, HoTen, Email, optional Lop. CA_NHAN maps to
-  INDIVIDUAL; DIEM_XEM_CHUNG maps to SHARED_VIEWING. Source row numbers survive.
-  Shared-only groups and duplicate display names are supported. Duplicate emails
-  are rejected. Invalid files leave the accepted roster untouched.
-- Durable create retry, SQL ownership, Tour-first email reservation and optimistic
-  concurrency. Background refresh never changes the version attached to a draft.
-- Conflicts have stable API codes: stale versions require an explicit reload;
-  `EMAIL_RESERVED` returns only the incoming `Roster[i].Email` fields, so the
-  draft remains intact without exposing another group's data.
+The Representative workspace uses a compact three-destination header: overview,
+Tour catalog and owned registrations. The registration list and detail share a
+workspace; selection, filters, pagination and detail tab survive in the URL.
+Phone layouts offer a registration chooser and labelled table values. Account
+and contact information are read-only; contact values come from owned records.
 
-Effective email reservation is an application policy: active rows in SUBMITTED
-and APPROVED reserve an email per Tour. REJECTED/CANCELLED release it; resubmit
-rechecks. Admin review uses the same normalization; future email corrections must also use it
-and parent lock. The 2 MB / 1000-row limits are technical import limits; preview also bounds
-XML expansion (8 MB per part), source rows (10002) and columns (256). The API
-limits JSON to 4 MB. Tour timestamps display in Vietnam time (UTC+7).
+- One registration per Representative/Tour. Opening a Tour checks existing
+  ownership before offering a new registration; failed lookups block creation.
+- Three steps: school/contact, invitation rows, then review and consent.
+  XLSX/CSV requires LoaiDong, HoTen and Email; Lop is optional. CA_NHAN maps to
+  INDIVIDUAL and DIEM_XEM_CHUNG maps to SHARED_VIEWING. Maximum 10 viewing
+  points and 2 MB per file. Viewing points are not a student attendance count.
+- Imports require explicit acceptance. Invalid files preserve the accepted
+  roster. Existing row IDs survive matching normalized emails; replacements
+  show additions/removals and their access impact before submission.
+- A 48-hour cutoff gates new registrations and additional rows. Existing
+  updates, removals, cancellation and resubmission follow server capabilities.
+  Missing identity/version data prevents unsafe editing.
+- Detail separates per-row PENDING/ACCEPTED/REJECTED/REMOVED decisions,
+  invitation access, email-service results and email-change review. Aggregate
+  APPROVED means some rows were approved; it never implies every row passed.
+- Accepted-row email corrections use the existing owner-scoped request API,
+  with the old address remaining current until Staff approves the request.
+  The request contains no unsupported reason field.
+- Owner-scoped invitation support uses the existing capabilities and API.
+  Provider acceptance is not proof of delivery. Submission itself issues no
+  shared group code or personal access code.
+- Mutations preserve request IDs and version snapshots across uncertain
+  retries. Conflicts require explicit reload; polling never silently replaces
+  the version attached to a draft. Definitive validation responses allow a
+  corrected email request without losing its error or consent.
 
-APPROVED or any registration with invitation history is read-only in this
-roster slice. Approved roster/email changes remain deferred; invitation support
-is implemented separately under ADR-0015. Submission itself issues no access code.
-Admin review is implemented in the separate live registration pages; see
-`web/docs/admin-registration-review.md`. See backend/docs/invitations-resend.md
-for real invitation/email setup; branch requests and runtime
-remain separate slices. Existing Admin Tour/Staff/Student mocks do not see or
-review SQL registrations.
+All runtime data comes from the real API. There is no sample-data fallback,
+mock account or simulated successful email delivery. Cache entries are scoped
+to the signed-in owner and removed when the account changes. Timestamps display
+in Vietnam time (UTC+7). Backend contracts and permissions remain authoritative.
 
-The live area has no mock fallback, mock profile, group-code sharing or
-name-matching entry instructions. The unused legacy group-code invitation panel was removed. Historical contracts and simulations under
-`web/src/api/contracts/` and `web/src/mocks/` remain for their other consumers.
-The previous Representative screen tests and two-column import expectations
-were replaced with HTTP-contract and Review 1 import tests because the old
-assumptions are no longer valid. Legacy simulation tests remain legacy evidence.
+See `web/docs/admin-registration-review.md` for Staff review and
+`backend/docs/invitations-resend.md` for invitation/email configuration.
 
 ## Isolated manual end-to-end run
 
@@ -66,14 +69,14 @@ and a JWT signing key through environment/User Secrets.
 6. Sign in as the first Representative, open the Tour, download the new template,
    replace its example rows, upload and explicitly confirm it, then submit.
    Reload detail/My Registrations; the same ID and roster must persist.
-7. Register another group with different emails in that Tour. Edit the original,
+7. Reopen the same Tour and confirm it leads to the existing registration. Edit it,
    cancel it and re-register through its detail link. Each change persists.
 8. Sign in as the second Representative. Lists must contain only their groups;
    opening the first account's registration must fail with 404.
 
-9. Sign in as Admin and open `/admin/registrations/pending`; inspect the SQL
+9. Sign in as Staff and open `/staff/manage/registrations/pending`; inspect the SQL
    roster, reject with a reason, then confirm Representative can resubmit.
-   Approve the resubmission and confirm Representative sees APPROVED/read-only.
+   Approve selected rows and confirm Representative sees their individual results.
    When invitation support is enabled, approval issues/queues private codes
    and emails; otherwise review continues without issuance.
 

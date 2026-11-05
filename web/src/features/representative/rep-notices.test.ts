@@ -16,8 +16,8 @@ describe('buildRepNotices', () => {
 
   it('reports review results with a link to the registration', () => {
     const [notice] = buildRepNotices([row({ state: 'REJECTED' })], NOW)
-    expect(notice).toMatchObject({ tone: 'bad', title: 'Đơn đăng ký bị từ chối', to: '/dai-dien/dang-ky/r1', subject: 'Buổi A · Lớp 12A1' })
-    expect(buildRepNotices([row({ state: 'APPROVED' })], NOW).map((n) => n.title)).toEqual(['Đơn đăng ký đã được duyệt'])
+    expect(notice).toMatchObject({ tone: 'bad', title: 'Đơn đăng ký bị từ chối', to: '/dai-dien/dang-ky/r1', subject: 'Buổi A, Lớp 12A1' })
+    expect(buildRepNotices([row({ state: 'APPROVED' })], NOW).map((n) => n.title)).toEqual(['Đăng ký có dòng được chấp nhận'])
   })
 
   it('pins a reminder within 24 hours of the start and announces the finalised list', () => {
@@ -40,5 +40,13 @@ describe('buildRepNotices', () => {
       row({ id: 'live', state: 'APPROVED', tourState: 'RUNNING', tourScheduledStartAt: '2026-09-01T00:00:00Z' }),
     ], NOW)
     expect(notices.map((n) => n.id.split(':')[0])).toEqual(['live', 'new', 'old'])
+  })
+  it('never treats roster rows as students, seat reservations, or delivered invitations', () => {
+    const text = buildRepNotices([row({ state: 'APPROVED', rowCount: 30 })], NOW).map(n => n.detail).join(' ')
+    expect(text).not.toMatch(/30 học sinh|có chỗ|đã nhận thư|đã gửi cho đoàn/)
+    expect(text).toContain('kết quả từng dòng')
+  })
+  it('does not invite resubmission after the tour has locked changes', () => {
+    expect(buildRepNotices([row({ state: 'REJECTED', tourState: 'READY' })], NOW)[0].detail).toContain('khóa thay đổi')
   })
 })
