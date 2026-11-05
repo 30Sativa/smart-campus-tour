@@ -43,6 +43,22 @@ function verdictOf(result: TourStartChecks, confirmed: boolean, opensAt: string,
   if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: 'Đánh dấu đủ 4 xác nhận tại chỗ rồi bấm Bắt đầu.' }
   return { tone: 'ok', title: 'Sẵn sàng bắt đầu', note: 'Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.' }
 }
+/** One numbered step of the Start panel, so the server's part and the operator's part never read as one checklist. */
+function StartStep({ number, done, title, status, note }: { number: number; done: boolean; title: string; status: string; note: string }) {
+  return <div className="mb-2.5 flex items-start gap-2.5" aria-label={`Bước ${number}: ${title}`} role="group">
+    <span className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${done ? 'bg-[#ecfdf3] text-[#15803d]' : 'bg-[#f1f5f9] text-[#475569]'}`}>
+      {done ? <CircleCheck size={15} aria-hidden="true" /> : number}
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-semibold text-[#0f172a]">Bước {number}. {title}</span>
+        <span className={`shrink-0 rounded-full px-2 py-px text-[11px] font-bold tabular-nums ${done ? 'bg-[#ecfdf3] text-[#15803d]' : 'bg-[#fffaf0] text-[#8a5a06]'}`}>{status}</span>
+      </span>
+      <span className="mt-0.5 block text-[11.5px] leading-[1.45] text-[#64748b]">{note}</span>
+    </span>
+  </div>
+}
+
 const VERDICT_STYLE = {
   ok: { box: 'border-[#b8dec9] bg-[#edf8f1] text-[#236344]', icon: CircleCheck },
   info: { box: 'border-[#d8e5f7] bg-[#f5f9ff] text-[#35507a]', icon: CircleCheck },
@@ -102,11 +118,14 @@ export default function StartCheckPage() {
   const notOperator = blockedBy.includes('callerIsOperator')
   const verdict = result ? verdictOf(result, confirmed, summary.scheduledStartAt, now) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
+  const blocking = result?.checks.filter(check => checkVerdict(check, blockedBy) === 'failed').length ?? 0
+  const ticked = CONFIRMATIONS.filter(({ key }) => confirmation[key]).length
   const reason = !result ? null
     : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
     : notOperator ? `Chỉ ${operator?.fullName ?? 'người vận hành được giao'} mới bắt đầu được Tour này.`
-    : !result.canStart ? (confirmed ? 'Đã đủ 4 xác nhận, nhưng máy chủ vẫn chặn Bắt đầu: xem các mục Cần xử lý. Xác nhận tại chỗ chỉ là phần của bạn, không mở được nút khi máy chủ chưa cho phép.' : 'Nút mở khi máy chủ cho phép (mọi mục Cần xử lý đạt) và đủ 4 xác nhận tại chỗ.')
-    : !confirmed ? 'Đánh dấu đủ 4 xác nhận tại chỗ.'
+    : !result.canStart && !confirmed ? 'Còn thiếu cả bước 1 và bước 2.'
+    : !result.canStart ? 'Bước 2 đã xong. Nút còn khóa vì bước 1: máy chủ chưa cho phép.'
+    : !confirmed ? 'Bước 1 đã đạt. Đánh dấu đủ 4 xác nhận ở bước 2.'
     : null
 
   return (
@@ -144,9 +163,14 @@ export default function StartCheckPage() {
 
         <aside className="space-y-4 xl:sticky xl:top-4">
           <section className={panelClass} aria-label="Bắt đầu Tour">
-            <PanelHead title="Bắt đầu Tour" description={notOperator ? undefined : 'Người vận hành xác nhận tại chỗ'} />
+            <PanelHead title="Bắt đầu Tour" description="Nút chỉ mở khi đạt cả 2 bước dưới đây." />
             <div className="p-4">
-              {!notOperator && <fieldset className="mb-3 space-y-1.5">
+              <StartStep number={1} done={Boolean(result?.canStart)} title="Máy chủ cho phép"
+                status={!result ? '…' : result.canStart ? 'Đạt' : `Còn ${blocking} mục chặn`}
+                note="Máy chủ tự kiểm tra vài giây một lần, bạn không tick ở đây. Các mục còn chặn nằm ở phần Cần xử lý." />
+              {!notOperator && <StartStep number={2} done={confirmed} title="Xác nhận tại chỗ" status={`${ticked}/4`}
+                note="Bạn tự đánh dấu khi đang đứng cạnh robot. Đây chỉ là phần của bạn, không thay được bước 1." />}
+              {!notOperator && <fieldset className="mb-3 ml-8 space-y-1.5">
                 <legend className="sr-only">Xác nhận tại chỗ</legend>
                 {CONFIRMATIONS.map(({ key, label, hint }) => (
                   <label key={key} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 transition-colors duration-150 motion-reduce:transition-none ${confirmation[key] ? 'border-[#bfdbfe] bg-[#eff6ff]' : 'border-[#e2e8f0] hover:border-[#bfdbfe]'}`}>
