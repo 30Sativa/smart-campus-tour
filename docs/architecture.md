@@ -46,8 +46,9 @@ reservation (ADR-0034); legacy Tours store none of them. No immutable READY
 snapshot is stored: the Tour pins its exact revision. READY and Reopen are
 implemented under ADR-0042 (conditions in §3.2) for versioned Tours; a legacy
 Tour is refused READY. Start, Next, End Early, Retry leg and Reconcile are implemented
-at Application and Staff API level (M2.2-b, M2.2-c); there is no robot endpoint yet, so
-nothing reaches a robot. No Finalize or branch-request endpoint is implemented here.
+at Application and Staff API level (M2.2-b, M2.2-c);
+the robot gets its commands through the Fleet Commands v1 endpoints (§3.6). No Finalize or
+branch-request endpoint is implemented here.
 
 | Method | Path | Behavior |
 |---|---|---|
@@ -958,8 +959,8 @@ never updates the target or deletes a command. It also gains column UPDATE on
 release. `Tours.CurrentRevisionStopId`/`LastArrivedRevisionStopId` reference
 `RouteRevisionStops` for versioned Tours, and a CHECK keeps legacy Tours on the
 `RouteStop` columns and versioned Tours off them (ADR-0043 D9). Start and Next
-write these rows (M2.2-b); no robot endpoint reads them yet, and Fleet Sync v1 still
-returns `commands: []`.
+write these rows (M2.2-b); the robot reads them through Fleet Commands v1 (M2.2-d), and
+Fleet Sync v1 still returns `commands: []`.
 
 **Planned, not implemented:** an Application dispatch use case selects an
 eligible robot for a ready `Tour`, sends one conceptual navigation leg through
@@ -1094,7 +1095,7 @@ while `FleetCommands:Enabled = false`, Start returns
 | Reported `executionStatus = IDLE` | Design | TELEMETRY | fail | `executionIdle` |
 | Reported `localized = true` | Design (D4) | TELEMETRY | null fails | `robotLocalized` |
 | Reported `motionReady = true` | Design (D4) | TELEMETRY | null fails | `motionReady` |
-| Operator console connected | SRS §7 | CONSOLE: `IOperatorConsolePresence`; production has no source yet (Hub has no per-user tracking) | "chưa có nguồn → fail" | `operatorConsoleConnected` |
+| Operator console connected: the Operator holds an open `/hubs/operations` connection (in memory, per API instance, ADR-0042 open decision 4) | SRS §7 | CONSOLE: `IOperatorConsolePresence` | no connection fails | `operatorConsoleConnected` |
 | `robotPlaced = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `robotPlaced` |
 | `areaClear = true` | web StartConfirmation | OPERATOR_CONFIRMATION | missing fails | `areaClear` |
 | `attendantPresent = true` (not yet in web) | SRS §7 | OPERATOR_CONFIRMATION | missing fails | `attendantPresent` |
@@ -1759,6 +1760,16 @@ at that position. This prerequisite does not block the transport-only spike.
 
 These are M2 application guarantees, not exactly-once delivery or distributed
 consensus supplied by HTTPS or SignalR.
+
+**Fleet Commands v1 (implemented, M2.2-d).** `POST /api/fleet/commands/v1/poll` and
+`POST /api/fleet/commands/v1/{commandId}/results` follow
+[`docs/contracts/fleet-commands/v1/`](contracts/fleet-commands/v1/README.md), with the robot
+scheme and the shared `FleetSync` rate limit. Poll needs the robot's current stream heard
+within `MaxTelemetryAgeSeconds` (else 409 `STREAM_NOT_CURRENT`); a command delivered to
+another stream becomes UNKNOWN and is not redelivered. A new GoTo needs a RUNNING NORMAL
+Tour and a dispatchable robot; a Cancel is always delivered, so a robot that lost dispatch
+can still be told to stop. Disabled, both answer 503 `COMMAND_TRANSPORT_DISABLED`. Backend
+notes and error codes are in `backend/docs/fleet-commands.md`.
 
 ### 3.7 Fleet authentication and compatibility status
 

@@ -66,6 +66,7 @@
     <None Include="..\..\deploy\init-db.sh" Link="Schema\init-db.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-request.json" Link="ContractFixtures\fleet-sync\v1\sync-request.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-response-accepted.json" Link="ContractFixtures\fleet-sync\v1\sync-response-accepted.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-commands\v1\*.json" Link="ContractFixtures\fleet-commands\v1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
