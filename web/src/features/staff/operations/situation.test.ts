@@ -27,10 +27,16 @@ describe('the situation a Tour is in', () => {
   it('reads the command before the assistance reason: an UNKNOWN command calls for Reconcile, never Retry', () => {
     const unknown = tourSituation(tour('RUNNING', assist('CommandUnknown'), 'UNKNOWN', { retryLeg: allow }))
     expect(unknown.action).toBe('reconcile')
-    // An EXPIRED command was never taken by the robot; the server allows no retry after it.
-    const expired = tourSituation(tour('RUNNING', assist('CommandUnknown'), 'EXPIRED'))
-    expect(expired).toMatchObject({ action: null, onlyEndEarly: true })
     expect(tourSituation(tour('RUNNING', assist('CommandUnknown'), 'RECONCILED'))).toMatchObject({ action: null, onlyEndEarly: true })
+  })
+
+  it('follows the server on an EXPIRED leg: Retry when retryLeg is offered, End Early when it is ruled out', () => {
+    const offered = tourSituation(tour('RUNNING', assist('CommandExpired'), 'EXPIRED', { retryLeg: allow }))
+    expect(offered).toMatchObject({ action: 'retryLeg', onlyEndEarly: false })
+    expect(offered.body).toMatch(/robot chưa nhận lệnh này/)
+    expect(tourSituation(tour('RUNNING', assist('RobotDisconnected'), 'EXPIRED', { retryLeg: refuse('telemetryFresh') })).action).toBe('retryLeg')
+    // The default fixture refuses with TOUR_RETRY_NOT_ALLOWED (e.g. the robot had taken the command): nothing is invented.
+    expect(tourSituation(tour('RUNNING', assist('CommandExpired'), 'EXPIRED'))).toMatchObject({ action: null, onlyEndEarly: true })
   })
 
   it('offers Retry for a really ended leg, also while a movement check holds it, and not when the server rules it out', () => {

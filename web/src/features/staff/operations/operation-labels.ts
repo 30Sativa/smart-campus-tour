@@ -87,6 +87,7 @@ const ASSISTANCE: Record<string, { label: string; hint: string }> = {
   NavigationFailed: { label: 'Lỗi điều hướng', hint: 'Robot báo không tới được đích. Kiểm tra đường đi tại chỗ.' },
   CommandRejected: { label: 'Robot từ chối lệnh', hint: 'Robot không nhận lệnh di chuyển. Xem lý do robot báo bên dưới.' },
   CommandUnknown: { label: 'Chưa rõ kết quả lệnh', hint: 'Không biết robot đã làm gì với lệnh. Kiểm tra robot tại chỗ trước khi làm gì tiếp.' },
+  CommandExpired: { label: 'Robot không lấy lệnh kịp', hint: 'Robot vẫn gửi telemetry nhưng không lấy lệnh trước thời hạn, nên lệnh đã hết hiệu lực và robot chưa nhận lệnh này.' },
   RobotDisconnected: { label: 'Mất kết nối robot', hint: 'Robot không lấy lệnh trước thời hạn và máy chủ không còn nhận telemetry mới từ robot. Không coi là robot đã dừng: kiểm tra robot tại chỗ.' },
   BackendRestarted: { label: 'Máy chủ vừa khởi động lại', hint: 'Máy chủ không tự gửi lệnh mới sau khi khởi động lại. Robot có thể vẫn đang thực hiện lệnh cũ: xem trạng thái lệnh và kiểm tra robot tại chỗ.' },
 }

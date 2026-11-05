@@ -274,8 +274,19 @@ describe('live console on the real Tour API', () => {
     expect(screen.getByText(/Chưa thực hiện được: Chưa đủ điều kiện để robot di chuyển\. · Telemetry robot còn mới/)).toBeInTheDocument()
   })
 
-  it('says only End Early remains when the leg expired before the robot took it', async () => {
-    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandUnknown', command: { id: 'cmd-1', kind: 'GoTo', state: 'EXPIRED', outcome: null, reasonCode: 'EXPIRED' } })
+  it('offers Retry after a leg the robot never took, when the server allows it', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandExpired', command: { id: 'cmd-1', kind: 'GoTo', state: 'EXPIRED', outcome: null, reasonCode: 'EXPIRED' } }, { retryLeg: allow })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText('Cần hỗ trợ: Robot không lấy lệnh kịp')).toBeInTheDocument()
+    expect(screen.getByText(/robot chưa nhận lệnh này\. Xử lý nguyên nhân tại chỗ/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Thử lại chặng/ }))
+    confirm('Thử lại')
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toMatchObject({ path: '/api/staff/manage/tours/tour-1/retry-leg', body: { expectedRowVersion: 'AAAAAAAAB9E=' } })
+  })
+
+  it('says only End Early remains when the server rules out retrying an expired leg', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'RobotDisconnected', command: { id: 'cmd-1', kind: 'GoTo', state: 'EXPIRED', outcome: null, reasonCode: 'EXPIRED' } })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
     expect(await screen.findByText(/robot chưa nhận lệnh này\. Máy chủ không cho thử lại/)).toBeInTheDocument()
     expect(screen.getByText(/Dùng mục Kết thúc sớm/)).toBeInTheDocument()

@@ -36,10 +36,12 @@ Rules the screens follow:
   A disabled button prints the server's reason and the failing check labels.
   The browser decides nothing; the server rechecks everything under its locks.
 - The situation card (`operations/situation.ts`) reads the command state before
-  the assistance reason: an UNKNOWN GoTo points at Reconcile, never Retry; an
-  EXPIRED or RECONCILED one leaves only End Early; Retry is shown (enabled or
-  held by a movement check) only when `retryLeg` is not refused with
-  `TOUR_RETRY_NOT_ALLOWED`. Any action the server allows that the card did not
+  the assistance reason: an UNKNOWN GoTo points at Reconcile, never Retry; a
+  RECONCILED one leaves only End Early. For any other ended leg (FAILED,
+  REJECTED, or EXPIRED before the robot took it, as allowed since PR #187)
+  Retry is shown, enabled or held by a movement check, only when `retryLeg` is
+  not refused with `TOUR_RETRY_NOT_ALLOWED`; otherwise only End Early remains.
+  The console never decides retryability itself. Any action the server allows that the card did not
   expect is still offered, so the screen cannot hide a way forward.
 - Only the Tour's Operator gets controls; other Staff see the same console and
   are told who operates. End Early sits in its own panel, needs a reason, says
@@ -83,25 +85,30 @@ Rules the screens follow:
 
 | Missing | Cause | Suggested resolution |
 |---|---|---|
-| End Early, Retry leg, Reconcile | No endpoints yet (ADR-0043 lists them for M2.2) | Add `POST …/end-early`, `…/retry-leg`, `…/commands/{id}/reconcile` with the same `allowedActions` pattern; the console shows them disabled with a reason until then |
-
-Releasing a held robot is no longer missing: the Technical robots page
-(`/technical/robots`) marks robots with `needsInspection` or a holding Tour as
-"Chờ kiểm tra tại chỗ" and offers "Trả robot về sử dụng" in the robot's detail
-dialog, behind a confirmation with a required note of what was checked on site.
-It calls `POST /api/technical/physical-robots/{id}/release-inspection`
-(Technical Staff only, ADR-0043 D13) and is disabled while the holding Tour has
-not ended. The Staff console only says the robot waits for that check.
-| Marking the current stop on the route | `execution.currentRevisionStopId` is a `RouteRevisionStops.Id`, but the revision stop view has no `id` | Add `id` to `RouteRevisionStopView`, or return the stop order in `execution` |
-
-| Releasing a held robot after End Early or Reconcile | `POST /api/technical/physical-robots/{id}/release-inspection` exists (Technical Staff, ADR-0043 D13) but `/technical/*` has no screen for it | Add release-inspection to the Technical robots page; the Staff console only says the robot waits for a Technical Staff check |
-| Ended Tours that still hold an UNKNOWN command in the overview | Done from the list: `execution.needsReconcile` on the newest 100 FINISHED rows drives the overview alert and bell item "Tour đã kết thúc, còn lệnh chưa rõ kết quả cần đối soát", linking to `/staff/live/{id}`. The list has no `needsReconcile` filter, so an older ended Tour past that page is not shown; an older server sends no `execution`, so none is shown | Add a `needsReconcile` filter to the list if Tours past the newest 100 must be found |
+| Ended Tours needing Reconcile beyond the newest 100 | The overview reads `execution.needsReconcile` on the newest 100 FINISHED list rows; the list has no `needsReconcile` filter | Add the filter if older ended Tours must be found |
 | Notifying groups and revoking live/fallback/Q&A on End Early | FR-48 consequences are a follow-up (ADR-0043 D14) | The End Early dialog tells the Operator to inform groups by the usual means |
 | Tour event log | No Tour event read API | `GET …/tours/{id}/events` (TourEvents) |
 | Push updates of Tours | `TourUpdated`/`AssistanceRequired` hub events are planned only | Emit them on the hub; screens then refetch instead of polling |
 | Start can succeed | `FleetCommands:Enabled=false`, nothing sets `IsDispatchEnabled` | M2.3 safety evidence and the D11 writer |
 | Operational Twin with real pose | Needs the measured ROS map → Twin transform | Calibrate, then feed `FleetUpdated.pose` to the twin |
-| Operational status in the Tour list | Done: each `TourSummary` carries `execution` (`operationalStatus`, `assistanceReason`, `currentStep`, `commandState`, `needsReconcile`). `useRunningTours` polls the RUNNING list every 3 s and reads no detail; it reads a running Tour's detail only when an older server omits `execution` | None |
+
+Done since the first M2 console, listed so these rows are not re-opened:
+
+- End Early, Retry leg and Reconcile: `POST …/end-early`, `…/retry-leg`,
+  `…/commands/{commandId}/reconcile`, gated by `allowedActions`.
+- Current stop on the route: `RouteRevisionStopView.id` matches
+  `execution.currentRevisionStopId`/`lastArrivedRevisionStopId`, marked only while RUNNING.
+- Execution summary in the Tour list: each `TourSummary` carries `execution`
+  (`operationalStatus`, `assistanceReason`, `currentStep`, `commandState`,
+  `needsReconcile`); `useRunningTours` reads a detail only when an older server
+  omits it. Ended Tours that still need Reconcile raise an overview alert and a bell item.
+- Releasing a held robot: `/technical/robots` marks a robot that needs inspection,
+  or whose holding Tour has ended, as "Chờ kiểm tra tại chỗ" (a robot in a running
+  Tour shows "Đang chạy Tour") and offers "Trả robot về sử dụng" behind a required
+  on-site note (`POST /api/technical/physical-robots/{id}/release-inspection`,
+  Technical Staff only, ADR-0043 D13).
+- Operator console presence: `operatorConsoleConnected` counts the Operator's
+  `/hubs/operations` connections.
 
 ## Staff interface update (2026-10-30)
 

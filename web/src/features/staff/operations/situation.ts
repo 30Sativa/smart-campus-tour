@@ -55,18 +55,19 @@ export function tourSituation(detail: TourDetails): Situation {
       tone: 'danger', title: 'Lệnh đã được đối soát, Tour không chạy tiếp được', action: null, onlyEndEarly: true,
       body: 'Kết quả thật của lệnh vẫn chưa rõ, nên máy chủ không gửi thêm lệnh nào. Kết thúc sớm Tour; robot chờ kỹ thuật viên kiểm tra tại chỗ.',
     }
-    if (command?.state === 'EXPIRED') return {
-      tone: 'danger', title: `Cần hỗ trợ: ${reason.label}`, action: null, onlyEndEarly: true,
-      body: 'Robot không lấy lệnh trước thời hạn nên lệnh đã hết hiệu lực; robot chưa nhận lệnh này. Máy chủ không cho thử lại chặng sau khi hết hạn. Kiểm tra robot tại chỗ, rồi kết thúc sớm Tour nếu không tiếp tục được.',
-    }
+    // Whether this leg may be retried is the server's rule (FAILED, REJECTED, or EXPIRED never taken by the robot);
+    // a refusal for other reasons (movement checks) still shows Retry, disabled with its checks.
     const retry = actionGate(detail, 'retryLeg')
-    // Retry exists for a leg that really ended FAILED or REJECTED; a refusal for other reasons (movement checks) still shows it, disabled.
-    if (retry && (retry.allowed || !retry.blockedBy.includes('TOUR_RETRY_NOT_ALLOWED'))) return {
+    const retryable = Boolean(retry && (retry.allowed || !retry.blockedBy.includes('TOUR_RETRY_NOT_ALLOWED')))
+    const cause = command?.state === 'EXPIRED'
+      ? 'Robot không lấy lệnh trước thời hạn nên lệnh đã hết hiệu lực; robot chưa nhận lệnh này.'
+      : reason.hint
+    if (retryable) return {
       tone: 'danger', title: `Cần hỗ trợ: ${reason.label}`, action: 'retryLeg', onlyEndEarly: false,
-      body: `${reason.hint} Xử lý nguyên nhân tại chỗ rồi thử lại chặng, hoặc kết thúc sớm Tour.`,
+      body: `${cause} Xử lý nguyên nhân tại chỗ (kết nối, vị trí robot) rồi thử lại chặng, hoặc kết thúc sớm Tour.`,
     }
     return { tone: 'danger', title: `Cần hỗ trợ: ${reason.label}`, action: null, onlyEndEarly: true,
-      body: `${reason.hint} Máy chủ không cho thử lại chặng này; kết thúc sớm Tour nếu không tiếp tục được.` }
+      body: `${cause} Máy chủ không cho thử lại chặng này; kiểm tra robot tại chỗ, rồi kết thúc sớm Tour nếu không tiếp tục được.` }
   }
 
   const step = execution?.currentStep
