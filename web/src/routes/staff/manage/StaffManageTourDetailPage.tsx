@@ -9,6 +9,7 @@ import { formatSlot, formatStamp } from '../../../features/administration/admin-
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
+import { TourStepper } from '../../../features/staff/operations/TourStepper'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
 
@@ -37,7 +38,7 @@ export default function StaffManageTourDetailPage() {
   }
 
   return <AdminPage>
-    <Link to="/staff/manage/tours" className="mb-4 inline-block text-sm text-[#2d719e]">← Danh sách Tour</Link>
+    <TourStepper detail={data} page="prepare" />
     <PageHeader eyebrow={`Tour · ${TOUR_STATE_LABEL[tour.state]}`} title={tour.name} description={tour.description ?? 'Chưa có mô tả.'} action={<div className="flex flex-wrap gap-2">
       {permissions.canEditMetadata && <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('primary')}>Sửa</Link>}
       {permissions.canCancel && <button type="button" className={buttonClass('danger')} onClick={() => { cancel.reset(); setConfirming(true) }}>Hủy Tour</button>}

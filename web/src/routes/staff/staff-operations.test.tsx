@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../../components/ui/toast-store'
 import type { TourActionAvailability, TourDetails, TourStartChecks } from '../../features/administration/tours/types'
 import { useAuthStore } from '../../stores/auth-store'
+import { useTourOriginStore } from '../../features/staff/operations/tour-origin'
 import LiveOperationsPage from './LiveOperationsPage'
 import StartCheckPage from './StartCheckPage'
 import ToursTodayPage from './ToursTodayPage'
@@ -75,6 +76,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   useAuthStore.getState().logout()
   useToastStore.setState({ toasts: [] })
+  useTourOriginStore.setState({ origin: null })
 })
 
 function renderAt(path: string, route: string, element: ReactNode) {
@@ -120,8 +122,20 @@ describe('pre-start check on the real Tour API', () => {
     const robot = screen.getByRole('list', { name: 'Robot' })
     expect(within(robot).getByText('Robot tự báo')).toBeInTheDocument()
     expect(within(robot).getByText(/Bật robot và cầu nối telemetry/)).toBeInTheDocument()
-    // A Tour on another day goes back to the calendar, not to today.
-    expect(screen.getByRole('link', { name: /Lịch buổi/ })).toHaveAttribute('href', '/staff/schedule?tour=tour-1')
+    // Opened straight from a link, back goes to the calendar; the steps say where the Tour is.
+    expect(screen.getByRole('link', { name: /Lịch buổi/ })).toHaveAttribute('href', '/staff/schedule')
+    expect(within(screen.getByRole('navigation', { name: 'Các bước của Tour' })).getByText('Kiểm tra & bắt đầu').closest('li')).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('goes back to the list the Tour was opened from', async () => {
+    tour = detail('READY'); checks = OPEN_CHECKS
+    useTourOriginStore.setState({ origin: '/staff/tours?view=READY' })
+    renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
+    expect(await screen.findByRole('link', { name: /Buổi hôm nay/ })).toHaveAttribute('href', '/staff/tours?view=READY')
+    // READY: preparation is done and still opens; the console has nothing to show yet.
+    const steps = screen.getByRole('navigation', { name: 'Các bước của Tour' })
+    expect(within(steps).getByRole('link', { name: /Chuẩn bị & chốt/ })).toHaveAttribute('href', '/staff/manage/tours/tour-1')
+    expect(within(steps).queryByRole('link', { name: /Điều hành/ })).not.toBeInTheDocument()
   })
 
   it('names the assigned operator when another Staff opens the check', async () => {

@@ -1,17 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { Link, MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useAuthStore } from '../../stores/auth-store'
 import StaffShell from './StaffShell'
 import { STAFF_NAV } from './staff-nav'
+import { useTourOriginStore } from './operations/tour-origin'
 
 function renderShell(role = 'Staff', path = '/staff') {
   useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role })
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}><Routes><Route path="/staff" element={<StaffShell />}><Route index element={<h1>Tình hình điều hành</h1>} /><Route path="schedule" element={<h1>Lịch và phiên tour</h1>} /><Route path="tours/:id" element={<h1>Chi tiết tour</h1>} /></Route><Route path="/" element={<h1>Trang chủ</h1>} /></Routes></MemoryRouter></QueryClientProvider>)
 }
 
-afterEach(() => useAuthStore.getState().logout())
+afterEach(() => { useAuthStore.getState().logout(); useTourOriginStore.setState({ origin: null }) })
 
 describe('StaffShell', () => {
   it('shows the active page and only offers administration to admins', () => {
@@ -33,6 +34,24 @@ describe('StaffShell', () => {
     expect(within(nav).queryByRole('link', { name: 'Đăng ký chờ duyệt' })).not.toBeInTheDocument()
     // Nothing folds: no group toggles inside the page list.
     expect(within(nav).queryAllByRole('button', { expanded: false })).toHaveLength(0)
+  })
+
+  it('keeps a Tour page under the list it was opened from', () => {
+    useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role: 'Staff' })
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/staff/schedule?view=list']}><Routes>
+      <Route path="/staff" element={<StaffShell />}>
+        <Route path="schedule" element={<Link to="/staff/manage/tours/t1">Mở Tour</Link>} />
+        <Route path="manage/tours/:id" element={<Link to="/staff/tours/t1/start">Kiểm tra</Link>} />
+        <Route path="tours/:id/start" element={<h1>Kiểm tra trước khi bắt đầu</h1>} />
+      </Route>
+    </Routes></MemoryRouter></QueryClientProvider>)
+    fireEvent.click(screen.getByRole('link', { name: 'Mở Tour' }))
+    // Moving between the Tour's own pages does not change where it came from.
+    fireEvent.click(screen.getByRole('link', { name: 'Kiểm tra' }))
+    expect(useTourOriginStore.getState().origin).toBe('/staff/schedule?view=list')
+    const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
+    expect(within(nav).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Chi tiết Tour')).toBeInTheDocument()
   })
 
   it('shows the signed-in account at the top right and no page search', () => {

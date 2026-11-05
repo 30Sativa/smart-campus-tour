@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, CircleCheck, Play, TriangleAlert, WifiOff } from 'lucide-react'
+import { CircleCheck, Play, TriangleAlert, WifiOff } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
@@ -17,8 +17,8 @@ import { blockerOwner, checkVerdict } from '../../features/staff/operations/oper
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
+import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { untilText } from '../../features/staff/formatters'
-import { campusDay } from '../../features/administration/tours/tour-calendar'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
@@ -89,9 +89,7 @@ export default function StartCheckPage() {
   const detail = tour.data
   const { tour: summary, reservation, operator } = detail
   const header = <>
-    {campusDay(summary.scheduledStartAt) === campusDay(new Date())
-      ? <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
-      : <Link to={`/staff/schedule?tour=${summary.id}`} className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Lịch buổi</Link>}
+    <TourStepper detail={detail} page="start" />
     <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
       description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
       action={<TourStateBadge state={summary.state} />} />

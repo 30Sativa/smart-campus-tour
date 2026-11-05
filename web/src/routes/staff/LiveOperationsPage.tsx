@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleCheck, Info, LifeBuoy, OctagonAlert, RefreshCw, TriangleAlert, UserRound, WifiOff } from 'lucide-react'
+import { CircleCheck, Info, LifeBuoy, OctagonAlert, RefreshCw, TriangleAlert, UserRound, WifiOff } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
@@ -12,6 +12,7 @@ import { isTourStale, useDayTours, useOperationTour, useRunningTours } from '../
 import { CommandCard, ExecutionPanel, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { tourSituation, type ConsoleAction, type Situation } from '../../features/staff/operations/situation'
 import { ConsoleActionButton, EndEarlyAction } from '../../features/staff/operations/TourActions'
+import { TourStepper } from '../../features/staff/operations/TourStepper'
 import { useAuthStore } from '../../stores/auth-store'
 
 /**
@@ -63,7 +64,7 @@ function TourConsole({ tourId }: { tourId: string }) {
 
   return (
     <StaffPage wide>
-      <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-3 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
+      <TourStepper detail={detail} page="live" />
       <PageHeader eyebrow="Điều hành trực tiếp" title={summary.name}
         description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? '-'} · người vận hành ${operator?.fullName ?? '-'}`}
         action={<><TourStateBadge state={summary.state} /><Link to={`/staff/manage/tours/${summary.id}`} className={buttonClass('secondary', 'sm')}>Thông tin Tour</Link></>} />
