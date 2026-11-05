@@ -9,8 +9,13 @@ This page records backend behavior. Decisions: ADR-0042, ADR-0043.
 | `POST /api/fleet/commands/v1/{commandId}/results` | Records one phase of one command. |
 
 Both use the Fleet Sync robot scheme (`Authorization: Bearer`, `X-Robot-Code`). User JWTs get 401.
-`FleetCommands:Enabled` is false by default, and both endpoints then answer 503
-`COMMAND_TRANSPORT_DISABLED`. Fleet Sync v1 stays telemetry-only: `commands` is always `[]`.
+Fleet Sync v1 stays telemetry-only: `commands` is always `[]`.
+
+`FleetCommands:Enabled` is false by default and gates movement only (ADR-0043, M2.2-f). While it is false,
+Start, Next and Retry refuse with `COMMAND_TRANSPORT_DISABLED` and poll hands out no GoTo. Everything else keeps
+running: poll checks the stream, applies the timeouts and delivers an open Cancel; results are always recorded;
+the sweeper and restart recovery always run. Neither endpoint answers 503. Restart recovery stops startup on
+failure only while the flag is true; while it is false a failure is logged and the API starts.
 
 ## Poll
 
@@ -21,7 +26,10 @@ Both use the Fleet Sync robot scheme (`Authorization: Bearer`, `X-Robot-Code`). 
 - Polling again on the same stream returns the same command.
 - A command delivered to another stream becomes UNKNOWN (`STREAM_CHANGED`) and is not redelivered, using the sweeper's rule.
 - A Cancel goes before its GoTo and is always delivered, so a robot that lost dispatch can still be told to stop.
-- A new GoTo needs a RUNNING NORMAL Tour and a robot with `IsDispatchEnabled = 1` and `NeedsInspection = 0`.
+  End Early queues one even for an UNKNOWN GoTo; the current stream receives it, as a best effort that proves
+  nothing about the robot stopping.
+- A GoTo is handed out only while `FleetCommands:Enabled = true`; a new one also needs a RUNNING NORMAL Tour and a
+  robot with `IsDispatchEnabled = 1` and `NeedsInspection = 0`.
 
 ## Results
 
@@ -36,7 +44,8 @@ The acknowledgement is sent after the transaction commits. `data` is `{accepted,
 | 409 | `RESULT_CONFLICT` | Different content for a recorded phase, or a `legId` that is not the command's. |
 | 409 | `RESULT_STREAM_MISMATCH` | Not the stream that received the command. |
 | 409 | `RESULT_PHASE_NOT_ALLOWED` | Transition not allowed. |
-| 503 | `COMMAND_TRANSPORT_DISABLED` | Commands are off; keep terminal results and retry. |
+
+Results are recorded whatever `FleetCommands:Enabled` says.
 
 ## Rate limit
 

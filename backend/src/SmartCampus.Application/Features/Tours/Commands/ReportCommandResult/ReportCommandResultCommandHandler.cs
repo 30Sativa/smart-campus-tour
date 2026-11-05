@@ -12,14 +12,13 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 /// <summary>
 /// Records one robot result under the Tour lock (ADR-0042 §3). The acknowledgement follows the commit, an exact repeat has
 /// no further effect, and only a result for the Tour's current leg moves the Tour; any other is recorded and changes nothing.
+/// Accepted whatever <c>FleetCommands:Enabled</c> says: what the robot reports it did is never refused.
 /// </summary>
 public sealed class ReportCommandResultCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, FleetCommandSettings settings, TimeProvider clock) : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
+    IRouteRevisionRepository revisions, TimeProvider clock) : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
 {
     public async Task<CommandResultAck> Handle(ReportCommandResultCommand result, CancellationToken ct)
     {
-        if (!settings.Enabled)
-            throw new ServiceUnavailableException("Command transport đang tắt.", TourStartPreflight.TransportDisabledCode);
         var known = await repository.FindCommandAsync(result.CommandId, ct);
         if (known is null || await revisions.GetRobotCodeAsync(known.RobotId, ct) != result.RobotCode)
             throw new NotFoundException("Không tìm thấy lệnh của robot này.", "COMMAND_NOT_FOUND");

@@ -14,6 +14,8 @@ public static class TourRuntime
     public const string NavigationFailed = "NavigationFailed";
     public const string CommandRejected = "CommandRejected";
     public const string CommandUnknown = "CommandUnknown";
+    /// <summary>A GoTo expired undelivered while telemetry was fresh: the robot provably never received it.</summary>
+    public const string CommandExpired = "CommandExpired";
     public const string RobotDisconnected = "RobotDisconnected";
     public const string BackendRestarted = "BackendRestarted";
 }

@@ -167,7 +167,7 @@ Lock order must match ADR-0039 (deployment and reservation locks taken by Tour c
 
 ### 6. Guards
 
-- **[Design]** `FleetCommands:Enabled`, default `false`. While false: Start is refused (`COMMAND_TRANSPORT_DISABLED`), both robot endpoints return `503 COMMAND_TRANSPORT_DISABLED`, no command row is written.
+- **[Design]** `FleetCommands:Enabled`, default `false`. While false: Start is refused (`COMMAND_TRANSPORT_DISABLED`), both robot endpoints return `503 COMMAND_TRANSPORT_DISABLED`, no command row is written. *(Refined by ADR-0043, M2.2-f: the flag gates movement only; poll still delivers an open Cancel but no GoTo, results are always recorded, and the robot endpoints no longer answer 503.)*
 - **[Design]** Per-robot `Robots.IsDispatchEnabled` must be true for Start. Per ADR-0039 nothing sets it true today, so every Start fails this check until a writer is added. It may be set true for a physical robot only after M2.3 evidence:
   - robot stops locally on heartbeat loss within ≤3 s **[SRS §7]**, covering bridge crash and silent loss **[§6]**;
   - exactly one Nav2 goal sender: `route_test.py`, RViz and the bridge never compete **[§3.5]**;

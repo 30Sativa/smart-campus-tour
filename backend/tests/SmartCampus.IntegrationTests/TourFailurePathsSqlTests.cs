@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
+using SmartCampus.Application.Features.Tours.Commands.PollRobotCommand;
 using SmartCampus.Application.Features.Tours.Commands.ReconcileRobotCommand;
 using SmartCampus.Application.Features.Tours.Commands.RecoverTourAfterRestart;
 using SmartCampus.Application.Features.Tours.Commands.ReleaseRobotInspection;
@@ -52,6 +54,38 @@ public sealed class TourFailurePathsSqlTests
         var cancel = await db.RobotCommands.AsNoTracking().SingleAsync(c => c.Kind == "Cancel");
         Assert.Equal(("PENDING", goTo.LegId, (Guid?)goTo.Id, true), (cancel.State, cancel.LegId, cancel.TargetCommandId, cancel.IsOpen));
         Assert.Equal(accepted ? "ACCEPTED" : "DELIVERED", (await db.RobotCommands.AsNoTracking().SingleAsync(c => c.Id == goTo.Id)).State);
+    }
+
+    [SchemaV11Fact]
+    public async Task EndEarly_WithAnUnknownGoTo_QueuesABestEffortCancel_ThatTheCurrentStreamReceives()
+    {
+        await using var w = await World.Create(enabled: true);
+        await Start(w);
+        var goTo = await Delivered(w);
+        await Unknown(w, goTo);
+        await EndEarly(w);
+
+        await using (var db = w.H.Context())
+        {
+            var cancel = await db.RobotCommands.AsNoTracking().SingleAsync(c => c.Kind == "Cancel");
+            Assert.Equal(("PENDING", goTo.LegId, (Guid?)goTo.Id), (cancel.State, cancel.LegId, cancel.TargetCommandId));
+            // The GoTo stays UNKNOWN for Reconcile: a queued Cancel proves nothing about the robot.
+            Assert.Equal(("UNKNOWN", true), await db.RobotCommands.AsNoTracking().Where(c => c.Id == goTo.Id).Select(c => ValueTuple.Create(c.State, c.IsOpen)).SingleAsync());
+            var requested = await db.TourEvents.AsNoTracking().SingleAsync(e => e.EventType == TourLifecycleEvents.LegCancelRequested);
+            Assert.Equal(((Guid?)cancel.Id, (Guid?)goTo.LegId, (Guid?)w.H.OperatorId), (requested.CommandId, requested.LegId, requested.ActorUserId));
+            Assert.Equal("CANCELLED", (await db.Tours.AsNoTracking().SingleAsync(t => t.Id == w.H.TourId)).State);
+        }
+
+        // The stream the backend hears now gets the Cancel, although an earlier stream received the GoTo.
+        var polled = await w.H.Send(new PollRobotCommandCommand(TourReadySqlTests.Robot, w.Stream));
+        Assert.Equal((RobotCommandKinds.Cancel, goTo.LegId, "DELIVERED", (Guid?)w.Stream),
+            (polled.Command!.Kind, polled.Command.LegId, polled.Command.State, polled.Command.DeliveredStreamId));
+
+        // Reconcile closes the Cancel with its GoTo, so nothing is left open to block the release.
+        await Reconcile(w, goTo.Id);
+        await using (var db = w.H.Context())
+            Assert.Equal(0, await db.RobotCommands.CountAsync(c => c.IsOpen));
+        await Release(w);
     }
 
     [SchemaV11Fact]
@@ -157,6 +191,48 @@ public sealed class TourFailurePathsSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task Retry_AfterExpired_SendsANewLegToTheSameTarget()
+    {
+        await using var w = await World.Create(enabled: true);
+        await Start(w);
+        var old = await Expire(w, freshTelemetry: true);
+        var detail = await w.H.Send(new SmartCampus.Application.Features.Tours.Queries.GetTour.GetTourQuery(w.H.TourId, w.H.OperatorId));
+        Assert.Equal(("NEEDS_ASSISTANCE", "CommandExpired", "EXPIRED"),
+            (detail.Execution!.OperationalStatus, detail.Execution.AssistanceReason, detail.Execution.Command!.State));
+        Assert.True(detail.AllowedActions!.RetryLeg.Allowed);
+
+        await Retry(w);
+
+        var execution = (await w.H.Detail()).Execution!;
+        Assert.Equal(("NORMAL", (string?)null), (execution.OperationalStatus, execution.AssistanceReason));
+        var next = await Current(w);
+        Assert.NotEqual(old.LegId, next.LegId);
+        Assert.Equal((old.X, old.Y, old.RouteRevisionStopId, "PENDING"), (next.X, next.Y, next.RouteRevisionStopId, next.State));
+        Assert.Equal(next.LegId, execution.CurrentLegId);
+    }
+
+    [SchemaV11Fact]
+    public async Task Retry_AfterExpired_StillNeedsTheMovementChecks()
+    {
+        await using var w = await World.Create(enabled: true);
+        await Start(w);
+        await Expire(w, freshTelemetry: false);
+        Assert.Equal("RobotDisconnected", (await w.H.Detail()).Execution!.AssistanceReason);
+        // The robot is not heard: the expired leg may be retried, but not before telemetry is fresh again.
+        Assert.Equal(["telemetryFresh"], (await Assert.ThrowsAsync<ConflictException>(() => Retry(w))).BlockedBy);
+        await w.Report(status: "NAVIGATING");
+        Assert.Equal(["executionIdle"], (await Assert.ThrowsAsync<ConflictException>(() => Retry(w))).BlockedBy);
+        await w.Report(localized: false);
+        Assert.Equal(["robotLocalized"], (await Assert.ThrowsAsync<ConflictException>(() => Retry(w))).BlockedBy);
+        await using (var db = w.H.Context())
+            Assert.Single(await db.RobotCommands.AsNoTracking().ToArrayAsync());
+
+        await w.Report();
+        await Retry(w);
+        Assert.Equal("NORMAL", (await w.H.Detail()).Execution!.OperationalStatus);
+    }
+
+    [SchemaV11Fact]
     public async Task Retry_IsRefused_WhileNormal_UnknownOrReconciled()
     {
         await using var w = await World.Create(enabled: true);
@@ -244,7 +320,8 @@ public sealed class TourFailurePathsSqlTests
         Assert.False(await w.H.Send(new SweepRobotCommandCommand(goTo.Id)));
 
         var execution = (await w.H.Detail()).Execution!;
-        Assert.Equal(("NEEDS_ASSISTANCE", "CommandUnknown", "EXPIRED"), (execution.OperationalStatus, execution.AssistanceReason, execution.Command!.State));
+        // Fresh telemetry and no delivery: the robot provably never received it, which is not an unknown outcome.
+        Assert.Equal(("NEEDS_ASSISTANCE", "CommandExpired", "EXPIRED"), (execution.OperationalStatus, execution.AssistanceReason, execution.Command!.State));
     }
 
     [SchemaV11Fact]
@@ -320,6 +397,9 @@ public sealed class TourFailurePathsSqlTests
         Assert.Equal(("RUNNING", "NEEDS_ASSISTANCE", "BackendRestarted"), (tour.State, tour.OperationalStatus, tour.AssistanceReason));
         var command = await db.RobotCommands.AsNoTracking().SingleAsync();
         Assert.Equal((goTo.Id, "EXPIRED", "BACKEND_RESTARTED"), (command.Id, command.State, command.ReasonCode));
+        // Resuming after a restart is a separate decision: an EXPIRED leg does not make it retryable.
+        await w.Report();
+        Assert.Equal("TOUR_RETRY_NOT_ALLOWED", (await Assert.ThrowsAsync<ConflictException>(() => Retry(w))).Code);
     }
 
     [SchemaV11Fact]
@@ -360,6 +440,16 @@ public sealed class TourFailurePathsSqlTests
         Assert.Equal(("NEEDS_ASSISTANCE", "CommandUnknown", "UNKNOWN", reason), (execution.OperationalStatus, execution.AssistanceReason, execution.Command!.State, execution.Command.ReasonCode));
         await using var db = w.H.Context();
         Assert.True((await db.RobotCommands.AsNoTracking().SingleAsync()).IsOpen);
+    }
+
+    /// <summary>The undelivered GoTo passes its AcceptBy and the sweeper expires it, with or without fresh telemetry.</summary>
+    private static async Task<RobotCommand> Expire(World w, bool freshTelemetry)
+    {
+        var goTo = await Current(w);
+        w.Clock.Now = goTo.AcceptBy!.Value.AddSeconds(1);
+        if (freshTelemetry) await w.Report();
+        Assert.True(await w.H.Send(new SweepRobotCommandCommand(goTo.Id)));
+        return goTo;
     }
 
     private static async Task Unknown(World w, RobotCommand goTo)

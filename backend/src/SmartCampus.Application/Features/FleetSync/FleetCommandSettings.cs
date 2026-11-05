@@ -1,9 +1,11 @@
 namespace SmartCampus.Application.Features.FleetSync;
 
 /// <summary>
-/// The <c>FleetCommands</c> section of ADR-0042. Off by default: while <see cref="Enabled"/> is false Start refuses and no
-/// command row is written. Turning it on does not move a physical robot by itself: <c>IsDispatchEnabled</c> has no writer
-/// before M2.3.
+/// The <c>FleetCommands</c> section of ADR-0042. <see cref="Enabled"/> (off by default) only gates movement: while it is
+/// false Start, Next and Retry refuse, so no GoTo row is written, and poll hands out no GoTo. Everything that makes the
+/// robot safer keeps running: poll still checks the stream, applies the timeouts and delivers an open Cancel, results are
+/// always recorded, and the sweeper and restart recovery always run. Turning it on does not move a physical robot by
+/// itself: <c>IsDispatchEnabled</c> has no writer before M2.3.
 /// </summary>
 public sealed class FleetCommandSettings
 {

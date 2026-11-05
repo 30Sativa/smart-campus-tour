@@ -1150,14 +1150,17 @@ this flow until M2.5 (ADR-0043 D8).
 
 **Failure paths (M2.2-c, ADR-0043).** A hosted sweeper applies the ADR-0043 timeout
 rules, one transaction per transition, decided again under the Tour and command locks
-so two sweepers make one transition. A GoTo that becomes UNKNOWN or EXPIRED on the
-current leg moves a NORMAL Tour to `NEEDS_ASSISTANCE` (`CommandUnknown`, or
-`RobotDisconnected` for an expiry with stale telemetry). Before the server accepts
-requests, restart recovery moves every RUNNING Tour to `NEEDS_ASSISTANCE`
-(`BackendRestarted`, keeping an existing reason), clears the dwell deadline and expires
-PENDING GoTos; a failure stops startup. Delivered commands wait for their result or the
-sweeper, and nothing continues by itself. Both run only while `FleetCommands:Enabled = true`.
-A Cancel closes with its GoTo (reason `LEG_ENDED`) so a robot can be released.
+so two sweepers make one transition. A GoTo that becomes UNKNOWN on the current leg
+moves a NORMAL Tour to `NEEDS_ASSISTANCE` (`CommandUnknown`); one that EXPIRES
+undelivered does so with `CommandExpired` (fresh telemetry) or `RobotDisconnected`
+(stale telemetry), and Retry leg is allowed from either because the robot never received
+it. Before the server accepts requests, restart recovery moves every RUNNING Tour to
+`NEEDS_ASSISTANCE` (`BackendRestarted`, keeping an existing reason), clears the dwell
+deadline and expires PENDING GoTos. Delivered commands wait for their result or the
+sweeper, and nothing continues by itself. Both run whatever `FleetCommands:Enabled` says;
+a recovery failure stops startup only while it is true. End Early with an UNKNOWN GoTo
+queues a best-effort Cancel and leaves the GoTo UNKNOWN for Reconcile; that is no evidence
+the robot stopped. A Cancel closes with its GoTo (reason `LEG_ENDED`) so a robot can be released.
 
 Not in this preflight, still required before a full Tour (ADR-0042 open
 decisions 1 and 5): head FRONT (ADR-0008), live stream, FR-49 camera preset and
@@ -1770,8 +1773,11 @@ scheme and the shared `FleetSync` rate limit. Poll needs the robot's current str
 within `MaxTelemetryAgeSeconds` (else 409 `STREAM_NOT_CURRENT`); a command delivered to
 another stream becomes UNKNOWN and is not redelivered. A new GoTo needs a RUNNING NORMAL
 Tour and a dispatchable robot; a Cancel is always delivered, so a robot that lost dispatch
-can still be told to stop. Disabled, both answer 503 `COMMAND_TRANSPORT_DISABLED`. Backend
-notes and error codes are in `backend/docs/fleet-commands.md`.
+can still be told to stop. `FleetCommands:Enabled = false` gates movement only (M2.2-f):
+poll still checks the stream, applies the timeouts and delivers an open Cancel, but hands
+out no GoTo; results are always recorded. Neither endpoint answers 503
+`COMMAND_TRANSPORT_DISABLED` any more. Backend notes and error codes are in
+`backend/docs/fleet-commands.md`.
 
 ### 3.7 Fleet authentication and compatibility status
 

@@ -27,7 +27,9 @@ public sealed class PollRobotCommandCommandValidator : AbstractValidator<PollRob
 /// <summary>
 /// Delivers the robot's one current command (ADR-0042 §1, §3). Bound to telemetry: only the stream the backend currently
 /// hears gets anything. A new stream never receives what an earlier stream received; that command becomes UNKNOWN.
-/// A Cancel goes first and is always delivered; a new GoTo needs a healthy Tour and a dispatchable robot.
+/// A Cancel goes first and is always delivered; a GoTo needs <c>FleetCommands:Enabled</c>, and a new GoTo also a healthy
+/// Tour and a dispatchable robot. The flag only stops movement: with it off the stream check, the timeouts and Cancel
+/// delivery still run, so turning it off never strands a Cancel.
 /// </summary>
 public sealed class PollRobotCommandCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
     IRouteRevisionRepository revisions, IFleetTelemetryStore telemetry, FleetCommandSettings settings, TimeProvider clock)
@@ -35,8 +37,6 @@ public sealed class PollRobotCommandCommandHandler(ITourManagementRepository rep
 {
     public async Task<RobotCommandPollResult> Handle(PollRobotCommandCommand poll, CancellationToken ct)
     {
-        if (!settings.Enabled)
-            throw new ServiceUnavailableException("Command transport đang tắt.", TourStartPreflight.TransportDisabledCode);
         var now = clock.GetUtcNow();
         var snapshot = RobotTelemetry.Latest(telemetry, poll.RobotCode);
         if (snapshot is null || snapshot.Report.StreamId != poll.StreamId || now - snapshot.ReceivedAt > settings.MaxTelemetryAge)
@@ -54,7 +54,7 @@ public sealed class PollRobotCommandCommandHandler(ITourManagementRepository rep
 
         if (cancel is { IsOpen: true })
             return new(Deliver(tour, cancel, poll.StreamId, now));
-        if (!goTo.IsOpen || goTo.State == RobotCommandStates.Unknown) return new(null);
+        if (!goTo.IsOpen || goTo.State == RobotCommandStates.Unknown || !settings.Enabled) return new(null);
         if (goTo.State == RobotCommandStates.Pending && !CanSendMovement(tour, robot)) return new(null);
         return new(Deliver(tour, goTo, poll.StreamId, now));
     }
