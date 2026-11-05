@@ -72,6 +72,7 @@ const StaffManagePoisPage = lazy(() => import('../../routes/staff/manage/StaffMa
 const StaffManagePoiFormPage = lazy(() => import('../../routes/staff/manage/StaffManagePoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 const AdminRobotCredentialsPage = lazy(() => import('../../routes/admin/AdminRobotCredentialsPage'))
+const AdminInfrastructurePage = lazy(() => import('../../routes/admin/AdminInfrastructurePage'))
 const AdminAuditLogsPage = lazy(() => import('../../routes/admin/AdminAuditLogsPage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
@@ -267,6 +268,7 @@ export const routes = [
       { path: 'accounts', element: <AdminAccountsPage /> },
       { path: 'roles', element: <RolesPage /> },
       { path: 'robot-credentials', element: <AdminRobotCredentialsPage /> },
+      { path: 'infrastructure', element: <AdminInfrastructurePage /> },
       { path: 'audit-logs', element: <AdminAuditLogsPage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },

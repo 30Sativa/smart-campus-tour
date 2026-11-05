@@ -759,6 +759,9 @@ Gazebo -> gazebo_preview_bridge -> /api/simulation/pose
 | Boundary | Clients and purpose |
 |---|---|
 | `/api/fleet/v1/sync` | HTTPS robot-to-backend telemetry report and empty-command reconciliation response. |
+| `/api/fleet/v1/diagnostics` | Authenticated robot hardware/ROS diagnostics report; separate from sync and does not carry commands. |
+| `/api/admin/infrastructure/health` | Admin-only read of backend-host/runtime, database connectivity, Docker and backup-marker status. |
+| `/api/technical/dashboard`, `/api/technical/robots/{robotCode}/diagnostics` | TechnicalStaff-only fleet overview and per-robot diagnostic view. |
 | `/hubs/operations` | Staff-only SignalR projection, including latest fleet telemetry. |
 | `/hubs/simulation` | Existing development-only SimulationPreview; unchanged. |
 
@@ -873,6 +876,34 @@ remains valid until expiry under current API authentication. Its legacy
 `syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
 remain separate. Neither a new sync nor a pose sample implies localization or
 motion readiness. No command is emitted by v1.
+
+#### 3.1.3 Fleet and infrastructure diagnostics (implemented monitoring slice)
+
+`POST /api/fleet/v1/diagnostics` accepts a report from the authenticated robot
+identified by the Fleet Robot credential. The body carries `robotId`, UTC
+`reportedAt`, and optional `miniPc`, `ros2`, and `sensors` snapshots. The
+reported robot ID must match the authenticated identity; report age is limited
+to two minutes in the past and 15 seconds in the future, with CPU and
+temperature bounds validated. The latest report is held in process memory and
+clears on restart. This endpoint reports observations only: it does not change
+Fleet Sync v1, ROS ownership, map assignment, readiness, or command transport.
+
+`GET /api/technical/dashboard` and
+`GET /api/technical/robots/{robotCode}/diagnostics` require the
+`TechnicalStaff` role. They combine persisted physical-robot/map/deployment
+records with the latest in-memory Fleet Sync and diagnostics snapshots. Missing
+or stale telemetry and diagnostics remain independently visible. The dashboard
+includes action items and counts for robot connection state, inspection holds,
+POI verification and route-test queues.
+
+`GET /api/admin/infrastructure/health` requires the `Admin` role and reports
+the API process host/runtime, a bounded database connectivity check, Docker
+availability, and the last-backup marker. Docker container details are
+currently a fixed two-container projection when the Docker socket is present;
+they are not queried from the Docker API. Host metrics depend on the runtime
+environment and may be unavailable on unsupported hosts. Backup health reads
+`/var/lib/campustour/backup-last-success`; absence of that marker is
+`NOT_RECORDED`, not proof that no backup exists.
 
 #### 3.1.1 POI target invariant
 

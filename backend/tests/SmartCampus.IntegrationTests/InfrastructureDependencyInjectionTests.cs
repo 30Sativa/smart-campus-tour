@@ -80,5 +80,10 @@ public sealed class InfrastructureDependencyInjectionTests
         Assert.Equal(TimeSpan.FromSeconds(30), settings.AcceptWindow);
         // No per-user console tracking yet: presence is unknown, never connected.
         Assert.Null(provider.GetRequiredService<IOperatorConsolePresence>().IsConnected(Guid.NewGuid()));
+
+        // Verification of monitoring and diagnostics DI registrations
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<SmartCampus.Application.Features.Infrastructure.IInfrastructureMetricsCollector>());
+        Assert.NotNull(provider.GetRequiredService<SmartCampus.Application.Features.RobotDiagnostics.IRobotDiagnosticsStore>());
     }
 }

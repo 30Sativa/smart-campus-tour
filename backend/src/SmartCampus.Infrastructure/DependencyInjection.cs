@@ -16,9 +16,13 @@ using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Application.Common.Abstractions.Invitations;
 using SmartCampus.Infrastructure.Integrations.Invitations;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.Infrastructure;
 using SmartCampus.Application.Features.MapPoi;
+using SmartCampus.Application.Features.RobotDiagnostics;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
+using SmartCampus.Infrastructure.Integrations.RobotDiagnostics;
+using SmartCampus.Infrastructure.Services;
 
 namespace SmartCampus.Infrastructure;
 
@@ -44,6 +48,8 @@ public static class DependencyInjection
         services.AddScoped<IRobotMapAssignmentManager, EfRobotMapAssignmentManager>();
         services.AddScoped<IPhysicalRobotCredentialManager, EfPhysicalRobotCredentialManager>();
         services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
+        services.AddSingleton<IRobotDiagnosticsStore, InMemoryRobotDiagnosticsStore>();
+        services.AddScoped<IInfrastructureMetricsCollector, InfrastructureMetricsCollector>();
         services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
         services.AddSingleton(new FleetCommandSettings(configuration.GetValue<bool?>("FleetCommands:Enabled") ?? false,
             configuration.GetValue<int?>("FleetCommands:MaxTelemetryAgeSeconds") ?? 2,

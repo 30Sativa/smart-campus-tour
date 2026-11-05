@@ -213,6 +213,24 @@ describe('route table', () => {
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
     })
 
+    it('opens infrastructure monitoring for Admin', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+        success: true,
+        data: {
+          collectedAt: '2026-11-05T08:00:00Z',
+          host: { machineName: 'test-host', osDescription: 'Linux', osArchitecture: 'X64', processorCount: 4, cpuPercent: 10, loadAverages: null, memory: { totalBytes: 100, availableBytes: 50, usedBytes: 50, usedPercent: 50, swapTotalBytes: null, swapUsedBytes: null, swapUsedPercent: null }, disk: { mountPoint: '/', driveFormat: 'ext4', totalBytes: 100, availableFreeBytes: 50, usedBytes: 50, usedPercent: 50, status: 'HEALTHY' }, network: [], hostUptimeSeconds: 100, status: 'HEALTHY' },
+          runtime: { frameworkVersion: '.NET', environment: 'Test', processUptimeSeconds: 100, workingSetBytes: 100, gcTotalMemoryBytes: 100, threadCount: 1 },
+          database: { status: 'ONLINE', canConnect: true, latencyMs: 1, provider: 'test', error: null },
+          docker: { status: 'NOT_CONFIGURED', message: null, totalContainers: 0, runningContainers: 0, unhealthyContainers: 0, containers: [] },
+          backup: { status: 'NOT_RECORDED', lastBackupTimestamp: null, ageHours: null, target: null, sizeBytes: null, message: null },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+      signIn('Admin')
+      const router = renderAt('/admin/infrastructure')
+      await settled(router, '/admin/infrastructure')
+      expect(await screen.findByRole('heading', { name: /Hạ tầng máy chủ/i })).toBeInTheDocument()
+    })
+
     it('shows credential audit to Admin and redirects other roles away', async () => {
       vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
         success: true,
