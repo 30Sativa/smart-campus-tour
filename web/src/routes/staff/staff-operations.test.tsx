@@ -101,7 +101,10 @@ describe('pre-start check on the real Tour API', () => {
     tickAll()
     expect(screen.getAllByRole('checkbox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeDisabled()
-    expect(screen.getByText(/Đã đủ 4 xác nhận, nhưng máy chủ vẫn chặn Bắt đầu/)).toBeInTheDocument()
+    // The server's part and the operator's part are separate steps: ticking all four does not open Start.
+    expect(within(screen.getByRole('group', { name: 'Bước 1: Máy chủ cho phép' })).getByText('Còn 2 mục chặn')).toBeInTheDocument()
+    expect(within(screen.getByRole('group', { name: 'Bước 2: Xác nhận tại chỗ' })).getByText('4/4')).toBeInTheDocument()
+    expect(screen.getByText('Bước 2 đã xong. Nút còn khóa vì bước 1: máy chủ chưa cho phép.')).toBeInTheDocument()
   })
 
   it('says when a Tour opened ahead of its day can start, and what the robot still has to report', async () => {
