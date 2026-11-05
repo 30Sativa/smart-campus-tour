@@ -83,6 +83,17 @@ Rules the screens follow:
 
 | Missing | Cause | Suggested resolution |
 |---|---|---|
+| End Early, Retry leg, Reconcile | No endpoints yet (ADR-0043 lists them for M2.2) | Add `POST …/end-early`, `…/retry-leg`, `…/commands/{id}/reconcile` with the same `allowedActions` pattern; the console shows them disabled with a reason until then |
+
+Releasing a held robot is no longer missing: the Technical robots page
+(`/technical/robots`) marks robots with `needsInspection` or a holding Tour as
+"Chờ kiểm tra tại chỗ" and offers "Trả robot về sử dụng" in the robot's detail
+dialog, behind a confirmation with a required note of what was checked on site.
+It calls `POST /api/technical/physical-robots/{id}/release-inspection`
+(Technical Staff only, ADR-0043 D13) and is disabled while the holding Tour has
+not ended. The Staff console only says the robot waits for that check.
+| Marking the current stop on the route | `execution.currentRevisionStopId` is a `RouteRevisionStops.Id`, but the revision stop view has no `id` | Add `id` to `RouteRevisionStopView`, or return the stop order in `execution` |
+
 | Releasing a held robot after End Early or Reconcile | `POST /api/technical/physical-robots/{id}/release-inspection` exists (Technical Staff, ADR-0043 D13) but `/technical/*` has no screen for it | Add release-inspection to the Technical robots page; the Staff console only says the robot waits for a Technical Staff check |
 | Ended Tours that still hold an UNKNOWN command in the overview | Done from the list: `execution.needsReconcile` on the newest 100 FINISHED rows drives the overview alert and bell item "Tour đã kết thúc, còn lệnh chưa rõ kết quả cần đối soát", linking to `/staff/live/{id}`. The list has no `needsReconcile` filter, so an older ended Tour past that page is not shown; an older server sends no `execution`, so none is shown | Add a `needsReconcile` filter to the list if Tours past the newest 100 must be found |
 | Notifying groups and revoking live/fallback/Q&A on End Early | FR-48 consequences are a follow-up (ADR-0043 D14) | The End Early dialog tells the Operator to inform groups by the usual means |

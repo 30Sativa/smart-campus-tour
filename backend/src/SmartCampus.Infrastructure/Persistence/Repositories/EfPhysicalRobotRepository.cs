@@ -13,6 +13,7 @@ public sealed class EfPhysicalRobotRepository(ApplicationDbContext dbContext) : 
             .Include(robot => robot.CredentialRevokedByUser)
             .Include(robot => robot.AssignedMapVersion).ThenInclude(map => map!.AreaKeyNavigation)
             .Include(robot => robot.MapAssignedByUser)
+            .Include(robot => robot.CurrentTour)
             .OrderBy(robot => robot.DisplayName).ThenBy(robot => robot.RobotCode)
             .ToArrayAsync(cancellationToken);
 
