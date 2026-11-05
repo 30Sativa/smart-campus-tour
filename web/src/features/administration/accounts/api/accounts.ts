@@ -15,6 +15,8 @@ function listPath(query: AccountListQuery): string {
 export const accountsApi = {
   list: (query: AccountListQuery) => apiClient<PagedApiResponse<AccountListItem>>(listPath(query)),
   create: (input: CreateAccountInput) => apiClient<ApiResponse<AccountListItem>>('/api/admin/accounts', { method: 'POST', json: input }),
+  /** Only the full name is editable; username and role are fixed after creation. */
+  update: (id: string, fullName: string) => apiClient<ApiResponse<AccountListItem>>(`/api/admin/accounts/${id}`, { method: 'PUT', json: { fullName } }),
   deactivate: (id: string) => apiClient<ApiResponse<null>>(`/api/admin/accounts/${id}/deactivate`, { method: 'POST' }),
   reactivate: (id: string) => apiClient<ApiResponse<null>>(`/api/admin/accounts/${id}/reactivate`, { method: 'POST' }),
 }

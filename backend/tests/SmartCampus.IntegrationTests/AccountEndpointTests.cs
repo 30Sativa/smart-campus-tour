@@ -601,6 +601,152 @@ public sealed class AccountEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, reactivateResponse.StatusCode);
     }
 
+    [SchemaV11Fact]
+    public async Task SelfService_ProfileAndPasswordChange_WorkEndToEndAndStaySelfScoped()
+    {
+        const string newPassword = "a-completely-new-password";
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(isActive: true, username: "self.admin", roles: ["ADMIN"]);
+        await database.InsertUserAsync(isActive: true, username: "self.staff", roles: ["STAFF"]);
+        await database.InsertUserAsync(isActive: true, username: "self.tech", roles: ["TECHNICAL_STAFF"]);
+        await database.InsertUserAsync(isActive: true, username: "self.rep", roles: ["SCHOOL_REPRESENTATIVE"]);
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+
+        using var anonymous = await host.Client.GetAsync("/api/account/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        // Every role reads its own profile; the response carries no credential data.
+        foreach (var (username, role) in new[]
+                 {
+                     ("self.admin", "Admin"), ("self.staff", "Staff"),
+                     ("self.tech", "TechnicalStaff"), ("self.rep", "Representative")
+                 })
+        {
+            var token = await GetAccessTokenAsync(host.Client, username);
+            using var me = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/api/account/me", token));
+            Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+            var text = await me.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(text);
+            var data = document.RootElement.GetProperty("data");
+            Assert.Equal(username, data.GetProperty("username").GetString());
+            Assert.Equal(role, data.GetProperty("role").GetString());
+            Assert.DoesNotContain("passwordHash", text, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Self-edit changes the name only; privilege fields in the body are rejected.
+        var staff = await LoginAsync(host.Client, "self.staff", Password);
+        var rename = CreateAuthenticatedRequest(HttpMethod.Put, "/api/account/me", staff.AccessToken);
+        rename.Content = JsonContent.Create(new { fullName = "Renamed Staff" });
+        using (var renamed = await host.Client.SendAsync(rename))
+            Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var escalate = CreateAuthenticatedRequest(HttpMethod.Put, "/api/account/me", staff.AccessToken);
+        escalate.Content = JsonContent.Create(new { fullName = "Renamed Staff", role = "Admin" });
+        using (var rejected = await host.Client.SendAsync(escalate))
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+        // Wrong current password and a weak new password are refused and change nothing.
+        foreach (var body in new object[]
+                 {
+                     new { currentPassword = "not-the-password", newPassword },
+                     new { currentPassword = Password, newPassword = "short" }
+                 })
+        {
+            var attempt = CreateAuthenticatedRequest(HttpMethod.Post, "/api/account/me/password", staff.AccessToken);
+            attempt.Content = JsonContent.Create(body);
+            using var refused = await host.Client.SendAsync(attempt);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
+        using (var stillValid = await RefreshAsync(host.Client, staff.Cookie))
+            Assert.Equal(HttpStatusCode.OK, stillValid.StatusCode);
+
+        var change = CreateAuthenticatedRequest(HttpMethod.Post, "/api/account/me/password", staff.AccessToken);
+        change.Content = JsonContent.Create(new { currentPassword = Password, newPassword });
+        using (var changed = await host.Client.SendAsync(change))
+            Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+
+        // The old password and the old refresh token no longer work; the new password does.
+        using (var oldLogin = await host.Client.PostAsJsonAsync("/api/auth/login", new { username = "self.staff", password = Password }))
+            Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+        using (var oldRefresh = await RefreshAsync(host.Client, staff.Cookie))
+            Assert.Equal(HttpStatusCode.Unauthorized, oldRefresh.StatusCode);
+        var fresh = await LoginAsync(host.Client, "self.staff", newPassword);
+        Assert.False(string.IsNullOrWhiteSpace(fresh.AccessToken));
+
+        await using var context = CreateContext(database.ConnectionString);
+        var stored = await context.Users.AsNoTracking().SingleAsync(user => user.Username == "self.staff");
+        Assert.DoesNotContain(newPassword, stored.PasswordHash);
+        Assert.Equal("Renamed Staff", stored.FullName);
+        Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "PASSWORD_CHANGED" && log.ActorUserId == stored.Id));
+        Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "PROFILE_UPDATED" && log.ActorUserId == stored.Id));
+    }
+
+    [SchemaV11Fact]
+    public async Task AdminUpdateAccount_EditsManagedNameOnly_AndNonAdminsAndAdminTargetsAreRefused()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        var adminId = (await database.InsertUserAsync(isActive: true, username: "upd.admin", roles: ["ADMIN"])).Id;
+        var staffId = (await database.InsertUserAsync(isActive: true, username: "upd.staff", roles: ["STAFF"])).Id;
+        var otherId = (await database.InsertUserAsync(isActive: true, username: "upd.other", roles: ["STAFF"])).Id;
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+        var adminToken = await GetAccessTokenAsync(host.Client, "upd.admin");
+        var staffToken = await GetAccessTokenAsync(host.Client, "upd.staff");
+
+        var byStaff = CreateAuthenticatedRequest(HttpMethod.Put, $"/api/admin/accounts/{otherId}", staffToken);
+        byStaff.Content = JsonContent.Create(new { fullName = "Hijacked" });
+        using (var forbidden = await host.Client.SendAsync(byStaff))
+            Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+
+        var edit = CreateAuthenticatedRequest(HttpMethod.Put, $"/api/admin/accounts/{staffId}", adminToken);
+        edit.Content = JsonContent.Create(new { fullName = "Edited By Admin" });
+        using (var ok = await host.Client.SendAsync(edit))
+            Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+
+        var role = CreateAuthenticatedRequest(HttpMethod.Put, $"/api/admin/accounts/{staffId}", adminToken);
+        role.Content = JsonContent.Create(new { fullName = "Edited By Admin", role = "Admin" });
+        using (var noRoleChange = await host.Client.SendAsync(role))
+            Assert.Equal(HttpStatusCode.BadRequest, noRoleChange.StatusCode);
+
+        var adminTarget = CreateAuthenticatedRequest(HttpMethod.Put, $"/api/admin/accounts/{adminId}", adminToken);
+        adminTarget.Content = JsonContent.Create(new { fullName = "Self Edit" });
+        using (var adminRefused = await host.Client.SendAsync(adminTarget))
+            Assert.Equal(HttpStatusCode.Forbidden, adminRefused.StatusCode);
+
+        await using var context = CreateContext(database.ConnectionString);
+        var staff = await context.Users.AsNoTracking().Include(user => user.UserRoles).SingleAsync(user => user.Id == staffId);
+        Assert.Equal("Edited By Admin", staff.FullName);
+        Assert.Equal("STAFF", Assert.Single(staff.UserRoles).Role);
+        Assert.Equal(1, await context.AuditLogs.CountAsync(log => log.Action == "ACCOUNT_UPDATED" && log.ActorUserId == adminId));
+    }
+
+    [SchemaV11Fact]
+    public async Task InfrastructureHealth_IsAdminOnly()
+    {
+        await using var database = await InitialAdminSeederTests.EmptySchemaDatabase.CreateAsync();
+        await database.InsertUserAsync(isActive: true, username: "infra.admin", roles: ["ADMIN"]);
+        await database.InsertUserAsync(isActive: true, username: "infra.staff", roles: ["STAFF"]);
+        await database.InsertUserAsync(isActive: true, username: "infra.tech", roles: ["TECHNICAL_STAFF"]);
+        await using var host = await ApiHost.StartForDatabaseAsync(database.ConnectionString);
+
+        using var anonymous = await host.Client.GetAsync("/api/admin/infrastructure/health");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        foreach (var username in new[] { "infra.staff", "infra.tech" })
+        {
+            var token = await GetAccessTokenAsync(host.Client, username);
+            using var denied = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/api/admin/infrastructure/health", token));
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+
+        var adminToken = await GetAccessTokenAsync(host.Client, "infra.admin");
+        using var allowed = await host.Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/api/admin/infrastructure/health", adminToken));
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        using var document = JsonDocument.Parse(await allowed.Content.ReadAsStringAsync());
+        var data = document.RootElement.GetProperty("data");
+        Assert.Equal("NOT_MONITORED", data.GetProperty("docker").GetProperty("status").GetString());
+        Assert.Equal(0, data.GetProperty("docker").GetProperty("containers").GetArrayLength());
+        Assert.Equal("UNKNOWN", data.GetProperty("backup").GetProperty("status").GetString());
+    }
+
     private static async Task<HttpResponseMessage> CreateAccountAsync(
         HttpClient client,
         string accessToken,

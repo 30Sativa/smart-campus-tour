@@ -36,7 +36,7 @@ export type HostSystemMetrics = {
   processorCount: number
   cpuPercent: number | null
   loadAverages: number[] | null
-  memory: HostMemoryMetrics
+  memory: HostMemoryMetrics | null
   disk: HostDiskMetrics
   network: NetworkInterfaceMetrics[]
   hostUptimeSeconds: number | null
@@ -69,7 +69,7 @@ export type ContainerMetrics = {
 }
 
 export type DockerStackMetrics = {
-  status: 'ONLINE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | string
+  status: 'ONLINE' | 'NOT_MONITORED' | 'UNAVAILABLE' | string
   message: string | null
   totalContainers: number
   runningContainers: number
@@ -78,7 +78,7 @@ export type DockerStackMetrics = {
 }
 
 export type BackupHealthMetrics = {
-  status: 'HEALTHY' | 'WARNING' | 'STALE' | 'NOT_RECORDED' | string
+  status: 'HEALTHY' | 'STALE' | 'UNKNOWN' | 'INVALID' | string
   lastBackupTimestamp: string | null
   ageHours: number | null
   target: string | null

@@ -602,6 +602,45 @@ JWT may remain usable until its natural expiry (about 15 minutes plus validation
 clock skew). This is the accepted V1 limitation; no token version or blacklist
 is used.
 
+### 3.0.1a Account update, self-service profile and password change
+
+All responses use the `BaseResponse` envelope. The account row has only
+`Username` (login identity) and `FullName`, so these are the only fields in play.
+
+- `PUT /api/admin/accounts/{id}` (Admin) body `{ "fullName" }`. Edits a managed
+  (non-Admin) account's full name; audit `ACCOUNT_UPDATED`. Username and role are
+  immutable after creation: roles gate role-owned data (registrations, assigned
+  Tours), and the username is the login identity with no recovery channel to
+  protect a change. Unknown body fields (for example `role`) return 400. Admin
+  accounts return 403, which also prevents self-deactivation and Admin escalation.
+  Deactivate/reactivate (above) already exist and are unchanged.
+- `GET /api/account/me`, `PUT /api/account/me` body `{ "fullName" }` (any of the
+  four account roles). No `{id}` exists: the subject is always the token's `sub`,
+  so another account cannot be addressed. Inactive accounts get 403 even with an
+  unexpired JWT. Audit `PROFILE_UPDATED`. Unknown fields (`role`, `isActive`,
+  `username`) return 400.
+- `POST /api/account/me/password` body `{ "currentPassword", "newPassword" }`.
+  Verifies the current password with the existing hasher, applies
+  `AccountPasswordPolicy` (12-128 characters, not blank) and rejects a new password
+  equal to the current one (400 with a per-field error). Guesses share the login
+  per-account budget (429). On success it stores a new hash, **revokes every
+  refresh token of the account**, and audits `PASSWORD_CHANGED` (no password
+  material is logged). Access tokens already issued remain valid until expiry
+  (about 15 minutes), the same accepted limitation as deactivation; the web client
+  signs out locally and sends the user to `/login`. Forgot/reset password is still
+  not provided and needs an email or admin-verified recovery design.
+
+`GET /api/admin/infrastructure/health` (Admin) is read-only and never fabricates
+values: a metric the platform cannot provide is `null` (`host.memory` may be
+null; `cpuPercent` is null until two `/proc/stat` samples exist), each section
+fails independently, and `collectedAt` is the measurement time. `docker.status`
+is `NOT_MONITORED` because the API container has no Docker socket by design.
+`backup.status` is `HEALTHY`/`STALE` only from a well-formed marker written by
+`backend/deploy/backup-sqlserver.sh` after `RESTORE VERIFYONLY` and SHA-256
+checks; otherwise `UNKNOWN` (marker not visible to the API) or `INVALID`. The API
+reads the marker only from `Monitoring:BackupStatePath`; the compose file does not
+mount it, so enabling it needs a read-only, API-readable copy of that file.
+
 ### 3.0.2 Retired POI catalog API and retained legacy data
 
 The legacy POI catalog API (/api/staff/manage/pois and /api/admin/pois) has

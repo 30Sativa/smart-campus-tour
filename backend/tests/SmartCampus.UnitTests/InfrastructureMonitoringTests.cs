@@ -31,7 +31,7 @@ public sealed class InfrastructureMonitoringTests
         Assert.Equal("ONLINE", result.Database.Status);
         Assert.True(result.Database.CanConnect);
         Assert.Equal(4.2, result.Database.LatencyMs);
-        Assert.Equal(50.0, result.Host.Memory.UsedPercent);
+        Assert.Equal(50.0, result.Host.Memory!.UsedPercent);
     }
 
     [Fact]
@@ -58,8 +58,43 @@ public sealed class InfrastructureMonitoringTests
         Assert.False(result.Database.CanConnect);
         // Host and Runtime metrics are still 100% available and valid!
         Assert.Equal("test-host", result.Host.MachineName);
-        Assert.Equal(50.0, result.Host.Memory.UsedPercent);
+        Assert.Equal(50.0, result.Host.Memory!.UsedPercent);
         Assert.Equal(1200, result.Runtime.ProcessUptimeSeconds);
+    }
+
+    private static readonly string Sha = new('a', 64);
+
+    [Fact]
+    public void BackupEvidence_RecentVerifiedMarker_IsHealthy()
+    {
+        var result = BackupEvidence.Evaluate($"20261105T060000Z\ts3://b/k.bak\t1048576\t{Sha}\n", Now);
+
+        Assert.Equal("HEALTHY", result.Status);
+        Assert.Equal(2.0, result.AgeHours);
+        Assert.Equal(1048576, result.SizeBytes);
+    }
+
+    [Fact]
+    public void BackupEvidence_OldMarker_IsStale()
+    {
+        var result = BackupEvidence.Evaluate($"20261103T060000Z\tlocal:/x.bak\t10\t{Sha}", Now);
+
+        Assert.Equal("STALE", result.Status);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("garbage")]
+    [InlineData("20261105T060000Z\tt\t0\t")]
+    [InlineData("20261105T060000Z\tt\t0\taaaa")]
+    [InlineData("20261105T060000Z\tt\t10")]
+    [InlineData("20261230T060000Z\tt\t10\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void BackupEvidence_MalformedOrFutureMarker_IsInvalidNotHealthy(string content)
+    {
+        var result = BackupEvidence.Evaluate(content, Now);
+
+        Assert.Equal("INVALID", result.Status);
+        Assert.Null(result.SizeBytes);
     }
 
     private sealed class StubMetricsCollector(InfrastructureHealthDto dto) : IInfrastructureMetricsCollector

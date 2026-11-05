@@ -5,6 +5,7 @@ import { buttonClass } from '../../components/ui/ui-classes'
 import { AdminPage, EmptyState, Notice, SkeletonRows } from '../../features/administration/AdminUi'
 import { AccountStatusAction } from '../../features/administration/accounts/components/AccountStatusAction'
 import { AccountTable, type AccountLifecycleAction } from '../../features/administration/accounts/components/AccountTable'
+import { EditAccountDialog } from '../../features/administration/accounts/components/EditAccountDialog'
 import { CreateAccountDialog } from '../../features/administration/accounts/components/CreateAccountDialog'
 import { accountRequestError } from '../../features/administration/accounts/errors'
 import { useAccounts } from '../../features/administration/accounts/hooks'
@@ -18,6 +19,7 @@ export default function AdminAccountsPage() {
   const [sort, setSort] = useState<AccountSort | ''>('')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [editing, setEditing] = useState<AccountListItem | null>(null)
   const [pendingAction, setPendingAction] = useState<{ account: AccountListItem; action: AccountLifecycleAction } | null>(null)
   const debouncedSearch = useDebouncedValue(search.trim(), 300)
   const accounts = useAccounts({ search: debouncedSearch || undefined, sort: sort || undefined, page, size: PAGE_SIZE })
@@ -72,6 +74,7 @@ export default function AdminAccountsPage() {
               sort={sort}
               onSort={changeSort}
               onLifecycleAction={(account, action) => setPendingAction({ account, action })}
+              onEdit={setEditing}
             />
             <div className="sr-only" aria-live="polite">
               Trang {pageData.pagination.page} / {totalPages} · {pageData.pagination.totalItems} tài khoản
@@ -89,6 +92,7 @@ export default function AdminAccountsPage() {
       </section>
 
       {createOpen && <CreateAccountDialog onClose={() => setCreateOpen(false)} onCreated={() => setCreateOpen(false)} />}
+      {editing && <EditAccountDialog account={editing} onClose={() => setEditing(null)} onSaved={() => setEditing(null)} />}
       {pendingAction && <AccountStatusAction
         account={pendingAction.account}
         action={pendingAction.action}

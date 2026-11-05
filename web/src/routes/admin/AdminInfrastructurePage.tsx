@@ -49,6 +49,8 @@ export default function AdminInfrastructurePage() {
   })
 
   const data = healthQuery.data
+  const memory = data?.host.memory ?? null
+  const diskKnown = data?.host.disk.status !== 'UNAVAILABLE'
 
   return (
     <AdminPage>
@@ -88,7 +90,7 @@ export default function AdminInfrastructurePage() {
         <section className={panelClass} aria-label="Đang tải dữ liệu hạ tầng">
           <SkeletonRows rows={8} label="Đang tải dữ liệu hạ tầng máy chủ…" />
         </section>
-      ) : healthQuery.isError ? (
+      ) : healthQuery.isError && !data ? (
         <AdminErrorPanel
           title="Không thể kết nối đến API giám sát hạ tầng"
           description="Máy chủ backend có thể đang khởi động lại hoặc không phản hồi. Kiểm tra lại kết nối mạng."
@@ -96,12 +98,28 @@ export default function AdminInfrastructurePage() {
         />
       ) : !data ? null : (
         <div className="space-y-4">
+          {healthQuery.isError && (
+            <div
+              role="alert"
+              className="flex items-center gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4 text-[13px] text-[#92400e]"
+            >
+              <ShieldAlert size={20} className="shrink-0" aria-hidden="true" />
+              <p>
+                Không cập nhật được số liệu mới. Các số bên dưới là lần đo thành công gần nhất lúc{' '}
+                <strong>{stamp(data.collectedAt)}</strong>, không phải trạng thái hiện tại.
+              </p>
+            </div>
+          )}
           {/* KPI Headline Tiles */}
           <KpiRow label="Tổng quan hạ tầng">
             <KpiTile
               label="CPU máy chủ"
-              value={data.host.cpuPercent !== null ? `${data.host.cpuPercent}%` : 'N/A'}
-              note={`${data.host.processorCount} vCPUs`}
+              value={data.host.cpuPercent !== null ? `${data.host.cpuPercent}%` : '-'}
+              note={
+                data.host.cpuPercent !== null
+                  ? `${data.host.processorCount} vCPUs`
+                  : 'Chưa đo được (lần đo đầu hoặc không hỗ trợ)'
+              }
               tone={
                 (data.host.cpuPercent ?? 0) > 85
                   ? 'danger'
@@ -112,15 +130,15 @@ export default function AdminInfrastructurePage() {
             />
             <KpiTile
               label="Bộ nhớ RAM"
-              value={`${data.host.memory.usedPercent}%`}
-              note={`${formatBytes(data.host.memory.usedBytes)} / ${formatBytes(data.host.memory.totalBytes)}`}
-              tone={data.host.memory.usedPercent > 90 ? 'danger' : data.host.memory.usedPercent > 75 ? 'warn' : 'plain'}
+              value={memory ? `${memory.usedPercent}%` : '-'}
+              note={memory ? `${formatBytes(memory.usedBytes)} / ${formatBytes(memory.totalBytes)}` : 'Không đo được'}
+              tone={!memory ? 'plain' : memory.usedPercent > 90 ? 'danger' : memory.usedPercent > 75 ? 'warn' : 'plain'}
             />
             <KpiTile
               label="Dung lượng ổ đĩa"
-              value={`${data.host.disk.usedPercent}%`}
-              note={`Còn trống ${formatBytes(data.host.disk.availableFreeBytes)}`}
-              tone={data.host.disk.usedPercent > 90 ? 'danger' : data.host.disk.usedPercent > 80 ? 'warn' : 'plain'}
+              value={diskKnown ? `${data.host.disk.usedPercent}%` : '-'}
+              note={diskKnown ? `Còn trống ${formatBytes(data.host.disk.availableFreeBytes)}` : 'Không đo được'}
+              tone={!diskKnown ? 'plain' : data.host.disk.usedPercent > 90 ? 'danger' : data.host.disk.usedPercent > 80 ? 'warn' : 'plain'}
             />
             <KpiTile
               label="Cơ sở dữ liệu"
@@ -173,11 +191,11 @@ export default function AdminInfrastructurePage() {
                       </dd>
                     </>
                   )}
-                  {data.host.memory.swapTotalBytes !== null && data.host.memory.swapTotalBytes > 0 && (
+                  {memory && memory.swapTotalBytes !== null && memory.swapTotalBytes > 0 && (
                     <>
                       <dt className="text-[#64748b]">Bộ nhớ Swap</dt>
                       <dd className="text-[#334155]">
-                        {formatBytes(data.host.memory.swapUsedBytes)} / {formatBytes(data.host.memory.swapTotalBytes)} ({data.host.memory.swapUsedPercent}%)
+                        {formatBytes(memory.swapUsedBytes)} / {formatBytes(memory.swapTotalBytes)} ({memory.swapUsedPercent}%)
                       </dd>
                     </>
                   )}
@@ -223,8 +241,12 @@ export default function AdminInfrastructurePage() {
               title="Docker & Container Stack"
               description="Trạng thái các container phục vụ dịch vụ CampusTour trên máy chủ."
               action={
-                <ToneBadge tone={data.docker.status === 'ONLINE' ? 'ok' : 'warn'}>
-                  Docker {data.docker.status === 'ONLINE' ? 'Khả dụng' : 'Không có socket'}
+                <ToneBadge tone={data.docker.status === 'ONLINE' ? 'ok' : 'muted'}>
+                  {data.docker.status === 'ONLINE'
+                    ? 'Khả dụng'
+                    : data.docker.status === 'NOT_MONITORED'
+                      ? 'Không giám sát từ API'
+                      : 'Không đọc được'}
                 </ToneBadge>
               }
             />
@@ -234,7 +256,7 @@ export default function AdminInfrastructurePage() {
                   <Layers size={16} className="mt-0.5 shrink-0 text-[#94a3b8]" aria-hidden="true" />
                   <div>
                     <p className="font-medium text-[#334155]">Thông tin container không khả dụng từ môi trường này.</p>
-                    <p className="mt-0.5 text-xs">{data.docker.message ?? 'Không tìm thấy Docker socket /var/run/docker.sock.'}</p>
+                    <p className="mt-0.5 text-xs">{data.docker.message ?? 'Không có nguồn dữ liệu container.'}</p>
                   </div>
                 </div>
               ) : data.docker.containers.length === 0 ? (
@@ -330,7 +352,9 @@ export default function AdminInfrastructurePage() {
                       ? 'Đạt'
                       : data.backup.status === 'STALE'
                         ? 'Cũ (>26h)'
-                        : 'Chưa có file'}
+                        : data.backup.status === 'INVALID'
+                          ? 'Bằng chứng không hợp lệ'
+                          : 'Chưa xác nhận được'}
                   </ToneBadge>
                 }
               />
@@ -350,7 +374,7 @@ export default function AdminInfrastructurePage() {
                   </dd>
                   <dt className="text-[#64748b]">Kích thước bản sao</dt>
                   <dd className="font-mono text-[#334155]">
-                    {formatBytes(data.backup.sizeBytes)}
+                    {data.backup.sizeBytes !== null ? formatBytes(data.backup.sizeBytes) : '-'}
                   </dd>
                 </dl>
                 {data.backup.message && (

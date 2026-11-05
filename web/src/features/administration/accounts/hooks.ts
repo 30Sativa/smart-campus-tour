@@ -21,6 +21,11 @@ export function useCreateAccount() {
   return useMutation({ mutationFn: (input: CreateAccountInput) => accountsApi.create(input), onSuccess: invalidate, gcTime: 0 })
 }
 
+export function useUpdateAccount() {
+  const invalidate = useInvalidateAccounts()
+  return useMutation({ mutationFn: ({ id, fullName }: { id: string; fullName: string }) => accountsApi.update(id, fullName), onSuccess: invalidate })
+}
+
 export function useDeactivateAccount() {
   const invalidate = useInvalidateAccounts()
   return useMutation({ mutationFn: (id: string) => accountsApi.deactivate(id), onSuccess: invalidate })
