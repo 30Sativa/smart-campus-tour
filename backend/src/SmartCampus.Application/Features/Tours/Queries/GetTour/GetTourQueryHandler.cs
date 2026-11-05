@@ -2,6 +2,7 @@ using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Routes;
+using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours.Queries.GetTour;
@@ -23,7 +24,8 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             CanMarkReady = blockers.Count == 0, CanReopen = tour.CanReopenBeforeStart, ReadyBlockers = blockers
         };
         var execution = await ExecutionAsync(tour, ct);
-        var actions = new TourAllowedActions(await StartAsync(tour, query.Viewer, ct), await NextAsync(tour, query.Viewer, ct));
+        var actions = new TourAllowedActions(await StartAsync(tour, query.Viewer, ct), await NextAsync(tour, query.Viewer, ct),
+            EndEarly(tour, query.Viewer), await RetryAsync(tour, query.Viewer, ct), await ReconcileAsync(tour, query.Viewer, ct));
         if (tour.RouteRevisionId is { } revisionId)
         {
             var revision = await RouteRevisionMapper.Load(revisions, tour.RouteId, revisionId, false, ct);
@@ -72,6 +74,34 @@ public sealed class GetTourQueryHandler(ITourManagementRepository repository, IR
             return new(true, null, []);
         var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
         return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
+    }
+
+    private static TourActionAvailability EndEarly(Tour tour, Guid? viewer) =>
+        tour.State != TourRuntime.Running ? Refused("Chỉ kết thúc sớm được Tour đang chạy.", "TOUR_STATE_INVALID")
+        : tour.OperatorUserId != viewer ? Refused("Chỉ người vận hành được giao cho Tour mới kết thúc sớm được.", "callerIsOperator")
+        : new(true, null, []);
+
+    private async Task<TourActionAvailability> RetryAsync(Tour tour, Guid? viewer, CancellationToken ct)
+    {
+        var previous = tour.CurrentLegId is { } legId ? await repository.FindLegCommandAsync(legId, ct) : null;
+        if (!RetryTourLegCommandHandler.CanRetry(tour, previous))
+            return Refused("Chỉ thử lại được chặng đã kết thúc thật sự với FAILED hoặc bị từ chối.", "TOUR_RETRY_NOT_ALLOWED");
+        if (tour.OperatorUserId != viewer)
+            return Refused("Chỉ người vận hành được giao cho Tour mới thử lại chặng được.", "callerIsOperator");
+        var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct);
+        var robot = await TourTarget.FindReservedRobotAsync(revisions, tour.AssignedRobotId!.Value, ct);
+        var map = revision is null ? null : await revisions.GetMapAsync(revision.MapVersionId, ct);
+        if (robot is null || map is null) return Refused("Không đọc được tuyến hoặc robot của Tour.", "TOUR_STATE_INVALID");
+        var checks = await preflight.EvaluateMovementAsync(tour, robot, map, ct);
+        return checks.CanStart ? new(true, null, []) : new(false, "Chưa đủ điều kiện để robot di chuyển.", checks.BlockedBy);
+    }
+
+    private async Task<TourActionAvailability> ReconcileAsync(Tour tour, Guid? viewer, CancellationToken ct)
+    {
+        var current = tour.CurrentLegId is { } legId ? await repository.FindLegCommandAsync(legId, ct) : null;
+        return current?.State != RobotCommandStates.Unknown ? Refused("Chặng hiện tại không có lệnh UNKNOWN.", "COMMAND_STATE_INVALID")
+            : tour.OperatorUserId != viewer ? Refused("Chỉ người vận hành được giao cho Tour mới đối soát được lệnh.", "callerIsOperator")
+            : new(true, null, []);
     }
 
     private static TourActionAvailability Refused(string reason, string blockedBy) => new(false, reason, [blockedBy]);

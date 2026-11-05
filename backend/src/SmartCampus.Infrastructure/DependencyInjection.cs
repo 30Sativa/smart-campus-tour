@@ -48,7 +48,9 @@ public static class DependencyInjection
         services.AddSingleton(new FleetCommandSettings(configuration.GetValue<bool?>("FleetCommands:Enabled") ?? false,
             configuration.GetValue<int?>("FleetCommands:MaxTelemetryAgeSeconds") ?? 2,
             configuration.GetValue<int?>("FleetCommands:StartLateLimitMinutes") ?? 15,
-            configuration.GetValue<int?>("FleetCommands:AcceptWindowSeconds") ?? 30));
+            configuration.GetValue<int?>("FleetCommands:AcceptWindowSeconds") ?? 30,
+            configuration.GetValue<int?>("FleetCommands:LegResultTimeoutSeconds") ?? 600,
+            configuration.GetValue<int?>("FleetCommands:SweepIntervalSeconds") ?? 5));
         services.AddSingleton<IAuthTokenService, JwtAuthTokenService>();
         services.AddSingleton<JwtTokenSettings>();
         services.AddSingleton(TimeProvider.System);

@@ -1,5 +1,6 @@
 using FluentValidation.TestHelper;
 using SmartCampus.Application.Features.FleetSync;
+using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 using SmartCampus.Domain.Entities;
 
@@ -59,6 +60,55 @@ public sealed class TourRuntimeTests
         var returning = new Tour();
         returning.BeginLeg(Guid.NewGuid(), RobotLegKinds.ToEnd, null, now);
         Assert.Equal(TourRuntime.ReturningToEnd, returning.CurrentStep);
+    }
+
+    [Fact]
+    public void CancelOf_CarriesTheLegWithoutATarget_AndClosesAsExpiredOrUnknown()
+    {
+        var goTo = GoTo();
+        var cancel = RobotCommand.CancelOf(goTo, DateTimeOffset.UnixEpoch.AddSeconds(1), null);
+        Assert.Equal((RobotCommandKinds.Cancel, goTo.LegId, (Guid?)goTo.Id, (decimal?)null, true), (cancel.Kind, cancel.LegId, cancel.TargetCommandId, cancel.X, cancel.IsOpen));
+
+        cancel.CloseCancel(DateTimeOffset.UnixEpoch.AddSeconds(2));
+        Assert.Equal((RobotCommandStates.Expired, false, RobotCommand.LegEndedReason), (cancel.State, cancel.IsOpen, cancel.ReasonCode));
+
+        var accepted = RobotCommand.CancelOf(goTo, DateTimeOffset.UnixEpoch, null);
+        accepted.Accept(DateTimeOffset.UnixEpoch.AddSeconds(1));
+        accepted.CloseCancel(DateTimeOffset.UnixEpoch.AddSeconds(2));
+        Assert.Equal((RobotCommandStates.Unknown, false), (accepted.State, accepted.IsOpen));
+    }
+
+    [Fact]
+    public void UnknownGoTo_StaysOpen_UntilReconciled_WithoutAnOutcome()
+    {
+        var command = GoTo();
+        command.MarkUnknown(DateTimeOffset.UnixEpoch.AddSeconds(1), "ACK_TIMEOUT");
+        Assert.True(command.IsOpen);
+        command.Reconcile(Guid.NewGuid(), "Đã xem", DateTimeOffset.UnixEpoch.AddSeconds(2));
+        Assert.Equal((RobotCommandStates.Reconciled, false, (string?)null), (command.State, command.IsOpen, command.Outcome));
+    }
+
+    [Fact]
+    public void TimeoutRules_ProveNothingWithoutEvidence_AndLeaveAnAcceptedCancelToItsGoTo()
+    {
+        var settings = new FleetCommandSettings(enabled: true);
+        var stream = Guid.NewGuid();
+        var pending = GoTo();
+        Assert.Null(RobotCommandTimeouts.Decide(pending, null, pending.AcceptBy!.Value, settings));
+        Assert.Equal(RobotCommandStates.Expired, RobotCommandTimeouts.Decide(pending, null, pending.AcceptBy.Value.AddMilliseconds(1), settings)!.State);
+
+        var delivered = GoTo();
+        delivered.DeliveredStreamId = stream;
+        delivered.State = RobotCommandStates.Delivered;
+        Assert.Null(RobotCommandTimeouts.Decide(delivered, null, delivered.AcceptBy!.Value, settings));
+        Assert.Null(RobotCommandTimeouts.Decide(delivered, stream, delivered.AcceptBy.Value, settings));
+        Assert.Equal(RobotCommandTimeouts.StreamChanged, RobotCommandTimeouts.Decide(delivered, Guid.NewGuid(), DateTimeOffset.UnixEpoch, settings)!.Reason);
+
+        var cancel = RobotCommand.CancelOf(delivered, DateTimeOffset.UnixEpoch, null);
+        Assert.Null(RobotCommandTimeouts.Decide(cancel, stream, DateTimeOffset.UnixEpoch.AddDays(1), settings));
+        cancel.DeliveredStreamId = stream;
+        cancel.Accept(DateTimeOffset.UnixEpoch);
+        Assert.Null(RobotCommandTimeouts.Decide(cancel, Guid.NewGuid(), DateTimeOffset.UnixEpoch.AddDays(1), settings));
     }
 
     [Fact]

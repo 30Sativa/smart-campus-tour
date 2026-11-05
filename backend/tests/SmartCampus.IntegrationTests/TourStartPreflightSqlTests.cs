@@ -236,9 +236,10 @@ public sealed class TourStartPreflightSqlTests
     /// <summary>A READY Tour in its start window, with a dispatch-enabled robot on the route's map reporting idle.</summary>
     internal sealed class World(TourReadySqlTests.Harness harness, MutableClock clock, FakeConsole console) : IAsyncDisposable
     {
-        private readonly Guid stream = Guid.NewGuid();
         private long seq;
+        private long tick;
 
+        public Guid Stream { get; private set; } = Guid.NewGuid();
         public TourReadySqlTests.Harness H => harness;
         public MutableClock Clock => clock;
         public FakeConsole Console => console;
@@ -283,10 +284,19 @@ public sealed class TourStartPreflightSqlTests
         {
             var now = clock.GetUtcNow();
             seq++;
-            var report = new FleetTelemetryReport(TourReadySqlTests.Robot, stream, seq, DateTimeOffset.UnixEpoch.AddSeconds(seq),
+            tick++;
+            var report = new FleetTelemetryReport(TourReadySqlTests.Robot, Stream, seq, DateTimeOffset.UnixEpoch.AddSeconds(tick),
                 mapKey ?? this.mapKey, frameId ?? this.frameId, null, status, null, localized, motionReady, null, battery);
             return harness.Service<IFleetTelemetryStore>().ApplyAsync(new(new(TourReadySqlTests.Robot, "PHYSICAL", null, false,
                 this.mapKey, this.frameId), report, now), CancellationToken.None);
+        }
+
+        /// <summary>The bridge restarted: telemetry continues on a new stream.</summary>
+        public Task RestartBridge()
+        {
+            Stream = Guid.NewGuid();
+            seq = 0;
+            return Report();
         }
 
         public Task<TourStartChecks> Checks() => harness.Send(new GetTourStartChecksQuery(harness.TourId, harness.OperatorId));

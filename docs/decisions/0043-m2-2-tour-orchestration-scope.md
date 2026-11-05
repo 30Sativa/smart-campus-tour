@@ -73,6 +73,10 @@ A late result for an earlier leg is recorded as a `TourEvent` and changes no Tou
 
 The command lifecycle is ADR-0042 §3 unchanged (`PENDING → DELIVERED → ACCEPTED → ARRIVED | FAILED | CANCELLED`, `EXPIRED`, `REJECTED`, `UNKNOWN`, `RECONCILED`). This ADR adds no command state.
 
+A Cancel closes with its GoTo. The v1.14 CHECK keeps an ACCEPTED Cancel open, so without this a robot could never pass release-inspection. When a GoTo closes (terminal, REJECTED or RECONCILED), its live Cancel moves to EXPIRED if never delivered, otherwise to UNKNOWN, with reason `LEG_ENDED`. For a Cancel, UNKNOWN is not open and blocks nothing.
+
+Timeouts run on server time. PENDING past `AcceptBy` is EXPIRED; DELIVERED past `AcceptBy`, or a GoTo ACCEPTED for longer than `FleetCommands:LegResultTimeoutSeconds`, is UNKNOWN; so is a delivered command when the robot's current telemetry stream differs from `DeliveredStreamId`. With no telemetry in this process the stream rule proves nothing and does not fire. Restart keeps the reason of a Tour already in NEEDS_ASSISTANCE, and withdraws only GoTo commands: an undelivered Cancel stays deliverable. Restart recovery and the sweeper run only while `FleetCommands:Enabled = true`.
+
 ## Operations allowed per state
 
 | Operation | Actor | Allowed |

@@ -48,7 +48,8 @@ public sealed record TourExecutionView(string State, string? OperationalStatus, 
 public sealed record TourCommandView(Guid Id, string Kind, string State, string? Outcome, string? ReasonCode);
 /// <summary>Advisory for the caller; Start and Next recheck under locks. <see cref="BlockedBy"/> holds check ids, or a state reason code.</summary>
 public sealed record TourActionAvailability(bool Allowed, string? Reason, IReadOnlyList<string> BlockedBy);
-public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next);
+public sealed record TourAllowedActions(TourActionAvailability Start, TourActionAvailability Next, TourActionAvailability EndEarly,
+    TourActionAvailability RetryLeg, TourActionAvailability Reconcile);
 public sealed record TourMutationResult(Guid Id);
 /// <summary>TourEvent types and receipt actions. READY and Reopen are not operational use of the Tour; the rest are.</summary>
 public static class TourLifecycleEvents
@@ -63,4 +64,13 @@ public static class TourLifecycleEvents
     public const string LegAccepted = "LEG_ACCEPTED";
     public const string LegRejected = "LEG_REJECTED";
     public const string LegTerminal = "LEG_TERMINAL";
+    public const string EndedEarly = "TOUR_ENDED_EARLY";
+    public const string LegRetried = "TOUR_LEG_RETRIED";
+    public const string LegWithdrawn = "LEG_WITHDRAWN";
+    public const string LegCancelRequested = "LEG_CANCEL_REQUESTED";
+    public const string CommandExpired = "COMMAND_EXPIRED";
+    public const string CommandUnknown = "COMMAND_UNKNOWN";
+    public const string CommandReconciled = "COMMAND_RECONCILED";
+    public const string BackendRestarted = "TOUR_BACKEND_RESTARTED";
+    public const string InspectionReleased = "ROBOT_INSPECTION_RELEASED";
 }

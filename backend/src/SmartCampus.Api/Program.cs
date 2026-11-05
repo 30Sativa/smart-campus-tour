@@ -96,6 +96,9 @@ if (!initialAdminSeedCommand.Requested && !simulationPreviewEnabled)
     builder.Services.AddSingleton<SmartCampus.Api.Invitations.TourCancelNoticeDispatcher>();
     if (builder.Configuration.GetValue<bool?>("Invitations:EmailWorkerEnabled") != false)
         builder.Services.AddHostedService<SmartCampus.Api.Invitations.InvitationEmailWorker>();
+    // Recovery first: it must finish before the server, and before the first sweep.
+    builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandRestartRecovery>();
+    builder.Services.AddHostedService<SmartCampus.Api.Hubs.FleetCommandSweeper>();
 }
 if (initialAdminSeedCommand.Requested || !simulationPreviewEnabled)
 {

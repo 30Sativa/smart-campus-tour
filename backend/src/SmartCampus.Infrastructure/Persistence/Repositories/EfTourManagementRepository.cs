@@ -36,7 +36,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actor && a.CorrelationId == requestId &&
             a.EntityType == "Tour" && (a.Action == "TOUR_CREATED" || a.Action == "TOUR_UPDATED" || a.Action == "TOUR_CANCELLED" ||
             a.Action == TourLifecycleEvents.Ready || a.Action == TourLifecycleEvents.Reopened ||
-            a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next), ct);
+            a.Action == TourLifecycleEvents.Started || a.Action == TourLifecycleEvents.Next ||
+            a.Action == TourLifecycleEvents.EndedEarly || a.Action == TourLifecycleEvents.LegRetried ||
+            a.Action == TourLifecycleEvents.CommandReconciled), ct);
 
     public async Task<PagedResult<TourSummary>> ListAsync(TourListRequest request, CancellationToken ct)
     {
@@ -105,8 +107,8 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public Task<TourRobotReservation?> FindActiveReservationAsync(Guid id, CancellationToken ct) =>
         db.TourRobotReservations.SingleOrDefaultAsync(r => r.TourId == id && r.ReleasedAt == null, ct);
 
-    public Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, CancellationToken ct) =>
-        db.Tours.AsNoTracking().AnyAsync(t => t.OperationalStatus == "NEEDS_ASSISTANCE" &&
+    public Task<bool> HasRobotTourNeedingAssistanceAsync(Guid robotId, Guid? exceptTourId, CancellationToken ct) =>
+        db.Tours.AsNoTracking().AnyAsync(t => t.OperationalStatus == "NEEDS_ASSISTANCE" && t.Id != exceptTourId &&
             (db.Robots.Any(r => r.Id == robotId && r.CurrentTourId == t.Id) || (t.AssignedRobotId == robotId && t.State == "RUNNING")), ct);
 
     public Task<bool> HasOpenCommandAsync(Guid robotId, CancellationToken ct) =>
@@ -125,6 +127,29 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
 
     public Task<RobotCommand?> LockCommandAsync(Guid id, CancellationToken ct) =>
         db.RobotCommands.FromSqlInterpolated($"SELECT * FROM dbo.RobotCommands WITH (UPDLOCK, ROWLOCK) WHERE Id = {id}").SingleOrDefaultAsync(ct);
+
+    public Task<RobotCommand?> LockOpenGoToAsync(Guid tourId, CancellationToken ct) =>
+        db.RobotCommands.FromSqlInterpolated($"SELECT * FROM dbo.RobotCommands WITH (UPDLOCK, ROWLOCK) WHERE TourId = {tourId} AND Kind = {RobotCommandKinds.GoTo} AND IsOpen = 1").SingleOrDefaultAsync(ct);
+
+    public Task<RobotCommand?> LockOpenCancelAsync(Guid goToId, CancellationToken ct) =>
+        db.RobotCommands.FromSqlInterpolated($"SELECT * FROM dbo.RobotCommands WITH (UPDLOCK, ROWLOCK) WHERE TargetCommandId = {goToId} AND IsOpen = 1").SingleOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<RobotCommand>> ListOpenCommandsAsync(CancellationToken ct) =>
+        await db.RobotCommands.AsNoTracking().Where(c => c.IsOpen).ToArrayAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> ListRunningTourIdsAsync(CancellationToken ct) =>
+        await db.Tours.AsNoTracking().Where(t => t.State == TourRuntime.Running).Select(t => t.Id).ToArrayAsync(ct);
+
+    public Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct) =>
+        db.Robots.Where(r => r.Id == robotId).ExecuteUpdateAsync(set => set.SetProperty(r => r.NeedsInspection, true), ct);
+
+    public async Task<bool> ReleaseInspectionAsync(Guid robotId, byte[] expectedRowVersion, CancellationToken ct) =>
+        await db.Robots.Where(r => r.Id == robotId && r.RowVersion == expectedRowVersion)
+            .ExecuteUpdateAsync(set => set.SetProperty(r => r.CurrentTourId, (Guid?)null).SetProperty(r => r.NeedsInspection, false), ct) == 1;
+
+    public Task<AuditLog?> FindRobotRequestAsync(Guid actor, Guid requestId, CancellationToken ct) =>
+        db.AuditLogs.AsNoTracking().SingleOrDefaultAsync(a => a.ActorUserId == actor && a.CorrelationId == requestId &&
+            a.EntityType == "Robot" && a.Action == TourLifecycleEvents.InspectionReleased, ct);
 
     public Task<RobotCommand?> FindLegCommandAsync(Guid legId, CancellationToken ct) =>
         db.RobotCommands.AsNoTracking().SingleOrDefaultAsync(c => c.LegId == legId && c.Kind == RobotCommandKinds.GoTo, ct);

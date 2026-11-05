@@ -8,7 +8,7 @@ namespace SmartCampus.Application.Features.FleetSync;
 public sealed class FleetCommandSettings
 {
     public FleetCommandSettings(bool enabled = false, int maxTelemetryAgeSeconds = 2, int startLateLimitMinutes = 15,
-        int acceptWindowSeconds = 30)
+        int acceptWindowSeconds = 30, int legResultTimeoutSeconds = 600, int sweepIntervalSeconds = 5)
     {
         if (maxTelemetryAgeSeconds <= 0)
             throw new InvalidOperationException("FleetCommands:MaxTelemetryAgeSeconds must be positive.");
@@ -16,10 +16,16 @@ public sealed class FleetCommandSettings
             throw new InvalidOperationException("FleetCommands:StartLateLimitMinutes must not be negative.");
         if (acceptWindowSeconds <= 0)
             throw new InvalidOperationException("FleetCommands:AcceptWindowSeconds must be positive.");
+        if (legResultTimeoutSeconds <= 0)
+            throw new InvalidOperationException("FleetCommands:LegResultTimeoutSeconds must be positive.");
+        if (sweepIntervalSeconds <= 0)
+            throw new InvalidOperationException("FleetCommands:SweepIntervalSeconds must be positive.");
         Enabled = enabled;
         MaxTelemetryAge = TimeSpan.FromSeconds(maxTelemetryAgeSeconds);
         StartLateLimit = TimeSpan.FromMinutes(startLateLimitMinutes);
         AcceptWindow = TimeSpan.FromSeconds(acceptWindowSeconds);
+        LegResultTimeout = TimeSpan.FromSeconds(legResultTimeoutSeconds);
+        SweepInterval = TimeSpan.FromSeconds(sweepIntervalSeconds);
     }
 
     public bool Enabled { get; }
@@ -29,4 +35,7 @@ public sealed class FleetCommandSettings
     public TimeSpan StartLateLimit { get; }
     /// <summary>A GoTo's AcceptBy is its issue time plus this. Initial value, not measured yet.</summary>
     public TimeSpan AcceptWindow { get; }
+    /// <summary>An accepted GoTo with no terminal result after this is UNKNOWN. Initial value, not measured yet.</summary>
+    public TimeSpan LegResultTimeout { get; }
+    public TimeSpan SweepInterval { get; }
 }
