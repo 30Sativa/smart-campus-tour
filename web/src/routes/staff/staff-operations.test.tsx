@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToastStore } from '../../components/ui/toast-store'
@@ -130,6 +130,22 @@ describe('pre-start check on the real Tour API', () => {
     expect(screen.queryByText('Đã chuyển trang')).not.toBeInTheDocument()
   })
 
+  it('keeps the checks on screen when a poll fails but locks Start until they are current again', async () => {
+    tour = detail('READY'); checks = OPEN_CHECKS
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/tours/tour-1/start']}>
+      <Routes><Route path="/staff/tours/:tourId/start" element={<StartCheckPage />} /></Routes>
+    </MemoryRouter></QueryClientProvider>)
+    await screen.findByRole('button', { name: /Bắt đầu Tour/ })
+    tickAll()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeEnabled())
+    vi.mocked(fetch).mockImplementation(async () => json({ success: false, message: 'down' }, 503))
+    await act(() => client.refetchQueries())
+    expect(await screen.findByText(/Không cập nhật được điều kiện từ máy chủ/)).toBeInTheDocument()
+    expect(screen.getByText('Sẵn sàng bắt đầu')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeDisabled()
+  })
+
   it('opens the console after the server confirms Start', async () => {
     tour = detail('READY'); checks = OPEN_CHECKS
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
@@ -143,47 +159,174 @@ describe('pre-start check on the real Tour API', () => {
 })
 
 describe('live console on the real Tour API', () => {
-  const running = (overrides: Partial<TourDetails['execution'] & object> = {}, next: TourActionAvailability = { allowed: false, reason: 'Robot còn lệnh đang mở.', blockedBy: ['noUnresolvedCommand'] }) => detail('RUNNING', {
+  const allow: TourActionAvailability = { allowed: true, reason: null, blockedBy: [] }
+  const refuse = (reason: string, ...blockedBy: string[]): TourActionAvailability => ({ allowed: false, reason, blockedBy })
+  type Actions = NonNullable<TourDetails['allowedActions']>
+  const actions = (overrides: Partial<Actions> = {}): Actions => ({
+    start: refuse('Chỉ Start được Tour READY.', 'tourReady'),
+    next: refuse('Robot còn lệnh đang mở.', 'noUnresolvedCommand'),
+    endEarly: allow,
+    retryLeg: refuse('Chỉ thử lại được chặng đã kết thúc thật sự với FAILED hoặc bị từ chối.', 'TOUR_RETRY_NOT_ALLOWED'),
+    reconcile: refuse('Chặng hiện tại không có lệnh UNKNOWN.', 'COMMAND_STATE_INVALID'),
+    ...overrides,
+  })
+  const running = (overrides: Partial<TourDetails['execution'] & object> = {}, allowed: Partial<Actions> = {}, state: TourDetails['tour']['state'] = 'RUNNING') => detail(state, {
     startedAt: '2026-11-04T02:01:00Z',
-    execution: { state: 'RUNNING', operationalStatus: 'NORMAL', assistanceReason: null, currentStep: 'NAVIGATING', currentLegId: 'leg-1', currentLegKind: 'TO_POI',
+    execution: { state, operationalStatus: 'NORMAL', assistanceReason: null, currentStep: 'NAVIGATING', currentLegId: 'leg-1', currentLegKind: 'TO_POI',
       currentRevisionStopId: 'rrs-1', lastArrivedRevisionStopId: null, dwellDeadlineAt: null,
       command: { id: 'cmd-1', kind: 'GoTo', state: 'PENDING', outcome: null, reasonCode: null }, ...overrides },
-    allowedActions: { start: { allowed: false, reason: 'Chỉ Start được Tour READY.', blockedBy: ['tourReady'] }, next },
+    allowedActions: actions(allowed),
   })
+  const dialog = () => screen.getByRole('dialog')
+  const confirm = (name: string) => fireEvent.click(within(dialog()).getByRole('button', { name }))
+  const typeReason = (text: string) => fireEvent.change(within(dialog()).getByRole('textbox'), { target: { value: text } })
 
-  it('shows the Tour state and the robot command as separate states, with Next held by the server', async () => {
+  it('keeps the Tour state and the robot command apart, says what is happening, and offers no forward step before the robot takes the command', async () => {
     tour = running()
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
-    const state = await screen.findByRole('region', { name: 'Trạng thái Tour' })
+    const situation = await screen.findByRole('region', { name: 'Tình hình hiện tại' })
+    expect(within(situation).getByText('Chờ robot lấy lệnh')).toBeInTheDocument()
+    const state = screen.getByRole('region', { name: 'Trạng thái Tour' })
     expect(within(state).getByText('Đang diễn ra')).toBeInTheDocument()
     expect(within(state).getByText('Đang di chuyển tới POI')).toBeInTheDocument()
     const command = screen.getByRole('region', { name: 'Lệnh robot' })
-    expect(within(command).getByText('Chờ robot lấy lệnh')).toBeInTheDocument()
     expect(within(command).getByText(/Robot chưa di chuyển vì lệnh này/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Đi tiếp/ })).toBeDisabled()
-    expect(screen.getByText(/Chưa đi tiếp được: Robot còn lệnh đang mở/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Kết thúc sớm/ })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Đi tiếp/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Kết thúc sớm Tour/ })).toBeEnabled()
     expect(screen.getByText(/không phải nút dừng khẩn cấp/)).toBeInTheDocument()
+    expect(screen.queryByText(/Chưa có trên hệ thống/)).not.toBeInTheDocument()
   })
 
-  it('explains a Tour that needs assistance and the robot reason, without offering a fake recovery', async () => {
-    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandRejected', command: { id: 'cmd-1', kind: 'GoTo', state: 'REJECTED', outcome: null, reasonCode: 'MAP_MISMATCH' } })
+  it('sends Next with the row version once the server allows it at a stop', async () => {
+    tour = running({ currentStep: 'OBSERVING', dwellDeadlineAt: '2026-11-04T02:10:00Z', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { next: allow })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
-    expect(await screen.findByText('Cần hỗ trợ: Robot từ chối lệnh')).toBeInTheDocument()
-    expect(screen.getByText('Lý do: Robot đang dùng bản đồ khác bản đồ của lệnh')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Thử lại chặng/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Đối soát lệnh/ })).toBeDisabled()
-  })
-
-  it('sends Next with the row version once the server allows it', async () => {
-    tour = running({ currentStep: 'OBSERVING', dwellDeadlineAt: '2026-11-04T02:10:00Z', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { allowed: true, reason: null, blockedBy: [] })
-    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
-    expect(await screen.findByText(/Tour không tự đi tiếp/)).toBeInTheDocument()
+    expect(await screen.findByText('Đang dừng tại điểm tham quan')).toBeInTheDocument()
+    expect(screen.getByText(/Tour không tự đi tiếp/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Đi tiếp/ }))
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đi tiếp' }))
+    confirm('Đi tiếp')
     await waitFor(() => expect(writes).toHaveLength(1))
     expect(writes[0].path).toBe('/api/staff/manage/tours/tour-1/next')
     expect(writes[0].body).toMatchObject({ expectedRowVersion: 'AAAAAAAAB9E=' })
+  })
+
+  it('offers Retry after a rejected leg, with the robot reason, and sends it with the row version', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandRejected', command: { id: 'cmd-1', kind: 'GoTo', state: 'REJECTED', outcome: null, reasonCode: 'MAP_MISMATCH' } }, { retryLeg: allow })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText('Cần hỗ trợ: Robot từ chối lệnh')).toBeInTheDocument()
+    expect(screen.getByText('Lý do: Robot đang dùng bản đồ khác bản đồ của lệnh')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Đối soát lệnh/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Thử lại chặng/ }))
+    confirm('Thử lại')
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toMatchObject({ path: '/api/staff/manage/tours/tour-1/retry-leg', body: { expectedRowVersion: 'AAAAAAAAB9E=' } })
+    await waitFor(() => expect(useToastStore.getState().toasts[0]?.title).toBe('Đã tạo lệnh mới cho chặng'))
+  })
+
+  it('keeps Retry disabled with the failing movement check named', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'NavigationFailed', command: { id: 'cmd-1', kind: 'GoTo', state: 'FAILED', outcome: 'FAILED', reasonCode: null } },
+      { retryLeg: refuse('Chưa đủ điều kiện để robot di chuyển.', 'telemetryFresh') })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByRole('button', { name: /Thử lại chặng/ })).toBeDisabled()
+    expect(screen.getByText(/Chưa thực hiện được: Chưa đủ điều kiện để robot di chuyển\. · Telemetry robot còn mới/)).toBeInTheDocument()
+  })
+
+  it('says only End Early remains when the leg expired before the robot took it', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandUnknown', command: { id: 'cmd-1', kind: 'GoTo', state: 'EXPIRED', outcome: null, reasonCode: 'EXPIRED' } })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText(/robot chưa nhận lệnh này\. Máy chủ không cho thử lại/)).toBeInTheDocument()
+    expect(screen.getByText(/Dùng mục Kết thúc sớm/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Thử lại chặng|Đối soát lệnh|Đi tiếp/ })).not.toBeInTheDocument()
+  })
+
+  it('reconciles an UNKNOWN command only with what was seen on site, reusing the request id for the same reason', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandUnknown', command: { id: 'cmd-1', kind: 'GoTo', state: 'UNKNOWN', outcome: null, reasonCode: 'LEG_RESULT_TIMEOUT' } }, { reconcile: allow })
+    writeReply = { status: 500, body: { success: false, message: 'Server error' } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText('Chưa rõ robot đã làm gì với lệnh')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Đối soát lệnh/ }))
+    expect(within(dialog()).getByRole('button', { name: 'Đối soát' })).toBeDisabled()
+    typeReason('Robot đứng yên cạnh phòng 601')
+    confirm('Đối soát')
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0].path).toBe('/api/staff/manage/tours/tour-1/commands/cmd-1/reconcile')
+    expect(writes[0].body).toMatchObject({ reason: 'Robot đứng yên cạnh phòng 601' })
+    expect(writes[0].body).not.toHaveProperty('expectedRowVersion')
+    // A failed or lost answer is retried as the same request, so the server replays instead of acting twice.
+    await within(dialog()).findByRole('alert')
+    confirm('Đối soát')
+    await waitFor(() => expect(writes).toHaveLength(2))
+    expect(writes[1].body.requestId).toBe(writes[0].body.requestId)
+    typeReason('Robot đứng yên ở hành lang')
+    confirm('Đối soát')
+    await waitFor(() => expect(writes).toHaveLength(3))
+    expect(writes[2].body.requestId).not.toBe(writes[0].body.requestId)
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('ends a Tour early only with a reason, says it is not an emergency stop, and claims nothing on a refusal', async () => {
+    tour = running({ command: { id: 'cmd-1', kind: 'GoTo', state: 'ACCEPTED', outcome: null, reasonCode: null } })
+    writeReply = { status: 409, body: { success: false, errors: { code: 'TOUR_STATE_INVALID' } } }
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /Kết thúc sớm Tour/ }))
+    expect(within(dialog()).getByText(/máy chủ xếp một lệnh hủy/)).toBeInTheDocument()
+    expect(within(dialog()).getByText(/Đây không phải dừng khẩn cấp/)).toBeInTheDocument()
+    expect(within(dialog()).getByRole('button', { name: 'Kết thúc sớm' })).toBeDisabled()
+    typeReason('Hành lang bị chặn')
+    confirm('Kết thúc sớm')
+    expect(await within(dialog()).findByText(/Tour không còn ở trạng thái cho phép thao tác này/)).toBeInTheDocument()
+    expect(writes[0]).toMatchObject({ path: '/api/staff/manage/tours/tour-1/end-early', body: { reason: 'Hành lang bị chặn', expectedRowVersion: 'AAAAAAAAB9E=' } })
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('still offers Reconcile on a Tour that ended early with an UNKNOWN command, and no End Early', async () => {
+    tour = running({ operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandUnknown', command: { id: 'cmd-1', kind: 'GoTo', state: 'UNKNOWN', outcome: null, reasonCode: 'ACK_TIMEOUT' } },
+      { reconcile: allow, endEarly: refuse('Chỉ kết thúc sớm được Tour đang chạy.', 'TOUR_STATE_INVALID') }, 'CANCELLED')
+    tour.endedAt = '2026-11-04T02:20:00Z'
+    tour.endReason = 'Hành lang bị chặn'
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText('Tour đã kết thúc, lệnh di chuyển cuối chưa rõ kết quả')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Đối soát lệnh/ })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /Kết thúc sớm Tour/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Hành lang bị chặn')).toBeInTheDocument()
+  })
+
+  it('gives another Staff the same picture without any control, naming who operates', async () => {
+    useAuthStore.getState().setAuth('test-token', { userId: 'staff-2', username: 'minh', role: 'Staff' })
+    tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } },
+      { next: refuse('Chỉ người vận hành được giao cho Tour mới đi tiếp được.', 'callerIsOperator') })
+    renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+    expect(await screen.findByText(/Chỉ Lan Staff mới thao tác được/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Đi tiếp|Kết thúc sớm/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps the last answer on screen when a poll fails, marks it old and locks the forward step', async () => {
+    tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { next: allow })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/live/tour-1']}>
+      <Routes><Route path="/staff/live/:tourId" element={<LiveOperationsPage />} /></Routes>
+    </MemoryRouter></QueryClientProvider>)
+    expect(await screen.findByRole('button', { name: /Đi tiếp/ })).toBeEnabled()
+    vi.mocked(fetch).mockImplementation(async () => json({ success: false, message: 'down' }, 503))
+    await act(() => client.refetchQueries())
+    expect(await screen.findByText(/Không cập nhật được từ máy chủ/)).toBeInTheDocument()
+    expect(screen.getByText('Đang dừng tại điểm tham quan')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Đi tiếp/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Kết thúc sớm Tour/ })).toBeEnabled()
+  })
+
+  it('cannot confirm an open Next once the server withdraws it', async () => {
+    tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { next: allow })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/staff/live/tour-1']}>
+      <Routes><Route path="/staff/live/:tourId" element={<LiveOperationsPage />} /></Routes>
+    </MemoryRouter></QueryClientProvider>)
+    fireEvent.click(await screen.findByRole('button', { name: /Đi tiếp/ }))
+    tour = running({ currentStep: 'OBSERVING', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } },
+      { next: refuse('Chưa đủ điều kiện để robot di chuyển.', 'operatorConsoleConnected') })
+    await act(() => client.refetchQueries())
+    expect(await within(dialog()).findByText(/không còn được phép: .*Console của người vận hành đang kết nối/)).toBeInTheDocument()
+    expect(within(dialog()).getByRole('button', { name: 'Đi tiếp' })).toBeDisabled()
+    expect(writes).toHaveLength(0)
   })
 })
 

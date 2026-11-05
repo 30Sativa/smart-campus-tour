@@ -63,6 +63,7 @@ export default function OverviewPage() {
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-[#0f172a]">{detail.tour.name}</span>
                     <span className="mt-1 flex flex-wrap gap-1.5">
+                      {detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE' && <ToneBadge tone="danger">Cần hỗ trợ</ToneBadge>}
                       {detail.execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[detail.execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
                       {command && <ToneBadge tone={commandStateInfo(command.state).tone}>Lệnh: {commandStateInfo(command.state).label}</ToneBadge>}
                     </span>

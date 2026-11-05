@@ -6,7 +6,7 @@ import { formatTime } from '../formatters'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
 import {
-  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, assistanceInfo, commandStateInfo, robotReasonText,
+  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, commandStateInfo, robotReasonText,
 } from './operation-labels'
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
@@ -24,7 +24,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** The robot command of the current leg: its own lifecycle, separate from the Tour's state. */
-export function CommandCard({ command }: { command: TourCommand | null | undefined }) {
+export function CommandCard({ command, legId, robotCode }: { command: TourCommand | null | undefined; legId?: string | null; robotCode?: string | null }) {
   if (!command) return <p className="text-[13px] text-[#64748b]">Chặng hiện tại không có lệnh robot nào.</p>
   const state = commandStateInfo(command.state)
   const reason = robotReasonText(command.reasonCode)
@@ -36,34 +36,44 @@ export function CommandCard({ command }: { command: TourCommand | null | undefin
       </div>
       <p className="mt-1.5 text-xs leading-5 text-[#475569]">{state.meaning}</p>
       {reason && <p className="mt-1 text-xs font-semibold text-[#9d3428]">Lý do: {reason}</p>}
+      {robotCode && legId && <RobotLegReport robotCode={robotCode} legId={legId} />}
       <p className="mt-1.5 font-mono text-[11px] text-[#94a3b8]" title="Mã lệnh">{command.id}</p>
     </div>
   )
 }
 
-/** Where the Tour is: state, operational status, step, and the command it is waiting on. */
+/**
+ * Which leg the robot itself says it is running, beside the command state. It
+ * helps a person judge an uncertain command on site; it never replaces the
+ * command state and proves nothing about the robot's safety.
+ */
+function RobotLegReport({ robotCode, legId }: { robotCode: string; legId: string }) {
+  const { robot } = useFleetRobot(robotCode)
+  if (!robot) return null
+  const same = robot.legId?.toLowerCase() === legId.toLowerCase()
+  const text = !robot.legId ? 'không thực hiện chặng nào' : same ? 'đang thực hiện chặng này' : 'đang thực hiện một chặng khác'
+  return <p className="mt-1.5 text-xs leading-5 text-[#475569]">
+    <span className="font-semibold">Robot tự báo:</span> {text}{robot.syncFresh ? '' : ' (báo cáo đã cũ)'}. Đây là telemetry, không phải kết quả lệnh.
+  </p>
+}
+
+/** Where the Tour is: state, operational status, step and times. What to do about it is the console's situation card. */
 export function ExecutionPanel({ detail, now }: { detail: TourDetails; now: number }) {
   const execution = detail.execution
   const state = detail.tour.state
-  const assist = execution?.operationalStatus === 'NEEDS_ASSISTANCE'
-  const reason = assist ? assistanceInfo(execution?.assistanceReason) : null
-  const dwell = execution?.currentStep === 'OBSERVING' && execution.dwellDeadlineAt ? execution.dwellDeadlineAt : null
+  // An ended Tour keeps its last status and step columns; shown as current they would say it is still moving.
+  const running = state === 'RUNNING'
+  const dwell = running && execution?.currentStep === 'OBSERVING' && execution.dwellDeadlineAt ? execution.dwellDeadlineAt : null
   const dwellLeft = dwell ? Math.round((new Date(dwell).getTime() - now) / 1000) : null
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <TourStateBadge state={state} />
-        {execution?.operationalStatus && <ToneBadge tone={OPERATIONAL_LABEL[execution.operationalStatus].tone}>{OPERATIONAL_LABEL[execution.operationalStatus].label}</ToneBadge>}
-        {execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
+        {running && execution?.operationalStatus && <ToneBadge tone={OPERATIONAL_LABEL[execution.operationalStatus].tone}>{OPERATIONAL_LABEL[execution.operationalStatus].label}</ToneBadge>}
+        {running && execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
       </div>
-      {reason && (
-        <div role="alert" className="rounded-xl border border-[#f5c8c2] bg-[#fff4f2] p-3 text-[13px] text-[#9d3428]">
-          <p className="font-bold">Cần hỗ trợ: {reason.label}</p>
-          <p className="mt-0.5 leading-5">{reason.hint}</p>
-        </div>
-      )}
       <dl className="divide-y divide-[#f1f5f9]">
-        {execution?.currentLegKind && <Row label="Chặng hiện tại">{LEG_LABEL[execution.currentLegKind] ?? 'Chặng khác'}</Row>}
+        {execution?.currentLegKind && <Row label={running ? 'Chặng hiện tại' : 'Chặng cuối cùng'}>{LEG_LABEL[execution.currentLegKind] ?? 'Chặng khác'}</Row>}
         {dwell && <Row label="Thời gian dừng gợi ý">{formatTime(dwell)}{dwellLeft !== null && dwellLeft > 0 ? `, còn ${dwellLeft} giây` : ', đã hết'}</Row>}
         {detail.startedAt && <Row label="Bắt đầu lúc">{formatTime(detail.startedAt)}</Row>}
         {detail.endedAt && <Row label="Kết thúc lúc">{formatTime(detail.endedAt)}</Row>}

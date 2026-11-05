@@ -32,9 +32,10 @@ shared rules; this file only covers what is specific to `web/`.
     roster; invitation support uses the real owner-scoped API (ADR-0015).
   - `/staff/*`: tour operations, for `Staff` only. What an operator does
     around a remote tour: today's Tours, the pre-start check and Start, live
-    operations (Tour state, the current robot command, Next), robot telemetry.
-    All of it reads the real Tour API (ADR-0042/0043) and `/hubs/operations`;
-    End Early, Retry, Reconcile and the event log wait for backend endpoints.
+    operations (Tour state, the current robot command, Next, Retry leg, End
+    Early, Reconcile), robot telemetry. All of it reads the real Tour API
+    (ADR-0042/0043) and `/hubs/operations`; the Tour event log waits for a
+    backend read endpoint.
     Scope: `docs/requirements/campus-tour-scope.md`; current screen map and
     blockers in `web/docs/staff-operations.md`.
     `CampusStaff` and `TourOperator` were merged into the one

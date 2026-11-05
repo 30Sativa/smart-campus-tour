@@ -87,8 +87,8 @@ const ASSISTANCE: Record<string, { label: string; hint: string }> = {
   NavigationFailed: { label: 'Lỗi điều hướng', hint: 'Robot báo không tới được đích. Kiểm tra đường đi tại chỗ.' },
   CommandRejected: { label: 'Robot từ chối lệnh', hint: 'Robot không nhận lệnh di chuyển. Xem lý do robot báo bên dưới.' },
   CommandUnknown: { label: 'Chưa rõ kết quả lệnh', hint: 'Không biết robot đã làm gì với lệnh. Kiểm tra robot tại chỗ trước khi làm gì tiếp.' },
-  RobotDisconnected: { label: 'Mất kết nối robot', hint: 'Máy chủ không nhận telemetry mới. Robot tự dừng tại chỗ khi mất kết nối.' },
-  BackendRestarted: { label: 'Máy chủ vừa khởi động lại', hint: 'Không có gì tự chạy tiếp sau khi máy chủ khởi động lại.' },
+  RobotDisconnected: { label: 'Mất kết nối robot', hint: 'Robot không lấy lệnh trước thời hạn và máy chủ không còn nhận telemetry mới từ robot. Không coi là robot đã dừng: kiểm tra robot tại chỗ.' },
+  BackendRestarted: { label: 'Máy chủ vừa khởi động lại', hint: 'Máy chủ không tự gửi lệnh mới sau khi khởi động lại. Robot có thể vẫn đang thực hiện lệnh cũ: xem trạng thái lệnh và kiểm tra robot tại chỗ.' },
 }
 export function assistanceInfo(reason: string | null | undefined): { label: string; hint: string } {
   return (reason && ASSISTANCE[reason]) || { label: 'Cần nhân viên kiểm tra', hint: 'Xem trạng thái lệnh robot bên dưới.' }
@@ -116,12 +116,16 @@ export const COMMAND_KIND_LABEL: Record<string, string> = { GoTo: 'Lệnh di chu
 const ROBOT_REASON: Record<string, string> = {
   MAP_MISMATCH: 'Robot đang dùng bản đồ khác bản đồ của lệnh',
   BUSY: 'Robot đang bận một lệnh khác',
-  EXPIRED: 'Robot nhận lệnh sau thời hạn',
+  EXPIRED: 'Quá thời hạn nhận lệnh',
+  ACK_TIMEOUT: 'Robot đã lấy lệnh nhưng không báo nhận trước thời hạn',
+  LEG_RESULT_TIMEOUT: 'Robot không báo kết quả chặng trước thời hạn',
+  STREAM_CHANGED: 'Kênh telemetry của robot đã đổi sau khi robot lấy lệnh (robot hoặc cầu nối có thể đã khởi động lại)',
+  LEG_ENDED: 'Chặng đã đóng nên lệnh này không còn cần',
   UNKNOWN_LEG: 'Robot không nhận ra chặng này',
   WITHDRAWN: 'Lệnh đã được rút trước khi robot lấy',
 }
-/** A robot/backend reason code in words; an unlisted one is shown as a code, labelled as such. */
+/** A robot or server reason code in words; an unlisted one is shown as a code, labelled as such. */
 export function robotReasonText(code: string | null | undefined): string | null {
   if (!code) return null
-  return ROBOT_REASON[code] ?? `Mã lý do từ robot: ${code}`
+  return ROBOT_REASON[code] ?? `Mã lý do: ${code}`
 }
