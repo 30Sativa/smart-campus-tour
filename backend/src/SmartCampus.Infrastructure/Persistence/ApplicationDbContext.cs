@@ -44,6 +44,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Robot> Robots { get; set; }
 
+    public virtual DbSet<RobotCommand> RobotCommands { get; set; }
+
     public virtual DbSet<RosterRow> RosterRows { get; set; }
 
     public virtual DbSet<RosterEmailChangeRequest> RosterEmailChangeRequests { get; set; }
@@ -663,6 +665,85 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_Robots_CurrentTourId");
         });
 
+        modelBuilder.Entity<RobotCommand>(entity =>
+        {
+            entity.HasIndex(e => new { e.RobotId, e.IssuedAt }, "IX_RobotCommands_RobotOpen").HasFilter("([IsOpen]=(1))");
+
+            entity.HasIndex(e => new { e.State, e.AcceptBy }, "IX_RobotCommands_Sweep").HasFilter("([IsOpen]=(1))");
+
+            entity.HasIndex(e => e.TargetCommandId, "IX_RobotCommands_TargetCommand").HasFilter("([TargetCommandId] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.TourId, e.IssuedAt }, "IX_RobotCommands_Tour");
+
+            entity.HasIndex(e => e.LegId, "UX_RobotCommands_OneGoToPerLeg")
+                .IsUnique()
+                .HasFilter("([Kind]='GoTo')");
+
+            entity.HasIndex(e => e.LegId, "UX_RobotCommands_OneOpenCancelPerLeg")
+                .IsUnique()
+                .HasFilter("([Kind]='Cancel' AND [IsOpen]=(1))");
+
+            entity.HasIndex(e => e.RobotId, "UX_RobotCommands_OneOpenGoTo")
+                .IsUnique()
+                .HasFilter("([Kind]='GoTo' AND [IsOpen]=(1))");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.AcceptBy).HasPrecision(3);
+            entity.Property(e => e.AcceptedAt).HasPrecision(3);
+            entity.Property(e => e.CompletedAt).HasPrecision(3);
+            entity.Property(e => e.DeliveredAt).HasPrecision(3);
+            entity.Property(e => e.FrameId).HasMaxLength(100);
+            entity.Property(e => e.IssuedAt).HasPrecision(3);
+            entity.Property(e => e.Kind)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.LegKind)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.MapKey).HasMaxLength(100);
+            entity.Property(e => e.Outcome)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ReasonCode).HasMaxLength(100);
+            entity.Property(e => e.ResolutionNote).HasMaxLength(1000);
+            entity.Property(e => e.ResolvedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.State)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.X).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.Y).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.Yaw).HasColumnType("decimal(9, 6)");
+
+            entity.HasOne(d => d.IssuedByUser).WithMany(p => p.RobotCommandIssuedByUsers)
+                .HasForeignKey(d => d.IssuedByUserId)
+                .HasConstraintName("FK_RobotCommands_IssuedByUserId");
+
+            entity.HasOne(d => d.ResolvedByUser).WithMany(p => p.RobotCommandResolvedByUsers)
+                .HasForeignKey(d => d.ResolvedByUserId)
+                .HasConstraintName("FK_RobotCommands_ResolvedByUserId");
+
+            entity.HasOne(d => d.Robot).WithMany(p => p.RobotCommands)
+                .HasForeignKey(d => d.RobotId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RobotCommands_RobotId");
+
+            entity.HasOne(d => d.RouteRevisionStop).WithMany(p => p.RobotCommands)
+                .HasForeignKey(d => d.RouteRevisionStopId)
+                .HasConstraintName("FK_RobotCommands_RouteRevisionStopId");
+
+            entity.HasOne(d => d.TargetCommand).WithMany(p => p.InverseTargetCommand)
+                .HasForeignKey(d => d.TargetCommandId)
+                .HasConstraintName("FK_RobotCommands_TargetCommandId");
+
+            entity.HasOne(d => d.Tour).WithMany(p => p.RobotCommands)
+                .HasForeignKey(d => d.TourId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RobotCommands_TourId");
+        });
+
         modelBuilder.Entity<RosterRow>(entity =>
         {
             entity.Property(e => e.Id).ValueGeneratedNever();
@@ -1047,6 +1128,14 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.CreatedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Tours_CreatedByUserId");
+
+            entity.HasOne(d => d.CurrentRevisionStop).WithMany(p => p.TourCurrentRevisionStops)
+                .HasForeignKey(d => d.CurrentRevisionStopId)
+                .HasConstraintName("FK_Tours_CurrentRevisionStopId");
+
+            entity.HasOne(d => d.LastArrivedRevisionStop).WithMany(p => p.TourLastArrivedRevisionStops)
+                .HasForeignKey(d => d.LastArrivedRevisionStopId)
+                .HasConstraintName("FK_Tours_LastArrivedRevisionStopId");
 
             entity.HasOne(d => d.CurrentRouteStop).WithMany(p => p.TourCurrentRouteStops)
                 .HasForeignKey(d => d.CurrentRouteStopId)

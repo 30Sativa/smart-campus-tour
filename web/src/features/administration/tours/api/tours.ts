@@ -1,6 +1,6 @@
 import { apiClient } from '../../../../api/client'
 import type { ApiResponse, PagedApiResponse } from '../../../../api/contracts/shared'
-import type { CreateTourInput, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourSlots, TourSummary } from '../types'
+import type { CreateTourInput, StartConfirmation, TourDetails, TourInput, TourListQuery, TourOperator, TourRobotOption, TourSlots, TourStartChecks, TourSummary } from '../types'
 
 type Mutation = ApiResponse<{ id: string }>
 
@@ -29,4 +29,20 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}`, { method: 'PUT', json: body }).then(() => id),
   cancel: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/cancel`, { method: 'POST', json: body }).then(() => id),
+  markReady: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/ready`, { method: 'POST', json: body }).then(() => id),
+  reopen: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/reopen`, { method: 'POST', json: body }).then(() => id),
+  startChecks: (id: string) => apiClient<ApiResponse<TourStartChecks>>(`/api/staff/manage/tours/${id}/start-checks`).then(r => r.data!),
+  start: (id: string, body: { requestId: string; expectedRowVersion: string; confirmation: StartConfirmation }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/start`, { method: 'POST', json: body }).then(() => id),
+  next: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/next`, { method: 'POST', json: body }).then(() => id),
+  endEarly: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/end-early`, { method: 'POST', json: body }).then(() => id),
+  retryLeg: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/retry-leg`, { method: 'POST', json: body }).then(() => id),
+  /** No row version: it targets one command, which the server locks and checks is still UNKNOWN. */
+  reconcile: (id: string, commandId: string, body: { requestId: string; reason: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/commands/${commandId}/reconcile`, { method: 'POST', json: body }).then(() => id),
 }

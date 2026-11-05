@@ -37,5 +37,15 @@ class FleetBridgeLaunchDefaultTests(unittest.TestCase):
             self.assertIn('check_fleet_time_sync.py', guide_text)
 
 
+class FleetBridgeCommandDefaultTests(unittest.TestCase):
+    def test_commands_are_off_in_the_shipped_config(self):
+        config = (PACKAGE_ROOT / 'config/fleet_bridge.yaml').read_text(encoding='utf-8')
+        self.assertIn('commands_enabled: false', config)
+        node = (PACKAGE_ROOT / 'fleet_bridge/node.py').read_text(encoding='utf-8')
+        self.assertIn("declare_parameter('commands_enabled', False)", node)
+        launch = (PACKAGE_ROOT / 'launch/fleet_bridge.launch.py').read_text(encoding='utf-8')
+        self.assertNotIn('commands_enabled', launch)
+
+
 if __name__ == '__main__':
     unittest.main()

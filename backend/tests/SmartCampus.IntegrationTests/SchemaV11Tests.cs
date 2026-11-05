@@ -11,6 +11,8 @@ using MediatR;
 using Microsoft.Data.SqlClient;
 using SmartCampus.Application;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Common.Abstractions.FleetSync;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.MapPoi;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
@@ -21,6 +23,7 @@ using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Infrastructure.Persistence;
 using SmartCampus.Infrastructure.Persistence.Repositories;
+using SmartCampus.Infrastructure.Integrations.FleetSync;
 using SmartCampus.Infrastructure.Authentication.PasswordHashing;
 using SmartCampus.Domain.Entities;
 using Xunit.Abstractions;
@@ -317,6 +320,8 @@ public sealed class SchemaV11Tests
         Assert.Contains(await sender.Send(new ListRouteTestParticipantsQuery()), person => person.UserId == participatingStaffId);
         Assert.Equal(map.PackageSha256, draft1.MapPackageSha256);
         Assert.Equal("Nội dung thuyết minh", Assert.Single(draft1.Stops).NarrationText);
+        Assert.Equal(await db.ScalarAsync<Guid>($"SELECT Id FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId:D}';"),
+            draft1.Stops[0].Id);
         Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}';"));
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId, draft1.RevisionId,
             new(Guid.NewGuid(), 1)));
@@ -682,6 +687,8 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.11-to-v1.12-robot-lifecycle.sql");
         await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
         await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
+        await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
+        await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -692,7 +699,9 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.13", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.14", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RobotCommands';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Tours') AND name='CurrentRevisionStopId' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name='DeactivatedAt' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourRobotReservations';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RouteTestRuns') AND name='MeasurementBasis' AND is_nullable=1;"));
@@ -793,6 +802,252 @@ public sealed class SchemaV11Tests
         Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.indexes WHERE name=N'UX_MapVersions_Area_PackageSha256';"));
     }
 
+    [SchemaV17Fact]
+    public async Task RobotCommandsUpgrade_AppliesOnce_AndRerunsWithoutChange()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.13';");
+
+        await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
+        await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
+
+        Assert.Equal("1.14", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.RobotCommands') AND is_unique=1 AND has_filter=1;"));
+        Assert.Equal(13, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RobotCommands') AND is_disabled=0 AND is_not_trusted=0;"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.foreign_keys WHERE parent_object_id=OBJECT_ID(N'dbo.Tours') AND name IN (N'FK_Tours_CurrentRevisionStopId',N'FK_Tours_LastArrivedRevisionStopId');"));
+        Assert.Equal(2, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Tours;"));
+        // The patch builds the same structure as the snapshot.
+        await using var snapshot = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        const string checks = """
+            SELECT STRING_AGG(CONVERT(nvarchar(max), CONCAT(name, ':', definition)), '|') WITHIN GROUP (ORDER BY name)
+            FROM sys.check_constraints WHERE parent_object_id IN (OBJECT_ID(N'dbo.RobotCommands'), OBJECT_ID(N'dbo.Tours'));
+            """;
+        Assert.Equal(await snapshot.ScalarAsync<string>(checks), await db.ScalarAsync<string>(checks));
+        const string columns = """
+            SELECT STRING_AGG(CONVERT(nvarchar(max), CONCAT(OBJECT_NAME(object_id), '.', name, ':', TYPE_NAME(user_type_id), ':', max_length, ':', precision, ':', scale, ':', is_nullable)), '|')
+                WITHIN GROUP (ORDER BY OBJECT_NAME(object_id), column_id)
+            FROM sys.columns WHERE object_id IN (OBJECT_ID(N'dbo.RobotCommands'), OBJECT_ID(N'dbo.Tours'));
+            """;
+        Assert.Equal(await snapshot.ScalarAsync<string>(columns), await db.ScalarAsync<string>(columns));
+        const string indexes = """
+            SELECT STRING_AGG(CONVERT(nvarchar(max), CONCAT(name, ':', is_unique, ':', filter_definition)), '|') WITHIN GROUP (ORDER BY name)
+            FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.RobotCommands') AND name IS NOT NULL;
+            """;
+        Assert.Equal(await snapshot.ScalarAsync<string>(indexes), await db.ScalarAsync<string>(indexes));
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommandsUpgrade_StopsWhenAVersionedTourUsesLegacyStops_AndChangesNothing()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.13';");
+        await db.ExecuteAsync($"""
+            ALTER TABLE dbo.Tours NOCHECK CONSTRAINT FK_Tours_RouteRevisionId;
+            UPDATE dbo.Tours SET RouteRevisionId = NEWID(), OperatorUserId = '{Id(1)}', CurrentRouteStopId = '{Id(21)}' WHERE Id = '{Id(41)}';
+            """);
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql"));
+
+        Assert.Contains(Id(41), error.Message);
+        Assert.DoesNotContain(Id(42), error.Message);
+        Assert.Equal("1.13", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RobotCommands';"));
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Tours') AND name='CurrentRevisionStopId';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommands_FilteredUniqueIndexes_AllowOneOpenGoToPerRobot_OneGoToPerLeg_OneOpenCancelPerLeg()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var legA = Id(201); var legB = Id(202); var legC = Id(203);
+        await db.ExecuteAsync(Command(Id(101), Id(81), legA));
+        // A second open GoTo on the same robot is refused, whatever its leg.
+        await db.ExpectErrorAsync(2601, Command(Id(102), Id(81), legB));
+        // UNKNOWN still holds the robot.
+        await db.ExecuteAsync(Moved(Id(101), "UNKNOWN", 1));
+        await db.ExpectErrorAsync(2601, Command(Id(102), Id(81), legB));
+        // Once reconciled the robot is free for a new leg.
+        await db.ExecuteAsync(Moved(Id(101), "RECONCILED", 0, $", ResolvedByUserId='{Id(1)}', ResolvedAt=SYSDATETIMEOFFSET(), ResolutionNote=N'Đã kiểm tra tại chỗ.'"));
+        await db.ExecuteAsync(Command(Id(102), Id(81), legB));
+        // One GoTo per leg, even on another robot and even when the first is closed: a retry is a new leg.
+        await db.ExpectErrorAsync(2601, Command(Id(103), Id(82), legA));
+        await db.ExecuteAsync(Command(Id(103), Id(82), legC));
+
+        await db.ExecuteAsync(Cancel(Id(111), Id(81), legB, Id(102)));
+        await db.ExpectErrorAsync(2601, Cancel(Id(112), Id(81), legB, Id(102)));
+        await db.ExecuteAsync($"UPDATE dbo.RobotCommands SET State='REJECTED', IsOpen=0, DeliveredAt=SYSDATETIMEOFFSET(), DeliveredStreamId=NEWID(), CompletedAt=SYSDATETIMEOFFSET() WHERE Id='{Id(111)}';");
+        await db.ExecuteAsync(Cancel(Id(112), Id(81), legB, Id(102)));
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommands_ChecksRefuseEachInconsistentRow()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        var n = 300;
+        // SQL Server names one violated CHECK; an unknown kind or state breaks every rule that reads it.
+        async Task Refused(string constraint, string sql, params string[] alsoBroken)
+        {
+            var error = await Assert.ThrowsAsync<SqlException>(() => db.ExecuteAsync(sql));
+            Assert.Equal(547, error.Number);
+            Assert.Contains(new[] { constraint }.Concat(alsoBroken), name => error.Message.Contains($"\"{name}\"", StringComparison.Ordinal));
+        }
+        string Row(Dictionary<string, string> overrides) => Command(Id(++n), Id(81), Id(++n), overrides);
+
+        await Refused("CK_RobotCommands_Kind", Row(new() { ["Kind"] = "'Move'" }), "CK_RobotCommands_Target", "CK_RobotCommands_IsOpen");
+        await Refused("CK_RobotCommands_State", Row(new() { ["State"] = "'DONE'" }), "CK_RobotCommands_IsOpen", "CK_RobotCommands_Delivery",
+            "CK_RobotCommands_Accepted", "CK_RobotCommands_Completed");
+        await Refused("CK_RobotCommands_LegKind", Row(new() { ["LegKind"] = "'TO_START'" }), "CK_RobotCommands_Stop");
+        await Refused("CK_RobotCommands_Stop", Row(new() { ["LegKind"] = "'TO_POI'" }));
+        await Refused("CK_RobotCommands_AcceptBy", Row(new() { ["AcceptBy"] = "DATEADD(SECOND,-1,SYSDATETIMEOFFSET())" }));
+        await Refused("CK_RobotCommands_Target", Row(new() { ["MapKey"] = "NULL" }));
+        await Refused("CK_RobotCommands_IsOpen", Row(new() { ["IsOpen"] = "0" }));
+        await Refused("CK_RobotCommands_Outcome", Row(new() { ["Outcome"] = "'ARRIVED'" }));
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+            await Refused("CK_RobotCommands_Outcome", Row(Closed(state, outcome: "NULL")));
+        await Refused("CK_RobotCommands_Outcome", Row(Closed("ARRIVED", outcome: "'FAILED'")));
+        await Refused("CK_RobotCommands_Delivery", Row(new() { ["DeliveredStreamId"] = "NEWID()", ["DeliveredAt"] = "SYSDATETIMEOFFSET()" }));
+        await Refused("CK_RobotCommands_Delivery", Row(new() { ["State"] = "'DELIVERED'", ["DeliveredAt"] = "SYSDATETIMEOFFSET()" }));
+        await Refused("CK_RobotCommands_Accepted", Row(new() { ["State"] = "'ACCEPTED'", ["DeliveredStreamId"] = "NEWID()", ["DeliveredAt"] = "SYSDATETIMEOFFSET()" }));
+        await Refused("CK_RobotCommands_Completed", Row(new() { ["CompletedAt"] = "SYSDATETIMEOFFSET()" }));
+        await Refused("CK_RobotCommands_Completed", Row(Closed("FAILED", completedAt: "NULL")));
+        await Refused("CK_RobotCommands_Resolution", Row(Closed("RECONCILED")));
+        await Refused("CK_RobotCommands_Resolution", Row(Closed("FAILED", extra: new() { ["ResolutionNote"] = "N'note'" })));
+
+        // A Cancel carries no target, needs its GoTo and never holds a navigation outcome.
+        await db.ExecuteAsync(Command(Id(399), Id(82), Id(398)));
+        await Refused("CK_RobotCommands_Target", Cancel(Id(397), Id(82), Id(398), Id(399), new() { ["X"] = "1" }));
+        await Refused("CK_RobotCommands_Target", Cancel(Id(397), Id(82), Id(398), Id(399), new() { ["TargetCommandId"] = "NULL" }));
+        await Refused("CK_RobotCommands_CancelState", Cancel(Id(397), Id(82), Id(398), Id(399), Closed("ARRIVED")));
+
+        // Valid closed rows are accepted, including a reconciled one with its resolution.
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+            await db.ExecuteAsync(Row(Closed(state)));
+        await db.ExecuteAsync(Row(Closed("RECONCILED", extra: new()
+            { ["ResolvedByUserId"] = $"'{Id(1)}'", ["ResolvedAt"] = "SYSDATETIMEOFFSET()", ["ResolutionNote"] = "N'Đã kiểm tra.'" })));
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommandOutcomeUpgrade_RejectsMissingOutcomes_PreservesHistory_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.14';");
+        const string bootstrapHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+        await db.ExecuteAsync(Command(Id(501), Id(81), Id(502), Closed("ARRIVED")));
+        var before = await db.ScalarAsync<byte[]>($"SELECT RowVersion FROM dbo.RobotCommands WHERE Id='{Id(501)}';");
+
+        await db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql");
+        var constraintId = await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');");
+        await db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql");
+
+        Assert.Equal(constraintId, await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.CK_RobotCommands_Outcome');"));
+        Assert.Equal(before, await db.ScalarAsync<byte[]>($"SELECT RowVersion FROM dbo.RobotCommands WHERE Id='{Id(501)}';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        Assert.Equal("1.15", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        const string check = "SELECT definition FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RobotCommands') AND name=N'CK_RobotCommands_Outcome' AND is_disabled=0 AND is_not_trusted=0;";
+        Assert.Equal(await snapshot.ScalarAsync<string>(check), await db.ScalarAsync<string>(check));
+        var n = 510;
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+        {
+            var id = Id(++n); var leg = Id(++n);
+            await db.ExpectErrorAsync(547, Command(id, Id(81), leg, Closed(state, outcome: "NULL")));
+            await db.ExpectErrorAsync(547, Command(id, Id(81), leg, Closed(state, outcome: "'INVALID'")));
+            await db.ExecuteAsync(Command(id, Id(81), leg, Closed(state)));
+            await db.ExpectErrorAsync(547, $"UPDATE dbo.RobotCommands SET Outcome=NULL WHERE Id='{id}';");
+        }
+    }
+
+    [SchemaV17Fact]
+    public async Task RobotCommandOutcomeUpgrade_ListsInvalidHistory_AndChangesNothing()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.14';");
+        var n = 550;
+        var invalidIds = new List<string>();
+        foreach (var state in new[] { "ARRIVED", "FAILED", "CANCELLED" })
+        {
+            var id = Id(++n); var leg = Id(++n);
+            invalidIds.Add(id);
+            await db.ExecuteAsync(Command(id, Id(81), leg, Closed(state, outcome: "NULL")));
+        }
+        const string check = "SELECT definition FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.RobotCommands') AND name=N'CK_RobotCommands_Outcome';";
+        var original = await db.ScalarAsync<string>(check);
+
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql"));
+
+        Assert.Equal(51142, error.Number);
+        foreach (var id in invalidIds) Assert.Contains(id, error.Message);
+        Assert.Equal(original, await db.ScalarAsync<string>(check));
+        Assert.Equal("1.14", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.RobotCommands WHERE Outcome IS NULL;"));
+    }
+
+    [SchemaV17Fact]
+    public async Task Tours_KeepVersionedAndLegacyStopColumnsApart()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        // FKs are disabled so only the stop-column rule can refuse the rows below.
+        await db.ExecuteAsync("""
+            ALTER TABLE dbo.Tours NOCHECK CONSTRAINT FK_Tours_CurrentRevisionStopId;
+            ALTER TABLE dbo.Tours NOCHECK CONSTRAINT FK_Tours_RouteRevisionId;
+            """);
+        var legacy = await Assert.ThrowsAsync<SqlException>(() =>
+            db.ExecuteAsync($"UPDATE dbo.Tours SET CurrentRevisionStopId = NEWID() WHERE Id = '{Id(41)}';"));
+        Assert.Contains("CK_Tours_StopColumns_ByTarget", legacy.Message);
+        var versioned = await Assert.ThrowsAsync<SqlException>(() => db.ExecuteAsync(
+            $"UPDATE dbo.Tours SET RouteRevisionId = NEWID(), OperatorUserId = '{Id(1)}', CurrentRouteStopId = '{Id(21)}' WHERE Id = '{Id(41)}';"));
+        Assert.Contains("CK_Tours_StopColumns_ByTarget", versioned.Message);
+        await db.ExecuteAsync($"UPDATE dbo.Tours SET RouteRevisionId = NEWID(), OperatorUserId = '{Id(1)}', CurrentRevisionStopId = NEWID() WHERE Id = '{Id(41)}';");
+    }
+
+    /// <summary>A valid open GoTo to the end pose unless <paramref name="overrides"/> change its columns.</summary>
+    private static string Command(string id, string robot, string leg, Dictionary<string, string>? overrides = null)
+    {
+        var columns = new Dictionary<string, string>
+        {
+            ["Id"] = $"'{id}'", ["RobotId"] = $"'{robot}'", ["TourId"] = $"'{Id(41)}'", ["LegId"] = $"'{leg}'",
+            ["LegKind"] = "'TO_END'", ["Kind"] = "'GoTo'", ["TargetCommandId"] = "NULL", ["State"] = "'PENDING'", ["IsOpen"] = "1",
+            ["Outcome"] = "NULL", ["RouteRevisionStopId"] = "NULL", ["MapKey"] = "N'pilot-v1'", ["FrameId"] = "N'map'",
+            ["X"] = "1.5", ["Y"] = "2.5", ["Yaw"] = "0", ["IssuedAt"] = "SYSDATETIMEOFFSET()",
+            ["AcceptBy"] = "DATEADD(SECOND,30,SYSDATETIMEOFFSET())", ["IssuedByUserId"] = $"'{Id(1)}'",
+            ["DeliveredAt"] = "NULL", ["DeliveredStreamId"] = "NULL", ["AcceptedAt"] = "NULL", ["CompletedAt"] = "NULL",
+            ["ReasonCode"] = "NULL", ["ResolvedByUserId"] = "NULL", ["ResolvedAt"] = "NULL", ["ResolutionNote"] = "NULL"
+        };
+        foreach (var (column, value) in overrides ?? []) columns[column] = value;
+        return $"INSERT dbo.RobotCommands({string.Join(',', columns.Keys)}) VALUES({string.Join(',', columns.Values)});";
+    }
+
+    /// <summary>A Cancel of <paramref name="target"/>: no target pose, no AcceptBy.</summary>
+    private static string Cancel(string id, string robot, string leg, string target, Dictionary<string, string>? overrides = null)
+    {
+        var columns = new Dictionary<string, string>
+        {
+            ["Kind"] = "'Cancel'", ["TargetCommandId"] = $"'{target}'", ["MapKey"] = "NULL", ["FrameId"] = "NULL",
+            ["X"] = "NULL", ["Y"] = "NULL", ["Yaw"] = "NULL", ["AcceptBy"] = "NULL"
+        };
+        foreach (var (column, value) in overrides ?? []) columns[column] = value;
+        return Command(id, robot, leg, columns);
+    }
+
+    /// <summary>Columns of a delivered command that left the running states as <paramref name="state"/>.</summary>
+    private static Dictionary<string, string> Closed(string state, string? outcome = null, string completedAt = "SYSDATETIMEOFFSET()",
+        Dictionary<string, string>? extra = null)
+    {
+        var columns = new Dictionary<string, string>
+        {
+            ["State"] = $"'{state}'", ["IsOpen"] = "0", ["DeliveredAt"] = "SYSDATETIMEOFFSET()", ["DeliveredStreamId"] = "NEWID()",
+            ["CompletedAt"] = completedAt,
+            ["Outcome"] = outcome ?? (state is "ARRIVED" or "FAILED" or "CANCELLED" ? $"'{state}'" : "NULL")
+        };
+        foreach (var (column, value) in extra ?? []) columns[column] = value;
+        return columns;
+    }
+
+    /// <summary>Moves a delivered GoTo to <paramref name="state"/>.</summary>
+    private static string Moved(string id, string state, int isOpen, string extra = "") =>
+        $"UPDATE dbo.RobotCommands SET State='{state}', IsOpen={isOpen}, DeliveredAt=SYSDATETIMEOFFSET(), DeliveredStreamId=NEWID(), CompletedAt=SYSDATETIMEOFFSET(){extra} WHERE Id='{id}';";
+
     private static string MapVersionFixture(string id, int version, char sha) => $"""
         IF NOT EXISTS (SELECT 1 FROM dbo.MapAreas WHERE AreaKey=N'pilot')
             INSERT dbo.MapAreas(AreaKey,DisplayName,CreatedByUserId,CreatedAt) VALUES(N'pilot',N'Pilot','{Id(1)}',SYSDATETIMEOFFSET());
@@ -870,7 +1125,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task VersionedMapAndPoiWorkflow_PersistsManualEvidenceAndExactRevisions()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -977,7 +1232,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task PoiVerification_RequiresCurrentMapDeployment_AndAllowsANewDeploymentOfPriorMap()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         await using var scope = services.CreateAsyncScope();
@@ -1012,7 +1267,7 @@ public sealed class SchemaV11Tests
     [SchemaV17Fact]
     public async Task ConcurrentMapChangeAndPoiVerification_CannotCommitPassAfterDifferentMapBecomesCurrent()
     {
-        await using var db = await TestDatabase.CreateAsync("snapshot-v1.13.sql");
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
         await db.ExecuteAsync($"INSERT dbo.Robots(Id,RobotCode,SourceType,CredentialHash,IsDispatchEnabled,NeedsInspection,FirstAcceptedSyncAt,FirstAcceptedMapKey,FirstAcceptedFrameId,CreatedAt) VALUES('{Id(83)}',N'physical_1','PHYSICAL',0x02,0,0,SYSDATETIMEOFFSET(),N'pilot-v1',N'map',SYSDATETIMEOFFSET());");
         await using var services = db.BuildFeatureServiceProvider();
         var mapA = await SendMapUploadAsync(services, Guid.Parse(Id(1)), Guid.NewGuid(), CreateMapPackage());
@@ -1234,7 +1489,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.13.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.15.sql")
         {
             var db = new TestDatabase();
             try
@@ -1278,6 +1533,9 @@ public sealed class SchemaV11Tests
             services.AddScoped<IInvitationRepository, EfInvitationRepository>();
             services.AddScoped<IStudentTourViewReader, EfStudentTourViewReader>();
             services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<IFleetTelemetryStore, InMemoryFleetTelemetryStore>();
+            services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
+            services.AddSingleton(new FleetCommandSettings());
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
             services.AddSingleton(new MapPoiSettings(null));

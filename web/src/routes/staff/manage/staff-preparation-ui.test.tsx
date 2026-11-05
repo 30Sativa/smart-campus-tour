@@ -24,13 +24,15 @@ const packageZip = (width: number) => zipSync({
   'map.yaml': strToU8('image: map.pgm\nmode: trinary\nresolution: 0.5\norigin: [-1, -2, 0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n'),
   'map.pgm': strToU8(`P2\n${width} 20\n255\n${Array(width * 20).fill(255).join(' ')}\n`),
 })
-const mapVersion = (id: string, mapKey: string, currentlyDeployedOn: unknown[]) => ({ map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName: mapKey, versionNumber: 1 }, currentlyDeployedOn })
+const mapVersion = (id: string, mapKey: string, currentlyDeployedOn: unknown[], areaName = mapKey) => ({ map: { id, mapKey, frameId: 'map', imageFileName: 'map.pgm', packageSha256: 'a'.repeat(64), areaName, areaKey: mapKey.replace(/-v\d+$/, ''), versionNumber: 1 }, currentlyDeployedOn })
 const proposal = (id: string, mapVersionId: string, mapKey: string, name: string): PoiProposal => ({
   id, currentRevision: 1, rowVersion: 'version', revision: { id: `${id}-rev`, revisionNumber: 1, mapVersionId, mapKey, name, purpose: 'Tham quan', description: null, narrationText: null, fallbackVideoUrl: null,
     x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT', createdAt: '2026-10-30T00:00:00Z', isSubmitted: true, submittedAt: '2026-10-30T00:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: null },
 })
 let proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v2', 'Điểm B')]
 const standardProposals = proposals
+const standardMaps = [mapVersion('map-b', 'test123-v2', [{ robotCode: 'amr-01', checkedAt: '2026-10-30T00:00:00Z' }]), mapVersion('map-a', 'test123-v1', [])]
+let mapVersions = standardMaps
 function respond(data: unknown, total?: number) {
   return new Response(JSON.stringify({ success: true, data, ...(total == null ? {} : { pagination: { page: 1, pageSize: 5, totalItems: total, totalPages: Math.ceil(total / 5) } }) }), { status: 200 })
 }
@@ -40,12 +42,12 @@ function show(element: React.ReactNode, path = '/staff/manage') {
   return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>{element}</MemoryRouter></QueryClientProvider>)
 }
 beforeEach(() => {
-  requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals
+  requests.length = 0; failRegistrations = false; packageFailure = null; proposals = standardProposals; mapVersions = standardMaps
   useAuthStore.getState().setAuth('test-token', { userId: 'staff-ui', username: 'staff', role: 'Staff' })
   vi.stubGlobal('fetch', vi.fn(async (input: string) => {
     const url = new URL(input, 'https://api.example.test'); requests.push(url)
     if (url.pathname === '/api/staff/poi-proposals') return respond(proposals)
-    if (url.pathname === '/api/maps/versions') return respond([mapVersion('map-b', 'test123-v2', [{ robotCode: 'amr-01', checkedAt: '2026-10-30T00:00:00Z' }]), mapVersion('map-a', 'test123-v1', [])])
+    if (url.pathname === '/api/maps/versions') return respond(mapVersions)
     if (url.pathname === '/api/maps/versions/map-old') return respond(mapVersion('map-old', 'retired-v1', []))
     if (url.pathname.endsWith('/package')) return packageFailure?.clone() ?? new Response(packageZip(url.pathname.includes('map-b') ? 40 : 10))
     if (url.pathname === '/api/staff/manage/tours') return respond([], url.searchParams.get('state') === 'READY' ? 12 : 37)
@@ -123,6 +125,24 @@ describe('staff preparation UI', () => {
     expect(requests.filter(url => url.pathname === '/api/maps/versions/map-a/package')).toHaveLength(1)
   })
 
+  it('distinguishes same-named areas at the same version and keeps their POIs and rasters separate', async () => {
+    mapVersions = [mapVersion('map-a', 'tang-6-v1', [], 'Tầng 6'), mapVersion('map-b', 'test123-v1', [], 'Tầng 6')]
+    proposals = [proposal('poi-a', 'map-a', 'tang-6-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v1', 'Điểm B')]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6 · phiên bản 1' })
+    const secondChoice = await screen.findByRole('option', { name: 'Tầng 6 · test123 · phiên bản 1' })
+    expect(firstChoice).toHaveValue('map-a')
+    expect(secondChoice).toHaveValue('map-b')
+    const first = await screen.findByRole('img', { name: 'Bản đồ tang-6-v1 với 1 POI' })
+    expect(first.querySelector('image')).toHaveAttribute('width', '10')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' }), { target: { value: 'map-b' } })
+    const second = await screen.findByRole('img', { name: 'Bản đồ test123-v1 với 1 POI' })
+    expect(second.querySelector('image')).toHaveAttribute('width', '40')
+    expect(screen.getByRole('button', { name: 'Chọn Điểm B' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' })).toHaveDisplayValue('Tầng 6 · test123 · phiên bản 1')
+  })
+
   it('shows the server message for a failed map download and recovers on retry', async () => {
     packageFailure = new Response(JSON.stringify({ success: false, message: 'Không tìm thấy gói bản đồ.' }), { status: 404 })
     show(<StaffManagePoisPage />, '/staff/manage/pois')
@@ -155,19 +175,76 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     expect(await screen.findAllByText('POI 02')).not.toHaveLength(0)
     expect(screen.getAllByText('Cần bổ sung nội dung thuyết minh')).toHaveLength(1)
-    expect(screen.getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
-    expect(screen.getByText('Kiểm tra thủ công')).toBeInTheDocument()
+    const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
+    expect(within(within(list).getByRole('button', { name: 'Chọn POI 02' })).getByText('Ghi pose trực tiếp trên robot')).toBeInTheDocument()
+    expect(within(within(list).getByRole('button', { name: 'Chọn Thư viện' })).getByText('Kiểm tra thủ công')).toBeInTheDocument()
+  })
+
+  it('asks Staff to add narration first for a POI imported from a pose file', async () => {
+    const imported = proposal('poi-a', 'map-a', 'test123-v1', 'POI 02')
+    proposals = [{ ...imported, sourcePoiId: 'POI_02', revision: { ...imported.revision, navigationStatus: 'NOT_TESTED', narrationText: null } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('Nhập từ tệp ghi pose trên robot. Đặt tên và viết thuyết minh để dùng được trong tuyến. Kỹ thuật vẫn đang kiểm tra vị trí.')
+    expect(within(chosen).getByRole('link', { name: 'Bổ sung thuyết minh' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+  })
+
+  it('draws the chosen pin on top of another pin at the same spot', async () => {
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const map = await screen.findByRole('img', { name: /với 2 POI/ })
+    const pins = () => within(map).getAllByRole('button').map(pin => pin.getAttribute('aria-label'))
+    expect(pins().at(-1)).toMatch(/Điểm A/)
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn Điểm C' }))
+    expect(pins().at(-1)).toMatch(/Điểm C/)
+  })
+
+  it('keeps the map frame when a status tab hides some points', async () => {
+    const draft = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), { ...draft, revision: { ...draft.revision, x: 3, y: 6, isSubmitted: false, submittedAt: null } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const before = (await screen.findByRole('img', { name: /với 2 POI/ })).getAttribute('viewBox')
+    fireEvent.click(screen.getByRole('button', { name: /^Bản nháp/ }))
+    const after = await screen.findByRole('img', { name: /với 1 POI/ })
+    expect(after.getAttribute('viewBox')).toBe(before)
+  })
+
+  it('opens the chosen point under its own row, one at a time, from the list or the map', async () => {
+    const second = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
+    proposals = [proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A'), second]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const list = await screen.findByRole('region', { name: 'Danh sách đề xuất POI' })
+    const rowOf = (name: string) => within(list).getByRole('button', { name: `Chọn ${name}` }).closest('li')!
+    await within(list).findByRole('button', { name: 'Chọn Điểm A' })
+    expect(within(rowOf('Điểm A')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
+    fireEvent.click(within(list).getByRole('button', { name: 'Chọn Điểm C' }))
+    expect(within(rowOf('Điểm C')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
+    expect(screen.getAllByRole('region', { name: 'Điểm đang chọn' })).toHaveLength(1)
+    const map = await screen.findByRole('img', { name: /với 2 POI/ })
+    fireEvent.click(within(map).getByRole('button', { name: /Điểm A/ }))
+    expect(within(rowOf('Điểm A')).getByRole('region', { name: 'Điểm đang chọn' })).toBeInTheDocument()
+  })
+
+  it('tells Staff the next step for the chosen POI, with one action and no map key noise', async () => {
+    const draft = proposal('poi-a', 'map-a', 'test123-v1', 'Điểm A')
+    proposals = [{ ...draft, revision: { ...draft.revision, isSubmitted: false, submittedAt: null, navigationStatus: 'NOT_TESTED' } } as PoiProposal]
+    show(<StaffManagePoisPage />, '/staff/manage/pois')
+    const chosen = await screen.findByRole('region', { name: 'Điểm đang chọn' })
+    expect(chosen).toHaveTextContent('Chưa gửi kiểm chứng. Hoàn tất nội dung rồi gửi để kỹ thuật viên kiểm tra trên robot.')
+    expect(within(chosen).getAllByRole('link')).toHaveLength(1)
+    expect(within(chosen).getByRole('link', { name: 'Mở để gửi kiểm chứng' })).toHaveAttribute('href', '/staff/manage/pois/poi-a')
+    expect(screen.queryByText('test123-v1', { selector: 'span' })).not.toBeInTheDocument()
   })
 
   it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
-    expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' })).not.toBeChecked()
     expect(within(list).getByText('Điểm A')).toBeInTheDocument()
     await waitFor(() => expect(requests.some(url => url.pathname === '/api/maps/versions')).toBe(true))
     await waitFor(() => {
-      if (!screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }).matches(':checked')) fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang triển khai' }))
+      if (!screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' }).matches(':checked')) fireEvent.click(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' }))
       expect(within(list).getByText('Điểm B')).toBeInTheDocument()
     })
     expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()

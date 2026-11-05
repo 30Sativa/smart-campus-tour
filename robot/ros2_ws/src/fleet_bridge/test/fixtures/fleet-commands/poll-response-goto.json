@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "message": "Current command.",
+  "data": {
+    "command": {
+      "commandId": "0d6c2f4a-8f0e-4b8c-9a51-2c7e4f1a3b01",
+      "kind": "GoTo",
+      "legId": "7a3e9c12-4b6d-4f1e-8c2a-9d0b1e2f3a41",
+      "mapKey": "tang-6-v1",
+      "frameId": "map",
+      "x": 12.5,
+      "y": -3.25,
+      "yaw": 1.5708,
+      "stopId": "c1f2e3d4-5a6b-4c7d-8e9f-0a1b2c3d4e51",
+      "issuedAt": "2026-11-10T02:00:00.000+00:00",
+      "acceptBy": "2026-11-10T02:00:10.000+00:00"
+    }
+  },
+  "errors": null
+}

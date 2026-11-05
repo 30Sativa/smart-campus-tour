@@ -6,7 +6,7 @@ import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from 
 import { revisionTone } from '../../features/administration/routes/route-messages'
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, Note, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
+import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
 import { errorText, routeTestErrors, stamp } from '../../features/technical/technical-format'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
@@ -121,11 +121,21 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const seconds = Number(duration)
   const durationValid = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // Advisory only: the server decides from the robot's latest deployment check.
+  // The server refuses this either way (ROBOT_NOT_READY_FOR_ROUTE), so save waits for a fresh robot list that shows a pass on this map.
   const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== route.mapKey || selectedRobot.latestDeploymentPassed === false)
   const errors = record.error ? routeTestErrors(record.error) : {}
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
-  const ready = robotCode && staffUserId && durationValid && evidence.trim() && !passBlocked && !failBlocked && (resultCode === 'PASS' || failureReason.trim())
+  const missingToSave = [
+    !robotCode && 'chọn robot',
+    robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
+    !staffUserId && 'chọn Staff đi cùng',
+    !durationValid && 'nhập tổng thời gian chạy',
+    passBlocked && 'tick đủ ba mục để ghi Đạt',
+    failBlocked && 'bỏ tick mục không đạt',
+    resultCode === 'FAIL' && !failureReason.trim() && 'nhập lý do không đạt',
+    !evidence.trim() && 'nhập ghi chú bằng chứng',
+  ].filter((item): item is string => Boolean(item))
+  const ready = missingToSave.length === 0
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -139,12 +149,12 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
 
   return (
     <Modal open size="lg" title={`Chạy thử ${route.name}`} description={`Phiên bản ${route.revisionNumber} · bản đồ ${route.mapKey} · ${route.stops.length} điểm dừng. Đạt khi cả ba kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="route-test-robot" label="Robot vật lý" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
+          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {route.mapKey}. Máy chủ sẽ từ chối cho tới khi có kiểm tra đạt đúng map này.</p>}
+          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>
@@ -155,13 +165,13 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
           {errors.staff && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.staff}</p>}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className={labelClass} htmlFor="route-test-result">Kết quả</label><select id="route-test-result" className={`${inputClass} mt-1`} value={resultCode} onChange={event => { setResultCode(event.target.value as 'PASS' | 'FAIL'); changed() }}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
+          <ResultToggle id="route-test-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này khi sửa tuyến." />
           <div><label className={labelClass} htmlFor="route-test-duration">Tổng thời gian chạy toàn tuyến (giây)</label><input id="route-test-duration" className={`${inputClass} mt-1`} type="number" required min={1} max={86400} step={1} value={duration} onChange={event => { setDuration(event.target.value); changed() }} /><p className="mt-1 text-xs text-[#64748b]">Tính từ lúc xuất phát đến khi kết thúc, gồm cả thời gian dừng tại các điểm.</p></div>
         </div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
-          {passBlocked && missing.length < checks.length && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả ba mục hoặc đổi Kết quả thành Không đạt.</p>}
-          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc đổi Kết quả thành Đạt.</p>}
+          {passBlocked && missing.length < checks.length && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả ba mục hoặc chọn Không đạt.</p>}
+          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc chọn Đạt.</p>}
         </div>
         {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="route-test-reason">Lý do không đạt</label><input id="route-test-reason" className={`${inputClass} mt-1`} required maxLength={1000} value={failureReason} onChange={event => { setFailureReason(event.target.value); changed() }} /></div>}
         <div><label className={labelClass} htmlFor="route-test-evidence">Ghi chú bằng chứng</label><textarea id="route-test-evidence" rows={3} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={event => { setEvidence(event.target.value); changed() }} /></div>

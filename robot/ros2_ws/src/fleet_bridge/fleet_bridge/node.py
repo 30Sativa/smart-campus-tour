@@ -1,4 +1,4 @@
-"""ROS 2 telemetry observer; it subscribes and never publishes robot commands."""
+"""ROS 2 Fleet Bridge: telemetry observer, plus an opt-in Nav2 command path; it never publishes velocity."""
 
 from __future__ import annotations
 
@@ -18,8 +18,9 @@ from tf2_ros import (
     TransformListener,
 )
 
+from .command_worker import CommandWorkerConfig, create_command_path
 from .credentials import read_credential
-from .http_client import FleetSyncHttpClient
+from .http_client import FleetCommandsHttpClient, FleetSyncHttpClient, commands_url_from_sync_url
 from .lifecycle import spin_until_worker_fatal
 from .protocol import pose_from_transform
 from .worker import FleetSyncWorker, ReportState, WorkerConfig
@@ -42,6 +43,9 @@ class FleetBridgeNode(Node):
         self.declare_parameter('max_clock_floor_ahead_sec', 10.0)
         self.declare_parameter('retry_initial_sec', 1.0)
         self.declare_parameter('retry_max_sec', 30.0)
+        self.declare_parameter('commands_enabled', False)
+        self.declare_parameter('command_base_url', '')
+        self.declare_parameter('command_poll_period_sec', 0.5)
 
         backend_url = str(self.get_parameter('backend_url').value).strip()
         robot_code = str(self.get_parameter('robot_code').value).strip()
@@ -99,17 +103,47 @@ class FleetBridgeNode(Node):
         self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
         self._sample_timer = self.create_timer(sample_period_sec, self._sample_tf)
 
+        report_state = ReportState(config)
+        self._commands = None
+        self._command_worker = None
+        commands_enabled = bool(self.get_parameter('commands_enabled').value)
+        if commands_enabled and report_period_sec >= 2.0:
+            self.get_logger().warning(
+                'report_period_sec is not below the backend telemetry limit (2 s); polls will be refused.')
+
+        def create_navigator():
+            from .nav2 import Nav2Navigator  # Nav2 types are needed only on this path.
+            return Nav2Navigator(self)
+
+        def create_transport():
+            base = str(self.get_parameter('command_base_url').value).strip() or commands_url_from_sync_url(backend_url)
+            return FleetCommandsHttpClient(base, robot_code, credential, request_timeout_sec)
+
+        path = create_command_path(
+            commands_enabled, create_navigator, create_transport,
+            CommandWorkerConfig(float(self.get_parameter('command_poll_period_sec').value), retry_max_sec),
+            map_key, frame_id, lambda: report_state.stream_id, self.get_logger().warning)
+        if path is not None:
+            self._commands, self._command_worker = path
+
         self._worker = FleetSyncWorker(
-            ReportState(config),
+            report_state,
             transport,
             self._snapshot,
             self._on_worker_state,
         )
         self._worker.start()
+        if self._command_worker is not None:
+            self._command_worker.start()
         self.get_logger().info(
+            'Fleet Bridge started with commands enabled; do not run another goal sender on this robot.'
+            if self._command_worker is not None else
             'Fleet Bridge started in telemetry-only mode; HTTPS runs on a background thread.')
 
     def destroy_node(self):
+        command_worker = getattr(self, '_command_worker', None)
+        if command_worker is not None:
+            command_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
         worker = getattr(self, '_worker', None)
         if worker is not None:
             worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
@@ -154,8 +188,10 @@ class FleetBridgeNode(Node):
     def _snapshot(self) -> dict[str, object]:
         with self._observation_lock:
             pose = dict(self._pose) if self._pose is not None else None
-        # R1 has no authoritative execution-state source or backend legId.
-        return {'pose': pose, 'status': 'UNKNOWN'}
+        # Without the command path there is no authoritative execution-state source or backend legId.
+        if self._commands is None:
+            return {'pose': pose, 'status': 'UNKNOWN'}
+        return {'pose': pose, **self._commands.snapshot()}
 
     def _on_worker_state(self, state: str, reason: str):
         if state == 'connected':

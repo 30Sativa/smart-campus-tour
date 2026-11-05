@@ -14,7 +14,7 @@ validate_inputs() {
     fail 'Database initializer image must use the approved GHCR repository and an immutable sha256 digest.'
   [[ "$sqlserver_image" =~ ^mcr\.microsoft\.com/mssql/server@sha256:[0-9a-f]{64}$ ]] ||
     fail 'SQL Server image must be a pinned Microsoft Container Registry digest.'
-  [[ ${DB_INIT_SOURCE_SHA:-} =~ ^[0-9a-f]{40}$ && ${DB_SCHEMA_VERSION:-} == 1.13 ]] ||
+  [[ ${DB_INIT_SOURCE_SHA:-} =~ ^[0-9a-f]{40}$ && ${DB_SCHEMA_VERSION:-} == 1.15 ]] ||
     fail 'Database tool source SHA and schema version must come from the validated release manifest.'
 }
 

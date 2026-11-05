@@ -223,9 +223,9 @@ outer wheel of `346.065 mm/s`; pair scaling still produces `97/250 mm/s` or
 the reverse. Before rounding, the effective twist is approximately
 `0.1734 m/s, 0.3251 rad/s`, preserving curvature. Do not raise the wheel cap
 or alter calibration just to remove this expected warning. Installed motor
-inversion changes signs afterward. See `robot/docs/nav2-turn-test.md` for
-runtime checks, hardware acceptance and rollback; no bridge/firmware code is
-changed by this trial.
+inversion changes signs afterward. The real-robot baseline runs 0.20 m/s
+(`robot/docs/robot-baseline-2026-11-02.md`), which avoids most of this scaling;
+no bridge/firmware code was changed by the 0.24 m/s trial.
 
 ## Run Teleop
 

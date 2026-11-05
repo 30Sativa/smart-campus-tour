@@ -31,16 +31,18 @@ shared rules; this file only covers what is specific to `web/`.
     `web/docs/representative-registration.md`. APPROVED is read-only in this
     roster; invitation support uses the real owner-scoped API (ADR-0015).
   - `/staff/*`: tour operations, for `Staff` only. What an operator does
-    around a remote tour: today's sessions and their groups, the pre-start
-    check and Start, live operations on the operational twin (Hold / Next /
-    End Early / recovery), the robot, the session log. Scope: the remote-tour
-    Review 1 target in `docs/requirements/campus-tour-scope.md`; current screen
-    map in `web/docs/staff-operations.md`.
+    around a remote tour: today's Tours, the pre-start check and Start, live
+    operations (Tour state, the current robot command, Next, Retry leg, End
+    Early, Reconcile), robot telemetry. All of it reads the real Tour API
+    (ADR-0042/0043) and `/hubs/operations`; the Tour event log waits for a
+    backend read endpoint.
+    Scope: `docs/requirements/campus-tour-scope.md`; current screen map and
+    blockers in `web/docs/staff-operations.md`.
     `CampusStaff` and `TourOperator` were merged into the one
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator on a free slot or typed time judged by `/api/staff/manage/tours/slots` (ADR-0034, ADR-0035, ADR-0036); legacy Tours keep their projection, and READY stays blocked until its dependencies are implemented. Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator on a free slot or typed time judged by `/api/staff/manage/tours/slots` (ADR-0034, ADR-0035, ADR-0036); legacy Tours keep their projection. READY/Reopen use `/ready` and `/reopen` and follow `permissions.canMarkReady/canReopen/readyBlockers` (ADR-0042). Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
     existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
@@ -155,7 +157,6 @@ web/
     │                     ...}.ts remain during migration
     ├── auth/             AuthBootstrap, AuthLayout + LoginPage/AuthFields,
     │                     access.ts (the areas), roles.ts, use-logout.ts
-    ├── mocks/            labelled mock backend — see below
     ├── stores/           auth-store.ts (memory only), theme-store.ts
     └── test/             setup.ts (Vitest + jest-dom)
 ```
@@ -194,8 +195,9 @@ web/
   keep them intact unless a later change can move all consumers mechanically.
 - `auth/` owns app-wide login, session, roles, and access. `stores/` owns only
   app-global client/UI state; TanStack Query remains the owner of server data.
-- `mocks/` contains labelled fixtures/simulations, never an automatic fallback
-  after a production API failure. Bind a mock beside the consuming feature.
+- There is no `mocks/` folder any more. A labelled fixture, if one is ever
+  needed again, is never an automatic fallback after a production API failure
+  and is bound beside the consuming feature.
 - `test/` contains the global Vitest bootstrap; feature and shared-component
   tests stay beside the code they cover.
 
@@ -249,19 +251,12 @@ session restore and logout are wired to the backend. Auth responses accept one
 supported role: `Admin`, `Staff`, `Representative` or `TechnicalStaff`; there is no Visitor
 role (an unknown role normalises to `null` and lands on `/`). Student invitation access is a separate browser-session target.
 
-Business features without a live backend binding continue to use labelled
-fixtures in `src/mocks/`. There is no toggle: `VITE_USE_MOCK_API` and every
-`USE_MOCK_API ? mock : http` ternary were removed on 2026-09-18; do not restore
-a dead switch.
-
-- `mocks/staff-mock.ts` implements the `StaffApi` contract, the same
-  type `api/contracts/staff.ts` implements over HTTP, so feature code does
-  not know which one it has. The binding is named once, in
-  `features/staff/staff-hooks.ts`;
-- mock business data is disclosed with a one-line badge in the shells, rendered
-  only when `import.meta.env.DEV` is true, plus a `console.warn` from
-  `mocks/mock-mode.ts` that fires in every build. Do not put build state back
-  into the middle of a screen someone works in all day.
+The operations console has no business fixtures: the Staff simulation and its
+mock push channel were removed on 2026-11-04 when the console moved to the real
+Tour API and `/hubs/operations` (`web/docs/staff-operations.md`). There is no
+toggle: `VITE_USE_MOCK_API` and every `USE_MOCK_API ? mock : http` ternary were
+removed on 2026-09-18; do not restore a dead switch. The local Digital Twin
+workbench (`/staff/digital-twin`) keeps its own labelled demo motion.
 
 This is a **data source, not a fallback**. Mock data must never be served in
 response to a failed request, and no screen may branch on where its rows came
@@ -269,8 +264,9 @@ from.
 
 `src/api/` contains the HTTP client (`client.ts`), Auth calls/session refresh,
 `ApiError`, `apiUrl`, SignalR factory (`signalr.ts`), and shared transport
-envelopes in `contracts/shared.ts`. Auth is wired; `staffApi` remains
-deliberately unwired until the corresponding backend features are ready.
+envelopes in `contracts/shared.ts`. Auth is wired. The former unwired
+`staffApi` proposal was removed; Tour operations call
+`features/administration/tours/api/tours.ts`.
 Feature-specific account and POI API bindings already live under
 `features/administration/{accounts,pois}/api/`. New feature endpoint calls and
 contracts follow that placement. Existing top-level `contracts/admin.ts`,
@@ -545,10 +541,11 @@ The frontend does not require any of the following by default:
 
 ## 4. Fleet state and realtime
 
-The staff dashboard currently uses a labelled mock API and mock push channel.
-Its robot pose, source, connection and health values are fixtures; the browser
-does not connect to robots or a backend fleet-pose Hub. The former
-`VITE_FLEET_HUB` pose stream and its client have been removed.
+The operations console reads robot telemetry from the Staff-only
+`/hubs/operations` hub (`FleetUpdated`), owned once by the Staff shell in
+`features/staff/operations/fleet-telemetry.ts`. It shows only what the robot
+reported, keeps ages counting between broadcasts and says when the hub is
+disconnected. Telemetry is not a Tour state and not proof that a command ran.
 
 The Web-based 3D Operational Digital Twin is core UI scope and lives in this
 app. It loads the campus model, renders physical/Gazebo/synthetic robot models,
@@ -574,11 +571,10 @@ factory only:
   `start()` / `stop()`;
 - `withAutomaticReconnect()` is on by default.
 
-No hub is consumed yet. `/hubs/operations` and its projection events are
-selected in `docs/architecture.md`; frontend payload mapping and reconnect /
-refetch behavior remain unimplemented.
-
-<!-- TODO(WP4): wire the selected /hubs/operations projection contract. -->
+`/hubs/operations` is consumed for `FleetUpdated` only, with the in-memory
+JWT as `accessTokenFactory` and a restart 5 s after a close. `TourUpdated`
+and `AssistanceRequired` are planned backend events; until they exist, Tour
+screens poll the Tour detail.
 
 ---
 

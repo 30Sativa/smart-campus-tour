@@ -73,8 +73,9 @@ Astra Pro (RGB)     -> person detection       -> Nav2 speed limit
 - The **production fleet bridge** for the physical robot lives here at
   `robot/ros2_ws/src/fleet_bridge/`, not in `backend/`. R1 implements its
   telemetry-only path: TF observation and HTTPS Fleet Sync v1
-  (`POST /api/fleet/v1/sync`). It has no Nav2 command path. See
-  `docs/contracts/fleet-sync/v1/` and ADR-0019. Python HTTPS/TLS compatibility
+  (`POST /api/fleet/v1/sync`). Its Nav2 command path (M2.2-e) is off by default
+  (`commands_enabled`) and is not for physical robots before M2.3. See
+  `docs/contracts/fleet-sync/v1/`, `docs/contracts/fleet-commands/v1/` and ADR-0019. Python HTTPS/TLS compatibility
   in the native ROS Humble environment and the deployment proxy remain R1
   verification gates. The bridge must not contain booking rules, scheduling,
   or robot-assignment logic; those are backend concerns

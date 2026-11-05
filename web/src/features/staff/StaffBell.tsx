@@ -1,23 +1,22 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
-import { useStaffAmrs, useTours } from './staff-hooks'
-import { buildAttentionQueue, type AttentionItem } from './attention'
-import { useNow } from './use-now'
+import { campusDay } from '../administration/tours/tour-calendar'
+import { useDayTours, useRunningTours, useToursNeedingReconcile } from './operations/hooks'
+import { buildAttention, type AttentionItem } from './operations/attention'
 
 const DOT: Record<AttentionItem['tone'], string> = { danger: 'bg-[#dc2626]', warn: 'bg-[#f59e0b]', info: 'bg-[#3b82f6]' }
 const LINK: Record<AttentionItem['tone'], string> = { danger: 'text-[#dc2626]', warn: 'text-[#b45309]', info: 'text-[#2d719e]' }
 
 /**
- * The bell at the top right of operations: the same attention queue the
- * dashboard used to list ("Cần chú ý"), one click from anywhere. A session
- * that needs assistance is counted and named first.
+ * The bell at the top right of operations: what needs a person, from real
+ * Tours, one click from anywhere. A Tour that needs assistance comes first.
  */
 export function StaffBell() {
-  const tours = useTours()
-  const robots = useStaffAmrs()
-  const now = useNow(15_000)
-  const items = tours.data && robots.data ? buildAttentionQueue({ tours: tours.data, robots: robots.data }, now) : []
+  const running = useRunningTours()
+  const today = useDayTours(campusDay(new Date()))
+  const ended = useToursNeedingReconcile()
+  const items = buildAttention(running.tours, today.data?.data ?? [], ended.tours)
   const urgent = items.filter((item) => item.tone === 'danger').length
   const [open, setOpen] = useState(false)
   const panelId = useId()
@@ -57,7 +56,7 @@ export function StaffBell() {
             {items.length > 0 && <span className="rounded-full bg-[#fdecea] px-2 py-0.5 text-[11px] font-bold text-[#b23e31] tabular-nums">{items.length}</span>}
           </div>
           {items.length === 0 ? (
-            <p className="flex items-center gap-2.5 px-4 py-4 text-sm font-semibold text-[#16a34a]"><CheckCheck size={18} aria-hidden="true" />Hệ thống hoạt động bình thường, không có sự cố.</p>
+            <p className="flex items-center gap-2.5 px-4 py-4 text-sm font-semibold text-[#16a34a]"><CheckCheck size={18} aria-hidden="true" />Không có việc cần chú ý.</p>
           ) : (
             <ul className="max-h-[min(440px,60vh)] divide-y divide-[#f3f4f6] overflow-y-auto">
               {items.map((item) => (

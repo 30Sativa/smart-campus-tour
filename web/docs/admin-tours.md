@@ -13,8 +13,9 @@ route selector. See `web/docs/route-management.md` and ADR-0017.
 now use the live `/api/admin/tours` API (ADR-0018) through
 `src/features/administration/tours/`: list/search, tabs by phase beside the state filter, create from an
 active Route (route revision + idempotency key), metadata/schedule/Route edit
-within server permissions, and Cancel with a reason. READY (Chốt / Mở lại) has
-no backend endpoint yet and is not offered. The dashboard and `/admin/history`
+within server permissions, and Cancel with a reason. READY (Chốt / Mở lại) uses
+`POST /api/staff/manage/tours/{id}/ready|reopen` (ADR-0042) on `/staff/manage/tours/:id`,
+following `permissions.canMarkReady/canReopen/readyBlockers` (2026-11-04). The dashboard and `/admin/history`
 remain labelled simulation consumers.
 
 `/admin/registrations` and `/admin/registrations/pending` now use the real SQL

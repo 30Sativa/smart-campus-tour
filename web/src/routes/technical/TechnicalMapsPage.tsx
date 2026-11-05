@@ -7,6 +7,7 @@ import { buttonClass, inputClass, labelClass } from '../../components/ui/ui-clas
 import { MapVersionTable } from '../../features/technical/MapVersionTable'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, TechnicalPage } from '../../features/technical/TechnicalUi'
+import { mapVersionLabel } from '../../features/technical/poi-labels'
 import { useMapAreas, useMapVersions, usePhysicalRobots, useRecordDeployment, useUploadMap } from '../../features/technical/technical-hooks'
 import { errorText, mapUploadFieldErrors } from '../../features/technical/technical-format'
 import type { MapAreaOption, MapVersionItem } from '../../features/technical/api/technical'
@@ -19,6 +20,7 @@ const shortSha = (sha: string) => (sha.length > 16 ? `${sha.slice(0, 8)}…${sha
  */
 export default function TechnicalMapsPage() {
   const maps = useMapVersions()
+  const robots = usePhysicalRobots()
   const [uploading, setUploading] = useState(false)
   const [uploadArea, setUploadArea] = useState<MapAreaOption | null>(null)
   const [checking, setChecking] = useState<MapVersionItem | null>(null)
@@ -49,7 +51,7 @@ export default function TechnicalMapsPage() {
 
       {maps.isPending ? <section className={panelClass}><p className="flex items-center justify-center gap-2 px-4 py-10 text-[13px] font-semibold text-[#64748b]" aria-busy="true"><LoaderCircle size={16} className="animate-spin text-[#2d719e]" aria-hidden="true" />Đang tải…</p></section>
         : maps.error ? <section className={panelClass}><p role="alert" className="p-4 text-[13px] text-[#b23e31]">{errorText(maps.error)}</p></section>
-        : items.length ? <MapVersionTable items={items} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
+        : items.length ? <MapVersionTable items={items} robots={robots} onUpload={area => { setUploadArea(area); setUploading(true) }} onCheck={setChecking} />
         : <section className={panelClass}><p className="px-4 py-8 text-center text-[13px] text-[#64748b]">Chưa có phiên bản bản đồ. Tải package đầu tiên lên để bắt đầu.</p></section>}
 
       <UploadModal key={uploadArea?.areaKey ?? 'new-area'} open={uploading} initialArea={uploadArea} onClose={() => { setUploading(false); setUploadArea(null) }} />
@@ -159,7 +161,7 @@ function DeploymentModal({ item, onClose }: { item: MapVersionItem | null; onClo
   }
   if (!map) return null
   return (
-    <Modal open title={`Ghi kết quả kiểm tra · ${map.areaName} v${map.versionNumber}`} description={`Chỉ ghi khi robot đã nạp đúng tệp này (checksum ${shortSha(map.packageSha256)}).`} onClose={onClose}
+    <Modal open title={`Ghi kết quả kiểm tra · ${mapVersionLabel(map)}`} description={`Chỉ ghi khi robot đã nạp đúng tệp này (checksum ${shortSha(map.packageSha256)}).`} onClose={onClose}
       footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Hủy</button><button type="submit" form="map-check-form" className={buttonClass('primary')} disabled={deployment.isPending || robots.isPending || robots.isError || !robots.data?.length || !robotCode || !note.trim() || passBlocked}>Lưu kết quả kiểm tra</button></div>}>
       <form id="map-check-form" className="space-y-3.5" onSubmit={submit}>
         <div><RobotPicker id="map-check-robot" label="Robot kiểm tra" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần hoàn tất cấu hình robot trước khi ghi kết quả kiểm tra." />{passBlocked && <p role="status" className="mt-1 text-sm text-[#b23e18]">Robot chưa xác nhận kết nối. Hãy bật kết nối trên robot rồi bấm Cập nhật trạng thái để lưu kết quả đạt. Nếu kiểm tra thực tế không đạt, bỏ chọn mục chưa đạt là lưu được ngay.</p>}</div>

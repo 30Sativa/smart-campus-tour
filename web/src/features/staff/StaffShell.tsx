@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, LogOut, MonitorPlay, ShieldAlert, UserRound, X } from 'lucide-react'
+import { ChevronDown, LogOut, MonitorPlay, UserRound } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
@@ -13,28 +13,25 @@ import { useDismiss } from '../../components/ui/use-dismiss'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
-import { useStaffRealtimeSync, useTours, type AssistanceNotice } from './staff-hooks'
 import { StaffBell } from './StaffBell'
-import { REASON_SHORT } from './reason'
-import type { TourOperation } from '../../api/contracts/staff'
-
-const TOAST_MS = 9_000
+import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
+import { useRunningTours, type RunningTour } from './operations/hooks'
+import { STEP_LABEL } from './operations/operation-labels'
 
 const CONNECTION_LABEL = {
-  connecting: 'Đang kết nối',
-  connected: 'Mô phỏng trực tiếp',
-  reconnecting: 'Đang kết nối lại',
-  disconnected: 'Mất kết nối',
+  connecting: 'Telemetry: đang kết nối',
+  connected: 'Telemetry: đang nhận',
+  reconnecting: 'Telemetry: kết nối lại',
+  disconnected: 'Telemetry: mất kết nối',
 } as const
 
 /**
  * The operations shell: the shared grouped sidebar (logo, folding groups,
  * the assistance badge on "Điều hành trực tiếp"), and a quiet header with the
- * realtime state, the bell (everything that needs attention) and the account.
+ * telemetry connection, the bell (everything that needs attention) and the account.
  */
 export default function StaffShell() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [toast, setToast] = useState<AssistanceNotice | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const location = useLocation()
@@ -44,14 +41,16 @@ export default function StaffShell() {
   const navRef = useMobileNav(menuOpen, closeMenu)
   const showAdminLink = isAdminRole(user?.role)
 
-  // The shell owns the one realtime subscription for the whole area.
-  const connection = useStaffRealtimeSync(setToast)
-  const today = useTours()
-  const assistCount = today.data?.filter((tour) => tour.operationalStatus === 'NeedsAssistance').length ?? 0
-  const running = today.data?.find((tour) => tour.state === 'Running' && tour.operationalStatus === 'NeedsAssistance') ?? today.data?.find((tour) => tour.state === 'Running')
+  // The shell owns the one telemetry hub subscription for the whole area.
+  useFleetTelemetrySync()
+  const connection = useFleetConnection((state) => state.state)
+  const runningTours = useRunningTours().tours
+  const needsHelp = runningTours.filter((detail) => detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE')
+  const assistCount = needsHelp.length
+  const running = needsHelp[0] ?? runningTours[0]
 
   const currentPath = activeNavPath(location.pathname)
-  // Preparation pages use live APIs; operational pages still use labelled simulations.
+  // Preparation pages do not need the telemetry state in their header.
   const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/profile'
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
   const pendingCount = usePendingReviewCount() ?? 0
@@ -63,12 +62,6 @@ export default function StaffShell() {
     closeButtonRef.current?.focus()
     return () => menuButton?.focus()
   }, [menuOpen])
-
-  useEffect(() => {
-    if (!toast) return
-    const id = window.setTimeout(() => setToast(null), TOAST_MS)
-    return () => window.clearTimeout(id)
-  }, [toast])
 
   return (
     <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
@@ -84,7 +77,7 @@ export default function StaffShell() {
         entries={STAFF_NAV_ENTRIES}
         currentPath={currentPath}
         badges={{
-          '/staff/live': { value: assistCount, label: `${assistCount} buổi cần hỗ trợ`, tone: 'danger' },
+          '/staff/live': { value: assistCount, label: `${assistCount} Tour cần hỗ trợ`, tone: 'danger' },
           '/staff/manage/registrations': { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
         }}
         // Only an Admin sees a way across, and only because that account
@@ -95,7 +88,7 @@ export default function StaffShell() {
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
-        highlight={!onLiveSqlPage && running ? (rail) => <RunningCard tour={running} rail={rail} onNavigate={closeMenu} /> : undefined}
+        highlight={!onLiveSqlPage && running ? (rail) => <RunningCard detail={running} rail={rail} onNavigate={closeMenu} /> : undefined}
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -124,37 +117,33 @@ export default function StaffShell() {
           </div>
         </header>
 
-        {!onLiveSqlPage && <p role="note" className="mx-4 mt-3 w-fit rounded-full bg-[#eff6ff] px-3 py-1 text-xs font-semibold text-[#4a6fa5] sm:mx-6 lg:mx-8">Chế độ mô phỏng · Số liệu minh họa</p>}
-
         {/* Every panel on a Staff page becomes a Purity card: 15px corners, no border, a soft lift. */}
         <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 ${softConsoleMain}`}>
           <RouteView />
         </main>
 
-        {toast && <AssistanceToast notice={toast} onClose={() => setToast(null)} />}
       </div>
     </div>
   )
 }
 
 /**
- * The session running now, kept in view under the logo: one click to its live
- * control. Red when it needs assistance. On the rail it shrinks to its icon.
+ * The Tour running now, kept in view under the logo: one click to its live
+ * console. Red when it needs assistance. On the rail it shrinks to its icon.
  */
-function RunningCard({ tour, rail, onNavigate }: { tour: TourOperation; rail: boolean; onNavigate: () => void }) {
-  const assist = tour.operationalStatus === 'NeedsAssistance'
-  const index = tour.progress?.stopIndex
-  const where = index != null && tour.stops[index] ? `Điểm ${index + 1}/${tour.stops.length}: ${tour.stops[index].name}` : 'Đang về điểm kết thúc'
+function RunningCard({ detail, rail, onNavigate }: { detail: RunningTour; rail: boolean; onNavigate: () => void }) {
+  const assist = detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE'
+  const step = detail.execution?.currentStep ? STEP_LABEL[detail.execution.currentStep] ?? 'Đang chạy' : 'Đang chạy'
   return (
-    <Link to={`/staff/live/${tour.id}`} onClick={onNavigate} title={rail ? `Đang chạy ${tour.code}` : undefined}
-      aria-label={`Đang chạy ${tour.code}${assist ? ', cần hỗ trợ' : ''}. Mở điều hành trực tiếp`}
+    <Link to={`/staff/live/${detail.tour.id}`} onClick={onNavigate} title={rail ? `Đang chạy ${detail.tour.name}` : undefined}
+      aria-label={`Đang chạy ${detail.tour.name}${assist ? ', cần hỗ trợ' : ''}. Mở điều hành trực tiếp`}
       className={`mb-1 flex min-h-12 items-center gap-2.5 rounded-[15px] px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2 ${assist ? 'bg-[#fdecea] text-[#b23e31] ring-1 ring-[#f5c8c2] hover:bg-[#fbe0dc]' : 'bg-[#eef2f7] text-[#1e293b] hover:bg-[#e5eaf1]'} ${rail ? 'lg:justify-center lg:px-0' : ''}`}>
       {rail ? <MonitorPlay size={17} aria-hidden="true" className="hidden shrink-0 lg:block" /> : null}
       <span className={`${rail ? 'lg:hidden' : ''} flex min-w-0 items-center gap-2.5`}>
         <LiveDot tone={assist ? 'warn' : 'ok'} />
         <span className="min-w-0">
-          <span className="block truncate text-[12.5px] font-semibold">Đang chạy {tour.code}{assist ? ', cần hỗ trợ' : ''}</span>
-          <span className="block truncate text-[11px] opacity-75">{where}</span>
+          <span className="block truncate text-[12.5px] font-semibold">{detail.tour.name}{assist ? ', cần hỗ trợ' : ''}</span>
+          <span className="block truncate text-[11px] opacity-75">{step}</span>
         </span>
       </span>
     </Link>
@@ -206,40 +195,6 @@ function AccountMenu({ username, role, onLogout }: { username?: string; role?: s
           </button>
         </div>
       )}
-    </div>
-  )
-}
-
-function AssistanceToast({ notice, onClose }: { notice: AssistanceNotice; onClose: () => void }) {
-  return (
-    <div
-      role="alert"
-      className="fixed top-[68px] right-4 z-40 w-[min(380px,calc(100vw-2rem))] rounded-xl border border-l-4 border-[#fca5a5] border-l-[#dc2626] bg-white p-4 shadow-xl transition-[opacity,transform] duration-300 motion-reduce:transition-none ease-out starting:-translate-y-3 starting:opacity-0 lg:right-5"
-    >
-      <div className="flex items-start gap-3">
-        <ShieldAlert size={20} className="mt-0.5 shrink-0 text-[#dc2626]" aria-hidden="true" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-extrabold text-[#0f172a]">
-            {notice.tourCode} cần hỗ trợ · {REASON_SHORT[notice.reason] ?? notice.reason}
-          </p>
-          {notice.detail && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#64748b]">{notice.detail}</p>}
-          <Link
-            to={`/staff/live/${notice.tourId}`}
-            onClick={onClose}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#2563eb] hover:underline"
-          >
-            Mở điều hành trực tiếp<ChevronRight size={13} aria-hidden="true" />
-          </Link>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Đóng thông báo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-[#94a3b8] hover:bg-[#f1f5f9] hover:text-[#0f172a]"
-        >
-          <X size={15} />
-        </button>
-      </div>
     </div>
   )
 }

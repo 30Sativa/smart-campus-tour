@@ -11,9 +11,17 @@ using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
+using SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
+using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.NextTourStop;
+using SmartCampus.Application.Features.Tours.Commands.ReconcileRobotCommand;
+using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
+using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
+using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
+using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
 using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
 using SmartCampus.Application.Features.Tours.Queries.GetTours;
 
@@ -55,7 +63,7 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>
-        Ok(new BaseResponse<TourDetails> { Success = true, Message = "Tour retrieved.", Data = await sender.Send(new GetTourQuery(id), ct) });
+        Ok(new BaseResponse<TourDetails> { Success = true, Message = "Tour retrieved.", Data = await sender.Send(new GetTourQuery(id, User.GetRequiredUserId()), ct) });
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTourRequest request, CancellationToken ct) =>
@@ -68,6 +76,39 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/cancel")]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelTourRequest request, CancellationToken ct) =>
         Success(await sender.Send(new CancelTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour cancelled before Start.");
+
+    [HttpPost("{id:guid}/ready")]
+    public async Task<IActionResult> MarkReady(Guid id, [FromBody] MarkTourReadyRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new MarkTourReadyCommand(id, User.GetRequiredUserId(), request), ct), "Tour marked READY.");
+
+    [HttpPost("{id:guid}/reopen")]
+    public async Task<IActionResult> Reopen(Guid id, [FromBody] ReopenTourRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new ReopenTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour reopened to SCHEDULED.");
+
+    [HttpGet("{id:guid}/start-checks")]
+    public async Task<IActionResult> StartChecks(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<TourStartChecks> { Success = true, Message = "Tour start checks retrieved.",
+            Data = await sender.Send(new GetTourStartChecksQuery(id, User.GetRequiredUserId()), ct) });
+
+    [HttpPost("{id:guid}/start")]
+    public async Task<IActionResult> Start(Guid id, [FromBody] StartTourRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new StartTourCommand(id, User.GetRequiredUserId(), request), ct), "Tour started.");
+
+    [HttpPost("{id:guid}/next")]
+    public async Task<IActionResult> Next(Guid id, [FromBody] NextTourStopRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new NextTourStopCommand(id, User.GetRequiredUserId(), request), ct), "Tour moved on.");
+
+    [HttpPost("{id:guid}/end-early")]
+    public async Task<IActionResult> EndEarly(Guid id, [FromBody] EndTourEarlyRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new EndTourEarlyCommand(id, User.GetRequiredUserId(), request), ct), "Tour ended early.");
+
+    [HttpPost("{id:guid}/retry-leg")]
+    public async Task<IActionResult> RetryLeg(Guid id, [FromBody] RetryTourLegRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new RetryTourLegCommand(id, User.GetRequiredUserId(), request), ct), "Leg retried.");
+
+    [HttpPost("{id:guid}/commands/{commandId:guid}/reconcile")]
+    public async Task<IActionResult> Reconcile(Guid id, Guid commandId, [FromBody] ReconcileRobotCommandRequest request, CancellationToken ct) =>
+        Success(await sender.Send(new ReconcileRobotCommandCommand(id, commandId, User.GetRequiredUserId(), request), ct), "Command reconciled.");
 
     private OkObjectResult Success(TourMutationResult result, string message) =>
         Ok(new BaseResponse<TourMutationResult> { Success = true, Message = message, Data = result });

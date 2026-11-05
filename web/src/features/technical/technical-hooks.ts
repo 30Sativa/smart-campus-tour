@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
-import { technicalApi, type RouteTestRunInput } from './api/technical'
+import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput } from './api/technical'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
@@ -25,6 +25,11 @@ export function usePhysicalRobots(enabled = true) {
 /** The robot page only; every picker uses usePhysicalRobots, which leaves deactivated robots out. */
 export function useAllPhysicalRobots() {
   return useQuery({ queryKey: [...keys.physicalRobots, 'all'], queryFn: technicalApi.listAllPhysicalRobots })
+}
+
+/** The robot's MiniPC key status; the key panel invalidates this same key after issue, rotate or revoke. */
+export function useRobotCredential(robotCode: string, enabled = true) {
+  return useQuery({ queryKey: ['technical', 'robot-credential', robotCode], queryFn: () => technicalApi.getRobotCredential(robotCode), enabled })
 }
 
 export function useRobotAffectedTours(robotId: string, mapVersionId: string | undefined, enabled: boolean) {
@@ -112,6 +117,13 @@ export const useActivateRobot = () => useTechnicalMutation(technicalApi.activate
   title: `Đã kích hoạt lại ${result.robotCode}`,
   detail: 'Cần cấp khóa mới và gán lại bản đồ trước khi dùng robot.',
 }))
+
+export const useReleaseRobotInspection = () => useTechnicalMutation(
+  (input: ReleaseRobotInspectionInput & { robotCode: string }) => technicalApi.releaseRobotInspection(input),
+  keys.physicalRobots, input => ({
+    title: `Đã trả ${input.robotCode} về sử dụng`,
+    detail: 'Robot không còn bị giữ và có thể được xếp cho Tour mới.',
+  }))
 
 export function useAssignRobotMap() {
   const client = useQueryClient()

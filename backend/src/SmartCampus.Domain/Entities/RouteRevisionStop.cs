@@ -42,4 +42,10 @@ public partial class RouteRevisionStop
     public virtual PoiVerificationRecord PoiVerificationRecord { get; set; } = null!;
 
     public virtual RouteRevision RouteRevision { get; set; } = null!;
+
+    public virtual ICollection<RobotCommand> RobotCommands { get; set; } = new List<RobotCommand>();
+
+    public virtual ICollection<Tour> TourCurrentRevisionStops { get; set; } = new List<Tour>();
+
+    public virtual ICollection<Tour> TourLastArrivedRevisionStops { get; set; } = new List<Tour>();
 }

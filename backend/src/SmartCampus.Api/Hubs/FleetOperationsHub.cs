@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Globalization;
+using System.Security.Claims;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -14,13 +16,44 @@ public static class FleetOperationsAuthorization
 }
 
 [Authorize(Policy = FleetOperationsAuthorization.StaffPolicy)]
-public sealed class FleetOperationsHub(FleetOperationsBroadcaster broadcaster) : Hub
+public sealed class FleetOperationsHub(FleetOperationsBroadcaster broadcaster, HubOperatorConsolePresence presence) : Hub
 {
     public override async Task OnConnectedAsync()
     {
+        presence.Connected(Context.User);
         await Clients.Caller.SendAsync("FleetUpdated", broadcaster.GetCurrentProjection(), Context.ConnectionAborted);
         await base.OnConnectedAsync();
     }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        presence.Disconnected(Context.User);
+        await base.OnDisconnectedAsync(exception);
+    }
+}
+
+/// <summary>
+/// An Operator's console is connected while they hold an open /hubs/operations connection (ADR-0042 open decision 4). In memory,
+/// so it is per API instance like the telemetry store, and starts empty: after a restart the console must reconnect.
+/// </summary>
+public sealed class HubOperatorConsolePresence : IOperatorConsolePresence
+{
+    private readonly ConcurrentDictionary<Guid, int> connections = new();
+
+    public bool? IsConnected(Guid userId) => connections.TryGetValue(userId, out var count) && count > 0;
+
+    public void Connected(ClaimsPrincipal? user)
+    {
+        if (UserId(user) is { } id) connections.AddOrUpdate(id, 1, (_, count) => count + 1);
+    }
+
+    public void Disconnected(ClaimsPrincipal? user)
+    {
+        if (UserId(user) is { } id) connections.AddOrUpdate(id, 0, (_, count) => Math.Max(0, count - 1));
+    }
+
+    private static Guid? UserId(ClaimsPrincipal? user) =>
+        Guid.TryParse(user?.FindFirstValue(ClaimTypes.NameIdentifier) ?? user?.FindFirstValue("sub"), out var id) ? id : null;
 }
 
 public sealed record FleetOperationsRobot(

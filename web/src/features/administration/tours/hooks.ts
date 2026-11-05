@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { routeKeys } from '../routes/hooks'
 import { versionedRoutesApi } from '../routes/versioned-api'
@@ -65,4 +66,31 @@ export function useCancelTour() {
   const onSuccess = useInvalidateTours()
   return useMutation({ mutationFn: ({ id, requestId, rowVersion, reason }: { id: string; requestId: string; rowVersion: string; reason: string }) =>
     toursApi.cancel(id, { requestId, expectedRowVersion: rowVersion, reason }), onSuccess })
+}
+/** SCHEDULED → READY. The server rechecks every READY condition under its locks. */
+export function useMarkTourReady() {
+  // A refusal can mean the Tour changed meanwhile (STALE_VERSION), so refresh either way.
+  const refresh = useInvalidateTours()
+  return useMutation({ mutationFn: ({ id, requestId, rowVersion }: { id: string; requestId: string; rowVersion: string }) =>
+    toursApi.markReady(id, { requestId, expectedRowVersion: rowVersion }), onSettled: refresh })
+}
+/** READY → SCHEDULED, with a reason for the Tour log. */
+export function useReopenTour() {
+  const refresh = useInvalidateTours()
+  return useMutation({ mutationFn: ({ id, requestId, rowVersion, reason }: { id: string; requestId: string; rowVersion: string; reason: string }) =>
+    toursApi.reopen(id, { requestId, expectedRowVersion: rowVersion, reason }), onSettled: refresh })
+}
+/**
+ * One idempotency key per attempt: kept while `scope` (action and the Tour's row
+ * version) is the same, so a retry after a lost response replays instead of
+ * acting twice; renewed once the Tour has changed.
+ */
+export function useRequestId(scope: string) {
+  const [entry, setEntry] = useState(() => ({ scope, id: newRequestId() }))
+  if (entry.scope !== scope) {
+    const next = { scope, id: newRequestId() }
+    setEntry(next)
+    return next.id
+  }
+  return entry.id
 }

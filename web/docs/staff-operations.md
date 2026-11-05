@@ -1,140 +1,153 @@
 # Staff console (`/staff/*`) — remote tours
 
+## Operations on the real backend (M2, 2026-11-04)
+
+The operations console no longer has a mock data source. The simulation
+(`mocks/staff-sim.ts`, `staff-mock.ts`, `staff-realtime-mock.ts`), its binding
+`features/staff/staff-hooks.ts`, the "Chế độ mô phỏng" label and the screens'
+mock-only components were removed. Every Tour or robot value on these screens is
+read from the backend; a value the backend does not provide is said to be missing.
+
+Two vocabularies are kept apart on every screen:
+
+- **Tour state**: `SCHEDULED → READY → RUNNING → COMPLETED | CANCELLED`, plus
+  `operationalStatus` (`NORMAL` / `NEEDS_ASSISTANCE` with a reason) and
+  `currentStep` (`NAVIGATING`, `OBSERVING`, `RETURNING_TO_END`; ADR-0043 D8).
+- **Robot command state** of the current leg (ADR-0042 §3): `PENDING`,
+  `DELIVERED`, `ACCEPTED`, `ARRIVED`, `FAILED`, `CANCELLED`, `EXPIRED`,
+  `REJECTED`, `UNKNOWN`, `RECONCILED`. A RUNNING Tour whose GoTo is still
+  `PENDING` says "Chờ robot lấy lệnh, robot chưa di chuyển vì lệnh này".
+
+| Route | Screen | Backend |
+|---|---|---|
+| `/staff` | Tổng quan vận hành: today's Tours, running Tours with step and command state, Tours needing assistance, robot telemetry | `GET /api/staff/manage/tours` (today, `phase=RUNNING`), Tour detail, `/hubs/operations` |
+| `/staff/tours` | Buổi hôm nay: today's Tours, one next step per state, then the not-ended Tours of the next 7 days ("Sắp tới") so a READY Tour on a later day is still reachable | `GET /api/staff/manage/tours?from&to` (today, and the 7 days after) |
+| `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
+| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the back link goes to Lịch buổi for a Tour on another day; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
+| `/staff/live[/:id]` | Điều hành trực tiếp: freshness line, a situation card (what is happening and the one step it calls for: Next, Retry leg or Reconcile), Tour state, command card with the robot's own leg report, route, robot telemetry, a separate End Early panel | Tour detail `execution`/`allowedActions` (polled 3 s), `POST …/next`, `…/retry-leg`, `…/end-early`, `…/commands/{commandId}/reconcile`, `/hubs/operations` |
+| `/staff/manage/tours/:id` | Tour preparation, now with **Chốt Tour (READY)** and **Mở lại** | `permissions.canMarkReady/canReopen/readyBlockers`, `POST …/ready`, `POST …/reopen` |
+| `/staff/robot`, `/staff/schedule`, `/staff/history` | unchanged, already API-backed | — |
+
+Rules the screens follow:
+
+- Buttons follow the server: READY follows `permissions.canMarkReady`, Start
+  follows `start-checks.canStart` plus the four confirmations, Next, Retry leg,
+  End Early and Reconcile follow `allowedActions.next/retryLeg/endEarly/reconcile`.
+  A disabled button prints the server's reason and the failing check labels.
+  The browser decides nothing; the server rechecks everything under its locks.
+- The situation card (`operations/situation.ts`) reads the command state before
+  the assistance reason: an UNKNOWN GoTo points at Reconcile, never Retry; a
+  RECONCILED one leaves only End Early. For any other ended leg (FAILED,
+  REJECTED, or EXPIRED before the robot took it, as allowed since PR #187)
+  Retry is shown, enabled or held by a movement check, only when `retryLeg` is
+  not refused with `TOUR_RETRY_NOT_ALLOWED`; otherwise only End Early remains.
+  The console never decides retryability itself. Any action the server allows that the card did not
+  expect is still offered, so the screen cannot hide a way forward.
+- Only the Tour's Operator gets controls; other Staff see the same console and
+  are told who operates. End Early sits in its own panel, needs a reason, says
+  what happens to the open command (withdrawn if never taken, a Cancel queued
+  otherwise, an UNKNOWN one kept for Reconcile) and that it is not an Emergency
+  Stop. Reconcile needs a note of what was seen on site and is offered on an
+  ended Tour too, because its UNKNOWN command keeps the robot held.
+- A failed poll keeps the last answer on screen with a "không cập nhật được"
+  notice instead of replacing the console with an error. While the Tour or the
+  start checks are older than 10 s or the last poll failed, the actions that
+  make the robot move (Start, Next, Retry) are locked; End Early and Reconcile
+  stay available. An open confirmation cannot be confirmed once the server
+  withdraws the action or the screen falls behind.
+- The Operator's console presence (`operatorConsoleConnected`, a movement check)
+  is this browser's `/hubs/operations` connection, so the console says when it is
+  not connected.
+- A check the server did not run because a prerequisite failed (not in
+  `blockedBy`) reads "Chưa kiểm tra", so root causes come first. `batteryInfo`
+  is informational.
+- When `commandTransportEnabled` or `robotDispatchEnabled` fails, a notice says
+  the system itself does not allow robot motion yet (M2.3 safety evidence,
+  ADR-0043 D11). There is no override.
+- Every write sends `requestId` and, except Reconcile (it targets one command),
+  `expectedRowVersion`. The request id is kept per intent (action, row version
+  and, for End Early and Reconcile, the typed reason, which the server
+  fingerprints), so a retry after a lost response replays instead of acting
+  twice, and a changed reason is a new request. Success is announced only after the server answers
+  200; a 409 shows the server's code in words (`COMMAND_TRANSPORT_DISABLED`,
+  `START_PRECONDITION_FAILED`, `MOVE_PRECONDITION_FAILED`, `TOUR_COMMAND_OPEN`,
+  `ROBOT_CLAIM_FAILED`, `READY_PRECONDITION_FAILED` with its blockers, `STALE_VERSION`,
+  `TOUR_RETRY_NOT_ALLOWED`, `COMMAND_STATE_INVALID`). A 403 on an Operator action
+  says only the assigned Operator may act.
+- Telemetry comes from `FleetUpdated` on `/hubs/operations`, connected once by
+  the shell with the in-memory JWT (`accessTokenFactory`). A closed connection
+  restarts after 5 s. Ages keep counting between broadcasts and a lost
+  connection is shown, so old values never look current. Telemetry is the
+  robot's own report, not a Tour state and not proof that a command ran.
+- The web page is not an Emergency Stop (web/AGENTS.md §7); the live console says so.
+
+### Not available yet, and why
+
+| Missing | Cause | Suggested resolution |
+|---|---|---|
+| Ended Tours needing Reconcile beyond the newest 100 | The overview reads `execution.needsReconcile` on the newest 100 FINISHED list rows; the list has no `needsReconcile` filter | Add the filter if older ended Tours must be found |
+| Notifying groups and revoking live/fallback/Q&A on End Early | FR-48 consequences are a follow-up (ADR-0043 D14) | The End Early dialog tells the Operator to inform groups by the usual means |
+| Tour event log | No Tour event read API | `GET …/tours/{id}/events` (TourEvents) |
+| Push updates of Tours | `TourUpdated`/`AssistanceRequired` hub events are planned only | Emit them on the hub; screens then refetch instead of polling |
+| Start can succeed | `FleetCommands:Enabled=false`, nothing sets `IsDispatchEnabled` | M2.3 safety evidence and the D11 writer |
+| Operational Twin with real pose | Needs the measured ROS map → Twin transform | Calibrate, then feed `FleetUpdated.pose` to the twin |
+
+Done since the first M2 console, listed so these rows are not re-opened:
+
+- End Early, Retry leg and Reconcile: `POST …/end-early`, `…/retry-leg`,
+  `…/commands/{commandId}/reconcile`, gated by `allowedActions`.
+- Current stop on the route: `RouteRevisionStopView.id` matches
+  `execution.currentRevisionStopId`/`lastArrivedRevisionStopId`, marked only while RUNNING.
+- Execution summary in the Tour list: each `TourSummary` carries `execution`
+  (`operationalStatus`, `assistanceReason`, `currentStep`, `commandState`,
+  `needsReconcile`); `useRunningTours` reads a detail only when an older server
+  omits it. Ended Tours that still need Reconcile raise an overview alert and a bell item.
+- Releasing a held robot: `/technical/robots` marks a robot that needs inspection,
+  or whose holding Tour has ended, as "Chờ kiểm tra tại chỗ" (a robot in a running
+  Tour shows "Đang chạy Tour") and offers "Trả robot về sử dụng" behind a required
+  on-site note (`POST /api/technical/physical-robots/{id}/release-inspection`,
+  Technical Staff only, ADR-0043 D13).
+- Operator console presence: `operatorConsoleConnected` counts the Operator's
+  `/hubs/operations` connections.
+
 ## Staff interface update (2026-10-30)
 
 - Navigation has three sections: operations, Tour preparation, and history.
   Creating a Tour is a page action; pending/all registrations share one navigation
   entry and retain both existing URLs with links between the views.
-- The operations overview uses the approved analytical layout and existing
-  light blue/navy palette: one interactive summary strip, a seven-day completion
-  line, a state ring, and a searchable session list. KPI/state filters, the
-  selected date and the open inspector are kept in query parameters. Critical
-  attention remains visible; preparation notices are expandable. Operations
-  remain simulation-backed and carry a visible source label.
-  The overview does not include the preview-only scenario controls or issue
-  operational commands; action links keep the existing preflight/live routes.
-- The preparation overview now reads the existing live Tour, registration-review
-  and POI APIs. Summary totals use pagination metadata, not the preview row count.
+- The preparation overview reads the live Tour, registration-review and POI
+  APIs. Summary totals use pagination metadata, not the preview row count.
   Loading/failure never becomes a zero total; sections fail independently.
-  This replaces only that overview's previous mock dashboard binding.
-- Today's session inspector is a non-modal side panel from 1536px; narrower
-  screens retain the dialog. Escape closes either view and restores focus.
 - Schedule views are exclusive: week, day timeline, or list (`?view=week|day|list`).
   Selecting a week cell opens that day. History puts its searchable list before
-  optional charts. Live operations split map/controls from 1440px.
+  optional charts.
 - POI summaries, rows and map markers share an explicit map-version selection.
   Empty filters and API errors are distinct. Route cards keep revision history
   collapsed and support server pagination.
-- These are frontend presentation changes. Existing server-side permissions,
-  allowed actions and pending scheduling/READY integration remain authoritative.
 
-The older scope/ownership notes below are historical; current business ownership
-follows ADR-0020 and frontend preparation routes follow ADR-0025/0027.
+## Roles
 
-Aligned on 2026-09-21 with **"CampusTour DT-AMR — Đặc tả phạm vi, nghiệp vụ và
-tích hợp tham quan từ xa" (19/09/2026)**. That document is the source of truth;
-this file only maps it onto the web area. Section numbers (§) refer to it.
-
-## What Staff does (and does not)
-
-| Staff does (§2) | Not Staff's (Admin or nobody in V1) |
-|---|---|
-| Check the device side and **Start** a `Ready` session | Create/edit sessions, approve/reject groups, send invitations, **Chốt buổi** (→ Ready), re-open, cancel before start — Admin |
-| **Hold at a POI**, **Next**, **End Early** (→ `Cancelled`) | Choosing a robot or swapping it mid-session (§6.1, S-02) |
-| Recover from `NeedsAssistance`: **retry leg**, **re-run POI**, **retry FRONT**, **confirm completion** (§12.2) | Pausing between POIs, "resume" of an old timer (§4.2, §4.5) |
-| Read the groups and rosters of the sessions they run | Group check-in (students watch remotely), picking a narration language (one language system-wide, §1) |
-| Confirm the robot is ready after End Early (§5.4) | Incident-management workflow (§5.6 — the reason lives on the Tour and in its log) |
-
-## State model shown on screen
-
-```
-TourState          Scheduled → Ready → Running → Completed | Cancelled
-OperationalStatus  Normal | NeedsAssistance (+ reason)   — only while Running
-Hold               flag at a POI; stops the automatic Next — not a state
-Step               PreparingStart · Navigating · PreparingView · Observing ·
-                   HeldAtPoi · ReturningFront · ReturningToEnd · Finished
-```
-
-An Admin-only account can open `/staff/*` but every run action is locked with
-the reason "Cần vai trò Nhân viên vận hành (Staff)" (scope §2.1 "Admin cần thêm
-role Staff"); the mock server also refuses such calls with 403.
-
-Every button's availability comes from the server (`allowedActions`, each with a
-reason). A disabled button always prints its reason. The screen never decides.
-
-## Screens
-
-| Route | Screen | Scope |
-|---|---|---|
-| `/staff` | Tổng quan vận hành — counts, the running session (state, step, POI, data age, pending command), "Cần xử lý", today's sessions, the robot | §11.1 Dashboard |
-| `/staff/tours` | Buổi hôm nay — sessions with groups and one next step each | §11 "xem các đoàn đăng ký" |
-| `/staff/schedule` | Lịch buổi — any day, live Tours and robot holds from `/api/staff/manage/tours`, not the mock | S-01 |
-| `/staff/tours/:id` | Chi tiết & nhật ký — info, groups & rosters, route progress, full log | §11.1 "Chi tiết/log phiên", §12.7 |
-| `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu — server device checks, 3 on-site confirmations, preview, Start | §5.3 |
-| `/staff/live[/:id]` | Điều hành trực tiếp — Operational Twin, trạng thái phiên, điều khiển & phục hồi, lộ trình và nhật ký. Telemetry chi tiết nằm ở `/staff/robot`; preview nằm trong bước kiểm tra trước khi bắt đầu. | §4.2, §11, §12 |
-| `/staff/robot` | Robot & thiết bị — physical robots and their connection from `/api/staff/physical-robots` | S-04 |
-| `/staff/history` | Lịch sử phiên — finished and cancelled Tours from `/api/staff/manage/tours` | S-05 |
-| `/staff/digital-twin` | Local six-robot workbench, Physical Twin preparation and separate simulator preview (no sidebar entry) | — |
-
-The physical preparation surface has no production telemetry binding yet.
-See `web/docs/physical-digital-twin.md` for its observation seam, freshness
-checks, calibration requirements and later miniPC integration steps.
-
-Twin rules applied (§11.2–11.6): POIs shown by order with the end point, **no
-straight lines between POIs**; the camera head turns separately from the body;
-a stale pose is greyed and labelled, never animated forward; Gazebo/Emulator
-robots carry their label and never serve a session.
-
-Operational Twin on the live operations and robot screens loads the styled
-V3 model, `web/public/models/simulator-map/NVHSV_Tang6_V3_modern_v2.glb`, using
-the same model loader, lighting and camera fit as the physical preparation view.
-Existing robot/POI fixtures and view controls are retained; changing the display
-asset does not establish measured ROS alignment or a production telemetry binding.
-
-The robot screen and idle live-operations twin start **six robots by default**,
-labelled as disconnected from the miniPC. **Điểm point** toggles ten initially
-hidden rings. Robots follow complete corridor laps with 1–3 randomly skipped
-observation stops per lap and thin animated dashed routes,
-observe for 60 simulated seconds and actively move into safe bays to yield to
-lower-numbered robots. The wider Digital Twin page exposes task queues,
-events/exports, local fleet metrics, scenarios, a rule-based Copilot, virtual
-point/onboard/CCTV cameras and isolated what-if trials. **Camera point** exposes
-C1–C10 on the map and a point selector for fixed views. These local controls send no
-physical commands and do not change active-Tour observations. See
-[local patrol fleet](patrol-demo.md) for placement, checks and integration limits.
+Business ownership follows ADR-0020; preparation routes follow ADR-0025/0027.
+Any Staff prepares Tours, marks READY and reopens. Only the Tour's assigned
+Operator (`Tours.OperatorUserId`) may Start or operate it (ADR-0042 D6); for any
+other Staff the start checks report `callerIsOperator` as the root cause.
+Admin never prepares, starts or operates a Tour.
 
 ## Code layout
 
 ```
-src/api/contracts/staff.ts            StaffApi (types + unwired HTTP implementation)
-src/api/contracts/staff-realtime.ts   StaffRealtime (FleetUpdated, TourUpdated+revision, AssistanceRequired)
-src/mocks/staff-sim.ts                mock server: the §4.4 flow, §4.5 hold/next, §12 faults & recovery
-src/mocks/staff-mock.ts               StaffApi over the simulation
-src/mocks/staff-realtime-mock.ts      push channel over the simulation (1 Hz while subscribed)
-src/features/staff/staff-hooks.ts     the one binding of both; revision guard on useTour (§8.6)
-src/features/staff/attention.ts       next action per state, counts, "Cần xử lý", route progress
-src/features/staff/status.ts          labels & tones (Vietnamese), steps, start checks
-src/features/staff/reason.ts          assistance reasons and what to check for each
-src/features/staff/components/        OperationControls, RunStatus, TourTimeline, TourParts,
-                                      RobotParts, OperationalTwin, LiveCameraPreview, ConfirmationDialog
+src/features/administration/tours/api/tours.ts   Tour API, incl. ready/reopen/start-checks/start/next
+src/features/administration/tours/TourReadyPanel.tsx   Chốt Tour / Mở lại on the preparation detail
+src/features/staff/operations/hooks.ts           operation queries (polling), freshness, write mutations, per-intent request ids
+src/features/staff/operations/fleet-telemetry.ts /hubs/operations FleetUpdated, connection state
+src/features/staff/operations/operation-labels.ts check, step, command-state and reason vocabulary
+src/features/staff/operations/operation-errors.ts structured 4xx refusals
+src/features/staff/operations/OperationParts.tsx  execution, command card, telemetry, system-gate notice
+src/features/staff/operations/StartCheckList.tsx  grouped server checks
+src/features/staff/operations/situation.ts       what is happening and the one suggested step, from server state
+src/features/staff/operations/TourActions.tsx    Next/Retry/Reconcile/End Early behind server gates and confirmations
 ```
 
-## Demo script (mock data, `staff/staff`)
-
-- T-01 is running on `robot_01` (3 POI + return leg). About 8 s after opening the
-  console Nav2 "fails" → `NeedsAssistance / Lỗi điều hướng` → **Thử lại chặng**.
-- At the next POI try **Giữ tại POI**, then **Đi tiếp**.
-- Later on a leg the shared stream drops → the leg finishes, robot holds at the
-  POI → once the stream is back, **Chạy lại POI**.
-- Around 110 s a FRONT command fails → **Thử lại FRONT**.
-- T-02 is Ready but the robot is busy: Start stays disabled with the reason.
-  End T-01 early, then start T-02.
-- T-03 is Scheduled (1 group waiting for Admin approval). Approve it and Chốt Tour
-  as `admin/admin` (`/admin/tours/tour-03`), or Chốt T-05, and Staff can start it.
-
-## Switching to the real backend
-
-Agree the endpoints and hub methods with `backend/` and record them in
-`docs/architecture.md`; then swap `mockStaffApi` / `mockStaffRealtime` for
-`staffApi` / `createStaffRealtimeHub()` in `staff-hooks.ts` and delete
-`src/mocks/staff-*`.
+`/staff/digital-twin` remains a local, labelled workbench (six simulated robots);
+it sends no command and does not represent a Tour. See
+`web/docs/physical-digital-twin.md` and [local patrol fleet](patrol-demo.md).

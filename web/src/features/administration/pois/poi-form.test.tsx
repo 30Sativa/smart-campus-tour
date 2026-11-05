@@ -58,7 +58,7 @@ describe('Staff versioned POI workflow', () => {
   it('loads the selected map package, converts a picked cell to world coordinates and creates/submits a proposal', async () => {
     renderAt('/staff/manage/pois/new')
     fireEvent.change(await screen.findByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
-    expect(screen.getByText('Robot đang triển khai: amr-01')).toBeInTheDocument()
+    expect(screen.getByText('Robot kiểm tra đạt: amr-01')).toBeInTheDocument()
     const svg = await screen.findByRole('group', { name: 'Bản đồ occupancy ROS' }) as unknown as SVGSVGElement
     fireEvent.click(screen.getByRole('button', { name: 'Chọn vị trí' }))
     fireEvent.pointerDown(svg, pointerAt(svg, 0.5, 0.5))
@@ -130,9 +130,11 @@ describe('Staff versioned POI workflow', () => {
 
     renderAt('/staff/manage/pois')
     expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
-    expect(screen.getByText('Library · v1')).toBeInTheDocument()
+    expect(screen.getByText('Library · library · phiên bản 1')).toBeInTheDocument()
     expect(screen.getByText('Chờ kỹ thuật kiểm tra')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
+    expect(screen.getByText('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Tạo điểm mới' })).not.toBeInTheDocument()
   })
 

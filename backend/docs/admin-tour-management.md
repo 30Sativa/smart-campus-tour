@@ -9,8 +9,9 @@ assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-rou
 lead time and the reservation formula are in [ADR-0035](../../docs/decisions/0035-tour-slots-lead-time-and-measured-reservation.md);
 slots are configured in `Tours:StartSlots`, and typed times in
 `Tours:CustomStartEarliest` and `Tours:CustomStartLatest` ([ADR-0036](../../docs/decisions/0036-tour-custom-start-time.md)).
-Existing legacy Tours keep their legacy Route. READY snapshots stay blocked by
-[ADR-0024](../../docs/decisions/0024-versioned-tour-scheduling-blockers.md).
+Existing legacy Tours keep their legacy Route and cannot be marked READY. READY and
+Reopen follow [ADR-0042](../../docs/decisions/0042-m2-command-transport-and-start-readiness.md);
+no immutable READY snapshot is stored: the Tour already pins its exact revision.
 
 ## Create a Tour from a tested Route revision
 
@@ -89,12 +90,146 @@ robot ownership, or grant post-Start fallback rights.
 No hard DELETE endpoint exists. RUNNING, terminal and anomalous execution rows
 must use later lifecycle/operational workflows instead of this cancellation API.
 
+## READY and Reopen (ADR-0042)
+
+POST `/api/staff/manage/tours/{id}/ready` with `{requestId, expectedRowVersion}`
+moves a SCHEDULED Tour to READY. Any Staff may call it; Admin, Technical Staff and
+Representative get 403. Under the Tour lock (then the map preparation, robot
+deployment and robot reservation locks, in the order Tour create uses) it checks
+every row of the READY conditions table in `docs/architecture.md` §3.2:
+SCHEDULED with no execution state, robot ownership or operational history (the
+Cancel/Edit test), an exact RouteRevision with Operator, an active
+single-role Staff Operator, the revision still schedulable (submitted, effective
+PASS, POI evidence, map gate; route deactivation does not count, ADR-0037), an
+active reservation, the ADR-0039 robot rule, no pending row or email-change
+decision, and a start still in the future. Any failure is 409
+`READY_PRECONDITION_FAILED` with every failing condition:
+
+```json
+{ "errors": { "code": "READY_PRECONDITION_FAILED",
+  "blockers": [ { "code": "PENDING_DECISIONS", "message": "Còn dòng đăng ký ..." } ] } }
+```
+
+Codes: `TOUR_STATE_INVALID`, `ROUTE_VERSION_REQUIRED`, `OPERATOR_REQUIRED`, the
+create-time revision codes (`ROUTE_NOT_SUBMITTED`, `ROUTE_TEST_PASS_REQUIRED`,
+`POI_VERIFICATION_STALE`, map gate codes), `RESERVATION_MISSING`,
+`ROBOT_NOT_READY_FOR_ROUTE`, `PENDING_DECISIONS`, `START_TIME_PASSED`. Only root
+causes are listed: a legacy Tour reports only `ROUTE_VERSION_REQUIRED`, a Tour
+without a reservation only `RESERVATION_MISSING` (the robot check is skipped);
+state, pending decisions and start time are always reported. Success writes a
+`TOUR_READY` TourEvent (actor) and the request receipt in the same commit. READY
+does not claim the robot, set `Robots.CurrentTourId`, start the Tour or send a command.
+
+POST `/api/staff/manage/tours/{id}/reopen` with `{requestId, expectedRowVersion, reason}`
+returns a READY Tour without execution state to SCHEDULED; another state is 409
+`TOUR_STATE_INVALID`, a blank reason 400. It writes a `TOUR_REOPENED` TourEvent
+(actor, reason) and the receipt; reservation, registrations and invitations are
+unchanged. READY/Reopen events are not operational history, so a reopened Tour
+stays editable and cancellable.
+
+While READY, Representative create/replace/resubmit/cancel, Staff row review and
+aggregate approve/reject, email-change request/review and Tour metadata PUT are
+refused with `TOUR_LOCKED`; invitation support and Viewer access follow
+`InvitationPolicy` and still work. Both endpoints use the receipt rules below.
+`GET /api/staff/manage/tours/{id}` adds `permissions.canMarkReady`, `canReopen` and
+`readyBlockers` (same list, evaluated without locks).
+
 Matching committed retries replay before stale-version/state checks. A new
 requestId with an old RowVersion conflicts. Key reuse for another payload,
 action or Tour also conflicts. Audit stores hashes and changed field names,
 not raw input text/rosters/access codes. Mutations use the existing Tour-first
 lock convention; reference/availability reads and access revocation stay in
 their transaction. No external email HTTP is inside that transaction.
+
+## Start and Next (ADR-0042, ADR-0043)
+
+These endpoints read the Start conditions table of `docs/architecture.md` §3.2 from
+real data. No robot endpoint exists yet, so a command waits as PENDING and nothing
+moves. `FleetCommands:Enabled` is false by default: Start then refuses and writes nothing.
+
+GET `/api/staff/manage/tours/{id}/start-checks` (any Staff) returns
+`{checks: [{id, passed, source, detail}], canStart, blockedBy}`, evaluated now
+without locks. `source` is `DB`, `TELEMETRY` (in-memory Fleet Sync store),
+`CONFIG` or `CONSOLE`. It includes `callerIsOperator` (is the viewer the Tour's
+Operator) and leaves out the four on-site confirmations. `callerIsOperator` is
+independent: for another Staff it is a root cause in `blockedBy`, and every other
+check is still evaluated in full. `canStart` belongs to the caller: true only when
+every returned check passed, so false for any Staff who is not the Operator, and
+always false while `FleetCommands:Enabled` is false.
+
+POST `/api/staff/manage/tours/{id}/start` with
+`{requestId, expectedRowVersion, confirmation: {robotPlaced, areaClear, attendantPresent, previewChecked}}`:
+
+- Caller is not `Tours.OperatorUserId` → 403 (a legacy Tour has no Operator, so nobody).
+- RowVersion differs → 409 `STALE_VERSION`.
+- Any failing check → 409 `START_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`.
+- Every check passes except `commandTransportEnabled` → 409 `COMMAND_TRANSPORT_DISABLED` with the checks.
+- Everything passes → the Tour runs (below). A robot that changed in the last moment is 409 `ROBOT_CLAIM_FAILED`.
+
+```json
+{ "errors": { "code": "START_PRECONDITION_FAILED",
+  "checks": [ { "id": "reservationActive", "passed": false, "source": "DB", "detail": "Tour chưa giữ robot ..." },
+              { "id": "telemetryFresh", "passed": false, "source": "TELEMETRY", "detail": "Chưa kiểm tra vì reservationActive chưa đạt." } ],
+  "blockedBy": [ "reservationActive", "commandTransportEnabled" ] } }
+```
+
+Start runs inside the Tour transaction and takes the READY lock order (Tour, map
+preparation, robot deployment, robot reservations). A refusal throws, so nothing
+commits, and is logged with Tour id, actor id, code and `blockedBy` only. A Start that
+passes claims the robot in one conditional UPDATE, moves READY to RUNNING (`NORMAL`,
+`NAVIGATING`, `TO_POI`, the first stop), inserts the first GoTo as PENDING with
+`AcceptBy = now + AcceptWindowSeconds`, and writes `TOUR_STARTED`,
+`LEG_DISPATCH_REQUESTED` and the receipt. A repeat with the same `requestId` returns
+the earlier result and creates nothing (SRS §4); other content under that id is
+`IDEMPOTENCY_CONFLICT`.
+
+POST `/api/staff/manage/tours/{id}/next` with `{requestId, expectedRowVersion}` is
+Operator only and needs RUNNING, NORMAL, OBSERVING (else `TOUR_STATE_INVALID`) and no
+open command (`TOUR_COMMAND_OPEN`). It closes the visit once, then sends a GoTo to the
+next stop or the end pose, or with `EndMode = LAST_POI` completes the Tour and releases
+the robot. A new command needs the movement checks of ADR-0043, else 409
+`MOVE_PRECONDITION_FAILED` with `errors.checks` and `errors.blockedBy`. Nothing leaves a
+POI by itself: `dwellDeadlineAt` is display only (D12).
+
+`GET /api/staff/manage/tours/{id}` adds `execution` and `allowedActions` (`start`, `next`,
+`endEarly`, `retryLeg`, `reconcile`: `{allowed, reason, blockedBy}`) for the caller; both
+are advisory.
+
+## Recovery (M2.2-c, ADR-0043)
+
+POST `/api/staff/manage/tours/{id}/end-early` with `{requestId, expectedRowVersion, reason}`:
+Operator only, while RUNNING. The Tour becomes CANCELLED, the robot needs inspection and
+stays held. An undelivered GoTo is withdrawn, a delivered or accepted one gets a Cancel,
+and the leg's real result is recorded when it arrives. **Nothing in this flow is evidence
+that the robot stopped.** FR-48 revocation and notices are a follow-up.
+
+POST `.../retry-leg` with `{requestId, expectedRowVersion}`: Operator only, after a GoTo
+that FAILED or was REJECTED; never after UNKNOWN or RECONCILED (`TOUR_RETRY_NOT_ALLOWED`).
+The movement checks run again, so a `BUSY` or `MAP_MISMATCH` rejection cannot loop.
+
+POST `.../commands/{commandId}/reconcile` with `{requestId, reason}`: Operator only, for an
+UNKNOWN GoTo. The outcome stays unknown, the robot needs inspection, and only End Early
+remains.
+
+POST `/api/technical/physical-robots/{id}/release-inspection` with
+`{requestId, expectedRowVersion, reason}`: Technical Staff, after an on-site check. Needs an
+ended Tour and no open command; clears the hold and the flag, with an audit row.
+
+The sweeper (every `FleetCommands:SweepIntervalSeconds`, 5) expires undelivered GoTos and
+marks unconfirmed ones UNKNOWN (`LegResultTimeoutSeconds`, 600, initial value, not measured).
+Restart recovery runs before the server accepts requests. Both need `FleetCommands:Enabled`.
+
+Root causes: a check that needs another check's input runs only when that check
+passed; otherwise it is `passed: false` with detail "Chưa kiểm tra vì <id> chưa đạt"
+and is not in `blockedBy`. Without an active reservation no robot or telemetry
+check runs; without fresh telemetry the other telemetry checks do not run.
+`batteryInfo` is informational and always passes.
+
+Configuration section `FleetCommands`: `Enabled` (default false),
+`MaxTelemetryAgeSeconds` (2), `StartLateLimitMinutes` (15), `AcceptWindowSeconds` (30,
+initial value, not measured), `LegResultTimeoutSeconds`, `SweepIntervalSeconds`. `operatorConsoleConnected` has
+no source yet (`IOperatorConsolePresence` returns unknown) and always fails;
+`robotDispatchEnabled` always fails because nothing sets `IsDispatchEnabled`.
 
 ## List and verification
 
@@ -119,9 +254,8 @@ source is available for the 15-minute-buffer reservation and the existing
 registration path can report row-level and email-change decisions. Current
 versioned Route views return `INCOMPLETE_CONTENT_AUDIO_DATA`; measured route-test
 duration is not substituted for configured total duration. Physical attendant
-and operational safety-console evidence also has no current source, so READY
-must remain blocked/unknown for those checks. No target reservation, READY,
-Finalize/Reopen or Start endpoint is currently available. Branch preparation,
+and operational safety-console evidence also has no current source; ADR-0042 makes
+them Start checks, not READY checks. No Finalize endpoint exists. Branch preparation,
 coordinated registered rescheduling and participant notification/expiry updates
 remain separate work.
 
@@ -133,14 +267,14 @@ remain separate work.
 | Configured total path duration | Route view reports `INCOMPLETE_CONTENT_AUDIO_DATA`; only dwell subtotal is known | **Blocked**; do not substitute measured navigation-test duration |
 | Explicit assigned Operator | User can be validated as one active `Staff` role, but Tour has no Operator field or API | **Unavailable** |
 | Robot interval and overlap | No versioned reservation table or interval query; legacy Tours have no reservation duration/robot link suitable for exclusion | **Unknown**; do not claim a conflict-free slot |
-| Registration-row/email decisions | Current registration is aggregate; there is no row email-change request workflow | **Unknown** when deciding READY |
-| Safety attendant/operations-console preflight | No persisted check source in backend | **Unknown**; READY must remain blocked |
+| Registration-row/email decisions | `HasPendingDecisionsAsync`: active PENDING rows and PENDING email-change requests | READY refuses with `PENDING_DECISIONS` |
+| Safety attendant/operations-console preflight | Attendant is an on-site Start confirmation; console presence has no source | `attendantPresent` is a Start confirmation; `operatorConsoleConnected` fails until a source exists |
 
 Target role/action boundary: Tour scheduling, configuration, readiness and
 pre-Start cancellation belong to `Staff` (product label Tour Staff). The assigned
 Operator is an explicitly selected active Staff account; CreatedByUserId cannot
 stand in for that assignment. Admin has no routine Tour-management permission;
 F-14 remains pending. Technical Staff, Representatives and Viewers have no Tour
-scheduling action. Start and assigned-Operator runtime actions are outside this
-slice and have no endpoint. These are target boundaries, not claims that the
+scheduling action. Start, Next, End Early, Retry and Reconcile belong to the assigned
+Operator. These are target boundaries, not claims that the
 versioned API is implemented.

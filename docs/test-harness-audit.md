@@ -122,7 +122,7 @@ offline ROS stubs do not prove physical navigation, TF timing or motor response.
 | robot/ros2_ws/src/orbbec_bringup/scripts/verify_astra_pro.sh; robot/ros2_ws/src/orbbec_bringup/orbbec_bringup/depth_check_node.py; robot/ros2_ws/src/orbbec_bringup/orbbec_bringup/costmap_contrib_node.py | PERMANENT REGRESSION manual harness | Reusable USB/ROS camera, TF/depth and costmap acceptance checks for current supplementary-sensor architecture. Diagnostic nodes are production-source files and remain untouched. |
 | robot/ros2_ws/src/robot_perception/scripts/bench_detector.py | PERMANENT REGRESSION manual harness | Repeatable actual-miniPC model/runtime resource measurements and manifest generation, not evidence a completed migration can be discarded. |
 | robot/quest-stream/scripts/check-quest.sh; robot/quest-stream/scripts/measure.sh | PERMANENT REGRESSION manual harness | Repeatable physical Quest/connectivity/stream measurement; real device/deployment required. |
-| robot/docs/nav2-turn-test.md; robot/docs/phase1-camera.md; robot/docs/phase2-perception.md; robot/docs/phase3-nav2.md; robot/docs/phase4-ai.md | PERMANENT REGRESSION manual procedures | Current hardware acceptance instructions, outside automated definition counts. |
+| robot/docs/phase1-camera.md; robot/docs/phase2-perception.md; robot/docs/phase3-nav2.md; robot/docs/phase4-ai.md | PERMANENT REGRESSION manual procedures | Current hardware acceptance instructions, outside automated definition counts. |
 
 The SignalR README's historical ROS base image differs from today's Ubuntu
 minimal base in robot/Dockerfile. Preserve the evidence as historical; a future

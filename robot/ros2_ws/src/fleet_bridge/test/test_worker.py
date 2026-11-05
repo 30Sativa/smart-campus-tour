@@ -569,16 +569,23 @@ class FleetSyncWorkerStateTests(unittest.TestCase):
         self.assertNotEqual(transport_threads[0], caller_thread)
         self.assertEqual('fleet-sync-https', transport_threads[0])
 
-    def test_no_navigation_command_surface_or_inferred_idle_status(self):
-        node_source = (Path(__file__).resolve().parents[1] / 'fleet_bridge/node.py').read_text(
-            encoding='utf-8')
-        package = (Path(__file__).resolve().parents[1] / 'package.xml').read_text(encoding='utf-8')
+    def test_navigation_stays_opt_in_and_no_module_publishes_velocity(self):
+        package_dir = Path(__file__).resolve().parents[1] / 'fleet_bridge'
+        node_source = (package_dir / 'node.py').read_text(encoding='utf-8')
+        # The default path infers no execution state and has no action surface of its own.
         self.assertIn("'status': 'UNKNOWN'", node_source)
         self.assertNotIn('GoalStatus', node_source)
-        self.assertNotIn('action_msgs', package)
         self.assertNotIn('ActionClient', node_source)
-        self.assertNotIn('create_publisher', node_source)
-        self.assertNotIn('cmd_vel', node_source)
+        # Nav2 is reached only through the lazily imported adapter, and only there.
+        self.assertNotIn('\nfrom .nav2', node_source)
+        self.assertIn('            from .nav2 import Nav2Navigator', node_source)
+        for module in package_dir.glob('*.py'):
+            source = module.read_text(encoding='utf-8')
+            self.assertNotIn('create_publisher', source, module.name)
+            self.assertNotIn('cmd_vel', source, module.name)
+            self.assertNotIn('cancel_all', source, module.name)
+            if module.name != 'nav2.py':
+                self.assertNotIn('ActionClient', source, module.name)
         self.assertIn('spin_until_worker_fatal', node_source)
         self.assertNotIn('rclpy.spin(', node_source)
 

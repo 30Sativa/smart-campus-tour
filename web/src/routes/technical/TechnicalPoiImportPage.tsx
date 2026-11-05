@@ -5,8 +5,8 @@ import { PageHeader, PanelHead, StatStrip, StatTile, panelClass } from '../../co
 import { Modal } from '../../components/ui/Drawer'
 import { buttonClass, inputClass, labelClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { RobotPicker } from '../../features/technical/RobotPicker'
-import { CheckRow, DetailFact, Note, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
-import { cameraPresetLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
+import { CheckRow, DetailFact, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge, ViewDetailButton } from '../../features/technical/TechnicalUi'
+import { cameraPresetLabel, mapVersionLabel, verificationMethodLabel } from '../../features/technical/poi-labels'
 import { errorText, poiVerifyErrors, stamp } from '../../features/technical/technical-format'
 import { useMapVersions, usePhysicalRobots, usePoiHistory, usePoiProposals, usePoiVerificationQueue, useVerifyPoi } from '../../features/technical/technical-hooks'
 import type { PoiProposal, PoiRevision, PoiVerificationQueueItem } from '../../features/technical/api/technical'
@@ -45,7 +45,7 @@ export default function TechnicalPoiImportPage() {
   // People read the area and version; the map key is only a fallback while the list loads.
   const mapName = (mapKey: string) => {
     const map = maps.data?.find(item => item.map.mapKey === mapKey)?.map
-    return map ? `${map.areaName} · v${map.versionNumber}` : mapKey
+    return map ? mapVersionLabel(map) : mapKey
   }
   const [filter, setFilter] = useState<PoiFilter>('pending')
 
@@ -153,14 +153,22 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
   const passBlocked = resultCode === 'PASS' && missing.length > 0
   const failBlocked = resultCode === 'FAIL' && missing.length === 0
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // Advisory only: the server decides from the robot's latest deployment check.
+  // The server refuses this either way (MAP_NOT_DEPLOYED), so save waits for a fresh robot list that shows a pass on this map.
   const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== revision.mapKey || selectedRobot.latestDeploymentPassed === false)
+  const missingToSave = [
+    !robotCode && 'chọn robot',
+    robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
+    passBlocked && 'tick đủ bốn mục để ghi Đạt',
+    failBlocked && 'bỏ tick mục không đạt',
+    resultCode === 'FAIL' && !reason.trim() && 'nhập lý do không đạt',
+    !evidence.trim() && 'nhập ghi chú bằng chứng',
+  ].filter((item): item is string => Boolean(item))
   const errors = verify.error ? poiVerifyErrors(verify.error) : {}
   const changed = () => { if (verify.error) verify.reset() }
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (passBlocked || failBlocked) return
+    if (missingToSave.length) return
     verify.mutate({
       proposalId: proposal.proposalId,
       revisionNumber: revision.revisionNumber,
@@ -178,19 +186,19 @@ function VerifyModal({ proposal, onClose }: { proposal: PoiVerificationQueueItem
 
   return (
     <Modal open size="lg" title={`Kiểm tra ${revision.name}`} description={`${revision.mapKey}, revision ${revision.revisionNumber} · camera ${revision.cameraPreset}. Đạt khi cả bốn kiểm tra đều đạt.`} onClose={onClose}
-      footer={<div className="flex justify-end gap-2"><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} disabled={verify.isPending || !robotCode || !evidence.trim() || passBlocked || failBlocked || (resultCode === 'FAIL' && !reason.trim())}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
+      footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="poi-verify-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="poi-verify-form" className={buttonClass('primary')} aria-describedby={missingToSave.length ? 'poi-verify-missing' : undefined} disabled={verify.isPending || missingToSave.length > 0}>{verify.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="poi-verify-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="verify-robot" label="Robot vật lý" value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
+          <RobotPicker id="verify-robot" label="Robot vật lý" mapKey={revision.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả kiểm chứng." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Máy chủ sẽ từ chối cho tới khi có kiểm tra đạt đúng map này.</p>}
+          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {revision.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
-        <div><label className={labelClass} htmlFor="verify-result">Kết quả</label><select id="verify-result" className={`${inputClass} mt-1`} value={resultCode} onChange={(event) => { setResultCode(event.target.value as 'PASS' | 'FAIL'); changed() }}><option value="PASS">Đạt</option><option value="FAIL">Không đạt</option></select></div>
+        <ResultToggle id="verify-result" value={resultCode} onChange={value => { setResultCode(value); changed() }} hint="Bỏ tick mục không đạt và ghi lý do. Staff sẽ thấy lý do này, sửa POI và gửi lại revision mới." />
         <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-sm"><p className="font-medium">Nội dung thuyết minh, chỉ đọc</p><p className="mt-1 whitespace-pre-wrap">{revision.narrationText ?? 'Chưa có nội dung thuyết minh'}</p>{revision.fallbackVideoUrl && <p className="mt-2 break-all text-xs text-[#64748b]">Video dự phòng: {revision.fallbackVideoUrl}</p>}</div>
         <div className="space-y-2">
           {checks.map(check => <CheckRow key={check.label} checked={check.checked} onChange={value => { check.set(value); changed() }}>{check.label}</CheckRow>)}
-          {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc đổi Kết quả thành Không đạt.</p>}
-          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc đổi Kết quả thành Đạt.</p>}
+          {passBlocked && <p role="alert" className="text-xs text-[#b23e18]">Chưa thể ghi Đạt, còn thiếu: {missing.join(', ')}. Tick đủ cả bốn mục hoặc chọn Không đạt.</p>}
+          {failBlocked && <p role="alert" className="text-xs text-[#b23e18]">Không đạt cần ít nhất một mục chưa đạt. Bỏ tick mục không đạt hoặc chọn Đạt.</p>}
         </div>
         {resultCode === 'FAIL' && <div><label className={labelClass} htmlFor="verify-reason">Lý do không đạt</label><input id="verify-reason" aria-invalid={Boolean(errors.reason)} className={`${inputClass} mt-1`} required maxLength={1000} value={reason} onChange={(event) => { setReason(event.target.value); changed() }} />{errors.reason && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.reason}</p>}</div>}
         <div><label className={labelClass} htmlFor="verify-evidence">Ghi chú bằng chứng</label><textarea id="verify-evidence" rows={3} aria-invalid={Boolean(errors.evidenceNote)} className={`${inputClass} mt-1`} required maxLength={2000} value={evidence} onChange={(event) => { setEvidence(event.target.value); changed() }} />{errors.evidenceNote && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.evidenceNote}</p>}</div>

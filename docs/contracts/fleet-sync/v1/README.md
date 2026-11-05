@@ -169,6 +169,8 @@ for controlled single-instance development and integration tests.
 
 ## M2 extension boundary
 
+Superseded for commands by [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (accepted 2026-11-03): v1 `commands` is always empty; commands go through [`docs/contracts/fleet-commands/v1/`](../../fleet-commands/v1/). v1 behavior is unchanged.
+
 The response reserves `commands` for a later versioned command envelope. M2
 must define per-leg commands, command IDs, acceptance/rejection/terminal results,
 result acknowledgements, durable intent/reconciliation, and restart behavior

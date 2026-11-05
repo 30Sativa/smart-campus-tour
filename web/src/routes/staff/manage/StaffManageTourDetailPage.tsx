@@ -8,12 +8,13 @@ import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../featu
 import { formatSlot, formatStamp } from '../../../features/administration/admin-format'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
 import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
+import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 
 const HEAD_LABEL = { FRONT: 'trước', LEFT: 'trái', RIGHT: 'phải' }
 
 /**
  * A live Tour: what it is, its Route snapshot, and the actions the server
- * permits (edit, cancel). READY (Chốt/Mở lại) has no API yet, so it is not offered.
+ * permits (edit, cancel, READY and Reopen), each following `permissions`.
  */
 export default function StaffManageTourDetailPage() {
   const { tourId = '' } = useParams()
@@ -41,7 +42,8 @@ export default function StaffManageTourDetailPage() {
       {permissions.canEditMetadata && <Link to={`/staff/manage/tours/${tour.id}/edit`} className={buttonClass('primary')}>Sửa</Link>}
       {permissions.canCancel && <button type="button" className={buttonClass('danger')} onClick={() => { cancel.reset(); setConfirming(true) }}>Hủy Tour</button>}
     </div>} />
-    {tour.state === 'SCHEDULED' && <div className="mb-4"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn. Chốt Tour (READY) chưa có trên hệ thống thật.</Notice></div>}
+    {tour.state === 'SCHEDULED' && <div className="mb-3"><Notice tone="info">Đại diện trường đang thấy Tour này và có thể đăng ký đoàn. Duyệt đơn ở mục Đăng ký đoàn, rồi chốt Tour khi đủ điều kiện.</Notice></div>}
+    <TourReadyPanel detail={data} />
 
     <section className={`${panelClass} p-4`} aria-label="Thông tin Tour">
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">

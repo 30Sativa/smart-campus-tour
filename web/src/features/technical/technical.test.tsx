@@ -28,6 +28,7 @@ let requests: Array<{ url: URL; init?: RequestInit }> = []
 const makePhysicalRobot = (overrides: Partial<PhysicalRobotOption> = {}): PhysicalRobotOption => ({
   id: 'robot-1', robotCode: 'amr-01', displayName: 'AMR 01', firstAcceptedSyncAt: '2026-10-27T10:00:00Z', firstAcceptedMapKey: 'library-v1', firstAcceptedFrameId: 'map',
   connectionStatus: 'CONNECTED', lastSyncReceivedAt: '2026-10-27T10:01:00Z', rowVersion: 'AAAAAAAAAAA=', assignedMapVersionId: 'map-v1', assignedAreaName: 'Library', assignedVersionNumber: 1, assignedMapKey: 'library-v1', assignedFrameId: 'map', mapAssignedAt: '2026-10-27T10:00:00Z', mapAssignedByName: 'Technical', latestDeployedMapKey: 'library-v1', latestDeployedFrameId: 'map', latestDeploymentPassed: true,
+  needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null,
   ...overrides,
 })
 let physicalRobots: PhysicalRobotOption[] = [makePhysicalRobot()]
@@ -48,13 +49,14 @@ let routeQueue: unknown[] = []
 let routeCatalog: unknown[] = []
 let routeDetail: unknown = null
 let routeRefusal: { status: number; body: unknown } | null = null
+let releaseRefusals: Array<{ status: number; body: unknown }> = []
 const routeFixture = { routeId: 'route-1', revisionId: 'rev-1', revisionNumber: 2, name: 'Tuyến thư viện', mapKey: 'library-v1', stops: [{}, {}], dwellDurationSeconds: 60, verificationStatus: 'NOT_TESTED', isSubmitted: true, testRuns: [], effectiveTestRunId: null, revisionHistory: [] }
 let credentialStatus: RobotCredentialView = { robotCode: 'amr-01', status: 'NOT_ISSUED', issuedAt: null, issuedByUserId: null, issuedByName: null, hint: null, revokedAt: null, revokedByUserId: null, revokedByName: null, rowVersion: 'AAAAAAAAAAA=', history: [] }
 
 const openRobotDetail = async () => fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết amr-01' }))
 
-function renderPage(page: React.ReactNode) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter>{page}</MemoryRouter></QueryClientProvider>)
+function renderPage(page: React.ReactNode, path = '/') {
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}>{page}</MemoryRouter></QueryClientProvider>)
 }
 
 describe('Technical Staff API integration', () => {
@@ -79,6 +81,7 @@ describe('Technical Staff API integration', () => {
     routeCatalog = []
     routeDetail = null
     routeRefusal = null
+    releaseRefusals = []
     useToastStore.setState({ toasts: [] })
     useAuthStore.getState().setAuth('token', { userId: 'tech-1', username: 'tech', role: 'TechnicalStaff' })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -128,6 +131,12 @@ describe('Technical Staff API integration', () => {
       if (url.pathname.endsWith('/activate') && init?.method === 'POST') {
         physicalRobots = physicalRobots.map(robot => ({ ...robot, deactivatedAt: null, deactivationReason: null }))
         return response({ id: 'robot-1', robotCode: 'amr-01', deactivatedAt: null, deactivationReason: null, rowVersion: 'AAAAAAAAAAI=', affectedTours: [] })
+      }
+      if (url.pathname.endsWith('/release-inspection') && init?.method === 'POST') {
+        const refusal = releaseRefusals.shift()
+        if (refusal) return new Response(JSON.stringify(refusal.body), { status: refusal.status, headers: { 'Content-Type': 'application/json' } })
+        physicalRobots = physicalRobots.map(robot => ({ ...robot, needsInspection: false, currentTourId: null, currentTourName: null, currentTourState: null, rowVersion: 'AAAAAAAAAAM=' }))
+        return response({ robotId: 'robot-1' })
       }
       if (url.pathname === '/api/technical/physical-robots') return failRobotLookup
         ? new Response(JSON.stringify({ success: false, message: 'Robot lookup unavailable.' }), { status: 503 })
@@ -251,6 +260,42 @@ describe('Technical Staff API integration', () => {
     expect(screen.getByText('library-v2 · map_v2')).toBeInTheDocument()
   })
 
+  it('walks a new robot through setup in order, showing only the next step', async () => {
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null, latestDeployedMapKey: null, latestDeployedFrameId: null, latestDeploymentPassed: null })]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    const checklist = within(await screen.findByRole('region', { name: 'Thiết lập robot' }))
+    expect(checklist.getByText('1/5 bước')).toBeInTheDocument()
+    await waitFor(() => expect(checklist.getByRole('listitem', { current: 'step' })).toHaveTextContent('Cấp khóa kết nối MiniPC'))
+    expect(checklist.getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(checklist.getByRole('button', { name: 'Cấp khóa' }))
+    expect(await screen.findByRole('dialog', { name: /khóa/i })).toBeInTheDocument()
+  })
+
+  it('points a connected robot with a key to the deployment check on its assigned map', async () => {
+    credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'ab12' }
+    physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2', latestDeployedFrameId: 'map_v2', latestDeploymentPassed: true })]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    const checklist = within(await screen.findByRole('region', { name: 'Thiết lập robot' }))
+    await waitFor(() => expect(checklist.getByText('4/5 bước')).toBeInTheDocument())
+    expect(checklist.getByRole('listitem', { current: 'step' })).toHaveTextContent('Kiểm tra triển khai đạt trên bản đồ được gán')
+    expect(checklist.getByRole('link', { name: 'Mở Quản lý bản đồ' })).toHaveAttribute('href', '/technical/maps')
+  })
+
+  it('says setup is complete once every step is done', async () => {
+    credentialStatus = { ...credentialStatus, status: 'ACTIVE', hint: 'ab12' }
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    expect(await screen.findByText('Đã xong các bước thiết lập.')).toBeInTheDocument()
+  })
+
+  it('opens the robot named in the link from the map page, where its map is assigned', async () => {
+    renderPage(<TechnicalRobotsPage />, '/technical/robots?robot=robot-1')
+    const detail = await screen.findByRole('dialog', { name: 'AMR 01' })
+    expect(within(detail).getByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
+  })
+
   it('shows an achieved badge when the latest deployment check passed', async () => {
     renderPage(<TechnicalRobotsPage />)
     expect(await screen.findByText('Đạt')).toBeInTheDocument()
@@ -277,16 +322,18 @@ describe('Technical Staff API integration', () => {
     renderPage(<TechnicalRobotsPage />)
     await openRobotDetail()
     fireEvent.click(await screen.findByRole('button', { name: 'Gán bản đồ' }))
-    await screen.findByRole('option', { name: 'Library · library' })
+    await screen.findByRole('option', { name: 'Library' })
     fireEvent.change(await screen.findByLabelText('Khu vực'), { target: { value: 'library' } })
-    await screen.findByRole('option', { name: /library-v1/ })
-    fireEvent.change(await screen.findByLabelText('Phiên bản bản đồ'), { target: { value: map.id } })
-    expect(screen.getByText('MiniPC phải dùng đúng MapKey/FrameId này, nếu không dữ liệu sẽ bị từ chối.')).toBeInTheDocument()
+    // The newest version starts selected and reads as a version, not a MapKey.
+    expect(await screen.findByRole('option', { name: /^Phiên bản 1 \(mới nhất\) · tải lên .* · Chờ kỹ thuật kiểm tra$/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Phiên bản bản đồ')).toHaveValue(map.id)
+    expect(screen.getByText(/Sau khi lưu, nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
+    expect(screen.getByText('library-v1', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu bản đồ' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồ' }))
     expect(requests.some(item => item.url.pathname.endsWith('/map-assignment'))).toBe(false)
     const confirmation = within(screen.getByRole('dialog', { name: 'Gán bản đồ cho amr-01?' }))
-    expect(confirmation.getByText(/MiniPC phải dùng đúng MapKey\/FrameId này/)).toBeInTheDocument()
+    expect(confirmation.getByText(/Gán Library phiên bản 1\. Trên MiniPC nhập MapKey library-v1, FrameId map\./)).toBeInTheDocument()
     fireEvent.click(confirmation.getByRole('button', { name: 'Gán bản đồ' }))
     await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')).toBe(true))
     const request = requests.find(item => item.url.pathname.endsWith('/map-assignment') && item.init?.method === 'PUT')!
@@ -294,6 +341,17 @@ describe('Technical Staff API integration', () => {
     expect((await screen.findAllByText('library-v1 · map')).length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Nhập hai giá trị này trên MiniPC/)).toBeInTheDocument()
     await waitFor(() => expect(requests.filter(item => item.url.pathname === '/api/technical/physical-robots' && item.init?.method !== 'POST').length).toBeGreaterThan(1))
+  })
+
+  it('names the robot already holding an area and does not offer that area', async () => {
+    physicalRobots = [
+      makePhysicalRobot({ assignedMapVersionId: null, assignedAreaName: null, assignedVersionNumber: null, assignedMapKey: null, assignedFrameId: null, mapAssignedAt: null, mapAssignedByName: null }),
+      makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02' }),
+    ]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Gán bản đồ' }))
+    expect(await screen.findByRole('option', { name: 'Library (robot amr-02 đang dùng)' })).toBeDisabled()
   })
 
   it('warns about Tours a map change strands and leaves them scheduled', async () => {
@@ -304,7 +362,7 @@ describe('Technical Staff API integration', () => {
     const dialog = within(await screen.findByRole('dialog'))
     await dialog.findByRole('option', { name: /Library/ })
     fireEvent.change(dialog.getByLabelText('Khu vực'), { target: { value: 'library' } })
-    await dialog.findByRole('option', { name: /v1/ })
+    await dialog.findByRole('option', { name: /Phiên bản 1 .* · đang gán$/ })
     fireEvent.change(dialog.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     fireEvent.submit(document.getElementById('robot-map-assignment-form') as HTMLFormElement)
 
@@ -335,6 +393,111 @@ describe('Technical Staff API integration', () => {
     await openRobotDetail()
     fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt lại' }))
     await waitFor(() => expect(requests.some(item => item.url.pathname.endsWith('/activate'))).toBe(true))
+  })
+
+  it('marks a held robot and releases it after an on-site check with a required reason', async () => {
+    physicalRobots = [makePhysicalRobot({ needsInspection: true, currentTourId: 'tour-9', currentTourState: 'CANCELLED' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Chờ kiểm tra tại chỗ')).toBeInTheDocument()
+    expect(screen.getByText(/1 robot đang chờ kiểm tra tại chỗ/)).toBeInTheDocument()
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Trả robot về sử dụng' }))
+    expect(screen.getByText(/không phải nút dừng khẩn cấp/)).toBeInTheDocument()
+    const confirm = screen.getByRole('button', { name: 'Trả robot' })
+    expect(confirm).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Đã kiểm tra gì tại chỗ/), { target: { value: 'Robot đứng yên ở sảnh A' } })
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(requests.some(item => item.url.pathname === '/api/technical/physical-robots/robot-1/release-inspection')).toBe(true))
+    const sent = requests.find(item => item.url.pathname.endsWith('/release-inspection'))!
+    expect(JSON.parse(String(sent.init?.body))).toEqual({ reason: 'Robot đứng yên ở sảnh A', expectedRowVersion: 'AAAAAAAAAAA=', requestId: expect.any(String) })
+    await waitFor(() => expect(useToastStore.getState().toasts.some(toast => toast.title === 'Đã trả amr-01 về sử dụng')).toBe(true))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Trả robot về sử dụng' })).not.toBeInTheDocument())
+    expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
+  })
+
+  it('translates a refused release and reuses the request id when the same reason is retried', async () => {
+    physicalRobots = [makePhysicalRobot({ needsInspection: true })]
+    releaseRefusals = [
+      { status: 409, body: { success: false, message: 'Robot còn lệnh đang mở hoặc chưa đối soát.', errors: { code: 'ROBOT_COMMAND_OPEN' } } },
+      { status: 503, body: { success: false, message: 'Tạm thời không lưu được.' } },
+    ]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Trả robot về sử dụng' }))
+    fireEvent.change(screen.getByLabelText(/Đã kiểm tra gì tại chỗ/), { target: { value: 'Đã kiểm tra' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    expect(await screen.findByText(/Người vận hành cần đối soát lệnh đó trước/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    expect(await screen.findByText('Tạm thời không lưu được.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    await waitFor(() => expect(requests.filter(item => item.url.pathname.endsWith('/release-inspection'))).toHaveLength(3))
+
+    const ids = requests.filter(item => item.url.pathname.endsWith('/release-inspection')).map(item => JSON.parse(String(item.init?.body)).requestId)
+    expect(new Set(ids).size).toBe(1)
+  })
+
+  it('uses a new request id when the reason changes and explains the other refusals', async () => {
+    physicalRobots = [makePhysicalRobot({ needsInspection: true })]
+    releaseRefusals = [
+      { status: 409, body: { success: false, message: 'x', errors: { code: 'STALE_VERSION' } } },
+      { status: 409, body: { success: false, message: 'x', errors: { code: 'ROBOT_NOT_HELD' } } },
+      { status: 403, body: { success: false, message: 'Forbidden' } },
+    ]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    fireEvent.click(await screen.findByRole('button', { name: 'Trả robot về sử dụng' }))
+    const reason = screen.getByLabelText(/Đã kiểm tra gì tại chỗ/)
+    fireEvent.change(reason, { target: { value: 'Lần một' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    expect(await screen.findByText(/Robot vừa thay đổi/)).toBeInTheDocument()
+    fireEvent.change(reason, { target: { value: 'Lần hai' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    expect(await screen.findByText(/Robot không còn bị giữ/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Trả robot' }))
+    expect(await screen.findByText('Chỉ Technical Staff được trả robot sau kiểm tra tại chỗ.')).toBeInTheDocument()
+
+    const ids = requests.filter(item => item.url.pathname.endsWith('/release-inspection')).map(item => JSON.parse(String(item.init?.body)).requestId)
+    expect(ids[0]).not.toBe(ids[1])
+    expect(ids[1]).toBe(ids[2])
+  })
+
+  it('offers no release for a robot that is not held', async () => {
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Trả robot về sử dụng' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
+  })
+
+  it('shows a robot in a running Tour as busy, not as awaiting inspection', async () => {
+    physicalRobots = [makePhysicalRobot({ currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'RUNNING' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Đang chạy Tour Tham quan thư viện')).toBeInTheDocument()
+    expect(screen.queryByText('Chờ kiểm tra tại chỗ')).not.toBeInTheDocument()
+    expect(screen.queryByText(/robot đang chờ kiểm tra tại chỗ/)).not.toBeInTheDocument()
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Thay đổi bản đồ' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Kiểm tra tại chỗ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Trả robot về sử dụng' })).not.toBeInTheDocument()
+  })
+
+  it('treats a robot still claimed by an ended Tour as held even without the inspection flag', async () => {
+    physicalRobots = [makePhysicalRobot({ currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'COMPLETED' })]
+    renderPage(<TechnicalRobotsPage />)
+    expect(await screen.findByText('Chờ kiểm tra tại chỗ')).toBeInTheDocument()
+    expect(screen.queryByText(/Đang chạy Tour/)).not.toBeInTheDocument()
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Trả robot về sử dụng' })).toBeEnabled()
+  })
+
+  it('disables release while the holding Tour has not ended', async () => {
+    physicalRobots = [makePhysicalRobot({ needsInspection: true, currentTourId: 'tour-9', currentTourName: 'Tham quan thư viện', currentTourState: 'RUNNING' })]
+    renderPage(<TechnicalRobotsPage />)
+    await openRobotDetail()
+    expect(await screen.findByRole('button', { name: 'Trả robot về sử dụng' })).toBeDisabled()
+    expect(screen.getByText(/Tour Tham quan thư viện đang giữ robot chưa kết thúc/)).toBeInTheDocument()
+    expect(screen.getByText(/giữ bởi Tour Tham quan thư viện/)).toBeInTheDocument()
   })
 
   it('blocks a new PASS for an unconfirmed robot but still permits an observed FAIL', async () => {
@@ -505,7 +668,7 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText('Library')).toBeInTheDocument()
     expect(screen.queryByText('Giới thiệu thư viện.')).not.toBeInTheDocument()
     expect(screen.queryByText(/^1, 2, 0$/)).not.toBeInTheDocument()
-    expect(await screen.findByText('Library · v1')).toBeInTheDocument()
+    expect(await screen.findByText('Library · library · phiên bản 1')).toBeInTheDocument()
     expect(screen.queryByText(/library-v1/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết Library' }))
     const detail = within(screen.getByRole('dialog', { name: 'Library' }))
@@ -552,7 +715,11 @@ describe('Technical Staff API integration', () => {
 
   it('requires a failed observation and a reason for Không đạt', async () => {
     await openPoiCheck()
-    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAIL' } })
+    const result = within(screen.getByRole('group', { name: 'Kết quả' }))
+    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(result.getByRole('button', { name: 'Không đạt' }))
+    expect(result.getByRole('button', { name: 'Không đạt' })).toHaveAttribute('aria-pressed', 'true')
+    expect(result.getByRole('button', { name: 'Đạt' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('alert')).toHaveTextContent('Không đạt cần ít nhất một mục chưa đạt')
     fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
@@ -584,10 +751,42 @@ describe('Technical Staff API integration', () => {
     expect(await screen.findByText(/Robot này chưa có kiểm tra triển khai đạt mới nhất/)).toBeInTheDocument()
   })
 
-  it('warns when the chosen robot was last checked on another map', async () => {
+  it('lists robots ready on the POI map first and says why the others are not', async () => {
+    physicalRobots = [
+      makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02', latestDeployedMapKey: 'library-v2' }),
+      makePhysicalRobot(),
+    ]
+    renderPage(<TechnicalPoiImportPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
+    await screen.findByRole('option', { name: /AMR 01 · amr-01/ })
+    const options = within(screen.getByLabelText('Robot vật lý')).getAllByRole('option').slice(1).map(option => option.textContent)
+    expect(options[0]).toMatch(/^AMR 01 · amr-01/)
+    expect(options[0]).not.toMatch(/chưa kiểm tra đạt/)
+    expect(options[1]).toMatch(/^AMR 02 · amr-02 .* · chưa kiểm tra đạt trên map này$/)
+  })
+
+  it('blocks saving while the chosen robot was last checked on another map, for either result', async () => {
     physicalRobots = [makePhysicalRobot({ latestDeployedMapKey: 'library-v2' })]
     await openPoiCheck()
     expect(await screen.findByText(/không phải kết quả đạt trên library-v1/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: robot chưa kiểm tra triển khai đạt trên map này.')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
+    fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
+    fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    fireEvent.submit(document.getElementById('poi-verify-form')!)
+    expect(verificationCalls()).toHaveLength(0)
+  })
+
+  it('says what is missing when Không đạt cannot be saved yet', async () => {
+    await openPoiCheck()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
+    fireEvent.click(screen.getByLabelText('Robot dừng đúng vị trí'))
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+    expect(screen.getByText('Chưa lưu được: nhập lý do không đạt.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch vị trí.' } })
+    expect(screen.queryByText(/Chưa lưu được/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeEnabled()
   })
 
@@ -635,7 +834,7 @@ describe('Technical Staff API integration', () => {
     expect(screen.queryByRole('button', { name: 'Sao chép MapKey' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Quản lý khóa' })).not.toBeInTheDocument()
     await openRobotDetail()
-    expect(screen.getAllByText(/Library/).filter(item => item.textContent === ' · Library v1')).toHaveLength(1)
+    expect(screen.getAllByText(/Library/).filter(item => item.textContent === ' · Library · phiên bản 1')).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép MapKey' }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('library-v1'))
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép FrameId' }))
@@ -735,7 +934,7 @@ describe('Technical Staff API integration', () => {
 
   it('requires a reason and a failed observation for a failed run', async () => {
     await openRouteTest()
-    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAIL' } })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Kết quả' })).getByRole('button', { name: 'Không đạt' }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText('Lý do không đạt'), { target: { value: 'Lệch điểm 2.' } })

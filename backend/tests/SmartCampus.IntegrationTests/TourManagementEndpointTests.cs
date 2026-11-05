@@ -8,6 +8,8 @@ using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
 using SmartCampus.Application.Features.Tours.Commands.CreateTour;
+using SmartCampus.Application.Features.Tours.Commands.MarkTourReady;
+using SmartCampus.Application.Features.Tours.Commands.ReopenTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Integrations.Invitations;
@@ -380,6 +382,182 @@ public sealed class TourManagementEndpointTests
         Assert.Empty(await db.Robots.ToArrayAsync());
     }
 
+    [SchemaV11Fact]
+    public async Task ReadyAndReopen_AreStaffOnly()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var version = (await f.Detail(id)).Tour.RowVersion;
+        foreach (var token in new string?[] { null, f.SystemAdmin, f.Representative, f.Technical })
+        {
+            var expected = token is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
+            foreach (var (path, body) in new (string, object)[]
+            {
+                ($"/api/staff/manage/tours/{id}/ready", new MarkTourReadyRequest(Guid.NewGuid(), version)),
+                ($"/api/staff/manage/tours/{id}/reopen", new ReopenTourRequest(Guid.NewGuid(), version, "Sửa danh sách"))
+            })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+                if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                using var response = await f.Client.SendAsync(request);
+                Assert.Equal(expected, response.StatusCode);
+            }
+        }
+        await using var db = f.Context();
+        Assert.Equal("SCHEDULED", (await db.Tours.SingleAsync()).State);
+        Assert.Empty(await db.TourEvents.ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
+    public async Task StartChecksAndStart_OverHttp_StaffOnly_OperatorOnly_AndWriteNothing()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var version = (await f.Detail(id)).Tour.RowVersion;
+        var start = new { requestId = Guid.NewGuid(), expectedRowVersion = version,
+            confirmation = new { robotPlaced = true, areaClear = true, attendantPresent = true, previewChecked = true } };
+        foreach (var token in new string?[] { null, f.SystemAdmin, f.Representative, f.Technical })
+        {
+            var expected = token is null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden;
+            using var read = new HttpRequestMessage(HttpMethod.Get, $"/api/staff/manage/tours/{id}/start-checks");
+            using var write = new HttpRequestMessage(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start") { Content = JsonContent.Create(start) };
+            foreach (var request in new[] { read, write })
+            {
+                if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                using var response = await f.Client.SendAsync(request);
+                Assert.Equal(expected, response.StatusCode);
+            }
+        }
+
+        // A legacy Tour has no Operator: any Staff may read the checklist, nobody may Start.
+        var checks = await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{id}/start-checks");
+        Assert.False(checks.GetProperty("canStart").GetBoolean());
+        var list = checks.GetProperty("checks").EnumerateArray().ToArray();
+        Assert.All(list, c => Assert.False(string.IsNullOrWhiteSpace(c.GetProperty("detail").GetString())));
+        Assert.False(list.Single(c => c.GetProperty("id").GetString() == "callerIsOperator").GetProperty("passed").GetBoolean());
+        Assert.DoesNotContain(list, c => c.GetProperty("source").GetString() == "OPERATOR_CONFIRMATION");
+        var blockedBy = checks.GetProperty("blockedBy").EnumerateArray().Select(b => b.GetString()).ToArray();
+        Assert.Equal(["tourReady", "callerIsOperator", "reservationActive", "revisionStillSchedulable", "operatorConsoleConnected",
+            "commandTransportEnabled"], blockedBy.Where(b => b != "withinStartWindow"));
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/start", start, HttpStatusCode.Forbidden);
+        await f.Send(HttpMethod.Get, $"/api/staff/manage/tours/{Guid.NewGuid()}/start-checks", expected: HttpStatusCode.NotFound);
+
+        await using var db = f.Context();
+        var tour = await db.Tours.SingleAsync();
+        Assert.Equal(("SCHEDULED", (DateTimeOffset?)null, (Guid?)null), (tour.State, tour.StartedAt, tour.AssignedRobotId));
+        Assert.Empty(await db.TourEvents.ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
+    public async Task RecoveryActions_AreStaffOnly_AndReleaseIsTechnicalStaffOnly()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var version = (await f.Detail(id)).Tour.RowVersion;
+        var staffActions = new (string Path, object Body)[]
+        {
+            ($"/api/staff/manage/tours/{id}/end-early", new { requestId = Guid.NewGuid(), expectedRowVersion = version, reason = "Mưa lớn" }),
+            ($"/api/staff/manage/tours/{id}/retry-leg", new { requestId = Guid.NewGuid(), expectedRowVersion = version }),
+            ($"/api/staff/manage/tours/{id}/commands/{Guid.NewGuid()}/reconcile", new { requestId = Guid.NewGuid(), reason = "Đã xem" })
+        };
+        foreach (var token in new[] { f.SystemAdmin, f.Representative, f.Technical })
+            foreach (var (path, body) in staffActions)
+                Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body, token));
+        // A legacy Tour has no Operator, so a Staff who is not its Operator is refused too.
+        foreach (var (path, body) in staffActions)
+            Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, path, body));
+
+        var release = new { requestId = Guid.NewGuid(), expectedRowVersion = version, reason = "Đã kiểm tra" };
+        var robot = $"/api/technical/physical-robots/{Guid.NewGuid()}/release-inspection";
+        Assert.Equal(HttpStatusCode.Forbidden, await f.SendStatus(HttpMethod.Post, robot, release));
+        Assert.Equal(HttpStatusCode.NotFound, await f.SendStatus(HttpMethod.Post, robot, release, f.Technical));
+    }
+
+    [SchemaV11Fact]
+    public async Task LegacyTour_IsRefusedReady_WithOnlyItsRootCause_AndDetailShowsTheSameList()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var detail = await f.Detail(id);
+        Assert.False(detail.Permissions.CanMarkReady);
+        Assert.False(detail.Permissions.CanReopen);
+        // Operator, revision, reservation and robot all need the exact revision, so they are not reported.
+        Assert.Equal(["ROUTE_VERSION_REQUIRED"], detail.Permissions.ReadyBlockers!.Select(b => b.Code));
+        Assert.All(detail.Permissions.ReadyBlockers!, b => Assert.False(string.IsNullOrWhiteSpace(b.Message)));
+
+        // An independent check still reports next to the root cause.
+        await f.Submit(id);
+        detail = await f.Detail(id);
+        var expected = new[] { "ROUTE_VERSION_REQUIRED", "PENDING_DECISIONS" };
+        Assert.Equal(expected, detail.Permissions.ReadyBlockers!.Select(b => b.Code));
+        var body = await f.SendBody(HttpMethod.Post, $"/api/staff/manage/tours/{id}/ready",
+            new MarkTourReadyRequest(Guid.NewGuid(), detail.Tour.RowVersion), HttpStatusCode.Conflict);
+        var errors = body.GetProperty("errors");
+        Assert.Equal("READY_PRECONDITION_FAILED", errors.GetProperty("code").GetString());
+        Assert.Equal(expected, errors.GetProperty("blockers").EnumerateArray().Select(b => b.GetProperty("code").GetString()));
+        await using var db = f.Context();
+        Assert.Equal("SCHEDULED", (await db.Tours.SingleAsync()).State);
+        Assert.Empty(await db.TourEvents.ToArrayAsync());
+        Assert.Empty(await db.AuditLogs.Where(a => a.Action == "TOUR_READY").ToArrayAsync());
+    }
+
+    [SchemaV11Fact]
+    public async Task ReadyLocksRosterReviewAndMetadataWriters_AndReopenUnlocksThem()
+    {
+        await using var f = await Fixture.Create();
+        var id = await f.CreateTour();
+        var registration = await f.Submit(id);
+        await f.Database.ExecuteAsync($"UPDATE dbo.Tours SET State='READY' WHERE Id='{id}';");
+
+        var review = await f.Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
+        var row = review.GetProperty("roster")[0];
+        object Accept() => new
+        {
+            requestId = Guid.NewGuid(), expectedRegistrationRowVersion = review.GetProperty("rowVersion").GetString(),
+            expectedTourRowVersion = review.GetProperty("tourRowVersion").GetString(), expectedRowVersion = row.GetProperty("rowVersion").GetString()
+        };
+        var rowPath = $"/api/staff/manage/registrations/{registration}/rows/{row.GetProperty("id").GetGuid()}/accept";
+        Assert.Equal("TOUR_LOCKED", (await f.SendBody(HttpMethod.Post, rowPath, Accept(), HttpStatusCode.Conflict)).GetProperty("errors").GetProperty("code").GetString());
+        var cancel = new { expectedRowVersion = review.GetProperty("rowVersion").GetString(), expectedTourRowVersion = review.GetProperty("tourRowVersion").GetString() };
+        Assert.Equal("TOUR_LOCKED", (await f.SendBody(HttpMethod.Post, $"/api/representative/registrations/{registration}/cancel", cancel,
+            HttpStatusCode.Conflict, token: f.Representative)).GetProperty("errors").GetProperty("code").GetString());
+        var detail = await f.Detail(id);
+        Assert.False(detail.Permissions.CanEditMetadata);
+        Assert.True(detail.Permissions.CanReopen);
+        Assert.Contains(detail.Permissions.ReadyBlockers!, b => b.Code == "TOUR_STATE_INVALID");
+        await f.Send(HttpMethod.Put, $"/api/staff/manage/tours/{id}",
+            new UpdateTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, null, f.Input() with { Name = "Locked" }), HttpStatusCode.Conflict);
+
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/reopen",
+            new ReopenTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, " "), HttpStatusCode.BadRequest);
+        var reopen = new ReopenTourRequest(Guid.NewGuid(), detail.Tour.RowVersion, "  Cần duyệt thêm dòng  ");
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/reopen", reopen);
+        await f.Send(HttpMethod.Post, $"/api/staff/manage/tours/{id}/reopen", reopen);
+        detail = await f.Detail(id);
+        Assert.Equal("SCHEDULED", detail.Tour.State);
+        // Reopen is not operational use: the Tour stays editable and cancellable.
+        Assert.True(detail.Permissions.CanEditMetadata);
+        Assert.True(detail.Permissions.CanCancel);
+        Assert.False(detail.Permissions.CanReopen);
+        Assert.Equal("TOUR_STATE_INVALID", (await f.SendBody(HttpMethod.Post, $"/api/staff/manage/tours/{id}/reopen",
+            reopen with { RequestId = Guid.NewGuid(), ExpectedRowVersion = detail.Tour.RowVersion }, HttpStatusCode.Conflict))
+            .GetProperty("errors").GetProperty("code").GetString());
+
+        await using (var db = f.Context())
+        {
+            var reopened = await db.TourEvents.SingleAsync();
+            Assert.Equal(("TOUR_REOPENED", "Cần duyệt thêm dòng"), (reopened.EventType, reopened.ReasonNote));
+            Assert.Equal(f.AdminId, reopened.ActorUserId);
+            Assert.Single(await db.AuditLogs.Where(a => a.Action == "TOUR_REOPENED").ToArrayAsync());
+            var stored = await db.GroupRegistrations.SingleAsync();
+            Assert.Equal("SUBMITTED", stored.State);
+            Assert.Equal(review.GetProperty("rowVersion").GetString(), Convert.ToBase64String(stored.RowVersion));
+        }
+        review = await f.Send(HttpMethod.Get, $"/api/staff/manage/registrations/{registration}");
+        row = review.GetProperty("roster")[0];
+        await f.Send(HttpMethod.Post, rowPath, Accept());
+    }
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private sealed class Fixture(InitialAdminSeederTests.EmptySchemaDatabase database, PoiManagementEndpointTests.ApiHost host, Guid adminId) : IAsyncDisposable
@@ -392,6 +570,7 @@ public sealed class TourManagementEndpointTests
         public string SystemAdmin { get; private set; } = "";
         public string Representative { get; private set; } = "";
         public string Staff { get; private set; } = "";
+        public string Technical { get; private set; } = "";
         public Guid[] PoiIds { get; } = [Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()];
         public RouteDetails Route { get; set; } = null!;
         public DateTimeOffset Now { get; } = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
@@ -411,6 +590,7 @@ public sealed class TourManagementEndpointTests
                 await database.InsertUserAsync(true, username: "tour.systemadmin", roles: ["ADMIN"]);
                 await database.InsertUserAsync(true, username: "tour.rep", roles: ["SCHOOL_REPRESENTATIVE"]);
                 await database.InsertUserAsync(true, username: "tour.staff", roles: ["STAFF"]);
+                await database.InsertUserAsync(true, username: "tour.technical", roles: ["TECHNICAL_STAFF"]);
                 var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(p => p.Key.Replace(":", "__"), p => p.Value);
                 host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(database.ConnectionString, settings);
                 var f = new Fixture(database, host, admin.Id);
@@ -419,6 +599,7 @@ public sealed class TourManagementEndpointTests
                 f.SystemAdmin = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.systemadmin");
                 f.Representative = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.rep");
                 f.Staff = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.staff");
+                f.Technical = await RepresentativeEndpointTests.LoginAsync(f.Client, "tour.technical");
                 await using (var db = f.Context())
                 {
                     db.Pois.AddRange(f.PoiIds.Select((id, index) => new Poi { Id = id, Name = $"Test POI {index}",
