@@ -89,9 +89,10 @@ describe('pre-start check on the real Tour API', () => {
     tour = detail('READY'); checks = BLOCKED_CHECKS
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
     expect(await screen.findByText('Chưa thể bắt đầu')).toBeInTheDocument()
-    const causes = screen.getByRole('list', { name: 'Nguyên nhân chưa bắt đầu được' })
-    expect(within(causes).getAllByRole('listitem')).toHaveLength(2)
-    expect(within(causes).getAllByText('Giới hạn hệ thống')).toHaveLength(2)
+    // Both causes are system gates: they sit in their own box, apart from anything the operator can clear.
+    expect(screen.getByText(/Còn 2 giới hạn hệ thống chưa mở/)).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Giới hạn hệ thống' })).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.queryByRole('list', { name: 'Robot' })).not.toBeInTheDocument()
     expect(screen.getByText(/1 kiểm tra chưa chạy vì phụ thuộc các mục trên: Robot báo đúng bản đồ của tuyến/)).toBeInTheDocument()
     expect(screen.getByText(/Hệ thống chưa cho phép robot di chuyển theo Tour/)).toBeInTheDocument()
     // A check skipped behind a failed prerequisite is not reported as a failure of its own.
@@ -101,6 +102,23 @@ describe('pre-start check on the real Tour API', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeDisabled()
     expect(screen.getByText('Nút mở khi mọi nguyên nhân bên trái được xử lý.')).toBeInTheDocument()
+  })
+
+  it('says when a Tour opened ahead of its day can start, and what the robot still has to report', async () => {
+    tour = detail('READY'); tour.tour.scheduledStartAt = new Date(Date.now() + 2 * 86_400_000 + 3_600_000).toISOString()
+    checks = { canStart: false, blockedBy: ['withinStartWindow', 'telemetryFresh'], checks: [
+      check('withinStartWindow', false, 'Chưa tới giờ bắt đầu của Tour.'),
+      { id: 'telemetryFresh', passed: false, source: 'TELEMETRY', detail: 'Robot chưa báo telemetry.' },
+    ] }
+    renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
+    expect(await screen.findByText('Chưa tới giờ bắt đầu')).toBeInTheDocument()
+    expect(screen.getByText(/còn 2 ngày 1 giờ\)\. Ngoài giờ, còn 1 việc cần xử lý/)).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Tour và người vận hành' })).getByText(/tự đạt khi tới giờ/)).toBeInTheDocument()
+    const robot = screen.getByRole('list', { name: 'Robot' })
+    expect(within(robot).getByText('Robot tự báo')).toBeInTheDocument()
+    expect(within(robot).getByText(/Bật robot và cầu nối telemetry/)).toBeInTheDocument()
+    // A Tour on another day goes back to the calendar, not to today.
+    expect(screen.getByRole('link', { name: /Lịch buổi/ })).toHaveAttribute('href', '/staff/schedule?tour=tour-1')
   })
 
   it('names the assigned operator when another Staff opens the check', async () => {
@@ -424,10 +442,21 @@ describe('today list', () => {
   it('reads today from the Tour API and offers the next step by state', async () => {
     tour = detail('READY')
     renderAt('/staff/tours', '/staff/tours', <ToursTodayPage />)
-    expect(await screen.findByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
+    const today = await screen.findByRole('table', { name: 'Tour hôm nay' })
+    expect(within(today).getByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
     const calls = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), 'http://localhost'))
     const list = calls.find(url => url.pathname === '/api/staff/manage/tours')
     expect(list?.searchParams.get('from')).toBeTruthy()
     expect(list?.searchParams.get('to')).toBeTruthy()
+  })
+
+  it('lists the next week under today, so a Tour two days out is reachable from here', async () => {
+    tour = detail('READY')
+    renderAt('/staff/tours', '/staff/tours', <ToursTodayPage />)
+    const ahead = await screen.findByRole('region', { name: 'Tour sắp tới' })
+    expect(await within(ahead).findByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
+    const lists = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), 'http://localhost')).filter(url => url.pathname === '/api/staff/manage/tours')
+    // Two windows: today, and the seven days after it.
+    expect(new Set(lists.map(url => url.searchParams.get('from'))).size).toBe(2)
   })
 })

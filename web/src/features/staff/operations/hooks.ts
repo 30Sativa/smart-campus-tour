@@ -42,6 +42,15 @@ export function useDayTours(day: string) {
   return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query), refetchInterval: LIST_MS })
 }
 
+const AHEAD_DAYS = 7
+/** `YYYY-MM-DD` a number of campus days after `day` (noon keeps it clear of any date-line edge). */
+const addDays = (day: string, days: number) => new Date(new Date(`${day}T12:00:00+07:00`).getTime() + days * 86_400_000).toISOString().slice(0, 10)
+/** The Tours of the next week after `day`, so the day page shows what is coming even when today is empty. */
+export function useUpcomingTours(day: string) {
+  const query: TourListQuery = { from: dayStart(addDays(day, 1)), to: dayEnd(addDays(day, AHEAD_DAYS)), sort: 'scheduledStartAt', page: 1, size: 20 }
+  return useQuery({ queryKey: tourKeys.list(query), queryFn: () => toursApi.list(query), refetchInterval: LIST_MS })
+}
+
 const RUNNING_QUERY: TourListQuery = { phase: 'RUNNING', sort: 'scheduledStartAt', page: 1, size: 20 }
 
 /** The run situation the overview shows. A list row carries it; for an older server it comes from the detail. */

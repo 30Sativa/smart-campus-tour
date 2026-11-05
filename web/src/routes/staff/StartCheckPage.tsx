@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, CircleCheck, Play, ShieldAlert, TriangleAlert, WifiOff } from 'lucide-react'
+import { ArrowLeft, CircleCheck, Play, TriangleAlert, WifiOff } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
@@ -13,10 +13,12 @@ import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
 import { useNow } from '../../features/staff/use-now'
-import { SYSTEM_GATES, checkVerdict } from '../../features/staff/operations/operation-labels'
+import { blockerOwner, checkVerdict } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { BlockerList, CheckGroups } from '../../features/staff/operations/StartCheckList'
+import { untilText } from '../../features/staff/formatters'
+import { campusDay } from '../../features/administration/tours/tour-calendar'
 
 /** The four on-site confirmations the Start request carries (SRS §7); the server records them. */
 const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: string }> = [
@@ -28,9 +30,16 @@ const CONFIRMATIONS: Array<{ key: keyof StartConfirmation; label: string; hint: 
 const NONE: StartConfirmation = { robotPlaced: false, areaClear: false, attendantPresent: false, previewChecked: false }
 
 type Verdict = { tone: 'ok' | 'info' | 'warn'; title: string; note: string }
-function verdictOf(result: TourStartChecks, confirmed: boolean): Verdict {
-  const causes = result.checks.filter(check => checkVerdict(check, result.blockedBy) === 'failed').length
-  if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: `Còn ${causes} nguyên nhân cần xử lý, xem bên dưới.` }
+function verdictOf(result: TourStartChecks, confirmed: boolean, opensAt: string, now: number): Verdict {
+  const causes = result.checks.filter(check => checkVerdict(check, result.blockedBy) === 'failed')
+  const system = causes.filter(check => blockerOwner(check.id) === 'system').length
+  const early = result.blockedBy.includes('withinStartWindow') && new Date(opensAt).getTime() > now
+  const work = causes.length - system - (early ? 1 : 0)
+  const rest = [work && `${work} việc cần xử lý`, system && `${system} giới hạn hệ thống chưa mở`].filter(Boolean).join(' và ')
+  // Too early is the usual reason a Tour opened days ahead cannot start; say when, not just "not yet".
+  if (!result.canStart && early)
+    return { tone: 'warn', title: 'Chưa tới giờ bắt đầu', note: `Mở lúc ${formatSlot(opensAt)} (${untilText(opensAt, now)}). ${rest ? `Ngoài giờ, còn ${rest}.` : 'Các điều kiện khác đều đạt.'} Danh sách tự cập nhật vài giây một lần.` }
+  if (!result.canStart) return { tone: 'warn', title: 'Chưa thể bắt đầu', note: `Còn ${rest}, xem bên dưới. Danh sách tự cập nhật vài giây một lần.` }
   if (!confirmed) return { tone: 'info', title: 'Máy chủ cho phép bắt đầu', note: 'Đánh dấu đủ 4 xác nhận tại chỗ rồi bấm Bắt đầu.' }
   return { tone: 'ok', title: 'Sẵn sàng bắt đầu', note: 'Máy chủ sẽ kiểm tra lại mọi điều kiện khi bắt đầu.' }
 }
@@ -64,7 +73,9 @@ export default function StartCheckPage() {
   const detail = tour.data
   const { tour: summary, reservation, operator } = detail
   const header = <>
-    <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
+    {campusDay(summary.scheduledStartAt) === campusDay(new Date())
+      ? <Link to="/staff/tours" className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Buổi hôm nay</Link>
+      : <Link to={`/staff/schedule?tour=${summary.id}`} className={`${buttonClass('ghost', 'sm')} mb-2 -ml-2`}><ArrowLeft size={15} aria-hidden="true" />Lịch buổi</Link>}
     <PageHeader eyebrow="Kiểm tra trước khi bắt đầu" title={summary.name}
       description={`${formatSlot(summary.scheduledStartAt)} · ${detail.routeRevision?.name ?? summary.routeName} · robot ${reservation?.robotCode ?? 'chưa giữ'} · người vận hành ${operator?.fullName ?? 'chưa giao'}`}
       action={<TourStateBadge state={summary.state} />} />
@@ -89,8 +100,7 @@ export default function StartCheckPage() {
   const stale = Boolean(result) && (isTourStale(checks, now) || isTourStale(tour, now))
   const canStart = Boolean(result?.canStart) && confirmed && !stale
   const notOperator = blockedBy.includes('callerIsOperator')
-  const systemClosed = result?.checks.some(check => (SYSTEM_GATES as readonly string[]).includes(check.id) && !check.passed) ?? false
-  const verdict = result ? verdictOf(result, confirmed) : null
+  const verdict = result ? verdictOf(result, confirmed, summary.scheduledStartAt, now) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
   const reason = !result ? null
     : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
@@ -120,11 +130,9 @@ export default function StartCheckPage() {
                     <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold tabular-nums">{passed}/{counted.length} đạt</span>
                   </div>
                 })()}
-                {systemClosed && <p className="mx-4 -mt-1 mb-3 flex gap-2 text-xs leading-5 text-[#7d5310]"><ShieldAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-                  Hệ thống chưa cho phép robot di chuyển theo Tour (điều khiển robot thật chờ bằng chứng an toàn M2.3). Đây không phải lỗi thao tác và không có cách bỏ qua.</p>}
                 {!result.canStart && <div className="border-t border-[#f1f5f9] px-4 pt-3 pb-4">
                   <h2 className="mb-2 text-xs font-semibold text-[#64748b]">Cần xử lý</h2>
-                  <BlockerList checks={result.checks} blockedBy={blockedBy} />
+                  <BlockerList checks={result.checks} blockedBy={blockedBy} opensAt={summary.scheduledStartAt} now={now} />
                 </div>}
               </section>
               <section className={panelClass} aria-label="Toàn bộ điều kiện">

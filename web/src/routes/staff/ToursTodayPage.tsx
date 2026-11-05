@@ -1,13 +1,13 @@
 import { CalendarDays } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { KpiRow, KpiTile } from '../../components/ui/Charts'
-import { FilterChips, LoadingPanel, PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
+import { FilterChips, LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass, rowClass, tdClass, thClass } from '../../components/ui/ui-classes'
 import { campusDate, campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { tourError } from '../../features/administration/tours/tour-messages'
 import type { TourState, TourSummary } from '../../features/administration/tours/types'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { useDayTours } from '../../features/staff/operations/hooks'
+import { useDayTours, useUpcomingTours } from '../../features/staff/operations/hooks'
 import { TourStateBadge } from '../../features/staff/operations/OperationParts'
 import { nextStep } from '../../features/staff/operations/next-step'
 
@@ -30,6 +30,8 @@ export default function ToursTodayPage() {
   const rows = all.filter(tour => matches(tour, view))
   const count = (state: TourState) => all.filter(tour => tour.state === state).length
   const known = tours.isSuccess
+  const upcoming = useUpcomingTours(today)
+  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state))
 
   return (
     <StaffPage>
@@ -48,7 +50,7 @@ export default function ToursTodayPage() {
         </div>
         {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
           : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
-          : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : 'Hôm nay không có Tour nào.'}</EmptyPanel></div>
+          : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : ahead.length ? 'Hôm nay không có Tour nào. Các Tour sắp tới ở bên dưới.' : 'Hôm nay không có Tour nào.'}</EmptyPanel></div>
           : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label="Tour hôm nay">
             <thead className="border-b border-[#e2e8f0]"><tr>{['Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-[#eef1f4]">{rows.map(tour => {
@@ -63,6 +65,21 @@ export default function ToursTodayPage() {
               </tr>
             })}</tbody>
           </table></div>}
+      </section>
+      <section className={`${panelClass} mt-4`} aria-label="Tour sắp tới">
+        <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới. Kiểm tra trước khi bắt đầu mở được từ đây, nhưng chỉ bắt đầu được khi tới giờ." />
+        {upcoming.isPending ? <div className="p-4"><LoadingPanel /></div>
+          : upcoming.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(upcoming.error))} onRetry={() => void upcoming.refetch()} /></div>
+          : ahead.length === 0 ? <div className="p-4"><EmptyPanel>Không có Tour nào trong 7 ngày tới.</EmptyPanel></div>
+          : <ul className="divide-y divide-[#eef1f4]">{ahead.map(tour => {
+            const step = nextStep(tour)
+            return <li key={tour.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+              <span className="w-28 shrink-0 text-[13px] font-semibold tabular-nums text-[#0f172a]">{campusDate(tour.scheduledStartAt).slice(0, 5)} · {campusTime(tour.scheduledStartAt)}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span><span className="block truncate text-xs text-[#64748b]">{tour.routeName} · robot {tour.reservation?.robotCode ?? '-'}</span></span>
+              <TourStateBadge state={tour.state} />
+              <Link to={step.to} className={buttonClass('secondary', 'sm')}>{step.label}</Link>
+            </li>
+          })}</ul>}
       </section>
     </StaffPage>
   )
