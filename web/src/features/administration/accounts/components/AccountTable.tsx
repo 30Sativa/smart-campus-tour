@@ -11,6 +11,7 @@ type AccountTableProps = {
   sort: AccountSort | ''
   onSort: (field: AccountSortField) => void
   onLifecycleAction: (account: AccountListItem, action: AccountLifecycleAction) => void
+  onEdit: (account: AccountListItem) => void
 }
 
 const SORT_COLUMNS: Array<{ field: AccountSortField; label: string }> = [
@@ -48,23 +49,28 @@ function RoleValue({ role }: { role: AccountListItem['role'] }) {
   return role === null ? <AdminStatusBadge status="invalid-role" /> : <span className="inline-flex rounded-full border border-[#cfe1fb] bg-[#eef5ff] px-2 py-px text-[11px] font-bold whitespace-nowrap text-[#2f62b8]">{role === 'TechnicalStaff' ? 'Technical Staff' : role}</span>
 }
 
-function AccountAction({ account, onAction }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction'] }) {
+function AccountAction({ account, onAction, onEdit }: { account: AccountListItem; onAction: AccountTableProps['onLifecycleAction']; onEdit: AccountTableProps['onEdit'] }) {
   if (account.role === 'Admin') return <span className="text-xs text-[#94a3b8]">cấu hình riêng</span>
   if (account.role === null) return <span className="text-xs text-[#94a3b8]">-</span>
   const action: AccountLifecycleAction = account.isActive ? 'deactivate' : 'reactivate'
   return (
-    <button
-      type="button"
-      onClick={() => onAction(account, action)}
-      className={buttonClass(account.isActive ? 'danger' : 'secondary', 'sm')}
-      aria-label={`${account.isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'} ${account.username}`}
-    >
-      {account.isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
-    </button>
+    <span className="inline-flex gap-1.5">
+      <button type="button" onClick={() => onEdit(account)} className={buttonClass('secondary', 'sm')} aria-label={`Sửa ${account.username}`}>
+        Sửa
+      </button>
+      <button
+        type="button"
+        onClick={() => onAction(account, action)}
+        className={buttonClass(account.isActive ? 'danger' : 'secondary', 'sm')}
+        aria-label={`${account.isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'} ${account.username}`}
+      >
+        {account.isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
+      </button>
+    </span>
   )
 }
 
-export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: AccountTableProps) {
+export function AccountTable({ accounts, sort, onSort, onLifecycleAction, onEdit }: AccountTableProps) {
   return (
     <>
       <TableFrame label="Danh sách tài khoản" wide>
@@ -83,7 +89,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
               <td className={tdClass}><AdminStatusBadge status={account.isActive ? 'account-active' : 'account-inactive'} /></td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.createdAt)}</td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.updatedAt)}</td>
-              <td className={`${tdClass} text-right`}><AccountAction account={account} onAction={onLifecycleAction} /></td>
+              <td className={`${tdClass} text-right`}><AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} /></td>
             </tr>
           ))}
         </tbody>
@@ -104,7 +110,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction }: Acco
               <div><dt className="text-xs text-[#64748b]">Tạo</dt><dd className="mt-1 text-xs text-[#475569]">{formatStamp(account.createdAt)}</dd></div>
               <div><dt className="text-xs text-[#64748b]">Cập nhật</dt><dd className="mt-1 text-xs text-[#475569]">{formatStamp(account.updatedAt)}</dd></div>
             </dl>
-            {account.role !== 'Admin' && account.role !== null && <AccountAction account={account} onAction={onLifecycleAction} />}
+            {account.role !== 'Admin' && account.role !== null && <AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} />}
           </li>
         ))}
       </ul>

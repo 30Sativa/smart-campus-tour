@@ -11,6 +11,8 @@ using SmartCampus.Application.Features.Accounts.Commands.CreateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.CreateAccount.Dtos;
 using SmartCampus.Application.Features.Accounts.Commands.DeactivateAccount;
 using SmartCampus.Application.Features.Accounts.Commands.ReactivateAccount;
+using SmartCampus.Application.Features.Accounts.Commands.UpdateAccount;
+using SmartCampus.Application.Features.Profile;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts;
 using SmartCampus.Application.Features.Accounts.Queries.GetAccounts.Dtos;
 
@@ -69,6 +71,24 @@ public sealed class AdminAccountsController(
         {
             Success = true,
             Message = "Account created.",
+            Data = response
+        });
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<BaseResponse<AccountProfileResponse>>> Update(
+        Guid id,
+        [FromBody] UpdateAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await sender.Send(
+            new UpdateAccountCommand(id, User.GetRequiredUserId(), request),
+            cancellationToken);
+
+        return Ok(new BaseResponse<AccountProfileResponse>
+        {
+            Success = true,
+            Message = "Account updated.",
             Data = response
         });
     }

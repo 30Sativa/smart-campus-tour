@@ -28,7 +28,9 @@ export default function AdminShell() {
   const navRef = useMobileNav(menuOpen, closeMenu)
 
   const current = adminActivePath(location.pathname)
-  const title = ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị hệ thống'
+  const title = location.pathname.startsWith('/admin/profile')
+    ? 'Hồ sơ của tôi'
+    : ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị hệ thống'
 
   return (
     <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>

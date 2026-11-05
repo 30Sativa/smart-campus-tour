@@ -7,6 +7,7 @@ import { isStaffRole, roleLabel } from '../../auth/roles'
 import { PageHeader, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { StaffPage } from '../../features/staff/StaffUi'
+import { AccountSettings } from '../../features/account/AccountSettings'
 import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { formatCountdown } from '../../features/staff/formatters'
 import { useNow } from '../../features/staff/use-now'
@@ -44,8 +45,8 @@ function Card({ title, note, action, children }: { title: string; note?: string;
 
 /**
  * The signed-in operator's own page: who the account is, what the role may
- * do, and today's shift at a glance. It only reads: accounts are issued and
- * changed by Admin, so there is no self-service edit or password form here.
+ * do, and today's shift at a glance. Name and password are self-service
+ * (AccountSettings); role and status stay with Admin.
  */
 export default function StaffProfilePage() {
   const user = useAuthStore((state) => state.user)
@@ -174,9 +175,11 @@ export default function StaffProfilePage() {
             </dl>
             <p className="mt-3 flex gap-2 rounded-xl bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#64748b]">
               <Info size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-[#94a3b8]" />
-              Cần đổi mật khẩu, họ tên hoặc khóa tài khoản? Liên hệ Admin: tài khoản được cấp và thay đổi tại khu vực quản trị.
+              Bạn tự sửa họ tên và đổi mật khẩu bên dưới. Khóa tài khoản hoặc đổi vai trò do Admin thực hiện.
             </p>
           </Card>
+
+          <AccountSettings />
 
           <button type="button" onClick={() => void logout()} className={`${buttonClass('danger', 'md')} w-full`}>
             <LogOut size={16} aria-hidden="true" />

@@ -74,6 +74,8 @@ const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
 const AdminRobotCredentialsPage = lazy(() => import('../../routes/admin/AdminRobotCredentialsPage'))
 const AdminInfrastructurePage = lazy(() => import('../../routes/admin/AdminInfrastructurePage'))
 const AdminAuditLogsPage = lazy(() => import('../../routes/admin/AdminAuditLogsPage'))
+const AdminProfilePage = lazy(() => import('../../routes/admin/AdminProfilePage'))
+const TechnicalProfilePage = lazy(() => import('../../routes/technical/TechnicalProfilePage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
@@ -270,6 +272,7 @@ export const routes = [
       { path: 'robot-credentials', element: <AdminRobotCredentialsPage /> },
       { path: 'infrastructure', element: <AdminInfrastructurePage /> },
       { path: 'audit-logs', element: <AdminAuditLogsPage /> },
+      { path: 'profile', element: <AdminProfilePage /> },
       // A mistyped path inside the area stays inside the area.
       { path: '*', element: <Navigate to="/admin" replace /> },
     ],
@@ -285,6 +288,7 @@ export const routes = [
       { path: 'poi-import', element: <TechnicalPoiImportPage /> },
       { path: 'poi-file-import', element: <TechnicalPoiFileImportPage /> },
       { path: 'confirmations', element: <TechnicalConfirmationsPage /> },
+      { path: 'profile', element: <TechnicalProfilePage /> },
       { path: '*', element: <Navigate to="/technical" replace /> },
     ],
   },
