@@ -3,160 +3,81 @@ import { CheckCircle2, CircleAlert, Download } from 'lucide-react'
 import { repButton } from '../rep-classes'
 import { ROSTER_MAX_ROWS, TEMPLATE_FILE_NAME, downloadBytes, importRosterFile, rosterTemplateBytes } from '../roster-import'
 import type { ImportResult } from '../roster-import'
+import type { RepresentativeRosterRow } from '../api/types'
+import { matchRosterIdentities, rosterReplacement } from '../registration-roster'
 import { RosterPreview } from '../../registrations/RosterPreview'
 import { HoopDrop } from './HoopDrop'
 
 export type AcceptedRoster = Extract<ImportResult, { ok: true }>
+type Phase = { kind: 'idle' } | { kind: 'validating'; fileName: string } |
+  { kind: 'invalid'; result: Extract<ImportResult, { ok: false }> } | { kind: 'valid'; result: AcceptedRoster }
 
-type Phase =
-  | { kind: 'idle' }
-  | { kind: 'validating'; fileName: string }
-  | { kind: 'invalid'; result: Extract<ImportResult, { ok: false }> }
-  | { kind: 'valid'; result: AcceptedRoster }
-
-/**
- * Excel roster upload (flow review §4.2, scope §3.3):
- *
- *   choose / drop / throw a file → (into the hoop) → validating → invalid: every row / column / reason,
- *                                       nothing replaced, pick another file
- *                                     → valid: preview, then the explicit
- *                                       "Xác nhận sử dụng danh sách này"
- *
- * Only the confirmation hands the rows to the form (`onAccept`), and it
- * replaces the whole list: files never merge. A bad file never touches the
- * list that is already in use.
- */
-export function ExcelUploader({ accepted, onAccept, inUse, error }: {
-  /** The list this form will send, once confirmed here. */
+export function ExcelUploader({ accepted, onAccept, inUse, error, existingRows = [], canAddRows = true }: {
   accepted: AcceptedRoster | null
   onAccept: (roster: AcceptedRoster) => void
-  /** The list on file when editing and no new file was confirmed yet. */
   inUse?: { count: number } | null
   error?: string
+  existingRows?: RepresentativeRosterRow[]
+  canAddRows?: boolean
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [reviewedAccepted, setReviewedAccepted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const read = async (file: File | undefined) => {
-    if (!file) return
+  const request = useRef(0)
+  const read = async (file: File) => {
+    const revision = ++request.current
+    setReviewedAccepted(false)
     setPhase({ kind: 'validating', fileName: file.name })
-    const result = await importRosterFile(file)
-    setPhase(result.ok ? { kind: 'valid', result } : { kind: 'invalid', result })
+    try {
+      const result = await importRosterFile(file)
+      if (revision === request.current) setPhase(result.ok ? { kind: 'valid', result } : { kind: 'invalid', result })
+    } catch {
+      if (revision === request.current) setPhase({ kind: 'invalid', result: { ok: false, fileName: file.name, issues: [{ row: null, column: null, message: 'Không đọc được tệp. Chọn lại tệp hoặc kiểm tra quyền truy cập trên máy tính.' }] } })
+    }
   }
-
-  const pick = () => inputRef.current?.click()
   const keptCount = accepted?.rows.length ?? inUse?.count ?? 0
-  const keptLabel = accepted ? `danh sách từ file ${accepted.fileName} (${accepted.rows.length} dòng lời mời)` : inUse ? `danh sách hiện tại (${inUse.count} dòng lời mời)` : null
-
-  return (
-    <div className="rep-upload">
-      <div className="rep-upload-spec">
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <p><b>Yêu cầu file danh sách</b></p>
-          <p style={{ marginTop: 4 }}>Các cột <b>LoaiDong, HoTen, Email</b> bắt buộc, cột <b>Lop</b> không bắt buộc. LoaiDong: CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. File .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} điểm xem (dòng lời mời).</p>
-        </div>
-        <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes(TEMPLATE_FILE_NAME, rosterTemplateBytes())}>
-          <Download size={16} aria-hidden="true" />Tải file Excel mẫu
-        </button>
+  const replacement = phase.kind === 'valid' && existingRows.length
+    ? rosterReplacement(existingRows, matchRosterIdentities(phase.result.rows, existingRows)) : null
+  const additionBlocked = phase.kind === 'valid' && !canAddRows && (replacement ? replacement.added.length > 0 : phase.result.rows.length > 0)
+  const blocked = additionBlocked || Boolean(replacement?.issues.length) || Boolean(replacement?.acceptedAffected && !reviewedAccepted)
+  return <div className="rep-upload rep-stack">
+    <div className="rep-upload-spec">
+      <div><p><strong>Yêu cầu tệp danh sách</strong></p>
+        <p className="rep-hint">Các cột LoaiDong, HoTen, Email bắt buộc; Lop không bắt buộc. LoaiDong nhận CA_NHAN hoặc DIEM_XEM_CHUNG. Điểm xem chung dùng email người phụ trách, không liệt kê tất cả người xem. Tệp .xlsx hoặc .csv, tối đa 2 MB và {ROSTER_MAX_ROWS} điểm xem.</p>
       </div>
-
-      {accepted && phase.kind !== 'valid' && (
-        <div className="rep-file-box is-ok" role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-          <div className="rep-file-head">
-            <CheckCircle2 size={20} aria-hidden="true" />
-            <div style={{ minWidth: 0 }}>
-              <p className="rep-file-name">{accepted.fileName}</p>
-              <p className="rep-file-note">Đã xác nhận {accepted.rows.length} dòng lời mời{accepted.withClass ? `, ${accepted.withClass} dòng có lớp` : ''}. Danh sách này sẽ được gửi.</p>
-            </div>
-          </div>
-          <button type="button" className={repButton('secondary', 'sm')} onClick={pick}>Chọn file khác</button>
-        </div>
-      )}
-
-      {/* The drop zone is a hoop: the file is read once it lands in the basket. */}
-      <HoopDrop
-        onFile={(file) => { void read(file) }}
-        inputRef={inputRef}
-        accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-        inputLabel="Chọn file Excel danh sách lời mời"
-        validating={phase.kind === 'validating' ? phase.fileName : null}
-        hasList={Boolean(accepted)}
-      />
-
-      {error && phase.kind === 'idle' && <p className="rep-gate-reason" style={{ color: 'var(--rep-bad)' }} role="alert">{error}</p>}
-
-      {phase.kind === 'invalid' && (
-        <div className="rep-file-box is-bad" role="alert">
-          <div className="rep-file-head">
-            <CircleAlert size={20} aria-hidden="true" />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p className="rep-file-name">File {phase.result.fileName} chưa hợp lệ</p>
-              <p className="rep-file-note">
-                Chưa có dòng lời mời nào được nhập{keptLabel ? `; vẫn giữ ${keptLabel}` : ''}. Sửa {phase.result.issues.length > 1 ? `${phase.result.issues.length} lỗi` : 'lỗi'} dưới đây rồi chọn lại file.
-              </p>
-            </div>
-          </div>
-          <div className="rep-table-wrap max-h-64" style={{ marginTop: 16, background: 'var(--rep-surface)' }}>
-            <table className="rep-table" style={{ minWidth: 420 }} aria-label="Lỗi trong file">
-              <thead><tr><th scope="col" style={{ width: 80 }}>Dòng</th><th scope="col" style={{ width: 96 }}>Cột</th><th scope="col">Lỗi</th></tr></thead>
-              <tbody>
-                {phase.result.issues.map((issue, i) => (
-                  <tr key={i} style={{ '--i': i } as React.CSSProperties}>
-                    <td className="num">{issue.row ?? '-'}</td>
-                    <td style={{ fontWeight: 650 }}>{issue.column ?? 'Cả file'}</td>
-                    <td>{issue.message}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="rep-file-actions" style={{ justifyContent: 'flex-start' }}>
-            <button type="button" className={repButton('secondary')} onClick={pick}>Chọn file khác</button>
-            <button type="button" className={repButton('ghost')} onClick={() => setPhase({ kind: 'idle' })}>Đóng</button>
-          </div>
-        </div>
-      )}
-
-      {phase.kind === 'valid' && (
-        <div className="rep-file-box is-ok">
-          <div className="rep-file-head">
-            <CheckCircle2 size={20} aria-hidden="true" />
-            <div style={{ minWidth: 0 }}>
-              <p className="rep-file-name">{phase.result.fileName}</p>
-              <p className="rep-file-note">File hợp lệ. Kiểm tra danh sách rồi xác nhận để dùng.</p>
-            </div>
-          </div>
-          <dl className="rep-file-stats">
-            {[
-              ['Dòng hợp lệ', phase.result.rows.length],
-              ['Dòng có lớp', phase.result.withClass],
-              ['Dòng trống bỏ qua', phase.result.skippedBlank],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd className="num">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <div style={{ marginTop: 16 }}><RosterPreview rows={phase.result.rows} label="Xem trước danh sách" maxHeight="max-h-[300px]" variant="representative" /></div>
-          {keptCount > 0 && (
-            <p className="rep-file-warn">Xác nhận sẽ thay toàn bộ {keptCount} dòng lời mời đang có bằng {phase.result.rows.length} dòng lời mời trong file này. Không ghép hai danh sách.</p>
-          )}
-          <div className="rep-file-actions">
-            <button type="button" className={repButton('secondary')} onClick={pick}>Chọn file khác</button>
-            <button
-              type="button"
-              className={repButton('dark')}
-              onClick={() => {
-                onAccept(phase.result)
-                setPhase({ kind: 'idle' })
-              }}
-            >
-              Xác nhận sử dụng danh sách này
-            </button>
-          </div>
-        </div>
-      )}
+      <button type="button" className={repButton('secondary', 'sm')} onClick={() => downloadBytes(TEMPLATE_FILE_NAME, rosterTemplateBytes())}><Download size={16} aria-hidden="true" />Tải file Excel mẫu</button>
     </div>
-  )
+    {accepted && <div className="rep-file-box is-ok" role="status"><div className="rep-file-head"><CheckCircle2 size={20} aria-hidden="true" /><div>
+      <p className="rep-file-name">{accepted.fileName}</p><p className="rep-file-note">Đã xác nhận {accepted.rows.length} dòng lời mời. Đây là danh sách đang được dùng trong bản nháp.</p>
+    </div></div></div>}
+    <HoopDrop onFile={file => { void read(file) }} inputRef={inputRef} accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+      inputLabel="Chọn file Excel danh sách lời mời" validating={phase.kind === 'validating' ? phase.fileName : null} hasList={keptCount > 0} />
+    {error && <p className="rep-error-message" role="alert">{error}</p>}
+    {phase.kind === 'invalid' && <div className="rep-file-box is-bad" role="alert">
+      <div className="rep-file-head"><CircleAlert size={20} aria-hidden="true" /><div><p className="rep-file-name">File {phase.result.fileName} chưa hợp lệ</p>
+        <p className="rep-file-note">Chưa nhập dòng nào từ tệp này.{keptCount > 0 ? ` Vẫn giữ ${keptCount} dòng đã xác nhận trước đó.` : ''} Sửa lỗi rồi chọn lại tệp.</p></div></div>
+      <div className="rep-table-wrap"><table className="rep-table" aria-label="Lỗi trong file"><thead><tr><th scope="col">Dòng</th><th scope="col">Cột</th><th scope="col">Lỗi</th></tr></thead><tbody>
+        {phase.result.issues.map((issue, index) => <tr key={index}><td data-label="Dòng" className="num">{issue.row ?? 'Toàn tệp'}</td><td data-label="Cột">{issue.column ?? 'Cả tệp'}</td><td data-label="Lỗi">{issue.message}</td></tr>)}
+      </tbody></table></div>
+      <button type="button" className={repButton('ghost')} onClick={() => setPhase({ kind: 'idle' })}>Đóng lỗi</button>
+    </div>}
+    {phase.kind === 'valid' && <div className="rep-stack">
+      <div className="rep-file-head"><CheckCircle2 size={20} aria-hidden="true" /><div><p className="rep-file-name">{phase.result.fileName}</p><p className="rep-file-note">Tệp hợp lệ: {phase.result.rows.length} dòng lời mời, {phase.result.withClass} dòng có lớp, bỏ qua {phase.result.skippedBlank} dòng trống. Kiểm tra rồi xác nhận để dùng.</p></div></div>
+      <RosterPreview rows={phase.result.rows} label="Xem trước danh sách" variant="representative" />
+      {replacement && <section className="rep-diff" aria-label="Thay đổi danh sách">
+        <h3>Thay đổi so với hồ sơ hiện tại</h3>
+        <p>Giữ nguyên {replacement.unchanged.length} dòng, cập nhật {replacement.changed.length} dòng, thêm {replacement.added.length} dòng, loại {replacement.removed.length} dòng.</p>
+        {replacement.changed.map(({ before, after }) => <div className="rep-diff-item" key={before.id}><strong>Cập nhật {before.displayName}</strong><p>{before.displayName} → {after.displayName}; lớp {before.className || 'không có'} → {after.className || 'không có'}. {before.rowNumber !== after.rowNumber ? 'Thay vị trí dòng trong tệp. ' : ''}Giữ định danh dòng và email {before.email}.</p></div>)}
+        {replacement.added.map(row => <div className="rep-diff-item" key={row.email}><strong>Thêm {row.displayName}</strong><p>{row.email}. Dòng mới chờ Staff duyệt.</p></div>)}
+        {replacement.removed.map(row => <div className="rep-diff-item" key={row.id ?? row.email}><strong>Loại {row.displayName}</strong><p>{row.email}. Lời mời bị thu hồi và phiên truy cập hiện có sẽ đóng khi lưu.</p></div>)}
+        {replacement.issues.length > 0 && <ul className="rep-error-list" role="alert">{replacement.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
+        {replacement.acceptedAffected && <label className="rep-consent"><input type="checkbox" checked={reviewedAccepted} onChange={event => setReviewedAccepted(event.target.checked)} />Tôi đã kiểm tra thay đổi trên dòng đã chấp nhận và hiểu việc loại dòng sẽ thu hồi quyền truy cập của dòng đó.</label>}
+      </section>}
+      {additionBlocked && <p className="rep-error-message" role="alert">Đã qua hạn thêm điểm xem mới 48 giờ trước giờ bắt đầu. Bạn vẫn có thể cập nhật hoặc loại dòng hiện tại theo quyền của hồ sơ.</p>}
+      {keptCount > 0 && <p className="rep-file-warn">Xác nhận thay toàn bộ danh sách trong bản nháp; không ghép hai tệp. Dòng khớp email giữ định danh và quyền truy cập hiện tại. Thay đổi chỉ được gửi khi lưu đăng ký.</p>}
+      <div className="rep-file-actions"><button type="button" className={repButton('secondary')} onClick={() => setPhase({ kind: 'idle' })}>Bỏ tệp vừa chọn</button>
+        <button type="button" className={repButton('dark')} disabled={blocked} onClick={() => { onAccept(phase.result); setPhase({ kind: 'idle' }) }}>Xác nhận sử dụng danh sách này</button>
+      </div>
+    </div>}
+  </div>
 }

@@ -1,0 +1,26 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · v2.0.0 */
+:root {
+  --rep-font: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+  --rep-bg: #f7faf6; --rep-surface: #f7faf6; --rep-sunk: #eaf2ed; --rep-sunk-2: #dce9df;
+  --rep-ink: #102d31; --rep-ink-2: #4e6568; --rep-ink-3: #536d65;
+  --rep-line: #cad8d0; --rep-line-2: #71857b;
+  --rep-accent: #d6f18d; --rep-accent-hover: #c6e674; --rep-accent-ink: #102d31;
+  --rep-focus: #276451; --rep-green: #276451; --rep-leaf: #a6d75e; --rep-leaf-2: #87b661;
+  --rep-ok: #17663f; --rep-ok-bg: #ddf2e6; --rep-warn: #805300; --rep-warn-bg: #fdf1d6;
+  --rep-bad: #a3291f; --rep-bad-bg: #fbe5e1; --rep-info: #0d5b6b; --rep-info-bg: #dff0f2;
+  --rep-mute: #536d65; --rep-mute-bg: #eaf2ed;
+  --rep-overlay: rgb(16 45 49 / .4); --rep-shadow: rgb(16 45 49 / .12);
+  --rep-space-2xs: 4px; --rep-space-xs: 8px; --rep-space-sm: 12px; --rep-space-md: 16px;
+  --rep-space-lg: 24px; --rep-space-xl: 40px; --rep-space-2xl: 64px;
+  --rep-text-xs: .75rem; --rep-text-sm: .875rem; --rep-text-md: 1rem; --rep-text-lg: 1.2rem; --rep-text-xl: 1.44rem; --rep-text-2xl: 1.728rem; --rep-text-3xl: 2.074rem;
+  --rep-radius: 8px; --rep-radius-dialog: 16px; --rep-container: 1320px; --rep-hit: 44px;
+  --rep-ease: cubic-bezier(.22,1,.36,1); --rep-duration: 120ms;
+}
+html.dark {
+  --rep-bg: #10272a; --rep-surface: #10272a; --rep-sunk: #193438; --rep-sunk-2: #254146;
+  --rep-ink: #edf6ef; --rep-ink-2: #c0d3c9; --rep-ink-3: #bdd0c5;
+  --rep-line: #3d5b58; --rep-line-2: #8ca79b; --rep-focus: #d6f18d; --rep-green: #b6e7c7;
+  --rep-ok: #b6e7c7; --rep-ok-bg: #173f31; --rep-warn: #f7d38d; --rep-warn-bg: #493b22;
+  --rep-bad: #ffc6bd; --rep-bad-bg: #512a28; --rep-info: #bae4e7; --rep-info-bg: #1b4146;
+  --rep-mute: #bdd0c5; --rep-mute-bg: #193438;
+}

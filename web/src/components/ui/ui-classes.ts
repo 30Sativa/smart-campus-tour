@@ -57,3 +57,22 @@ export const cardClass =
 
 /** A quieter tile inside a card: one reading (telemetry value, note). */
 export const tileClass = 'rounded-xl border border-[#edf2f7] bg-[#f8fafc]'
+
+
+/* ── Soft console look, shared by the Staff and Admin shells ─────────────── */
+
+/** The shell's ground: off-white with a few faint blue washes for the frosted sidebar to blur. */
+export const softConsoleGround =
+  'bg-[#f4f7fb] bg-[radial-gradient(38rem_30rem_at_-6%_-8%,rgba(96,165,250,0.30),transparent_70%),radial-gradient(30rem_26rem_at_8%_105%,rgba(147,197,253,0.32),transparent_70%),radial-gradient(40rem_30rem_at_100%_0%,rgba(191,219,254,0.35),transparent_70%)] text-[#2d3748]'
+
+/**
+ * The scroll area of a soft console: every panel (`ct-panel`) becomes a borderless
+ * 15px card with a light lift, and every primary button (`ct-btn-primary`) a
+ * light-blue button with muted blue text.
+ */
+export const softConsoleMain =
+  '[&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#edf3fb] [&_.ct-btn-primary]:text-[#4a6fa5] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#e3ecf8] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]'
+
+/** The floating, frosted header card of a soft console. */
+export const softConsoleHeader =
+  'flex min-h-[62px] items-center gap-3 rounded-[15px] border border-white/80 bg-white/75 px-4 shadow-[0_7px_23px_rgba(0,0,0,0.05)] backdrop-blur-xl'

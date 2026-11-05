@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import RepresentativeShell from './RepresentativeShell'
@@ -16,11 +16,14 @@ import { rosterTemplateBytes } from './roster-import'
 const version = 'AAAAAAAAAAE='
 const tour: RepresentativeTour = { id: 'tour', name: 'Tour thật', description: 'Tuyến chuẩn bị', scheduledStartAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString(), state: 'SCHEDULED',
   rowVersion: version, routeName: 'Tuyến A', stops: [{ order: 1, name: 'POI A', description: null }], register: { allowed: true, reason: null } }
+const newTour: RepresentativeTour = { ...tour, id: 'new-tour', name: 'Buổi chưa đăng ký' }
 const initial: RepresentativeRegistration = {
   summary: { id: 'registration', tourId: 'tour', tourName: tour.name, tourScheduledStartAt: tour.scheduledStartAt, tourState: 'SCHEDULED',
     schoolName: 'Trường A', groupName: 'Đoàn A', state: 'SUBMITTED', rowCount: 1, submittedAt: tour.scheduledStartAt, updatedAt: tour.scheduledStartAt },
   contactName: 'Người phụ trách', contactEmail: 'contact@example.com', rowVersion: version, tourRowVersion: version,
-  rejectionReason: null, reviewedAt: null, roster: [{ rowNumber: 2, rowType: 'SHARED_VIEWING', displayName: 'Phòng A', email: 'room@example.com', className: null }],
+  rejectionReason: null, reviewedAt: null, roster: [{ id: 'roster-room', rowVersion: version, participationState: 'PENDING',
+    reviewReason: null, reviewedAt: null, canRequestEmailChange: false, canRemove: true, invitationRowVersion: null,
+    rowNumber: 2, rowType: 'SHARED_VIEWING', displayName: 'Phòng A', email: 'room@example.com', className: null }],
   allowedActions: { edit: { allowed: true, reason: null }, resubmit: { allowed: false, reason: 'Chưa thể gửi lại' }, cancel: { allowed: true, reason: null } },
 }
 let registration: RepresentativeRegistration
@@ -59,13 +62,18 @@ beforeEach(() => {
     if (url.pathname === '/api/registrations/registration/invitations')
       return response({ enabled: false, canIssue: false, items: [] })
     const path = url.pathname.replace('/api/representative', '')
-    if (options?.method === 'POST' && path === '/tours/tour/registrations') {
+    if (options?.method === 'POST' && path === '/tours/new-tour/registrations') {
       const payload = JSON.parse(options.body as string) as RegistrationInput
       const requestId = new Headers(options.headers).get('Idempotency-Key')
       expect(requestId).not.toBeNull()
       submitAttempts.push({ key: requestId!, input: payload })
       if (failSubmit) { failSubmit = false; throw new TypeError('Connection lost after commit') }
-      registration = { ...registration, roster: payload.roster, summary: { ...registration.summary, ...payload, rowCount: payload.roster.length }, contactName: payload.contactName, contactEmail: payload.contactEmail }
+      registration = { ...registration,
+        roster: payload.roster.map(({ rowId, ...row }, index) => ({ ...row, id: rowId ?? `created-row-${index}`, rowVersion: version,
+          participationState: 'PENDING', reviewReason: null, reviewedAt: null, canRequestEmailChange: false, canRemove: true, invitationRowVersion: null })),
+        summary: { ...registration.summary, id: 'new-registration', tourId: newTour.id, tourName: newTour.name,
+          schoolName: payload.schoolName, groupName: payload.groupName, rowCount: payload.roster.length },
+        contactName: payload.contactName, contactEmail: payload.contactEmail }
       return response({ id: registration.summary.id })
     }
     if (options?.method === 'PUT') {
@@ -76,8 +84,16 @@ beforeEach(() => {
     }
     if (options?.method === 'POST' && path.endsWith('/cancel')) { cancelledVersion = JSON.parse(options.body as string).expectedRowVersion; registration.summary.state = 'CANCELLED'; return response(null) }
     if (path === '/tours/tour') return response(tour)
+    if (path === '/tours/new-tour') return response(newTour)
     if (path === '/tours') return response([tour], 200, { pagination: { page: 1, pageSize: 20, totalItems: 42, totalPages: 3 } })
-    if (path === '/registrations/registration') return missingRegistration ? response(null, 404, { message: 'Không tìm thấy dữ liệu.' }) : response(structuredClone(registration))
+    if (path === `/registrations/${registration.summary.id}`) return missingRegistration ? response(null, 404, { message: 'Không tìm thấy dữ liệu.' }) : response(structuredClone(registration))
+    if (path === '/registrations/old') {
+      const summary = closedRegistrations.find(item => item.id === 'old')!
+      return response({ ...structuredClone(initial), summary, rejectionReason: summary.rejectionReason,
+        allowedActions: Object.fromEntries(['edit', 'resubmit', 'cancel'].map(action => [action, { allowed: false, reason: 'Buổi đã chốt danh sách.' }])) })
+    }
+    if (path === '/registrations' && url.searchParams.get('tourId') === newTour.id && registration.summary.tourId !== newTour.id)
+      return response([], 200, { pagination: { page: 1, pageSize: 1, totalItems: 0, totalPages: 0 } })
     if (path === '/registrations' && url.searchParams.get('group') === 'closed')
       return response(closedRegistrations, 200, { pagination: { page: 1, pageSize: 20, totalItems: closedRegistrations.length, totalPages: 1 } })
     if (path === '/registrations') return response([registration.summary], 200, { pagination: { page: 1, pageSize: 20, totalItems: 25, totalPages: 2 } })
@@ -87,18 +103,22 @@ beforeEach(() => {
 afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals() })
 
 describe('Representative real HTTP contract', () => {
-  it('splits Đăng ký của tôi into active and cancelled tabs; an ended registration shows only its reason', async () => {
-    closedRegistrations = [{ ...initial.summary, id: 'old', tourName: 'Buổi đã chốt', state: 'REJECTED', tourState: 'READY',
+  it('filters active and closed registrations; selecting an ended record retains its reason without actionable resubmission', async () => {
+    closedRegistrations = [{ ...initial.summary, id: 'old', groupName: 'Đoàn đã chốt', tourName: 'Buổi đã chốt', state: 'REJECTED', tourState: 'READY',
       rejectionReason: 'Danh sách thiếu lớp.', reviewedAt: initial.summary.updatedAt }]
     renderAt('/dai-dien/dang-ky')
-    expect(await screen.findByRole('heading', { name: 'Đang chờ duyệt' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Tour thật' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Đang hoạt động', pressed: true })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Tour thật/ })).toBeInTheDocument()
     expect(screen.queryByText('Buổi đã chốt')).toBeNull()
-    fireEvent.click(await screen.findByRole('tab', { name: /Đã hủy\s*1/ }))
-    expect(await screen.findByRole('link', { name: 'Buổi đã chốt' })).toBeInTheDocument()
-    expect(screen.getByText('Danh sách thiếu lớp.')).toBeInTheDocument()
-    expect(screen.getByText('Bị từ chối')).toBeInTheDocument()
-    expect(screen.queryByText('Ngày tham quan')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Đã hủy' }))
+    const closed = await screen.findByRole('link', { name: /Buổi đã chốt/ })
+    expect(within(closed).getByText('Danh sách thiếu lớp.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Đã hủy', pressed: true })).toBeInTheDocument()
+    fireEvent.click(closed)
+    expect(await screen.findByRole('heading', { name: 'Đoàn đã chốt' })).toBeInTheDocument()
+    expect(screen.getByText('Đăng ký bị từ chối')).toBeInTheDocument()
+    expect(screen.getAllByText('Danh sách thiếu lớp.').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
     expect(screen.queryByRole('link', { name: 'Sửa và gửi lại' })).toBeNull()
   })
   it('shows a registration error instead of an infinite loading skeleton', async () => {
@@ -118,14 +138,16 @@ describe('Representative real HTTP contract', () => {
     expect(screen.getByText('Các buổi đang nhận đăng ký đoàn')).toBeInTheDocument()
     expect(screen.queryByText(/còn chỗ/)).not.toBeInTheDocument()
   })
-  it('keeps a register action even when the Representative already has a group', async () => {
+  it('opens the existing registration and prevents a second registration for the same Tour', async () => {
     renderAt('/dai-dien/buoi/tour')
-    expect(await screen.findByRole('link', { name: 'Đăng ký đoàn' })).toHaveAttribute('href', '/dai-dien/buoi/tour/dang-ky')
-    expect(await screen.findByRole('link', { name: 'Xem tất cả (25)' })).toHaveAttribute('href', '/dai-dien/dang-ky?tourId=tour')
+    expect(await screen.findByRole('link', { name: 'Xem đăng ký' })).toHaveAttribute('href', '/dai-dien/dang-ky/registration')
+    expect(screen.queryByRole('link', { name: 'Đăng ký đoàn' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đăng ký đoàn' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tra cứu đăng ký của buổi này' })).toHaveAttribute('href', '/dai-dien/dang-ky?tourId=tour')
   })
   it('imports mixed XLSX, submits exact row types and retries the same uncertain intent', async () => {
     failSubmit = true
-    renderAt('/dai-dien/buoi/tour/dang-ky')
+    renderAt('/dai-dien/buoi/new-tour/dang-ky')
     fireEvent.change(await screen.findByLabelText(/Tên trường/), { target: { value: 'Trường B' } })
     fireEvent.change(screen.getByLabelText(/Tên đoàn/), { target: { value: 'Đoàn B' } })
     fireEvent.change(screen.getByLabelText(/Người liên hệ/), { target: { value: 'Đại diện B' } })
@@ -189,13 +211,19 @@ describe('Representative real HTTP contract', () => {
   })
   it('reads approved rows but never shows legacy access or an approved edit action', async () => {
     registration.summary.state = 'APPROVED'
+    registration.roster[0] = { ...registration.roster[0], participationState: 'ACCEPTED', reviewedAt: tour.scheduledStartAt }
     registration.allowedActions = Object.fromEntries(['edit', 'resubmit', 'cancel'].map(k => [k, { allowed: false, reason: 'Chức năng sau duyệt chưa được triển khai.' }])) as RepresentativeRegistration['allowedActions']
-    renderAt('/dai-dien/dang-ky/registration')
+    renderAt('/dai-dien/dang-ky/registration?tab=invitations')
     expect(await screen.findByRole('region', { name: 'Hỗ trợ lời mời' })).toBeInTheDocument()
     expect(await screen.findByText('Hỗ trợ lời mời chưa được bật. Liên hệ quản trị hệ thống.')).toBeInTheDocument()
-    expect(screen.getByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
     expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/Mã đoàn|Sao chép mã|Nhập họ tên/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'Danh sách' }))
+    expect(await screen.findByRole('table', { name: 'Danh sách lời mời' })).toHaveTextContent('Phòng A')
+    expect(screen.getByText('Đã chấp nhận')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'Thông tin' }))
+    expect(await screen.findByRole('button', { name: 'Sửa và gửi lại' })).toBeDisabled()
+    expect(screen.queryByRole('link', { name: /Sửa/ })).not.toBeInTheDocument()
   })
   it('surfaces an API error without replacing it with mock data', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response(null, 503, { message: 'Unavailable' })))

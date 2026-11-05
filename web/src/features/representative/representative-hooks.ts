@@ -1,28 +1,40 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../stores/auth-store'
 import { representativeApi as api } from './api/representative-api'
-import type { ListParameters, RegistrationInput } from './api/types'
+import type { ListParameters, RegistrationInput, RosterEmailChangeInput } from './api/types'
+
+export const repReadQueryOptions = { networkMode: 'always', retry: false } as const
 
 export const repQueryKeys = { all: ['representative'] as const, owner: (id: string) => ['representative', id] as const }
 export function useRepTours(parameters: ListParameters = {}) {
   const owner = useAuthStore(s => s.user?.userId)
-  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'tours', parameters],
+  return useQuery({ ...repReadQueryOptions, queryKey: [...repQueryKeys.owner(owner ?? ''), 'tours', parameters],
     queryFn: ({ signal }) => api.tours(parameters, signal), enabled: Boolean(owner), refetchInterval: 15000 })
 }
 export function useRepTour(id: string) {
   const owner = useAuthStore(s => s.user?.userId)
-  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'tour', id],
-    queryFn: ({ signal }) => api.tour(id, signal), enabled: Boolean(owner && id), retry: false })
+  return useQuery({ ...repReadQueryOptions, queryKey: [...repQueryKeys.owner(owner ?? ''), 'tour', id],
+    queryFn: ({ signal }) => api.tour(id, signal), enabled: Boolean(owner && id) })
 }
 export function useRepRegistrations(parameters: ListParameters = {}) {
   const owner = useAuthStore(s => s.user?.userId)
-  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'registrations', parameters],
+  return useQuery({ ...repReadQueryOptions, queryKey: [...repQueryKeys.owner(owner ?? ''), 'registrations', parameters],
     queryFn: ({ signal }) => api.registrations(parameters, signal), enabled: Boolean(owner), refetchInterval: 15000 })
 }
 export function useRepRegistration(id: string | undefined) {
   const owner = useAuthStore(s => s.user?.userId)
-  return useQuery({ queryKey: [...repQueryKeys.owner(owner ?? ''), 'registration', id],
-    queryFn: ({ signal }) => api.registration(id!, signal), enabled: Boolean(owner && id), retry: false, refetchInterval: 15000 })
+  return useQuery({ ...repReadQueryOptions, queryKey: [...repQueryKeys.owner(owner ?? ''), 'registration', id],
+    queryFn: ({ signal }) => api.registration(id!, signal), enabled: Boolean(owner && id), refetchInterval: 15000 })
+}
+export function useRepEmailChanges(id: string) {
+  const owner = useAuthStore(s => s.user?.userId)
+  return useQuery({ ...repReadQueryOptions, queryKey: [...repQueryKeys.owner(owner ?? ''), 'email-changes', id],
+    queryFn: ({ signal }) => api.emailChanges(id, signal), enabled: Boolean(owner && id), refetchInterval: 15000 })
+}
+export function useRequestRepEmailChange() {
+  const invalidate = useInvalidate()
+  return useMutation({ mutationFn: ({ id, rowId, input }: { id: string; rowId: string; input: RosterEmailChangeInput }) =>
+    api.requestEmailChange(id, rowId, input), onSuccess: invalidate })
 }
 function useInvalidate() {
   const client = useQueryClient()

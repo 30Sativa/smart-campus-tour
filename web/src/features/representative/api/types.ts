@@ -21,13 +21,29 @@ export type RegistrationSummary = {
 }
 /** "Đăng ký của tôi" halves: still in play, or ended (cancelled, Tour cancelled, refused with no way back). */
 export type RegistrationGroup = 'active' | 'closed'
+export type RepresentativeRosterRow = RosterRow & {
+  id?: string; rowVersion?: string; participationState?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'REMOVED'
+  reviewReason?: string | null; reviewedAt?: string | null; canRequestEmailChange?: boolean
+  canRemove?: boolean; invitationRowVersion?: string | null
+}
+export type RegistrationRosterInput = RosterRow & { rowId?: string | null }
+export type RosterEmailChange = {
+  id: string; registrationId: string; rowId: string; rowNumber: number; currentEmail: string; proposedEmail: string
+  state: 'PENDING' | 'ACCEPTED' | 'REJECTED'; requestedByUserId: string; createdAt: string
+  reviewedAt: string | null; reviewedByUserId: string | null; reviewReason: string | null
+  rowVersion: string; tourRowVersion: string; registrationRowVersion: string; rosterRowVersion: string; canReview: boolean
+}
+export type RosterEmailChangeInput = {
+  requestId: string; proposedEmail: string; expectedTourRowVersion: string
+  expectedRegistrationRowVersion: string; expectedRowVersion: string
+}
 export type RepresentativeRegistration = {
   summary: RegistrationSummary; contactName: string; contactEmail: string; rowVersion: string; tourRowVersion: string
-  rejectionReason: string | null; reviewedAt: string | null; roster: RosterRow[]
+  rejectionReason: string | null; reviewedAt: string | null; roster: RepresentativeRosterRow[]
   allowedActions: { edit: ActionGate; resubmit: ActionGate; cancel: ActionGate }
 }
 export type RegistrationInput = {
-  schoolName: string; groupName: string; contactName: string; contactEmail: string; expectedTourRowVersion: string; roster: RosterRow[]
+  schoolName: string; groupName: string; contactName: string; contactEmail: string; expectedTourRowVersion: string; roster: RegistrationRosterInput[]
 }
 export type ListParameters = { search?: string; sort?: string; page?: number; size?: number; tourId?: string; state?: RegistrationState; group?: RegistrationGroup }
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
 import { roleLabel } from '../../auth/roles'
 import { RouteView } from '../../components/ui/RouteView'
+import { softConsoleGround, softConsoleHeader, softConsoleMain } from '../../components/ui/ui-classes'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { ADMIN_NAV, adminActivePath } from './admin-nav'
@@ -30,7 +31,7 @@ export default function AdminShell() {
   const title = ADMIN_NAV.find(({ path }) => path === current)?.label ?? 'Quản trị hệ thống'
 
   return (
-    <div className="flex min-h-[100dvh] bg-[#f6f7f9] text-[#173b59]">
+    <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
       <MobileNavToggle open={menuOpen} controls="admin-navigation" label="Mở điều hướng quản trị" closeLabel="Đóng điều hướng quản trị" onOpen={() => setMenuOpen(true)} onClose={closeMenu} />
 
       <AdminSidebar
@@ -42,15 +43,19 @@ export default function AdminShell() {
         panelRef={navRef}
       />
 
-      <div className="relative flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-20 shrink-0 bg-[#f6f7f9]/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-          <div className="flex h-13 items-center justify-between gap-3 border-b border-[#e5e7eb]">
-            <p className="min-w-0 truncate text-[12.5px] font-medium text-[#9ca3af]">CampusTour <span className="mx-1.5 text-[#d1d5db]">/</span> <span className="text-[#6b7280]">{title}</span></p>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* The same frosted header card as the Staff console: breadcrumb above the page name. */}
+        <header className="sticky top-0 z-20 shrink-0 px-4 pt-3 sm:px-6 lg:px-8">
+          <div className={softConsoleHeader}>
+            <div className="min-w-0">
+              <p className="truncate text-[12px] text-[#a0aec0]">Quản trị <span className="mx-1">/</span> <span className="text-[#2d3748]">{title}</span></p>
+              <p className="truncate text-sm font-bold text-[#2d3748]">{title}</p>
+            </div>
             <AdminHeaderActions name={user?.username || 'Quản trị viên'} role={roleLabel(user?.role)} icon={ShieldCheck} />
           </div>
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0"><RouteView /></main>
+        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 ${softConsoleMain}`}><RouteView /></main>
       </div>
     </div>
   )

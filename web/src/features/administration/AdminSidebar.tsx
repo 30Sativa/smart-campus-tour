@@ -24,6 +24,7 @@ export function AdminSidebar({ id, currentPath, onNavigate, onLogout, open, pane
       onLogout={onLogout}
       open={open}
       panelRef={panelRef}
+      look="soft"
     />
   )
 }

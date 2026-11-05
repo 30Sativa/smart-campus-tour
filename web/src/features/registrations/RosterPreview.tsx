@@ -43,12 +43,12 @@ export function RosterPreview<T extends RosterRow>({ rows, label = 'Danh sách l
           <tbody className={representative ? undefined : 'divide-y divide-[#f1f5f9]'}>
             {shown.map(({ row, n }) => (
               <tr key={n} style={representative ? { '--i': n } as React.CSSProperties : undefined}>
-                {rowSelect && <td className="py-2.5 pl-4">{rowSelect(row)}</td>}
-                <td className={representative ? 'rep-muted num' : 'px-4 py-2.5 text-[#94a3b8] tabular-nums'}>{row.rowNumber}</td>
-                <td className={representative ? 'font-semibold' : 'px-4 py-2.5 font-medium text-[#0f172a]'}>{row.displayName}</td>
-                <td className={representative ? undefined : 'px-4 py-2.5'}><span className={representative ? `rep-row-type ${row.rowType === 'INDIVIDUAL' ? 'rep-row-type--ind' : 'rep-row-type--shared'}` : undefined}>{row.rowType === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung'}</span></td><td className={representative ? undefined : 'px-4 py-2.5'}>{row.email}</td>
-                <td className={representative ? undefined : 'px-4 py-2.5 text-[#334155]'}>{row.className || <span className={representative ? 'rep-muted' : 'text-[#94a3b8]'}>-</span>}</td>
-                {rowAction && <td className="px-4 py-2.5">{rowAction(row)}</td>}
+                {rowSelect && <td data-label="Chọn" className="py-2.5 pl-4">{rowSelect(row)}</td>}
+                <td data-label="STT" className={representative ? 'rep-muted num' : 'px-4 py-2.5 text-[#94a3b8] tabular-nums'}>{row.rowNumber}</td>
+                <td data-label="Họ tên" className={representative ? 'font-semibold' : 'px-4 py-2.5 font-medium text-[#0f172a]'}><div>{row.displayName}</div></td>
+                <td data-label="Loại dòng" className={representative ? undefined : 'px-4 py-2.5'}><div><span className={representative ? `rep-row-type ${row.rowType === 'INDIVIDUAL' ? 'rep-row-type--ind' : 'rep-row-type--shared'}` : undefined}>{row.rowType === 'INDIVIDUAL' ? 'Cá nhân' : 'Điểm xem chung'}</span></div></td><td data-label="Email" className={representative ? undefined : 'px-4 py-2.5'}><div>{row.email}</div></td>
+                <td data-label="Lớp" className={representative ? undefined : 'px-4 py-2.5 text-[#334155]'}><div>{row.className || <span className={representative ? 'rep-muted' : 'text-[#94a3b8]'}>-</span>}</div></td>
+                {rowAction && <td data-label="Thao tác" className="px-4 py-2.5"><div>{rowAction(row)}</div></td>}
               </tr>
             ))}
             {shown.length === 0 && (

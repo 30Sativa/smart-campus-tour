@@ -7,6 +7,7 @@ import { isAdminRole, roleLabel } from '../../auth/roles'
 import { usePendingReviewCount } from '../administration/registrations/hooks'
 import { LiveDot } from './StaffUi'
 import { RouteView } from '../../components/ui/RouteView'
+import { softConsoleGround, softConsoleHeader, softConsoleMain } from '../../components/ui/ui-classes'
 import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
@@ -63,7 +64,7 @@ export default function StaffShell() {
   }, [menuOpen])
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-[#f4f7fb] bg-[radial-gradient(38rem_30rem_at_-6%_-8%,rgba(96,165,250,0.30),transparent_70%),radial-gradient(30rem_26rem_at_8%_105%,rgba(147,197,253,0.32),transparent_70%),radial-gradient(40rem_30rem_at_100%_0%,rgba(191,219,254,0.35),transparent_70%)] text-[#2d3748]">
+    <div className={`flex h-[100dvh] overflow-hidden ${softConsoleGround}`}>
       <MobileNavToggle open={menuOpen} controls="staff-navigation" label="Mở điều hướng vận hành" closeLabel="Đóng điều hướng vận hành" onOpen={() => setMenuOpen(true)} onClose={closeMenu} buttonRef={menuButtonRef} />
 
       <GroupedSidebar
@@ -93,7 +94,7 @@ export default function StaffShell() {
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Purity-style navbar: a frosted card floating over the page, breadcrumb above the page name. */}
         <header className="sticky top-0 z-20 shrink-0 px-4 pt-3 sm:px-6 lg:px-8">
-          <div className="flex min-h-[62px] items-center gap-3 rounded-[15px] border border-white/80 bg-white/75 px-4 shadow-[0_7px_23px_rgba(0,0,0,0.05)] backdrop-blur-xl">
+          <div className={softConsoleHeader}>
             <div className="min-w-0">
               <p className="truncate text-[12px] text-[#a0aec0]">{section} <span className="mx-1">/</span> <span className="text-[#2d3748]">{title}</span></p>
               <p className="truncate text-sm font-bold text-[#2d3748]">{title}</p>
@@ -117,7 +118,7 @@ export default function StaffShell() {
         </header>
 
         {/* Every panel on a Staff page becomes a Purity card: 15px corners, no border, a soft lift. */}
-        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 [&_.ct-panel]:rounded-[15px] [&_.ct-panel]:border-transparent [&_.ct-panel]:shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)] [&_.ct-btn-primary]:bg-[#edf3fb] [&_.ct-btn-primary]:text-[#4a6fa5] [&_.ct-btn-primary]:shadow-none [&_.ct-btn-primary:hover]:bg-[#e3ecf8] [&_.ct-btn-primary:disabled]:bg-[#f1f5f9] [&_.ct-btn-primary:disabled]:text-[#94a3b8]">
+        <main className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0 ${softConsoleMain}`}>
           <RouteView />
         </main>
 

@@ -22,9 +22,11 @@ export function withTourDeadline(tour: RepresentativeTour, now = Date.now()): Re
   return { ...tour, register: applyRegistrationDeadline(tour.register, tour.scheduledStartAt, now) }
 }
 
-/** Edit and resubmit close with registration; cancelling stays a server decision. */
-export function withRegistrationDeadline(registration: RepresentativeRegistration, now = Date.now()): RepresentativeRegistration {
-  const start = registration.summary.tourScheduledStartAt
-  const { edit, resubmit, cancel } = registration.allowedActions
-  return { ...registration, allowedActions: { edit: applyRegistrationDeadline(edit, start, now), resubmit: applyRegistrationDeadline(resubmit, start, now), cancel } }
+/** Existing-row changes and cancellation follow server gates, including after the new-row cutoff. */
+export function withRegistrationDeadline(registration: RepresentativeRegistration): RepresentativeRegistration {
+  return registration
+}
+
+export function newRosterRowsAllowed(scheduledStartAt: string, now = Date.now()): boolean {
+  return now < registrationClosesAt(scheduledStartAt).getTime()
 }
