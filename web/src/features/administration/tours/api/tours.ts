@@ -38,4 +38,11 @@ export const toursApi = {
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/start`, { method: 'POST', json: body }).then(() => id),
   next: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
     apiClient<Mutation>(`/api/staff/manage/tours/${id}/next`, { method: 'POST', json: body }).then(() => id),
+  endEarly: (id: string, body: { requestId: string; expectedRowVersion: string; reason: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/end-early`, { method: 'POST', json: body }).then(() => id),
+  retryLeg: (id: string, body: { requestId: string; expectedRowVersion: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/retry-leg`, { method: 'POST', json: body }).then(() => id),
+  /** No row version: it targets one command, which the server locks and checks is still UNKNOWN. */
+  reconcile: (id: string, commandId: string, body: { requestId: string; reason: string }) =>
+    apiClient<Mutation>(`/api/staff/manage/tours/${id}/commands/${commandId}/reconcile`, { method: 'POST', json: body }).then(() => id),
 }

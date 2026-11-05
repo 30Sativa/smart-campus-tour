@@ -34,7 +34,7 @@ export type TourDetails = {
   }
   /** The run state; every field but `state` stays null until Start (ADR-0043). */
   execution?: TourExecution | null
-  /** Advisory for the caller; Start and Next recheck under the server's locks. */
+  /** Advisory for the caller; every write rechecks under the server's locks. */
   allowedActions?: TourAllowedActions | null
 }
 /** One failing READY condition, in the backend's words. */
@@ -57,7 +57,11 @@ export type TourExecution = {
 }
 /** `blockedBy` holds Start check ids, or a state reason code. */
 export type TourActionAvailability = { allowed: boolean; reason: string | null; blockedBy: string[] }
-export type TourAllowedActions = { start: TourActionAvailability; next: TourActionAvailability }
+/** The recovery actions (ADR-0043) come from servers with M2.2 failure paths; an older response omits them, read as not allowed. */
+export type TourAllowedActions = {
+  start: TourActionAvailability; next: TourActionAvailability
+  endEarly?: TourActionAvailability; retryLeg?: TourActionAvailability; reconcile?: TourActionAvailability
+}
 export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
 /** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
 export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[] }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, CircleCheck, Play, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, CircleCheck, Play, ShieldAlert, TriangleAlert, WifiOff } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog'
@@ -11,7 +11,8 @@ import type { StartConfirmation, TourStartChecks } from '../../features/administ
 import { QuestLiveVideo } from '../../features/quest-stream/QuestLiveVideo'
 import { QUEST_WHEP_URL } from '../../features/quest-stream/quest-stream-config'
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
-import { useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
+import { isTourStale, useOperationTour, useStartChecks, useStartTour } from '../../features/staff/operations/hooks'
+import { useNow } from '../../features/staff/use-now'
 import { SYSTEM_GATES, checkVerdict } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
@@ -55,9 +56,11 @@ export default function StartCheckPage() {
   const [confirmation, setConfirmation] = useState<StartConfirmation>(NONE)
   const [confirming, setConfirming] = useState(false)
   const requestId = useRequestId(`start:${tourId}:${tour.data?.tour.rowVersion ?? ''}`)
+  const now = useNow(1000)
 
   if (tour.isPending) return <StaffPage><LoadingPanel /></StaffPage>
-  if (tour.isError) return <StaffPage><ErrorPanel error={tour.error} onRetry={() => void tour.refetch()} /></StaffPage>
+  // A failed poll keeps the last answer on screen (marked old below); only a failed first load has nothing to show.
+  if (!tour.data) return <StaffPage><ErrorPanel error={tour.error} onRetry={() => void tour.refetch()} /></StaffPage>
   const detail = tour.data
   const { tour: summary, reservation, operator } = detail
   const header = <>
@@ -82,12 +85,15 @@ export default function StartCheckPage() {
   const counted = result?.checks.filter(check => checkVerdict(check, blockedBy) !== 'info') ?? []
   const passed = counted.filter(check => check.passed).length
   const confirmed = CONFIRMATIONS.every(({ key }) => confirmation[key])
-  const canStart = Boolean(result?.canStart) && confirmed
+  // Start is decided on what the screen shows, so it waits while the checks or the Tour are out of date.
+  const stale = Boolean(result) && (isTourStale(checks, now) || isTourStale(tour, now))
+  const canStart = Boolean(result?.canStart) && confirmed && !stale
   const notOperator = blockedBy.includes('callerIsOperator')
   const systemClosed = result?.checks.some(check => (SYSTEM_GATES as readonly string[]).includes(check.id) && !check.passed) ?? false
   const verdict = result ? verdictOf(result, confirmed) : null
   const refusal = start.isError ? operationRefusal(start.error, { operator: true }) : null
   const reason = !result ? null
+    : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
     : notOperator ? `Chỉ ${operator?.fullName ?? 'người vận hành được giao'} mới bắt đầu được Tour này.`
     : !result.canStart ? 'Nút mở khi mọi nguyên nhân bên trái được xử lý.'
     : !confirmed ? 'Đánh dấu đủ 4 xác nhận tại chỗ.'
@@ -100,6 +106,8 @@ export default function StartCheckPage() {
         <div className="min-w-0 space-y-4">
           {!result ? <section className={`${panelClass} p-4`}>{checks.isError ? <ErrorPanel error={checks.error} onRetry={() => void checks.refetch()} /> : <LoadingPanel label="Đang tải điều kiện bắt đầu…" />}</section>
             : <>
+              {stale && <p role="alert" className="flex items-start gap-2 rounded-xl border border-[#f1dcb0] bg-[#fffaf0] px-4 py-3 text-[13px] leading-5 font-semibold text-[#7d5310]">
+                <WifiOff size={16} className="mt-0.5 shrink-0" aria-hidden="true" />Không cập nhật được điều kiện từ máy chủ. Kết quả dưới đây có thể đã cũ, nên Bắt đầu tạm khóa.</p>}
               <section className={panelClass} aria-label="Kết luận">
                 {verdict && (() => {
                   const style = VERDICT_STYLE[verdict.tone]
