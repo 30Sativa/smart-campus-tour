@@ -9,17 +9,17 @@ interface Student2DMapProps {
   robotPose?: StudentRobotPose | null
 }
 
-/** Landing "night ops" palette: blue-black ground, cyan route and current stop, white next stop. */
+/** The map uses the same campus palette as the invited viewer workspace. */
 const C = {
-  ground: '#071116',
-  grid: 'rgba(52, 211, 239, 0.07)',
-  building: '#0e1c23',
-  buildingLine: '#1f3844',
-  label: '#8fa6ae',
-  accent: '#34d3ef',
-  next: '#e7eef1',
-  white: '#ffffff',
-  water: '#0b232b',
+  ground: 'var(--st-stage)',
+  grid: 'var(--st-stage-control)',
+  building: 'var(--st-stage-label)',
+  buildingLine: 'var(--st-stage-control)',
+  label: 'var(--st-stage-secondary)',
+  accent: 'var(--st-primary)',
+  next: 'var(--st-stage-ink)',
+  white: 'var(--st-stage-ink)',
+  water: 'var(--st-stage-label)',
 }
 
 export function Student2DMap({
@@ -74,8 +74,8 @@ export function Student2DMap({
           <rect width="1000" height="700" fill="url(#campus-grid)" />
 
           {/* Khu Công viên / Hồ trung tâm */}
-          <path d="M 380 280 C 450 260, 560 300, 540 400 C 510 480, 420 460, 370 420 Z" fill={C.water} stroke="#17414c" strokeWidth="1.5" />
-          <text x="455" y="370" fill="#5f98a6" fontSize="13" textAnchor="middle">Hồ Sen Sinh Thái</text>
+          <path d="M 380 280 C 450 260, 560 300, 540 400 C 510 480, 420 460, 370 420 Z" fill={C.water} stroke={C.buildingLine} strokeWidth="1.5" />
+          <text x="455" y="370" fill={C.label} fontSize="13" textAnchor="middle">Hồ Sen Sinh Thái</text>
 
           <rect x="80" y="350" width="160" height="110" rx="8" fill={C.building} stroke={C.buildingLine} strokeWidth="2" />
           <text x="160" y="410" fill={C.label} fontSize="13" textAnchor="middle">Giảng Đường A</text>
@@ -106,14 +106,14 @@ export function Student2DMap({
                   cx={px}
                   cy={py}
                   r="15"
-                  fill={isCurrent ? C.accent : isNext ? C.next : '#0b1519'}
-                  stroke={isCurrent ? C.accent : isNext ? C.next : '#35505b'}
+                  fill={isCurrent ? C.accent : isNext ? C.next : C.ground}
+                  stroke={isCurrent ? C.accent : isNext ? C.next : C.buildingLine}
                   strokeWidth="2"
                 />
-                <text x={px} y={py + 4.5} fill={isCurrent || isNext ? '#0b1519' : C.white} fontSize="12" fontWeight="600" textAnchor="middle">
+                <text x={px} y={py + 4.5} fill={isCurrent || isNext ? C.ground : C.white} fontSize="12" fontWeight="600" textAnchor="middle">
                   {poi.order}
                 </text>
-                <text x={px} y={py + 34} fill={isCurrent ? C.accent : '#c9d6db'} fontSize="13" fontWeight={isCurrent ? 600 : 400} textAnchor="middle">
+                <text x={px} y={py + 34} fill={isCurrent ? C.accent : C.label} fontSize="13" fontWeight={isCurrent ? 600 : 400} textAnchor="middle">
                   {poi.title}
                 </text>
               </g>
@@ -128,8 +128,8 @@ export function Student2DMap({
               <line x1="0" y1="0" x2="0" y2="-36" stroke={C.accent} strokeWidth="2.5" strokeLinecap="round" />
             </g>
             <circle cx="0" cy="0" r="13" fill={C.white} stroke={C.accent} strokeWidth="3" />
-            <circle cx="0" cy="0" r="4.5" fill="#0b1519" />
-            <text x="0" y="28" fill={C.white} fontSize="11" fontFamily="ui-monospace, monospace" textAnchor="middle">
+            <circle cx="0" cy="0" r="4.5" fill={C.ground} />
+            <text x="0" y="28" fill={C.white} fontSize="12" textAnchor="middle">
               ROBOT AMR
             </text>
           </g>}
@@ -138,12 +138,12 @@ export function Student2DMap({
 
       <div className="st-map__foot">
         <div className="st-legend">
-          <span><i style={{ background: '#34d3ef' }} />Điểm hiện tại</span>
-          <span><i style={{ background: '#e7eef1' }} />Điểm kế tiếp</span>
-          <span><i style={{ background: '#fff', boxShadow: '0 0 0 2px #34d3ef' }} />Robot AMR</span>
+          <span><i className="st-legend__current" />Điểm hiện tại</span>
+          <span><i className="st-legend__next" />Điểm kế tiếp</span>
+          <span><i className="st-legend__robot" />Robot AMR</span>
           <span><i className="st-legend__route" />Tuyến đường</span>
         </div>
-        <span className="st-mono" style={{ fontSize: 10 }}>Tọa độ thực từ ROS 2 Nav2</span>
+        <span className="st-mono">Tọa độ thực từ ROS 2 Nav2</span>
       </div>
     </div>
   )

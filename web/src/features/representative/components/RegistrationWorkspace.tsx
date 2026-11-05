@@ -48,7 +48,7 @@ export function RegistrationWorkspace({ registrationId, children }: { registrati
           </form>
         </div>
         {query.isPending ? <p aria-busy="true">Đang tải đăng ký…</p> : query.error ? <ErrorState title="Không tải được đăng ký" message={readRepError(query.error).message} onRetry={() => void query.refetch()} /> : !query.data?.data.length ? <EmptyState title="Không có đăng ký phù hợp" description="Thử đổi nhóm hoặc từ khóa tìm kiếm." /> : <>
-          <div>{query.data.data.map(item => <Link key={item.id} to={registrationUrl(item.id, params)} className={`rep-record ${item.id === selected ? 'rep-record--selected' : ''}`} aria-current={item.id === selected ? 'page' : undefined}>
+          <div className="rep-record-list">{query.data.data.map(item => <Link key={item.id} to={registrationUrl(item.id, params)} className={`rep-record ${item.id === selected ? 'rep-record--selected' : ''}`} aria-current={item.id === selected ? 'page' : undefined}>
             <strong className="rep-record-title">{item.tourName}</strong><span>{item.groupName}</span><RegistrationStatusBadge state={item.state} />
             <span className="rep-record-meta">{isClosedRegistration(item) ? closedNote(item).reason : formatDateTime(item.tourScheduledStartAt)}</span>
           </Link>)}</div>

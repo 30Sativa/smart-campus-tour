@@ -140,7 +140,8 @@ export function StudentVideoPlayer({
         <video
           src={streamUrl}
           aria-label="Video dự phòng"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          poster="/images/student-campus.png"
+          className="st-video__fallback"
           loop
           playsInline
           autoPlay

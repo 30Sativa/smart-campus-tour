@@ -1,0 +1,33 @@
+{
+  "mode": "in-thread",
+  "verdict": "ship",
+  "scope": "app",
+  "findings": [
+    {
+      "finding": "Phone header crowding at 320px",
+      "status": "resolved",
+      "fix": "Wrap the status next to the wordmark and keep title ellipsis; retain accessible exit label."
+    },
+    {
+      "finding": "Long audio-test label",
+      "status": "resolved",
+      "fix": "Shortened to Nghe thử âm thanh; preserve the test handler and ready/pending states."
+    },
+    {
+      "finding": "AI updates move the entire document",
+      "status": "resolved",
+      "fix": "Scroll only the message viewport and constrain the desktop panel to the video column height; reduced-motion respected."
+    }
+  ],
+  "theme_gap": "none: same forest/lime palette, type, controls and card spacing as the approved Representative UI",
+  "old_page_did_better": "The old camera was wider because its container was wider; the requested shared container deliberately trades that width for consistent gutters and readable controls.",
+  "material_slots": [],
+  "material_note": "No new photographs or statistics required. Existing video poster retained. Real stream availability needs an authorized Tour; visual checks use isolated fixtures.",
+  "copy_notes": [
+    "Metadata separators become commas",
+    "Live label is Vietnamese",
+    "Audio test button shortened",
+    "AI typing punctuation normalized; fallback badge verbatim"
+  ],
+  "checks": "Hallmark kept-record confirms original links, fields, handlers, headings and figures. Original tests were not modified."
+}

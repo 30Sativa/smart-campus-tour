@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-05",
+  "verification": "bash scripts/verify web: PASS",
+  "testFiles": 97,
+  "tests": 713,
+  "studentTests": 47,
+  "hallmark": {
+    "floorFailures": 0,
+    "reflexFindings": 0,
+    "warnings": 0,
+    "answered": 5,
+    "dismissed": 4,
+    "kept": "2/2 links, 2/2 fields, 23/23 handlers, 2/2 headings, 1/1 figures"
+  },
+  "visual": "Isolated fixture checks passed for entry, waiting, live, completed, cancelled, shared AI privacy, entry error, keyboard tabs, AI draft retention, 320px and dark mode.",
+  "runtime": "Existing real invitation/session/video/AI APIs retained; camera availability not tested by these fixtures.",
+  "latestRevision": "Journey above the video, labelled stop states, tactile button feedback and sliding tab selection. Layout, dark mode and reduced-motion verified."
+}

@@ -103,6 +103,19 @@ beforeEach(() => {
 afterEach(() => { clients.forEach(c => c.clear()); useAuthStore.getState().logout(); vi.unstubAllGlobals() })
 
 describe('Representative real HTTP contract', () => {
+  it('opens navigation, closes it with Escape and restores the menu button focus', async () => {
+    renderAt('/dai-dien')
+    const opener = screen.getByRole('button', { name: 'Mở menu' })
+    opener.focus()
+    fireEvent.click(opener)
+    const navigation = screen.getByRole('navigation', { name: 'Điều hướng đại diện trường' })
+    expect(opener).toHaveAttribute('aria-expanded', 'true')
+    expect(navigation).toHaveFocus()
+    fireEvent.keyDown(navigation, { key: 'Escape' })
+    expect(opener).toHaveAttribute('aria-expanded', 'false')
+    expect(opener).toHaveFocus()
+    await screen.findByRole('heading', { name: 'Buổi đang nhận đăng ký' })
+  })
   it('filters active and closed registrations; selecting an ended record retains its reason without actionable resubmission', async () => {
     closedRegistrations = [{ ...initial.summary, id: 'old', groupName: 'Đoàn đã chốt', tourName: 'Buổi đã chốt', state: 'REJECTED', tourState: 'READY',
       rejectionReason: 'Danh sách thiếu lớp.', reviewedAt: initial.summary.updatedAt }]

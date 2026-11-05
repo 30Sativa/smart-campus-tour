@@ -91,19 +91,12 @@ export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, sh
       <div className="st-x-wait__grid">
         <section className="st-x-card st-x-count">
           <Countdown scheduledAt={snapshot.scheduledAt} />
-          <svg className="st-x-bot" width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">
-            <rect x="12" y="22" width="40" height="28" rx="10" fill="currentColor" />
-            <rect x="18" y="29" width="28" height="12" rx="6" fill="#13261d" />
-            <circle cx="26" cy="35" r="2.6" fill="#d6f18d" /><circle cx="38" cy="35" r="2.6" fill="#d6f18d" />
-            <path d="M32 22v-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            <circle cx="32" cy="11" r="4" fill="#f4b860" />
-          </svg>
-          <span className="st-pill-status"><i />Đang chờ bắt đầu</span>
+          <span className="st-pill-status"><Clock size={14} aria-hidden="true" />Đang chờ bắt đầu</span>
           <h3>{heading ?? `Xin chào, ${session?.studentName ?? 'bạn'}!`}</h3>
           <p>
             {intro ?? `Bạn đã được xác nhận vào phòng chờ của đoàn ${session?.groupCode ?? ''}. Khi người điều hành nhấn bắt đầu, màn hình sẽ tự chuyển sang hình trực tiếp từ robot.`}
           </p>
-          <p className="st-x-meta"><Clock size={14} /><span>{meta ?? `${snapshot.schoolName} • Giờ dự kiến ${snapshot.scheduledAt}`}</span></p>
+          <p className="st-x-meta"><Clock size={14} /><span>{meta ?? `${snapshot.schoolName}, Giờ dự kiến ${snapshot.scheduledAt}`}</span></p>
           {children}
         </section>
 
@@ -120,7 +113,7 @@ export function StudentWaitingRoom({ session, snapshot, heading, intro, meta, sh
                 {isPlayingTestAudio ? 'Đang phát...' : audioTested ? (
                   <><CheckCircle2 size={14} className="st-ok" /><span>Âm thanh sẵn sàng</span></>
                 ) : (
-                  <><VolumeX size={14} /><span>Bấm để nghe thử âm thanh</span></>
+                  <><VolumeX size={14} /><span>Nghe thử âm thanh</span></>
                 )}
               </button>
             </div>
@@ -171,9 +164,7 @@ function scheduledTime(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-const RING_WINDOW_MS = 60 * 60 * 1000
-
-/** Count-down ring to the scheduled start; the ring empties over the last hour. */
+/** Countdown to the scheduled start, displayed as a quiet text figure. */
 function Countdown({ scheduledAt }: { scheduledAt: string }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -187,13 +178,8 @@ function Countdown({ scheduledAt }: { scheduledAt: string }) {
     : left === 0 ? 'Sắp bắt đầu'
     : left >= 3_600_000 ? `${Math.floor(left / 3_600_000)}:${pad(Math.floor((left % 3_600_000) / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
     : `${pad(Math.floor(left / 60_000))}:${pad(Math.floor((left % 60_000) / 1000))}`
-  const fill = left == null ? 1 : 1 - Math.min(1, left / RING_WINDOW_MS)
   return (
     <div className="st-x-ring" role="timer" aria-label={left == null ? `Giờ dự kiến ${scheduledAt}` : `Còn ${label} tới giờ bắt đầu`}>
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="50" r="44" className="st-x-ring__track" />
-        <circle cx="50" cy="50" r="44" className="st-x-ring__arc" pathLength={100} strokeDasharray="100" strokeDashoffset={100 - fill * 100} />
-      </svg>
       <span className="st-x-ring__c">
         <b>{label}</b>
         <span>{left == null ? 'Giờ dự kiến' : left === 0 ? 'Chờ Staff bắt đầu' : 'Bắt đầu sau'}</span>

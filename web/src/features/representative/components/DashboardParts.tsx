@@ -4,29 +4,29 @@ import { repButton } from '../rep-classes'
 import { formatDateTime, groupLabel } from '../rep-format'
 import { Callout, ErrorState, RegistrationStatusBadge, RepPageHeader } from './RepUi'
 
-/** The overview starts with the next useful task and its current server state. */
+export function RepOverviewHeader() {
+  return <RepPageHeader title="Tổng quan" description="Theo dõi đăng ký và chuẩn bị lời mời cho buổi tham quan."
+    action={<Link to="/dai-dien/buoi" className={repButton('primary')}>Xem buổi tham quan</Link>} />
+}
+
+/** Keep the next registered visit and incomplete-query states visible on the overview. */
 export function RepHero({ next, loading = false, error, onRetry }: {
   next: RegistrationSummary | null; loading?: boolean; error?: string; onRetry?: () => void
 }) {
-  return <>
-    <RepPageHeader title="Tổng quan" description="Theo dõi đăng ký và chuẩn bị lời mời cho buổi tham quan."
-      action={<Link to="/dai-dien/buoi" className={repButton('primary')}>Xem buổi tham quan</Link>} />
-    <section className="rep-section" aria-labelledby="rep-next-title">
-      <div className="rep-section-head"><h2 id="rep-next-title">Buổi sắp tới gần nhất</h2></div>
-      {loading ? <p role="status" aria-busy="true" className="rep-hint">Đang kiểm tra lịch tham quan của bạn…</p>
-        : error ? <ErrorState title="Chưa xác định được buổi sắp tới" message={error} onRetry={onRetry} />
-        : next ? <div className="rep-list-row">
-          <div className="rep-stack rep-next-summary">
-            <h3>{next.tourName}</h3>
-            <p>{formatDateTime(next.tourScheduledStartAt)}</p>
-            <p className="rep-muted">{groupLabel(next) ?? next.schoolName}</p>
-            <RegistrationStatusBadge state={next.state} />
-          </div>
-          <Link to={`/dai-dien/dang-ky/${next.id}`} className={repButton('secondary')}>Xem đăng ký sắp tới</Link>
+  return <section className="rep-section rep-card rep-next-card" aria-labelledby="rep-next-title">
+    <div className="rep-section-head"><h2 id="rep-next-title">Buổi sắp tới gần nhất</h2></div>
+    {loading ? <p role="status" aria-busy="true" className="rep-hint">Đang kiểm tra lịch tham quan của bạn…</p>
+      : error ? <ErrorState title="Chưa xác định được buổi sắp tới" message={error} onRetry={onRetry} />
+      : next ? <div className="rep-list-row">
+        <div className="rep-stack rep-next-summary">
+          <h3>{next.tourName}</h3>
+          <p className="rep-reg-meta"><span className="num">{formatDateTime(next.tourScheduledStartAt)}</span><span>{groupLabel(next) ?? next.schoolName}</span></p>
+          <RegistrationStatusBadge state={next.state} />
         </div>
-          : <p className="rep-hint">Chưa có đăng ký chờ duyệt hoặc đã duyệt cho một buổi tham quan sắp tới.</p>}
-    </section>
-  </>
+        <Link to={`/dai-dien/dang-ky/${next.id}`} className={repButton('secondary', 'sm')}>Xem đăng ký sắp tới</Link>
+      </div>
+        : <p className="rep-hint">Chưa có đăng ký chờ duyệt hoặc đã duyệt cho một buổi tham quan sắp tới.</p>}
+  </section>
 }
 
 export function RepAttention({ registration }: { registration: RegistrationSummary }) {

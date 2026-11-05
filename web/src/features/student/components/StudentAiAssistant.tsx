@@ -55,7 +55,8 @@ export function AiChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
+    const viewport = messagesEndRef.current?.parentElement
+    viewport?.scrollTo?.({ top: viewport.scrollHeight, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
   }, [messages, isTyping])
 
   const handleSend = () => {
@@ -130,7 +131,7 @@ export function AiChatPanel({
                   <span>Trợ lý AI</span>
                   {msg.poiName && <span>Trả lời về: {msg.poiName}</span>}
                   {msg.isAudioPlaying && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span className="st-bubble__audio">
                       <Volume2 size={12} />
                       Đang đọc câu trả lời
                     </span>
@@ -156,7 +157,7 @@ export function AiChatPanel({
         {isTyping && (
           <div className="st-msg st-msg--ai">
             <div className="st-bubble">
-              <span className="st-typing"><i /><i /><i /><span>AI đang tra cứu...</span></span>
+              <span className="st-typing"><i /><i /><i /><span>AI đang tra cứu…</span></span>
             </div>
           </div>
         )}

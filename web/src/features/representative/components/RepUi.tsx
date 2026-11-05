@@ -22,10 +22,10 @@ export function RepPageHeader({ back, title, description, badges, action }: {
   </>
 }
 
-export function RepSection({ title, action, children, id }: { kicker?: string; title: string; action?: ReactNode; children: ReactNode; id?: string }) {
+export function RepSection({ title, action, children, id, className = '' }: { kicker?: string; title: string; action?: ReactNode; children: ReactNode; id?: string; className?: string }) {
   const autoId = useId()
   const headingId = id ?? autoId
-  return <section className="rep-section" aria-labelledby={headingId}><div className="rep-section-head"><h2 id={headingId}>{title}</h2>{action}</div>{children}</section>
+  return <section className={`rep-section${className ? ` ${className}` : ''}`} aria-labelledby={headingId}><div className="rep-section-head"><h2 id={headingId}>{title}</h2>{action}</div>{children}</section>
 }
 
 export function Panel({ title, action, children, className = '', padded = true, id }: {

@@ -1,0 +1,22 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · scope: app · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, match the approved Representative system deliberately */
+@import url('../representative/tokens.css');
+:root {
+  --st-font: var(--rep-font);
+  --st-bg: var(--rep-bg); --st-paper: var(--rep-surface); --st-sunk: var(--rep-sunk); --st-selected: var(--rep-sunk-2);
+  --st-ink: var(--rep-ink); --st-secondary: var(--rep-ink-2); --st-muted: var(--rep-ink-3);
+  --st-line: var(--rep-line); --st-field-line: var(--rep-line-2);
+  --st-primary: var(--rep-accent); --st-primary-hover: var(--rep-accent-hover); --st-primary-ink: var(--rep-accent-ink);
+  --st-focus: var(--rep-focus); --st-green: var(--rep-green);
+  --st-success: var(--rep-ok); --st-success-bg: var(--rep-ok-bg); --st-warning: var(--rep-warn); --st-warning-bg: var(--rep-warn-bg);
+  --st-danger: var(--rep-bad); --st-danger-bg: var(--rep-bad-bg); --st-info: var(--rep-info); --st-info-bg: var(--rep-info-bg);
+  --st-stage: #102d31; --st-stage-ink: #edf6ef; --st-stage-secondary: #c0d3c9;
+  --st-stage-overlay: rgb(9 28 31 / .86); --st-stage-control: rgb(237 246 239 / .14);
+  --st-stage-label: rgb(9 28 31 / .8); --st-clear: transparent;
+  --st-font-xs: var(--rep-text-xs); --st-font-sm: var(--rep-text-sm); --st-font-md: var(--rep-text-md);
+  --st-font-lg: var(--rep-text-lg); --st-font-xl: var(--rep-text-xl); --st-font-title: var(--rep-text-2xl);
+  --st-radius: var(--rep-radius); --st-card-radius: var(--rep-radius-card); --st-shadow: var(--rep-card-shadow);
+  --st-gap: var(--rep-space-lg); --st-small-gap: var(--rep-space-md); --st-container: var(--rep-container);
+  --st-ease: var(--rep-ease); --st-duration: var(--rep-duration);
+  --st-duration-short: 220ms; --st-button-shadow: 0 3px 8px var(--rep-shadow);
+}
