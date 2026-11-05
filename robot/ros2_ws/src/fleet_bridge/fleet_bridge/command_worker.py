@@ -59,8 +59,14 @@ class FleetCommandWorker:
                 return
 
     def run_once(self) -> bool:
-        """Results first: a finished leg must be heard before more work arrives."""
-        return self._flush_results() and self._poll()
+        """Results first, then always poll: a result the backend cannot take yet must never keep a Cancel away.
+
+        A new GoTo polled meanwhile still meets the executor's rules (BUSY while a leg runs or the buffer is full).
+        Healthy only when both succeeded, so a failing result post still backs off.
+        """
+        flushed = self._flush_results()
+        polled = self._poll()
+        return flushed and polled
 
     def _flush_results(self) -> bool:
         while (result := self.executor.next_result()) is not None:

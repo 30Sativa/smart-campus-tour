@@ -309,6 +309,42 @@ class WorkerTests(unittest.TestCase):
         worker.run_once()
         self.assertEqual(['result', 'poll'], order)
 
+    def test_a_failing_result_post_does_not_keep_a_cancel_away(self):
+        for failure in (TransportFailure('URLError'), OSError('reset'), HttpResponse(500, None),
+                        HttpResponse(503, {'errors': {'code': 'COMMAND_TRANSPORT_DISABLED'}})):
+            transport = ScriptedTransport(polls=[HttpResponse(200, fixture('poll-response-cancel.json'))], results=[failure])
+            worker, executor, navigator = self.worker(transport)
+            executor.handle(goto(), STREAM)
+            navigator.on_response(True, None)  # the ACCEPTED result is the one that cannot be posted
+            self.assertFalse(worker.run_once(), failure)
+            self.assertEqual(1, len(transport.posted), failure)
+            self.assertEqual({'streamId': STREAM}, transport.last_poll, failure)
+            self.assertEqual(1, navigator.cancels, failure)
+            pending = results(executor)
+            self.assertEqual([(goto().command_id, 'ACCEPTED'), ('9e8d7c6b-5a49-4382-a1b0-c9d8e7f6a502', 'ACCEPTED')],
+                             [(r['commandId'], r['phase']) for r in pending], failure)
+
+    def test_a_failing_result_post_still_refuses_a_new_goto_while_busy(self):
+        other = fixture('poll-response-goto.json')
+        other['data']['command'].update(commandId='22222222-2222-4222-8222-222222222222', legId='11111111-1111-4111-8111-111111111111')
+        transport = ScriptedTransport(polls=[HttpResponse(200, other)], results=[HttpResponse(502, None)])
+        worker, executor, navigator = self.worker(transport)
+        executor.handle(goto(), STREAM)
+        navigator.on_response(True, None)
+        self.assertFalse(worker.run_once())
+        self.assertEqual(1, len(navigator.goals))
+        self.assertEqual(0, navigator.cancels)
+        self.assertEqual([('ACCEPTED', None), ('REJECTED', 'BUSY')], [(r['phase'], r['reason']) for r in results(executor)])
+
+    def test_health_needs_both_the_results_and_the_poll(self):
+        worker, executor, navigator = self.worker(ScriptedTransport(results=[TransportFailure('URLError')]))
+        executor.handle(goto(), STREAM)
+        navigator.on_response(True, None)
+        self.assertFalse(worker.run_once())  # poll answered, results did not
+        self.assertTrue(worker.run_once())   # the result went through on the next round
+        worker, _, _ = self.worker(ScriptedTransport(polls=[TransportFailure('URLError')]))
+        self.assertFalse(worker.run_once())  # nothing to flush, poll failed
+
     def test_disabled_builds_nothing_and_touches_no_transport(self):
         def forbidden():
             raise AssertionError('commands_enabled=false must not build the command path')

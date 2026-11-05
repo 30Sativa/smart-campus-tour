@@ -37,6 +37,12 @@ kept in order, in memory, until the backend answers `200` or a definitive `4xx`;
 errors, `5xx`, `401` and `503` keep them. The buffer holds 32: past that an `ACCEPTED` may be
 dropped with a log line, a `TERMINAL` never, and new GoTos are refused with `BUSY`.
 
+Each round posts the kept results first and then always polls, even when a result post
+failed, so a result the backend cannot take yet never keeps a Cancel from arriving. A GoTo
+polled in that round still meets the rules above (`BUSY` while a leg runs or the buffer is
+full). The round counts as healthy only when both the results and the poll succeeded;
+otherwise the next round backs off.
+
 **Operating rule:** while `commands_enabled` is true, do not run `route_test.py` or send
 goals from RViz. One goal sender per robot (`docs/architecture.md` §3.5). Nothing enforces
 this yet; enforcement is M2.3.
