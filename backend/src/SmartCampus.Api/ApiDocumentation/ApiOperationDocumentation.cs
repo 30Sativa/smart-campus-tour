@@ -126,6 +126,10 @@ internal static class ApiOperationDocumentation
             ["StudentTourController.View"] = ("[Viewer] Xem nội dung tour và tiến độ", "Returns route/progress information for `tourId` after validating its Viewer session cookie. No account or bearer JWT is used. Missing, expired or revoked session is rejected; response is not cached."),
             ["StudentQuestionsController.Ask"] = ("[Viewer] Gửi câu hỏi riêng trong tour", "Answers a question for `tourId` using the Viewer session cookie. Body includes `questionId`, `text` and optional recent turns; access and current per-session limits are enforced server-side. Invalid request/session returns 400/401/403; rate limits may return 429. This does not imply the future instance-wide 8/20 admission target is implemented."),
             ["SimulationController.Publish"] = ("[Development] Gửi pose mô phỏng", "Publishes a pose to the development SimulationPreview projection. This endpoint is excluded from OpenAPI unless SimulationPreview is enabled. It is not a production robot control or Fleet Sync endpoint."),
+            ["AdminInfrastructureController.GetHealth"] = ("[Admin] Giám sát hạ tầng máy chủ và EC2", "Returns live server and backend host metrics: CPU, RAM, disk, network, process runtime, database availability and ping latency, Docker container health, and last backup status. Supports independent data availability: partial failures do not prevent other available metrics from being returned. Requires Admin role. " + JwtErrors),
+            ["TechnicalDashboardController.GetDashboard"] = ("[Technical Staff] Tổng quan kỹ thuật và trạng thái đội robot", "Returns aggregated technical KPIs, active queues (held robots needing on-site release inspection, pending POI verifications, route test queues), and physical robot operational status. Requires TechnicalStaff role. " + JwtErrors),
+            ["TechnicalDashboardController.GetRobotDiagnostics"] = ("[Technical Staff] Chi tiết chẩn đoán robot và Mini PC", "Returns comprehensive technical diagnostics for one physical robot: connection status, telemetry facts, Mini PC system resources (CPU, RAM, GPU, disk, temperature), ROS 2 node health, and sensor diagnostics (LiDAR, IMU, Odometry, Camera). Missing or unsupported metrics are reported as UNAVAILABLE or N/A. Requires TechnicalStaff role. " + JwtErrors),
+            ["FleetDiagnosticsController.ReportDiagnostics"] = ("[Robot] Báo cáo chẩn đoán phần cứng và ROS 2", "Ingests periodic hardware, ROS 2 node, and sensor health diagnostics from an authenticated physical robot. Uses FleetRobot authentication scheme. Telemetry age and metric bounds are validated. " + JwtErrors),
         };
 
     public static bool TryGet(ActionDescriptor descriptor, string? relativePath, out ApiOperationDetails details)
@@ -206,6 +210,9 @@ internal static class ApiOperationDocumentation
         if (controller == "StaffTours")
             return ("Tour Staff — Quản lý Tour", summary, description);
         if (controller == "StaffRegistrations") return ("Tour Staff — Registration Review", summary, description);
+        if (controller == "AdminInfrastructure") return ("Administration — Infrastructure", summary, description);
+        if (controller == "TechnicalDashboard") return ("Technical Staff — Dashboard & Diagnostics", summary, description);
+        if (controller == "FleetDiagnostics") return ("Robot — Fleet Diagnostics", summary, description);
         if (controller == "Auth") return ("Authentication", summary, description);
         if (controller == "FleetSync") return ("Robot — Fleet Sync (telemetry only)", summary, description);
         if (controller == "Invitations") return ("Invitations — Staff / Representative", summary, description);
