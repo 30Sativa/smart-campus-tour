@@ -15,7 +15,8 @@ public sealed record RouteRunRequest(
     string ResultCode, bool AllStopsReached, bool SafelyStopped, bool LocalizationPassed,
     int MeasuredDurationSeconds, string? FailureReason, string EvidenceNote);
 
-public sealed record RouteRevisionStopView(Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
+/// <summary>One stop of a revision. <c>Id</c> is the <c>RouteRevisionStops.Id</c> that a Tour's execution stop ids name.</summary>
+public sealed record RouteRevisionStopView(Guid Id, Guid PoiRevisionId, Guid SourcePoiVerificationRecordId,
     int StopOrder, int DwellSeconds, IReadOnlyList<RouteHeadStep> HeadSteps,
     string Name, decimal X, decimal Y, decimal Yaw, string CameraPreset,
     string? NarrationText = null, string? FallbackVideoUrl = null);

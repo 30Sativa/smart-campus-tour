@@ -320,6 +320,8 @@ public sealed class SchemaV11Tests
         Assert.Contains(await sender.Send(new ListRouteTestParticipantsQuery()), person => person.UserId == participatingStaffId);
         Assert.Equal(map.PackageSha256, draft1.MapPackageSha256);
         Assert.Equal("Nội dung thuyết minh", Assert.Single(draft1.Stops).NarrationText);
+        Assert.Equal(await db.ScalarAsync<Guid>($"SELECT Id FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId:D}';"),
+            draft1.Stops[0].Id);
         Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}';"));
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId, draft1.RevisionId,
             new(Guid.NewGuid(), 1)));

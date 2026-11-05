@@ -197,6 +197,50 @@ describe('live console on the real Tour API', () => {
     expect(screen.queryByText(/Chưa có trên hệ thống/)).not.toBeInTheDocument()
   })
 
+  describe('route stops', () => {
+    const stops = [
+      { ...STOP, id: 'RRS-1' },
+      { ...STOP, id: 'rrs-2', poiRevisionId: 'poi-rev-2', stopOrder: 2, name: 'Sảnh A' },
+      { ...STOP, id: 'rrs-3', poiRevisionId: 'poi-rev-3', stopOrder: 3, name: 'Phòng Lab' },
+    ]
+    const withStops = (value: TourDetails, list: object[] = stops): TourDetails =>
+      ({ ...value, routeRevision: { ...REVISION, stops: list } as unknown as TourDetails['routeRevision'] })
+    const stopRow = async (name: RegExp) =>
+      (await within(await screen.findByRole('region', { name: 'Tuyến của Tour' })).findByText(name)).closest('li') as HTMLElement
+
+    it('marks the stop the robot is heading to and the last one reached, from the Tour state', async () => {
+      tour = withStops(running({ currentRevisionStopId: 'rrs-2', lastArrivedRevisionStopId: 'rrs-1' }))
+      renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+      expect(within(await stopRow(/Sảnh A/)).getByText('Robot đang tới')).toBeInTheDocument()
+      expect(await stopRow(/Sảnh A/)).toHaveAttribute('aria-current', 'step')
+      expect(within(await stopRow(/Thư viện/)).getByText('Đã tới')).toBeInTheDocument()
+      expect(within(await stopRow(/Phòng Lab/)).queryByText(/Robot đang tới|Đã tới|Đang dừng/)).not.toBeInTheDocument()
+      expect(screen.getByText(/theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo/)).toBeInTheDocument()
+    })
+
+    it('says the robot is stopped at the stop it is observing', async () => {
+      tour = withStops(running({ currentStep: 'OBSERVING', currentRevisionStopId: 'rrs-2', lastArrivedRevisionStopId: 'rrs-2', command: null }))
+      renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+      const row = await stopRow(/Sảnh A/)
+      expect(within(row).getByText('Đang dừng tại đây')).toBeInTheDocument()
+      expect(within(row).queryByText('Đã tới')).not.toBeInTheDocument()
+    })
+
+    it('marks nothing on an ended Tour or for an older server without stop ids', async () => {
+      tour = withStops(running({ currentRevisionStopId: 'rrs-2', lastArrivedRevisionStopId: 'rrs-1' }, {}, 'COMPLETED'))
+      const { unmount } = renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+      await stopRow(/Sảnh A/)
+      expect(within(screen.getByRole('region', { name: 'Tuyến của Tour' })).queryAllByText(/Robot đang tới|Đã tới|Đang dừng tại đây/)).toHaveLength(0)
+      unmount()
+
+      tour = withStops(running({ currentRevisionStopId: 'rrs-2', lastArrivedRevisionStopId: 'rrs-1' }), stops.map(stop => ({ ...stop, id: undefined })))
+      renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)
+      await stopRow(/Sảnh A/)
+      expect(within(screen.getByRole('region', { name: 'Tuyến của Tour' })).queryAllByText(/Robot đang tới|Đã tới|Đang dừng tại đây/)).toHaveLength(0)
+      expect(screen.queryByText(/không phải vị trí robot tự báo/)).not.toBeInTheDocument()
+    })
+  })
+
   it('sends Next with the row version once the server allows it at a stop', async () => {
     tour = running({ currentStep: 'OBSERVING', dwellDeadlineAt: '2026-11-04T02:10:00Z', command: { id: 'cmd-1', kind: 'GoTo', state: 'ARRIVED', outcome: 'ARRIVED', reasonCode: null } }, { next: allow })
     renderAt('/staff/live/tour-1', '/staff/live/:tourId', <LiveOperationsPage />)

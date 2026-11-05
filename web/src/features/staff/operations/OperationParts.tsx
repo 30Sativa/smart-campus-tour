@@ -124,20 +124,51 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
   )
 }
 
-/** The revision's stops in order. The current stop is not marked: see `TourExecution.currentRevisionStopId`. */
+type StopMark = { label: string; tone: StatusTone }
+const sameId = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
+
+/**
+ * What the server's Tour state says about one stop, or null. Only a RUNNING
+ * Tour is marked: an ended Tour keeps its last stop ids, which would look
+ * current. A stop without `id` (an older server) is never marked.
+ */
+function stopMark(detail: TourDetails, stopId: string | undefined): StopMark | null {
+  const execution = detail.execution
+  if (detail.tour.state !== 'RUNNING' || !execution || !stopId) return null
+  if (sameId(stopId, execution.currentRevisionStopId)) {
+    if (execution.currentStep === 'NAVIGATING') return { label: 'Robot đang tới', tone: 'info' }
+    if (execution.currentStep === 'OBSERVING') return { label: 'Đang dừng tại đây', tone: 'ok' }
+  }
+  return sameId(stopId, execution.lastArrivedRevisionStopId) ? { label: 'Đã tới', tone: 'muted' } : null
+}
+
+/** The revision's stops in order, marked from the Tour's execution stop ids while it runs. */
 export function RouteStopList({ detail }: { detail: TourDetails }) {
   const revision = detail.routeRevision
   if (!revision) return <p className="text-[13px] text-[#64748b]">Tour này không chạy trên một phiên bản tuyến đã kiểm chứng.</p>
+  const marks = revision.stops.map(stop => stopMark(detail, stop.id))
+  const returning = detail.tour.state === 'RUNNING' && detail.execution?.currentStep === 'RETURNING_TO_END'
+  const marked = returning || marks.some(Boolean)
   return (
     <div>
       <ol className="divide-y divide-[#f1f5f9]">
-        {revision.stops.map(stop => <li key={`${stop.stopOrder}-${stop.poiRevisionId}`} className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
-          <span className="font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}</span>
-          <span className="shrink-0 text-xs text-[#64748b]">dừng {stop.dwellSeconds} giây</span>
-        </li>)}
-        <li className="py-2 text-[13px] text-[#64748b]">{revision.endMode === 'POSE' ? 'Về điểm kết thúc của tuyến' : 'Kết thúc tại điểm dừng cuối'}</li>
+        {revision.stops.map((stop, index) => {
+          const mark = marks[index]
+          return <li key={`${stop.stopOrder}-${stop.poiRevisionId}`} aria-current={mark?.tone === 'info' || mark?.tone === 'ok' ? 'step' : undefined}
+            className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
+            <span className="min-w-0 font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}</span>
+            <span className="flex shrink-0 items-baseline gap-2">
+              {mark && <ToneBadge tone={mark.tone}>{mark.label}</ToneBadge>}
+              <span className="text-xs text-[#64748b]">dừng {stop.dwellSeconds} giây</span>
+            </span>
+          </li>
+        })}
+        <li aria-current={returning ? 'step' : undefined} className="flex items-baseline justify-between gap-3 py-2 text-[13px] text-[#64748b]">
+          <span>{revision.endMode === 'POSE' ? 'Về điểm kết thúc của tuyến' : 'Kết thúc tại điểm dừng cuối'}</span>
+          {returning && <ToneBadge tone="info">Robot đang tới</ToneBadge>}
+        </li>
       </ol>
-      <p className="mt-2 text-[11.5px] leading-5 text-[#94a3b8]">Máy chủ chưa trả mã điểm dừng trong tuyến, nên màn hình chưa đánh dấu điểm robot đang tới.</p>
+      {marked && <p className="mt-2 text-[11.5px] leading-5 text-[#94a3b8]">Đánh dấu theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo.</p>}
     </div>
   )
 }

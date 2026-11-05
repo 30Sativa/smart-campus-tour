@@ -144,10 +144,12 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         };
         revision.Route = route!;
         repo.Add(revision);
+        var stopIds = new Guid[i.Stops.Count];
         for (var index = 0; index < i.Stops.Count; index++)
         {
             var selected = byId[i.Stops[index].PoiRevisionId];
-            repo.Add(new RouteRevisionStop { Id = Guid.NewGuid(), RouteRevisionId = revision.Id, RouteRevision = revision,
+            stopIds[index] = Guid.NewGuid();
+            repo.Add(new RouteRevisionStop { Id = stopIds[index], RouteRevisionId = revision.Id, RouteRevision = revision,
                 PoiProposalRevisionId = selected.Revision.Id, SourcePoiVerificationRecordId = selected.Verification.Id,
                 MapVersionId = map.Id, PoiNavigationFingerprint = selected.Revision.NavigationFingerprint,
                 StopOrder = index + 1, DwellSeconds = i.Stops[index].DwellSeconds,
@@ -172,7 +174,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             i.Stops.Select((s, index) =>
             {
                 var selected = byId[s.PoiRevisionId];
-                return new RouteRevisionStopView(selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
+                return new RouteRevisionStopView(stopIds[index], selected.Revision.Id, selected.Verification.Id, index + 1, s.DwellSeconds,
                     s.HeadSteps, selected.Revision.Name, selected.Revision.X, selected.Revision.Y, selected.Revision.Yaw,
                     selected.Revision.CameraPreset, selected.Revision.NarrationText, selected.Revision.FallbackVideoUrl);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
