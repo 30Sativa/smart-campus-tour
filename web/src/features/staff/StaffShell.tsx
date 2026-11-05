@@ -14,9 +14,8 @@ import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
 import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { StaffBell } from './StaffBell'
 import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
-import { useRunningTours } from './operations/hooks'
+import { useRunningTours, type RunningTour } from './operations/hooks'
 import { STEP_LABEL } from './operations/operation-labels'
-import type { TourDetails } from '../administration/tours/types'
 
 const CONNECTION_LABEL = {
   connecting: 'Telemetry: đang kết nối',
@@ -131,7 +130,7 @@ export default function StaffShell() {
  * The Tour running now, kept in view under the logo: one click to its live
  * console. Red when it needs assistance. On the rail it shrinks to its icon.
  */
-function RunningCard({ detail, rail, onNavigate }: { detail: TourDetails; rail: boolean; onNavigate: () => void }) {
+function RunningCard({ detail, rail, onNavigate }: { detail: RunningTour; rail: boolean; onNavigate: () => void }) {
   const assist = detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE'
   const step = detail.execution?.currentStep ? STEP_LABEL[detail.execution.currentStep] ?? 'Đang chạy' : 'Đang chạy'
   return (

@@ -3,8 +3,9 @@ import { act, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/client'
 import { useAuthStore } from '../../../stores/auth-store'
-import type { TourDetails, TourSummary } from '../../administration/tours/types'
+import type { TourSummary } from '../../administration/tours/types'
 import { buildAttention } from './attention'
+import type { RunningTour } from './hooks'
 import { useFleetConnection, useFleetTelemetrySync, type FleetRobot } from './fleet-telemetry'
 import { operationRefusal } from './operation-errors'
 import { checkVerdict } from './operation-labels'
@@ -103,9 +104,17 @@ describe('operation refusals', () => {
 describe('attention queue', () => {
   const summary = (id: string, state: TourSummary['state']) => ({ id, name: id, state, scheduledStartAt: '2026-11-04T02:00:00Z' }) as TourSummary
   it('puts a Tour needing assistance first, then READY, then not-yet-READY Tours', () => {
-    const help = { tour: summary('t-run', 'RUNNING'), execution: { operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'NavigationFailed' } } as unknown as TourDetails
+    const help = { tour: summary('t-run', 'RUNNING'), execution: { operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'NavigationFailed', currentStep: 'NAVIGATING', commandState: 'FAILED' } } as RunningTour
     const items = buildAttention([help], [summary('t-ready', 'READY'), summary('t-new', 'SCHEDULED'), summary('t-done', 'COMPLETED')])
     expect(items.map(item => item.id)).toEqual(['assist-t-run', 'ready-t-ready', 'scheduled-t-new'])
     expect(items[0]).toMatchObject({ tone: 'danger', headline: 'Cần hỗ trợ: Lỗi điều hướng', to: '/staff/live/t-run' })
+  })
+
+  it('names an ended Tour whose GoTo the server still reports UNKNOWN, after assistance and before READY', () => {
+    const ended = (id: string, needsReconcile: boolean) => ({ ...summary(id, 'CANCELLED'),
+      execution: { operationalStatus: 'NEEDS_ASSISTANCE', assistanceReason: 'CommandUnknown', currentStep: 'NAVIGATING', commandState: needsReconcile ? 'UNKNOWN' : 'RECONCILED', needsReconcile } }) as TourSummary
+    const items = buildAttention([], [summary('t-ready', 'READY')], [ended('t-held', true), ended('t-closed', false)])
+    expect(items.map(item => item.id)).toEqual(['reconcile-t-held', 'ready-t-ready'])
+    expect(items[0]).toMatchObject({ tone: 'danger', headline: 'Tour đã kết thúc, còn lệnh chưa rõ kết quả cần đối soát', to: '/staff/live/t-held' })
   })
 })
