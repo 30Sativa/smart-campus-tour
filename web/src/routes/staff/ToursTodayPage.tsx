@@ -51,36 +51,33 @@ export default function ToursTodayPage() {
         {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
           : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
           : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : ahead.length ? 'Hôm nay không có Tour nào. Các Tour sắp tới ở bên dưới.' : 'Hôm nay không có Tour nào.'}</EmptyPanel></div>
-          : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label="Tour hôm nay">
-            <thead className="border-b border-[#e2e8f0]"><tr>{['Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>
-            <tbody className="divide-y divide-[#eef1f4]">{rows.map(tour => {
-              const step = nextStep(tour)
-              return <tr key={tour.id} className={rowClass}>
-                <td className={`${tdClass} font-semibold tabular-nums`}>{campusTime(tour.scheduledStartAt)}</td>
-                <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{tour.routeName}</span></td>
-                <td className={`${tdClass} font-mono text-xs`}>{tour.reservation?.robotCode ?? '-'}</td>
-                <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
-                <td className={tdClass}><TourStateBadge state={tour.state} /></td>
-                <td className={tdClass}><Link to={step.to} className={buttonClass(tour.state === 'READY' || tour.state === 'RUNNING' ? 'primary' : 'secondary', 'sm')}>{step.label}</Link></td>
-              </tr>
-            })}</tbody>
-          </table></div>}
+          : <TourTable label="Tour hôm nay" tours={rows} />}
       </section>
       <section className={`${panelClass} mt-4`} aria-label="Tour sắp tới">
         <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới. Kiểm tra trước khi bắt đầu mở được từ đây, nhưng chỉ bắt đầu được khi tới giờ." />
         {upcoming.isPending ? <div className="p-4"><LoadingPanel /></div>
           : upcoming.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(upcoming.error))} onRetry={() => void upcoming.refetch()} /></div>
           : ahead.length === 0 ? <div className="p-4"><EmptyPanel>Không có Tour nào trong 7 ngày tới.</EmptyPanel></div>
-          : <ul className="divide-y divide-[#eef1f4]">{ahead.map(tour => {
-            const step = nextStep(tour)
-            return <li key={tour.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-              <span className="w-28 shrink-0 text-[13px] font-semibold tabular-nums text-[#0f172a]">{campusDate(tour.scheduledStartAt).slice(0, 5)} · {campusTime(tour.scheduledStartAt)}</span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span><span className="block truncate text-xs text-[#64748b]">{tour.routeName} · robot {tour.reservation?.robotCode ?? '-'}</span></span>
-              <TourStateBadge state={tour.state} />
-              <Link to={step.to} className={buttonClass('secondary', 'sm')}>{step.label}</Link>
-            </li>
-          })}</ul>}
+          : <TourTable label="Tour sắp tới" tours={ahead} dated />}
       </section>
     </StaffPage>
   )
+}
+
+/** One row per Tour with its next step. `dated` adds the day, for Tours that are not today. */
+function TourTable({ label, tours, dated = false }: { label: string; tours: TourSummary[]; dated?: boolean }) {
+  return <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label={label}>
+    <thead className="border-b border-[#e2e8f0]"><tr>{[dated ? 'Ngày giờ' : 'Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(head => <th key={head} scope="col" className={thClass}>{head}</th>)}</tr></thead>
+    <tbody className="divide-y divide-[#eef1f4]">{tours.map(tour => {
+      const step = nextStep(tour)
+      return <tr key={tour.id} className={rowClass}>
+        <td className={`${tdClass} font-semibold tabular-nums whitespace-nowrap`}>{dated && `${campusDate(tour.scheduledStartAt).slice(0, 5)} · `}{campusTime(tour.scheduledStartAt)}</td>
+        <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{tour.routeName}</span></td>
+        <td className={`${tdClass} font-mono text-xs`}>{tour.reservation?.robotCode ?? '-'}</td>
+        <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
+        <td className={tdClass}><TourStateBadge state={tour.state} /></td>
+        <td className={tdClass}><Link to={step.to} className={buttonClass(tour.state === 'READY' || tour.state === 'RUNNING' ? 'primary' : 'secondary', 'sm')}>{step.label}</Link></td>
+      </tr>
+    })}</tbody>
+  </table></div>
 }

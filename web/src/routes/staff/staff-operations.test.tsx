@@ -101,7 +101,7 @@ describe('pre-start check on the real Tour API', () => {
     tickAll()
     expect(screen.getAllByRole('checkbox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeDisabled()
-    expect(screen.getByText('Nút mở khi mọi nguyên nhân bên trái được xử lý.')).toBeInTheDocument()
+    expect(screen.getByText(/Đã đủ 4 xác nhận, nhưng máy chủ vẫn chặn Bắt đầu/)).toBeInTheDocument()
   })
 
   it('says when a Tour opened ahead of its day can start, and what the robot still has to report', async () => {
@@ -454,7 +454,9 @@ describe('today list', () => {
     tour = detail('READY')
     renderAt('/staff/tours', '/staff/tours', <ToursTodayPage />)
     const ahead = await screen.findByRole('region', { name: 'Tour sắp tới' })
-    expect(await within(ahead).findByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
+    const table = await within(ahead).findByRole('table', { name: 'Tour sắp tới' })
+    expect(within(table).getByRole('columnheader', { name: 'Ngày giờ' })).toBeInTheDocument()
+    expect(within(table).getByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
     const lists = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), 'http://localhost')).filter(url => url.pathname === '/api/staff/manage/tours')
     // Two windows: today, and the seven days after it.
     expect(new Set(lists.map(url => url.searchParams.get('from'))).size).toBe(2)

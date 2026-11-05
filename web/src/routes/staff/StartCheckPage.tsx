@@ -105,7 +105,7 @@ export default function StartCheckPage() {
   const reason = !result ? null
     : stale ? 'Điều kiện chưa cập nhật được từ máy chủ. Chờ cập nhật lại rồi bắt đầu.'
     : notOperator ? `Chỉ ${operator?.fullName ?? 'người vận hành được giao'} mới bắt đầu được Tour này.`
-    : !result.canStart ? 'Nút mở khi mọi nguyên nhân bên trái được xử lý.'
+    : !result.canStart ? (confirmed ? 'Đã đủ 4 xác nhận, nhưng máy chủ vẫn chặn Bắt đầu: xem các mục Cần xử lý. Xác nhận tại chỗ chỉ là phần của bạn, không mở được nút khi máy chủ chưa cho phép.' : 'Nút mở khi máy chủ cho phép (mọi mục Cần xử lý đạt) và đủ 4 xác nhận tại chỗ.')
     : !confirmed ? 'Đánh dấu đủ 4 xác nhận tại chỗ.'
     : null
 
