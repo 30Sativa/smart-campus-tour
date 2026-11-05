@@ -15,7 +15,7 @@ import { useDayTours, useNextStop, useOperationTour, useRunningTours } from '../
 import { checkInfo } from '../../features/staff/operations/operation-labels'
 import { operationRefusal } from '../../features/staff/operations/operation-errors'
 import { CommandCard, ExecutionPanel, RobotTelemetryPanel, RouteStopList, TourStateBadge } from '../../features/staff/operations/OperationParts'
-import { StartCheckList } from '../../features/staff/operations/StartCheckList'
+import { BlockerList } from '../../features/staff/operations/StartCheckList'
 
 /**
  * Live operations of one Tour: the Tour's state, the robot command it waits on,
@@ -121,7 +121,7 @@ function Controls({ detail }: { detail: TourDetails }) {
         <button type="button" className={`${buttonClass('primary', 'lg')} w-full`} disabled={!gate?.allowed || next.isPending} aria-describedby="next-reason"
           onClick={() => { next.reset(); setConfirming(true) }}><ArrowRight size={18} aria-hidden="true" />Đi tiếp</button>
         <p id="next-reason" className="text-[13px] leading-5 text-[#64748b]">{!gate ? 'Máy chủ chưa trả quyền thao tác cho Tour này.' : gate.allowed ? 'Robot rời điểm dừng hiện tại khi bạn xác nhận.' : `Chưa đi tiếp được: ${blocked}`}</p>
-        {refusal?.checks && !confirming && <StartCheckList checks={refusal.checks} blockedBy={refusal.blockedBy} />}
+        {refusal?.checks && !confirming && <BlockerList checks={refusal.checks} blockedBy={refusal.blockedBy} />}
 
         <div className="border-t border-[#f1f5f9] pt-3">
           <p className="mb-2 text-xs font-semibold text-[#64748b]">Chưa có trên hệ thống</p>

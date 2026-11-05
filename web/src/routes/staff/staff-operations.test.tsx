@@ -85,24 +85,30 @@ function renderAt(path: string, route: string, element: ReactNode) {
 const tickAll = () => { for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box) }
 
 describe('pre-start check on the real Tour API', () => {
-  it('shows the server checks, says the system may not move a robot yet, and keeps Start disabled', async () => {
+  it('leads with the verdict and only the root causes, says the system may not move a robot yet, and keeps Start disabled', async () => {
     tour = detail('READY'); checks = BLOCKED_CHECKS
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
-    expect(await screen.findByText('Robot chưa được bật điều phối (IsDispatchEnabled = 0).', { selector: 'span' })).toBeInTheDocument()
-    expect(screen.getByText('Hệ thống chưa cho phép robot di chuyển theo Tour')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa thể bắt đầu')).toBeInTheDocument()
+    const causes = screen.getByRole('list', { name: 'Nguyên nhân chưa bắt đầu được' })
+    expect(within(causes).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(causes).getAllByText('Giới hạn hệ thống')).toHaveLength(2)
+    expect(screen.getByText(/1 kiểm tra chưa chạy vì phụ thuộc các mục trên: Robot báo đúng bản đồ của tuyến/)).toBeInTheDocument()
+    expect(screen.getByText(/Hệ thống chưa cho phép robot di chuyển theo Tour/)).toBeInTheDocument()
     // A check skipped behind a failed prerequisite is not reported as a failure of its own.
     expect(screen.getByText('Robot báo đúng bản đồ của tuyến').closest('li')).toHaveAttribute('data-verdict', 'notRun')
     expect(screen.getByText('Pin robot (chỉ hiển thị, không chặn)').closest('li')).toHaveAttribute('data-verdict', 'info')
     tickAll()
     expect(screen.getAllByRole('checkbox')).toHaveLength(4)
     expect(screen.getByRole('button', { name: /Bắt đầu Tour/ })).toBeDisabled()
-    expect(screen.getByText(/Chưa thể bắt đầu: Robot được bật điều phối; Kênh lệnh robot đang bật/)).toBeInTheDocument()
+    expect(screen.getByText('Nút mở khi mọi nguyên nhân bên trái được xử lý.')).toBeInTheDocument()
   })
 
   it('names the assigned operator when another Staff opens the check', async () => {
     tour = detail('READY'); checks = { ...BLOCKED_CHECKS, blockedBy: ['callerIsOperator', ...BLOCKED_CHECKS.blockedBy] }
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
-    expect(await screen.findByText('Chỉ người vận hành được giao (Lan Staff) mới bắt đầu được Tour này.')).toBeInTheDocument()
+    expect(await screen.findByText('Chỉ Lan Staff mới bắt đầu được Tour này.')).toBeInTheDocument()
+    // The on-site confirmations are the Operator's; nobody else is asked to tick them.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
   it('sends all four confirmations with the row version, and shows a refusal without claiming success', async () => {
