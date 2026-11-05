@@ -4,14 +4,13 @@ import { KpiRow, KpiTile } from '../../components/ui/Charts'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { campusDate, campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
-import { tourError } from '../../features/administration/tours/tour-messages'
-import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { useFleetConnection, useFleetTelemetry } from '../../features/staff/operations/fleet-telemetry'
 import { RECONCILE_HEADLINE, RECONCILE_HINT } from '../../features/staff/operations/attention'
 import { useDayTours, useRunningTours, useToursNeedingReconcile } from '../../features/staff/operations/hooks'
-import { nextStep } from '../../features/staff/operations/next-step'
+import { DayTours } from '../../features/staff/operations/DayTours'
 import { STEP_LABEL, assistanceInfo, commandStateInfo } from '../../features/staff/operations/operation-labels'
-import { ToneBadge, TourStateBadge } from '../../features/staff/operations/OperationParts'
+import { ToneBadge } from '../../features/staff/operations/OperationParts'
 
 const CONNECTION_TEXT = { connecting: 'Đang kết nối kênh telemetry…', connected: 'Kênh telemetry đang kết nối.', reconnecting: 'Đang kết nối lại kênh telemetry…', disconnected: 'Mất kết nối kênh telemetry, đang thử lại.' } as const
 
@@ -96,21 +95,7 @@ export default function OverviewPage() {
         </section>
       </div>
 
-      <section className={`${panelClass} mt-4`} aria-label="Tour hôm nay">
-        <PanelHead title="Tour hôm nay" action={<Link to="/staff/tours" className={buttonClass('ghost', 'sm')}>Mở buổi hôm nay</Link>} />
-        {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
-          : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
-          : list.length === 0 ? <div className="p-4"><EmptyPanel>Hôm nay không có Tour nào.</EmptyPanel></div>
-          : <ul className="divide-y divide-[#f1f5f9]">{list.map(tour => {
-            const step = nextStep(tour)
-            return <li key={tour.id} className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[60px_minmax(0,1fr)_auto_auto]">
-              <time className="text-sm font-bold tabular-nums text-[#0f172a]" dateTime={tour.scheduledStartAt}>{campusTime(tour.scheduledStartAt)}</time>
-              <span className="min-w-0"><span className="block truncate text-sm font-semibold text-[#0f172a]">{tour.name}</span><span className="block truncate text-xs text-[#64748b]">{tour.routeName} · {tour.registrationCount} đoàn</span></span>
-              <span className="col-start-2 sm:col-start-auto"><TourStateBadge state={tour.state} /></span>
-              <Link to={step.to} className={`${buttonClass('secondary', 'sm')} col-start-2 justify-self-start sm:col-start-auto`}>{step.label}</Link>
-            </li>
-          })}</ul>}
-      </section>
+      <DayTours />
     </StaffPage>
   )
 }

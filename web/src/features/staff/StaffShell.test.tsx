@@ -50,7 +50,7 @@ describe('StaffShell', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Kiểm tra' }))
     expect(useTourOriginStore.getState().origin).toBe('/staff/schedule?view=list')
     const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
-    expect(within(nav).getByRole('link', { name: 'Lịch buổi' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: 'Lịch Tour' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('Chi tiết Tour')).toBeInTheDocument()
   })
 
@@ -85,7 +85,7 @@ describe('StaffShell', () => {
     expect(open).toHaveAttribute('aria-expanded', 'false')
     expect(open).toHaveFocus()
     fireEvent.click(open)
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch buổi' }))
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Điều hướng vận hành' })).getByRole('link', { name: 'Lịch Tour' }))
     expect(open).toHaveAttribute('aria-expanded', 'false')
   })
 })

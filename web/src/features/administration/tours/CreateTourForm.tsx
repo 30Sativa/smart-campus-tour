@@ -89,7 +89,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
       </div>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       <div className="flex flex-col-reverse gap-2 border-t border-[#f1f5f9] pt-4 sm:flex-row sm:justify-end">
-        <Link to="/staff/manage/tours" className={buttonClass('secondary')}>Hủy bỏ</Link>
+        <Link to="/staff/schedule" className={buttonClass('secondary')}>Hủy bỏ</Link>
         <button type="submit" disabled={busy || !ready} className={buttonClass('primary')}>{busy ? 'Đang lưu…' : 'Tạo Tour'}</button>
       </div>
     </fieldset>

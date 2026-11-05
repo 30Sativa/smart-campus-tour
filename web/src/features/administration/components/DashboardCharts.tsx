@@ -187,7 +187,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
           <ResponsiveContainer width="100%" height="100%" debounce={160}>
             <PieChart>
               <Pie data={data} dataKey="value" nameKey="label" innerRadius="66%" outerRadius="100%" paddingAngle={data.length > 1 ? 2 : 0} stroke="none" isAnimationActive={!reducedMotion()} startAngle={90} endAngle={-270}
-                onClick={(_, index) => { const picked = data[index]; if (picked) navigate(`/staff/manage/tours?state=${picked.state}`) }} className="cursor-pointer outline-none">
+                onClick={(_, index) => { const picked = data[index]; if (picked) navigate(`/staff/schedule?view=list&state=${picked.state}`) }} className="cursor-pointer outline-none">
                 {data.map((d) => <Cell key={d.state} fill={TOUR_COLOR[d.state]} />)}
               </Pie>
             </PieChart>
@@ -200,7 +200,7 @@ export function ToursByState({ tours }: { tours: AdminTour[] }) {
         <ul className="flex flex-wrap justify-center gap-x-1 gap-y-1" aria-label="Mở Tour theo trạng thái">
           {data.map((d) => (
             <li key={d.state}>
-              <Link to={`/staff/manage/tours?state=${d.state}`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[#4b5563] hover:bg-[#f3f4f6] hover:text-[#111827]">
+              <Link to={`/staff/schedule?view=list&state=${d.state}`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-[#4b5563] hover:bg-[#f3f4f6] hover:text-[#111827]">
                 <span aria-hidden="true" className="size-[9px] rounded-full" style={{ background: TOUR_COLOR[d.state] }} />{d.label} <b className="text-[#111827] tabular-nums">{d.value}</b>
               </Link>
             </li>

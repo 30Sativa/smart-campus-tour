@@ -26,8 +26,8 @@ export default function StaffManageDashboardPage() {
       action={<Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>} />
     <KpiRow label="Số liệu chuẩn bị">
       <KpiTile to="/staff/manage/registrations/pending" label="Đoàn chờ duyệt" value={pending ?? '-'} note={registrations.isError ? 'Không tải được' : undefined} tone={pending ? 'warn' : 'plain'} />
-      <KpiTile to="/staff/manage/tours" label="Tour đang chuẩn bị" value={totalTours ?? '-'} note={tours.isError ? 'Không tải được' : undefined} />
-      <KpiTile to="/staff/manage/tours?state=READY" label="Tour sẵn sàng" value={ready.isSuccess ? ready.data.pagination.totalItems : '-'} note={ready.isError ? 'Không tải được' : undefined} />
+      <KpiTile to="/staff/schedule?view=list" label="Tour đang chuẩn bị" value={totalTours ?? '-'} note={tours.isError ? 'Không tải được' : undefined} />
+      <KpiTile to="/staff/schedule?view=list&state=READY" label="Tour sẵn sàng" value={ready.isSuccess ? ready.data.pagination.totalItems : '-'} note={ready.isError ? 'Không tải được' : undefined} />
       <KpiTile to="/staff/manage/pois" label="Đề xuất POI" value={pois.isSuccess ? pois.data.length : '-'} note={pois.isError ? 'Không tải được' : undefined} />
     </KpiRow>
 
@@ -43,7 +43,7 @@ export default function StaffManageDashboardPage() {
 
     <section className={panelClass} aria-label="Tour đang chuẩn bị">
       <PanelHead title="Tour đang chuẩn bị" description={totalTours != null ? `Hiển thị ${tours.data?.data.length ?? 0} trong ${totalTours} Tour đang chuẩn bị.` : undefined}
-        action={<Link to="/staff/manage/tours" className={buttonClass('secondary', 'sm')}>Tất cả Tour</Link>} />
+        action={<Link to="/staff/schedule?view=list" className={buttonClass('secondary', 'sm')}>Tất cả Tour</Link>} />
       {tours.isError ? <AdminErrorPanel title="Không tải được danh sách Tour." onRetry={() => void tours.refetch()} /> : tours.isPending ? <SkeletonRows rows={3} /> : !tours.data.data.length ? <EmptyState title="Chưa có Tour đang chuẩn bị" action={<Link to="/staff/manage/tours/new" className={buttonClass('primary', 'sm')}>Tạo Tour</Link>} /> :
         <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left" aria-label="Tour đang chuẩn bị">
           <thead><tr>{['Tour', 'Thời gian', 'Tuyến', 'Đoàn đăng ký'].map(label => <th key={label} scope="col" className={thClass}>{label}</th>)}</tr></thead>

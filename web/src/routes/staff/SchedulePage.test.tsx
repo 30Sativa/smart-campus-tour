@@ -44,10 +44,26 @@ describe('Staff Tour calendar', () => {
     expect(within(robots).getByRole('link', { name: 'Tour sáng thật' })).toHaveAttribute('href', '/staff/manage/tours/tour-1')
     expect(screen.queryByRole('region', { name: 'Lịch tuần' })).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    // Under the robots, every Tour of the day, so one without a robot hold is not lost.
+    expect(within(screen.getByRole('list', { name: 'Lịch tour' })).getByText(/robot amr-01 · giữ 08:45 - 09:37/)).toBeInTheDocument()
+  })
+
+  it('lists every Tour across time in the list view, which was the Tour list page', async () => {
+    show()
+    await screen.findByRole('region', { name: 'Lịch tuần' })
+    const calendarCalls = urls.length
     fireEvent.click(screen.getByRole('button', { name: 'Danh sách' }))
-    const list = await screen.findByRole('list', { name: 'Lịch tour' })
-    expect(within(list).getByText(/robot amr-01 · giữ 08:45 - 09:37/)).toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: 'Robot trong ngày' })).not.toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Danh sách Tour' })
+    expect(within(table).getByRole('link', { name: 'Tour sáng thật' })).toHaveAttribute('href', '/staff/tours/tour-1')
+    expect(screen.getByRole('button', { name: 'Sắp diễn ra' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('region', { name: 'Lịch tuần' })).not.toBeInTheDocument()
+    // The list asks by phase, not for this week's dates.
+    const listed = urls.slice(calendarCalls).at(-1)!
+    expect(listed.searchParams.get('phase')).toBe('UPCOMING')
+    expect(listed.searchParams.get('from')).toBeNull()
+    // Picking a tab keeps the page on the list view.
+    fireEvent.click(screen.getByRole('button', { name: 'Đang chạy' }))
+    expect(await screen.findByRole('table', { name: 'Danh sách Tour' })).toBeInTheDocument()
   })
 
   it('reports a failed load with a retry and invents no sessions', async () => {
