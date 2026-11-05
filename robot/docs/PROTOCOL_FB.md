@@ -28,10 +28,48 @@ file này tồn tại.
 | `TARE,<seq>,<deg>` | Đặt hướng hiện tại = `<deg>` |
 | `TARE,<seq>,RAW` | Bỏ offset tare |
 | `DIAG,<seq>` | Chẩn đoán IMU. **Blocking ~2.5 s và dừng động cơ** — chỉ dùng khi debug |
+<<<<<<< Updated upstream
 | `CONTACTOR,<seq>,ON` | Bật output contactor PB10. Không refresh motor watchdog |
 | `CONTACTOR,<seq>,OFF` | Tắt output contactor PB10. Không refresh motor watchdog |
 
 Kết thúc dòng bằng `\n`. Sai cú pháp → `ERR,bad_command`.
+=======
+| `HEAD,<seq>,HOME` | Đầu quay: bật driver, mỗi trục quay chậm (20°/s) về phía **vật cản cơ khí**, đứng yên 200 ms, coi như đang ở cạnh vật cản, rồi chạy về 0°. PAN: quay **phải** 190° tới cạnh vật cản ở 174° phải, rồi quay trái 174° về 0° (chỉ đúng khi đầu đang trong khoảng 174° phải – 16° trái). TILT: cúi **xuống** 44° tới vật cản ở cúi 20°, rồi ngửa 20° về thẳng. Giới hạn mềm PAN ±170°, TILT ±18°. `stm32_bridge` tự gửi lệnh này khi STM32 vừa khởi động. Mất khoảng 13 s. Bị từ chối khi đang chạy |
+| `HEAD,<seq>,STOP` | Đầu quay giảm tốc về 0 rồi đứng, giữ driver bật và giữ mốc. Nếu đang HOME thì hủy HOME và mất mốc (`head_state=4`) |
+| `HEAD,<seq>,ZERO` | Lấy vị trí hiện tại làm mốc 0/0 (người vận hành tự cân đầu về FRONT), bật driver. Cách dự phòng khi không HOME được. Bị từ chối khi đang chạy/HOME |
+| `HEAD,<seq>,STEP,<n_pan>,<n_tilt>` | **Nhấn nút một lần**: quay tương đối `n` bước đủ của motor (số nguyên có dấu). Tại trục ra: 1 bước PAN = 0,6° (hộp số 3:1), 1 bước TILT = 1,8° (gắn trực tiếp). Cộng dồn vào đích hiện tại, dừng ở giới hạn mềm thay vì báo lỗi |
+| `HEAD,<seq>,JOG,<d_pan>,<d_tilt>` | **Giữ nút**: `d` ∈ {-1, 0, 1}. Trục có `d≠0` quay liên tục (30°/s) về phía giới hạn; `d=0` giảm tốc dừng. **Host phải gửi lại ít nhất mỗi 300 ms** (nên 100 ms); im lặng quá hạn thì firmware tự giảm tốc dừng (deadman). Nhả nút: gửi `JOG,0,0` |
+| `HEAD,<seq>,<pan_cdeg>,<tilt_cdeg>` | Đầu quay tới góc tuyệt đối tính từ mốc ZERO, số nguyên centi-độ. PAN dương = quay trái, TILT dương = ngửa lên. Góc làm tròn tới bước (PAN 0,6°, TILT 1,8° với driver bước đủ). Firmware tự chạy profile hình thang; gửi lệnh mới giữa chừng thì đổi đích (giảm tốc trước nếu phải đổi chiều) |
+| `HEAD,<seq>,OFF` | Tắt hai driver PAN/TILT (nEN cao). Motor thả trôi nên **mất mốc**: phải `ZERO` lại trước lệnh góc tiếp theo |
+| `CONTACTOR,<seq>,ON` | Bật MOSFET contactor: PA10 mức cao. Không refresh motor watchdog |
+| `CONTACTOR,<seq>,OFF` | Tắt MOSFET contactor: PA10 mức thấp. Khi boot contactor **bật** (PA10 cao, `CONTACTOR_ON_AT_BOOT`, từ 05/11/2026). Không refresh motor watchdog |
+
+Các lệnh `HEAD` không refresh motor watchdog của bánh xe. Kết thúc dòng bằng
+`\n`. Sai cú pháp → `ERR,bad_command`. Lệnh `HEAD` đúng cú pháp nhưng bị từ
+chối trả một dòng riêng, và `head_seq` trong FB **không** đổi:
+
+| Dòng lỗi | Nguyên nhân |
+|---|---|
+| `ERR,head_not_zeroed` | Lệnh góc/STEP/JOG khi chưa có mốc (từ lúc boot, sau `OFF`, hoặc HOME bị `HEAD,<seq>,STOP` giữa chừng) |
+| `ERR,head_limit` | Góc tuyệt đối vượt giới hạn `HEAD_PAN_LIMIT_CDEG` / `HEAD_TILT_LIMIT_CDEG` |
+| `ERR,head_busy` | Lệnh bất kỳ trong lúc HOME, hoặc `ZERO`/`HOME` khi đầu quay đang chạy |
+
+Ba lỗi này **không** đổi trường `status` của FB, vì trường đó mô tả bánh xe.
+Riêng `ERR,bad_command` vẫn đặt `status=ERR` như trước.
+
+Contactor chuyển chân ngày 23/10/2026: theo PCB `robot-pan-tilt-chan-cho-6-9`,
+PB10 nay là TILT_nEN và MOSFET contactor nối PA10. Cú pháp lệnh `CONTACTOR`
+giữ nguyên. Timeout `CMD` 300 ms, watchdog trong ngắt và `STOP` **không** tự
+tắt contactor; host phải gửi `CONTACTOR,<seq>,OFF` khi cần. Từ 05/11/2026
+firmware bật contactor ngay khi boot. Đầu quay không phụ thuộc contactor.
+Bridge gửi lệnh này qua service `contactor/set` (xem
+`ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`).
+
+**Seq:** bridge dùng một bộ đếm chung cho mọi lệnh, bắt đầu từ 1 và bỏ qua 0
+khi tràn, vì `head_seq=0` trong FB nghĩa là "firmware chưa nhận lệnh HEAD
+nào". Lệnh `HEAD` bị từ chối nhận ra được khi trường 1 (`seq`) đã tới seq của
+lệnh mà `head_seq` chưa đổi.
+>>>>>>> Stashed changes
 
 ## STM32 → Host: khung `FB`
 

@@ -1,0 +1,23 @@
+/**:
+  ros__parameters:
+    use_sim_time: false
+    frame_id: map
+    map_frame: map
+    base_frame: base_footprint
+    sample_period_sec: 0.2
+    pose_stale_after_sec: 5.0
+    report_period_sec: 2.0
+    request_timeout_sec: 5.0
+    max_report_age_sec: 30.0
+    max_clock_floor_ahead_sec: 10.0
+    retry_initial_sec: 1.0
+    retry_max_sec: 30.0
+    # Telemetry-only unless turned on. See README.md before enabling: never on a physical robot before M2.3.
+    commands_enabled: false
+    command_base_url: ""
+    command_poll_period_sec: 0.5
+    # ADR-0045 Operator head buttons (docs/contracts/fleet-head/v1). Off by default; needs stm32_bridge head/*
+    # in the same namespace and FleetHead:Enabled on the backend.
+    head_enabled: false
+    head_base_url: ""
+    head_wait_ms: 1500

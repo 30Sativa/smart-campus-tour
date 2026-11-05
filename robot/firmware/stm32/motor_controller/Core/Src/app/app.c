@@ -37,7 +37,11 @@ static void app_cdc_log(const char *s)
 
 void App_Init(void)
 {
+<<<<<<< Updated upstream
 	Contactor_Init();
+=======
+	Contactor_Init();   /* PA10 = 1: contactor BAT luc khoi dong (CONTACTOR_ON_AT_BOOT) */
+>>>>>>> Stashed changes
 	Motor_Init();
 	Protocol_Init();
 

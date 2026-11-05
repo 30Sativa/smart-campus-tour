@@ -50,9 +50,43 @@ def generate_launch_description():
     reset_odom_on_start = LaunchConfiguration('reset_odom_on_start')
     odom_covariance_diagonal = LaunchConfiguration('odom_covariance_diagonal')
     twist_covariance_diagonal = LaunchConfiguration('twist_covariance_diagonal')
+<<<<<<< Updated upstream
 
     return LaunchDescription([
         DeclareLaunchArgument(
+=======
+    enable_head = LaunchConfiguration('enable_head')
+    enable_contactor = LaunchConfiguration('enable_contactor')
+    head_auto_home = LaunchConfiguration('head_auto_home')
+    head_park_on_shutdown = LaunchConfiguration('head_park_on_shutdown')
+    contactor_on_at_startup = LaunchConfiguration('contactor_on_at_startup')
+
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'enable_head', default_value='true',
+            description='PAN/TILT head interface (head/set, head/jog, head/step, '
+                        'head/state, head/stop|off|zero). Needs rebuilt '
+                        'bus_interfaces and firmware with 24-field FB; see '
+                        'HEAD_CONTROL.md.'),
+        DeclareLaunchArgument(
+            'enable_contactor', default_value='true',
+            description='contactor/set and contactor/state (STM32 PA10). '
+                        'Independent of enable_head.'),
+        DeclareLaunchArgument(
+            'head_auto_home', default_value='true',
+            description='HOME the PAN/TILT head automatically after the STM32 '
+                        'boots (PAN right to the stop, TILT down to the stop, '
+                        'then both back to 0).'),
+        DeclareLaunchArgument(
+            'head_park_on_shutdown', default_value='true',
+            description='Move the head to 0/0 when the bridge shuts down so the '
+                        'next HOME starts near the front.'),
+        DeclareLaunchArgument(
+            'contactor_on_at_startup', default_value='true',
+            description='Switch the contactor ON once at bridge startup if the '
+                        'first feedback frame reports it OFF.'),
+        DeclareLaunchArgument(
+>>>>>>> Stashed changes
             'robot_id', default_value='',
             description='ROS namespace for this robot. Empty preserves the '
                         'single-robot graph.'),
@@ -274,6 +308,17 @@ def generate_launch_description():
                     reset_odom_on_start, value_type=bool),
                 'odom_covariance_diagonal': odom_covariance_diagonal,
                 'twist_covariance_diagonal': twist_covariance_diagonal,
+<<<<<<< Updated upstream
+=======
+                'enable_head': ParameterValue(enable_head, value_type=bool),
+                'enable_contactor': ParameterValue(
+                    enable_contactor, value_type=bool),
+                'head_auto_home': ParameterValue(head_auto_home, value_type=bool),
+                'head_park_on_shutdown': ParameterValue(
+                    head_park_on_shutdown, value_type=bool),
+                'contactor_on_at_startup': ParameterValue(
+                    contactor_on_at_startup, value_type=bool),
+>>>>>>> Stashed changes
             }],
         ),
     ])

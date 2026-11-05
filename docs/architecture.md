@@ -536,6 +536,41 @@ send/cancel reconciliation, not only a check before the send. Publish business
 notifications after the corresponding state/event commit. Define tour revision
 semantics across backend restart before wiring the frontend revision guard.
 
+<<<<<<< Updated upstream
+=======
+**Robot-local head interface (draft, 23/10/2026).** The STM32 firmware and
+`stm32_bridge` expose the PAN/TILT head on the robot's ROS graph: action
+`head/set` (`bus_interfaces/action/SetHead`: absolute angle or HOME against
+the mechanical stop), topics `head/jog`, `head/step` (operator buttons),
+`head/state`, services `head/stop`, `head/off`, `head/zero`, plus
+`contactor/set` / `contactor/state` (separate module, needs only
+`std_msgs`/`std_srvs`, stays up when the head interface is disabled). A goal succeeds only when the firmware
+feedback reports that command's sequence number as accepted **and** the head
+idle; the position is open-loop (step counting, no encoder). Serial contract:
+`robot/docs/PROTOCOL_FB.md`; interface details:
+`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`. This does **not** define
+presets; Fleet Sync v1 still carries no robot commands.
+
+**Operator head control (ADR-0045, proposed 05/11/2026; flags off by default).**
+Only `Tours.OperatorUserId` of a `RUNNING` Tour turns that Tour's robot head, with
+buttons on the Operator console:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
+| POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
+
+Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
+(epoch + seq, last 32, never older than `FleetHead:MaxCommandAgeMs`); no
+`RobotCommands` row, TourEvent or audit row per press. A `JOG` carries `ttlMs` and
+the robot releases it at its own receipt time + `ttlMs`, so a lost network or a
+closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
+`STEP`/`JOG` to topics `head/step`/`head/jog`, `STOP` to service `head/stop`,
+`ANGLE` to action `head/set`, and reports `head/state` on its next poll. Same
+single-API-instance limit as Fleet Sync (ADR-0019).
+
+>>>>>>> Stashed changes
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a
 separately established Capstone requirement. A separate patch must define presets,

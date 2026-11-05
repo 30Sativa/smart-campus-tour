@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "message": "Head commands.",
+  "data": {
+    "epoch": "8d3b1f2e-6c4a-4a55-9e2f-1b7c0d9a4e61",
+    "commands": [
+      { "seq": 42, "kind": "STEP", "issuedAt": "2026-11-05T12:00:00.120Z", "panSteps": 1, "tiltSteps": 0 },
+      { "seq": 43, "kind": "JOG", "issuedAt": "2026-11-05T12:00:00.300Z", "panDir": -1, "tiltDir": 0, "ttlMs": 600 },
+      { "seq": 44, "kind": "STOP", "issuedAt": "2026-11-05T12:00:01.000Z" },
+      { "seq": 45, "kind": "ANGLE", "issuedAt": "2026-11-05T12:00:01.200Z", "panDeg": 0, "tiltDeg": 0 }
+    ]
+  },
+  "errors": null
+}

@@ -29,7 +29,41 @@ builder.Services.AddSimulationPreview();
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+<<<<<<< Updated upstream
 builder.Services.AddOpenApi();
+=======
+builder.Services.AddApiDocumentation(simulationPreviewEnabled);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, ct) => await context.HttpContext.Response.WriteAsJsonAsync(
+        new SmartCampus.Api.Common.Responses.BaseResponse<object> {
+            Success = false, Message = "Bạn đã thử quá nhiều lần. Đợi một phút rồi thử lại.",
+            Errors = new { code = "RATE_LIMITED" }
+        }, ct);
+    options.AddPolicy("InvitationJoin", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("AccountLogin", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    var fleetSyncPermitLimit = builder.Configuration.GetValue<int?>("FleetSync:RateLimit:PermitLimit") ?? 600;
+    var fleetSyncWindowSeconds = builder.Configuration.GetValue<int?>("FleetSync:RateLimit:WindowSeconds") ?? 60;
+    if (fleetSyncPermitLimit <= 0 || fleetSyncWindowSeconds <= 0)
+        throw new InvalidOperationException("FleetSync rate-limit permit limit and window must be positive.");
+    options.AddPolicy("FleetSync", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = fleetSyncPermitLimit, Window = TimeSpan.FromSeconds(fleetSyncWindowSeconds), QueueLimit = 0 }));
+    // ADR-0045: head buttons repeat JOG about 5 times a second and the robot polls again after each delivery.
+    var fleetHeadPermitLimit = builder.Configuration.GetValue<int?>("FleetHead:RateLimit:PermitLimit") ?? 1200;
+    var fleetHeadWindowSeconds = builder.Configuration.GetValue<int?>("FleetHead:RateLimit:WindowSeconds") ?? 60;
+    if (fleetHeadPermitLimit <= 0 || fleetHeadWindowSeconds <= 0)
+        throw new InvalidOperationException("FleetHead rate-limit permit limit and window must be positive.");
+    options.AddPolicy(SmartCampus.Api.Controllers.FleetHeadRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = fleetHeadPermitLimit, Window = TimeSpan.FromSeconds(fleetHeadWindowSeconds), QueueLimit = 0 }));
+});
+>>>>>>> Stashed changes
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {
     var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];

@@ -4,9 +4,19 @@
 
 static uint8_t contactor_commanded_on = 0U;
 
+/* = 1: contactor BAT ngay khi STM32 khoi dong (05/11/2026). Host van tat/bat
+ * duoc bang CONTACTOR,<seq>,OFF|ON. Dat 0 de quay lai hanh vi cu (tat luc boot). */
+#ifndef CONTACTOR_ON_AT_BOOT
+#define CONTACTOR_ON_AT_BOOT 1
+#endif
+
 void Contactor_Init(void)
 {
+#if CONTACTOR_ON_AT_BOOT
+	Contactor_On();
+#else
 	Contactor_Off();
+#endif
 }
 
 void Contactor_On(void)

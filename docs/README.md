@@ -28,6 +28,45 @@ copying them here.
 
 ## 3. Architecture and Product Decisions
 
+<<<<<<< Updated upstream
+=======
+ADR-0020 supersedes only the listed business parts of earlier ADRs. The
+owner-authorized API cutover in [ADR-0027](decisions/0027-versioned-map-poi-and-route-api-cutover.md)
+retires replaced Admin POI/Route/Tour/registration aliases and legacy authoring
+operations while retaining only reads still used by the pre-execution Tour
+slice. See `backend/docs/api-cutover.md` for the endpoint-by-endpoint inventory.
+TechnicalStaff login does not by itself implement every Technical workspace.
+
+The owner-authorized [Admin Route CRUD update](decisions/0017-admin-route-management.md)
+replaces seed-only business Route/dwell preparation; earlier ADRs retain their
+original text with explicit supersession notices. Usage:
+`web/docs/route-management.md`.
+
+The [Admin Tour backend slice](decisions/0018-admin-tour-management.md) adds
+SCHEDULED creation/update and pre-Start cancellation without frontend/runtime
+integration. API usage: `backend/docs/admin-tour-management.md`.
+
+The [Fleet Sync v1 backend slice](decisions/0019-https-fleet-sync.md) records
+HTTPS telemetry, per-robot credentials and the Staff operations projection.
+Contract fixtures and a Python probe are in `docs/contracts/fleet-sync/v1/`.
+
+The proposed [Operator head control](decisions/0045-operator-head-control.md)
+(flags off by default) lets the Operator of a RUNNING Tour turn the PAN/TILT head
+over the in-memory, long-polled `docs/contracts/fleet-head/v1/`.
+
+The owner-authorized [versioned map/POI slice](decisions/0021-map-package-and-poi-verification.md)
+adds backend APIs and additive v1.2 persistence for ROS map packages, manual
+deployment evidence and per-POI Technical Staff verification. Its contract and
+frontend handoff are in `backend/docs/map-poi-versioning.md`. Route revision and
+manual whole-route test evidence follow the scoped succession in
+[ADR-0023](decisions/0023-versioned-routes-and-manual-route-verification.md);
+their API sequence is in `backend/docs/route-revisions.md`. This is human
+evidence only, not physical acceptance or Tour readiness. Robot pose-capture
+import is ADR-0038; project POI YAML templates, branch runtime and scheduling remain pending.
+Command transport is selected by [ADR-0042](decisions/0042-m2-command-transport-and-start-readiness.md)
+and is implemented from M2.2.
+
+>>>>>>> Stashed changes
 [Decision Records](decisions/README.md) indexes accepted ADRs and product
 decisions. A decision may still have a separate implementation or compatibility
 gate; check its status before treating it as realized.

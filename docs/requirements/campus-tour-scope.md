@@ -65,7 +65,19 @@ Bài đánh giá trải nghiệm dùng cùng nội dung campus và thời lượ
 
 Đây là bài đánh giá trải nghiệm sản phẩm được đề xuất thêm; không thay câu hỏi nghiên cứu chính trong phiếu và không tự kích hoạt tính năng rating/feedback trong app.
 
+<<<<<<< Updated upstream
 Với vài nhánh định sẵn, video tương tác cũng cho phép chọn nhánh. Nhóm không tuyên bố lựa chọn nhánh tự nó làm robot tốt hơn video: hệ thống chứng minh hình ảnh tại thời điểm đang diễn ra và chuỗi yêu cầu → Staff quyết định → robot thật đổi đường. Mức hữu ích đối với học sinh là điều cần đánh giá ở R1-15, không phải kết luận có sẵn. Bài đánh giá trải nghiệm là đề xuất bổ sung cần GVHD xác nhận, chưa là gate bắt buộc.
+=======
+Staff approves narration text, uploads externally produced audio (and applicable
+lip-sync assets), Q&A bank entries and fallback video. Before Start, approved
+narration is delivered to the Quest guide and receipt checked (FR-50).
+At POI arrival, apply the checked camera preset before the guide cue.
+Manual Staff camera control is outside target. *Proposed revision (ADR-0045,
+05/11/2026, pending owner acceptance): the assigned Operator of a RUNNING Tour
+may turn the PAN/TILT head with buttons over Fleet Head v1; Viewers still may
+not.* Command transport for these future interactions remains pending; HTTPS
+telemetry sync is not a command path.
+>>>>>>> Stashed changes
 
 ## 4. Vai trò và luồng tham gia
 

@@ -28,7 +28,53 @@ và sơ đồ dây thực tế.
 | PB14 | SR04T SONAR3 ECHO | J_SONAR3 pin 3, EXTI15_10 input |
 | PB15 | SR04T SONAR4 TRIG | J_SONAR4 pin 1, GPIO output |
 | PA6 | SR04T SONAR4 ECHO | J_SONAR4 pin 3, EXTI9_5 input |
+<<<<<<< Updated upstream
 | PB10 | CONTACTOR_EN | J_CONTACTOR pin 2 / EN -> J_MCU_L pin 5, GPIO output |
+=======
+| PA8 | PAN STEP | J_MCU_R.10 → R11 220 Ω → J_PAN.1, GPIO output (`head.c`) |
+| PA15 | PAN DIR | J_MCU_R.15 → R12 220 Ω → J_PAN.2, GPIO output |
+| PB2 | PAN nEN | J_MCU_L.7 → J_PAN.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO |
+| PA9 | TILT STEP | J_MCU_R.11 → R13 220 Ω → J_TILT.1, GPIO output |
+| PA7 | TILT DIR | J_MCU_L.11 → R14 220 Ω → J_TILT.2, GPIO output |
+| PB10 | TILT nEN | J_MCU_L.5 → J_TILT.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO. **Trước 23/10/2026 là CONTACTOR_EN** |
+| PA10 | CONTACTOR_EN | Cổng MOSFET contactor, GPIO output push-pull. `MX_GPIO_Init` đặt mức thấp, rồi `App_Init` bật lên CAO (contactor bật khi khởi động, `CONTACTOR_ON_AT_BOOT`, từ 05/11/2026). Lệnh `CONTACTOR,<seq>,ON/OFF`. **Từ 23/10/2026** |
+
+## Timer đang dùng
+
+| Timer | Dùng cho | Cấu hình ở |
+|---|---|---|
+| TIM2 | Tick 50 kHz phát xung STEP bánh xe, ưu tiên ngắt 1 | `.ioc` + `motor_hal.c` |
+| TIM6 | Tick 10 kHz phát xung PAN/TILT, ưu tiên ngắt 2 | **chỉ `head.c`**, không có trong `.ioc` |
+
+TIM6 không khai báo trong `.ioc`. Bật TIM6 hoặc DAC trong CubeMX sau này sẽ
+sinh `TIM6_DAC_IRQHandler` trùng với bản trong `stm32g4xx_it.c` (USER CODE).
+
+## Đầu quay PAN/TILT (DRV8825)
+
+Theo PCB `robot-pan-tilt-chan-cho-6-9` (19/10/2026): STEP/DIR đi **thẳng** từ
+STM32 qua điện trở nối tiếp 220 Ω, không qua 74HCT245, nên driver nhận mức
+logic 3,3 V. DRV8825 nhận mức cao từ 2,2 V nên đủ, nhưng cần đo dạng xung tại
+đầu driver với dây 20–25 cm. nEN tích cực mức thấp và có điện trở kéo lên
+3V3: khi MCU reset hay chưa chạy tới `MX_GPIO_Init`, driver tắt. Firmware
+chốt nEN mức cao trước khi bật output (`.ioc` `PinState=GPIO_PIN_SET`,
+`main.c`, `head.c`). Chi tiết điều khiển: `docs/HEAD_PAN_TILT.md`.
+
+**74HCT245 chân 6–9 (A5–A8) đang để hở** trên PCB mới. Firmware không điều
+khiển được các chân này. Trước khi cấp nguồn chạy IC đệm của bánh xe, phải
+đưa chúng về mức xác định ở phần cứng (nối GND hoặc điện trở kéo), xem tài
+liệu PCB mục 3 và datasheet TI SN74HCT245 mục 11.1.
+
+## Contactor (PA10)
+
+PA10 lái cổng MOSFET của contactor: mức cao = đóng. Từ lúc cấp nguồn tới khi
+`MX_GPIO_Init` chạy (và suốt lúc MCU reset hoặc đang nạp ST-Link), PA10 ở
+trạng thái input thả nổi. **Cổng MOSFET phải có điện trở kéo xuống GND trên
+mạch** (thường 10–100 kΩ), nếu không contactor có thể tự đóng lúc khởi động.
+Firmware không thay thế được điện trở này. Cần kiểm tra trên PCB.
+Từ 05/11/2026 firmware bật contactor ngay khi boot (`CONTACTOR_ON_AT_BOOT` = 1
+trong `contactor.c`): contactor đóng vài ms sau khi STM32 chạy, kể cả sau mỗi
+lần reset hoặc nạp code.
+>>>>>>> Stashed changes
 
 ## ST-LINK / SWD
 

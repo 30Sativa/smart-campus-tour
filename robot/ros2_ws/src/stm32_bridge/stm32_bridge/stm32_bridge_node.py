@@ -1047,6 +1047,18 @@ class Stm32BridgeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = Stm32BridgeNode()
+<<<<<<< Updated upstream
+=======
+    # Nhieu luong: action head/set (HOME ~13 s) va service cho xac nhan tu FB
+    # trong khi timer (callback group mac dinh, tuan tu) van gui CMD/STOP va
+    # doc FB. Ghi serial duoc khoa bang _serial_lock.
+    from rclpy.executors import MultiThreadedExecutor
+    # Action/service cho xac nhan chiem luong; timer (doc FB) can mot luong
+    # rieng con trong, neu khong cac lenh cho se het han. 8 luong du cho mot
+    # goal HOME + vai service + goal moi thay goal cu cung luc.
+    executor = MultiThreadedExecutor(num_threads=8)
+    executor.add_node(node)
+>>>>>>> Stashed changes
 
     try:
         rclpy.spin(node)

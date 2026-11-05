@@ -28,6 +28,17 @@
     <None Include="..\..\database\smart-campus-tour-schema-v1.1.sql" Link="Schema\snapshot.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-schema-v1.0.sql" Link="Schema\snapshot-v1.0.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\database\smart-campus-tour-permissions.sql" Link="Schema\permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+<<<<<<< Updated upstream
+=======
+    <None Include="..\..\database\smart-campus-tour-runtime-permissions.sql" Link="Schema\runtime-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\smart-campus-tour-bootstrap-check.sql" Link="Schema\bootstrap-check.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\database\fleet-credential-provisioning-permissions.sql" Link="Schema\fleet-credential-provisioning-permissions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\deploy\init-db.sh" Link="Schema\init-db.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-request.json" Link="ContractFixtures\fleet-sync\v1\sync-request.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-sync\v1\sync-response-accepted.json" Link="ContractFixtures\fleet-sync\v1\sync-response-accepted.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-commands\v1\*.json" Link="ContractFixtures\fleet-commands\v1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\docs\contracts\fleet-head\v1\*.json" Link="ContractFixtures\fleet-head\v1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+>>>>>>> Stashed changes
   </ItemGroup>
 
 </Project>
