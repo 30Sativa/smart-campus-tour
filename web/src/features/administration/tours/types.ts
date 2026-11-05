@@ -19,6 +19,16 @@ export type TourSummary = {
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** The active robot hold. Null for a legacy Tour and once a Tour is cancelled. */
   reservation?: TourReservation | null
+  /** Read-only run situation from the list query. An older server omits it; then read the detail. */
+  execution?: TourExecutionSummary | null
+}
+/**
+ * `commandState` is the current leg's GoTo, the command the detail shows.
+ * `needsReconcile` is true while any GoTo of the Tour is UNKNOWN, also after the Tour ended.
+ */
+export type TourExecutionSummary = {
+  operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
+  commandState: RobotCommandState | null; needsReconcile: boolean
 }
 export type TourDetails = {
   tour: TourSummary
