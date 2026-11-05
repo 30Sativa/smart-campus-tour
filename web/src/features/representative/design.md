@@ -4,7 +4,15 @@ User approved the complete standalone reference on 2026-11-05. Implement the rea
 
 ## Locked visual system
 
-Be Vietnam Pro; forest ink #102d31, paper #f7faf6, sage #eaf2ed, lime primary #d6f18d. Use `--rep-*` tokens from representative stylesheet, dark overrides from theme store. Body16px, labels14px, title32px, section23px. Use existing rep classes; root supplies all shared styles. Centered max1320px, top nav three destinations, one bell, account menu. No marketing heroes or closing photo CTA, no giant zero stats or icon coins, no uppercase eyebrows, no dot-separated metadata, no arrow appended to every link. One primary action per region. Flat tables, horizontal rules, tinted internal record list left, selected registration details right. At mobile the list becomes an explicit chooser/back flow, and tables restack using `data-label` cells; active tab is visible. Profiles read-only, selected light/dark state visible.
+Latest user revision (2026-11-05): restore the compact top navigation and
+original card style. Balance the overview with three equal summary cards, a
+full-width next-visit card and two equal-width content cards sharing the same
+padding, header and empty-state height. Keep the forest/lime palette and all
+server-backed data, ownership and permission behavior.
+
+Be Vietnam Pro; forest ink #102d31, paper #f7faf6, sage #eaf2ed, lime primary #d6f18d. Use `--rep-*` tokens from representative stylesheet, dark overrides from theme store. Body16px, labels14px, title32px, section23px. Use existing rep classes; root supplies all shared styles. Centered max1320px, top nav three destinations, one bell, account menu. No marketing heroes or closing photo CTA, no giant zero stats or icon coins, no uppercase eyebrows, no dot-separated metadata, no arrow appended to every link. One primary action per region. Flat tables, horizontal rules, tinted internal record list left, selected registration details right.
+
+Compact card revision (user request, 2026-11-05): page background is tinted (`--rep-bg`) and grouped content sits on white `.rep-card` surfaces (`--rep-radius-card`, `--rep-card-shadow`) instead of full-width rules. Overview stats are three separate small cards (label with a small outline icon, value, one-line hint) — never vertical divider rules. Overview is a 1.6/1 grid: next-tour and recent-activity cards left, open-tours card right. Tour catalog is one flush card of rows; the registrations workspace is one rounded card with a segmented group switch. Nav is 64px with pill links; titles 28px, leads 14px, body line-height 1.5; empty states are compact and centered inside their card. At mobile the list becomes an explicit chooser/back flow, and tables restack using `data-label` cells; active tab is visible. Profiles read-only, selected light/dark state visible.
 
 ## Shared JSX/CSS contract
 

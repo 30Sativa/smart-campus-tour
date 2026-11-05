@@ -1,0 +1,43 @@
+[
+ {
+  "shape": "app screen",
+  "scope": "app",
+  "theme": "brand",
+  "mode": "redesign",
+  "depth": "full",
+  "axes": "sage/Be Vietnam Pro/forest-lime",
+  "hero": "not applicable: viewer app",
+  "nav": "compact top bar",
+  "footer": "none: active viewer workspace",
+  "imagery": "existing video poster and actual authorized stream",
+  "photos": [],
+  "entry": "src/features/student/student.css",
+  "fingerprint": [
+   "video workspace",
+   "top bar",
+   "left video",
+   "right tabs",
+   "flat stop list",
+   "quiet surfaces"
+  ],
+  "sections": [
+   "invitation",
+   "waiting",
+   "live",
+   "completed",
+   "cancelled"
+  ],
+  "signature": "Robot camera, current stop and persistent narration/AI/route panel",
+  "waived": [],
+  "prompt": "Synchronize Student Tour UI with the approved Representative UI",
+  "copy_changes": [
+   "Replace metadata middle-dot separators with commas",
+   "LIVE becomes Trực tiếp",
+   "Bấm để nghe thử âm thanh becomes Nghe thử âm thanh",
+   "AI typing ellipsis becomes typographic"
+  ],
+  "kept": "2/2 links, 2/2 fields, 23/23 handlers, 2/2 headings, 1/1 figures from the before record",
+  "review": "in-thread finish review; mobile header and audio button refinement",
+  "date": "2026-11-05"
+ }
+]

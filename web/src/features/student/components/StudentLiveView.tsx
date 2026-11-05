@@ -1,5 +1,5 @@
 import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { Bot, Captions, Check, Compass, Flag, ListOrdered, MessageSquare } from 'lucide-react'
+import { Bot, Captions, Check, Clock3, Compass, Flag, ListOrdered, MapPin, MessageSquare, Route } from 'lucide-react'
 import type { PoiDetail, StudentSession, StudentTourSnapshot } from '../student-types'
 import { getStudentStatusDisplay } from '../student-status'
 import { POI_PROGRESS_LABEL, poiMinutes, poiProgress } from '../student-route'
@@ -36,9 +36,8 @@ const TABS: { key: StudentLiveTab; label: string; Icon: typeof Compass }[] = [
 ]
 
 /**
- * Live tour, layout "Ứng dụng tab": the robot's camera with a strip of stops
- * underneath, and one panel with four tabs beside it. On phones the panel
- * drops under the video and its tab bar sits at the bottom like an app.
+ * The journey leads above the robot's camera and the tabbed information panel.
+ * On phones those panels stack in the same reading order.
  * Every tab stays mounted so the AI conversation survives a tab switch.
  */
 export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narrationIdleText, video, notice }: StudentLiveViewProps) {
@@ -73,19 +72,19 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
 
   return (
     <div className="st-ctn st-live-view st-e st-x-live">
+      {pois.length > 0 && <JourneyRail pois={pois} snapshot={snapshot} />}
       <div className="st-e-grid">
         <div className="st-e-main">
           <div className={`st-x-stage st-tone-${statusDisplay.tone}${snapshot.step === 'navigating' || snapshot.step === 'returning' ? ' is-moving' : ''}`}>
             <StudentVideoPlayer streamUrl={snapshot.videoStreamUrl || undefined} statusLabel={stopLabel}
               badge={video?.badge} emptyMessage={video?.emptyMessage} />
-            {/* What is happening, over the picture (the player keeps its own controls below it). */}
+            {/* Keep the current stop readable below the picture and its controls. */}
             <div className="st-x-caption" aria-live="polite">
-              <small><i aria-hidden="true" />{statusDisplay.label}</small>
+              <small><MapPin size={14} aria-hidden="true" />{statusDisplay.label}</small>
               <h2>{snapshot.step === 'returning' ? 'Về điểm kết thúc' : snapshot.currentPoi?.title ?? snapshot.nextPoi?.title ?? idleTitle ?? snapshot.tourName}</h2>
               {statusDisplay.description && <p>{statusDisplay.description}</p>}
             </div>
           </div>
-          {pois.length > 0 && <JourneyRail pois={pois} snapshot={snapshot} />}
           {notice}
         </div>
 
@@ -156,7 +155,7 @@ export function StudentLiveView({ snapshot, ai, showMap = true, idleTitle, narra
                       <b>{poi.title}</b>
                       <small>
                         {state === 'now' ? 'Bạn đang ở đây' : POI_PROGRESS_LABEL[state]}
-                        {state === 'later' && minutes ? ` · khoảng ${minutes} phút` : ''}
+                        {state === 'later' && minutes ? `, khoảng ${minutes} phút` : ''}
                       </small>
                     </span>
                   </li>
@@ -196,7 +195,7 @@ function JourneyRail({ pois, snapshot }: { pois: PoiDetail[]; snapshot: StudentT
   const minutes = pois.filter((_, index) => states[index] !== 'done').reduce((sum, poi) => sum + (poiMinutes(poi) ?? 0), 0)
   return (
     <section className="st-x-rail" aria-label="Hành trình">
-      <p className="st-x-rail__head"><span>Hành trình</span><span>{percent}%{minutes ? ` · còn khoảng ${minutes} phút dừng` : ''}</span></p>
+      <p className="st-x-rail__head"><span><Route size={20} aria-hidden="true" />Hành trình</span><span className="st-x-rail__meta"><b>{percent}%</b>{minutes ? <span><Clock3 size={14} aria-hidden="true" />còn khoảng {minutes} phút dừng</span> : null}</span></p>
       <div className="st-x-rail__track" role="progressbar" aria-label="Tiến độ hành trình" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
         <span className="st-x-rail__fill" style={{ width: `${percent}%` }} />
         {pois.map((poi, index) => (
@@ -207,8 +206,9 @@ function JourneyRail({ pois, snapshot }: { pois: PoiDetail[]; snapshot: StudentT
       <ol className="st-x-rail__stops" style={{ gridTemplateColumns: `repeat(${legs}, minmax(0, 1fr))` }}>
         {pois.map((poi, index) => (
           <li key={poi.id} className={`is-${states[index]}`} aria-current={states[index] === 'now' ? 'step' : undefined}>
-            <b>{String(poi.order).padStart(2, '0')}</b>
+            <b>{states[index] === 'done' ? <Check size={14} aria-hidden="true" /> : states[index] === 'now' ? <MapPin size={14} aria-hidden="true" /> : null}{String(poi.order).padStart(2, '0')}</b>
             <span>{poi.title.split(' & ')[0]}</span>
+            <small>{POI_PROGRESS_LABEL[states[index]]}</small>
           </li>
         ))}
         <li className={snapshot.step === 'returning' ? 'is-now' : 'is-later'}><b><Flag size={12} aria-hidden="true" /> Đích</b><span>Về điểm cuối</span></li>

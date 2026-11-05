@@ -7,7 +7,10 @@ The schema is v1.1, unchanged by this feature.
 ## Implemented
 
 The Representative workspace uses a compact three-destination header: overview,
-Tour catalog and owned registrations. The registration list and detail share a
+Tour catalog and owned registrations. The overview keeps three equally sized
+summary cards, a full-width upcoming-visit card, then two equal-width cards for
+recent registrations and open Tours. Card spacing and empty-state heights match
+across both columns; mobile layouts stack naturally. The registration list and detail share a
 workspace; selection, filters, pagination and detail tab survive in the URL.
 Phone layouts offer a registration chooser and labelled table values. Account
 and contact information are read-only; contact values come from owned records.

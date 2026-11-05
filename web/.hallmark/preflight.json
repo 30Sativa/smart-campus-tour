@@ -1,0 +1,33 @@
+{
+  "scanned": "2026-11-05",
+  "findings": {
+    "fonts": "Be Vietnam Pro: web/src/features/representative/tokens.css:4",
+    "palette": "Forest, sage and lime: web/src/features/representative/tokens.css:5",
+    "framework": "React, Vite and TypeScript: web/package.json:7",
+    "source": "Invitation/session and live state composition: web/src/features/student/invitation/StudentInvitationPage.tsx:1",
+    "reference": "Approved balanced Representative layout: web/src/routes/representative/RepDashboardPage.tsx:23",
+    "material": "Existing logo, video poster, live session contracts and route/narration data. Visual fixtures are isolated outside app source.",
+    "baseline": "web/.hallmark/before.json: 318 Floor findings, 128 Reflex findings, 23 warnings; includes obsolete styles and map literals."
+  },
+  "preserve": [
+    "Approved Representative changes in the working tree",
+    "Brand tokens",
+    "All Student endpoints, fields, handlers and polling",
+    "Real video/AI capabilities and shared-screen privacy"
+  ],
+  "introduce": [
+    "Shared Student palette aliases",
+    "Balanced quiet viewer layout",
+    "Accessible entry errors and skip link",
+    "Keyboard tab/draft regression coverage"
+  ],
+  "inferred": {
+    "audience": "Invited students and shared viewing rooms",
+    "use": "Watch the authorized Tour and ask questions",
+    "tone": "Restrained, readable, consistent with Representative"
+  },
+  "scope": "app",
+  "theme": "brand",
+  "mode": "redesign",
+  "depth": "full"
+}

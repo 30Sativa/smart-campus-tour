@@ -1,9 +1,9 @@
 import { useParams } from 'react-router'
 import { StudentHeader } from '../../features/student/components/StudentHeader'
 import { StudentInvitationPage } from '../../features/student/invitation/StudentInvitationPage'
-import '../../features/landing/landing.css'
 import '../../features/student/student.css'
 import '../../features/student/student-expedition.css'
+import '../../features/student/invitation/invitation.css'
 
 const TOUR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -12,9 +12,9 @@ export default function StudentTourPage() {
   const { tourId } = useParams<{ tourId?: string }>()
   if (tourId && TOUR_ID.test(tourId)) return <StudentInvitationPage key={tourId.toLowerCase()} tourId={tourId.toLowerCase()} />
   return <div className="lp st st-x st--entry">
-    <div className="st-x-bg" aria-hidden="true"><i /><i /><i /></div>
+    <a className="st-skip" href="#student-main">Đến nội dung chính</a>
     <StudentHeader session={null} />
-    <main className="st-main">
+    <main id="student-main" tabIndex={-1} className="st-main st-entry-message st-ctn">
       <h1>Không tìm thấy buổi tham quan</h1>
       <p>Hãy mở đường link trong email lời mời và nhập mã truy cập của bạn.</p>
     </main>

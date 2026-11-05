@@ -28,7 +28,7 @@ export function StudentHeader({
   onLeave,
   leaveLabel = 'Thoát',
   leaveDisabled = false,
-  liveLabel = 'LIVE',
+  liveLabel = 'Trực tiếp',
   portalLabel = 'Cổng tham quan học sinh',
 }: StudentHeaderProps) {
   const theme = useThemeStore((state) => state.theme)
@@ -39,8 +39,8 @@ export function StudentHeader({
     </button>
   )
   const leaveButton = onLeave && (
-    <button type="button" onClick={onLeave} disabled={leaveDisabled} title="Thoát phiên tham quan" className="st-leave">
-      <LogOut size={14} />
+    <button type="button" onClick={onLeave} disabled={leaveDisabled} aria-label={leaveLabel} title="Thoát phiên tham quan" className="st-leave">
+      <LogOut size={16} aria-hidden="true" />
       <span>{leaveLabel}</span>
     </button>
   )
@@ -49,11 +49,11 @@ export function StudentHeader({
       <div className="st-ctn st-header__inner">
         <div className="st-brand">
           <BrandMark />
-          <div style={{ minWidth: 0 }}>
+          <div className="st-brand__copy">
             <div className="st-brand__top">
               <span className="st-brand__name">CampusTour</span>
               {isLive && (
-                <span className="st-live"><i />{liveLabel}</span>
+                <span className="st-live">{liveLabel}</span>
               )}
             </div>
             <h1 className="st-brand__title">{tourName}</h1>
@@ -66,7 +66,7 @@ export function StudentHeader({
             <div className="st-user__text">
               <p className="st-user__name">{session.studentName}</p>
               <p className="st-user__meta">
-                {session.studentClass ? `Lớp ${session.studentClass} • ` : ''}Đoàn {session.groupCode}
+                {session.studentClass ? `Lớp ${session.studentClass}, ` : ''}Đoàn {session.groupCode}
               </p>
             </div>
             <div className="st-avatar" aria-hidden="true">{session.studentName.trim().charAt(0)}</div>
@@ -75,7 +75,7 @@ export function StudentHeader({
         ) : (
           <div className="st-user">
             {themeButton}
-            <div className="st-portal"><i />{portalLabel}</div>
+            <div className="st-portal">{portalLabel}</div>
             {leaveButton}
           </div>
         )}

@@ -1,28 +1,63 @@
-.st .st-invitation-card {
-  align-self: flex-start;
-  width: calc(100% - 40px);
-  max-width: 576px;
-  margin: 40px auto;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--paper);
-  color: var(--ink);
-}
-.st .st-invitation-card h2 { margin-bottom: 12px; font-size: 24px; font-weight: 700; }
-.st .st-invitation-card p { margin-top: 8px; line-height: 1.6; }
-.st .st-invitation-card label { margin-top: 20px; }
-.st .st-invitation-card input { margin-top: 8px; }
-.st .st-invitation-submit { margin-top: 20px; padding-inline: 24px; }
-/* Live Q&A inside the invitation card: undo the card's paragraph spacing for chat bubbles. */
-.st .st-invitation-ai { margin-top: 20px; }
-.st .st-invitation-ai .st-ai p { margin-top: 0; }
-.st .st-invitation-ai .st-ai__err button { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; text-decoration: underline; }
-@media (max-width: 600px) {
-  .st .st-invitation-card { margin-top: 24px; padding: 20px; }
-}
-/* Invited page: session status under the shared Tour screens, fallback video link. */
-.st .st-invitation-status:empty { display: none; }
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: full · scope: app · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V3 · weakest: V, retain a familiar invitation form with clear failure states */
+.st .st-invitation-card { width: min(calc(100% - 64px),576px); margin: 40px auto; padding: 32px; border: 1px solid var(--st-line); border-radius: var(--st-card-radius); background: var(--st-paper); color: var(--st-ink); box-shadow: var(--st-shadow); }
+.st .st-invitation-card h2 { margin-bottom: 12px; font-size: var(--st-font-xl); text-wrap: balance; }
+.st .st-invitation-card p { color: var(--st-secondary); font-size: var(--st-font-sm); line-height: 1.8; max-width: 65ch; }
+.st .st-invitation-card label { display: block; margin-top: 24px; font-size: var(--st-font-sm); font-weight: 600; }
+.st .st-invitation-card input { width: 100%; height: 48px; margin-top: 8px; padding: 12px 12px; border: 1px solid var(--st-field-line); border-radius: var(--st-radius); background: var(--st-paper); color: var(--st-ink); font-size: var(--st-font-md); }
+.st .st-invitation-card input[aria-invalid='true'] { border-color: var(--st-danger); }
+.st .st-invitation-submit { width: 100%; margin-top: 24px; }
+.st .st-invitation-note { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--st-line); }
+.st .st-session-error, .st .st-invitation-card .st-session-error { margin-top: 16px; padding: 12px 16px; border-radius: var(--st-radius); background: var(--st-danger-bg); color: var(--st-danger); font-size: var(--st-font-sm); line-height: 1.7; }
+.st .st-session-retry { min-height: 44px; margin-top: 8px; color: var(--st-green); font-size: var(--st-font-sm); text-decoration: underline; }
 .st .st-invitation-status { padding-bottom: 24px; }
-.st .st-invitation-fallback { margin-top: 12px; }
-.st .st-invitation-fallback a { text-decoration: underline; font-weight: 600; }
+.st .st-invitation-status:empty { display: none; }
+.st .st-invitation-fallback a { display: inline-flex; align-items: center; min-height: 44px; color: var(--st-green); font-size: var(--st-font-sm); text-decoration: underline; }
+.st .st-entry-message { padding-block: 40px; }
+.st .st-entry-message h1 { font-size: var(--st-font-title); margin-bottom: 12px; }
+.st .st-entry-message p { color: var(--st-secondary); font-size: var(--st-font-md); max-width: 65ch; line-height: 1.8; }
+.st .st-loading-lines { display: grid; gap: 16px; margin-top: 24px; }
+.st .st-loading-lines span { height: 44px; background: var(--st-sunk); border-radius: var(--st-radius); }
+.st .st-loading-lines span:first-child { height: 20px; width: 75%; }
+.st .st-entry-layout { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr); align-items: center; gap: 48px; min-height: calc(100dvh - 73px); padding-block: 32px; }
+.st .st-entry-story { display: grid; gap: 24px; min-width: 0; }
+.st .st-entry-intro h2 { max-width: 20ch; font-size: 36px; line-height: 1.2; letter-spacing: -.6px; text-wrap: balance; }
+.st .st-entry-intro > p { max-width: 52ch; margin-top: 16px; color: var(--st-secondary); font-size: var(--st-font-md); line-height: 1.7; }
+.st .st-entry-photo { position: relative; overflow: clip; border-radius: var(--st-card-radius); aspect-ratio: 2 / 1; background: var(--st-stage); }
+.st .st-entry-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 65% 62%; }
+.st .st-entry-photo figcaption { position: absolute; inset: auto auto 16px 16px; display: inline-flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 8px 12px; border-radius: var(--st-radius); background: var(--st-stage-label); color: var(--st-stage-ink); font-size: var(--st-font-xs); }
+.st .st-entry-photo figcaption svg { color: var(--st-primary); }
+.st .st-entry-features { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.st .st-entry-features li { display: flex; align-items: flex-start; gap: 8px; color: var(--st-secondary); font-size: var(--st-font-xs); line-height: 1.6; }
+.st .st-entry-features svg { color: var(--st-green); }
+.st .st-entry-layout .st-entry-form { width: 100%; margin: 0; padding: 32px; border-top: 3px solid var(--st-green); }
+.st .st-entry-form-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.st .st-entry-form-heading > svg { color: var(--st-green); }
+.st .st-entry-form-heading h2 { margin-bottom: 0; }
+.st .st-entry-code-field { position: relative; margin-top: 8px; }
+.st .st-entry-code-field > svg { position: absolute; top: 50%; left: 16px; transform: translateY(-50%); pointer-events: none; color: var(--st-muted); }
+.st .st-entry-code-field input { margin-top: 0; padding-left: 44px; }
+.st .st-entry-code-field input:hover:not(:disabled) { background: var(--st-sunk); }
+.st .st-entry-form .st-invitation-note { display: flex; align-items: flex-start; gap: 12px; }
+.st .st-entry-form .st-invitation-note svg { margin-top: 4px; color: var(--st-green); }
+@media (max-width: 1100px) {
+  .st .st-entry-layout { gap: 32px; }
+  .st .st-entry-layout .st-entry-form { padding: 24px; }
+  .st .st-entry-intro h2 { font-size: 32px; }
+}
+@media (max-width: 800px) {
+  .st .st-entry-layout { grid-template-columns: minmax(0,1fr); gap: 32px; min-height: 0; padding-block: 24px 40px; }
+  .st .st-entry-story { gap: 20px; }
+  .st .st-entry-photo { aspect-ratio: 2.6 / 1; }
+  .st .st-entry-intro h2 { font-size: 28px; }
+  .st .st-entry-intro br { display: none; }
+  .st .st-entry-intro > p { margin-top: 12px; font-size: var(--st-font-sm); }
+  .st .st-entry-features { gap: 12px; }
+  .st .st-entry-features li { flex-direction: column; gap: 4px; }
+}
+@media (max-width: 390px) {
+  .st .st-entry-form-heading { gap: 8px; }
+  .st .st-entry-form-heading h2 { font-size: var(--st-font-lg); }
+  .st .st-entry-photo figcaption { inset: auto 8px 8px; padding: 8px; }
+}
+@media (max-width: 599px) { .st .st-invitation-card { width: calc(100% - 32px); padding: 24px; margin-block: 24px; } }

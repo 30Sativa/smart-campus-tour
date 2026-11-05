@@ -112,6 +112,17 @@ describe('Representative Tour detail ownership', () => {
 })
 
 describe('Representative overview state', () => {
+  it('keeps an empty overview useful with catalog and activity navigation', async () => {
+    vi.spyOn(representativeApi, 'registrations').mockResolvedValue(paged([]))
+    vi.mocked(representativeApi.tours).mockResolvedValue(paged([]))
+    renderPage('/dai-dien')
+    expect(await screen.findByRole('heading', { name: 'Tổng quan' })).toBeInTheDocument()
+    expect(screen.getByText('Bạn chưa có đăng ký nào')).toBeInTheDocument()
+    expect(screen.getByText('Chưa có buổi nhận đăng ký')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Xem buổi tham quan' })).toHaveAttribute('href', '/dai-dien/buoi')
+    expect(screen.getByRole('link', { name: 'Đăng ký của tôi' })).toHaveAttribute('href', '/dai-dien/dang-ky')
+    expect(screen.getByRole('link', { name: 'Xem tất cả buổi' })).toHaveAttribute('href', '/dai-dien/buoi')
+  })
   it('shows server totals and the nearest visit beyond the recent list in the owner cache', async () => {
     vi.spyOn(representativeApi, 'registrations').mockImplementation(async parameters => {
       if (parameters.group === 'active') return parameters.page === 1

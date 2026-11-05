@@ -22,15 +22,15 @@ export function StudentEndScreen({ session, snapshot, onLeave, name, meta }: Stu
       <span className="st-end__icon" aria-hidden="true">
         {isCancelled ? <XCircle size={30} /> : <CheckCircle2 size={30} />}
       </span>
-      <div className="st-kicker">{isCancelled ? 'Buổi tham quan đã dừng' : 'Buổi tham quan đã xong'}</div>
       <h2 className="st-x-display">{isCancelled ? 'Buổi tham quan đã kết thúc sớm' : 'Hoàn thành chuyến tham quan!'}</h2>
+      <p className="st-pill-status" role="status">{isCancelled ? 'Buổi tham quan đã dừng' : 'Buổi tham quan đã xong'}</p>
       <p className="st-x-lead">
         Cảm ơn {name ?? session?.studentName ?? 'bạn'} đã đồng hành cùng Robot AMR.{' '}
         {isCancelled
           ? 'Buổi tham quan được nhân viên vận hành kết thúc sớm. Hình ảnh trực tiếp và trợ lý AI đã dừng hoạt động.'
           : 'Robot đã hoàn thành chặng đường và về tới vị trí kết thúc an toàn. Hy vọng bạn đã có trải nghiệm thú vị về khuôn viên!'}
       </p>
-      <p className="st-x-meta"><School size={16} /><span>{meta ?? `${snapshot.schoolName} • Đoàn ${session?.groupCode ?? ''}`}</span></p>
+      <p className="st-x-meta"><School size={16} /><span>{meta ?? `${snapshot.schoolName}, Đoàn ${session?.groupCode ?? ''}`}</span></p>
 
       {!isCancelled && stops.length > 0 && (
         <>
@@ -54,7 +54,6 @@ export function StudentEndScreen({ session, snapshot, onLeave, name, meta }: Stu
       {onLeave && (
         <button type="button" onClick={onLeave} className="st-btn">
           <span>Rời phòng tham quan</span>
-          <span className="st-btn__ic" aria-hidden="true">↗</span>
         </button>
       )}
     </div>

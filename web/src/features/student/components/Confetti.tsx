@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-const COLORS = ['#d6f18d', '#a6d75e', '#f4b860', '#ff8b7b', '#f2efe6']
+const COLOR_TOKENS = ['--st-primary', '--rep-leaf', '--st-success', '--st-info', '--st-paper']
 
 /**
  * One burst of confetti when a finished Tour's end screen opens. Purely
@@ -15,6 +15,8 @@ export function Confetti() {
     const context = canvas?.getContext('2d')
     if (!canvas || !context) return
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const style = getComputedStyle(canvas)
+    const colors = COLOR_TOKENS.map(token => style.getPropertyValue(token).trim())
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
     const bits = Array.from({ length: 150 }, () => ({
@@ -23,7 +25,7 @@ export function Confetti() {
       vx: (Math.random() - 0.5) * 14,
       vy: -Math.random() * 14 - 4,
       size: Math.random() * 6 + 3,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
       angle: Math.random() * 6,
       spin: (Math.random() - 0.5) * 0.3,
     }))
