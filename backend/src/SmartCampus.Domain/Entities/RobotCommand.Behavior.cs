@@ -57,6 +57,13 @@ public partial class RobotCommand
         return command;
     }
 
+    public void Deliver(Guid streamId, DateTimeOffset at)
+    {
+        DeliveredStreamId = streamId;
+        DeliveredAt = at;
+        MoveTo(RobotCommandStates.Delivered);
+    }
+
     public void Accept(DateTimeOffset at)
     {
         AcceptedAt = at;

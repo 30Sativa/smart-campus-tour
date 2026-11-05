@@ -1,7 +1,6 @@
 # Fleet Commands v1
 
-**Status: Accepted in [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (03/11/2026). The backend stores commands and processes results from M2.2-b; the robot endpoints are M2.2-d.**
-No robot endpoint or bridge code exists for this contract yet.
+**Status: Accepted in [ADR-0042](../../../decisions/0042-m2-command-transport-and-start-readiness.md) (03/11/2026). Implemented by the backend from M2.2-d.**
 Fleet Sync v1 stays telemetry-only and always returns `commands: []`. Dispatch
 stays off until the M2.3 safety evidence.
 
@@ -63,7 +62,8 @@ Requests: [`result-accepted.json`](result-accepted.json),
 | `reason` | Nullable UPPER_SNAKE code, e.g. `MAP_MISMATCH`, `BUSY`, `EXPIRED`, `UNKNOWN_LEG`. |
 
 The backend answers `200` only after the resulting state change and its
-`TourEvents` row are committed:
+`TourEvents` row are committed. Like every API response this is in the `data` field
+of the standard envelope:
 
 ```json
 {"accepted":true,"duplicate":false,"commandState":"ACCEPTED"}

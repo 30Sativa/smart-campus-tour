@@ -52,6 +52,8 @@ public interface ITourManagementRepository
     Task<RobotCommand?> LockOpenCancelAsync(Guid goToId, CancellationToken ct);
     /// <summary>Candidates only, unlocked: each transition rechecks under its own locks.</summary>
     Task<IReadOnlyList<RobotCommand>> ListOpenCommandsAsync(CancellationToken ct);
+    /// <summary>The Tour of the robot's open command, unlocked, so a poll knows which root lock to take first.</summary>
+    Task<Guid?> FindOpenCommandTourAsync(Guid robotId, CancellationToken ct);
     Task<IReadOnlyList<Guid>> ListRunningTourIdsAsync(CancellationToken ct);
     Task MarkRobotNeedsInspectionAsync(Guid robotId, CancellationToken ct);
     /// <summary>Clears the hold only if the robot still has this version; false when it changed.</summary>

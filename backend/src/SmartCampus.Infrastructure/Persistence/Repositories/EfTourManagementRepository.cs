@@ -137,6 +137,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
     public async Task<IReadOnlyList<RobotCommand>> ListOpenCommandsAsync(CancellationToken ct) =>
         await db.RobotCommands.AsNoTracking().Where(c => c.IsOpen).ToArrayAsync(ct);
 
+    public Task<Guid?> FindOpenCommandTourAsync(Guid robotId, CancellationToken ct) =>
+        db.RobotCommands.AsNoTracking().Where(c => c.RobotId == robotId && c.IsOpen).Select(c => (Guid?)c.TourId).FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<Guid>> ListRunningTourIdsAsync(CancellationToken ct) =>
         await db.Tours.AsNoTracking().Where(t => t.State == TourRuntime.Running).Select(t => t.Id).ToArrayAsync(ct);
 

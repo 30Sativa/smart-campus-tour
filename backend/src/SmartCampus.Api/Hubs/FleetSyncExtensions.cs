@@ -15,6 +15,9 @@ public static class FleetSyncExtensions
         services.AddSingleton(provider => CreateSettings(configuration,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FleetSyncSettings>>()));
         services.AddSingleton<FleetOperationsBroadcaster>();
+        // Replaces the Infrastructure default, which has no hub to count.
+        services.AddSingleton<HubOperatorConsolePresence>();
+        services.AddSingleton<SmartCampus.Application.Common.Abstractions.FleetSync.IOperatorConsolePresence>(provider => provider.GetRequiredService<HubOperatorConsolePresence>());
         services.AddHostedService<FleetFreshnessMonitor>();
         services.AddAuthorization(options => options.AddPolicy(
             FleetOperationsAuthorization.StaffPolicy,

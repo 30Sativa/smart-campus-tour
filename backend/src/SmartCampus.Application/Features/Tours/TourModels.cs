@@ -68,6 +68,7 @@ public static class TourLifecycleEvents
     public const string LegRetried = "TOUR_LEG_RETRIED";
     public const string LegWithdrawn = "LEG_WITHDRAWN";
     public const string LegCancelRequested = "LEG_CANCEL_REQUESTED";
+    public const string CommandDelivered = "COMMAND_DELIVERED";
     public const string CommandExpired = "COMMAND_EXPIRED";
     public const string CommandUnknown = "COMMAND_UNKNOWN";
     public const string CommandReconciled = "COMMAND_RECONCILED";

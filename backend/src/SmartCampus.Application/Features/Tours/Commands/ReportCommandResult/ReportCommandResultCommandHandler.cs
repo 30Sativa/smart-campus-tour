@@ -3,6 +3,7 @@ using System.Text.Json;
 using MediatR;
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Application.Features.FleetSync;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Domain.Entities;
 
@@ -13,15 +14,17 @@ namespace SmartCampus.Application.Features.Tours.Commands.ReportCommandResult;
 /// no further effect, and only a result for the Tour's current leg moves the Tour; any other is recorded and changes nothing.
 /// </summary>
 public sealed class ReportCommandResultCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations,
-    IRouteRevisionRepository revisions, TimeProvider clock) : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
+    IRouteRevisionRepository revisions, FleetCommandSettings settings, TimeProvider clock) : IRequestHandler<ReportCommandResultCommand, CommandResultAck>
 {
     public async Task<CommandResultAck> Handle(ReportCommandResultCommand result, CancellationToken ct)
     {
+        if (!settings.Enabled)
+            throw new ServiceUnavailableException("Command transport đang tắt.", TourStartPreflight.TransportDisabledCode);
         var known = await repository.FindCommandAsync(result.CommandId, ct);
         if (known is null || await revisions.GetRobotCodeAsync(known.RobotId, ct) != result.RobotCode)
-            throw new NotFoundException("Không tìm thấy lệnh của robot này.");
+            throw new NotFoundException("Không tìm thấy lệnh của robot này.", "COMMAND_NOT_FOUND");
         var tour = await registrations.LockTourAsync(known.TourId, ct) ?? throw new NotFoundException("Không tìm thấy Tour của lệnh.");
-        var command = await repository.LockCommandAsync(result.CommandId, ct) ?? throw new NotFoundException("Không tìm thấy lệnh của robot này.");
+        var command = await repository.LockCommandAsync(result.CommandId, ct) ?? throw new NotFoundException("Không tìm thấy lệnh của robot này.", "COMMAND_NOT_FOUND");
 
         if (command.LegId != result.LegId)
             throw new ConflictException("Kết quả không thuộc chặng của lệnh.", "RESULT_CONFLICT");

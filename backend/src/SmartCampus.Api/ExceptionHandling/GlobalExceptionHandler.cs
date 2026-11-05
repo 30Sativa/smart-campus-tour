@@ -54,7 +54,7 @@ public sealed class GlobalExceptionHandler(
             NotFoundException notFoundException => (
                 StatusCodes.Status404NotFound,
                 notFoundException.Message,
-                null),
+                notFoundException.Code is null ? null : (object?)new { code = notFoundException.Code }),
             ConflictException { Checks: not null } conflictException => (
                 StatusCodes.Status409Conflict,
                 conflictException.Message,
