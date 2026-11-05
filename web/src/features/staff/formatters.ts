@@ -88,3 +88,13 @@ export function formatSpeed(value?: number | null) {
 export function visitorLabel(tour: { visitorCount: number; confirmedVisitorCount?: number | null }) {
   return tour.confirmedVisitorCount != null ? `${tour.confirmedVisitorCount}/${tour.visitorCount} khách` : `${tour.visitorCount} khách`
 }
+
+/** "còn 1 ngày 21 giờ" past a day, otherwise the shared countdown. */
+export function untilText(value: string, now: number): string | null {
+  const minutes = Math.round((new Date(value).getTime() - now) / 60_000)
+  if (minutes < 24 * 60) return formatCountdown(value, now)
+  const days = Math.floor(minutes / (24 * 60))
+  const hours = Math.floor((minutes % (24 * 60)) / 60)
+  return hours ? `còn ${days} ngày ${hours} giờ` : `còn ${days} ngày`
+}
+

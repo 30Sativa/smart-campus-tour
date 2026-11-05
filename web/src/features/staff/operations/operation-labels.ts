@@ -70,6 +70,46 @@ export function checkVerdict(check: { id: string; passed: boolean }, blockedBy: 
  */
 export const SYSTEM_GATES = ['commandTransportEnabled', 'robotDispatchEnabled'] as const
 
+/**
+ * Who clears a failed Start check. `system` is what nobody on this screen can
+ * change (the M2.3 gates and the console presence the backend cannot see yet);
+ * `robot` is what the robot reports or what is recorded about it.
+ */
+export type BlockerOwner = 'tour' | 'robot' | 'system'
+export function blockerOwner(id: string): BlockerOwner {
+  if ((SYSTEM_GATES as readonly string[]).includes(id) || id === 'operatorConsoleConnected') return 'system'
+  const group = checkInfo(id).group
+  return group === 'robot' || group === 'telemetry' ? 'robot' : 'tour'
+}
+
+/** Where the server read a check from (the `source` of `TourStartPreflight`), in words. */
+export const CHECK_SOURCE_LABEL: Record<string, string> = {
+  DB: 'Dữ liệu hệ thống',
+  TELEMETRY: 'Robot tự báo',
+  CONFIG: 'Cấu hình máy chủ',
+  CONSOLE: 'Kết nối console',
+}
+
+/** What to do about a failed check, when someone on site can do something. The server's detail says why it failed. */
+export const CHECK_FIX: Record<string, string> = {
+  tourReady: 'Chốt Tour ở trang chuẩn bị Tour.',
+  callerIsOperator: 'Đăng nhập bằng tài khoản người vận hành được giao, hoặc đổi người vận hành ở trang chuẩn bị Tour.',
+  reservationActive: 'Giữ lại robot cho khung giờ ở trang chuẩn bị Tour.',
+  revisionStillSchedulable: 'Tuyến cần một lần chạy thử đạt (Technical Staff).',
+  noPendingDecisions: 'Duyệt hết các đăng ký còn chờ ở mục Đăng ký đoàn.',
+  robotEligibleForRoute: 'Technical Staff kiểm tra robot với phiên bản tuyến.',
+  robotMapMatchesRoute: 'Technical Staff gán đúng bản đồ của tuyến cho robot.',
+  robotNotNeedsInspection: 'Kiểm tra robot tại chỗ rồi xác nhận ở Robot & thiết bị.',
+  robotNotHeldByOtherTour: 'Chờ Tour đang giữ robot kết thúc.',
+  noOpenIncident: 'Xử lý sự cố ở màn hình điều hành của Tour đang giữ robot.',
+  noUnresolvedCommand: 'Đóng lệnh còn mở ở màn hình điều hành (Đối soát).',
+  telemetryFresh: 'Bật robot và cầu nối telemetry trên miniPC. Mục này tự đạt khi máy chủ nhận được báo cáo mới.',
+  mapContextMatches: 'Cho robot chạy đúng bản đồ của tuyến.',
+  executionIdle: 'Chờ robot làm xong việc đang làm.',
+  robotLocalized: 'Định vị lại robot trên bản đồ (đặt vị trí ban đầu).',
+  motionReady: 'Kiểm tra nút dừng khẩn cấp và động cơ của robot.',
+}
+
 export const STEP_LABEL: Record<TourStep, string> = {
   NAVIGATING: 'Đang di chuyển tới POI',
   OBSERVING: 'Đang dừng tại POI',

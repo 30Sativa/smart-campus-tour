@@ -1,6 +1,8 @@
-import { Check, ChevronDown, Info, Minus, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Info, Minus, ShieldAlert, X } from 'lucide-react'
+import { formatSlot } from '../../administration/admin-format'
 import type { TourStartCheck } from '../../administration/tours/types'
-import { CHECK_GROUP_LABEL, SYSTEM_GATES, checkInfo, checkVerdict, type CheckGroup, type CheckVerdict } from './operation-labels'
+import { untilText } from '../formatters'
+import { CHECK_FIX, CHECK_GROUP_LABEL, CHECK_SOURCE_LABEL, blockerOwner, checkInfo, checkVerdict, type BlockerOwner, type CheckGroup, type CheckVerdict } from './operation-labels'
 
 const ORDER: CheckGroup[] = ['tour', 'robot', 'telemetry', 'system', 'onsite', 'other']
 
@@ -11,51 +13,84 @@ const VERDICT: Record<CheckVerdict, { label: string; icon: typeof Check; classNa
   info: { label: 'Thông tin', icon: Info, className: 'bg-[#eff6ff] text-[#2563eb]' },
 }
 
-/** What kind of blocker a root cause is, so the operator knows who can clear it. */
-function blockerKind(id: string): { label: string; className: string } {
-  if ((SYSTEM_GATES as readonly string[]).includes(id) || id === 'operatorConsoleConnected')
-    return { label: 'Giới hạn hệ thống', className: 'bg-[#fffaf0] text-[#8a5a06] border-[#f1dcb0]' }
-  if (id === 'callerIsOperator') return { label: 'Quyền', className: 'bg-[#f5f3ff] text-[#5b21b6] border-[#ddd6fe]' }
-  if (id === 'withinStartWindow') return { label: 'Lịch', className: 'bg-[#eff6ff] text-[#1d4ed8] border-[#bfdbfe]' }
-  return { label: CHECK_GROUP_LABEL[checkInfo(id).group], className: 'bg-[#f8fafc] text-[#475569] border-[#e2e8f0]' }
-}
-
 function VerdictIcon({ verdict }: { verdict: CheckVerdict }) {
   const { label, icon: Icon, className } = VERDICT[verdict]
   return <span className={`grid size-5 shrink-0 place-items-center rounded-full ${className}`} title={label}><Icon size={12} strokeWidth={3} aria-hidden="true" /></span>
 }
 
 /**
- * Only the root causes, each with the backend's detail and who can clear it.
- * Checks the server skipped because of them are folded into one line, so a
- * single stale telemetry report does not read as five problems.
+ * Only the root causes, sorted by who can clear them: the Tour side (people,
+ * on this system), the robot side (what the robot reports or what is recorded
+ * about it) and the system gates nobody here can open. Each row carries where
+ * the server read it, the server's own detail and, when there is one, what to
+ * do. Checks the server skipped because of them are folded into one line, so
+ * a single stale telemetry report does not read as five problems.
  */
-export function BlockerList({ checks, blockedBy }: { checks: TourStartCheck[]; blockedBy: readonly string[] }) {
+export function BlockerList({ checks, blockedBy, opensAt, now }: { checks: TourStartCheck[]; blockedBy: readonly string[]; opensAt?: string; now?: number }) {
   const failed = checks.filter(check => checkVerdict(check, blockedBy) === 'failed')
   const notRun = checks.filter(check => checkVerdict(check, blockedBy) === 'notRun')
   if (!failed.length) return <p className="text-[13px] font-semibold text-[#15803d]">Mọi điều kiện từ máy chủ đều đạt.</p>
+  const of = (owner: BlockerOwner) => failed.filter(check => blockerOwner(check.id) === owner)
+  const system = of('system')
+  const fixFor = (id: string) => id === 'withinStartWindow' ? windowFix(opensAt, now) : CHECK_FIX[id]
   return (
-    <div>
-      <ul className="divide-y divide-[#f1f5f9]" aria-label="Nguyên nhân chưa bắt đầu được">
-        {failed.map(check => {
-          const kind = blockerKind(check.id)
-          return <li key={check.id} className="flex items-start gap-3 py-2.5 first:pt-0" data-verdict="failed">
-            <VerdictIcon verdict="failed" />
-            <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-[13px] font-semibold text-[#0f172a]">{checkInfo(check.id).label}</span>
-                <span className={`rounded-full border px-2 py-px text-[10.5px] font-semibold ${kind.className}`}>{kind.label}</span>
-              </span>
-              <span className="mt-0.5 block text-xs leading-5 text-[#64748b]">{check.detail}</span>
-            </span>
-          </li>
-        })}
-      </ul>
-      {notRun.length > 0 && <p className="mt-2 rounded-lg bg-[#f8fafc] px-3 py-2 text-xs leading-5 text-[#64748b]">
+    <div className="space-y-4">
+      {OWNERS.map(({ owner, title, note }) => {
+        const rows = of(owner)
+        if (!rows.length) return null
+        return <div key={owner}>
+          <h3 className="text-[13px] font-semibold text-[#0f172a]">{title}</h3>
+          <p className="mb-1.5 text-xs leading-5 text-[#64748b]">{note}</p>
+          <ul className="divide-y divide-[#f1f5f9]" aria-label={title}>
+            {rows.map(check => {
+              const fix = fixFor(check.id)
+              return <li key={check.id} className="flex items-start gap-3 py-2.5" data-verdict="failed">
+                <VerdictIcon verdict="failed" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[13px] font-semibold text-[#0f172a]">{checkInfo(check.id).label}</span>
+                    <SourceChip source={check.source} />
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[#64748b]">{check.detail}</span>
+                  {fix && <span className="mt-0.5 flex gap-1 text-xs leading-5 font-medium text-[#1d4ed8]"><ArrowRight size={13} className="mt-[3px] shrink-0" aria-hidden="true" />{fix}</span>}
+                </span>
+              </li>
+            })}
+          </ul>
+        </div>
+      })}
+      {notRun.length > 0 && <p className="rounded-lg bg-[#f8fafc] px-3 py-2 text-xs leading-5 text-[#64748b]">
         {notRun.length} kiểm tra chưa chạy vì phụ thuộc các mục trên: {notRun.map(check => checkInfo(check.id).label).join(', ')}.
       </p>}
+      {system.length > 0 && <div className="rounded-xl border border-[#f1dcb0] bg-[#fffaf0] px-3.5 py-3">
+        <p className="flex gap-2 text-xs leading-5 font-semibold text-[#7d5310]"><ShieldAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+          Hệ thống chưa cho phép robot di chuyển theo Tour (điều khiển robot thật chờ bằng chứng an toàn M2.3). Đây không phải lỗi thao tác, không cần bạn xử lý và không có cách bỏ qua.</p>
+        <ul className="mt-1.5 ml-6 space-y-1" aria-label="Giới hạn hệ thống">
+          {system.map(check => <li key={check.id} className="text-xs leading-5 text-[#7d5310]" data-verdict="failed">
+            <span className="font-semibold">{checkInfo(check.id).label}</span>: {check.detail}
+          </li>)}
+        </ul>
+      </div>}
     </div>
   )
+}
+
+const OWNERS: Array<{ owner: Exclude<BlockerOwner, 'system'>; title: string; note: string }> = [
+  { owner: 'tour', title: 'Tour và người vận hành', note: 'Đọc từ dữ liệu Tour trên hệ thống. Người vận hành hoặc Staff xử lý.' },
+  { owner: 'robot', title: 'Robot', note: 'Robot tự gửi trạng thái về máy chủ (telemetry), không phải web hỏi thẳng robot. Mục tự chuyển sang đạt khi robot báo đúng.' },
+]
+
+function SourceChip({ source }: { source: string }) {
+  const label = CHECK_SOURCE_LABEL[source]
+  if (!label) return null
+  return <span className="rounded-full border border-[#e2e8f0] bg-[#f8fafc] px-2 py-px text-[10.5px] font-semibold text-[#475569]">{label}</span>
+}
+
+/** The window opens at the scheduled start: before it say when, after it how to move it. Without a start time (a refusal on the live console) there is nothing to add. */
+function windowFix(opensAt: string | undefined, now: number | undefined): string | undefined {
+  if (!opensAt || now === undefined) return undefined
+  if (new Date(opensAt).getTime() <= now) return 'Đã quá giờ bắt đầu: mở lại Tour để dời lịch.'
+  return `Mở lúc ${formatSlot(opensAt)} (${untilText(opensAt, now)}). Không cần làm gì, mục này tự đạt khi tới giờ.`
 }
 
 /** Every check the server returned, one folded line per group with its count. */
