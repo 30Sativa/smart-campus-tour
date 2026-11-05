@@ -418,6 +418,31 @@ public sealed class TourHappyPathSqlTests
         Assert.Equal(["callerIsOperator"], (await w.H.Send(new GetTourQuery(w.H.TourId, w.H.StaffId))).AllowedActions!.Next.BlockedBy);
     }
 
+    [SchemaV11Fact]
+    public async Task Detail_StopIds_AreTheRevisionStopIdsTheExecutionNames()
+    {
+        await using var w = await World.Create(enabled: true, twoStopsToEndPose: true);
+        await using (var db = w.H.Context())
+        {
+            var rows = await db.RouteRevisionStops.AsNoTracking().Where(s => s.RouteRevisionId == w.H.Route.RevisionId)
+                .OrderBy(s => s.StopOrder).Select(s => s.Id).ToArrayAsync();
+            Assert.Equal(rows, (await w.H.Detail()).RouteRevision!.Stops.Select(s => s.Id));
+        }
+
+        await Start(w);
+        var running = await w.H.Detail();
+        var stops = running.RouteRevision!.Stops;
+        Assert.Equal(stops[0].Id, running.Execution!.CurrentRevisionStopId);
+        Assert.Null(running.Execution.LastArrivedRevisionStopId);
+
+        await Result(w, await Delivered(w), "TERMINAL", "ARRIVED");
+        Assert.Equal(stops[0].Id, (await w.H.Detail()).Execution!.LastArrivedRevisionStopId);
+
+        await Next(w);
+        var second = (await w.H.Detail()).Execution!;
+        Assert.Equal((stops[1].Id, stops[0].Id), (second.CurrentRevisionStopId!.Value, second.LastArrivedRevisionStopId!.Value));
+    }
+
     private static async Task AssertCompletedAndReleased(World w)
     {
         await using var db = w.H.Context();

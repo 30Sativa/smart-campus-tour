@@ -48,7 +48,7 @@ export type TourCommand = { id: string; kind: 'GoTo' | 'Cancel'; state: RobotCom
 export type TourExecution = {
   state: TourState; operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
   currentLegId: string | null; currentLegKind: TourLegKind | null
-  /** `RouteRevisionStops.Id`. The revision's stop view carries no such id yet, so the UI cannot match it to a stop. */
+  /** `RouteRevisionStops.Id`, matching `routeRevision.stops[].id` (absent from older servers, which leaves the stops unmarked). */
   currentRevisionStopId: string | null; lastArrivedRevisionStopId: string | null
   /** Display only: the Tour never leaves a POI by itself (ADR-0043 D12). */
   dwellDeadlineAt: string | null

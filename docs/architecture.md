@@ -141,7 +141,9 @@ submission and Technical Staff manual test evidence described in
 participating Staff account from the read-only
 `GET /api/technical/route-verifications/participants`. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
-not pass legacy `PoiId` values. Saving or submitting a revision requires the
+not pass legacy `PoiId` values. Each stop view (route revision reads and the Tour detail's
+`routeRevision.stops[]`) also returns its own `id`, the `RouteRevisionStops.Id` that Tour
+`execution.currentRevisionStopId` and `lastArrivedRevisionStopId` name (additive). Saving or submitting a revision requires the
 exact map version to have current technical evidence, otherwise 409
 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
 serve existing Tour records only. Versioned Route to Tour selection,

@@ -86,7 +86,6 @@ Rules the screens follow:
 | Releasing a held robot after End Early or Reconcile | `POST /api/technical/physical-robots/{id}/release-inspection` exists (Technical Staff, ADR-0043 D13) but `/technical/*` has no screen for it | Add release-inspection to the Technical robots page; the Staff console only says the robot waits for a Technical Staff check |
 | Ended Tours that still hold an UNKNOWN command in the overview | `TourSummary` has no execution fields, and only RUNNING Tours are read in detail | Return the execution summary in the list; until then the ended Tour's "Xem Tour" opens its console, which offers Reconcile |
 | Notifying groups and revoking live/fallback/Q&A on End Early | FR-48 consequences are a follow-up (ADR-0043 D14) | The End Early dialog tells the Operator to inform groups by the usual means |
-| Marking the current stop on the route | `execution.currentRevisionStopId` is a `RouteRevisionStops.Id`, but the revision stop view has no `id` | Add `id` to `RouteRevisionStopView`, or return the stop order in `execution` |
 | Tour event log | No Tour event read API | `GET …/tours/{id}/events` (TourEvents) |
 | Push updates of Tours | `TourUpdated`/`AssistanceRequired` hub events are planned only | Emit them on the hub; screens then refetch instead of polling |
 | Start can succeed | `FleetCommands:Enabled=false`, nothing sets `IsDispatchEnabled` | M2.3 safety evidence and the D11 writer |
