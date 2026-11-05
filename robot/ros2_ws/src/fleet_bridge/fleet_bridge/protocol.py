@@ -97,6 +97,7 @@ def build_report(
     frame_id: str,
     pose: dict[str, float | str] | None,
     status: str,
+    leg_id: str | None = None,
 ) -> dict[str, object]:
     if not ROBOT_CODE_PATTERN.fullmatch(robot_code):
         raise ValueError('robot code is not valid for Fleet Sync v1')
@@ -110,7 +111,7 @@ def build_report(
         raise ValueError('mapKey and frameId must be configured')
     if status not in ALLOWED_STATUSES:
         raise ValueError('status is not allowed by Fleet Sync v1')
-    if status in {'NAVIGATING', 'ARRIVED', 'FAILED'}:
+    if status in {'NAVIGATING', 'ARRIVED', 'FAILED'} and not leg_id:
         raise ValueError('legId is required for leg-specific execution statuses')
 
     return {
@@ -122,7 +123,7 @@ def build_report(
         'frameId': frame_id,
         'pose': pose,
         'status': status,
-        'legId': None,
+        'legId': leg_id,
         'localized': None,
         'motionReady': None,
         'faultCode': None,

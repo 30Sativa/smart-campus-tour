@@ -5,7 +5,8 @@ Sync v1 endpoint. It observes TF only; execution status remains `UNKNOWN`
 because R1 has no authoritative execution-state source or backend leg ID. It
 does not create a navigation ActionClient, subscribe to Nav2 action status,
 publish velocity, or accept a Backend command. The response's empty
-`commands` array is not consumed as an instruction channel.
+`commands` array is not consumed as an instruction channel. The opt-in Fleet Commands
+v1 receiver is described in `robot/ros2_ws/src/fleet_bridge/README.md`.
 
 The implementation follows [ADR-0019](../../docs/decisions/0019-https-fleet-sync.md)
 and the wire contract in

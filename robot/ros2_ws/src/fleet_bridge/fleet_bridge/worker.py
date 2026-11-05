@@ -78,6 +78,7 @@ class ReportState:
             self.config.frame_id,
             snapshot.get('pose'),
             str(snapshot.get('status', 'UNKNOWN')),
+            snapshot.get('leg_id'),
         )
         self.pending_body = serialize_report(report)
         self.pending_created_monotonic = monotonic_now

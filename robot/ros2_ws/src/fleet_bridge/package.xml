@@ -3,7 +3,7 @@
 <package format="3">
   <name>fleet_bridge</name>
   <version>0.1.0</version>
-  <description>Telemetry-only ROS 2 to Backend Fleet Sync v1 bridge.</description>
+  <description>ROS 2 to Backend Fleet Sync v1 bridge, with an opt-in Fleet Commands v1 receiver.</description>
   <maintainer email="caoduy856@gmail.com">Duy</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,9 @@
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>tf2_ros_py</exec_depend>
 
