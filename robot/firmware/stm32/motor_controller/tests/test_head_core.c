@@ -185,7 +185,7 @@ static long run_until_idle(long max_ticks)
 /* Chay toi khi truc PAN di duoc it nhat n buoc (khong phu thuoc thong so). */
 static void run_until_pan(int32_t n)
 {
-	for (long i = 0; i < 20L * HEAD_TICK_HZ; i++)
+	for (uint32_t i = 0; i < 20U * HEAD_TICK_HZ; i++)
 	{
 		if (HeadCore_GetPositionSteps(HEAD_AXIS_PAN) >= n) return;
 		tick();

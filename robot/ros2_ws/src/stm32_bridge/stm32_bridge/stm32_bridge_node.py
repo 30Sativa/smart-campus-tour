@@ -1,13 +1,18 @@
 import math
+import threading
 import time
-from typing import Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, JointState, Range
 from tf2_ros import TransformBroadcaster
+
+from stm32_bridge.head_link import next_seq
+from stm32_bridge.imu_health import ImuHealth, parse_fb_counters, WARN as IMU_WARN
 
 try:
     import serial
@@ -46,7 +51,18 @@ DEFAULT_TWIST_COVARIANCE_DIAGONAL = [
     0.1,
 ]
 
+# Report huong ma firmware dang stream (BNO08X_USE_GAME_ROTATION_VECTOR).
+# game_rotation_vector (0x08, mac dinh): gyro + accel, khong tu ke -> yaw_acc
+#   khong mo ta sai so heading, dung variance co dinh.
+# rotation_vector (0x05, firmware cu): yaw_acc = muc hieu chuan tu ke.
+IMU_ORIENTATION_REPORTS = ('game_rotation_vector', 'rotation_vector')
+DEFAULT_IMU_ORIENTATION_REPORT = 'game_rotation_vector'
+# ~5.7 do 1-sigma. EKF dung yaw IMU tuong doi (imu0_relative); do tren xe
+# that, yaw khong tu ke lech LiDAR 3-4 % moi vong quay va troi < 0.5 do/phut.
+GAME_ROTATION_VECTOR_YAW_VARIANCE = 0.01
+
 # Variance cua yaw theo muc accuracy BNO08x bao ve (truong yaw_acc cua khung FB).
+# Chi dung voi rotation_vector.
 # 0 = tu ke chua hieu chuan: heading van co gia tri nhung co the sai hang chuc do.
 IMU_YAW_VARIANCE_BY_ACCURACY = {
     3: 0.0020,    # ~2.5 do 1-sigma
@@ -56,7 +72,7 @@ IMU_YAW_VARIANCE_BY_ACCURACY = {
 }
 # Firmware cu khong gui yaw_acc: gia dinh trung binh thay vi tin tuyet doi.
 DEFAULT_IMU_YAW_VARIANCE = 0.05
-# Roll/pitch khong duoc do (chi bat Rotation Vector, va xe chay nen phang).
+# Roll/pitch khong duoc do (chi publish yaw, va xe chay nen phang).
 IMU_UNMEASURED_VARIANCE = 99999.0
 
 
@@ -65,6 +81,14 @@ def imu_yaw_variance(yaw_acc: Optional[int]) -> float:
     if yaw_acc is None:
         return DEFAULT_IMU_YAW_VARIANCE
     return IMU_YAW_VARIANCE_BY_ACCURACY.get(yaw_acc, DEFAULT_IMU_YAW_VARIANCE)
+
+
+def imu_orientation_variance(yaw_acc: Optional[int],
+                             orientation_report: str) -> float:
+    """Variance cua yaw cho report huong firmware dang dung."""
+    if orientation_report == 'game_rotation_vector':
+        return GAME_ROTATION_VECTOR_YAW_VARIANCE
+    return imu_yaw_variance(yaw_acc)
 
 
 def yaw_to_quaternion_z(yaw_rad: float) -> Tuple[float, float]:
@@ -83,6 +107,12 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('baudrate', 115200)
         self.declare_parameter('wheel_base', DEFAULT_WHEEL_BASE)
         self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
+        # Odometry-only correction of the travelled distance (Localization V2).
+        # 1.0 = unchanged. Scales the translation integrated from STEP counts,
+        # not the rotation, not the commands sent to the STM32 and not
+        # joint_states. Set it from a measured straight run
+        # (measured / wheel-odom distance); see robot/docs/localization-v2.md.
+        self.declare_parameter('odom_linear_scale', 1.0)
         self.declare_parameter('steps_per_rev', 200.0)
         self.declare_parameter('microstep', 8.0)
         self.declare_parameter('gear_ratio', 10.0)
@@ -128,6 +158,17 @@ class Stm32BridgeNode(Node):
         self.declare_parameter('publish_imu', True)
         self.declare_parameter('imu_topic', 'imu/data')
         self.declare_parameter('imu_frame', 'imu_link')
+        # FB yaw_valid=0 longer than this -> WARN + /diagnostics WARN (EKF then
+        # runs on wheel odometry only). Does not change what is published.
+        self.declare_parameter('imu_stale_timeout', 1.0)
+        # Dau quay PAN/TILT + contactor (stm32_bridge/head_ros.py). Tat neu
+        # chay voi firmware cu hoac moi truong chua build bus_interfaces moi.
+        self.declare_parameter('enable_head', True)
+        # Contactor PA10 (stm32_bridge/contactor_ros.py), doc lap voi dau quay.
+        self.declare_parameter('enable_contactor', True)
+        # Phai khop BNO08X_USE_GAME_ROTATION_VECTOR cua firmware dang nap.
+        self.declare_parameter(
+            'imu_orientation_report', DEFAULT_IMU_ORIENTATION_REPORT)
         self.declare_parameter(
             'odom_covariance_diagonal',
             DEFAULT_ODOM_COVARIANCE_DIAGONAL,
@@ -141,6 +182,12 @@ class Stm32BridgeNode(Node):
         self.baudrate = int(self.get_parameter('baudrate').value)
         self.wheel_base = float(self.get_parameter('wheel_base').value)
         self.wheel_radius = float(self.get_parameter('wheel_radius').value)
+        requested_scale = float(self.get_parameter('odom_linear_scale').value)
+        self.odom_linear_scale = self._valid_odom_linear_scale(requested_scale)
+        if self.odom_linear_scale != requested_scale:
+            self.get_logger().warn(
+                f'odom_linear_scale={requested_scale} outside [0.8, 1.2]. '
+                'Falling back to 1.0.')
         self.steps_per_rev = float(self.get_parameter('steps_per_rev').value)
         self.microstep = float(self.get_parameter('microstep').value)
         self.gear_ratio = float(self.get_parameter('gear_ratio').value)
@@ -185,6 +232,14 @@ class Stm32BridgeNode(Node):
         self.publish_imu = bool(self.get_parameter('publish_imu').value)
         self.imu_topic = str(self.get_parameter('imu_topic').value)
         self.imu_frame = str(self.get_parameter('imu_frame').value)
+        self.imu_orientation_report = str(
+            self.get_parameter('imu_orientation_report').value)
+        if self.imu_orientation_report not in IMU_ORIENTATION_REPORTS:
+            self.get_logger().error(
+                f'imu_orientation_report={self.imu_orientation_report!r} '
+                f'khong hop le {IMU_ORIENTATION_REPORTS}; dung '
+                f'{DEFAULT_IMU_ORIENTATION_REPORT}.')
+            self.imu_orientation_report = DEFAULT_IMU_ORIENTATION_REPORT
         self.reset_odom_on_start = bool(
             self.get_parameter('reset_odom_on_start').value)
         self.odom_covariance_diagonal = self._read_diagonal_parameter(
@@ -244,9 +299,15 @@ class Stm32BridgeNode(Node):
         self._feedback_warn_period = 1.0 / self.feedback_rate_warn_hz
 
         self._serial = None
+        # Timer (CMD/STOP, doc FB) va callback dau quay (executor nhieu luong)
+        # cung ghi serial va dung chung bo dem seq.
+        self._serial_lock = threading.RLock()
+        self._head = None
+        self._contactor = None
         self._next_reconnect_time = 0.0
         self._reconnect_period = 1.0
-        self._seq = 0
+        # Bat dau tu 1 va bo qua 0 khi tran: FB head_seq=0 = "chua co lenh HEAD".
+        self._seq = 1
         self._left_mm_s = 0
         self._right_mm_s = 0
         self._command_is_stop = True
@@ -273,6 +334,9 @@ class Stm32BridgeNode(Node):
         self._last_feedback_timeout_warn_time = 0.0
         self._last_invalid_dt_warn_time = 0.0
         self._last_count_jump_warn_time = 0.0
+        self._imu_health = ImuHealth(
+            stale_timeout=float(self.get_parameter('imu_stale_timeout').value),
+            start=self._node_start_mono)
 
         self._odom_pub = None
         self._tf_broadcaster = None
@@ -303,6 +367,7 @@ class Stm32BridgeNode(Node):
             f'microstep={self.microstep:.1f}, '
             f'gear_ratio={self.gear_ratio:.3f}, '
             f'steps_per_meter={self.steps_per_meter:.3f}, '
+            f'odom_linear_scale={self.odom_linear_scale:.4f}, '
             f'max_wheel_speed_mm_s={self.max_wheel_speed_mm_s:.1f}, '
             f'speed_scale={self.speed_scale:.3f}, '
             f'invert_left={self.invert_left}, invert_right={self.invert_right}, '
@@ -311,6 +376,7 @@ class Stm32BridgeNode(Node):
             f'publish_odom={self.publish_odom}, publish_tf={self.publish_tf}, '
             f'odom_frame={self.odom_frame}, base_frame={self.base_frame}, '
             f'wheel_odom_topic=wheel/odom, imu_topic={self.imu_topic}, '
+            f'imu_orientation_report={self.imu_orientation_report}, '
             f'publish_sonar={self.publish_sonar}, '
             f'sonar_topics=({self.sonar1_topic},{self.sonar2_topic},'
             f'{self.sonar3_topic},{self.sonar4_topic}), '
@@ -321,6 +387,35 @@ class Stm32BridgeNode(Node):
         self.create_subscription(Twist, 'cmd_vel', self._cmd_vel_callback, 10)
         self._timer = self.create_timer(
             1.0 / self.send_rate_hz, self._timer_callback)
+        self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self._imu_health_timer = self.create_timer(1.0, self._imu_health_callback)
+
+        if bool(self.get_parameter('enable_head').value):
+            # Import tre: cac goi bus_interfaces/std_srvs chi can khi bat dau quay.
+            # Loi o day (bus_interfaces cu chua build lai, thieu std_srvs...) KHONG
+            # duoc lam chet node: banh xe va odometry van phai chay.
+            try:
+                from stm32_bridge.head_ros import HeadInterface
+                self._head = HeadInterface(self, self.send_seq_command)
+                self.get_logger().info(
+                    'Head interface enabled: head/set, head/jog, head/step, '
+                    'head/state, head/stop, head/off, head/zero')
+            except Exception as exc:  # noqa: BLE001 - bao loi ro, chay tiep
+                self._head = None
+                self.get_logger().error(
+                    f'Head interface disabled: {exc!r}. Rebuild '
+                    'bus_interfaces (colcon build --packages-select bus_interfaces '
+                    'stm32_bridge) or set enable_head:=false.')
+
+        if bool(self.get_parameter('enable_contactor').value):
+            try:
+                from stm32_bridge.contactor_ros import ContactorInterface
+                self._contactor = ContactorInterface(self, self.send_seq_command)
+                self.get_logger().info(
+                    'Contactor interface enabled: contactor/set, contactor/state')
+            except Exception as exc:  # noqa: BLE001
+                self._contactor = None
+                self.get_logger().error(f'Contactor interface disabled: {exc!r}.')
 
     def _cmd_vel_callback(self, msg: Twist):
         if not self._is_finite_twist(msg):
@@ -374,6 +469,8 @@ class Stm32BridgeNode(Node):
         # write timeout.
         self._read_feedback()
         self._check_feedback_timeout(now)
+        if self._head is not None:
+            self._call_head('on_timer', now)
 
         if self._last_cmd_time is None:
             # No /cmd_vel received yet. Keep the firmware in STOP state.
@@ -389,23 +486,57 @@ class Stm32BridgeNode(Node):
         else:
             self._send_command(self._left_mm_s, self._right_mm_s)
 
-    def _send_command(self, left_mm_s: int, right_mm_s: int):
-        seq = self._seq
-        command = f'CMD,{seq},{left_mm_s},{right_mm_s}\r\n'
+    def send_seq_command(self, build: Callable[[int], str]) -> Optional[int]:
+        """Cap seq, gui build(seq) + CRLF; tra seq da gui hoac None.
 
-        if self._write_serial(command):
-            self._seq = (self._seq + 1) % UINT32_MODULO
+        Seq dung chung cho moi lenh (CMD/STOP/HEAD/CONTACTOR) nen truong
+        <seq> cua FB cho biet firmware da xu ly toi dau."""
+        with self._serial_lock:
+            seq = self._seq
+            body = build(seq)
+            if not self._write_serial(body + '\r\n'):
+                return None
+            self._seq = next_seq(self._seq)
+        if not body.startswith(('CMD,', 'STOP,')):
+            if ',JOG,' in body and not body.endswith(',JOG,0,0'):
+                self.get_logger().debug(f'TX: {body}')   # keepalive 10 Hz khi giu nut
+            else:
+                self.get_logger().info(f'TX: {body}')
+        return seq
+
+    def _call_head(self, method: str, *args) -> None:
+        self._call_hook(self._head, method, *args)
+
+    def _call_hook(self, target, method: str, *args) -> None:
+        """Goi hook dau quay/contactor tu thread timer; loi chi duoc log (giam
+        tan suat), khong duoc lam mat CMD/STOP hay odometry cua banh xe."""
+        try:
+            getattr(target, method)(*args)
+        except Exception as exc:  # noqa: BLE001
+            # Gioi han log rieng tung giao dien: loi lap cua head khong che
+            # mat loi cua contactor va nguoc lai.
+            name = type(target).__name__
+            last = getattr(self, '_hook_error_log', None)
+            if last is None:
+                last = self._hook_error_log = {}
+            now = time.monotonic()
+            if now - last.get(name, -1e9) >= 5.0:
+                last[name] = now
+                self.get_logger().error(f'{name} error in {method}: {exc!r}')
+
+    def _send_command(self, left_mm_s: int, right_mm_s: int):
+        seq = self.send_seq_command(
+            lambda s: f'CMD,{s},{left_mm_s},{right_mm_s}')
+        if seq is not None:
             self._log_tx(f'CMD,{seq},{left_mm_s},{right_mm_s}',
                          ('CMD', left_mm_s, right_mm_s))
 
     def _send_stop(self):
         # Use the firmware's dedicated STOP command so the controller enters its
-        # STOP state instead of "running at zero speed".
-        seq = self._seq
-        command = f'STOP,{seq}\r\n'
-
-        if self._write_serial(command):
-            self._seq = (self._seq + 1) % UINT32_MODULO
+        # STOP state instead of "running at zero speed". The firmware does not
+        # stop the PAN/TILT head on STOP (it is sent at send_rate_hz while idle).
+        seq = self.send_seq_command(lambda s: f'STOP,{s}')
+        if seq is not None:
             self._log_tx(f'STOP,{seq}', ('STOP', 0, 0))
 
     def _open_serial(self):
@@ -445,6 +576,10 @@ class Stm32BridgeNode(Node):
         self._open_serial()
 
     def _write_serial(self, command: str) -> bool:
+        with self._serial_lock:
+            return self._write_serial_locked(command)
+
+    def _write_serial_locked(self, command: str) -> bool:
         if self._serial is None or not self._serial.is_open:
             return False
 
@@ -503,6 +638,8 @@ class Stm32BridgeNode(Node):
 
         if line.startswith('ERR,'):
             self.get_logger().warn(f'STM32 protocol error: {line}')
+            if self._head is not None:
+                self._call_head('on_error_line', line)
             return
 
         self.get_logger().debug(f'Ignoring non-feedback serial line: {line}')
@@ -511,11 +648,18 @@ class Stm32BridgeNode(Node):
         parsed = self._parse_feedback_line(line, include_sonar=True)
         if parsed is None:
             return
+        if self._head is not None:
+            self._call_head('on_feedback_line', line)
+        if self._contactor is not None:
+            self._call_hook(self._contactor, 'on_feedback_line', line)
 
         (seq, left_count, right_count, dt_ms, status, yaw_rad, yaw_acc,
          sonar1, sonar2, sonar3, sonar4) = parsed
 
         now_mono = time.monotonic()
+        rearm, reset_seen = parse_fb_counters(line)
+        self._log_imu_events(self._imu_health.on_feedback(
+            now_mono, yaw_rad is not None, rearm, reset_seen))
         now_ros = self.get_clock().now()
         now_ros_sec = now_ros.nanoseconds / 1e9
 
@@ -604,7 +748,7 @@ class Stm32BridgeNode(Node):
                      yaw_acc: Optional[int]):
         """Publish sensor_msgs/Imu chi voi orientation yaw.
 
-        Khong co gyro/accel tho (firmware chi bat Rotation Vector) nen dat -1
+        Khong co gyro/accel tho (firmware chi stream report huong) nen dat -1
         vao phan tu dau cua hai covariance con lai -- quy uoc chuan cua ROS de
         bao "khong co du lieu nay", robot_localization se bo qua chung.
         """
@@ -630,7 +774,8 @@ class Stm32BridgeNode(Node):
         msg.orientation_covariance = [
             IMU_UNMEASURED_VARIANCE, 0.0, 0.0,
             0.0, IMU_UNMEASURED_VARIANCE, 0.0,
-            0.0, 0.0, imu_yaw_variance(yaw_acc),
+            0.0, 0.0, imu_orientation_variance(
+                yaw_acc, self.imu_orientation_report),
         ]
         msg.angular_velocity_covariance[0] = -1.0
         msg.linear_acceleration_covariance[0] = -1.0
@@ -738,6 +883,14 @@ class Stm32BridgeNode(Node):
             self._last_invalid_dt_warn_time = now_mono
         return 0.0
 
+    @staticmethod
+    def _valid_odom_linear_scale(value: float) -> float:
+        """A measured odometry scale is a few percent; anything outside
+        [0.8, 1.2] is a typo and falls back to 1.0 (V1 behaviour)."""
+        if not math.isfinite(value) or not 0.8 <= value <= 1.2:
+            return 1.0
+        return value
+
     def _update_odometry(
             self,
             delta_left_count: int,
@@ -746,7 +899,7 @@ class Stm32BridgeNode(Node):
         left_distance = delta_left_count / self.steps_per_meter
         right_distance = delta_right_count / self.steps_per_meter
 
-        delta_s = (right_distance + left_distance) / 2.0
+        delta_s = (right_distance + left_distance) / 2.0 * self.odom_linear_scale
         delta_theta = (right_distance - left_distance) / self.wheel_base
         heading = self._theta + delta_theta / 2.0
         self._x += delta_s * math.cos(heading)
@@ -835,6 +988,33 @@ class Stm32BridgeNode(Node):
 
         publisher.publish(range_msg)
 
+    def _imu_feedback_alive(self, now: float) -> bool:
+        last = self._last_feedback_mono
+        return last is not None and now - last <= self.feedback_timeout
+
+    def _log_imu_events(self, events):
+        for level, text in events:
+            if level >= IMU_WARN:
+                self.get_logger().warn(text)
+            else:
+                self.get_logger().info(text)
+
+    def _imu_health_callback(self):
+        now = time.monotonic()
+        alive = self._imu_feedback_alive(now)
+        self._log_imu_events(self._imu_health.check(now, alive))
+        level, message, values = self._imu_health.status(now, alive)
+        status = DiagnosticStatus()
+        status.level = bytes([level])
+        status.name = f'{self.get_fully_qualified_name()}: imu'
+        status.message = message
+        status.hardware_id = self.port
+        status.values = [KeyValue(key=k, value=v) for k, v in values.items()]
+        array = DiagnosticArray()
+        array.header.stamp = self.get_clock().now().to_msg()
+        array.status = [status]
+        self._diag_pub.publish(array)
+
     def _check_feedback_timeout(self, now: float):
         if not self.publish_odom and not self.publish_tf:
             return
@@ -888,6 +1068,10 @@ class Stm32BridgeNode(Node):
         self._last_count_jump_warn_time = now
 
     def _close_serial(self):
+        with self._serial_lock:
+            self._close_serial_locked()
+
+    def _close_serial_locked(self):
         if self._serial is None:
             return
 
@@ -1038,6 +1222,8 @@ class Stm32BridgeNode(Node):
     def destroy_node(self):
         try:
             self.get_logger().info('Sending stop command before shutdown.')
+            if self._head is not None:
+                self._head.shutdown()
             self._send_stop()
         finally:
             self._close_serial()
@@ -1047,9 +1233,7 @@ class Stm32BridgeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = Stm32BridgeNode()
-<<<<<<< Updated upstream
-=======
-    # Nhieu luong: action head/set (HOME ~13 s) va service cho xac nhan tu FB
+    # Nhieu luong: action head/set (HOME ~21 s) va service cho xac nhan tu FB
     # trong khi timer (callback group mac dinh, tuan tu) van gui CMD/STOP va
     # doc FB. Ghi serial duoc khoa bang _serial_lock.
     from rclpy.executors import MultiThreadedExecutor
@@ -1058,10 +1242,9 @@ def main(args=None):
     # goal HOME + vai service + goal moi thay goal cu cung luc.
     executor = MultiThreadedExecutor(num_threads=8)
     executor.add_node(node)
->>>>>>> Stashed changes
 
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

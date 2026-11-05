@@ -50,11 +50,6 @@ def generate_launch_description():
     reset_odom_on_start = LaunchConfiguration('reset_odom_on_start')
     odom_covariance_diagonal = LaunchConfiguration('odom_covariance_diagonal')
     twist_covariance_diagonal = LaunchConfiguration('twist_covariance_diagonal')
-<<<<<<< Updated upstream
-
-    return LaunchDescription([
-        DeclareLaunchArgument(
-=======
     enable_head = LaunchConfiguration('enable_head')
     enable_contactor = LaunchConfiguration('enable_contactor')
     head_auto_home = LaunchConfiguration('head_auto_home')
@@ -86,7 +81,6 @@ def generate_launch_description():
             description='Switch the contactor ON once at bridge startup if the '
                         'first feedback frame reports it OFF.'),
         DeclareLaunchArgument(
->>>>>>> Stashed changes
             'robot_id', default_value='',
             description='ROS namespace for this robot. Empty preserves the '
                         'single-robot graph.'),
@@ -308,8 +302,6 @@ def generate_launch_description():
                     reset_odom_on_start, value_type=bool),
                 'odom_covariance_diagonal': odom_covariance_diagonal,
                 'twist_covariance_diagonal': twist_covariance_diagonal,
-<<<<<<< Updated upstream
-=======
                 'enable_head': ParameterValue(enable_head, value_type=bool),
                 'enable_contactor': ParameterValue(
                     enable_contactor, value_type=bool),
@@ -318,7 +310,6 @@ def generate_launch_description():
                     head_park_on_shutdown, value_type=bool),
                 'contactor_on_at_startup': ParameterValue(
                     contactor_on_at_startup, value_type=bool),
->>>>>>> Stashed changes
             }],
         ),
     ])

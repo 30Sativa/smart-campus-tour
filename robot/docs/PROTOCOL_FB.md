@@ -28,12 +28,6 @@ file này tồn tại.
 | `TARE,<seq>,<deg>` | Đặt hướng hiện tại = `<deg>` |
 | `TARE,<seq>,RAW` | Bỏ offset tare |
 | `DIAG,<seq>` | Chẩn đoán IMU. **Blocking ~2.5 s và dừng động cơ** — chỉ dùng khi debug |
-<<<<<<< Updated upstream
-| `CONTACTOR,<seq>,ON` | Bật output contactor PB10. Không refresh motor watchdog |
-| `CONTACTOR,<seq>,OFF` | Tắt output contactor PB10. Không refresh motor watchdog |
-
-Kết thúc dòng bằng `\n`. Sai cú pháp → `ERR,bad_command`.
-=======
 | `HEAD,<seq>,HOME` | Đầu quay: bật driver, mỗi trục quay chậm (20°/s) về phía **vật cản cơ khí**, đứng yên 200 ms, coi như đang ở cạnh vật cản, rồi chạy về 0°. PAN: quay **phải** 190° tới cạnh vật cản ở 174° phải, rồi quay trái 174° về 0° (chỉ đúng khi đầu đang trong khoảng 174° phải – 16° trái). TILT: cúi **xuống** 44° tới vật cản ở cúi 20°, rồi ngửa 20° về thẳng. Giới hạn mềm PAN ±170°, TILT ±18°. `stm32_bridge` tự gửi lệnh này khi STM32 vừa khởi động. Mất khoảng 13 s. Bị từ chối khi đang chạy |
 | `HEAD,<seq>,STOP` | Đầu quay giảm tốc về 0 rồi đứng, giữ driver bật và giữ mốc. Nếu đang HOME thì hủy HOME và mất mốc (`head_state=4`) |
 | `HEAD,<seq>,ZERO` | Lấy vị trí hiện tại làm mốc 0/0 (người vận hành tự cân đầu về FRONT), bật driver. Cách dự phòng khi không HOME được. Bị từ chối khi đang chạy/HOME |
@@ -69,7 +63,6 @@ Bridge gửi lệnh này qua service `contactor/set` (xem
 khi tràn, vì `head_seq=0` trong FB nghĩa là "firmware chưa nhận lệnh HEAD
 nào". Lệnh `HEAD` bị từ chối nhận ra được khi trường 1 (`seq`) đã tới seq của
 lệnh mà `head_seq` chưa đổi.
->>>>>>> Stashed changes
 
 ## STM32 → Host: khung `FB`
 
@@ -79,7 +72,8 @@ lệnh mà `head_seq` chưa đổi.
 FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
    <yaw_cdeg>,<yaw_valid>,
    <s1_mm>,<s1_valid>,<s2_mm>,<s2_valid>,<s3_mm>,<s3_valid>,<s4_mm>,<s4_valid>,
-   <yaw_acc>
+   <yaw_acc>,<imu_rearm>,<imu_reset_seen>,
+   <head_seq>,<pan_cdeg>,<tilt_cdeg>,<head_state>,<contactor>
 ```
 
 | Vị trí | Trường | Ghi chú |
@@ -92,6 +86,11 @@ FB,<seq>,<left_count>,<right_count>,<dt_ms>,<status>,
 | 7 | `yaw_valid` | 1 = mẫu IMU còn mới (dưới 200 ms) |
 | 8–15 | 4 cặp sonar | `<mm>,<valid>` cho SONAR1–4 |
 | 16 | `yaw_acc` | 0–3. **0 = từ kế chưa hiệu chuẩn, heading có thể sai hàng chục độ** |
+| 17, 18 | `imu_rearm`, `imu_reset_seen` | Bộ đếm IMU tích lũy từ lúc boot |
+| 19 | `head_seq` | Seq lệnh HEAD cuối được chấp nhận; 0 khi chưa nhận lệnh |
+| 20, 21 | `pan_cdeg`, `tilt_cdeg` | Góc tính từ số xung STEP, đơn vị 0,01°, không phải encoder |
+| 22 | `head_state` | 0 OFF, 1 IDLE, 2 MOVING, 3 HOMING, 4 NO_REF |
+| 23 | `contactor` | 0 OFF, 1 ON: trạng thái lệnh GPIO PA10, không phải tiếp điểm |
 
 `yaw_valid` nói *có dữ liệu mới*, `yaw_acc` nói *dữ liệu đáng tin tới đâu*.
 Hai thứ khác nhau. Bridge publish mọi yaw hợp lệ lên `imu/data` và chuyển
@@ -110,8 +109,11 @@ Bridge vẫn đọc được hết, để firmware cũ không làm chết node:
 | 8 | thêm `yaw_cdeg`, `yaw_valid` |
 | 12 | thêm 2 sonar |
 | 16 | thêm sonar 3–4 |
-| **17** | thêm `yaw_acc` ← hiện tại |
-| 18+ | trường lạ ở cuối được bỏ qua |
+| 17 | thêm `yaw_acc` |
+| 19 | thêm bộ đếm IMU |
+| 23 | thêm head, chưa có contactor |
+| **24** | thêm contactor ← hiện tại |
+| 25+ | trường lạ ở cuối được bỏ qua |
 
 ## Khung `DIAG`
 

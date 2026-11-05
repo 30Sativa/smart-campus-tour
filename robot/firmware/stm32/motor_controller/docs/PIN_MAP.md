@@ -28,9 +28,6 @@ và sơ đồ dây thực tế.
 | PB14 | SR04T SONAR3 ECHO | J_SONAR3 pin 3, EXTI15_10 input |
 | PB15 | SR04T SONAR4 TRIG | J_SONAR4 pin 1, GPIO output |
 | PA6 | SR04T SONAR4 ECHO | J_SONAR4 pin 3, EXTI9_5 input |
-<<<<<<< Updated upstream
-| PB10 | CONTACTOR_EN | J_CONTACTOR pin 2 / EN -> J_MCU_L pin 5, GPIO output |
-=======
 | PA8 | PAN STEP | J_MCU_R.10 → R11 220 Ω → J_PAN.1, GPIO output (`head.c`) |
 | PA15 | PAN DIR | J_MCU_R.15 → R12 220 Ω → J_PAN.2, GPIO output |
 | PB2 | PAN nEN | J_MCU_L.7 → J_PAN.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO |
@@ -74,7 +71,6 @@ Firmware không thay thế được điện trở này. Cần kiểm tra trên P
 Từ 05/11/2026 firmware bật contactor ngay khi boot (`CONTACTOR_ON_AT_BOOT` = 1
 trong `contactor.c`): contactor đóng vài ms sau khi STM32 chạy, kể cả sau mỗi
 lần reset hoặc nạp code.
->>>>>>> Stashed changes
 
 ## ST-LINK / SWD
 

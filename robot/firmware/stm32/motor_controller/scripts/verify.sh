@@ -15,10 +15,6 @@ for t in test_bno08x_parse test_usb_rx_queue; do
         -lm -o "$out/$t"
 done
 
-<<<<<<< Updated upstream
-echo "== run =="
-for t in test_bno08x_parse test_usb_rx_queue; do
-=======
 # motor_core.c chay voi main.h gia (tests/stubs) va -O0 nhu build Debug cua
 # CubeIDE; #pragma optimize trong file van ap dung nhu tren MCU.
 gcc -std=c11 -Wall -Wextra -Werror -O1 \
@@ -57,7 +53,6 @@ gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
 
 echo "== run =="
 for t in test_bno08x_parse test_bno08x_rearm test_usb_rx_queue test_motor_core test_usb_protocol test_head_core test_head_core_fast test_head_core_micro16; do
->>>>>>> Stashed changes
     echo "-- $t"
     "$out/$t"
 done
