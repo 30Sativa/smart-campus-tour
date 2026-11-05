@@ -7,7 +7,8 @@ import { campusDate, campusDay, campusTime } from '../../features/administration
 import { tourError } from '../../features/administration/tours/tour-messages'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { useFleetConnection, useFleetTelemetry } from '../../features/staff/operations/fleet-telemetry'
-import { useDayTours, useRunningTours } from '../../features/staff/operations/hooks'
+import { RECONCILE_HEADLINE, RECONCILE_HINT } from '../../features/staff/operations/attention'
+import { useDayTours, useRunningTours, useToursNeedingReconcile } from '../../features/staff/operations/hooks'
 import { nextStep } from '../../features/staff/operations/next-step'
 import { STEP_LABEL, assistanceInfo, commandStateInfo } from '../../features/staff/operations/operation-labels'
 import { ToneBadge, TourStateBadge } from '../../features/staff/operations/OperationParts'
@@ -23,6 +24,7 @@ export default function OverviewPage() {
   const today = campusDay(new Date())
   const tours = useDayTours(today)
   const running = useRunningTours()
+  const ended = useToursNeedingReconcile()
   const fleet = useFleetTelemetry()
   const connection = useFleetConnection(store => store.state)
   const list = tours.data?.data ?? []
@@ -43,6 +45,12 @@ export default function OverviewPage() {
         </div>
       })}</section>}
 
+      {ended.tours.length > 0 && <section aria-label="Tour cần đối soát lệnh" className="mb-4 space-y-2">{ended.tours.map(tour =>
+        <div key={tour.id} role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f5c8c2] bg-[#fff4f2] px-4 py-3 text-[13px] text-[#9d3428]">
+          <span className="flex min-w-0 items-start gap-2"><LifeBuoy size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span><span className="block font-bold">{tour.name}: {RECONCILE_HEADLINE}</span><span className="block">{RECONCILE_HINT}</span></span></span>
+          <Link to={`/staff/live/${tour.id}`} className={buttonClass('danger', 'sm')}>Mở để đối soát</Link>
+        </div>)}</section>}
+
       <KpiRow label="Tình hình hôm nay">
         <KpiTile label="Tour hôm nay" value={known ? list.length : '-'} />
         <KpiTile label="Đang diễn ra" value={running.list.isSuccess ? running.tours.length : '-'} />
@@ -58,13 +66,14 @@ export default function OverviewPage() {
               : running.isPending ? <LoadingPanel />
               : running.tours.length === 0 ? <p className="text-sm text-[#64748b]">Không có Tour nào đang chạy.{upcoming[0] ? ` Tour kế tiếp hôm nay: ${upcoming[0].name} lúc ${campusTime(upcoming[0].scheduledStartAt)}.` : ''}</p>
               : <ul className="divide-y divide-[#f1f5f9]">{running.tours.map(detail => {
-                const command = detail.execution?.command
+                const command = detail.execution?.commandState
                 return <li key={detail.tour.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-[#0f172a]">{detail.tour.name}</span>
                     <span className="mt-1 flex flex-wrap gap-1.5">
+                      {detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE' && <ToneBadge tone="danger">Cần hỗ trợ</ToneBadge>}
                       {detail.execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[detail.execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
-                      {command && <ToneBadge tone={commandStateInfo(command.state).tone}>Lệnh: {commandStateInfo(command.state).label}</ToneBadge>}
+                      {command && <ToneBadge tone={commandStateInfo(command).tone}>Lệnh: {commandStateInfo(command).label}</ToneBadge>}
                     </span>
                   </span>
                   <Link to={`/staff/live/${detail.tour.id}`} className={buttonClass('primary', 'sm')}>Mở điều hành<ArrowRight size={14} aria-hidden="true" /></Link>

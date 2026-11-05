@@ -19,7 +19,11 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         t.GroupRegistrations.Count, t.GroupRegistrations.SelectMany(r => r.RosterRows).Count(row => row.Invitation != null),
         t.RouteRevisionId, t.TourRobotReservations.Where(r => r.ReleasedAt == null)
             .Select(r => new TourReservationView(r.Robot.RobotCode, r.StartsAt, r.EndsAt, r.MeasuredDurationSeconds, r.ReleasedAt,
-                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds)).FirstOrDefault());
+                r.ExpectedDurationSeconds ?? r.MeasuredDurationSeconds)).FirstOrDefault(),
+        // The leg command FindLegCommandAsync reads, as subqueries of this one statement.
+        new TourExecutionSummary(t.OperationalStatus, t.AssistanceReason, t.CurrentStep,
+            t.RobotCommands.Where(c => c.LegId == t.CurrentLegId && c.Kind == RobotCommandKinds.GoTo).Select(c => c.State).FirstOrDefault(),
+            t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown)));
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {

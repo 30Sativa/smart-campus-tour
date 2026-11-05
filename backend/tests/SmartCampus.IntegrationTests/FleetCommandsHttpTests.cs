@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SmartCampus.Api.Controllers;
 using SmartCampus.Api.Hubs;
+using SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 using SmartCampus.Domain.Entities;
 using SmartCampus.Infrastructure.Authentication;
 using World = SmartCampus.IntegrationTests.TourStartPreflightSqlTests.World;
@@ -153,20 +154,84 @@ public sealed class FleetCommandsHttpTests
     }
 
     [SchemaV11Fact]
-    public async Task EndpointsAnswer503_WhileCommandsAreOff_AndFleetSyncStaysTelemetryOnly()
+    public async Task WhileCommandsAreOff_PollDeliversACancelButNoGoTo_ResultsAreRecorded_AndFleetSyncStaysTelemetryOnly()
     {
         await using var b = await Bridge.Create(enabled: false);
         var sync = await b.Sync();
         Assert.Equal(JsonValueKind.Array, sync.GetProperty("data").GetProperty("commands").ValueKind);
         Assert.Equal(0, sync.GetProperty("data").GetProperty("commands").GetArrayLength());
+        Assert.Equal(HttpStatusCode.OK, (await b.Post("/api/fleet/commands/v1/poll", new { streamId = b.Stream })).Status);
+        var wrong = await b.Post("/api/fleet/commands/v1/poll", new { streamId = Guid.NewGuid() });
+        Assert.Equal((HttpStatusCode.Conflict, "STREAM_NOT_CURRENT"), (wrong.Status, Code(wrong.Body)));
 
-        var poll = await b.Post("/api/fleet/commands/v1/poll", new { streamId = b.Stream });
-        Assert.Equal((HttpStatusCode.ServiceUnavailable, "COMMAND_TRANSPORT_DISABLED"), (poll.Status, Code(poll.Body)));
-        var id = Guid.NewGuid();
-        var body = Fixture("result-accepted.json");
-        body["commandId"] = id;
-        var result = await b.Post($"/api/fleet/commands/v1/{id}/results", body);
-        Assert.Equal((HttpStatusCode.ServiceUnavailable, "COMMAND_TRANSPORT_DISABLED"), (result.Status, Code(result.Body)));
+        // A Tour started while the flag was on, through the in-process handlers that have it on; this API process has it off.
+        b.W.Clock.Now = DateTimeOffset.UtcNow;
+        await b.W.Report();
+        await TourHappyPathSqlTests.Start(b.W);
+        await b.Sync();
+        Assert.Equal(JsonValueKind.Null, (await b.PollData()).GetProperty("command").ValueKind);
+        await using (var db = b.W.H.Context())
+            Assert.Equal("PENDING", (await db.RobotCommands.AsNoTracking().SingleAsync()).State);
+
+        // Delivered before the flag went off: not handed out again either.
+        await b.W.H.Database.ExecuteAsync($"UPDATE dbo.RobotCommands SET State='DELIVERED', DeliveredAt=SYSDATETIMEOFFSET(), DeliveredStreamId='{b.Stream}';");
+        Assert.Equal(JsonValueKind.Null, (await b.PollData()).GetProperty("command").ValueKind);
+        RobotCommand goTo;
+        await using (var db = b.W.H.Context())
+            goTo = await db.RobotCommands.AsNoTracking().SingleAsync();
+        var goToPath = $"/api/fleet/commands/v1/{goTo.Id}/results";
+        var accepted = await b.Post(goToPath, b.ResultBody(goTo.Id, goTo.LegId, "result-accepted.json"));
+        Assert.Equal((HttpStatusCode.OK, (true, false, "ACCEPTED")), (accepted.Status, Ack(accepted.Body)));
+
+        await b.W.H.Send(new EndTourEarlyCommand(b.W.H.TourId, b.W.H.OperatorId, new(Guid.NewGuid(), await b.W.H.Version(), "Mưa lớn")));
+        await b.Sync();
+        var cancel = await b.Post("/api/fleet/commands/v1/poll", new { streamId = b.Stream });
+        AssertSameShape(Fixture("poll-response-cancel.json"), cancel.Body);
+        var command = cancel.Body.GetProperty("data").GetProperty("command");
+        Assert.Equal(("Cancel", goTo.LegId), (command.GetProperty("kind").GetString(), command.GetProperty("legId").GetGuid()));
+
+        var cancelPath = $"/api/fleet/commands/v1/{command.GetProperty("commandId").GetGuid()}/results";
+        Assert.Equal((true, false, "ACCEPTED"), Ack((await b.Post(cancelPath, b.ResultBody(command, "result-accepted.json"))).Body));
+        var terminal = b.ResultBody(goTo.Id, goTo.LegId, "result-terminal-arrived.json");
+        terminal["outcome"] = "CANCELLED";
+        Assert.Equal((true, false, "CANCELLED"), Ack((await b.Post(goToPath, terminal)).Body));
+        await using (var db = b.W.H.Context())
+            Assert.Equal(0, await db.RobotCommands.CountAsync(c => c.IsOpen));
+    }
+
+    [SchemaV11Fact]
+    public async Task WhileCommandsAreOff_RestartRecoveryAndTheSweeperStillRun()
+    {
+        await using var world = await World.Create(enabled: true);
+        await TourHappyPathSqlTests.Start(world);
+        var goTo = await TourHappyPathSqlTests.Delivered(world);
+        // Delivered an hour ago and never acknowledged; restart recovery leaves a delivered command to the sweeper.
+        await world.H.Database.ExecuteAsync($"""
+            UPDATE dbo.RobotCommands SET IssuedAt = DATEADD(HOUR, -2, SYSDATETIMEOFFSET()), DeliveredAt = DATEADD(HOUR, -2, SYSDATETIMEOFFSET()),
+                AcceptBy = DATEADD(HOUR, -1, SYSDATETIMEOFFSET()) WHERE Id = '{goTo.Id}';
+            """);
+
+        await using var host = await PoiManagementEndpointTests.ApiHost.StartForDatabaseAsync(world.H.Database.ConnectionString, new Dictionary<string, string>
+        {
+            ["FleetCommands__Enabled"] = "false",
+            ["FleetCommands__SweepIntervalSeconds"] = "1"
+        });
+
+        // Recovery finished before the host answered its first request.
+        await using (var db = world.H.Context())
+        {
+            var tour = await db.Tours.AsNoTracking().SingleAsync(t => t.Id == world.H.TourId);
+            Assert.Equal(("NEEDS_ASSISTANCE", "BackendRestarted"), (tour.OperationalStatus, tour.AssistanceReason));
+        }
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        RobotCommand swept;
+        do
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            await using var db = world.H.Context();
+            swept = await db.RobotCommands.AsNoTracking().SingleAsync();
+        } while (swept.State != "UNKNOWN" && DateTime.UtcNow < deadline);
+        Assert.Equal(("UNKNOWN", "ACK_TIMEOUT"), (swept.State, swept.ReasonCode));
     }
 
     [SchemaV11Fact]
@@ -327,11 +392,14 @@ public sealed class FleetCommandsHttpTests
             return reply.Body.GetProperty("data");
         }
 
-        public JsonNode ResultBody(JsonElement command, string fixture)
+        public JsonNode ResultBody(JsonElement command, string fixture) =>
+            ResultBody(command.GetProperty("commandId").GetGuid(), command.GetProperty("legId").GetGuid(), fixture);
+
+        public JsonNode ResultBody(Guid commandId, Guid legId, string fixture)
         {
             var body = Fixture(fixture);
-            body["commandId"] = command.GetProperty("commandId").GetGuid();
-            body["legId"] = command.GetProperty("legId").GetGuid();
+            body["commandId"] = commandId;
+            body["legId"] = legId;
             body["streamId"] = Stream;
             return body;
         }

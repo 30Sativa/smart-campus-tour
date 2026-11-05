@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, CheckCheck, ChevronRight } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { campusDay } from '../administration/tours/tour-calendar'
-import { useDayTours, useRunningTours } from './operations/hooks'
+import { useDayTours, useRunningTours, useToursNeedingReconcile } from './operations/hooks'
 import { buildAttention, type AttentionItem } from './operations/attention'
 
 const DOT: Record<AttentionItem['tone'], string> = { danger: 'bg-[#dc2626]', warn: 'bg-[#f59e0b]', info: 'bg-[#3b82f6]' }
@@ -15,7 +15,8 @@ const LINK: Record<AttentionItem['tone'], string> = { danger: 'text-[#dc2626]', 
 export function StaffBell() {
   const running = useRunningTours()
   const today = useDayTours(campusDay(new Date()))
-  const items = buildAttention(running.tours, today.data?.data ?? [])
+  const ended = useToursNeedingReconcile()
+  const items = buildAttention(running.tours, today.data?.data ?? [], ended.tours)
   const urgent = items.filter((item) => item.tone === 'danger').length
   const [open, setOpen] = useState(false)
   const panelId = useId()

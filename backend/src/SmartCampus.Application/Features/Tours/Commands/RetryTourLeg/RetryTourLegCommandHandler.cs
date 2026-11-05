@@ -9,7 +9,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 
 /// <summary>
-/// A new leg to the same target after a leg that is known to have ended (ADR-0043). Never from an UNKNOWN or RECONCILED
+/// A new leg to the same target after a leg that is known to have ended or never reached the robot (EXPIRED) (ADR-0043). Never from an UNKNOWN or RECONCILED
 /// command: the old goal may still run. The movement checks include executionIdle and mapContextMatches, so a BUSY or
 /// MAP_MISMATCH rejection cannot retry in a loop.
 /// </summary>
@@ -30,7 +30,7 @@ public sealed class RetryTourLegCommandHandler(ITourManagementRepository reposit
         RowVersionToken.EnsureCurrent(tour.RowVersion, command.Request.ExpectedRowVersion);
         var previous = tour.CurrentLegId is { } legId ? await repository.FindLegCommandAsync(legId, ct) : null;
         if (!CanRetry(tour, previous))
-            throw new ConflictException("Chỉ thử lại được chặng đã kết thúc thật sự với FAILED hoặc bị từ chối.", "TOUR_RETRY_NOT_ALLOWED");
+            throw new ConflictException("Chỉ thử lại được chặng đã kết thúc thật sự với FAILED, bị từ chối, hoặc hết hạn khi robot chưa nhận.", "TOUR_RETRY_NOT_ALLOWED");
 
         var robotId = tour.AssignedRobotId!.Value;
         var revision = await revisions.FindRevisionAsync(tour.RouteRevisionId!.Value, ct)
@@ -52,9 +52,15 @@ public sealed class RetryTourLegCommandHandler(ITourManagementRepository reposit
         return new(tour.Id);
     }
 
-    /// <summary>The reason must match how the leg really ended; shared with the Tour detail.</summary>
+    /// <summary>
+    /// The reason must match how the leg really ended; shared with the Tour detail. An EXPIRED GoTo was never delivered, so
+    /// the robot provably never received it: it expired with fresh telemetry (<c>CommandExpired</c>) or stale telemetry
+    /// (<c>RobotDisconnected</c>, where <c>telemetryFresh</c> blocks the retry until the robot is heard again).
+    /// </summary>
     internal static bool CanRetry(Tour tour, RobotCommand? previous) =>
         tour.State == TourRuntime.Running && tour.OperationalStatus == TourRuntime.NeedsAssistance && previous is not null &&
         ((tour.AssistanceReason == TourRuntime.NavigationFailed && previous.State == RobotCommandStates.Failed) ||
-         (tour.AssistanceReason == TourRuntime.CommandRejected && previous.State == RobotCommandStates.Rejected));
+         (tour.AssistanceReason == TourRuntime.CommandRejected && previous.State == RobotCommandStates.Rejected) ||
+         (tour.AssistanceReason is TourRuntime.CommandExpired or TourRuntime.RobotDisconnected &&
+          previous.State == RobotCommandStates.Expired && previous.DeliveredStreamId is null));
 }

@@ -19,6 +19,16 @@ export type TourSummary = {
   rowVersion: string; registrationCount: number; invitationCount: number; routeRevisionId: string | null
   /** The active robot hold. Null for a legacy Tour and once a Tour is cancelled. */
   reservation?: TourReservation | null
+  /** Read-only run situation from the list query. An older server omits it; then read the detail. */
+  execution?: TourExecutionSummary | null
+}
+/**
+ * `commandState` is the current leg's GoTo, the command the detail shows.
+ * `needsReconcile` is true while any GoTo of the Tour is UNKNOWN, also after the Tour ended.
+ */
+export type TourExecutionSummary = {
+  operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
+  commandState: RobotCommandState | null; needsReconcile: boolean
 }
 export type TourDetails = {
   tour: TourSummary
@@ -34,7 +44,7 @@ export type TourDetails = {
   }
   /** The run state; every field but `state` stays null until Start (ADR-0043). */
   execution?: TourExecution | null
-  /** Advisory for the caller; Start and Next recheck under the server's locks. */
+  /** Advisory for the caller; every write rechecks under the server's locks. */
   allowedActions?: TourAllowedActions | null
 }
 /** One failing READY condition, in the backend's words. */
@@ -48,7 +58,7 @@ export type TourCommand = { id: string; kind: 'GoTo' | 'Cancel'; state: RobotCom
 export type TourExecution = {
   state: TourState; operationalStatus: TourOperationalStatus | null; assistanceReason: string | null; currentStep: TourStep | null
   currentLegId: string | null; currentLegKind: TourLegKind | null
-  /** `RouteRevisionStops.Id`. The revision's stop view carries no such id yet, so the UI cannot match it to a stop. */
+  /** `RouteRevisionStops.Id`, matching `routeRevision.stops[].id` (absent from older servers, which leaves the stops unmarked). */
   currentRevisionStopId: string | null; lastArrivedRevisionStopId: string | null
   /** Display only: the Tour never leaves a POI by itself (ADR-0043 D12). */
   dwellDeadlineAt: string | null
@@ -57,7 +67,11 @@ export type TourExecution = {
 }
 /** `blockedBy` holds Start check ids, or a state reason code. */
 export type TourActionAvailability = { allowed: boolean; reason: string | null; blockedBy: string[] }
-export type TourAllowedActions = { start: TourActionAvailability; next: TourActionAvailability }
+/** The recovery actions (ADR-0043) come from servers with M2.2 failure paths; an older response omits them, read as not allowed. */
+export type TourAllowedActions = {
+  start: TourActionAvailability; next: TourActionAvailability
+  endEarly?: TourActionAvailability; retryLeg?: TourActionAvailability; reconcile?: TourActionAvailability
+}
 export type TourStartCheck = { id: string; passed: boolean; source: string; detail: string }
 /** `canStart` belongs to the caller: false for any Staff who is not the Tour's Operator. */
 export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blockedBy: string[] }

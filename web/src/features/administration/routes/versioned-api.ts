@@ -13,7 +13,7 @@ export type VersionedRoute = {
   mapVersionId: string; mapKey: string; mapPackageSha256: string; startX: number; startY: number; startYaw: number
   endMode: 'POSE' | 'LAST_POI'; endX: number | null; endY: number | null; endYaw: number | null
   configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null
-  durationStatus: string; dwellDurationSeconds: number; stops: Array<{ poiRevisionId: string; sourcePoiVerificationRecordId: string; stopOrder: number; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }>; name: string; x: number; y: number; yaw: number; cameraPreset: string }>
+  durationStatus: string; dwellDurationSeconds: number; stops: Array<{ /** `RouteRevisionStops.Id`; an older server omits it. */ id?: string; poiRevisionId: string; sourcePoiVerificationRecordId: string; stopOrder: number; dwellSeconds: number; headSteps: Array<{ preset: 'FRONT' | 'LEFT' | 'RIGHT'; holdSeconds: number }>; name: string; x: number; y: number; yaw: number; cameraPreset: string }>
   /** Open for new Tours. Off does not affect Tours already scheduled. */
   isActive: boolean
   /** Opaque concurrency token for deactivate/activate. */

@@ -6,7 +6,7 @@ import { formatTime } from '../formatters'
 import { useNow } from '../use-now'
 import { telemetryAge, useFleetConnection, useFleetRobot } from './fleet-telemetry'
 import {
-  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, assistanceInfo, commandStateInfo, robotReasonText,
+  COMMAND_KIND_LABEL, LEG_LABEL, OPERATIONAL_LABEL, STEP_LABEL, commandStateInfo, robotReasonText,
 } from './operation-labels'
 
 export function ToneBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
@@ -24,7 +24,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** The robot command of the current leg: its own lifecycle, separate from the Tour's state. */
-export function CommandCard({ command }: { command: TourCommand | null | undefined }) {
+export function CommandCard({ command, legId, robotCode }: { command: TourCommand | null | undefined; legId?: string | null; robotCode?: string | null }) {
   if (!command) return <p className="text-[13px] text-[#64748b]">Chặng hiện tại không có lệnh robot nào.</p>
   const state = commandStateInfo(command.state)
   const reason = robotReasonText(command.reasonCode)
@@ -36,34 +36,44 @@ export function CommandCard({ command }: { command: TourCommand | null | undefin
       </div>
       <p className="mt-1.5 text-xs leading-5 text-[#475569]">{state.meaning}</p>
       {reason && <p className="mt-1 text-xs font-semibold text-[#9d3428]">Lý do: {reason}</p>}
+      {robotCode && legId && <RobotLegReport robotCode={robotCode} legId={legId} />}
       <p className="mt-1.5 font-mono text-[11px] text-[#94a3b8]" title="Mã lệnh">{command.id}</p>
     </div>
   )
 }
 
-/** Where the Tour is: state, operational status, step, and the command it is waiting on. */
+/**
+ * Which leg the robot itself says it is running, beside the command state. It
+ * helps a person judge an uncertain command on site; it never replaces the
+ * command state and proves nothing about the robot's safety.
+ */
+function RobotLegReport({ robotCode, legId }: { robotCode: string; legId: string }) {
+  const { robot } = useFleetRobot(robotCode)
+  if (!robot) return null
+  const same = robot.legId?.toLowerCase() === legId.toLowerCase()
+  const text = !robot.legId ? 'không thực hiện chặng nào' : same ? 'đang thực hiện chặng này' : 'đang thực hiện một chặng khác'
+  return <p className="mt-1.5 text-xs leading-5 text-[#475569]">
+    <span className="font-semibold">Robot tự báo:</span> {text}{robot.syncFresh ? '' : ' (báo cáo đã cũ)'}. Đây là telemetry, không phải kết quả lệnh.
+  </p>
+}
+
+/** Where the Tour is: state, operational status, step and times. What to do about it is the console's situation card. */
 export function ExecutionPanel({ detail, now }: { detail: TourDetails; now: number }) {
   const execution = detail.execution
   const state = detail.tour.state
-  const assist = execution?.operationalStatus === 'NEEDS_ASSISTANCE'
-  const reason = assist ? assistanceInfo(execution?.assistanceReason) : null
-  const dwell = execution?.currentStep === 'OBSERVING' && execution.dwellDeadlineAt ? execution.dwellDeadlineAt : null
+  // An ended Tour keeps its last status and step columns; shown as current they would say it is still moving.
+  const running = state === 'RUNNING'
+  const dwell = running && execution?.currentStep === 'OBSERVING' && execution.dwellDeadlineAt ? execution.dwellDeadlineAt : null
   const dwellLeft = dwell ? Math.round((new Date(dwell).getTime() - now) / 1000) : null
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <TourStateBadge state={state} />
-        {execution?.operationalStatus && <ToneBadge tone={OPERATIONAL_LABEL[execution.operationalStatus].tone}>{OPERATIONAL_LABEL[execution.operationalStatus].label}</ToneBadge>}
-        {execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
+        {running && execution?.operationalStatus && <ToneBadge tone={OPERATIONAL_LABEL[execution.operationalStatus].tone}>{OPERATIONAL_LABEL[execution.operationalStatus].label}</ToneBadge>}
+        {running && execution?.currentStep && <ToneBadge tone="info">{STEP_LABEL[execution.currentStep] ?? 'Bước khác'}</ToneBadge>}
       </div>
-      {reason && (
-        <div role="alert" className="rounded-xl border border-[#f5c8c2] bg-[#fff4f2] p-3 text-[13px] text-[#9d3428]">
-          <p className="font-bold">Cần hỗ trợ: {reason.label}</p>
-          <p className="mt-0.5 leading-5">{reason.hint}</p>
-        </div>
-      )}
       <dl className="divide-y divide-[#f1f5f9]">
-        {execution?.currentLegKind && <Row label="Chặng hiện tại">{LEG_LABEL[execution.currentLegKind] ?? 'Chặng khác'}</Row>}
+        {execution?.currentLegKind && <Row label={running ? 'Chặng hiện tại' : 'Chặng cuối cùng'}>{LEG_LABEL[execution.currentLegKind] ?? 'Chặng khác'}</Row>}
         {dwell && <Row label="Thời gian dừng gợi ý">{formatTime(dwell)}{dwellLeft !== null && dwellLeft > 0 ? `, còn ${dwellLeft} giây` : ', đã hết'}</Row>}
         {detail.startedAt && <Row label="Bắt đầu lúc">{formatTime(detail.startedAt)}</Row>}
         {detail.endedAt && <Row label="Kết thúc lúc">{formatTime(detail.endedAt)}</Row>}
@@ -114,20 +124,51 @@ export function RobotTelemetryPanel({ robotCode }: { robotCode: string | null | 
   )
 }
 
-/** The revision's stops in order. The current stop is not marked: see `TourExecution.currentRevisionStopId`. */
+type StopMark = { label: string; tone: StatusTone }
+const sameId = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase()
+
+/**
+ * What the server's Tour state says about one stop, or null. Only a RUNNING
+ * Tour is marked: an ended Tour keeps its last stop ids, which would look
+ * current. A stop without `id` (an older server) is never marked.
+ */
+function stopMark(detail: TourDetails, stopId: string | undefined): StopMark | null {
+  const execution = detail.execution
+  if (detail.tour.state !== 'RUNNING' || !execution || !stopId) return null
+  if (sameId(stopId, execution.currentRevisionStopId)) {
+    if (execution.currentStep === 'NAVIGATING') return { label: 'Robot đang tới', tone: 'info' }
+    if (execution.currentStep === 'OBSERVING') return { label: 'Đang dừng tại đây', tone: 'ok' }
+  }
+  return sameId(stopId, execution.lastArrivedRevisionStopId) ? { label: 'Đã tới', tone: 'muted' } : null
+}
+
+/** The revision's stops in order, marked from the Tour's execution stop ids while it runs. */
 export function RouteStopList({ detail }: { detail: TourDetails }) {
   const revision = detail.routeRevision
   if (!revision) return <p className="text-[13px] text-[#64748b]">Tour này không chạy trên một phiên bản tuyến đã kiểm chứng.</p>
+  const marks = revision.stops.map(stop => stopMark(detail, stop.id))
+  const returning = detail.tour.state === 'RUNNING' && detail.execution?.currentStep === 'RETURNING_TO_END'
+  const marked = returning || marks.some(Boolean)
   return (
     <div>
       <ol className="divide-y divide-[#f1f5f9]">
-        {revision.stops.map(stop => <li key={`${stop.stopOrder}-${stop.poiRevisionId}`} className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
-          <span className="font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}</span>
-          <span className="shrink-0 text-xs text-[#64748b]">dừng {stop.dwellSeconds} giây</span>
-        </li>)}
-        <li className="py-2 text-[13px] text-[#64748b]">{revision.endMode === 'POSE' ? 'Về điểm kết thúc của tuyến' : 'Kết thúc tại điểm dừng cuối'}</li>
+        {revision.stops.map((stop, index) => {
+          const mark = marks[index]
+          return <li key={`${stop.stopOrder}-${stop.poiRevisionId}`} aria-current={mark?.tone === 'info' || mark?.tone === 'ok' ? 'step' : undefined}
+            className="flex items-baseline justify-between gap-3 py-2 text-[13px]">
+            <span className="min-w-0 font-semibold text-[#0f172a]">{stop.stopOrder}. {stop.name}</span>
+            <span className="flex shrink-0 items-baseline gap-2">
+              {mark && <ToneBadge tone={mark.tone}>{mark.label}</ToneBadge>}
+              <span className="text-xs text-[#64748b]">dừng {stop.dwellSeconds} giây</span>
+            </span>
+          </li>
+        })}
+        <li aria-current={returning ? 'step' : undefined} className="flex items-baseline justify-between gap-3 py-2 text-[13px] text-[#64748b]">
+          <span>{revision.endMode === 'POSE' ? 'Về điểm kết thúc của tuyến' : 'Kết thúc tại điểm dừng cuối'}</span>
+          {returning && <ToneBadge tone="info">Robot đang tới</ToneBadge>}
+        </li>
       </ol>
-      <p className="mt-2 text-[11.5px] leading-5 text-[#94a3b8]">Máy chủ chưa trả mã điểm dừng trong tuyến, nên màn hình chưa đánh dấu điểm robot đang tới.</p>
+      {marked && <p className="mt-2 text-[11.5px] leading-5 text-[#94a3b8]">Đánh dấu theo trạng thái Tour trên máy chủ, không phải vị trí robot tự báo.</p>}
     </div>
   )
 }

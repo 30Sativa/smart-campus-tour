@@ -19,7 +19,14 @@ public static class TourPhases
 public sealed record TourSummary(Guid Id, string Name, string? Description, Guid RouteId, string RouteName,
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,
-    int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null);
+    int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
+    TourExecutionSummary? Execution = null);
+/// <summary>
+/// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
+/// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.
+/// </summary>
+public sealed record TourExecutionSummary(string? OperationalStatus, string? AssistanceReason, string? CurrentStep,
+    string? CommandState, bool NeedsReconcile);
 public sealed record TourUsage(bool HasRegistrations, bool HasAllowedBranches, bool HasOperationalHistory, bool HasRobotOwnership)
 {
     public bool LocksScheduleAndRoute => HasRegistrations || HasAllowedBranches || HasOperationalHistory || HasRobotOwnership;

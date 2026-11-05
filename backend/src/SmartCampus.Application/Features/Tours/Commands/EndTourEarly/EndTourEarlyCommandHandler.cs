@@ -8,7 +8,7 @@ namespace SmartCampus.Application.Features.Tours.Commands.EndTourEarly;
 
 /// <summary>
 /// Ends a running Tour (ADR-0043 D13, D14). The command is withdrawn if the robot never received it, otherwise a Cancel is
-/// queued; the leg's real result is still recorded when it arrives. Nothing here proves the robot stopped, so it needs
+/// queued, also for an UNKNOWN GoTo (best effort); the leg's real result is still recorded when it arrives. Nothing here proves the robot stopped, so it needs
 /// inspection and stays held. FR-48 revocation and notices are a follow-up.
 /// </summary>
 public sealed class EndTourEarlyCommandHandler(ITourManagementRepository repository, IRegistrationRepository registrations, TimeProvider clock)
@@ -47,8 +47,8 @@ public sealed class EndTourEarlyCommandHandler(ITourManagementRepository reposit
 
     private void StopLeg(Tour tour, RobotCommand goTo, Guid actor, string reason, DateTimeOffset now)
     {
-        // An UNKNOWN GoTo may or may not be running and has no delivery channel to trust; it stays for Reconcile.
-        if (goTo.State == RobotCommandStates.Unknown) return;
+        // An UNKNOWN GoTo may or may not be running. It stays UNKNOWN for Reconcile, but a Cancel is still queued as a best
+        // effort for whichever stream polls next; delivering or acknowledging it does not prove the robot stopped.
         var withdrawn = goTo.State == RobotCommandStates.Pending;
         var cancel = withdrawn ? null : RobotCommand.CancelOf(goTo, now, actor);
         if (withdrawn) goTo.Expire(now, "WITHDRAWN");

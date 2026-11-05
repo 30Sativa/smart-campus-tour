@@ -11,9 +11,12 @@ unchanged and is still the only telemetry path.
 ## Authentication and enable flag
 
 Same robot scheme as Fleet Sync v1: `Authorization: Bearer <credential>` and
-`X-Robot-Code: <RobotCode>` over HTTPS. User JWTs are refused. While
-`FleetCommands:Enabled = false` (the default), both endpoints return
-`503 COMMAND_TRANSPORT_DISABLED`.
+`X-Robot-Code: <RobotCode>` over HTTPS. User JWTs are refused.
+`FleetCommands:Enabled = false` (the default) gates movement only: poll still
+answers, checks the stream, applies timeouts and returns an open Cancel, but never
+a GoTo; results are always recorded. The backend no longer answers
+`503 COMMAND_TRANSPORT_DISABLED` on these endpoints; a bridge still treats that code
+like any `5xx` (keep terminal results and retry later).
 
 ## Poll — `POST /api/fleet/commands/v1/poll`
 
@@ -78,7 +81,7 @@ of the standard envelope:
 | `409 RESULT_CONFLICT` | Different content for a phase already recorded. Producer bug; drop it. |
 | `409 RESULT_STREAM_MISMATCH` | `streamId` is not the stream that received the command. Drop it. |
 | `409 RESULT_PHASE_NOT_ALLOWED` | Transition not allowed (e.g. TERMINAL on a Cancel, any result for an expired command). Drop it. |
-| `503 COMMAND_TRANSPORT_DISABLED` | Commands are disabled. Keep terminal results and retry later. |
+| `503 COMMAND_TRANSPORT_DISABLED` | Not sent by current backends (M2.2-f). Keep terminal results and retry later. |
 | network error / `5xx` | Outcome unknown. Retry the exact body with bounded backoff. |
 
 Terminal results are kept by the bridge and retried until a `200` or a

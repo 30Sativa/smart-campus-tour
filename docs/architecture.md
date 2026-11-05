@@ -52,7 +52,7 @@ branch-request endpoint is implemented here.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null, and a read-only `execution` summary (additive; the detail's `tour` carries it too): `operationalStatus`, `assistanceReason`, `currentStep`, `commandState` (the current leg's GoTo state, the command the detail's `execution.command` shows, or null) and `needsReconcile` (true while any GoTo of the Tour is UNKNOWN, also after End Early, until Reconcile or a late result closes it). Read in the same list query; it changes no Tour or command. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. `permissions` adds `canMarkReady`, `canReopen` and `readyBlockers` (`[{code, message}]`, Vietnamese message): the READY conditions evaluated now, without locks. `execution` gives state, operationalStatus, assistanceReason, currentStep, the current leg, the stop ids, dwellDeadlineAt (display only) and the leg's command. `allowedActions` (`start`, `next`, `endEarly`, `retryLeg`, `reconcile`) are `{allowed, reason, blockedBy}` for the caller, advisory until rechecked under locks. |
 | GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days), optional `time=HH:mm` to judge a typed start beside the slots (ADR-0036). Returns `customStartEarliest`/`customStartLatest`. Per day and configured slot: `available`, or `reasonCode` (`OUTSIDE_START_HOURS`, `LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
 | GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
@@ -141,7 +141,9 @@ submission and Technical Staff manual test evidence described in
 participating Staff account from the read-only
 `GET /api/technical/route-verifications/participants`. Route stops carry exact
 `PoiRevisionId` and the corresponding effective verification evidence; they do
-not pass legacy `PoiId` values. Saving or submitting a revision requires the
+not pass legacy `PoiId` values. Each stop view (route revision reads and the Tour detail's
+`routeRevision.stops[]`) also returns its own `id`, the `RouteRevisionStops.Id` that Tour
+`execution.currentRevisionStopId` and `lastArrivedRevisionStopId` name (additive). Saving or submitting a revision requires the
 exact map version to have current technical evidence, otherwise 409
 `TECHNICAL_CHECK_PENDING` or `TECHNICAL_CHECK_NOT_PASSED` (ADR-0033). The two remaining Staff Route GET operations
 serve existing Tour records only. Versioned Route to Tour selection,
@@ -1150,14 +1152,17 @@ this flow until M2.5 (ADR-0043 D8).
 
 **Failure paths (M2.2-c, ADR-0043).** A hosted sweeper applies the ADR-0043 timeout
 rules, one transaction per transition, decided again under the Tour and command locks
-so two sweepers make one transition. A GoTo that becomes UNKNOWN or EXPIRED on the
-current leg moves a NORMAL Tour to `NEEDS_ASSISTANCE` (`CommandUnknown`, or
-`RobotDisconnected` for an expiry with stale telemetry). Before the server accepts
-requests, restart recovery moves every RUNNING Tour to `NEEDS_ASSISTANCE`
-(`BackendRestarted`, keeping an existing reason), clears the dwell deadline and expires
-PENDING GoTos; a failure stops startup. Delivered commands wait for their result or the
-sweeper, and nothing continues by itself. Both run only while `FleetCommands:Enabled = true`.
-A Cancel closes with its GoTo (reason `LEG_ENDED`) so a robot can be released.
+so two sweepers make one transition. A GoTo that becomes UNKNOWN on the current leg
+moves a NORMAL Tour to `NEEDS_ASSISTANCE` (`CommandUnknown`); one that EXPIRES
+undelivered does so with `CommandExpired` (fresh telemetry) or `RobotDisconnected`
+(stale telemetry), and Retry leg is allowed from either because the robot never received
+it. Before the server accepts requests, restart recovery moves every RUNNING Tour to
+`NEEDS_ASSISTANCE` (`BackendRestarted`, keeping an existing reason), clears the dwell
+deadline and expires PENDING GoTos. Delivered commands wait for their result or the
+sweeper, and nothing continues by itself. Both run whatever `FleetCommands:Enabled` says;
+a recovery failure stops startup only while it is true. End Early with an UNKNOWN GoTo
+queues a best-effort Cancel and leaves the GoTo UNKNOWN for Reconcile; that is no evidence
+the robot stopped. A Cancel closes with its GoTo (reason `LEG_ENDED`) so a robot can be released.
 
 Not in this preflight, still required before a full Tour (ADR-0042 open
 decisions 1 and 5): head FRONT (ADR-0008), live stream, FR-49 camera preset and
@@ -1770,8 +1775,11 @@ scheme and the shared `FleetSync` rate limit. Poll needs the robot's current str
 within `MaxTelemetryAgeSeconds` (else 409 `STREAM_NOT_CURRENT`); a command delivered to
 another stream becomes UNKNOWN and is not redelivered. A new GoTo needs a RUNNING NORMAL
 Tour and a dispatchable robot; a Cancel is always delivered, so a robot that lost dispatch
-can still be told to stop. Disabled, both answer 503 `COMMAND_TRANSPORT_DISABLED`. Backend
-notes and error codes are in `backend/docs/fleet-commands.md`.
+can still be told to stop. `FleetCommands:Enabled = false` gates movement only (M2.2-f):
+poll still checks the stream, applies the timeouts and delivers an open Cancel, but hands
+out no GoTo; results are always recorded. Neither endpoint answers 503
+`COMMAND_TRANSPORT_DISABLED` any more. Backend notes and error codes are in
+`backend/docs/fleet-commands.md`.
 
 ### 3.7 Fleet authentication and compatibility status
 

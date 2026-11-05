@@ -48,6 +48,7 @@ export function ConfirmationDialog({
   reasonPlaceholder = 'Ghi lại để đồng nghiệp và nhật ký vận hành hiểu vì sao…',
   busyLabel = 'Đang gửi…',
   busy = false,
+  confirmDisabled = false,
   error,
   onConfirm,
   onCancel,
@@ -65,6 +66,8 @@ export function ConfirmationDialog({
   reasonPlaceholder?: string
   busyLabel?: string
   busy?: boolean
+  /** The decision is no longer possible (e.g. the server withdrew it while the dialog was open); say why in `children`. */
+  confirmDisabled?: boolean
   error?: string | null
   onConfirm: (reason: string) => void
   onCancel: () => void
@@ -126,7 +129,7 @@ export function ConfirmationDialog({
           <button type="button" onClick={close} className={buttonClass('secondary')}>Quay lại</button>
           <button
             type="button"
-            disabled={busy || missingReason}
+            disabled={busy || missingReason || confirmDisabled}
             onClick={() => onConfirm(reason.trim())}
             className={danger ? `${buttonClass('secondary')} !border-[#c9534a] !bg-[#c9534a] !text-white hover:!bg-[#b23e31] disabled:!opacity-50` : buttonClass('primary')}
           >

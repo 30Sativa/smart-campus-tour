@@ -1,8 +1,9 @@
+import { useRef } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toursApi } from '../../administration/tours/api/tours'
-import { tourKeys } from '../../administration/tours/hooks'
+import { newRequestId, tourKeys } from '../../administration/tours/hooks'
 import { dayEnd, dayStart } from '../../administration/tours/tour-calendar'
-import type { StartConfirmation, TourDetails, TourListQuery } from '../../administration/tours/types'
+import type { StartConfirmation, TourDetails, TourExecutionSummary, TourListQuery, TourSummary } from '../../administration/tours/types'
 
 /**
  * Server state for running Tours. Everything reads `/api/staff/manage/tours`
@@ -42,19 +43,47 @@ export function useDayTours(day: string) {
 }
 
 const RUNNING_QUERY: TourListQuery = { phase: 'RUNNING', sort: 'scheduledStartAt', page: 1, size: 20 }
+
+/** The run situation the overview shows. A list row carries it; for an older server it comes from the detail. */
+export type RunningSituation = Pick<TourExecutionSummary, 'operationalStatus' | 'assistanceReason' | 'currentStep' | 'commandState'>
+export type RunningTour = { tour: TourSummary; execution: RunningSituation | null }
+
+function situationOf(detail: TourDetails): RunningSituation | null {
+  const execution = detail.execution
+  return execution ? { operationalStatus: execution.operationalStatus, assistanceReason: execution.assistanceReason,
+    currentStep: execution.currentStep, commandState: execution.command?.state ?? null } : null
+}
+
 /**
- * Running Tours with their execution. The list summary carries no operational
- * status, so each running Tour's detail is read too; there are at most as many
- * as robots.
+ * Running Tours with their situation, from the list alone: one request polled
+ * as often as a live Tour. An older server's rows carry no `execution`, so only
+ * those Tours' details are read, as before.
  */
 export function useRunningTours() {
-  const list = useQuery({ queryKey: tourKeys.list(RUNNING_QUERY), queryFn: () => toursApi.list(RUNNING_QUERY), refetchInterval: LIST_MS })
-  const ids = list.data?.data.map(tour => tour.id) ?? []
+  const list = useQuery({ queryKey: tourKeys.list(RUNNING_QUERY), queryFn: () => toursApi.list(RUNNING_QUERY), refetchInterval: LIVE_TOUR_MS })
+  const rows = list.data?.data ?? []
   const details = useQueries({
-    queries: ids.map(id => ({ queryKey: tourKeys.detail(id), queryFn: () => toursApi.get(id), refetchInterval: LIVE_TOUR_MS })),
+    queries: rows.filter(tour => tour.execution === undefined)
+      .map(tour => ({ queryKey: tourKeys.detail(tour.id), queryFn: () => toursApi.get(tour.id), refetchInterval: LIVE_TOUR_MS })),
   })
-  const tours = details.flatMap(detail => (detail.data && detail.data.tour.state === 'RUNNING' ? [detail.data] : []))
+  const read = new Map(details.flatMap(detail => (detail.data ? [[detail.data.tour.id, detail.data] as const] : [])))
+  const tours = rows.flatMap((tour): RunningTour[] => {
+    if (tour.execution !== undefined) return [{ tour, execution: tour.execution }]
+    const detail = read.get(tour.id)
+    return detail && detail.tour.state === 'RUNNING' ? [{ tour: detail.tour, execution: situationOf(detail) }] : []
+  })
   return { list, tours, isPending: list.isPending || details.some(detail => detail.isPending), isError: list.isError }
+}
+
+const FINISHED_QUERY: TourListQuery = { phase: 'FINISHED', sort: '-scheduledStartAt', page: 1, size: 100 }
+/**
+ * Ended Tours that still hold an UNKNOWN GoTo, which keeps the robot held until
+ * the Operator reconciles it. Read from the newest finished Tours' list rows;
+ * an older server returns no `execution`, so none is shown.
+ */
+export function useToursNeedingReconcile() {
+  const list = useQuery({ queryKey: tourKeys.list(FINISHED_QUERY), queryFn: () => toursApi.list(FINISHED_QUERY), refetchInterval: LIST_MS })
+  return { list, tours: (list.data?.data ?? []).filter(tour => tour.execution?.needsReconcile === true) }
 }
 
 function useRefreshTours() {
@@ -72,11 +101,64 @@ export function useStartTour() {
   })
 }
 
+type TourWrite = { id: string; requestId: string; rowVersion: string }
+
 export function useNextStop() {
   const onSettled = useRefreshTours()
   return useMutation({
-    mutationFn: ({ id, requestId, rowVersion }: { id: string; requestId: string; rowVersion: string }) =>
-      toursApi.next(id, { requestId, expectedRowVersion: rowVersion }),
+    mutationFn: ({ id, requestId, rowVersion }: TourWrite) => toursApi.next(id, { requestId, expectedRowVersion: rowVersion }),
     onSettled,
   })
+}
+
+export function useRetryLeg() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, requestId, rowVersion }: TourWrite) => toursApi.retryLeg(id, { requestId, expectedRowVersion: rowVersion }),
+    onSettled,
+  })
+}
+
+export function useEndTourEarly() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, requestId, rowVersion, reason }: TourWrite & { reason: string }) =>
+      toursApi.endEarly(id, { requestId, expectedRowVersion: rowVersion, reason }),
+    onSettled,
+  })
+}
+
+export function useReconcileCommand() {
+  const onSettled = useRefreshTours()
+  return useMutation({
+    mutationFn: ({ id, commandId, requestId, reason }: { id: string; commandId: string; requestId: string; reason: string }) =>
+      toursApi.reconcile(id, commandId, { requestId, reason }),
+    onSettled,
+  })
+}
+
+/**
+ * One request id per intent. A retry of the same intent after a lost response
+ * must reuse its id so the server replays instead of acting twice; a different
+ * intent needs a new one. The key names the intent: action, Tour or command,
+ * row version and, for End Early and Reconcile, the typed reason, which the
+ * server fingerprints (same id, other reason = IDEMPOTENCY_CONFLICT).
+ */
+export function useIntentRequestIds() {
+  const ids = useRef(new Map<string, string>())
+  return (intent: string) => {
+    let id = ids.current.get(intent)
+    if (!id) { id = newRequestId(); ids.current.set(intent, id) }
+    return id
+  }
+}
+
+/**
+ * Whether the Tour on screen may be out of date: the last poll failed, or the
+ * newest answer is older than a few polls (a hidden tab stops polling). An
+ * operator deciding to move a robot must be looking at current state.
+ */
+const STALE_AFTER_MS = 10_000
+export function isTourStale(query: { isRefetchError: boolean; dataUpdatedAt: number }, now: number) {
+  return query.isRefetchError || (query.dataUpdatedAt > 0 && now - query.dataUpdatedAt > STALE_AFTER_MS)
 }

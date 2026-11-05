@@ -48,6 +48,7 @@ public static class RobotCommandTimeouts
         });
         if (command.Kind == RobotCommandKinds.GoTo && tour.State == TourRuntime.Running &&
             tour.OperationalStatus == TourRuntime.Normal && tour.CurrentLegId == command.LegId)
-            tour.RequireAssistance(expired && !telemetryFresh ? TourRuntime.RobotDisconnected : TourRuntime.CommandUnknown, now);
+            tour.RequireAssistance(!expired ? TourRuntime.CommandUnknown
+                : telemetryFresh ? TourRuntime.CommandExpired : TourRuntime.RobotDisconnected, now);
     }
 }

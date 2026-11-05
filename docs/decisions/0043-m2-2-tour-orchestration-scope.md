@@ -62,10 +62,11 @@ End Early sets the Tour state, withdraws or cancels the open command and holds t
 | RUNNING / RETURNING_TO_END | GoTo `TERMINAL ARRIVED` on the `TO_END` leg | COMPLETED, `EndedAt`, robot released (D13) | result valid for the current leg |
 | RUNNING, NORMAL | GoTo `TERMINAL FAILED` | `OperationalStatus = NEEDS_ASSISTANCE`, `AssistanceReason = NavigationFailed` | current leg |
 | RUNNING, NORMAL | GoTo `REJECTED` | `OperationalStatus = NEEDS_ASSISTANCE`, `AssistanceReason = CommandRejected`; the robot's reason is kept in the `TourEvent` | current leg; refines ADR-0042 §3, which used `NavigationFailed` |
-| RUNNING, NORMAL | command becomes UNKNOWN or EXPIRED | `NEEDS_ASSISTANCE` (`CommandUnknown` or `RobotDisconnected`) | ADR-0042 §3 |
+| RUNNING, NORMAL | GoTo becomes UNKNOWN | `NEEDS_ASSISTANCE` (`CommandUnknown`) | ADR-0042 §3 |
+| RUNNING, NORMAL | GoTo becomes EXPIRED (never delivered) | `NEEDS_ASSISTANCE`: `CommandExpired` with fresh telemetry, `RobotDisconnected` with stale telemetry | refines ADR-0042 §3, which used `CommandUnknown` for an expiry with fresh telemetry (M2.2-f) |
 | RUNNING | backend start-up | `NEEDS_ASSISTANCE` (`BackendRestarted`) | always; nothing resumes |
-| RUNNING / NEEDS_ASSISTANCE | Retry leg (Operator) | `NORMAL`, new GoTo with a new `legId` to the same target | `AssistanceReason` is `NavigationFailed` with the old GoTo terminal `FAILED`, or `CommandRejected` with the old GoTo `REJECTED` (never UNKNOWN/RECONCILED); movement checks pass |
-| RUNNING (any) | End Early (Operator) | CANCELLED, `EndedAt`, `EndReason`, `NeedsInspection = 1`, robot kept | always while RUNNING |
+| RUNNING / NEEDS_ASSISTANCE | Retry leg (Operator) | `NORMAL`, new GoTo with a new `legId` to the same target | `AssistanceReason` is `NavigationFailed` with the old GoTo terminal `FAILED`, `CommandRejected` with the old GoTo `REJECTED`, or `CommandExpired`/`RobotDisconnected` with the old GoTo `EXPIRED` and never delivered (never UNKNOWN/RECONCILED); movement checks pass |
+| RUNNING (any) | End Early (Operator) | CANCELLED, `EndedAt`, `EndReason`, `NeedsInspection = 1`, robot kept; the open GoTo is withdrawn if PENDING, otherwise a Cancel is queued (also for an UNKNOWN GoTo, see below) | always while RUNNING |
 
 A late result for an earlier leg is recorded as a `TourEvent` and changes no Tour state.
 
@@ -75,7 +76,11 @@ The command lifecycle is ADR-0042 §3 unchanged (`PENDING → DELIVERED → ACCE
 
 A Cancel closes with its GoTo. The v1.14 CHECK keeps an ACCEPTED Cancel open, so without this a robot could never pass release-inspection. When a GoTo closes (terminal, REJECTED or RECONCILED), its live Cancel moves to EXPIRED if never delivered, otherwise to UNKNOWN, with reason `LEG_ENDED`. For a Cancel, UNKNOWN is not open and blocks nothing.
 
-Timeouts run on server time. PENDING past `AcceptBy` is EXPIRED; DELIVERED past `AcceptBy`, or a GoTo ACCEPTED for longer than `FleetCommands:LegResultTimeoutSeconds`, is UNKNOWN; so is a delivered command when the robot's current telemetry stream differs from `DeliveredStreamId`. With no telemetry in this process the stream rule proves nothing and does not fire. Restart keeps the reason of a Tour already in NEEDS_ASSISTANCE, and withdraws only GoTo commands: an undelivered Cancel stays deliverable. Restart recovery and the sweeper run only while `FleetCommands:Enabled = true`.
+Timeouts run on server time. PENDING past `AcceptBy` is EXPIRED; DELIVERED past `AcceptBy`, or a GoTo ACCEPTED for longer than `FleetCommands:LegResultTimeoutSeconds`, is UNKNOWN; so is a delivered command when the robot's current telemetry stream differs from `DeliveredStreamId`. With no telemetry in this process the stream rule proves nothing and does not fire. Restart keeps the reason of a Tour already in NEEDS_ASSISTANCE, and withdraws only GoTo commands: an undelivered Cancel stays deliverable.
+
+**`FleetCommands:Enabled` gates movement only (M2.2-f).** While it is false, Start, Next and Retry refuse (`COMMAND_TRANSPORT_DISABLED`), so no GoTo is created, and poll hands out no GoTo, not even one already delivered (`command: null`). Everything that can only make the robot safer keeps running: poll still checks `STREAM_NOT_CURRENT`, applies the timeouts and delivers an open Cancel; results are always recorded; the sweeper and restart recovery always run. Turning the flag off therefore never strands a Cancel, a result or a timeout. Restart recovery stops startup on failure only while the flag is on; while it is off a failure is logged and startup continues, because nothing can move the robot until a restart with the flag on, which runs recovery again.
+
+**End Early with an UNKNOWN GoTo (M2.2-f).** A Cancel is still queued as PENDING, as a best effort, and recorded with `LEG_CANCEL_REQUESTED` like the other cases; the GoTo stays UNKNOWN for Reconcile. The Cancel goes to whichever stream the backend hears at the next poll, which may not be the stream that received the GoTo. Neither its delivery nor an `ACCEPTED` for it is evidence that the robot stopped; the robot keeps `NeedsInspection = 1` and Reconcile closes the Cancel with its GoTo.
 
 ## Operations allowed per state
 
@@ -83,8 +88,8 @@ Timeouts run on server time. PENDING past `AcceptBy` is EXPIRED; DELIVERED past 
 |---|---|---|
 | Start | Tour Operator | Tour READY, all Start checks pass, transport enabled |
 | Next | Tour Operator | RUNNING, `NORMAL`, `OBSERVING`, robot has no open command, movement checks pass |
-| End Early | Tour Operator | RUNNING (any operational status or step) |
-| Retry leg | Tour Operator | RUNNING, `NEEDS_ASSISTANCE`, old GoTo FAILED (`NavigationFailed`) or REJECTED (`CommandRejected`), never UNKNOWN or RECONCILED. Movement checks must include `executionIdle` and `mapContextMatches`, so a `BUSY` or `MAP_MISMATCH` rejection cannot retry in a loop |
+| End Early | Tour Operator | RUNNING (any operational status or step); with an UNKNOWN GoTo a best-effort Cancel is queued and the GoTo stays UNKNOWN |
+| Retry leg | Tour Operator | RUNNING, `NEEDS_ASSISTANCE`, old GoTo FAILED (`NavigationFailed`), REJECTED (`CommandRejected`), or EXPIRED and never delivered (`CommandExpired`, or `RobotDisconnected` once telemetry is fresh again), never UNKNOWN or RECONCILED. An EXPIRED GoTo is proof the robot never received it. Movement checks must include `executionIdle` and `mapContextMatches`, so a `BUSY` or `MAP_MISMATCH` rejection cannot retry in a loop. A GoTo expired by restart recovery (`BackendRestarted`) is not retryable here; resuming after a restart is a follow-up |
 | Reconcile | Tour Operator | a command of the Tour in UNKNOWN → RECONCILED; the Tour stays `NEEDS_ASSISTANCE`, robot `NeedsInspection = 1`; afterwards only End Early |
 | Release-inspection | Technical Staff | the Tour holding the robot is COMPLETED or CANCELLED, robot has no open command; reason required |
 
