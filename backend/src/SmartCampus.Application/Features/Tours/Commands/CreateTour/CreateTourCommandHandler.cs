@@ -7,7 +7,7 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Tours.Commands.CreateTour;
 
 public sealed class CreateTourCommandHandler(ITourManagementRepository repository, IRouteRevisionRepository revisions,
-    IMapVersionRepository maps, TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<CreateTourCommand, TourMutationResult>
+    IMapVersionRepository maps, IScheduleBlockRepository blocks, TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<CreateTourCommand, TourMutationResult>
 {
     public async Task<TourMutationResult> Handle(CreateTourCommand command, CancellationToken ct)
     {
@@ -30,10 +30,13 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
         // The robot is held for the whole shift (docs/lich-tour-theo-ca.md §3).
         var (startsAt, endsAt) = TourSchedule.ShiftWindow(shift.Date, shift.Shift);
-        // Decided after the robot lock, on a fresh clock, so a shift taken while waiting is seen.
+        // Admin takes this same lock to close a day or shift, so a block and a new Tour cannot pass each other.
+        await blocks.LockDateAsync(shift.Date, ct);
+        var adminBlock = TourSchedule.BlockOf(await blocks.ListActiveAsync(shift.Date, shift.Date, ct), shift);
+        // Decided after the locks, on a fresh clock, so a shift taken or closed while waiting is seen.
         var now = clock.GetUtcNow();
         TourSchedule.EnsureUsable(TourSchedule.Evaluate(shift, now, plan,
-            await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct)));
+            await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct), adminBlock));
         var tour = new Tour
         {
             Id = Guid.NewGuid(), Name = input.Name, Description = input.Description, RouteId = revision.RouteId,

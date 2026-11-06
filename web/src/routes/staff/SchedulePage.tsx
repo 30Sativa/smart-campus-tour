@@ -57,11 +57,12 @@ const insideGrid = (tour: TourSummary) => {
   return start >= DAY_OPENS && start + durationOf(tour) / 60 <= DAY_OPENS + DAY_MINUTES
 }
 const LEAD_TIME_MS = 72 * 3600_000
-/** A shift still takes a new Tour: no live Tour holds it and its Tour start is at least 72 hours away (docs/lich-tour-theo-ca.md §3). */
+const instant = (value: string) => new Date(value).getTime()
+/** A shift still takes a new Tour: not closed by Admin, no live Tour holds it and its Tour start is at least 72 hours away (docs/lich-tour-theo-ca.md §3, §5). */
 const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
-  new Date(shift.tourStartsAt).getTime() - now >= LEAD_TIME_MS && !tours.some(tour => tour.state !== 'CANCELLED' &&
-    (tour.reservation ? tour.reservation.startsAt : tour.scheduledStartAt) < shift.endsAt &&
-    (tour.reservation ? tour.reservation.endsAt : endOf(tour)) > shift.startsAt)
+  !shift.block && instant(shift.tourStartsAt) - now >= LEAD_TIME_MS && !tours.some(tour => tour.state !== 'CANCELLED' &&
+    instant(tour.reservation ? tour.reservation.startsAt : tour.scheduledStartAt) < instant(shift.endsAt) &&
+    instant(tour.reservation ? tour.reservation.endsAt : endOf(tour)) > instant(shift.startsAt))
 const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
 const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)} - ${campusTime(shift.endsAt)}`
 
@@ -221,6 +222,11 @@ function OutsideChip({ tour, selected, onSelect }: { tour: TourSummary; selected
 function ShiftBand({ day, shift, open }: { day: string; shift: TourShift; open: boolean }) {
   const top = (campusMinutes(shift.startsAt) - DAY_OPENS) / 60 * HOUR_PX
   const tall = (campusMinutes(shift.endsAt) - campusMinutes(shift.startsAt)) / 60 * HOUR_PX
+  if (shift.block) return <div aria-label={`${shift.name} ${shiftSpan(shift)}, đã khoá: ${shift.block.reason}`} role="group" title={shift.block.reason}
+    className="absolute inset-x-0 overflow-hidden border-y border-[#d5dbe3] bg-[#e8ecf1] px-1.5 py-1" style={{ top, height: tall }}>
+    <span className="block truncate text-[10.5px] font-semibold text-[#475569]">{shift.name} · Đã khoá</span>
+    <span className="block text-[10.5px] leading-tight text-[#64748b]">{shift.block.reason}</span>
+  </div>
   return <div aria-label={`${shift.name} ${shiftSpan(shift)}`} role="group" className="absolute inset-x-0 border-y border-dashed border-[#c9dcf2] bg-[#f3f8ff]/80 px-1.5 py-1" style={{ top, height: tall }}>
     <span className="block truncate text-[10.5px] font-semibold text-[#4a6fa5]">{shift.name}</span>
     {open && <Link to={createHref(day, shift)} aria-label={`Tạo Tour ${shift.name} ngày ${day}`} className={`absolute right-1 bottom-1 rounded-md bg-white/90 px-1.5 text-[10.5px] font-semibold text-[#2563eb] hover:bg-white ${focus}`}>+ Tạo Tour</Link>}
@@ -329,6 +335,11 @@ function DayShifts({ day, shifts, isOpen, outside, onSelect }: { day: string; sh
       <ul aria-label="Các ca trong ngày" className="relative h-12 min-w-0 flex-1 rounded-lg bg-[#f8fafc]">{shifts.map(item => {
         const left = Math.max(0, (campusMinutes(item.startsAt) - DAY_OPENS) / DAY_MINUTES * 100)
         const width = (campusMinutes(item.endsAt) - campusMinutes(item.startsAt)) / DAY_MINUTES * 100
+        if (item.block) return <li key={item.code} aria-label={`${item.name} ${shiftSpan(item)}, đã khoá: ${item.block.reason}`} title={item.block.reason}
+          className="absolute inset-y-1 overflow-hidden rounded-md border border-[#d5dbe3] bg-[#e8ecf1] px-1.5" style={{ left: `${left}%`, width: `${width}%` }}>
+          <span className="block truncate text-[11px] font-semibold text-[#475569]">{item.name} · Đã khoá</span>
+          <span className="block truncate text-[11px] text-[#64748b]">{item.block.reason}</span>
+        </li>
         return <li key={item.code} aria-label={`${item.name} ${shiftSpan(item)}`} className="absolute inset-y-1 overflow-hidden rounded-md border border-dashed border-[#c9dcf2] bg-[#f3f8ff] px-1.5" style={{ left: `${left}%`, width: `${width}%` }}>
           <span className="block truncate text-[11px] font-semibold text-[#4a6fa5]">{item.name} · {shiftSpan(item)}</span>
           {isOpen(item) && <Link to={createHref(day, item)} aria-label={`Tạo Tour ${item.name} ngày ${day}`} className={`block truncate text-[11px] font-semibold text-[#2563eb] hover:underline ${focus}`}>+ Tạo Tour</Link>}

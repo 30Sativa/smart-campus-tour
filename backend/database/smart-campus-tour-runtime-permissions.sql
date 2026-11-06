@@ -16,6 +16,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.RouteStops TO campus_tour_ap
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.Tours TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
 GRANT UPDATE (ReleasedAt, ReleasedByUserId) ON OBJECT::dbo.TourRobotReservations TO campus_tour_app;
+-- v1.16: Admin schedule blocks are removed by stamping RemovedAt/RemovedByUserId, never deleted.
+GRANT SELECT, INSERT ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
+GRANT UPDATE (RemovedAt, RemovedByUserId) ON OBJECT::dbo.TourScheduleBlocks TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.PoiImportReceipts TO campus_tour_app;
 GRANT SELECT ON OBJECT::dbo.RouteVariants TO campus_tour_app;
 GRANT SELECT, INSERT ON OBJECT::dbo.Robots TO campus_tour_app;

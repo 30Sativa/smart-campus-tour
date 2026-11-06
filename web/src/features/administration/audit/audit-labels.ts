@@ -8,6 +8,7 @@ export const AUDIT_ACTION_GROUPS: { label: string; actions: Record<string, strin
     TOUR_REGISTRATION_CANCELLED: 'Hủy đăng ký do hủy Tour', TOUR_INVITATION_REVOKED: 'Thu hồi lời mời do hủy Tour',
     TOUR_CANCEL_NOTICE_REQUESTED: 'Xếp hàng email hủy Tour', TOUR_CANCEL_NOTICE_STARTED: 'Bắt đầu gửi email hủy Tour',
     TOUR_CANCEL_NOTICE_SENT: 'Đã gửi email hủy Tour', TOUR_CANCEL_NOTICE_FAILED: 'Gửi email hủy Tour thất bại',
+    SCHEDULE_BLOCK_CREATED: 'Khoá ngày/ca', SCHEDULE_BLOCK_REMOVED: 'Gỡ khoá ngày/ca',
   } },
   { label: 'Đăng ký đoàn', actions: {
     REGISTRATION_SUBMITTED: 'Gửi đăng ký', REGISTRATION_RESUBMITTED: 'Gửi lại đăng ký', REGISTRATION_UPDATED: 'Sửa đăng ký',
@@ -40,7 +41,7 @@ const ACTION_LABELS: Record<string, string> = Object.assign({}, ...AUDIT_ACTION_
 const ENTITY_LABELS: Record<string, string> = {
   User: 'Tài khoản', Tour: 'Tour', GroupRegistration: 'Đăng ký đoàn', RosterRow: 'Dòng danh sách', RosterEmailChangeRequest: 'Yêu cầu đổi email',
   Invitation: 'Lời mời', Route: 'Tuyến', RouteRevision: 'Phiên bản tuyến', Poi: 'POI', PoiProposal: 'POI', PoiProposalRevision: 'Phiên bản POI',
-  MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI',
+  MapVersion: 'Bản đồ', Robot: 'Robot', PoiImport: 'Nhập POI', TourScheduleBlock: 'Khoá lịch',
 }
 const RESULT_LABELS: Record<string, { label: string; tone: 'ok' | 'danger' | 'muted' }> = {
   SUCCESS: { label: 'Thành công', tone: 'ok' }, PASS: { label: 'Đạt', tone: 'ok' }, FAIL: { label: 'Không đạt', tone: 'danger' },

@@ -1,7 +1,9 @@
+using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.UnitTests;
 
@@ -197,14 +199,53 @@ public sealed class TourScheduleTests
     }
 
     [Fact]
-    public async Task ShiftCalendar_ListsEachConfiguredShiftOfEachDay()
+    public void AnAdminBlock_ComesAfterTheLength_AndBeforeOverlaps()
     {
-        var view = await new GetTourShiftsQueryHandler(Settings).Handle(new(Day, Day.AddDays(1)), default);
+        var closed = new TourShiftBlockView(Guid.NewGuid(), ScheduleBlockScope.Shift, "Bảo trì");
+        var hold = new TourReservationHold("Tour cũ", Start, Start.AddMinutes(30));
+        var block = TourSchedule.Evaluate(MorningOnDay, LongAgo, Plan, [hold], closed);
+        Assert.Equal(TourSchedule.ShiftBlocked, block!.Code);
+        Assert.Equal("Ca này đã bị khoá: Bảo trì", block.Message);
+        Assert.Equal(TourSchedule.RouteTooLongForShift, TourSchedule.Evaluate(MorningOnDay, LongAgo, new(6000, 6000), [], closed)!.Code);
+        Assert.Equal(TourSchedule.LeadTimeTooShort, TourSchedule.Evaluate(MorningOnDay, Start, Plan, [], closed)!.Code);
+        Assert.Equal("SHIFT_BLOCKED", Assert.Throws<ConflictException>(() => TourSchedule.EnsureUsable(block)).Code);
+    }
+
+    [Fact]
+    public void BlockOf_FindsTheDayBlockFirst_ThenTheShifts_OnThatDateOnly()
+    {
+        var afternoon = new TourShiftOnDay(Day, Settings.Shifts[1]);
+        TourScheduleBlock Block(string? code, DateOnly date) => new() { Id = Guid.NewGuid(), BlockDate = date, ShiftCode = code, Reason = "Lý do" };
+        Assert.Null(TourSchedule.BlockOf([Block("S1", Day), Block(null, Day.AddDays(1))], afternoon));
+        Assert.Equal(ScheduleBlockScope.Shift, TourSchedule.BlockOf([Block("S2", Day)], afternoon)!.Scope);
+        Assert.Equal(ScheduleBlockScope.Day, TourSchedule.BlockOf([Block("S2", Day), Block(null, Day)], afternoon)!.Scope);
+    }
+
+    [Fact]
+    public async Task ShiftCalendar_ListsEachConfiguredShiftOfEachDay_WithItsBlock()
+    {
+        var closed = new TourScheduleBlock { Id = Guid.NewGuid(), BlockDate = Day, ShiftCode = "S1", Reason = "Bảo trì" };
+        var view = await new GetTourShiftsQueryHandler(Settings, new StubBlocks([closed])).Handle(new(Day, Day.AddDays(1)), default);
         Assert.Equal(2, view.Days.Count);
         var morning = view.Days[0].Shifts[0];
         Assert.Equal(("S1", "Ca sáng", "08:15", 5400), (morning.Code, morning.Name, morning.Time, morning.MaxDurationSeconds));
         Assert.Equal(TourSchedule.ShiftWindow(Day, Morning), (morning.StartsAt, morning.EndsAt));
+        Assert.Equal(new TourShiftBlockView(closed.Id, ScheduleBlockScope.Shift, "Bảo trì"), morning.Block);
+        Assert.Null(view.Days[0].Shifts[1].Block);
         Assert.Equal(["S1", "S2", "S3"], view.Days[1].Shifts.Select(shift => shift.Code));
         Assert.Equal(3600, view.RecommendedMaxSeconds);
+    }
+
+    private sealed class StubBlocks(IReadOnlyList<TourScheduleBlock> active) : IScheduleBlockRepository
+    {
+        public Task<IReadOnlyList<TourScheduleBlock>> ListActiveAsync(DateOnly from, DateOnly to, CancellationToken ct) => Task.FromResult(active);
+        public Task LockDateAsync(DateOnly date, CancellationToken ct) => throw new NotImplementedException();
+        public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct) => throw new NotImplementedException();
+        public Task<AuditLog?> FindRequestAsync(Guid actor, Guid requestId, CancellationToken ct) => throw new NotImplementedException();
+        public Task<DateOnly?> FindDateAsync(Guid id, CancellationToken ct) => throw new NotImplementedException();
+        public Task<TourScheduleBlock?> FindAsync(Guid id, CancellationToken ct) => throw new NotImplementedException();
+        public Task<IReadOnlyList<ScheduleBlockingTour>> ListToursInWindowAsync(DateTimeOffset startsAt, DateTimeOffset endsAt, CancellationToken ct) => throw new NotImplementedException();
+        public void Add(TourScheduleBlock block) => throw new NotImplementedException();
+        public void AddAudit(AuditLog audit) => throw new NotImplementedException();
     }
 }

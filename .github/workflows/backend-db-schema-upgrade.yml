@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Successful main commit SHA with a verified v1.15 database tool
+        description: Successful main commit SHA with a verified v1.16 database tool
         required: true
         type: string
 

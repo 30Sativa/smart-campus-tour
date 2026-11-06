@@ -859,6 +859,37 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal("flow_physical", tourData.GetProperty("reservation").GetProperty("robotCode").GetString());
         Assert.Equal(1, await database.CountRowsAsync("dbo.TourRobotReservations"));
 
+        // docs/lich-tour-theo-ca.md §5: only Admin closes a shift; a shift with a Tour cannot be closed, and Staff sees the reason.
+        object BlockBody(string? shiftCode) => new { requestId = Guid.NewGuid(), date = slotDate.ToString("yyyy-MM-dd"), shiftCode, reason = "Bảo trì robot" };
+        using (var asStaff = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", staffToken, BlockBody("S2")))
+            Assert.Equal(HttpStatusCode.Forbidden, asStaff.StatusCode);
+        using (var listAsStaff = await Get(host.Client, $"/api/admin/schedule-blocks?from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}", staffToken))
+            Assert.Equal(HttpStatusCode.Forbidden, listAsStaff.StatusCode);
+        using (var asTechnical = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", technicalToken, BlockBody("S2")))
+            Assert.Equal(HttpStatusCode.Forbidden, asTechnical.StatusCode);
+        using (var occupied = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", adminToken, BlockBody("S1")))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, occupied.StatusCode);
+            var errors = (await Body(occupied)).GetProperty("errors");
+            Assert.Equal("SHIFT_HAS_TOURS", errors.GetProperty("code").GetString());
+            Assert.Contains("Scheduled from a tested revision", errors.GetProperty("blockers")[0].GetProperty("message").GetString());
+        }
+        using var closeShift = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", adminToken, BlockBody("S2"));
+        Assert.Equal(HttpStatusCode.OK, closeShift.StatusCode);
+        var closedId = (await Body(closeShift)).GetProperty("data").GetProperty("id").GetGuid();
+        using (var staffCalendar = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}", staffToken))
+        {
+            var calendarShifts = (await Body(staffCalendar)).GetProperty("data").GetProperty("days")[0].GetProperty("shifts");
+            Assert.Equal(JsonValueKind.Null, calendarShifts[0].GetProperty("block").ValueKind);
+            Assert.Equal("Bảo trì robot", calendarShifts[1].GetProperty("block").GetProperty("reason").GetString());
+        }
+        using (var blockedSlots = await Get(host.Client, slotPath, staffToken))
+            Assert.Equal("SHIFT_BLOCKED", (await Body(blockedSlots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[1].GetProperty("reasonCode").GetString());
+        using (var removeAsStaff = await Json(host.Client, HttpMethod.Post, $"/api/admin/schedule-blocks/{closedId}/remove", staffToken, new { requestId = Guid.NewGuid() }))
+            Assert.Equal(HttpStatusCode.Forbidden, removeAsStaff.StatusCode);
+        using (var reopen = await Json(host.Client, HttpMethod.Post, $"/api/admin/schedule-blocks/{closedId}/remove", adminToken, new { requestId = Guid.NewGuid() }))
+            Assert.Equal(HttpStatusCode.OK, reopen.StatusCode);
+
         // ADR-0037: deactivating stops new Tours only, and leaves history and existing Tours alone.
         async Task<JsonElement> ListedRoute(string query)
         {

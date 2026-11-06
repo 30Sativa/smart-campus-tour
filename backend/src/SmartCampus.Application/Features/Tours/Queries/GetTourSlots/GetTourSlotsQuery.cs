@@ -25,7 +25,7 @@ public sealed class GetTourSlotsQueryValidator : AbstractValidator<GetTourSlotsQ
 }
 
 public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IRouteRevisionRepository revisions,
-    IMapVersionRepository maps, TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<GetTourSlotsQuery, TourSlotsView>
+    IMapVersionRepository maps, IScheduleBlockRepository blocks, TourScheduleSettings settings, TimeProvider clock) : IRequestHandler<GetTourSlotsQuery, TourSlotsView>
 {
     public async Task<TourSlotsView> Handle(GetTourSlotsQuery query, CancellationToken ct)
     {
@@ -38,16 +38,17 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
         var holds = plan is null ? [] : await tours.GetActiveReservationsAsync(robot.Id,
             TourSchedule.ShiftWindow(days[0][0].Date, days[0][0].Shift).StartsAt,
             TourSchedule.ShiftWindow(days[^1][^1].Date, days[^1][^1].Shift).EndsAt, ct);
+        var active = await blocks.ListActiveAsync(query.From, query.To, ct);
         var now = clock.GetUtcNow();
         return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
-            days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds)).ToArray())).ToArray(),
+            days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds, TourSchedule.BlockOf(active, shift))).ToArray())).ToArray(),
             settings.RecommendedMaxSeconds);
     }
 
-    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds)
+    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds, TourShiftBlockView? adminBlock)
     {
         var start = TourSchedule.TourStart(shift.Date, shift.Shift);
-        var block = TourSchedule.Evaluate(shift, now, plan, holds);
+        var block = TourSchedule.Evaluate(shift, now, plan, holds, adminBlock);
         var (startsAt, endsAt) = TourSchedule.ShiftWindow(shift.Date, shift.Shift);
         return new(shift.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), start, block is null, block?.Code, block?.Message,
             startsAt, endsAt, start - TourSchedule.RegistrationClose, shift.Shift.Code, shift.Shift.Name, TourSchedule.MaxDurationSeconds(shift.Shift));

@@ -45,7 +45,10 @@ public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? 
     int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds);
 /// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
 public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
-    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds);
+    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds, TourShiftBlockView? Block);
+/// <summary>The Admin block closing a shift; <see cref="Scope"/> says whether it covers the whole day.</summary>
+public sealed record TourShiftBlockView(Guid Id, string Scope, string Reason);
+public static class ScheduleBlockScope { public const string Day = "DAY"; public const string Shift = "SHIFT"; }
 public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
 public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);

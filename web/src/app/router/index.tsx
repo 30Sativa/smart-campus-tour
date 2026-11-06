@@ -69,6 +69,7 @@ const AdminAccountsPage = lazy(() => import('../../routes/admin/AdminAccountsPag
 const StaffManagePoisPage = lazy(() => import('../../routes/staff/manage/StaffManagePoisPage'))
 const StaffManagePoiFormPage = lazy(() => import('../../routes/staff/manage/StaffManagePoiFormPage'))
 const RolesPage = lazy(() => import('../../routes/admin/RolesPage'))
+const AdminSchedulePage = lazy(() => import('../../routes/admin/AdminSchedulePage'))
 const AdminRobotCredentialsPage = lazy(() => import('../../routes/admin/AdminRobotCredentialsPage'))
 const AdminInfrastructurePage = lazy(() => import('../../routes/admin/AdminInfrastructurePage'))
 const AdminAuditLogsPage = lazy(() => import('../../routes/admin/AdminAuditLogsPage'))
@@ -280,6 +281,7 @@ export const routes = [
       { index: true, element: <Navigate to="/admin/accounts" replace /> },
       { path: 'accounts', element: <AdminAccountsPage /> },
       { path: 'roles', element: <RolesPage /> },
+      { path: 'schedule-blocks', element: <AdminSchedulePage /> },
       { path: 'robot-credentials', element: <AdminRobotCredentialsPage /> },
       { path: 'infrastructure', element: <AdminInfrastructurePage /> },
       { path: 'audit-logs', element: <AdminAuditLogsPage /> },

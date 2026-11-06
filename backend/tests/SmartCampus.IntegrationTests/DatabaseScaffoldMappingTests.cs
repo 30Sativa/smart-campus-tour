@@ -30,7 +30,7 @@ public sealed class DatabaseScaffoldMappingTests
                 "PoiProposalSubmissions", "PoiProposals", "PoiVerificationRecords", "Pois", "RefreshTokens",
                 "RobotCommands", "Robots", "RosterEmailChangeRequests", "RosterRows", "Routes", "RouteRevisions", "RouteRevisionStops",
                 "RouteRevisionSubmissions", "RouteTestRuns", "RouteStops", "RouteVariants", "TourAllowedBranches",
-                "TourEvents", "TourRobotReservations", "Tours", "UserRoles", "Users"
+                "TourEvents", "TourRobotReservations", "TourScheduleBlocks", "Tours", "UserRoles", "Users"
             }.OrderBy(name => name),
             tables);
     }
