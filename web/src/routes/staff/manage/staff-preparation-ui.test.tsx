@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { strToU8, zipSync } from 'fflate'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import StaffManageDashboardPage from './StaffManageDashboardPage'
+import { WorkQueue } from '../../../features/staff/WorkQueue'
 import StaffManagePoisPage from './StaffManagePoisPage'
 import SchedulePage from '../SchedulePage'
 import type { PoiProposal } from '../../../features/technical/api/technical'
@@ -65,13 +65,22 @@ afterEach(() => {
 })
 
 describe('staff preparation UI', () => {
-  it('uses API totals rather than the number of rows in a dashboard preview', async () => {
-    show(<StaffManageDashboardPage />)
-    const kpis = screen.getByRole('region', { name: 'Số liệu chuẩn bị' })
-    expect(await within(kpis).findByText('37')).toBeInTheDocument()
-    expect(await within(kpis).findByText('23')).toBeInTheDocument()
-    expect(await within(kpis).findByText('12')).toBeInTheDocument()
+  it('uses API totals rather than the number of rows in the queue preview', async () => {
+    show(<WorkQueue urgent={false} />)
+    const registrations = screen.getByRole('group', { name: 'Đăng ký chờ duyệt' })
+    const tours = screen.getByRole('group', { name: 'Tour chưa chốt' })
+    expect(await within(registrations).findByText('23')).toBeInTheDocument()
+    expect(await within(tours).findByText('37')).toBeInTheDocument()
     expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
+    expect(requests.some(url => url.pathname === '/api/staff/manage/tours' && url.searchParams.get('state') === 'SCHEDULED')).toBe(true)
+  })
+
+  it('folds the queue to one line while something needs a person now, and opens on request', async () => {
+    show(<WorkQueue urgent />)
+    expect(await screen.findByText(/23 đăng ký chờ duyệt · 37 Tour chưa chốt · 0 POI cần hoàn thiện/)).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Đăng ký chờ duyệt' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Mở/ }))
+    expect(screen.getByRole('group', { name: 'Đăng ký chờ duyệt' })).toBeInTheDocument()
   })
 
   it('counts only the POIs Staff still has to finish, not passed or waiting ones', async () => {
@@ -82,19 +91,19 @@ describe('staff preparation UI', () => {
       { ...draft, revision: { ...draft.revision, isSubmitted: false, navigationStatus: null } },
       { ...failed, revision: { ...failed.revision, navigationStatus: 'FAIL' } },
       { ...waiting, revision: { ...waiting.revision, navigationStatus: null } }] as PoiProposal[]
-    show(<StaffManageDashboardPage />)
-    const tile = await screen.findByRole('link', { name: /POI cần hoàn thiện/ })
-    await waitFor(() => expect(tile).toHaveTextContent(/POI cần hoàn thiện\s*2/))
+    show(<WorkQueue urgent={false} />)
+    const section = screen.getByRole('group', { name: 'POI cần hoàn thiện' })
+    await waitFor(() => expect(within(section).getByRole('heading')).toHaveTextContent(/POI cần hoàn thiện\s*2/))
+    expect(within(section).getByText(/1 POI khác đang chờ kỹ thuật kiểm tra/)).toBeInTheDocument()
   })
 
-  it('keeps failed registration totals unknown while other dashboard sections load', async () => {
+  it('keeps failed registration totals unknown while other queue sections load', async () => {
     failRegistrations = true
-    show(<StaffManageDashboardPage />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được đăng ký chờ duyệt.')
-    const pending = screen.getByRole('link', { name: /Đoàn chờ duyệt/ })
-    expect(pending).toHaveTextContent('-')
-    expect(pending).toHaveTextContent('Không tải được')
-    expect(await screen.findByText('37')).toBeInTheDocument()
+    show(<WorkQueue urgent={false} />)
+    const registrations = screen.getByRole('group', { name: 'Đăng ký chờ duyệt' })
+    expect(await within(registrations).findByRole('alert')).toHaveTextContent('Không tải được.')
+    expect(within(registrations).getByRole('heading')).toHaveTextContent(/Đăng ký chờ duyệt\s*-/)
+    expect(await within(screen.getByRole('group', { name: 'Tour chưa chốt' })).findByText('37')).toBeInTheDocument()
   })
 
   it('keeps POI rows and map markers on the selected map version and explains empty filters', async () => {

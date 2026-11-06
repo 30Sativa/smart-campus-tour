@@ -43,7 +43,7 @@ describe('StaffShell on every page', () => {
     expect(within(nav).getByRole('link', { name: /Đăng ký đoàn/ })).toHaveAttribute('href', '/staff/manage/registrations/pending')
     expect(activeNavPath('/staff/manage/registrations')).toBe(REGISTRATIONS_NAV_PATH)
     expect(activeNavPath('/staff/manage/registrations/pending')).toBe(REGISTRATIONS_NAV_PATH)
-    expect(activeNavPath('/staff/manage')).toBe('/staff/manage')
+    expect(activeNavPath('/staff/manage/pois/new')).toBe('/staff/manage/pois')
   })
 })
 
@@ -53,14 +53,15 @@ describe('StaffShell', () => {
     // way across to `/admin`.
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
-    expect(within(nav).getByRole('link', { name: 'Tổng quan vận hành' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByRole('link', { name: 'Khu vực quản trị' })).not.toBeInTheDocument()
   })
 
-  it('lists every page under always-open sections in the order of a working day', () => {
+  it('lists every page under always-open sections, with one overview', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
-    expect(['Vận hành', 'Chuẩn bị Tour', 'Lịch sử'].map((heading) => within(nav).getByText(heading))).toHaveLength(3)
+    expect(['Vận hành', 'Tour & đăng ký', 'Nội dung tham quan', 'Lịch sử'].map((heading) => within(nav).getByText(heading))).toHaveLength(4)
+    expect(within(nav).queryByRole('link', { name: /Tổng quan chuẩn bị/ })).not.toBeInTheDocument()
     for (const page of STAFF_NAV) expect(within(nav).getByRole('link', { name: new RegExp(page.label) })).toHaveAttribute('href', page.path)
     expect(within(nav).queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Đăng ký chờ duyệt' })).not.toBeInTheDocument()
