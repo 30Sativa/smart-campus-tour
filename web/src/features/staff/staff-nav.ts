@@ -1,5 +1,4 @@
-import { Bot, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route, ShieldCheck } from 'lucide-react'
-import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
+import { Bot, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
