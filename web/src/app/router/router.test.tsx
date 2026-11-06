@@ -211,6 +211,9 @@ describe('route table', () => {
       const router = renderAt('/admin/roles')
       await settled(router, '/admin/roles')
       expect(await screen.findByRole('heading', { name: /Vai trò & quyền/i, level: 1 })).toBeInTheDocument()
+      // The matrix covers UI areas only; it must not claim to describe API permissions.
+      expect(screen.getByText(/Quyền gọi từng API do máy chủ kiểm tra riêng/)).toBeInTheDocument()
+      expect(screen.queryByText(/luôn khớp với hành vi thật/)).not.toBeInTheDocument()
     })
 
     it('opens infrastructure monitoring for Admin', async () => {
