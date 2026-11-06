@@ -3,7 +3,7 @@ import { ChevronDown, LogOut, MonitorPlay, UserRound } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useAuthStore } from '../../stores/auth-store'
 import { useLogout } from '../../auth/use-logout'
-import { isAdminRole, roleLabel } from '../../auth/roles'
+import { roleLabel } from '../../auth/roles'
 import { usePendingReviewCount } from '../administration/registrations/hooks'
 import { LiveDot } from './StaffUi'
 import { RouteView } from '../../components/ui/RouteView'
@@ -12,7 +12,7 @@ import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
-import { ADMIN_LINK_ICON, REGISTRATIONS_NAV_PATH, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
+import { REGISTRATIONS_NAV_PATH, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { StaffBell } from './StaffBell'
 import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
 import { useRunningTours, type RunningTour } from './operations/hooks'
@@ -45,7 +45,6 @@ export default function StaffShell() {
   const handleLogout = useLogout()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   const navRef = useMobileNav(menuOpen, closeMenu)
-  const showAdminLink = isAdminRole(user?.role)
 
   // The shell owns the one telemetry hub subscription for the whole area.
   useFleetTelemetrySync()
@@ -93,9 +92,6 @@ export default function StaffShell() {
           '/staff/live': { value: assistCount, label: `${assistCount} Tour cần hỗ trợ`, tone: 'danger' },
           [REGISTRATIONS_NAV_PATH]: { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
         }}
-        // Only an Admin sees a way across, and only because that account
-        // genuinely has the other area. An operator is not shown a door it cannot open.
-        secondary={showAdminLink ? [{ to: '/admin', label: 'Khu vực quản trị', icon: ADMIN_LINK_ICON }] : undefined}
         onNavigate={closeMenu}
         onLogout={handleLogout}
         open={menuOpen}

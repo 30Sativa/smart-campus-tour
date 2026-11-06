@@ -48,14 +48,13 @@ describe('StaffShell on every page', () => {
 })
 
 describe('StaffShell', () => {
-  it('shows the active page and only offers administration to admins', () => {
-    const view = renderShell()
+  it('shows the active page and no cross-link to administration', () => {
+    // Admin cannot enter `/staff` (RequireArea), so the shell never offers a
+    // way across to `/admin`.
+    renderShell()
     const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
     expect(within(nav).getByRole('link', { name: 'Tổng quan' })).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByRole('link', { name: 'Khu vực quản trị' })).not.toBeInTheDocument()
-    view.unmount()
-    renderShell('Admin')
-    expect(screen.getByRole('link', { name: 'Khu vực quản trị' })).toHaveAttribute('href', '/admin')
   })
 
   it('lists every page under always-open sections, with one overview', () => {
