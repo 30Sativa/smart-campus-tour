@@ -132,9 +132,20 @@ Done since the first M2 console, listed so these rows are not re-opened:
   Tour & đăng ký (Lịch Tour, Đăng ký đoàn), Nội dung tham quan (POI, tuyến),
   Lịch sử. "Đăng ký đoàn" opens the pending queue its badge counts.
 - The running-Tour card and the robot channel chip show on every Staff page.
-- Not yet possible without API changes: "my Tours" for the assigned Operator
-  (list rows carry no Operator), READY blockers on list rows, and a server-side
-  filter for Tours needing a reconcile (the client scans the newest 100).
+- Since the same day's API additions (`docs/architecture.md`, Tour list row):
+  - "Chỉ Tour tôi vận hành" (`?mine=1`) narrows the running, today and next-7-day
+    lists to the signed-in account's Tours, from each row's `operator`. Alerts
+    are never filtered. Rows and alerts say who operates ("Bạn vận hành" /
+    "Vận hành: …").
+  - The queue's "Tour chưa chốt" rows show the server's READY blockers
+    (`readyBlockers=true`, page of 5).
+  - Tours needing a reconcile are read with `needsReconcile=true` instead of
+    scanning the newest finished Tours; the row flag is still checked.
+  - `TourUpdated` on `/hubs/operations` makes every open Staff screen re-read
+    Tours at once; the existing polling stays as the fallback.
+- Not done, waiting for a decision: an incident record (safety stop) beyond
+  NEEDS_ASSISTANCE, and a working-day calendar for the 2-working-day review
+  target (the queue shows calendar time waited and says so).
 
 ## Staff interface update (2026-10-30)
 

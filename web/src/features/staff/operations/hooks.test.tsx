@@ -43,7 +43,7 @@ describe('useRunningTours', () => {
 })
 
 describe('useToursNeedingReconcile', () => {
-  it('keeps only ended Tours the server marks as needing Reconcile, from the newest finished Tours', async () => {
+  it('asks the server for the Tours needing Reconcile, and still keeps only the rows it marks', async () => {
     api.list.mockResolvedValue(page([
       summary('held', 'CANCELLED', situation({ commandState: 'UNKNOWN', needsReconcile: true })),
       summary('done', 'COMPLETED', situation({ commandState: 'ARRIVED' })),
@@ -52,6 +52,7 @@ describe('useToursNeedingReconcile', () => {
     const { result } = renderHook(() => useToursNeedingReconcile(), { wrapper })
     await waitFor(() => expect(result.current.list.isSuccess).toBe(true))
     expect(result.current.tours.map(tour => tour.id)).toEqual(['held'])
-    expect(api.list).toHaveBeenCalledWith(expect.objectContaining<Partial<TourListQuery>>({ phase: 'FINISHED', sort: '-scheduledStartAt' }))
+    // An older server ignores the filter and returns every finished Tour; the row flag still decides.
+    expect(api.list).toHaveBeenCalledWith(expect.objectContaining<Partial<TourListQuery>>({ phase: 'FINISHED', needsReconcile: true, sort: '-scheduledStartAt' }))
   })
 })

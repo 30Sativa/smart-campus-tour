@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, LifeBuoy, Plus } from 'lucide-react'
+import { ArrowRight, CalendarDays, LifeBuoy, Plus, UserRound } from 'lucide-react'
 import { Link } from 'react-router'
 import { LoadingPanel, PageHeader, PanelHead, panelClass } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
@@ -14,6 +14,8 @@ import { useNow } from '../../features/staff/use-now'
 import { TodayTours, UpcomingTours } from '../../features/staff/operations/DayTours'
 import { STEP_LABEL, assistanceInfo, commandStateInfo } from '../../features/staff/operations/operation-labels'
 import { ToneBadge } from '../../features/staff/operations/OperationParts'
+import { operatorLabel, useMineFilter } from '../../features/staff/operations/mine'
+import type { TourSummary } from '../../features/administration/tours/types'
 
 const CONNECTION_TEXT = { connecting: 'Đang kết nối kênh robot…', connected: 'Kênh robot đang nhận báo cáo.', reconnecting: 'Đang kết nối lại kênh robot…', disconnected: 'Mất kết nối kênh robot, đang thử lại.' } as const
 
@@ -49,15 +51,22 @@ export default function OverviewPage() {
   const ended = useToursNeedingReconcile()
   const now = useNow(5_000)
   const { reviewId, close } = useReviewParam()
-  const list = tours.data?.data ?? []
+  const { mine, setMine, keep, isMine } = useMineFilter()
+  const list = (tours.data?.data ?? []).filter(keep)
+  // Alerts are never filtered: whoever sees one first can call the Operator.
   const assistance = running.tours.filter(detail => detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE')
   const next = list.find(tour => tour.state === 'READY' || tour.state === 'SCHEDULED')
   const urgent = assistance.length > 0 || ended.tours.length > 0
+  const who = (tour: TourSummary) => operatorLabel(tour, isMine(tour))
+  const withOperator = (hint: string, tour: TourSummary) => [hint, who(tour)].filter(Boolean).join(' ')
 
   return (
     <StaffPage>
       <PageHeader eyebrow="Staff" title="Tổng quan" description={`Ngày ${campusDate(`${today}T05:00:00Z`)}. Việc cần làm theo thứ tự gấp: bây giờ, hôm nay, rồi hàng chờ chuẩn bị.`}
         action={<>
+          <button type="button" aria-pressed={mine} onClick={() => setMine(!mine)} className={buttonClass(mine ? 'primary' : 'ghost')}>
+            <UserRound size={15} aria-hidden="true" />Chỉ Tour tôi vận hành
+          </button>
           <Link to="/staff/schedule" className={buttonClass('secondary')}><CalendarDays size={15} aria-hidden="true" />Xem lịch</Link>
           <Link to="/staff/manage/tours/new" className={buttonClass('primary')}><Plus size={16} aria-hidden="true" />Tạo Tour</Link>
         </>} />
@@ -67,10 +76,10 @@ export default function OverviewPage() {
       <section aria-label="Bây giờ" className="mb-4 space-y-2">
         {assistance.map(detail => {
           const reason = assistanceInfo(detail.execution?.assistanceReason)
-          return <Alert key={detail.tour.id} title={`${detail.tour.name} cần hỗ trợ: ${reason.label}`} hint={reason.hint} to={`/staff/live/${detail.tour.id}`} action="Mở điều hành" />
+          return <Alert key={detail.tour.id} title={`${detail.tour.name} cần hỗ trợ: ${reason.label}`} hint={withOperator(reason.hint, detail.tour)} to={`/staff/live/${detail.tour.id}`} action="Mở điều hành" />
         })}
-        {ended.tours.map(tour => <Alert key={tour.id} title={`${tour.name}: ${RECONCILE_HEADLINE}`} hint={RECONCILE_HINT} to={`/staff/live/${tour.id}`} action="Mở để đối soát" />)}
-        <RunningTours running={running} next={next} />
+        {ended.tours.map(tour => <Alert key={tour.id} title={`${tour.name}: ${RECONCILE_HEADLINE}`} hint={withOperator(RECONCILE_HINT, tour)} to={`/staff/live/${tour.id}`} action="Mở để đối soát" />)}
+        <RunningTours running={running} next={next} keep={keep} who={who} mine={mine} />
       </section>
 
       <div className="grid items-start gap-4 2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -95,15 +104,20 @@ function Alert({ title, hint, to, action }: { title: string; hint: string; to: s
 }
 
 /** The running Tours with their step and command; with none running, one line naming the next Tour of the day. */
-function RunningTours({ running, next }: { running: ReturnType<typeof useRunningTours>; next?: { name: string; scheduledStartAt: string } }) {
+function RunningTours({ running, next, keep, who, mine }: {
+  running: ReturnType<typeof useRunningTours>; next?: { name: string; scheduledStartAt: string }
+  keep: (tour: TourSummary) => boolean; who: (tour: TourSummary) => string | null; mine: boolean
+}) {
   if (running.isError) return <ErrorPanel error={running.list.error} onRetry={() => void running.list.refetch()} />
   if (running.isPending) return <LoadingPanel />
-  if (running.tours.length === 0) return <p className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-[13px] text-[#475569]">
-    Không có Tour nào đang chạy.{next ? ` Tour kế tiếp hôm nay: ${next.name} lúc ${campusTime(next.scheduledStartAt)}.` : ' Hôm nay không còn Tour nào chờ bắt đầu.'}
+  const shown = running.tours.filter(detail => keep(detail.tour))
+  if (shown.length === 0) return <p className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-[13px] text-[#475569]">
+    {mine ? 'Bạn không vận hành Tour nào đang chạy.' : 'Không có Tour nào đang chạy.'}
+    {next ? ` Tour kế tiếp hôm nay: ${next.name} lúc ${campusTime(next.scheduledStartAt)}.` : ' Hôm nay không còn Tour nào chờ bắt đầu.'}
   </p>
   return <section className={panelClass} aria-label="Tour đang chạy">
-    <PanelHead title={`Đang chạy (${running.tours.length})`} description="Trạng thái Tour và lệnh robot của chặng hiện tại." />
-    <ul className="divide-y divide-[#f1f5f9] px-4">{running.tours.map(detail => {
+    <PanelHead title={`Đang chạy (${shown.length})`} description="Trạng thái Tour và lệnh robot của chặng hiện tại." />
+    <ul className="divide-y divide-[#f1f5f9] px-4">{shown.map(detail => {
       const command = detail.execution?.commandState
       return <li key={detail.tour.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
         <span className="min-w-0">
@@ -114,6 +128,7 @@ function RunningTours({ running, next }: { running: ReturnType<typeof useRunning
             {command && <ToneBadge tone={commandStateInfo(command).tone}>Lệnh: {commandStateInfo(command).label}</ToneBadge>}
             {detail.tour.reservation?.robotCode && <ToneBadge tone="muted">{detail.tour.reservation.robotCode}</ToneBadge>}
           </span>
+          {who(detail.tour) && <span className="mt-1 block text-xs text-[#64748b]">{who(detail.tour)}</span>}
         </span>
         <Link to={`/staff/live/${detail.tour.id}`} className={buttonClass('primary', 'sm')}>Mở điều hành<ArrowRight size={14} aria-hidden="true" /></Link>
       </li>

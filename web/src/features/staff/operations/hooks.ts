@@ -84,14 +84,15 @@ export function useRunningTours() {
   return { list, tours, isPending: list.isPending || details.some(detail => detail.isPending), isError: list.isError }
 }
 
-const FINISHED_QUERY: TourListQuery = { phase: 'FINISHED', sort: '-scheduledStartAt', page: 1, size: 100 }
+const RECONCILE_QUERY: TourListQuery = { phase: 'FINISHED', needsReconcile: true, sort: '-scheduledStartAt', page: 1, size: 50 }
 /**
  * Ended Tours that still hold an UNKNOWN GoTo, which keeps the robot held until
- * the Operator reconciles it. Read from the newest finished Tours' list rows;
- * an older server returns no `execution`, so none is shown.
+ * the Operator reconciles it. The server filters (`needsReconcile`), so an old
+ * one is not missed behind newer finished Tours. The row's own flag is still
+ * checked: a server without the filter returns every finished Tour.
  */
 export function useToursNeedingReconcile() {
-  const list = useQuery({ queryKey: tourKeys.list(FINISHED_QUERY), queryFn: () => toursApi.list(FINISHED_QUERY), refetchInterval: LIST_MS })
+  const list = useQuery({ queryKey: tourKeys.list(RECONCILE_QUERY), queryFn: () => toursApi.list(RECONCILE_QUERY), refetchInterval: LIST_MS })
   return { list, tours: (list.data?.data ?? []).filter(tour => tour.execution?.needsReconcile === true) }
 }
 

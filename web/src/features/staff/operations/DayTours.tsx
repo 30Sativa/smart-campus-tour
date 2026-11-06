@@ -7,6 +7,7 @@ import type { TourState, TourSummary } from '../../administration/tours/types'
 import { EmptyPanel, ErrorPanel } from '../StaffUi'
 import { useFleetTelemetry, type FleetSnapshot } from './fleet-telemetry'
 import { useDayTours, useUpcomingTours } from './hooks'
+import { operatorLabel, useMineFilter } from './mine'
 import { ToneBadge, TourStateBadge } from './OperationParts'
 import { nextStep } from './next-step'
 
@@ -24,11 +25,13 @@ export function TodayTours() {
   const today = campusDay(new Date())
   const tours = useDayTours(today)
   const upcoming = useUpcomingTours(today)
+  const { keep, mine } = useMineFilter()
   const asked = params.get('view') as View | null
   const view: View = asked && VIEWS.some(item => item.value === asked) ? asked : 'all'
-  const all = tours.data?.data ?? []
+  const all = (tours.data?.data ?? []).filter(keep)
   const rows = all.filter(tour => matches(tour, view))
-  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state))
+  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state) && keep(tour))
+  const none = mine ? 'Hôm nay bạn không vận hành Tour nào.' : 'Hôm nay không có Tour nào.'
   const options = VIEWS.map(item => tours.isSuccess ? { ...item, label: `${item.label} (${all.filter(tour => matches(tour, item.value)).length})` } : item)
 
   return <section className={panelClass} aria-label="Tour hôm nay">
@@ -39,7 +42,7 @@ export function TodayTours() {
     </div>
     {tours.isPending ? <div className="p-4"><LoadingPanel /></div>
       : tours.isError ? <div className="p-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>
-      : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : ahead.length ? 'Hôm nay không có Tour nào. Các Tour sắp tới ở bên dưới.' : 'Hôm nay không có Tour nào.'}</EmptyPanel></div>
+      : rows.length === 0 ? <div className="p-4"><EmptyPanel>{all.length ? 'Không có Tour nào ở trạng thái này hôm nay.' : ahead.length ? `${none} Các Tour sắp tới ở bên dưới.` : none}</EmptyPanel></div>
       : <TourTable label="Tour hôm nay" tours={rows} />}
   </section>
 }
@@ -47,7 +50,8 @@ export function TodayTours() {
 /** The not-ended Tours of the next week, so a Tour on a later day is still one click away. */
 export function UpcomingTours() {
   const upcoming = useUpcomingTours(campusDay(new Date()))
-  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state))
+  const { keep } = useMineFilter()
+  const ahead = (upcoming.data?.data ?? []).filter(tour => !ENDED.includes(tour.state) && keep(tour))
   return <section className={`${panelClass} mt-4`} aria-label="Tour sắp tới">
     <PanelHead title="Sắp tới" description="Tour chưa kết thúc trong 7 ngày tới. Kiểm tra trước khi bắt đầu mở được từ đây, nhưng chỉ bắt đầu được khi tới giờ."
       action={<Link to="/staff/schedule" className={buttonClass('ghost', 'sm')}>Xem lịch</Link>} />
@@ -73,6 +77,7 @@ function RobotReport({ robotCode, snapshot }: { robotCode: string; snapshot: Fle
 /** One row per Tour with its next step. `dated` adds the day, for Tours that are not today. */
 function TourTable({ label, tours, dated = false }: { label: string; tours: TourSummary[]; dated?: boolean }) {
   const snapshot = useFleetTelemetry()
+  const { isMine } = useMineFilter()
   return <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left" aria-label={label}>
     <thead className="border-b border-[#e2e8f0]"><tr>{[dated ? 'Ngày giờ' : 'Giờ', 'Tour', 'Robot', 'Đoàn', 'Trạng thái', 'Bước tiếp theo'].map(head => <th key={head} scope="col" className={thClass}>{head}</th>)}</tr></thead>
     <tbody className="divide-y divide-[#eef1f4]">{tours.map(tour => {
@@ -80,7 +85,7 @@ function TourTable({ label, tours, dated = false }: { label: string; tours: Tour
       const robotCode = tour.reservation?.robotCode
       return <tr key={tour.id} className={rowClass}>
         <td className={`${tdClass} font-semibold tabular-nums whitespace-nowrap`}>{dated && `${campusDate(tour.scheduledStartAt).slice(0, 5)} · `}{campusTime(tour.scheduledStartAt)}</td>
-        <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{tour.routeName}</span></td>
+        <td className={tdClass}><span className="block font-semibold text-[#0f172a]">{tour.name}</span><span className="block text-xs text-[#64748b]">{[tour.routeName, operatorLabel(tour, isMine(tour))].filter(Boolean).join(' · ')}</span></td>
         <td className={tdClass}>{robotCode ? <span className="flex flex-col items-start gap-1"><span className="font-mono text-xs">{robotCode}</span>{!dated && !ENDED.includes(tour.state) && <RobotReport robotCode={robotCode} snapshot={snapshot} />}</span> : '-'}</td>
         <td className={`${tdClass} tabular-nums`}>{tour.registrationCount} đoàn</td>
         <td className={tdClass}><TourStateBadge state={tour.state} /></td>

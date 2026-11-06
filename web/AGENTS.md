@@ -579,10 +579,12 @@ factory only:
   `start()` / `stop()`;
 - `withAutomaticReconnect()` is on by default.
 
-`/hubs/operations` is consumed for `FleetUpdated` only, with the in-memory
-JWT as `accessTokenFactory` and a restart 5 s after a close. `TourUpdated`
-and `AssistanceRequired` are planned backend events; until they exist, Tour
-screens poll the Tour detail.
+`/hubs/operations` is consumed for `FleetUpdated` and `TourUpdated`, with the
+in-memory JWT as `accessTokenFactory` and a restart 5 s after a close.
+`TourUpdated` carries nothing: it means a Tour command committed, so the shell
+invalidates the Tour queries (and once more after a reconnect). It may be
+coalesced or lost, so Tour screens keep polling as the fallback.
+`AssistanceRequired` remains a planned backend event.
 
 ---
 

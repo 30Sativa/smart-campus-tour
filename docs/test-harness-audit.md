@@ -239,8 +239,8 @@ explicitly labeled mocks; they do not claim pending business targets are built.
 | web/src/features/representative/roster-import.test.ts | 8 → 8 | PERMANENT REGRESSION; keep | CSV/XLSX template/read/write, compressed shared strings, Vietnamese data, all-or-nothing validation and size/type/row limits. |
 | web/src/features/staff/StaffShell.test.tsx | 3 → 3 | PERMANENT REGRESSION; keep | Role-sensitive console chrome and mobile dismiss/focus behavior. |
 | web/src/features/staff/attention.test.ts | 7 → 7 | PERMANENT REGRESSION; keep | Operational next steps, fresh heartbeat versus stale pose, count/queue priority and server target. |
-| web/src/features/staff/components/OverviewAnalytics.test.tsx | 2 → 2 | PERMANENT REGRESSION; keep | Only supplied measurements and explicit empty states; no fabricated telemetry. |
-| web/src/features/staff/components/RouteSchematic.test.tsx | 1 → 1 | PERMANENT REGRESSION; keep | Ordered POIs/source and map interaction without fabricated camera image. |
+| web/src/features/staff/components/OverviewAnalytics.test.tsx | 2 → 0 | Removed 2026-11-07 with its dead component | Only supplied measurements and explicit empty states; no fabricated telemetry. See the per-test section. |
+| web/src/features/staff/components/RouteSchematic.test.tsx | 1 → 0 | Removed 2026-11-07 with its dead component | Ordered POIs/source and map interaction without fabricated camera image. See the per-test section. |
 | web/src/features/staff/status.test.ts | 5 → 5 | PERMANENT REGRESSION; keep | Human-readable status/severity, enum case, unknown and unhealthy-state presentation. |
 | web/src/features/student/student-matching.test.ts | 7 → 7 | PERMANENT REGRESSION; keep | Existing mock name/class match, Unicode normalization and generic rejection; currently live implementation, not proof of target personal invitation access. |
 | web/src/features/student/student-workflow.test.tsx | 5 → 5 | PERMANENT REGRESSION; keep | Existing mock join/live/wait/completed screens; target invitation/session workflow remains separate unimplemented work. |
@@ -979,14 +979,22 @@ Before-cleanup definitions: CONTRACT/ARCHITECTURE: 100; DUPLICATE: 2; PERMANENT 
 
 | Test definition | Classification | Action |
 |---|---|---|
-| summarises only the readings supplied by the operations responses | PERMANENT REGRESSION | keep |
-| shows explicit empty states instead of inventing measurements | PERMANENT REGRESSION | keep |
+| summarises only the readings supplied by the operations responses | PERMANENT REGRESSION | removed 2026-11-07 with the component |
+| shows explicit empty states instead of inventing measurements | PERMANENT REGRESSION | removed 2026-11-07 with the component |
 
 ### web/src/features/staff/components/RouteSchematic.test.tsx
 
 | Test definition | Classification | Action |
 |---|---|---|
-| shows the ordered POIs and live robot source without inventing a camera image | PERMANENT REGRESSION | keep |
+| shows the ordered POIs and live robot source without inventing a camera image | PERMANENT REGRESSION | removed 2026-11-07 with the component |
+
+The two components above, and the rest of the Staff UI built on the simulated
+`api/contracts/staff` operations contract (`today-board.ts`, `overview-data.ts`,
+`TodayLanes`, `TourAgenda`, `RunStatus`, `TourParts`, `RobotParts`,
+`StaffCharts`, `DeviceMonitors`), had no route rendering them after the console
+moved to the real Tour API (2026-11-04). They were deleted as dead code, so their
+tests had nothing left to protect; the no-invented-data rule they asserted is
+covered on the live screens (`OverviewPage.test.tsx`, `operations.test.tsx`).
 
 ### web/src/features/staff/status.test.ts
 
