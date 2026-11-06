@@ -15,6 +15,8 @@ typedef struct
 {
 	HeadAxisPins pins;
 	volatile int32_t pos;            /* so buoc da phat, co dau */
+	volatile uint32_t elec;          /* tong xung co dau tu luc Init, KHONG bao gio dat lai:
+	                                  * elec % HEAD_PHASE_PERIOD = pha bo dem buoc cua DRV8825 */
 	volatile int32_t target;
 	volatile float vel;              /* buoc/s, co dau; chi ISR ghi tru Off/Halt */
 	volatile uint32_t phase_acc;
@@ -33,7 +35,8 @@ typedef struct
 	int32_t limit_steps;
 	int32_t home_seek_steps;         /* co dau: chieu toi vat can */
 	int32_t home_stop_steps;         /* vi tri vat can tinh tu 0, co dau */
-	uint8_t home_phase;              /* 0 xong/khong homing, 1 tim vat can, 2 ve 0 (chi main loop) */
+	uint32_t home_settle_start_ms;
+	uint8_t home_phase;              /* HOME_PHASE_* (chi main loop) */
 } HeadAxis;
 
 static HeadAxis axes[HEAD_AXIS_COUNT];
@@ -43,6 +46,14 @@ static uint8_t s_homing = 0U;            /* chi main loop */
 static uint8_t s_jog_axes = 0U;          /* bit i = truc i dang JOG (chi main loop) */
 static uint32_t s_jog_last_ms = 0U;
 static uint8_t s_profile_div = 0U;
+
+/* Chu ky pha dien cua DRV8825: 4 buoc du = 4 * HEAD_MICROSTEP xung. */
+#define HEAD_PHASE_PERIOD ((uint32_t)(4.0f * HEAD_MICROSTEP + 0.5f))
+
+#define HOME_PHASE_NONE   0U     /* xong / khong homing */
+#define HOME_PHASE_SEEK   1U     /* quay toi vat can */
+#define HOME_PHASE_SETTLE 2U     /* dung yen cho roto on dinh */
+#define HOME_PHASE_RETURN 3U     /* tu vat can ve 0 */
 
 #define PIN_HIGH(port, pin) ((port)->BSRR = (uint32_t)(pin))
 #define PIN_LOW(port, pin)  ((port)->BSRR = ((uint32_t)(pin) << 16U))
@@ -82,6 +93,7 @@ static void HeadCore_InitAxis(HeadAxis *a, const HeadAxisPins *pins,
 
 	a->pins = *pins;
 	a->pos = 0;
+	a->elec = 0U;    /* DRV8825 vua cap nguon cung STM32: bo dem buoc o trang thai home */
 	a->target = 0;
 	a->vel = 0.0f;
 	a->phase_acc = 0U;
@@ -100,7 +112,8 @@ static void HeadCore_InitAxis(HeadAxis *a, const HeadAxisPins *pins,
 	a->limit_steps = (int32_t)lroundf((float)limit_cdeg * a->steps_per_cdeg);
 	a->home_seek_steps = sign * (int32_t)lroundf((float)home_seek_cdeg * a->steps_per_cdeg);
 	a->home_stop_steps = sign * (int32_t)lroundf((float)home_offset_cdeg * a->steps_per_cdeg);
-	a->home_phase = 0U;
+	a->home_settle_start_ms = 0U;
+	a->home_phase = HOME_PHASE_NONE;
 
 	PIN_LOW(a->pins.step_port, a->pins.step_pin);
 	HeadCore_WriteDir(&a->pins, 1);
@@ -307,6 +320,30 @@ HeadResult HeadCore_Zero(void)
 	return HEAD_OK;
 }
 
+/* Quang seek (co dau) keo dai them 0..HEAD_PHASE_PERIOD-1 xung theo chieu
+ * seek de xung cuoi roi vao pha elec % HEAD_PHASE_PERIOD == 0.
+ *
+ * Ly do: motor buoc ep vao vat can se truot, va khi dung han roto nam o vi
+ * tri can bang cua pha dien cuoi cung gan vat can nhat (cach vat can < 2 buoc
+ * du ve mot trong hai phia). Pha cuoi ngau nhien -> moc 0 lech ngau nhien
+ * toi +/-2 buoc du (PAN 1.2 do, TILT 3.6 do). Pha cuoi co dinh -> vi tri can
+ * bang do co dinh -> moc 0 lap lai, phan lech con lai la hang so va duoc
+ * HOME_OFFSET hieu chinh. Goi trong critical section. */
+static int32_t HeadCore_AlignedSeekLocked(const HeadAxis *a)
+{
+	int32_t seek = a->home_seek_steps;
+#if HEAD_HOME_PHASE_ALIGN
+	const uint32_t period = HEAD_PHASE_PERIOD;
+	uint32_t r = (a->elec + (uint32_t)seek) % period;   /* period la luy thua 2: dung ca khi tran */
+	if (r != 0U)
+	{
+		if (seek > 0) seek += (int32_t)(period - r);
+		else          seek -= (int32_t)r;
+	}
+#endif
+	return seek;
+}
+
 HeadResult HeadCore_Home(void)
 {
 	if ((s_homing != 0U) ||
@@ -328,8 +365,8 @@ HeadResult HeadCore_Home(void)
 		a->phase_acc = 0U;
 		a->step_pending = 0U;
 		a->speed_cap = a->home_sps;
-		a->target = a->home_seek_steps;
-		a->home_phase = 1U;
+		a->target = HeadCore_AlignedSeekLocked(a);
+		a->home_phase = HOME_PHASE_SEEK;
 	}
 	s_zeroed = 0U;
 	s_homing = 1U;
@@ -367,21 +404,28 @@ void HeadCore_Service(uint32_t now_ms)
 		for (uint8_t i = 0U; i < HEAD_AXIS_COUNT; i++)
 		{
 			HeadAxis *a = &axes[i];
-			if ((a->home_phase == 1U) && (HeadCore_IsMoving(i) == 0U))
+			if ((a->home_phase == HOME_PHASE_SEEK) && (HeadCore_IsMoving(i) == 0U))
 			{
-				/* Da quay het quang seek: truc dang ep vao vat can. */
+				/* Da quay het quang seek: truc dang ep vao vat can. Giu yen
+				 * cho roto het rung truoc khi dat moc. */
+				a->home_settle_start_ms = now_ms;
+				a->home_phase = HOME_PHASE_SETTLE;
+			}
+			else if ((a->home_phase == HOME_PHASE_SETTLE) &&
+			         ((uint32_t)(now_ms - a->home_settle_start_ms) >= HEAD_HOME_SETTLE_MS))
+			{
 				__disable_irq();
 				a->pos = a->home_stop_steps;
 				a->target = 0;
 				a->speed_cap = a->max_sps;
 				__enable_irq();
-				a->home_phase = 2U;
+				a->home_phase = HOME_PHASE_RETURN;
 			}
-			else if ((a->home_phase == 2U) && (HeadCore_IsMoving(i) == 0U))
+			else if ((a->home_phase == HOME_PHASE_RETURN) && (HeadCore_IsMoving(i) == 0U))
 			{
-				a->home_phase = 0U;
+				a->home_phase = HOME_PHASE_NONE;
 			}
-			if (a->home_phase != 0U)
+			if (a->home_phase != HOME_PHASE_NONE)
 			{
 				all_done = 0U;
 			}
@@ -403,7 +447,7 @@ void HeadCore_Off(void)
 	s_jog_axes = 0U;
 	for (uint8_t i = 0U; i < HEAD_AXIS_COUNT; i++)
 	{
-		axes[i].home_phase = 0U;
+		axes[i].home_phase = HOME_PHASE_NONE;
 		axes[i].vel = 0.0f;
 		axes[i].phase_inc = 0U;
 		axes[i].phase_acc = 0U;
@@ -429,7 +473,7 @@ void HeadCore_Halt(void)
 	s_jog_axes = 0U;
 	for (uint8_t i = 0U; i < HEAD_AXIS_COUNT; i++)
 	{
-		axes[i].home_phase = 0U;
+		axes[i].home_phase = HOME_PHASE_NONE;
 		HeadCore_HaltAxisLocked(&axes[i]);
 	}
 	__enable_irq();
@@ -594,6 +638,7 @@ static inline __attribute__((always_inline)) void HeadCore_TickAxis(HeadAxis *a,
 	PIN_HIGH(a->pins.step_port, a->pins.step_pin);
 	a->pulse_ticks = 1U;
 	a->pos += a->dir;
+	a->elec += (uint32_t)(int32_t)a->dir;
 }
 
 void HeadCore_HandleTick(void)

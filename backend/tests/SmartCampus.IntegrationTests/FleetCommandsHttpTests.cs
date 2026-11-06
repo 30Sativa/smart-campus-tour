@@ -318,6 +318,57 @@ public sealed class FleetCommandsHttpTests
             if (value is JsonObject) AssertSameShape(value, actual.GetProperty(name));
     }
 
+    /// <summary>ADR-0045 over HTTP: the Operator's head button reaches the robot's waiting long poll (docs/contracts/fleet-head/v1).</summary>
+    [SchemaV11Fact]
+    public async Task HeadControl_TheOperatorOfARunningTour_TurnsTheHead_ThroughTheRobotsLongPoll()
+    {
+        await using var b = await Bridge.Create(headEnabled: true);
+        var early = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "STOP" });
+        Assert.Equal((HttpStatusCode.Conflict, "TOUR_STATE_INVALID"), (early.Status, Code(early.Body)));
+
+        await b.StartTour();
+        var deaf = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "STEP", panSteps = 1 });
+        Assert.Equal((HttpStatusCode.Conflict, "HEAD_ROBOT_NOT_CONNECTED"), (deaf.Status, Code(deaf.Body)));
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await b.Post("/api/fleet/head/v1/poll", new { afterSeq = 0, waitMs = 0 }, credential: b.OperatorToken)).Status);
+
+        var poll = b.Post("/api/fleet/head/v1/poll", new
+        {
+            epoch = (Guid?)null, afterSeq = 0, waitMs = 5000,
+            head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 }
+        });
+        await Task.Delay(300);
+        Assert.False(poll.IsCompleted, "nothing queued yet: the robot's poll waits");
+        var sent = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "JOG", panDir = -1, tiltDir = 0 });
+        Assert.True(sent.Status == HttpStatusCode.OK, sent.Body.ToString());
+        Assert.Equal(TourReadySqlTests.Robot, sent.Body.GetProperty("data").GetProperty("robotCode").GetString());
+
+        var reply = await poll.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.True(reply.Status == HttpStatusCode.OK, reply.Body.ToString());
+        var data = reply.Body.GetProperty("data");
+        var command = Assert.Single(data.GetProperty("commands").EnumerateArray());
+        Assert.Equal(("JOG", -1, 0, 600), (command.GetProperty("kind").GetString(), command.GetProperty("panDir").GetInt32(),
+            command.GetProperty("tiltDir").GetInt32(), command.GetProperty("ttlMs").GetInt32()));
+        Assert.False(command.TryGetProperty("panSteps", out _), "only the fields of the kind are on the wire");
+
+        // The same seq is never handed out twice in one epoch.
+        var again = await b.Post("/api/fleet/head/v1/poll", new
+        {
+            epoch = data.GetProperty("epoch").GetGuid(), afterSeq = command.GetProperty("seq").GetInt64(), waitMs = 0
+        });
+        Assert.Empty(again.Body.GetProperty("data").GetProperty("commands").EnumerateArray());
+
+        var status = await b.OperatorCall(HttpMethod.Get, "head");
+        Assert.Equal(HttpStatusCode.OK, status.Status);
+        var head = status.Body.GetProperty("data");
+        Assert.Equal((true, TourReadySqlTests.Robot, true, "IDLE"), (head.GetProperty("enabled").GetBoolean(),
+            head.GetProperty("robotCode").GetString(), head.GetProperty("connected").GetBoolean(),
+            head.GetProperty("head").GetProperty("state").GetString()));
+
+        var invalid = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "JOG", panDir = 2 });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.Status);
+    }
+
     /// <summary>The bridge's side of the wire, against a real API process on the World's database.</summary>
     private sealed class Bridge(World world, PoiManagementEndpointTests.ApiHost host, string secret, string operatorToken, ClientWebSocket? console) : IAsyncDisposable
     {
@@ -328,7 +379,7 @@ public sealed class FleetCommandsHttpTests
         public Guid Stream { get; private set; } = Guid.NewGuid();
         private string mapKey = "";
 
-        public static async Task<Bridge> Create(bool enabled = true, int maxTelemetryAgeSeconds = 30)
+        public static async Task<Bridge> Create(bool enabled = true, int maxTelemetryAgeSeconds = 30, bool headEnabled = false)
         {
             var world = await World.Create(report: false, enabled: true, twoStopsToEndPose: true);
             var credential = FleetRobotCredentialHash.Create();
@@ -340,7 +391,8 @@ public sealed class FleetCommandsHttpTests
                 ["FleetCommands__Enabled"] = enabled ? "true" : "false",
                 ["FleetCommands__MaxTelemetryAgeSeconds"] = maxTelemetryAgeSeconds.ToString(),
                 // The sweeper is covered on its own; a slow test machine must not expire these commands.
-                ["FleetCommands__AcceptWindowSeconds"] = "300"
+                ["FleetCommands__AcceptWindowSeconds"] = "300",
+                ["FleetHead__Enabled"] = headEnabled ? "true" : "false"
             });
             var token = await RepresentativeEndpointTests.LoginAsync(host.Client, "ready.operator");
             var bridge = new Bridge(world, host, credential.Secret, token, await OpenConsole(host, token));
@@ -430,6 +482,17 @@ public sealed class FleetCommandsHttpTests
             using var response = await host.Client.SendAsync(request);
             var text = await response.Content.ReadAsStringAsync();
             Assert.True(response.IsSuccessStatusCode, $"{action}: {response.StatusCode} {text}");
+        }
+
+        /// <summary>The Operator calls one Tour endpoint; returns the status and body instead of asserting success.</summary>
+        public async Task<(HttpStatusCode Status, JsonElement Body)> OperatorCall(HttpMethod method, string action, object? body = null)
+        {
+            using var request = new HttpRequestMessage(method, $"/api/staff/manage/tours/{world.H.TourId}/{action}");
+            if (body is not null) request.Content = JsonContent.Create(body);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", operatorToken);
+            using var response = await host.Client.SendAsync(request);
+            var text = await response.Content.ReadAsStringAsync();
+            return (response.StatusCode, string.IsNullOrEmpty(text) ? default : JsonDocument.Parse(text).RootElement.Clone());
         }
 
         private const string UseOwnCredential = "\0";

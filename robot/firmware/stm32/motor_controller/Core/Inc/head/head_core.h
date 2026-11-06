@@ -20,9 +20,13 @@
  * la "da phat du xung", khong phai da xac nhan bang cam bien. Tat driver
  * (OFF) lam motor tha troi nen mat moc -> phai HOME (hoac ZERO tay) lai.
  *
- * Moi thong so co khi duoi day la GIA TRI MAC DINH CHUA DO. Sua cho khop phan
- * cung (jumper vi buoc tren de DRV8825, ti so truyen, gioi han co khi) truoc
- * khi chay that.
+ * Sai so homing: khi ep vao vat can roi dung, roto nam o mot vi tri can bang
+ * cach vat can toi da +/-2 buoc du. Vi tri do lap lai giong nhau neu quang
+ * seek luon ket thuc o cung pha dien cua driver (HEAD_HOME_PHASE_ALIGN), nen
+ * moc 0 lap lai moi lan HOME va chi can hieu chinh HOME_OFFSET mot lan.
+ *
+ * Thong so co khi duoi day theo phan cung 05/11/2026 (motor 17HD4401S,
+ * DRV8825 buoc du). Doi phan cung thi sua cho khop.
  */
 
 #include "main.h"
@@ -43,13 +47,20 @@
 #define HEAD_MAX_STEP_HZ 4000.0f
 #endif
 
-/* ---- Co khi (MAC DINH, CHUA DO) ------------------------------------------- */
+/* ---- Co khi (05/11/2026) ---------------------------------------------------
+ * Ca hai truc: motor 17HD4401S (NEMA17 42x42, 1.8 do/buoc, 0.42 Nm).
+ *   PAN : hop so hanh tinh 3:1 -> 1 buoc du = 0.6 do tai truc ra.
+ *   TILT: gan truc tiep vao dau gia -> 1 buoc du = 1.8 do.
+ * DRV8825 KHONG cam jumper M0-M2 = buoc du -> HEAD_MICROSTEP 1. Moi goc bi
+ * lam tron toi buoc gan nhat (PAN 0.6 do, TILT 1.8 do).
+ * Cam jumper vi buoc thi doi HEAD_MICROSTEP cho khop (M2 cao = 1/16 -> 16):
+ * chay em hon, it rung cong huong va it mat buoc hon buoc du. */
 #ifndef HEAD_MOTOR_STEPS_PER_REV
 #define HEAD_MOTOR_STEPS_PER_REV 200.0f   /* motor 1.8 do/buoc */
 #endif
 
 #ifndef HEAD_MICROSTEP
-#define HEAD_MICROSTEP 16.0f              /* jumper M0-M2 tren de DRV8825 */
+#define HEAD_MICROSTEP 1.0f               /* jumper M0-M2 tren de DRV8825: khong cam = buoc du */
 #endif
 
 #ifndef HEAD_PAN_GEAR_RATIO
@@ -57,62 +68,87 @@
 #endif
 
 #ifndef HEAD_TILT_GEAR_RATIO
-#define HEAD_TILT_GEAR_RATIO 2.0f         /* hop so hanh tinh 2:1 */
+#define HEAD_TILT_GEAR_RATIO 1.0f         /* gan truc tiep, khong hop so */
 #endif
 
 /* ---- Homing bang vat can co khi --------------------------------------------
  * HOME_DIR: chieu quay toi vat can (+1 = chieu duong: PAN quay trai, TILT
- * ngoc len; -1 = chieu am).
- * HOME_OFFSET: vat can nam cach 0 do bao nhieu (centi-do). Vat can o 180 do
- * -> 18000: sau homing truc chay nguoc 180 do de ve 0.
- * HOME_SEEK: quang duong quay toi vat can, PHAI lon hon khoang cach xa nhat
- * co the tu vi tri bat ky toi vat can (truc chi co mot vat can va co the dang
- * o ngay phia ben kia no -> gan 360 do) cong du tru. Quay thua sau khi cham
- * vat can chi la truot buoc tai cho. */
-/* PAN (23/10/2026): vong co vat can chiem 170..190 do. Homing quay sang
- * PHAI (chieu am) toi canh vat can o -170 do (= 190 do), roi dem +170 do ve 0.
- * Canh con lai o +170 do chan phia trai. Xa nhat toi canh phai: dau dang sat
- * canh trai (+170) -> 340 do; seek 360 do (du 20 do). */
+ * ngua len; -1 = chieu am: PAN quay phai, TILT cui xuong).
+ * HOME_SEEK: quang quay toi vat can. Quay thua sau khi cham vat can chi la
+ * truot buoc tai cho ("te te"), nhung cang it cang do mon va do rung.
+ * HOME_OFFSET: khoang cach tu canh vat can ve 0 do (centi-do). Day la NUT
+ * HIEU CHINH: HOME xong ma dau chua thang thi sua so nay (moc lap lai, xem
+ * HEAD_HOME_PHASE_ALIGN).
+ *
+ * PAN (05/11/2026): vat can (khoi vang) o phia sau, canh phai cach 0 do 174
+ * do ve ben phai. Homing quay PHAI 190 do toi vat can, roi quay TRAI 174 do
+ * ve 0. Gia dinh canh trai cua vat can doi xung o 174 do ben trai.
+ * CHU Y: 190 do chi du khi dau dang nam trong khoang [174 phai .. 16 trai].
+ * Lech trai hon 16 do thi het quang seek ma chua cham vat can -> moc 0 sai.
+ * stm32_bridge dua dau ve 0 truoc khi tat (head_park_on_shutdown) de lan
+ * khoi dong sau nam trong khoang nay. Muon HOME duoc tu MOI vi tri thi dat
+ * HEAD_PAN_HOME_SEEK_CDEG = 36000 (truot buoc lau hon).
+ *
+ * TILT (05/11/2026): vat can o phia CUI 20 do. Homing cui xuong toi vat can
+ * roi ngua len 20 do ve thang (20 do = 11 buoc du, lam tron 19.8 do).
+ * SEEK 44 do: tu vi tri ngua cao nhat co the (~20 do) toi vat can duoi la
+ * 40 do, du 4 do. */
 #ifndef HEAD_PAN_HOME_DIR
 #define HEAD_PAN_HOME_DIR (-1)
 #endif
-/* TILT (23/10/2026): hanh trinh 30 do len / 30 do xuong, vat can cung o
- * +30 va -30. Homing cui XUONG toi vat can -30 roi dem +30 ve 0. Xa nhat toi
- * vat can duoi: dau dang ngoc het (+30) -> 60 do; seek 70 do (du 10 do).
- * Muon homing ngoc LEN thi dat HEAD_TILT_HOME_DIR = 1. */
+#ifndef HEAD_PAN_HOME_SEEK_CDEG
+#define HEAD_PAN_HOME_SEEK_CDEG 19000
+#endif
+#ifndef HEAD_PAN_HOME_OFFSET_CDEG
+#define HEAD_PAN_HOME_OFFSET_CDEG 17400
+#endif
+
 #ifndef HEAD_TILT_HOME_DIR
 #define HEAD_TILT_HOME_DIR (-1)
 #endif
-#ifndef HEAD_PAN_HOME_OFFSET_CDEG
-#define HEAD_PAN_HOME_OFFSET_CDEG 17000
+#ifndef HEAD_TILT_HOME_SEEK_CDEG
+#define HEAD_TILT_HOME_SEEK_CDEG 4400
 #endif
 #ifndef HEAD_TILT_HOME_OFFSET_CDEG
-#define HEAD_TILT_HOME_OFFSET_CDEG 3000
+#define HEAD_TILT_HOME_OFFSET_CDEG 2000
 #endif
-#ifndef HEAD_PAN_HOME_SEEK_CDEG
-#define HEAD_PAN_HOME_SEEK_CDEG 36000
-#endif
-#ifndef HEAD_TILT_HOME_SEEK_CDEG
-#define HEAD_TILT_HOME_SEEK_CDEG 7000
-#endif
-/* Toc do luc tim vat can: cham de dap vao vat can nhe va truot buoc em. */
+
+/* Toc do luc tim vat can (truc ra): cham de cham nhe va truot buoc em. */
 #ifndef HEAD_HOME_SPEED_DPS
 #define HEAD_HOME_SPEED_DPS 20.0f
 #endif
 
-/* Gioi han goc tinh tu moc 0, centi-do. Phai NHO HON khoang cach toi vat can
- * de khong bao gio dap vao vat can khi chay binh thuong. Lenh goc tuyet doi
- * vuot gioi han bi tu choi; STEP/JOG thi dung lai o gioi han. */
-/* PAN: +/-165 do, cach hai canh vat can (+/-170) 5 do. */
-#ifndef HEAD_PAN_LIMIT_CDEG
-#define HEAD_PAN_LIMIT_CDEG 16500
+/* Het quang seek: dung yen chung nay (driver van giu) cho roto het rung va
+ * nam yen o vi tri can bang canh vat can, roi moi quay ve 0. */
+#ifndef HEAD_HOME_SETTLE_MS
+#define HEAD_HOME_SETTLE_MS 200U
 #endif
 
-/* TILT: +/-25 do, cach vat can +/-30 do 5 do (sai so homing toi ~3.6 do qua
- * hop so 2:1). Muon dung du +/-30 thi dat vat can o +/-35 va doi OFFSET 3500,
- * LIMIT 3000, SEEK 8000. */
+/* = 1: keo dai quang seek them 0..(4*HEAD_MICROSTEP - 1) xung de no luon ket
+ * thuc o cung pha dien cua bo dem buoc trong DRV8825 (chu ky 4 buoc du).
+ * Roto bi ep vao vat can se nam o vi tri can bang cua pha do, nen moc 0 lap
+ * lai giong nhau moi lan HOME (thay vi lech ngau nhien toi +/-2 buoc du).
+ * Gia dinh: DRV8825 va STM32 cung duoc cap nguon (bo dem cua ca hai bat dau
+ * tu 0). Chi reset STM32 (nap code, rut USB) ma driver van co nguon thi lan
+ * HOME sau co the lech toi +/-2 buoc; tat/bat nguon ca robot de lap lai. */
+#ifndef HEAD_HOME_PHASE_ALIGN
+#define HEAD_HOME_PHASE_ALIGN 1
+#endif
+
+/* Gioi han goc tinh tu moc 0, centi-do. Phai NHO HON khoang cach toi vat can
+ * de khong bao gio ep vao vat can khi chay binh thuong. Lenh goc tuyet doi
+ * vuot gioi han bi tu choi; STEP/JOG thi dung lai o gioi han. */
+/* PAN: +/-170 do, cach canh vat can (174 do) 4 do. */
+#ifndef HEAD_PAN_LIMIT_CDEG
+#define HEAD_PAN_LIMIT_CDEG 17000
+#endif
+
+/* TILT: +/-18 do (cui 18, ngua 18) = 10 buoc du; vat can cui o 20 do. Neu sai
+ * so homing day gioi han cham vat can thi ep < 2 buoc du: motor buoc khong
+ * truot, khong mat goc. Phia ngua khong co vat can trong firmware; neu co vat
+ * can co khi phia tren thi no phai xa hon 18 do. */
 #ifndef HEAD_TILT_LIMIT_CDEG
-#define HEAD_TILT_LIMIT_CDEG 2500
+#define HEAD_TILT_LIMIT_CDEG 1800
 #endif
 
 #if (HEAD_PAN_LIMIT_CDEG >= HEAD_PAN_HOME_OFFSET_CDEG) || (HEAD_TILT_LIMIT_CDEG >= HEAD_TILT_HOME_OFFSET_CDEG)
@@ -124,8 +160,8 @@
 
 /* ---- Nut bam (STEP / JOG) ------------------------------------------------------
  * Nhan 1 lan: HEAD,<seq>,STEP,<n_pan>,<n_tilt> quay n BUOC DU cua motor
- * (1 buoc du = HEAD_MICROSTEP vi buoc; qua hop so: PAN 1.8/3 = 0.6 do,
- * TILT 1.8/2 = 0.9 do).
+ * (1 buoc du = HEAD_MICROSTEP vi buoc; tai truc ra: PAN 1.8/3 = 0.6 do,
+ * TILT 1.8 do).
  * Giu nut: HEAD,<seq>,JOG,<dir_pan>,<dir_tilt> (dir -1/0/1) quay lien tuc;
  * host phai gui lai it nhat moi HEAD_JOG_TIMEOUT_MS, im lang qua han thi
  * firmware tu giam toc dung (deadman: mat mang khong lam dau quay chay mai). */
@@ -147,7 +183,9 @@
 
 /* Dao chieu DIR neu motor quay nguoc quy uoc:
  *   PAN  duong = quay trai (nhin tu tren xuong, nguoc chieu kim dong ho, REP-103)
- *   TILT duong = ngoc len */
+ *   TILT duong = ngua len
+ * Kiem tra truoc khi HOME lan dau: ZERO roi STEP +1 PAN phai quay TRAI,
+ * STEP +1 TILT phai NGUA len; sai thi dat *_DIR_INVERT = 1U. */
 #ifndef HEAD_PAN_DIR_INVERT
 #define HEAD_PAN_DIR_INVERT 0U
 #endif
@@ -185,7 +223,7 @@ typedef enum
 	HEAD_STATE_OFF = 0,      /* driver tat (nEN cao), khong giu luc, khong co moc */
 	HEAD_STATE_IDLE = 1,     /* driver bat, co moc, ca hai truc da phat du xung toi dich */
 	HEAD_STATE_MOVING = 2,
-	HEAD_STATE_HOMING = 3,   /* dang tim vat can / chay ve 0 */
+	HEAD_STATE_HOMING = 3,   /* dang tim vat can / cho on dinh / chay ve 0 */
 	HEAD_STATE_NO_REF = 4    /* driver bat (giu luc) nhung KHONG co moc: HOME bi STOP giua chung */
 } HeadState;
 

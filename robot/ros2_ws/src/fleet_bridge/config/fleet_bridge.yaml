@@ -16,3 +16,8 @@
     commands_enabled: false
     command_base_url: ""
     command_poll_period_sec: 0.5
+    # ADR-0045 Operator head buttons (docs/contracts/fleet-head/v1). Off by default; needs stm32_bridge head/*
+    # in the same namespace and FleetHead:Enabled on the backend.
+    head_enabled: false
+    head_base_url: ""
+    head_wait_ms: 1500

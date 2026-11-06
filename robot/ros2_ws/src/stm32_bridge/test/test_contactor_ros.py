@@ -63,6 +63,9 @@ class FakeNode:
     def create_service(self, _t, name, cb, callback_group=None):
         self.services[name] = cb
 
+    def get_logger(self):
+        return SimpleNamespace(info=lambda *_: None, warn=lambda *_: None)
+
 
 class FakeStm32:
     def __init__(self, iface, with_field=True, drop_contactor=False):
@@ -112,8 +115,9 @@ class FakeStm32:
         self.thread.join(timeout=1)
 
 
-def make(**kw):
-    node = FakeNode()
+def make(params=None, **kw):
+    # Mac dinh tat "bat khi khoi dong" de cac test cu bat dau tu PA10 = 0.
+    node = FakeNode({'contactor_on_at_startup': False, **(params or {})})
     holder = {}
     iface = ContactorInterface(node, lambda b: holder['hw'].send(b))
     hw = FakeStm32(iface, **kw)
@@ -192,5 +196,34 @@ def test_old_state_frame_does_not_confirm():
         call(node, True)
         r = call(node, True)                            # da ON san: xac nhan ngay khi FB moi toi
         assert r.success and r.message == 'on'
+    finally:
+        hw.stop()
+
+
+def test_startup_turns_contactor_on_once():
+    node, iface, hw = make(params={'contactor_on_at_startup': True})
+    try:
+        time.sleep(0.2)
+        cmds = [s for s in hw.sent if s.startswith('CONTACTOR')]
+        assert len(cmds) == 1 and cmds[0].endswith(',ON') and hw.pa10 == 1
+        resp = call(node, False)                # van tat duoc
+        assert resp.success and resp.message == 'off'
+        time.sleep(0.2)
+        assert hw.pa10 == 0 and len([s for s in hw.sent if s.startswith('CONTACTOR')]) == 2
+    finally:
+        hw.stop()
+
+
+def test_startup_sends_nothing_when_firmware_already_on():
+    node = FakeNode({'contactor_on_at_startup': True})
+    holder = {}
+    iface = ContactorInterface(node, lambda b: holder['hw'].send(b))
+    hw = FakeStm32(iface)
+    hw.pa10 = 1                                 # firmware moi: bat luc boot
+    holder['hw'] = hw
+    hw.start()
+    try:
+        time.sleep(0.2)
+        assert not [s for s in hw.sent if s.startswith('CONTACTOR')]
     finally:
         hw.stop()

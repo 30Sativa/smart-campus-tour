@@ -294,7 +294,9 @@ End Early revokes live/fallback/Q&A for all sessions and copied URLs, preserving
 Result only; cancellation/ACK does not establish physical stop. Do not implement
 pending F-14, branch cutoff or project YAML/frame mapping. M2 commands use their own
 Fleet Commands v1 endpoints (ADR-0042, `backend/docs/fleet-commands.md`), off by default;
-HTTPS Fleet Sync ADR-0019 remains telemetry-only with no commands.
+HTTPS Fleet Sync ADR-0019 remains telemetry-only with no commands. Operator head
+buttons use the separate in-memory Fleet Head v1 (ADR-0045, `backend/docs/fleet-head.md`),
+off by default; never route them through `RobotCommands`.
 
 ## 4. Request, persistence, and response flow
 

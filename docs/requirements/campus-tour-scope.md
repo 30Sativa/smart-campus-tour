@@ -113,7 +113,10 @@ Staff approves narration text, uploads externally produced audio (and applicable
 lip-sync assets), Q&A bank entries and fallback video. Before Start, approved
 narration is delivered to the Quest guide and receipt checked (FR-50).
 At POI arrival, apply the checked camera preset before the guide cue.
-Manual Staff camera control is outside target. Command transport for these
+Manual Staff camera control is outside target. *Proposed revision (ADR-0045,
+05/11/2026, pending owner acceptance): the assigned Operator of a RUNNING Tour
+may turn the PAN/TILT head with buttons over Fleet Head v1; Viewers still may
+not.* Command transport for these
 future interactions remains pending; HTTPS telemetry sync is not a command path.
 
 ## 4. Scheduling and READY (FR-14–18/27, BR-06/07/16)

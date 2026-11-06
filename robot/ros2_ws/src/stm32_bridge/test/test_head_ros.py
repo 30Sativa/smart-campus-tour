@@ -106,7 +106,7 @@ class FakeNode:
 
 class FakeFirmware:
     """Mo phong STM32 o muc giao thuc: seq dung chung, dau quay chay mat
-    `move_s` giay moi lenh goc, HOME mat `home_s`, gioi han +/-165/+/-25."""
+    `move_s` giay moi lenh goc, HOME mat `home_s`, gioi han +/-170/+/-18."""
 
     def __init__(self, iface, move_s=0.3, home_s=0.5, with_head=True,
                  err_delay=0.0, with_contactor=True):
@@ -174,7 +174,7 @@ class FakeFirmware:
             if not ref:
                 return self._err('head_not_zeroed')
             pan, tilt = int(p[2]), int(p[3])
-            if abs(pan) > 16500 or abs(tilt) > 2500:
+            if abs(pan) > 17000 or abs(tilt) > 1800:
                 return self._err('head_limit')
             self.target = (pan, tilt)
             self.state, self.busy_until = hl.STATE_MOVING, now + self.move_s
@@ -250,7 +250,9 @@ class FakeGoalHandle:
 
 
 def make(params=None, **fw_kw):
-    node = FakeNode(params)
+    # Mac dinh tat HOME tu dong de cac test cu kiem dung tung lenh; test rieng
+    # ben duoi bat lai.
+    node = FakeNode({'head_auto_home': False, **(params or {})})
     holder = {}
     iface = HeadInterface(node, lambda build: holder['fw'].send(build))
     fw = FakeFirmware(iface, **fw_kw)
@@ -284,7 +286,7 @@ def test_rejections_carry_the_firmware_reason():
         r = run_goal(iface, FakeGoalHandle(mode=0, pan=10.0))
         assert not r.success and r.message == 'rejected:head_not_zeroed'
         run_goal(iface, FakeGoalHandle(mode=1))
-        gh = FakeGoalHandle(mode=0, pan=170.0)
+        gh = FakeGoalHandle(mode=0, pan=175.0)
         r = run_goal(iface, gh)
         assert gh.final == 'aborted' and r.message == 'rejected:head_limit'
     finally:
@@ -395,7 +397,7 @@ def test_reject_reason_found_even_when_err_arrives_after_fb():
     node, iface, fw = make(err_delay=0.06)
     try:
         run_goal(iface, FakeGoalHandle(mode=1))
-        r = run_goal(iface, FakeGoalHandle(mode=0, pan=170.0))
+        r = run_goal(iface, FakeGoalHandle(mode=0, pan=175.0))
         assert r.message == 'rejected:head_limit'
     finally:
         fw.stop()
@@ -407,5 +409,89 @@ def test_stm32_reset_during_home_is_reported():
         threading.Timer(0.3, fw.reset_mcu).start()
         r = run_goal(iface, FakeGoalHandle(mode=1))
         assert not r.success and r.message == 'aborted:stm32_reset'
+    finally:
+        fw.stop()
+
+
+def _wait(cond, timeout=3.0):
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < timeout:
+        if cond():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _homes(fw):
+    return [s for s in fw.sent if s.endswith(',HOME')]
+
+
+def test_auto_home_after_boot_and_after_stm32_reset_only():
+    node, iface, fw = make(params={'head_auto_home': True})
+    try:
+        assert _wait(lambda: fw.state == hl.STATE_IDLE and len(_homes(fw)) == 1)
+        assert any('auto-home done' in str(x) for x in node.logs)
+        time.sleep(0.3)
+        assert len(_homes(fw)) == 1, 'HOME tu dong chi mot lan sau khi boot'
+        # Nguoi dung tat driver: khong duoc tu HOME lai.
+        resp = node.services['head/off'](None, SimpleNamespace())
+        assert resp.success
+        time.sleep(0.4)
+        assert len(_homes(fw)) == 1
+        # STM32 khoi dong lai (head_seq=0, OFF): HOME lai.
+        fw.reset_mcu()
+        assert _wait(lambda: len(_homes(fw)) == 2 and fw.state == hl.STATE_IDLE)
+    finally:
+        fw.stop()
+
+
+def test_auto_home_does_not_care_about_contactor():
+    node, iface, fw = make(params={'head_auto_home': True})
+    try:
+        fw.contactor = 0                        # contactor tat
+        assert _wait(lambda: fw.state == hl.STATE_IDLE and len(_homes(fw)) == 1)
+        r = run_goal(iface, FakeGoalHandle(mode=0, pan=30.0, tilt=-18.0))
+        assert r.success and not any(s.startswith('CONTACTOR') for s in fw.sent)
+    finally:
+        fw.stop()
+
+
+def test_auto_home_off_by_parameter():
+    node, iface, fw = make(params={'head_auto_home': False})
+    try:
+        time.sleep(0.3)
+        assert not _homes(fw)
+    finally:
+        fw.stop()
+
+
+def test_park_on_shutdown_sends_zero_angle():
+    node, iface, fw = make()
+    try:
+        run_goal(iface, FakeGoalHandle(mode=1))
+        r = run_goal(iface, FakeGoalHandle(mode=0, pan=90.0, tilt=10.0))
+        assert r.success
+        time.sleep(0.05)
+        iface.shutdown()
+        assert fw.sent[-1].startswith('HEAD,') and fw.sent[-1].endswith(',0,0')
+        assert ',JOG,' not in fw.sent[-1]
+    finally:
+        fw.stop()
+
+
+def test_no_park_without_reference_or_when_disabled():
+    node, iface, fw = make()
+    try:
+        iface.shutdown()                       # chua HOME: khong co moc
+        assert not any(s.startswith('HEAD,') for s in fw.sent)
+    finally:
+        fw.stop()
+    node, iface, fw = make(params={'head_park_on_shutdown': False})
+    try:
+        run_goal(iface, FakeGoalHandle(mode=1))
+        run_goal(iface, FakeGoalHandle(mode=0, pan=45.0))
+        n = len(fw.sent)
+        iface.shutdown()
+        assert len(fw.sent) == n
     finally:
         fw.stop()

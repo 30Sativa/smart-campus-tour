@@ -12,6 +12,17 @@ nay. Tat ca ten la tuong doi -> /robot_01/... khi chay co namespace.
   srv     head/zero       std_srvs/srv/Trigger           (moc tay, du phong)
 
 Contactor nam rieng o contactor_ros.py (khong phu thuoc bus_interfaces).
+Dau quay KHONG phu thuoc trang thai contactor: lenh HEAD gui di bat ke
+contactor dang bat hay tat.
+
+Tu dong (tham so):
+  head_auto_home        STM32 vua khoi dong (FB: head_state=OFF, head_seq=0)
+                        -> gui HEAD,HOME: PAN quay phai tim vat can roi ve 0,
+                        TILT cui tim vat can roi ve thang. Lap lai sau moi lan
+                        STM32 reset; khong chay lai sau head/off cua nguoi dung.
+  head_park_on_shutdown tat bridge khi dau dang co moc -> dua ve 0/0 truoc,
+                        de lan HOME sau bat dau gan phia truoc (PAN chi quay
+                        190 do khi HOME, xem firmware head_core.h).
 
 Logic thuan (dinh dang lenh, doc FB, ket qua theo seq, deadman JOG) nam o
 head_link.py va duoc test khong can ROS.
@@ -34,6 +45,8 @@ HEAD_ERROR_MATCH_WINDOW_S = 1.0
 # tu choi co the den truoc dong ERR: cho them toi da chung nay de lay ly do.
 REJECT_REASON_GRACE_S = 0.15
 FEEDBACK_STALE_S = 1.0
+# HOME tu dong that bai (vd mat serial) ma dau van OFF/chua co lenh: thu lai.
+AUTO_HOME_RETRY_S = 5.0
 
 
 class HeadInterface:
@@ -47,9 +60,15 @@ class HeadInterface:
         node.declare_parameter('head_move_timeout', 20.0)
         node.declare_parameter('head_home_timeout', 45.0)
         node.declare_parameter('head_command_timeout', 1.0)
+        node.declare_parameter('head_auto_home', True)
+        node.declare_parameter('head_park_on_shutdown', True)
         self._move_timeout = float(node.get_parameter('head_move_timeout').value)
         self._home_timeout = float(node.get_parameter('head_home_timeout').value)
         self._cmd_timeout = float(node.get_parameter('head_command_timeout').value)
+        self._auto_home = bool(node.get_parameter('head_auto_home').value)
+        self._park_on_shutdown = bool(node.get_parameter('head_park_on_shutdown').value)
+        self._auto_home_thread: Optional[threading.Thread] = None
+        self._auto_home_last_try: Optional[float] = None
         rate = float(node.get_parameter('head_state_rate_hz').value)
         self._state_period = 1.0 / rate if rate > 0.0 else 0.1
 
@@ -97,6 +116,7 @@ class HeadInterface:
             self._fb_mono = now
             self._cond.notify_all()
         self._publish_state(fb, now)
+        self._maybe_auto_home(fb, now)
 
     def on_error_line(self, line: str) -> None:
         kind = hl.head_error_kind(line)
@@ -113,9 +133,55 @@ class HeadInterface:
 
     def shutdown(self) -> None:
         with self._jog_lock:
-            if self._jog.active:
-                self._jog.reset()
-                self._send(lambda seq: hl.cmd_head_jog(seq, 0, 0))
+            jogging = self._jog.active
+            self._jog.reset()
+        with self._cond:
+            fb = self._fb
+        if self._park_on_shutdown and fb is not None and fb.referenced and \
+                (fb.pan_cdeg != 0 or fb.tilt_cdeg != 0 or fb.state == hl.STATE_MOVING):
+            # Lenh goc thay the JOG dang giu; firmware tu chay ve 0 ke ca khi
+            # bridge da thoat.
+            self._node.get_logger().info('Head park: HEAD -> 0/0 before shutdown')
+            self._send(lambda seq: hl.cmd_head_angle(seq, 0.0, 0.0))
+        elif jogging:
+            self._send(lambda seq: hl.cmd_head_jog(seq, 0, 0))
+
+    # ---- HOME tu dong ----------------------------------------------------------
+    def _maybe_auto_home(self, fb: hl.HeadFeedback, now: float) -> None:
+        """head_seq=0 + OFF = STM32 vua khoi dong, chua nhan lenh HEAD nao."""
+        if not self._auto_home:
+            return
+        if fb.head_seq != 0:
+            # Da co lenh HEAD duoc chap nhan (HOME nay, hoac lenh nguoi dung):
+            # cho lan STM32 reset ke tiep.
+            self._auto_home_last_try = None
+            return
+        if fb.state != hl.STATE_OFF:
+            return
+        if self._auto_home_thread is not None and self._auto_home_thread.is_alive():
+            return
+        if self._auto_home_last_try is not None and \
+                (now - self._auto_home_last_try) < AUTO_HOME_RETRY_S:
+            return
+        self._auto_home_last_try = now
+        self._auto_home_thread = threading.Thread(
+            target=self._run_auto_home, name='head_auto_home', daemon=True)
+        self._auto_home_thread.start()
+
+    def _run_auto_home(self) -> None:
+        log = self._node.get_logger()
+        log.info('Head auto-home: HEAD,HOME (PAN right to the stop then back to 0, '
+                 'TILT down to the stop then up to level)')
+        with self._jog_lock:
+            self._jog.reset()
+        outcome, fb, detail = self._send_and_wait(
+            lambda seq: hl.cmd_head_word(seq, 'HOME'), self._home_timeout)
+        if outcome == hl.DONE:
+            log.info('Head auto-home done: referenced at 0/0')
+            return
+        if outcome == 'timeout':
+            self._send(lambda seq: hl.cmd_head_word(seq, 'STOP'))
+        log.warn('Head auto-home failed: ' + self._describe(outcome, fb, detail))
 
     # ---- publish -------------------------------------------------------------
     def _publish_state(self, fb: hl.HeadFeedback, now: float) -> None:

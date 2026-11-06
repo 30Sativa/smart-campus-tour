@@ -11,6 +11,25 @@ the native Nav2, localization or DDS configuration. Its launch namespace
 defaults to `robot_01`; confirm the namespace with read-only graph inspection
 and override `robot_namespace` if the surveyed graph uses another name.
 
+## Head receiver (off by default, ADR-0045)
+
+`head_enabled: true` adds a Fleet Head v1 long-poll loop (`docs/contracts/fleet-head/v1/`): the Operator's head
+buttons from the web reach the `stm32_bridge` head interface in the same namespace. With `false` (the default) nothing
+polls and `bus_interfaces` is not imported. Independent of `commands_enabled`; the backend must also set
+`FleetHead:Enabled=true`.
+
+| Command | ROS |
+|---|---|
+| `STEP` | publish `head/step` |
+| `JOG` | publish `head/jog` at 10 Hz until this robot's receipt time + `ttlMs`, then `0,0` once |
+| `STOP` | release a jog, call `head/stop` |
+| `ANGLE` | release a jog, send `head/set` (mode angle), fire and forget |
+
+Each `seq` runs once, in order; a new backend `epoch` restarts the count. A failed ROS call is logged and the next
+command still runs. The latest `head/state` (fresh within 2 s) rides on the next poll. `head_wait_ms` (1500) must stay
+below `request_timeout_sec`. Code: `head.py` (pure logic, `test/test_head.py`), `head_worker.py` (HTTPS thread),
+`head_ros.py` (the only module allowed publishers, and only `head/step`/`head/jog`).
+
 ## Command receiver (off by default)
 
 `commands_enabled: true` adds a Fleet Commands v1 poll loop

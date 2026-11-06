@@ -1,7 +1,7 @@
 """Logic phim cho head_teleop (khong import rclpy, test bang pytest thuong).
 
 Mo phong dung hanh vi nut tren FE:
-  - nhan 1 lan        -> HEAD STEP 1 buoc (PAN 0,6 do, TILT 0,9 do)
+  - nhan 1 lan        -> HEAD STEP 1 buoc (PAN 0,6 do, TILT 1,8 do)
   - giu phim          -> JOG lien tuc theo huong do
   - nha phim          -> JOG 0,0
 

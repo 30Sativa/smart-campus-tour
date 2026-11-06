@@ -142,6 +142,14 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("FleetSync", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = fleetSyncPermitLimit, Window = TimeSpan.FromSeconds(fleetSyncWindowSeconds), QueueLimit = 0 }));
+    // ADR-0045: head buttons repeat JOG about 5 times a second and the robot polls again after each delivery.
+    var fleetHeadPermitLimit = builder.Configuration.GetValue<int?>("FleetHead:RateLimit:PermitLimit") ?? 1200;
+    var fleetHeadWindowSeconds = builder.Configuration.GetValue<int?>("FleetHead:RateLimit:WindowSeconds") ?? 60;
+    if (fleetHeadPermitLimit <= 0 || fleetHeadWindowSeconds <= 0)
+        throw new InvalidOperationException("FleetHead rate-limit permit limit and window must be positive.");
+    options.AddPolicy(SmartCampus.Api.Controllers.FleetHeadRateLimit.Policy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = fleetHeadPermitLimit, Window = TimeSpan.FromSeconds(fleetHeadWindowSeconds), QueueLimit = 0 }));
 });
 builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
 {

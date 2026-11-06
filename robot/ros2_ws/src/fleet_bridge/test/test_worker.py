@@ -1,5 +1,6 @@
 import http.client
 import json
+import re
 import threading
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -579,12 +580,22 @@ class FleetSyncWorkerStateTests(unittest.TestCase):
         # Nav2 is reached only through the lazily imported adapter, and only there.
         self.assertNotIn('\nfrom .nav2', node_source)
         self.assertIn('            from .nav2 import Nav2Navigator', node_source)
+        # The opt-in head adapter (ADR-0045) is imported lazily, like Nav2.
+        self.assertNotIn('\nfrom .head_ros', node_source)
+        self.assertIn('            from .head_ros import create_ros_head', node_source)
         for module in package_dir.glob('*.py'):
             source = module.read_text(encoding='utf-8')
-            self.assertNotIn('create_publisher', source, module.name)
+            if module.name == 'head_ros.py':
+                # Its only publishers are the stm32_bridge head topics and its only action is head/set: never motion.
+                self.assertEqual(['head/jog', 'head/step'],
+                                 sorted(re.findall(r"create_publisher\(\w+, '([^']+)'", source)))
+                self.assertEqual(2, source.count('create_publisher'))
+                self.assertEqual(['head/set'], re.findall(r"ActionClient\(node, \w+, '([^']+)'\)", source))
+            else:
+                self.assertNotIn('create_publisher', source, module.name)
             self.assertNotIn('cmd_vel', source, module.name)
             self.assertNotIn('cancel_all', source, module.name)
-            if module.name != 'nav2.py':
+            if module.name not in ('nav2.py', 'head_ros.py'):
                 self.assertNotIn('ActionClient', source, module.name)
         self.assertIn('spin_until_worker_fatal', node_source)
         self.assertNotIn('rclpy.spin(', node_source)

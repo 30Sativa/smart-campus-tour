@@ -40,13 +40,19 @@ gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
     "$root/tests/test_head_core.c" "$root/Core/Src/head/head_core.c" \
     -lm -o "$out/test_head_core"
 gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
-    -DHEAD_MAX_SPEED_DPS=2000.0f -DHEAD_ACCEL_DPS2=20000.0f \
+    -DHEAD_MAX_SPEED_DPS=3000.0f -DHEAD_ACCEL_DPS2=30000.0f \
     -I "$root/tests/stubs" -I "$root/Core/Inc" \
     "$root/tests/test_head_core.c" "$root/Core/Src/head/head_core.c" \
     -lm -o "$out/test_head_core_fast"
+# Ban vi buoc 1/16 (khi cam jumper M2 tren DRV8825).
+gcc -std=gnu11 -Wall -Wextra -Werror -O0 \
+    -DHEAD_MICROSTEP=16.0f \
+    -I "$root/tests/stubs" -I "$root/Core/Inc" \
+    "$root/tests/test_head_core.c" "$root/Core/Src/head/head_core.c" \
+    -lm -o "$out/test_head_core_micro16"
 
 echo "== run =="
-for t in test_bno08x_parse test_bno08x_rearm test_usb_rx_queue test_motor_core test_usb_protocol test_head_core test_head_core_fast; do
+for t in test_bno08x_parse test_bno08x_rearm test_usb_rx_queue test_motor_core test_usb_protocol test_head_core test_head_core_fast test_head_core_micro16; do
     echo "-- $t"
     "$out/$t"
 done

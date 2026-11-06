@@ -1256,9 +1256,27 @@ the mechanical stop), topics `head/jog`, `head/step` (operator buttons),
 feedback reports that command's sequence number as accepted **and** the head
 idle; the position is open-loop (step counting, no encoder). Serial contract:
 `robot/docs/PROTOCOL_FB.md`; interface details:
-`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`. This does **not** define the
-backend↔robot head contract, presets, or who may operate the head; Fleet
-Sync v1 still carries no robot commands.
+`robot/ros2_ws/src/stm32_bridge/HEAD_CONTROL.md`. This does **not** define
+presets; Fleet Sync v1 still carries no robot commands.
+
+**Operator head control (ADR-0045, proposed 05/11/2026; flags off by default).**
+Only `Tours.OperatorUserId` of a `RUNNING` Tour turns that Tour's robot head, with
+buttons on the Operator console:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/staff/manage/tours/{id}/head-commands` | `{kind: STEP\|JOG\|STOP\|ANGLE, panSteps?, tiltSteps?, panDir?, tiltDir?, panDeg?, tiltDeg?}`; 200 `{seq, robotCode, issuedAt}` (queued, not executed). 403 not the Operator; 409 `HEAD_CONTROL_DISABLED`, `TOUR_STATE_INVALID`, `HEAD_ROBOT_NOT_CONNECTED`; 429 `FleetHead` policy. |
+| GET | `/api/staff/manage/tours/{id}/head` | Any Staff: `{enabled, robotCode, connected, lastPollAt, head}` from the robot's last poll. |
+| POST | `/api/fleet/head/v1/poll` | Robot scheme. Long poll `{epoch, afterSeq, waitMs, head}` → `{epoch, commands[]}`. |
+
+Wire: `docs/contracts/fleet-head/v1/`. Commands live only in API memory per robot
+(epoch + seq, last 32, never older than `FleetHead:MaxCommandAgeMs`); no
+`RobotCommands` row, TourEvent or audit row per press. A `JOG` carries `ttlMs` and
+the robot releases it at its own receipt time + `ttlMs`, so a lost network or a
+closed tab stops the head. On the robot, `fleet_bridge` (`head_enabled`) maps
+`STEP`/`JOG` to topics `head/step`/`head/jog`, `STOP` to service `head/stop`,
+`ANGLE` to action `head/set`, and reports `head/state` on its next poll. Same
+single-API-instance limit as Fleet Sync (ADR-0019).
 
 Rotating head/pan presets remain a V1 requirement outside the navigation wire
 MVP. FRONT gating is the current orchestration decision described above, not a

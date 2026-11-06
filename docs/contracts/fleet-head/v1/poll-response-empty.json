@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "message": "No head command.",
+  "data": {
+    "epoch": "8d3b1f2e-6c4a-4a55-9e2f-1b7c0d9a4e61",
+    "commands": []
+  },
+  "errors": null
+}

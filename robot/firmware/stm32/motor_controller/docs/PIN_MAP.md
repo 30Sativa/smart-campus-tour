@@ -34,7 +34,7 @@ và sơ đồ dây thực tế.
 | PA9 | TILT STEP | J_MCU_R.11 → R13 220 Ω → J_TILT.1, GPIO output |
 | PA7 | TILT DIR | J_MCU_L.11 → R14 220 Ω → J_TILT.2, GPIO output |
 | PB10 | TILT nEN | J_MCU_L.5 → J_TILT.3, kéo lên 3V3 qua R9/R10, GPIO output, khởi động mức CAO. **Trước 23/10/2026 là CONTACTOR_EN** |
-| PA10 | CONTACTOR_EN | Cổng MOSFET contactor, GPIO output push-pull, khởi động mức THẤP (tắt). Lệnh `CONTACTOR,<seq>,ON/OFF`. **Từ 23/10/2026** |
+| PA10 | CONTACTOR_EN | Cổng MOSFET contactor, GPIO output push-pull. `MX_GPIO_Init` đặt mức thấp, rồi `App_Init` bật lên CAO (contactor bật khi khởi động, `CONTACTOR_ON_AT_BOOT`, từ 05/11/2026). Lệnh `CONTACTOR,<seq>,ON/OFF`. **Từ 23/10/2026** |
 
 ## Timer đang dùng
 
@@ -68,6 +68,9 @@ PA10 lái cổng MOSFET của contactor: mức cao = đóng. Từ lúc cấp ngu
 trạng thái input thả nổi. **Cổng MOSFET phải có điện trở kéo xuống GND trên
 mạch** (thường 10–100 kΩ), nếu không contactor có thể tự đóng lúc khởi động.
 Firmware không thay thế được điện trở này. Cần kiểm tra trên PCB.
+Từ 05/11/2026 firmware bật contactor ngay khi boot (`CONTACTOR_ON_AT_BOOT` = 1
+trong `contactor.c`): contactor đóng vài ms sau khi STM32 chạy, kể cả sau mỗi
+lần reset hoặc nạp code.
 
 ## ST-LINK / SWD
 
@@ -114,7 +117,7 @@ bit-bang, có hỗ trợ chờ clock stretching của BNO08x (timeout 25 ms).
 | PB8/PB9 | Chưa dùng. Không được ghi là I2C1 trong tài liệu hiện tại. Có thể dành cho CAN sau khi cấu hình CubeMX và driver CAN. |
 | I2C1/I2C2/I2C3 | Chưa có peripheral nào được khởi tạo trong `main.c`; các giá trị clock I2C còn lại trong `.ioc` không có nghĩa là I2C đang chạy. |
 | CAN/FDCAN | Chưa có cấu hình và driver trong firmware hiện tại. |
-| PB3–PB5, PB8/PB9, PC4, PC6, PC10–PC15, PF0–PF1 | Đang để dành; phải kiểm tra alternate function trong CubeMX trước khi dùng. |
+| PA7, PA8, PA9, PA10, PA15, PB2–PB5, PB8/PB9, PC4, PC6, PC10–PC15, PF0–PF1 | Đang để dành; phải kiểm tra alternate function trong CubeMX trước khi dùng. |
 
 ## Lưu ý phần cứng
 
