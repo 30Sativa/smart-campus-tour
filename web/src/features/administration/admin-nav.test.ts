@@ -4,10 +4,10 @@ import { ADMIN_NAV, adminActivePath } from './admin-nav'
 describe('administration navigation', () => {
   it('lists account/security administration without adding Tour preparation or control', () => {
     expect(ADMIN_NAV.map((item) => item.label)).toEqual([
-      'Tài khoản', 'Vai trò & quyền', 'Lịch sử khóa robot', 'Hạ tầng máy chủ', 'Nhật ký hệ thống', 'Khu vực vận hành',
+      'Tài khoản', 'Vai trò & quyền', 'Lịch vận hành', 'Lịch sử khóa robot', 'Hạ tầng máy chủ', 'Nhật ký hệ thống', 'Khu vực vận hành',
     ])
     expect(ADMIN_NAV.map((item) => item.path)).toEqual([
-      '/admin/accounts', '/admin/roles', '/admin/robot-credentials', '/admin/infrastructure', '/admin/audit-logs', '/staff',
+      '/admin/accounts', '/admin/roles', '/admin/schedule-blocks', '/admin/robot-credentials', '/admin/infrastructure', '/admin/audit-logs', '/staff',
     ])
   })
 

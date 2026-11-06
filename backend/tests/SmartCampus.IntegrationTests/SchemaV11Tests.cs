@@ -710,6 +710,9 @@ public sealed class SchemaV11Tests
         await db.ApplyFileAsync("upgrade-v1.12-to-v1.13-map-package-uniqueness.sql");
         await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
         await db.ApplyFileAsync("upgrade-v1.13-to-v1.14-robot-commands.sql");
+        await db.ApplyFileAsync("upgrade-v1.14-to-v1.15-command-outcome.sql");
+        await db.ApplyFileAsync("upgrade-v1.15-to-v1.16-schedule-blocks.sql");
+        await db.ApplyFileAsync("upgrade-v1.15-to-v1.16-schedule-blocks.sql");
         await db.ApplyFileAsync("runtime-permissions.sql");
         await db.ApplyFileAsync("fleet-credential-provisioning-permissions.sql");
         await db.ExecuteAsync("ALTER ROLE campus_tour_app ADD MEMBER smartcampus_api;");
@@ -720,8 +723,9 @@ public sealed class SchemaV11Tests
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RosterEmailChangeRequests';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Pois') AND name='RowVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.RosterRows') AND name='ParticipationState';"));
-        Assert.Equal("1.14", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal("1.16", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='RobotCommands';"));
+        Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourScheduleBlocks';"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Tours') AND name='CurrentRevisionStopId' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Robots') AND name='DeactivatedAt' AND is_nullable=1;"));
         Assert.Equal(1, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourRobotReservations';"));
@@ -747,6 +751,12 @@ public sealed class SchemaV11Tests
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiImportReceipts','OBJECT','DELETE');"));
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiVerificationRecords','OBJECT','UPDATE');"));
             Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.PoiVerificationRecords','OBJECT','DELETE');"));
+            // Admin blocks are added and stamped as removed, never rewritten or deleted.
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','INSERT');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','UPDATE','RemovedAt','COLUMN');"));
+            Assert.Equal(1, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','UPDATE','RemovedByUserId','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','UPDATE','Reason','COLUMN');"));
+            Assert.Equal(0, await ScalarAsync<int>(connection, "SELECT HAS_PERMS_BY_NAME('dbo.TourScheduleBlocks','OBJECT','DELETE');"));
         }
         finally { await ExecuteAsync(connection, "REVERT;"); }
     }
@@ -977,6 +987,59 @@ public sealed class SchemaV11Tests
             await db.ExecuteAsync(Command(id, Id(81), leg, Closed(state)));
             await db.ExpectErrorAsync(547, $"UPDATE dbo.RobotCommands SET Outcome=NULL WHERE Id='{id}';");
         }
+    }
+
+    [SchemaV17Fact]
+    public async Task ScheduleBlocksUpgrade_MatchesTheSnapshot_KeepsTheMarkers_AndReruns()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.15.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.15';");
+        const string bootstrapHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        await db.ExecuteAsync($"EXEC sys.sp_addextendedproperty @name=N'CampusTourBootstrapHash', @value=N'{bootstrapHash}';");
+
+        await db.ApplyFileAsync("upgrade-v1.15-to-v1.16-schedule-blocks.sql");
+        var tableId = await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.TourScheduleBlocks');");
+        await db.ApplyFileAsync("upgrade-v1.15-to-v1.16-schedule-blocks.sql");
+
+        Assert.Equal(tableId, await db.ScalarAsync<int>("SELECT OBJECT_ID(N'dbo.TourScheduleBlocks');"));
+        Assert.Equal("1.16", await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(32),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourSchemaVersion';"));
+        Assert.Equal(bootstrapHash, await db.ScalarAsync<string>("SELECT CONVERT(nvarchar(64),value) FROM sys.extended_properties WHERE class=0 AND name=N'CampusTourBootstrapHash';"));
+        await using var snapshot = await TestDatabase.CreateAsync();
+        foreach (var shape in new[]
+        {
+            "SELECT STRING_AGG(CONCAT(c.name,':',t.name,':',c.max_length,':',c.is_nullable), N',') WITHIN GROUP (ORDER BY c.column_id) FROM sys.columns c JOIN sys.types t ON t.user_type_id=c.user_type_id WHERE c.object_id=OBJECT_ID(N'dbo.TourScheduleBlocks');",
+            "SELECT STRING_AGG(CONCAT(name,':',definition), N',') WITHIN GROUP (ORDER BY name) FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.TourScheduleBlocks');",
+            "SELECT STRING_AGG(CONCAT(name,':',is_unique,':',filter_definition), N',') WITHIN GROUP (ORDER BY name) FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourScheduleBlocks') AND name IS NOT NULL;"
+        })
+            Assert.Equal(await snapshot.ScalarAsync<string>(shape), await db.ScalarAsync<string>(shape));
+    }
+
+    [SchemaV17Fact]
+    public async Task ScheduleBlocksUpgrade_RefusesAnyOtherVersion()
+    {
+        await using var db = await TestDatabase.CreateAsync("snapshot-v1.14.sql");
+        await db.ExecuteAsync("EXEC sys.sp_addextendedproperty @name=N'CampusTourSchemaVersion', @value=N'1.14';");
+        var error = await Assert.ThrowsAsync<SqlException>(() => db.ApplyFileAsync("upgrade-v1.15-to-v1.16-schedule-blocks.sql"));
+        Assert.Equal(51160, error.Number);
+        Assert.Equal(0, await db.ScalarAsync<int>("SELECT COUNT(*) FROM sys.tables WHERE name='TourScheduleBlocks';"));
+    }
+
+    [SchemaV17Fact]
+    public async Task ScheduleBlocks_HoldOneActiveBlockPerDayOrShift_AndKeepRemovedRows()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        string Block(int id, string? shift, string reason = "N'Nghỉ lễ'", string removal = "NULL,NULL") =>
+            $"INSERT dbo.TourScheduleBlocks(Id,BlockDate,ShiftCode,Reason,CreatedByUserId,CreatedAt,RemovedByUserId,RemovedAt) VALUES('{Id(id)}','2099-01-05',{(shift is null ? "NULL" : $"'{shift}'")},{reason},'{Id(1)}',SYSDATETIMEOFFSET(),{removal});";
+        await db.ExecuteAsync(Block(901, null));
+        await db.ExpectErrorAsync(2601, Block(902, null));
+        await db.ExecuteAsync(Block(903, "S1"));
+        await db.ExpectErrorAsync(2601, Block(904, "S1"));
+        await db.ExpectErrorAsync(547, Block(905, "S2", reason: "N'   '"));
+        await db.ExpectErrorAsync(547, Block(906, "  "));
+        await db.ExpectErrorAsync(547, Block(907, "S2", removal: $"'{Id(1)}',NULL"));
+        await db.ExecuteAsync($"UPDATE dbo.TourScheduleBlocks SET RemovedByUserId='{Id(1)}', RemovedAt=SYSDATETIMEOFFSET() WHERE Id='{Id(903)}';");
+        await db.ExecuteAsync(Block(908, "S1"));
+        Assert.Equal(3, await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.TourScheduleBlocks;"));
     }
 
     [SchemaV17Fact]
@@ -1510,7 +1573,7 @@ public sealed class SchemaV11Tests
         public string ConnectionString => settings.ConnectionString;
         private bool created;
 
-        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.15.sql")
+        public static async Task<TestDatabase> CreateAsync(string snapshot = "snapshot-v1.16.sql")
         {
             var db = new TestDatabase();
             try
@@ -1549,6 +1612,7 @@ public sealed class SchemaV11Tests
             services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
             services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
             services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
+            services.AddScoped<IScheduleBlockRepository, EfScheduleBlockRepository>();
             services.AddScoped<ITourManagementTransaction, EfTourManagementTransaction>();
             services.AddScoped<IRegistrationRepository, EfRegistrationRepository>();
             services.AddScoped<IInvitationRepository, EfInvitationRepository>();

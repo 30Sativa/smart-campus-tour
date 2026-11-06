@@ -72,6 +72,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<TourRobotReservation> TourRobotReservations { get; set; }
 
+    public virtual DbSet<TourScheduleBlock> TourScheduleBlocks { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
@@ -1070,6 +1072,30 @@ public partial class ApplicationDbContext : DbContext
                 .HasForeignKey(d => d.TourId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_TourRobotReservations_TourId");
+        });
+
+        modelBuilder.Entity<TourScheduleBlock>(entity =>
+        {
+            entity.HasIndex(e => new { e.BlockDate, e.ShiftCode }, "UX_TourScheduleBlocks_Active")
+                .IsUnique()
+                .HasFilter("([RemovedAt] IS NULL)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasPrecision(3);
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.RemovedAt).HasPrecision(3);
+            entity.Property(e => e.ShiftCode)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+
+            entity.HasOne(d => d.CreatedByUser).WithMany(p => p.TourScheduleBlockCreatedByUsers)
+                .HasForeignKey(d => d.CreatedByUserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TourScheduleBlocks_CreatedByUserId");
+
+            entity.HasOne(d => d.RemovedByUser).WithMany(p => p.TourScheduleBlockRemovedByUsers)
+                .HasForeignKey(d => d.RemovedByUserId)
+                .HasConstraintName("FK_TourScheduleBlocks_RemovedByUserId");
         });
 
         modelBuilder.Entity<Tour>(entity =>

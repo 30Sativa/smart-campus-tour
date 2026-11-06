@@ -1,4 +1,4 @@
--- SQLCMD input: SchemaHash is the current v1.15 snapshot hash; prior hashes are used only for controlled upgrades.
+-- SQLCMD input: SchemaHash is the current v1.16 snapshot hash; prior hashes are used only for controlled upgrades.
 -- Upgrade paths preserve the original bootstrap hash and advance only CampusTourSchemaVersion.
 SET NOCOUNT ON;
 DECLARE @hash nvarchar(64) = (
@@ -13,6 +13,7 @@ DECLARE @v18 nvarchar(64) = N'$(SchemaHashV18)';
 DECLARE @v110 nvarchar(64) = N'$(SchemaHashV110)';
 DECLARE @v111 nvarchar(64) = N'$(SchemaHashV111)';
 DECLARE @v112 nvarchar(64) = N'$(SchemaHashV112)';
+DECLARE @v115 nvarchar(64) = N'$(SchemaHashV115)';
 DECLARE @v114 nvarchar(64) = N'$(SchemaHashV114)';
 DECLARE @v113 nvarchar(64) = N'$(SchemaHashV113)';
 DECLARE @v19 nvarchar(64) = N'$(SchemaHashV19)';
@@ -61,6 +62,7 @@ DECLARE @knownPriorHash bit = CASE WHEN @hash IN (
     @v112,
     @v113,
     @v114,
+    @v115,
     @v17,
     @v16,
     @v14,
@@ -145,8 +147,20 @@ DECLARE @v115ObjectsPresent bit = CASE WHEN @v114ObjectsPresent = 1 AND
           AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(definition), N'[', N''), N']', N''), N' ', N''), CHAR(13), N''), CHAR(10), N'') LIKE N'%outcomeisnotnull%')
     THEN 1 ELSE 0 END;
 
-IF @schemaVersion = N'1.15' AND @v115ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
+DECLARE @v116ObjectsPresent bit = CASE WHEN @v115ObjectsPresent = 1 AND
+    OBJECT_ID(N'dbo.TourScheduleBlocks', N'U') IS NOT NULL AND
+    EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.TourScheduleBlocks')
+        AND name=N'UX_TourScheduleBlocks_Active' AND is_unique=1 AND has_filter=1) AND
+    EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.TourScheduleBlocks')
+        AND name=N'CK_TourScheduleBlocks_Removal_Complete' AND is_disabled=0 AND is_not_trusted=0)
+    THEN 1 ELSE 0 END;
+
+IF @schemaVersion = N'1.16' AND @v116ObjectsPresent = 1 AND (@hash = @current OR @knownPriorHash = 1)
     SELECT 'READY';
+ELSE IF @schemaVersion = N'1.16'
+    THROW 51001, 'Database schema version marker is 1.16 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
+ELSE IF @schemaVersion = N'1.15' AND @v115ObjectsPresent = 1 AND (@hash = @v115 OR @knownPriorHash = 1)
+    SELECT 'UPGRADE_REQUIRED';
 ELSE IF @schemaVersion = N'1.15'
     THROW 51001, 'Database schema version marker is 1.15 but the snapshot marker or required structure is invalid; inspect and repair from a verified backup.', 1;
 ELSE IF @schemaVersion = N'1.14' AND @v114ObjectsPresent = 1 AND (@hash = @v114 OR @knownPriorHash = 1)

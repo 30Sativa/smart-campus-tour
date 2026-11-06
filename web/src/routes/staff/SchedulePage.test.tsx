@@ -18,11 +18,13 @@ function shiftDays(from: string, to: string) {
     const date = day.toISOString().slice(0, 10)
     days.push({ date, shifts: [
       { code: 'S1', name: 'Ca sáng', startsAt: `${date}T01:00:00Z`, endsAt: `${date}T03:00:00Z`, tourStartsAt: `${date}T01:15:00Z`, time: '08:15', maxDurationSeconds: 5400 },
-      { code: 'S2', name: 'Ca chiều 1', startsAt: `${date}T06:00:00Z`, endsAt: `${date}T08:00:00Z`, tourStartsAt: `${date}T06:15:00Z`, time: '13:15', maxDurationSeconds: 5400 },
+      { code: 'S2', name: 'Ca chiều 1', startsAt: `${date}T06:00:00Z`, endsAt: `${date}T08:00:00Z`, tourStartsAt: `${date}T06:15:00Z`, time: '13:15', maxDurationSeconds: 5400,
+        block: date === blockedDate ? { id: 'block-1', scope: 'SHIFT', reason: 'Bảo trì robot' } : null },
     ] })
   }
   return days
 }
+let blockedDate = ''
 let urls: URL[] = []
 let status = 200
 
@@ -32,6 +34,7 @@ describe('Staff Tour calendar', () => {
   beforeEach(() => {
     urls = []
     status = 200
+    blockedDate = ''
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://localhost')
       urls.push(url)
@@ -62,6 +65,15 @@ describe('Staff Tour calendar', () => {
     expect(within(week).getByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 2099-01-05' })).toHaveAttribute('href', '/staff/manage/tours/new?date=2099-01-05&shift=S2')
     expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 2099-01-06' })).toBeInTheDocument()
     expect(urls.find(item => item.pathname === '/api/staff/manage/tours/shifts')!.searchParams.get('to')).toBe('2099-01-11')
+  })
+
+  it('shows a shift closed by Admin in grey with its reason and no "+ Tạo Tour"', async () => {
+    blockedDate = '2099-01-06'
+    show()
+    const week = await screen.findByRole('region', { name: 'Lịch tuần' })
+    expect(await within(week).findByRole('group', { name: 'Ca chiều 1 13:00 - 15:00, đã khoá: Bảo trì robot' })).toHaveTextContent('Bảo trì robot')
+    expect(within(week).queryByRole('link', { name: 'Tạo Tour Ca chiều 1 ngày 2099-01-06' })).not.toBeInTheDocument()
+    expect(within(week).getByRole('link', { name: 'Tạo Tour Ca sáng ngày 2099-01-06' })).toBeInTheDocument()
   })
 
   it('keeps a Tour outside 07:00-19:00 in the day\'s "Ngoài ca" strip instead of past the grid', async () => {

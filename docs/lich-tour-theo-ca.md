@@ -148,7 +148,7 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 |---|---|---|---|
 | A | Quy tắc tuyến (mục 2, trừ dòng tổng thời gian dừng) | Xong, chờ xác nhận (06/11/2026) | Xem "Phần A" bên dưới |
 | B | Ca cố định và giới hạn thời lượng (mục 3, 4, cùng dòng tổng thời gian dừng ở mục 2) | Xong, chờ xác nhận (07/11/2026) | Xem "Phần B" bên dưới |
-| C | Admin khoá ngày/ca (mục 5) | Chưa làm | |
+| C | Admin khoá ngày/ca (mục 5) | Xong, chờ xác nhận (07/11/2026) | Xem "Phần C" bên dưới |
 
 ### Phần A: quy tắc tuyến
 
@@ -272,3 +272,54 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
   có thể vẫn tạo được cho robot khác. Form tạo Tour mới là nơi quyết định theo từng robot.
 - `backend/docs/admin-tour-management.md`, ADR-0035, ADR-0036 và `web/AGENTS.md` vẫn mô tả slot và giờ gõ tay. Theo chỉ đạo
   đợt này, các file đó chưa được sửa.
+
+### Phần C: Admin khoá ngày/ca
+
+**Đã làm**
+- DB: schema v1.16 (`backend/database/smart-campus-tour-schema-v1.16.sql`) và patch
+  `backend/database/patches/upgrade-v1.15-to-v1.16-schedule-blocks.sql`. Bảng `TourScheduleBlocks` có đủ các cột theo yêu
+  cầu. Index lọc `UX_TourScheduleBlocks_Active` đảm bảo mỗi ngày/ca có tối đa một khoá đang hiệu lực. Runtime chỉ được
+  SELECT, INSERT và UPDATE hai cột `RemovedAt`, `RemovedByUserId`; không sửa được lý do, không xoá được dòng.
+- Nâng phiên bản theo đúng cách bản v1.14 → v1.15: `bootstrap-check`, `init-db.sh` (có thêm bước kiểm quyền trên bảng mới),
+  `upgrade-db.sh` (mọi đường nâng cấp đều chạy thêm patch mới), `upgrade-db-schema-ec2.sh`, `deploy-ec2.sh`,
+  `validate-release-manifest.py`, `Dockerfile.db-init`, hai workflow trong `.github/workflows/` (chỉ đổi số phiên bản, không
+  bỏ bước kiểm tra nào), các script test deploy và `test-db-upgrade` (thêm ca 12: nâng từ v1.15).
+- Backend: `GET /api/admin/schedule-blocks?from=&to=` (cùng dạng với `shifts`), `POST /api/admin/schedule-blocks`
+  (`requestId`, `date`, `shiftCode`, `reason`; `shiftCode` null là khoá cả ngày), `POST /api/admin/schedule-blocks/{id}/remove`
+  (`requestId`). Chỉ role Admin. Ghi audit `SCHEDULE_BLOCK_CREATED` và `SCHEDULE_BLOCK_REMOVED`; dòng audit đồng thời là
+  biên nhận chống gửi trùng, giống Tour.
+- Khoá vào ngày hoặc ca đang có Tour chưa huỷ: 409 `SHIFT_HAS_TOURS`, `errors.blockers` liệt kê từng Tour.
+- Không có race giữa tạo Tour và tạo khoá: cả hai lấy cùng một khoá `sp_getapplock` theo ngày (`tour-schedule-date:<ngày>`).
+- Danh sách ca trống và tạo Tour: ca bị khoá trả `SHIFT_BLOCKED` kèm lý do, nằm sau `ROUTE_TOO_LONG_FOR_SHIFT` và trước
+  `RESERVATION_OVERLAP`, đúng thứ tự mục B. Endpoint `shifts` của Staff có thêm `block` (`id`, `scope`, `reason`).
+- Web Admin: trang "Lịch vận hành" (`/admin/schedule-blocks`) trong menu Admin. Hiện từng ngày theo từng ca, có nút khoá ca,
+  khoá ngày, gỡ khoá; nhập lý do trong hộp thoại; lỗi `SHIFT_HAS_TOURS` hiện tên các Tour. Nhật ký hệ thống có nhãn cho hai
+  hành động mới.
+- Web Staff: trên Lịch Tour, ca bị khoá là dải xám kèm lý do, không có "+ Tạo Tour".
+
+**Kiểm tra**
+- `scripts/verify web`: PASS (749 test). `scripts/verify backend`: exit 0 (unit 474/474, integration 481/481, có chạy test SQL;
+  chạy trên bản sao không kèm `global.json`). `scripts/verify digital-twin`: PASS.
+- `scripts/verify robot` và `scripts/verify ai-assistant` không qua trên máy này vì thiếu môi trường, nên `scripts/verify` đầy đủ
+  chưa exit 0 ở đây. Đợt này không sửa hai thư mục đó. Xem báo cáo phần C.
+- Test `HeadControl_TheOperatorOfARunningTour_...` hỏng một lần (`HEAD_ROBOT_NOT_CONNECTED`) khi máy đang chạy tsc và vitest
+  song song, và qua ở lần chạy verify đủ sau đó. Có thể test này nhạy với tải máy; chưa điều tra thêm.
+- Test mới: `ScheduleBlockSqlTests` (khoá ca đang có Tour bị từ chối và nêu tên Tour, Tour đã huỷ không chặn, tạo Tour vào
+  ca bị khoá, gỡ khoá xong tạo được, audit, khoá trùng, ngày và ca lẻ loại trừ nhau, gửi trùng `requestId`, đầu vào sai,
+  đua giữa tạo Tour và tạo khoá qua 5 vòng); `SchemaV11Tests` (patch khớp snapshot, chạy lại được, từ chối phiên bản khác,
+  ràng buộc bảng, quyền runtime); `DeploymentDatabaseTests` (bootstrap v1.16, v1.15 cần nâng cấp);
+  `BusinessFlowIntegrationTests` (Staff và Technical bị 403, `SHIFT_HAS_TOURS` và `SHIFT_BLOCKED` qua HTTP);
+  `AdminSchedulePage.test.tsx`, `SchedulePage.test.tsx`.
+- **Chưa chạy được:** `backend/scripts/test-db-upgrade` và `backend/scripts/test-deployment` cần Docker, mà Docker không chạy
+  trên máy này. Hai script đã được cập nhật và qua `bash -n`; CI sẽ chạy thật. Patch thì đã được chạy trên SQL Express qua
+  `SchemaV11Tests`.
+
+**Lệch so với file này hoặc tài liệu khác**
+- Quy tắc "không vừa khoá cả ngày vừa khoá ca lẻ" được kiểm trong ứng dụng dưới khoá ngày, trả 409 `SCHEDULE_BLOCK_EXISTS`;
+  SQL không có ràng buộc riêng cho quy tắc này. Mã này và `SCHEDULE_BLOCK_ALREADY_REMOVED` là hai mã mới, chưa có trong mục 6.
+- Entity `TourScheduleBlock` và mapping EF được viết tay theo đúng dạng scaffold, không chạy `scaffold-db`. Test SQL đọc và
+  ghi bảng này đều qua.
+- `AGENTS.md` yêu cầu ADR cho thay đổi schema và ghi hợp đồng API vào `docs/architecture.md`. Theo chỉ đạo đợt này, chưa có
+  ADR và chưa sửa `docs/architecture.md`, `backend/database/README.md`, `backend/docs/ec2-deployment.md`.
+- **Khi triển khai:** `deploy-ec2.sh` nay yêu cầu schema 1.16, nên database production phải chạy luồng nâng cấp có backup
+  (`upgrade-db-schema-ec2.sh`, tạo image `backend-db-init:schema-v1.16`) trước hoặc cùng lúc với API mới.

@@ -83,7 +83,7 @@ export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blo
 export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean }
 export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
 export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
-export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
 /** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
 
 /**
@@ -107,5 +107,7 @@ export type TourSlots = {
   recommendedMaxSeconds: number
 }
 /** A configured shift on one day, for the calendar before a route or robot is chosen. */
-export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number }
+export type TourShift = { code: string; name: string; startsAt: string; endsAt: string; tourStartsAt: string; time: string; maxDurationSeconds: number; block: TourShiftBlock | null }
+/** An Admin closure of this shift; `scope` says whether it covers the whole day (docs/lich-tour-theo-ca.md §5). */
+export type TourShiftBlock = { id: string; scope: 'DAY' | 'SHIFT'; reason: string }
 export type TourShifts = { days: { date: string; shifts: TourShift[] }[]; recommendedMaxSeconds: number }

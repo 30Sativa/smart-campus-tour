@@ -1,5 +1,6 @@
 using System.Globalization;
 using SmartCampus.Application.Common.Exceptions;
+using SmartCampus.Domain.Entities;
 
 namespace SmartCampus.Application.Features.Tours;
 
@@ -74,6 +75,7 @@ public static class TourSchedule
     public const string LeadTimeTooShort = "LEAD_TIME_TOO_SHORT";
     public const string ReservationOverlap = "RESERVATION_OVERLAP";
     public const string RouteTooLongForShift = "ROUTE_TOO_LONG_FOR_SHIFT";
+    public const string ShiftBlocked = "SHIFT_BLOCKED";
     public const string RemeasureRequired = "ROUTE_TEST_REMEASURE_REQUIRED";
 
     public static readonly TimeSpan LeadTime = TimeSpan.FromHours(72);
@@ -118,12 +120,24 @@ public static class TourSchedule
         return measuredSeconds + targetStops.Sum(stop => Math.Max(0, stop.DwellSeconds - tested.GetValueOrDefault(stop.StopOrder)));
     }
 
+    /// <summary>The Admin block closing this shift, if any; a whole-day block wins over one for the shift (docs/lich-tour-theo-ca.md §5).</summary>
+    public static TourShiftBlockView? BlockOf(IEnumerable<TourScheduleBlock> activeBlocks, TourShiftOnDay shift)
+    {
+        var ofDay = activeBlocks.Where(block => block.BlockDate == shift.Date).ToArray();
+        var block = ofDay.FirstOrDefault(item => item.ShiftCode is null) ?? ofDay.FirstOrDefault(item => item.ShiftCode == shift.Shift.Code);
+        return block is null ? null : new(block.Id, block.ShiftCode is null ? ScheduleBlockScope.Day : ScheduleBlockScope.Shift, block.Reason);
+    }
+
+    /// <summary>The whole campus date, for closing or looking across a day.</summary>
+    public static (DateTimeOffset StartsAt, DateTimeOffset EndsAt) DayWindow(DateOnly date) =>
+        (SlotStart(date, TimeOnly.MinValue), SlotStart(date.AddDays(1), TimeOnly.MinValue));
+
     /// <summary>
-    /// Null when the shift can be used. Order: lead time, remeasure, length, then any hold still in force inside
-    /// the shift, including an older Tour held at an odd time.
+    /// Null when the shift can be used. Order: lead time, remeasure, length, Admin block, then any hold still in
+    /// force inside the shift, including an older Tour held at an odd time.
     /// </summary>
     public static TourSlotBlock? Evaluate(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan,
-        IReadOnlyCollection<TourReservationHold> holds)
+        IReadOnlyCollection<TourReservationHold> holds, TourShiftBlockView? adminBlock = null)
     {
         var start = TourStart(shift.Date, shift.Shift);
         if (start - now < LeadTime) return new(LeadTimeTooShort, "Quá gần hiện tại, cần tạo trước ít nhất 72 giờ");
@@ -131,6 +145,8 @@ public static class TourSchedule
         var max = MaxDurationSeconds(shift.Shift);
         if (plan.ExpectedDurationSeconds > max)
             return new(RouteTooLongForShift, $"Tuyến cần {Minutes(plan.ExpectedDurationSeconds)}, ca này chỉ chứa được {Minutes(max)}");
+        if (adminBlock is not null)
+            return new(ShiftBlocked, $"{(adminBlock.Scope == ScheduleBlockScope.Day ? "Ngày này" : "Ca này")} đã bị khoá: {adminBlock.Reason}");
         var (startsAt, endsAt) = ShiftWindow(shift.Date, shift.Shift);
         var clash = holds.Where(hold => hold.StartsAt < endsAt && hold.EndsAt > startsAt).OrderBy(hold => hold.StartsAt).FirstOrDefault();
         return clash is null ? null : new(ReservationOverlap, $"Trùng khung giữ robot của Tour {clash.TourName}");
@@ -144,6 +160,7 @@ public static class TourSchedule
             LeadTimeTooShort => "TOUR_LEAD_TIME_TOO_SHORT",
             RemeasureRequired => RemeasureRequired,
             RouteTooLongForShift => RouteTooLongForShift,
+            ShiftBlocked => ShiftBlocked,
             _ => "ROBOT_RESERVATION_CONFLICT"
         });
     }
