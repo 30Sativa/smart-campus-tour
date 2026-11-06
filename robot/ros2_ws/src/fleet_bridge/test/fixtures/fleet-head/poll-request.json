@@ -1,0 +1,12 @@
+{
+  "epoch": "8d3b1f2e-6c4a-4a55-9e2f-1b7c0d9a4e61",
+  "afterSeq": 41,
+  "waitMs": 1500,
+  "head": {
+    "state": "IDLE",
+    "referenced": true,
+    "panDeg": 12.6,
+    "tiltDeg": -3.6,
+    "observedAt": "2026-11-05T12:00:00.000Z"
+  }
+}

@@ -6,6 +6,11 @@ bus_interfaces, nen van chay khi giao dien dau quay tat hoac loi.
   srv     contactor/set    std_srvs/srv/SetBool   data=true: ON, false: OFF
   topic   contactor/state  std_msgs/msg/Bool      publish khi doi va 1 Hz
 
+Contactor BAT khi khoi dong: firmware bat PA10 luc boot (CONTACTOR_ON_AT_BOOT),
+va bridge (contactor_on_at_startup) gui CONTACTOR,ON mot lan neu khung FB dau
+tien bao dang tat (firmware cu, hoac ai do da tat truoc khi bridge khoi dong
+lai). Sau do chi bat/tat theo contactor/set.
+
 Serial: CONTACTOR,<seq>,ON|OFF; trang thai lay tu truong 23 cua FB
 (robot/docs/PROTOCOL_FB.md). Day la trang thai LENH cua PA10, khong phai
 phan hoi tu tiep diem contactor.
@@ -26,7 +31,9 @@ class ContactorInterface:
         self._node = node
         self._send = send_seq_command
         node.declare_parameter('contactor_command_timeout', 1.0)
+        node.declare_parameter('contactor_on_at_startup', True)
         self._timeout = float(node.get_parameter('contactor_command_timeout').value)
+        self._startup_pending = bool(node.get_parameter('contactor_on_at_startup').value)
 
         self._cond = threading.Condition()
         self._fb_seq: Optional[int] = None
@@ -54,6 +61,11 @@ class ContactorInterface:
             self._fb_seq = fb.fb_seq
             self._state = fb.contactor
             self._cond.notify_all()
+            startup_on = self._startup_pending and not fb.contactor
+            self._startup_pending = False
+        if startup_on:
+            self._node.get_logger().info('Contactor ON at startup')
+            self._send(lambda s: hl.cmd_contactor(s, True))
         if fb.contactor != self._last_published or (now - self._last_pub_mono) >= 1.0:
             self._pub.publish(Bool(data=fb.contactor))
             self._last_published = fb.contactor

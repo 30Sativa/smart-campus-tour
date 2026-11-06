@@ -7,7 +7,7 @@ service ma FE/backend se dung, nen test o day la test dung duong ROS that.
 
 Phim:
   mui ten / WASD  nhan = 1 buoc, giu = quay lien tuc, nha = dung
-  h   HOME (tim vat can roi ve 0 do, ~21 s)
+  h   HOME (tim vat can roi ve 0 do, ~13 s)
   0   ve goc 0/0 (can da HOME)
   space  dung (head/stop)      o  tat driver (head/off)
   z   dat moc tay tai vi tri hien tai (head/zero)

@@ -3,10 +3,14 @@ using FluentValidation.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SmartCampus.Api.Common.Authentication;
 using SmartCampus.Api.Common.Requests;
 using SmartCampus.Api.Common.Responses;
 using SmartCampus.Application.Common.Authentication;
+using SmartCampus.Application.Features.FleetHead;
+using SmartCampus.Application.Features.FleetHead.Commands.SendHeadCommand;
+using SmartCampus.Application.Features.FleetHead.Queries.GetTourHeadStatus;
 using SmartCampus.Application.Features.Routes;
 using SmartCampus.Application.Features.Tours;
 using SmartCampus.Application.Features.Tours.Commands.CancelTour;
@@ -109,6 +113,27 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
     [HttpPost("{id:guid}/commands/{commandId:guid}/reconcile")]
     public async Task<IActionResult> Reconcile(Guid id, Guid commandId, [FromBody] ReconcileRobotCommandRequest request, CancellationToken ct) =>
         Success(await sender.Send(new ReconcileRobotCommandCommand(id, commandId, User.GetRequiredUserId(), request), ct), "Command reconciled.");
+
+    /// <summary>ADR-0045: the Operator of a RUNNING Tour turns its robot's head. Queued is not executed.</summary>
+    [HttpPost("{id:guid}/head-commands")]
+    [RequestSizeLimit(4 * 1024)]
+    [EnableRateLimiting(FleetHeadRateLimit.Policy)]
+    public async Task<ActionResult<BaseResponse<SendHeadCommandResult>>> QueueHeadCommand(Guid id,
+        [FromBody] StaffHeadCommandRequest request, CancellationToken ct) =>
+        Ok(new BaseResponse<SendHeadCommandResult>
+        {
+            Success = true,
+            Message = "Head command queued.",
+            Data = await sender.Send(new SendHeadCommand(id, User.GetRequiredUserId(), new HeadCommandSpec(request.Kind,
+                request.PanSteps, request.TiltSteps, request.PanDir, request.TiltDir, request.PanDeg, request.TiltDeg)), ct)
+        });
+
+    [HttpGet("{id:guid}/head")]
+    public async Task<ActionResult<BaseResponse<TourHeadStatus>>> GetHeadStatus(Guid id, CancellationToken ct) =>
+        Ok(new BaseResponse<TourHeadStatus>
+        {
+            Success = true, Message = "Head status retrieved.", Data = await sender.Send(new GetTourHeadStatusQuery(id), ct)
+        });
 
     private OkObjectResult Success(TourMutationResult result, string message) =>
         Ok(new BaseResponse<TourMutationResult> { Success = true, Message = message, Data = result });

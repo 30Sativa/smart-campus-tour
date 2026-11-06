@@ -84,6 +84,7 @@ API/SQL facts and retained technical decisions remain explicit in each notice.
 | [0043](0043-m2-2-tour-orchestration-scope.md) | M2.2 scope: no FRONT until M2.5, versioned stop columns, fake-bridge testing, manual Next, release rules, End Early without FR-48; schema v1.14 `RobotCommands` | accepted by the repository owner 2026-11-03; storage in schema v1.14 |
 
 | [0044](0044-robot-command-terminal-outcome-check.md) | Close the NULL outcome CHECK hole for terminal robot commands; preserve v1.14 and upgrade through v1.15 | corrective implementation of ADR-0042/0043, 2026-11-04 |
+| [0045](0045-operator-head-control.md) | The assigned Operator of a RUNNING Tour turns the PAN/TILT head with buttons over a separate in-memory, long-polled Fleet Head v1 contract; nothing persisted | proposed 2026-11-05 (team member Sơn), behind flags off by default; pending owner acceptance |
 
 <!-- TODO(Duy): những decision sắp tới đáng viết ADR:
      - chọn database cho backend

@@ -90,8 +90,8 @@ ros2 run stm32_bridge head_teleop --ros-args -r __ns:=/robot_01
 
 | Phím | Tác dụng |
 |---|---|
-| ← → ↑ ↓ (hoặc A D W S) | **Nhấn** = 1 bước (PAN 0,6°, TILT 0,9°). **Giữ** = quay liên tục. **Nhả** = dừng |
-| `h` | HOME: quay phải tới vật cản rồi đếm về 0° (khoảng 21 s) |
+| ← → ↑ ↓ (hoặc A D W S) | **Nhấn** = 1 bước (PAN 0,6°, TILT 1,8°). **Giữ** = quay liên tục. **Nhả** = dừng |
+| `h` | HOME: PAN quay phải tới vật cản rồi về 0°, TILT cúi tới vật cản rồi về thẳng (khoảng 13 s). Bridge đã tự HOME một lần khi STM32 khởi động |
 | `0` | Về góc 0°/0° (cần đã HOME) |
 | Space | Dừng (`head/stop`) |
 | `o` | Tắt driver (`head/off`): TILT có thể đổ theo trọng lực |
@@ -111,13 +111,13 @@ Làm theo thứ tự. Ghi lại kết quả từng bước.
 | # | Thao tác | Đạt khi |
 |---|---|---|
 | 1 | Chưa HOME, nhấn ← | Bị từ chối: log bridge `rejected:head_not_zeroed` hoặc HeadState vẫn OFF; motor không quay |
-| 2 | `h` (HOME) | PAN quay **phải** tới vật cản (170°–190°), TILT xuống tới vật cản, rồi cả hai về 0°. Kết quả `homed`, `state=1`, `referenced=true`, pan≈0, tilt≈0 |
+| 2 | `h` (HOME) | PAN quay **phải** 190° tới vật cản (cạnh 174° phải), TILT cúi tới vật cản (20°), rồi cả hai về 0°. Kết quả `homed`, `state=1`, `referenced=true`, pan≈0, tilt≈0 |
 | 3 | Đánh dấu vị trí 0° bằng bút, HOME lại 3 lần | Lệch so với vạch ≤ PAN 2,4° / TILT 3,6° (giới hạn của homing chạm cơ khí) |
 | 4 | Nhấn ← 10 lần chậm | PAN tăng đúng 6,0° (10 × 0,6°), chiều quay trái |
-| 5 | Nhấn ↑ 10 lần chậm | TILT tăng đúng 9,0°, ngóc lên |
+| 5 | Nhấn ↑ 5 lần chậm | TILT tăng đúng 9,0°, ngửa lên |
 | 6 | Giữ → 2 s rồi nhả | Quay đều, dừng trong ~0,3 s sau khi nhả |
-| 7 | Giữ ← tới khi tự dừng | Dừng ở +165° (giới hạn mềm), **không** chạm vật cản |
-| 8 | Giữ ↓ tới khi tự dừng | Dừng ở −25°, không chạm vật cản ở −30° |
+| 7 | Giữ ← tới khi tự dừng | Dừng ở +169,8° (giới hạn mềm ±170°), **không** chạm vật cản |
+| 8 | Giữ ↓ tới khi tự dừng | Dừng ở −18° (giới hạn mềm), không trượt ở vật cản cúi 20° |
 | 9 | Đang giữ phím, rút cáp mạng/đóng `head_teleop` bằng `kill -9` | Đầu quay tự dừng trong ≤ 0,3 s (deadman firmware) |
 | 10 | Đang HOME, nhấn Space | HOME hủy, `state=4` (NO_REF), phải HOME lại |
 | 11 | `0` sau khi xoay tay lệch | Về pan 0°, tilt 0°, kết quả `reached` |

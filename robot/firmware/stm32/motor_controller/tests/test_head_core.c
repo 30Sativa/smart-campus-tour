@@ -49,6 +49,31 @@ static int32_t g_wall[HEAD_AXIS_COUNT];     /* canh con lai (phia doi dien), co 
 static long g_lost[HEAD_AXIS_COUNT];
 static uint32_t g_ms = 0U;
 
+/* Mo hinh roto sat thuc te hon (test_homing_repeatable_rotor_model): vi tri
+ * roto g_x (don vi xung, 0 = 0 do that, so thuc) chi nam yen o vi tri can bang
+ * cua pha dien hien tai = g_cmd + g_c0 + k * chu ky (chu ky = 4 buoc du).
+ * Moi xung, roto toi vi tri can bang GAN NHAT cua pha moi; vat can chan
+ * [g_s, g_w] thi roto bi ep tai vat can. Can bang gan nhat nhay khac +/-1 =
+ * truot pha (mat buoc). g_c0: lech pha co dinh giua bo dem buoc cua driver
+ * va rang roto (hang so vat ly cua tung motor). */
+static int g_rotor_on = 0;
+static double g_x[HEAD_AXIS_COUNT];
+static long g_cmd[HEAD_AXIS_COUNT];
+static long g_c0[HEAD_AXIS_COUNT];
+static double g_s[HEAD_AXIS_COUNT], g_w[HEAD_AXIS_COUNT];
+static long g_slip[HEAD_AXIS_COUNT];
+#define PHASE_PERIOD ((long)(4.0f * HEAD_MICROSTEP + 0.5f))
+
+static void rotor_settle(int a)
+{
+	double q = (double)(g_cmd[a] + g_c0[a]);
+	double k = floor((g_x[a] - q) / (double)PHASE_PERIOD + 0.5);
+	double e = q + k * (double)PHASE_PERIOD;
+	if (e < g_s[a]) e = g_s[a];
+	if (e > g_w[a]) e = g_w[a];
+	g_x[a] = e;
+}
+
 static const HeadAxisPins PAN_PINS  = { &g_port[0][SIG_STEP], 1U, &g_port[0][SIG_DIR], 1U, 0U, &g_port[0][SIG_EN], 1U };
 static const HeadAxisPins TILT_PINS = { &g_port[1][SIG_STEP], 1U, &g_port[1][SIG_DIR], 1U, 0U, &g_port[1][SIG_EN], 1U };
 
@@ -88,6 +113,14 @@ static void tick(void)
 			if (dir_changed) L->step_on_dir_tick++;
 			if (L->low_run < 1) L->bad_pulse++;
 			if (g_level[a][SIG_DIR]) L->steps_fwd++; else L->steps_rev++;
+			if (g_rotor_on)
+			{
+				double before = g_x[a];
+				double free = before + (g_level[a][SIG_DIR] ? 1.0 : -1.0);
+				g_cmd[a] += g_level[a][SIG_DIR] ? 1 : -1;
+				rotor_settle(a);
+				if (fabs(g_x[a] - free) > 1e-9) g_slip[a]++;
+			}
 			if (g_phys_on)
 			{
 				int32_t next = g_phys[a] + (g_level[a][SIG_DIR] ? 1 : -1);
@@ -152,7 +185,7 @@ static long run_until_idle(long max_ticks)
 /* Chay toi khi truc PAN di duoc it nhat n buoc (khong phu thuoc thong so). */
 static void run_until_pan(int32_t n)
 {
-	for (long i = 0; i < 20L * HEAD_TICK_HZ; i++)
+	for (uint32_t i = 0; i < 20U * HEAD_TICK_HZ; i++)
 	{
 		if (HeadCore_GetPositionSteps(HEAD_AXIS_PAN) >= n) return;
 		tick();
@@ -301,7 +334,7 @@ static void test_off_drops_reference(void)
 {
 	printf("test_off_drops_reference\n");
 	reset(); (void)HeadCore_Zero(); sync_pins(); clear_log();
-	(void)HeadCore_Command(9000, 2000);
+	(void)HeadCore_Command(9000, 1500);
 	run_until_pan(HeadCore_GetTargetSteps(HEAD_AXIS_PAN) / 4);
 	CHECK(HeadCore_Zero() == HEAD_ERR_BUSY, "ZERO while moving is rejected");
 	HeadCore_Off();
@@ -321,10 +354,10 @@ static void test_both_axes_together(void)
 {
 	printf("test_both_axes_together\n");
 	reset(); (void)HeadCore_Zero(); sync_pins(); clear_log();
-	(void)HeadCore_Command(-4500, -2000);
+	(void)HeadCore_Command(-4500, -1500);
 	long t = run_until_idle(20L * HEAD_TICK_HZ);
 	int32_t pt = (int32_t)lroundf(-4500.0f * HeadCore_StepsPerCdeg(HEAD_AXIS_PAN));
-	int32_t tt = (int32_t)lroundf(-2000.0f * HeadCore_StepsPerCdeg(HEAD_AXIS_TILT));
+	int32_t tt = (int32_t)lroundf(-1500.0f * HeadCore_StepsPerCdeg(HEAD_AXIS_TILT));
 	CHECK(t > 0, "both axes finish");
 	CHECK(HeadCore_GetPositionSteps(HEAD_AXIS_PAN) == pt && HeadCore_GetPositionSteps(HEAD_AXIS_TILT) == tt, "both at their own targets (negative direction)");
 	CHECK(g_log[0].steps_fwd == 0 && g_log[1].steps_fwd == 0, "all edges in the negative direction");
@@ -332,7 +365,7 @@ static void test_both_axes_together(void)
 	CHECK(g_log[0].bad_pulse == 0 && g_log[1].bad_pulse == 0, "pulse timing holds on both axes");
 	HeadStatus st; HeadCore_GetStatus(&st);
 	float half_step_cdeg = 0.5f / HeadCore_StepsPerCdeg(HEAD_AXIS_TILT);
-	CHECK(st.pan_cdeg == -4500 && fabsf((float)st.tilt_cdeg + 2000.0f) <= half_step_cdeg + 1.0f,
+	CHECK(st.pan_cdeg == -4500 && fabsf((float)st.tilt_cdeg + 1500.0f) <= half_step_cdeg + 1.0f,
 	      "status reports both angles in cdeg (within half a step)");
 }
 
@@ -353,8 +386,8 @@ static void phys_setup(int32_t pan_start_cdeg, int32_t tilt_start_cdeg)
 	g_phys_on = 1;
 	g_stop[0] = HEAD_PAN_HOME_DIR * cdeg_steps(0, HEAD_PAN_HOME_OFFSET_CDEG);
 	g_stop[1] = HEAD_TILT_HOME_DIR * cdeg_steps(1, HEAD_TILT_HOME_OFFSET_CDEG);
-	/* PAN: vat can 170..190 do -> canh doi dien o -HOME_DIR * 170 do.
-	 * TILT: vat can cung o +/-30 do -> canh doi dien doi xung. */
+	/* PAN: khoi vat can o phia sau, hai canh doi xung o +/-174 do.
+	 * TILT: vat can cui 20 do; gia lap them vat can ngua doi xung 20 do. */
 	g_wall[0] = -HEAD_PAN_HOME_DIR * cdeg_steps(0, HEAD_PAN_HOME_OFFSET_CDEG);
 	g_wall[1] = -HEAD_TILT_HOME_DIR * cdeg_steps(1, HEAD_TILT_HOME_OFFSET_CDEG);
 	g_phys[0] = cdeg_steps(0, pan_start_cdeg);
@@ -366,13 +399,13 @@ static void test_homing_against_hard_stop(void)
 {
 	printf("test_homing_against_hard_stop\n");
 	/* Vi tri xuat phat that, centi-do tu 0 do that.
-	 * PAN: goc that (duong = trai), vat can 170..190 do nen chi dat duoc
-	 * (-170, +170). -16900 = sat canh homing (ben phai); +16900 = sat canh
-	 * trai, xa canh homing nhat (339 do).
-	 * TILT: goc that (duong = ngoc len), vat can +/-30 do. -2900 = sat vat
-	 * can duoi (canh homing); +2900 = ngoc het, xa canh homing nhat (59 do). */
+	 * PAN: goc that (duong = trai). Seek 190 do sang phai chi toi duoc canh
+	 * vat can (174 do phai) khi dau dang trong [174 phai .. 16 trai]:
+	 * -17300 = sat canh homing; +1200 = gan bien trai cua khoang do.
+	 * TILT: goc that (duong = ngua len), vat can cui 20 do. -1900 = sat vat
+	 * can; +1900 = ngua het, xa vat can nhat (39 do). */
 	static const int32_t starts[][2] = {
-		{ 0, 0 }, { 9000, -1500 }, { -9000, 2000 }, { -16900, -2900 }, { 16900, 2900 }
+		{ 0, 0 }, { 1200, -1500 }, { -9000, 1800 }, { -17300, -1900 }, { 600, 1900 }
 	};
 	for (unsigned k = 0; k < sizeof(starts) / sizeof(starts[0]); k++)
 	{
@@ -407,6 +440,96 @@ static void test_homing_against_hard_stop(void)
 	CHECK(g_lost[0] + g_lost[1] == lost, "moving between the soft limits never hits the stop");
 	CHECK(g_phys[0] == HeadCore_GetPositionSteps(0) && g_phys[1] == HeadCore_GetPositionSteps(1), "physical == counted position after limit-to-limit moves");
 	g_phys_on = 0;
+}
+
+/* HOME voi mo hinh roto truot pha (xem g_rotor_on): moc 0 phai LAP LAI dung
+ * mot vi tri du dau xuat phat o dau, lech khoi vi tri ly tuong < 2 buoc du,
+ * va chay giua hai gioi han mem sau do khong bao gio truot buoc. */
+static void test_homing_repeatable_rotor_model(void)
+{
+	printf("test_homing_repeatable_rotor_model\n");
+	const double micro = (double)HEAD_MICROSTEP;
+	const int32_t offset_cdeg[HEAD_AXIS_COUNT] = { HEAD_PAN_HOME_OFFSET_CDEG, HEAD_TILT_HOME_OFFSET_CDEG };
+	const int home_dir[HEAD_AXIS_COUNT] = { HEAD_PAN_HOME_DIR, HEAD_TILT_HOME_DIR };
+	const int32_t limit_cdeg[HEAD_AXIS_COUNT] = { HEAD_PAN_LIMIT_CDEG, HEAD_TILT_LIMIT_CDEG };
+	static const int32_t starts[][2] = { { 0, 0 }, { 1200, 1900 }, { -9000, -1700 }, { -17300, 900 } };
+	const long n_starts = (long)(sizeof(starts) / sizeof(starts[0]));
+	long c0_stride = PHASE_PERIOD / 8; if (c0_stride < 1) c0_stride = 1;
+	int all_repeat = 1, all_close = 1, all_noslip = 1;
+	long pressed_runs = 0;
+	double worst_err[HEAD_AXIS_COUNT] = { 0.0, 0.0 };
+
+	for (long c0 = 0; c0 < PHASE_PERIOD; c0 += c0_stride)
+	{
+		double first[HEAD_AXIS_COUNT] = { 0.0, 0.0 };
+		double first_err[HEAD_AXIS_COUNT] = { 0.0, 0.0 };
+		/* Mot lan cap nguon (driver + STM32) roi HOME nhieu lan: giua cac lan,
+		 * dau chay lenh khac, bi OFF va bi xoay tay toi cho moi. Bo dem buoc
+		 * cua driver KHONG reset giua cac lan, giong ngoai doi. */
+		reset();
+		g_rotor_on = 1;
+		for (int a = 0; a < (int)HEAD_AXIS_COUNT; a++) g_cmd[a] = 0;
+		for (long k = 0; k < n_starts; k++)
+		{
+			if (k > 0) { HeadCore_Off(); sync_pins(); }
+			for (int a = 0; a < (int)HEAD_AXIS_COUNT; a++)
+			{
+				/* Vat can that nam le 0.37 buoc du so voi luoi buoc (khong bao
+				 * gio trung khit), firmware tinh offset bang so buoc lam tron. */
+				double stop = (double)offset_cdeg[a] * (double)HeadCore_StepsPerCdeg((uint8_t)a) + 0.37 * micro;
+				g_s[a] = -stop; g_w[a] = stop;    /* hai canh doi xung */
+				g_c0[a] = c0 + a; g_slip[a] = 0;
+				g_x[a] = (double)starts[k][a] * (double)HeadCore_StepsPerCdeg((uint8_t)a) + 0.21 * micro;
+			}
+			CHECK(HeadCore_Home() == HEAD_OK, "HOME accepted");
+			sync_pins();
+			for (int a = 0; a < (int)HEAD_AXIS_COUNT; a++) rotor_settle(a);   /* driver bat: roto hut ve can bang */
+			long t = run_ms_until_state_not(HEAD_STATE_HOMING, 120000);
+			HeadStatus st; HeadCore_GetStatus(&st);
+			if (t <= 0 || st.state != HEAD_STATE_IDLE) { CHECK(0, "homing finishes"); continue; }
+			for (int a = 0; a < (int)HEAD_AXIS_COUNT; a++)
+			{
+				/* Neu offset firmware = khoang cach that, 0 do ly tuong o day: */
+				double fw_stop = (double)lroundf((float)offset_cdeg[a] * HeadCore_StepsPerCdeg((uint8_t)a));
+				double ideal = (home_dir[a] < 0) ? (g_s[a] + fw_stop) : (g_w[a] - fw_stop);
+				double err = g_x[a] - ideal;
+				if (fabs(err) > worst_err[a]) worst_err[a] = fabs(err);
+				if (fabs(err) > 2.0 * micro + 1e-9) all_close = 0;
+				if (k == 0) { first[a] = g_x[a]; first_err[a] = err; }
+				else if (fabs(g_x[a] - first[a]) > 1e-9) all_repeat = 0;
+			}
+			/* Chay toi hai gioi han mem: khong duoc truot buoc. */
+			long slip0 = g_slip[0] + g_slip[1];
+			double x0[2] = { g_x[0], g_x[1] };
+			(void)HeadCore_Command(limit_cdeg[0], limit_cdeg[1]);
+			(void)run_ms_until_state_not(HEAD_STATE_MOVING, 20000);
+			(void)HeadCore_Command(-limit_cdeg[0], -limit_cdeg[1]);
+			(void)run_ms_until_state_not(HEAD_STATE_MOVING, 20000);
+			(void)HeadCore_Command(0, 0);
+			(void)run_ms_until_state_not(HEAD_STATE_MOVING, 20000);
+			/* Ep nhe vao vat can (< 2 buoc du) khong mat goc: roto quay lai dung
+			 * cho cu. Mat goc = ve 0 xong ma roto khong con o cho cu. */
+			if (g_slip[0] + g_slip[1] != slip0) pressed_runs++;
+			if (fabs(g_x[0] - x0[0]) > 1e-9 || fabs(g_x[1] - x0[1]) > 1e-9)
+				all_noslip = 0;
+			/* Mot lenh bat ky truoc lan OFF ke tiep: pha bo dem doi. */
+			(void)HeadCore_Command((int32_t)(1300 * (k + 1)), (int32_t)(-500 * (k + 1)));
+			(void)run_ms_until_state_not(HEAD_STATE_MOVING, 20000);
+		}
+		printf("       driver phase c0 %3ld: zero lands PAN %+6.2f / TILT %+6.2f full steps from ideal\n",
+		       c0, first_err[0] / micro, first_err[1] / micro);
+	}
+	g_rotor_on = 0;
+	printf("       worst homing error: PAN %.2f deg, TILT %.2f deg (truoc hieu chinh HOME_OFFSET)\n",
+	       worst_err[0] / (HeadCore_StepsPerCdeg(0) * 100.0), worst_err[1] / (HeadCore_StepsPerCdeg(1) * 100.0));
+	printf("       runs touching a stop at the soft limit: %ld (lightly pressed, no loss)\n", pressed_runs);
+#if HEAD_HOME_PHASE_ALIGN
+	CHECK(all_repeat, "same rotor position after HOME from every start (repeatable zero)");
+#else
+	printf("       (HEAD_HOME_PHASE_ALIGN=0: repeatable=%d, not checked)\n", all_repeat);
+#endif
+	CHECK(all_close, "homed zero within 2 full steps of the ideal zero");
+	CHECK(all_noslip, "limit-to-limit moves after HOME lose no angle (rotor returns exactly)");
 }
 
 static void test_homing_abort(void)
@@ -520,6 +643,7 @@ int main(void)
 	test_both_axes_together();
 	test_sub_step_command();
 	test_homing_against_hard_stop();
+	test_homing_repeatable_rotor_model();
 	test_homing_abort();
 	test_step_taps();
 	test_jog_hold_and_deadman();

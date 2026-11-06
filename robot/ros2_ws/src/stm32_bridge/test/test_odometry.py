@@ -936,3 +936,33 @@ def test_contactor_hook_errors_are_isolated_and_logged_separately():
     Stm32BridgeNode._call_hook(harness, ContactorBoom(), 'on_feedback_line', 'FB,2')
     assert len(logged) == 2
     assert 'HeadBoom' in logged[0] and 'ContactorBoom' in logged[1]
+
+
+def test_head_and_contactor_share_serial_sequence_without_power_gate():
+    import threading
+
+    from stm32_bridge.head_link import cmd_contactor, cmd_head_word
+
+    sent = []
+    node = SimpleNamespace(
+        _serial_lock=threading.RLock(),
+        _seq=2 ** 32 - 1,
+        _write_serial=lambda command: sent.append(command) or True,
+        get_logger=lambda: SimpleNamespace(info=lambda message: None),
+    )
+    assert Stm32BridgeNode.send_seq_command(
+        node, lambda seq: cmd_contactor(seq, False)) == 2 ** 32 - 1
+    assert Stm32BridgeNode.send_seq_command(
+        node, lambda seq: cmd_head_word(seq, 'HOME')) == 1
+    assert sent == ['CONTACTOR,4294967295,OFF\r\n', 'HEAD,1,HOME\r\n']
+
+
+def test_serial_head_error_reaches_head_interface():
+    received = []
+    node = SimpleNamespace(
+        _head=object(),
+        _call_head=lambda method, line: received.append((method, line)),
+        get_logger=lambda: SimpleNamespace(warn=lambda message: None),
+    )
+    Stm32BridgeNode._process_rx_line(node, 'ERR,head_limit')
+    assert received == [('on_error_line', 'ERR,head_limit')]

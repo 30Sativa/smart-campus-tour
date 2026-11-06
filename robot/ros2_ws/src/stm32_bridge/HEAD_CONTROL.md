@@ -10,9 +10,9 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 
 | Loại | Tên | Kiểu | Ý nghĩa |
 |---|---|---|---|
-| action | `head/set` | `bus_interfaces/action/SetHead` | `mode=1` HOME (tìm vật cản rồi về 0°, khoảng 21 s); `mode=0` tới góc `pan_deg`/`tilt_deg`. Thành công chỉ khi FB báo `head_seq` = seq lệnh **và** `head_state=1` |
+| action | `head/set` | `bus_interfaces/action/SetHead` | `mode=1` HOME (tìm vật cản rồi về 0°, khoảng 13 s); `mode=0` tới góc `pan_deg`/`tilt_deg`. Thành công chỉ khi FB báo `head_seq` = seq lệnh **và** `head_state=1` |
 | topic (sub) | `head/jog` | `bus_interfaces/msg/HeadJog` | Giữ nút: `pan`/`tilt` ∈ {-1,0,1}. Publish đều ≥ 5 Hz (nên 10 Hz) khi giữ; nhả: publish `0,0` |
-| topic (sub) | `head/step` | `bus_interfaces/msg/HeadStep` | Nhấn nút: số bước đủ (PAN 0,6°, TILT 0,9° mỗi bước) |
+| topic (sub) | `head/step` | `bus_interfaces/msg/HeadStep` | Nhấn nút: số bước đủ (PAN 0,6°, TILT 1,8° mỗi bước) |
 | topic (pub) | `head/state` | `bus_interfaces/msg/HeadState` | Trạng thái, góc, `referenced`, `last_head_seq`. 10 Hz và mỗi khi đổi trạng thái |
 | service | `head/stop` | `std_srvs/srv/Trigger` | Giảm tốc dừng; đang HOME thì hủy HOME (mất mốc) |
 | service | `head/off` | `std_srvs/srv/Trigger` | Tắt driver, mất mốc (TILT có thể đổ theo trọng lực) |
@@ -20,8 +20,27 @@ Trạng thái: **code và test offline xong, chưa chạy với ROS thật và r
 | service | `contactor/set` | `std_srvs/srv/SetBool` | Bật/tắt contactor (PA10). Thành công khi một khung FB **sinh sau** lệnh này báo đúng trạng thái. Xem bảng kết quả bên dưới |
 | topic (pub) | `contactor/state` | `std_msgs/msg/Bool` | Trạng thái lệnh của PA10, 1 Hz và khi đổi |
 
-Quy ước góc: PAN dương = quay trái, 0° = phía trước, giới hạn ±165° (vật cản
-170°–190°). TILT dương = ngóc lên, giới hạn ±25° (vật cản ±30°).
+Quy ước góc: PAN dương = quay trái, 0° = phía trước, giới hạn ±170° (vật cản
+phía sau, cạnh ở 174°). TILT dương = ngửa lên, giới hạn ±18° (vật cản cúi
+20°). Góc làm tròn tới bước: PAN 0,6°, TILT 1,8° (driver bước đủ).
+
+## Tự động khi khởi động
+
+- **HOME tự động** (`head_auto_home`): ngay khi khung FB cho thấy STM32 vừa
+  khởi động (`head_state=0` và `head_seq=0`), bridge gửi `HEAD,<seq>,HOME`.
+  PAN quay phải 190° tìm vật cản rồi quay trái 174° về 0°. TILT cúi tìm vật
+  cản rồi ngửa 20° về thẳng. Bridge chạy lại HOME sau mỗi lần STM32 reset,
+  nhưng **không** chạy lại sau `head/off` của người dùng (lúc đó `head_seq≠0`).
+  Thất bại (mất serial…) thì thử lại sau 5 s.
+- **Về 0 trước khi tắt** (`head_park_on_shutdown`): bridge tắt khi đầu đang có
+  mốc thì gửi `HEAD,<seq>,0,0`; firmware tự chạy về 0 kể cả khi bridge đã
+  thoát. Lý do: seek PAN chỉ 190°, nên lần HOME sau phải bắt đầu trong khoảng
+  174° phải – 16° trái.
+- **Contactor bật khi khởi động**: firmware bật PA10 lúc boot. Bridge
+  (`contactor_on_at_startup`) gửi `CONTACTOR,<seq>,ON` một lần nếu khung FB
+  đầu tiên báo đang tắt. Sau đó chỉ bật/tắt theo `contactor/set`.
+- Đầu quay **không phụ thuộc contactor**: không lệnh `HEAD` nào kiểm tra hay đổi
+  trạng thái contactor.
 
 ## Kết quả action `head/set`
 
@@ -64,7 +83,10 @@ làm mất `contactor/set`. Trạng thái là trạng thái **lệnh** của PA1
 | `head_move_timeout` | 20 s | Timeout goal góc |
 | `head_home_timeout` | 45 s | Timeout goal HOME |
 | `head_command_timeout` | 1 s | Timeout xác nhận `head/off`, `head/zero` |
+| `head_auto_home` | `true` | HOME tự động khi STM32 vừa khởi động |
+| `head_park_on_shutdown` | `true` | Đưa đầu về 0/0 khi tắt bridge |
 | `enable_contactor` | `true` | Bật giao diện contactor (độc lập với `enable_head`) |
+| `contactor_on_at_startup` | `true` | Gửi `CONTACTOR,ON` một lần khi bridge khởi động nếu đang tắt |
 | `contactor_command_timeout` | 1 s | Timeout xác nhận `contactor/set` |
 
 ## Thay đổi khác trong node
@@ -116,13 +138,17 @@ serial, firmware cũ, service và deadman JOG.
 ## Lưu ý an toàn
 
 - `contactor/set` không có phân quyền: node ROS nào trong cùng graph cũng gọi
-  được. Contactor không tự tắt khi mất `cmd_vel`/`CMD` (giữ hành vi firmware cũ).
+  được. Contactor không tự tắt khi mất `cmd_vel`/`CMD`, và **bật ngay khi
+  STM32 khởi động**.
+- Bật bridge là đầu quay tự HOME (motor tự quay). Không để tay hoặc dây vướng
+  đầu quay khi khởi động; tắt bằng `head_auto_home:=false` khi bench.
 - `head/off` thả trôi motor: TILT có thể đổ theo trọng lực.
 
 ## Chưa làm
 
-- Backend/fleet bridge → ROS: chưa có kênh lệnh từ backend xuống robot (Fleet
-  Sync v1 chỉ có telemetry). Xem `docs/architecture.md`.
-- Phân quyền ai được điều khiển đầu quay (Staff hay người xem) là quyết định
-  nghiệp vụ chưa chốt: scope Review 1 ghi Student không điều khiển đầu quay.
+- Backend → ROS: đã có Fleet Head v1 (ADR-0045, đề xuất 05/11/2026, cờ tắt mặc
+  định). `fleet_bridge` (`head_enabled: true`) long-poll backend rồi gửi vào
+  `head/step`, `head/jog`, `head/stop`, `head/set` của node này. Chỉ Operator
+  của Tour đang RUNNING được bấm; người xem không. Xem
+  `docs/contracts/fleet-head/v1/README.md`.
 - TF động cho camera theo góc PAN/TILT (nếu camera nằm trên đầu quay).

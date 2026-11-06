@@ -46,6 +46,10 @@ class FleetBridgeNode(Node):
         self.declare_parameter('commands_enabled', False)
         self.declare_parameter('command_base_url', '')
         self.declare_parameter('command_poll_period_sec', 0.5)
+        # ADR-0045 Operator head buttons; off by default, independent of commands_enabled.
+        self.declare_parameter('head_enabled', False)
+        self.declare_parameter('head_base_url', '')
+        self.declare_parameter('head_wait_ms', 1500)
 
         backend_url = str(self.get_parameter('backend_url').value).strip()
         robot_code = str(self.get_parameter('robot_code').value).strip()
@@ -126,6 +130,21 @@ class FleetBridgeNode(Node):
         if path is not None:
             self._commands, self._command_worker = path
 
+        self._head_worker = None
+        if bool(self.get_parameter('head_enabled').value):
+            # Imported only here: the telemetry-only bridge needs no bus_interfaces.
+            from .head_ros import create_ros_head
+            from .head_worker import FleetHeadHttpClient, FleetHeadWorker, HeadWorkerConfig, head_url_from_sync_url
+            head_base = str(self.get_parameter('head_base_url').value).strip() or head_url_from_sync_url(backend_url)
+            wait_ms = int(self.get_parameter('head_wait_ms').value)
+            if not 0 <= wait_ms <= 10_000 or request_timeout_sec * 1000 <= wait_ms:
+                raise RuntimeError('head_wait_ms must be 0..10000 and below request_timeout_sec.')
+            applier, head_state = create_ros_head(self, self.get_logger().warning)
+            self._head_worker = FleetHeadWorker(
+                HeadWorkerConfig(wait_ms=wait_ms, retry_max_sec=min(retry_max_sec, 10.0)), applier,
+                FleetHeadHttpClient(head_base, robot_code, credential, request_timeout_sec),
+                head_state.latest, self.get_logger().warning)
+
         self._worker = FleetSyncWorker(
             report_state,
             transport,
@@ -135,12 +154,18 @@ class FleetBridgeNode(Node):
         self._worker.start()
         if self._command_worker is not None:
             self._command_worker.start()
+        if self._head_worker is not None:
+            self._head_worker.start()
+            self.get_logger().info('Fleet Head enabled: Operator head buttons reach stm32_bridge head/*.')
         self.get_logger().info(
             'Fleet Bridge started with commands enabled; do not run another goal sender on this robot.'
             if self._command_worker is not None else
             'Fleet Bridge started in telemetry-only mode; HTTPS runs on a background thread.')
 
     def destroy_node(self):
+        head_worker = getattr(self, '_head_worker', None)
+        if head_worker is not None:
+            head_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
         command_worker = getattr(self, '_command_worker', None)
         if command_worker is not None:
             command_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)

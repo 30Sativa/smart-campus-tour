@@ -46,6 +46,14 @@ class FleetBridgeCommandDefaultTests(unittest.TestCase):
         launch = (PACKAGE_ROOT / 'launch/fleet_bridge.launch.py').read_text(encoding='utf-8')
         self.assertNotIn('commands_enabled', launch)
 
+    def test_head_control_is_off_in_the_shipped_config(self):
+        config = (PACKAGE_ROOT / 'config/fleet_bridge.yaml').read_text(encoding='utf-8')
+        self.assertIn('head_enabled: false', config)
+        node = (PACKAGE_ROOT / 'fleet_bridge/node.py').read_text(encoding='utf-8')
+        self.assertIn("declare_parameter('head_enabled', False)", node)
+        launch = (PACKAGE_ROOT / 'launch/fleet_bridge.launch.py').read_text(encoding='utf-8')
+        self.assertNotIn('head_enabled', launch)
+
 
 if __name__ == '__main__':
     unittest.main()
