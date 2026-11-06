@@ -725,10 +725,46 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(poiRevisionId, poiVerification.GetProperty("proposalRevisionId").GetGuid());
         Assert.Equal("PASS", poiVerification.GetProperty("resultCode").GetString());
 
+        // A route needs a second stop at least one metre away (docs/lich-tour-theo-ca.md §2).
+        using var createLab = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
+            new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Lab", purpose = "Lab",
+                description = "Integration test", x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin phòng lab.", fallbackVideoUrl = (string?)null } });
+        Assert.Equal(HttpStatusCode.OK, createLab.StatusCode);
+        var labProposal = (await Body(createLab)).GetProperty("data");
+        var labProposalId = labProposal.GetProperty("id").GetGuid();
+        var labRevisionId = labProposal.GetProperty("revision").GetProperty("id").GetGuid();
+        using var submitLab = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{labProposalId}/submit", staffToken,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1, expectedRowVersion = labProposal.GetProperty("rowVersion").GetString() });
+        Assert.Equal(HttpStatusCode.OK, submitLab.StatusCode);
+        using var verifyLab = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/poi-proposals/{labProposalId}/revisions/1/verification", technicalToken,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1,
+                expectedRowVersion = (await Body(submitLab)).GetProperty("data").GetProperty("rowVersion").GetString(),
+                robotCode = "flow_physical", resultCode = "PASS", reached = true, stopped = true,
+                localizationPassed = true, cameraPresetConfirmed = true, reason = (string?)null,
+                evidenceNote = "SIMULATED BACKEND TEST evidence; no physical robot test was run." });
+        Assert.Equal(HttpStatusCode.OK, verifyLab.StatusCode);
+        Assert.Equal(2, eligibleMap.GetProperty("routeMinStops").GetInt32());
+        Assert.Equal(1.0m, eligibleMap.GetProperty("routeMinStopSeparationMeters").GetDecimal());
+
+        var routeStops = new[]
+        {
+            new { poiRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } },
+            new { poiRevisionId = labRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } }
+        };
+        // A start on the first stop's own position leaves the robot nowhere to go.
+        using var startOnStop = await Json(host.Client, HttpMethod.Post, "/api/staff/routes", staffToken,
+            new { requestId = Guid.NewGuid(), expectedCurrentRevision = 0, name = "Flow Route", description = "API integration test",
+                mapVersionId = mapId, startX = 0.5m, startY = 0.5m, startYaw = 0m, endMode = "LAST_POI",
+                endX = (decimal?)null, endY = (decimal?)null, endYaw = (decimal?)null, stops = routeStops });
+        Assert.Equal(HttpStatusCode.Conflict, startOnStop.StatusCode);
+        var startOnStopError = (await Body(startOnStop)).GetProperty("errors");
+        Assert.Equal("ROUTE_STOP_TOO_CLOSE", startOnStopError.GetProperty("code").GetString());
+
         var routeDraft = new { requestId = Guid.NewGuid(), expectedCurrentRevision = 0, name = "Flow Route",
-            description = "API integration test", mapVersionId = mapId, startX = 0.5m, startY = 0.5m, startYaw = 0m,
+            description = "API integration test", mapVersionId = mapId, startX = 0.5m, startY = 1.5m, startYaw = 0m,
             endMode = "LAST_POI", endX = (decimal?)null, endY = (decimal?)null, endYaw = (decimal?)null,
-            stops = new[] { new { poiRevisionId, dwellSeconds = 10, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } } } };
+            stops = routeStops };
         using var createRoute = await Json(host.Client, HttpMethod.Post, "/api/staff/routes", staffToken, routeDraft);
         Assert.Equal(HttpStatusCode.OK, createRoute.StatusCode);
         var route = (await Body(createRoute)).GetProperty("data");

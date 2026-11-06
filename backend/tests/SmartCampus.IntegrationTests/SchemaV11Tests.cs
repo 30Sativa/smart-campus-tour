@@ -312,17 +312,24 @@ public sealed class SchemaV11Tests
         await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), proposal.Id, 1,
             new(Guid.NewGuid(), 1, proposal.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual POI PASS.")));
         var verifiedPoiNavigationFingerprint = proposal.Revision.NavigationFingerprint;
+        // A route needs at least two stops one metre apart (docs/lich-tour-theo-ca.md §2).
+        var lab = await sender.Send(new CreatePoiProposalCommand(Guid.Parse(Id(2)),
+            new(Guid.NewGuid(), new(map.Id, "Lab", "Lab", null, -0.5m, -1.5m, 0m, "FRONT", "Thuyết minh phòng lab", null))));
+        lab = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), lab.Id, new(Guid.NewGuid(), 1, lab.RowVersion)));
+        await sender.Send(new RecordPoiVerificationCommand(Guid.Parse(Id(1)), lab.Id, 1,
+            new(Guid.NewGuid(), 1, lab.RowVersion, "physical_1", "PASS", true, true, true, true, null, "Manual POI PASS.")));
+        RouteRevisionStopInput LabStop() => new(lab.Revision.Id, 30, [new("FRONT", 30)]);
 
         var draft1 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -1.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+            new(Guid.NewGuid(), 0, "Pilot", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal("NOT_TESTED", draft1.VerificationStatus);
         Assert.Contains(await sender.Send(new ListRouteTestParticipantsQuery()), person => person.UserId == participatingStaffId);
         Assert.Equal(map.PackageSha256, draft1.MapPackageSha256);
-        Assert.Equal("Nội dung thuyết minh", Assert.Single(draft1.Stops).NarrationText);
-        Assert.Equal(await db.ScalarAsync<Guid>($"SELECT Id FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId:D}';"),
+        Assert.Equal("Nội dung thuyết minh", draft1.Stops[0].NarrationText);
+        Assert.Equal(await db.ScalarAsync<Guid>($"SELECT Id FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId:D}' AND StopOrder=1;"),
             draft1.Stops[0].Id);
-        Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}';"));
+        Assert.Equal("Nội dung thuyết minh", await db.ScalarAsync<string>($"SELECT NarrationText FROM dbo.RouteRevisionStops WHERE RouteRevisionId='{draft1.RevisionId}' AND StopOrder=1;"));
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId, draft1.RevisionId,
             new(Guid.NewGuid(), 1)));
 
@@ -362,8 +369,8 @@ public sealed class SchemaV11Tests
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
         var secondRoute = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), null,
-            new(Guid.NewGuid(), 0, "Pilot Secondary", null, map.Id, -1.5m, -1.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+            new(Guid.NewGuid(), 0, "Pilot Secondary", null, map.Id, -1.5m, -0.5m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         using (var pageOneRequest = new HttpRequestMessage(HttpMethod.Get, "/api/routes?page=1&size=1&sort=name"))
         using (var pageTwoRequest = new HttpRequestMessage(HttpMethod.Get, "/api/routes?page=2&size=1&sort=name"))
         {
@@ -405,8 +412,8 @@ public sealed class SchemaV11Tests
         Assert.Equal("FAIL", failed.VerificationStatus);
 
         var draft2 = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 1, "Pilot", "Corrected start pose", map.Id, -1m, -1m, 0m, "POSE", -0.5m, -0.5m, 0m,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+            new(Guid.NewGuid(), 1, "Pilot", "Corrected start pose", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 30, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(2, draft2.RevisionNumber);
         Assert.Equal("NOT_TESTED", draft2.VerificationStatus);
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), draft2.RouteId, draft2.RevisionId,
@@ -416,7 +423,7 @@ public sealed class SchemaV11Tests
                 null, "Human-observed successful whole-route run.")));
         Assert.Equal("PASS", passed.VerificationStatus);
         Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", passed.DurationStatus);
-        Assert.Equal(30, passed.DwellDurationSeconds);
+        Assert.Equal(60, passed.DwellDurationSeconds);
 
         var tourActor = Guid.Parse(Id(2));
         var tourStart = TourSlot(4, 9);
@@ -439,20 +446,20 @@ public sealed class SchemaV11Tests
         Assert.Equal(tourStart.AddMinutes(-15), tourDetail.Reservation.StartsAt);
         Assert.Equal(tourStart.AddSeconds(260).AddMinutes(15), tourDetail.Reservation.EndsAt);
         Assert.Equal(260, tourDetail.Reservation.ExpectedDurationSeconds);
-        Assert.Equal(new[] { "Library" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
+        Assert.Equal(new[] { "Library", "Lab" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
         await sender.Send(new CancelTourCommand(tour.Id, tourActor, new(Guid.NewGuid(), tourDetail.Tour.RowVersion, "Rescheduling")));
         Assert.NotNull((await sender.Send(new GetTourQuery(tour.Id))).Reservation!.ReleasedAt);
         Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart)))).Id);
         Assert.NotEqual(tour.Id, later.Id);
 
         var dwellOnly = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 2, "Pilot", "Dwell adjustment only", map.Id, -1m, -1m, 0m, "POSE", -0.5m, -0.5m, 0m,
-                [new(proposal.Revision.Id, 45, [new("FRONT", 30)])])));
+            new(Guid.NewGuid(), 2, "Pilot", "Dwell adjustment only", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 45, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(3, dwellOnly.RevisionNumber);
         Assert.Equal("PASS", dwellOnly.VerificationStatus);
         Assert.Equal(passed.EffectiveTestRunId, dwellOnly.EffectiveTestRunId);
         Assert.Equal(passed.EffectiveTestRunId, Assert.Single(dwellOnly.TestRuns).Id);
-        Assert.Equal(45, dwellOnly.DwellDurationSeconds);
+        Assert.Equal(75, dwellOnly.DwellDurationSeconds);
         Assert.Equal("INCOMPLETE_CONTENT_AUDIO_DATA", dwellOnly.DurationStatus);
         await sender.Send(new SubmitRouteRevisionCommand(Guid.Parse(Id(2)), dwellOnly.RouteId, dwellOnly.RevisionId,
             new(Guid.NewGuid(), 3)));
@@ -559,8 +566,8 @@ public sealed class SchemaV11Tests
         proposal = await sender.Send(new SubmitPoiProposalCommand(Guid.Parse(Id(2)), proposal.Id,
             new(Guid.NewGuid(), 2, proposal.RowVersion)));
         var contentOnlyDraft = await sender.Send(new SaveRouteRevisionCommand(Guid.Parse(Id(2)), draft1.RouteId,
-            new(Guid.NewGuid(), 3, "Pilot", "Content wording update", map.Id, -1m, -1m, 0m, "POSE", -0.5m, -0.5m, 0m,
-                [new(proposal.Revision.Id, 45, [new("FRONT", 30)])])));
+            new(Guid.NewGuid(), 3, "Pilot", "Content wording update", map.Id, -1m, -0.4m, 0m, "POSE", -0.5m, -0.5m, 0m,
+                [new(proposal.Revision.Id, 45, [new("FRONT", 30)]), LabStop()])));
         Assert.Equal(4, contentOnlyDraft.RevisionNumber);
         Assert.Equal("FAIL", contentOnlyDraft.VerificationStatus);
         Assert.Equal(newerFail.EffectiveTestRunId, contentOnlyDraft.EffectiveTestRunId);
@@ -1539,6 +1546,7 @@ public sealed class SchemaV11Tests
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
             services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
             services.AddSingleton(new MapPoiSettings(null));
+            services.AddSingleton(new RouteRuleSettings(null, null));
             return services.BuildServiceProvider(validateScopes: true);
         }
 

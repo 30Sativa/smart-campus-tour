@@ -28,6 +28,23 @@ public sealed class TourReadySqlTests
     internal const string Robot = "amr_ready";
 
     [SchemaV11Fact]
+    public async Task ARevisionSavedBeforeTheStopRules_IsStillReadAndScheduled()
+    {
+        // docs/lich-tour-theo-ca.md §2: the rules apply when a revision is saved; one already saved with a
+        // single stop and a 3600 s dwell is not re-checked.
+        await using var h = await Harness.Create();
+        await h.Database.ExecuteAsync($"""
+            DELETE dbo.RouteRevisionStops WHERE RouteRevisionId = '{h.Route.RevisionId}' AND StopOrder = 2;
+            UPDATE dbo.RouteRevisionStops SET DwellSeconds = 3600 WHERE RouteRevisionId = '{h.Route.RevisionId}';
+            """);
+
+        var legacy = await h.Send(new GetRouteRevisionQuery(h.Route.RouteId, h.Route.RevisionId, false));
+        Assert.Equal(3600, Assert.Single(legacy.Stops).DwellSeconds);
+        Assert.Equal("PASS", legacy.VerificationStatus);
+        Assert.NotEqual(h.TourId, await h.CreateTour(h.Start.AddDays(1)));
+    }
+
+    [SchemaV11Fact]
     public async Task MarkReady_LocksTheTour_RecordsEventAndReceipt_AndTouchesNoRobot()
     {
         await using var h = await Harness.Create();
@@ -247,8 +264,9 @@ public sealed class TourReadySqlTests
             }
             await Send(new RecordMapDeploymentCommand(technicalId, map.Id, new(Guid.NewGuid(), Robot, map.PackageSha256, true, true, "Kiểm tra triển khai.")));
             var library = await VerifiedPoi(map.Id, "Thư viện", 1.5m, 1.5m);
-            var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]) };
-            if (twoStopsToEndPose) stops.Add(new(await VerifiedPoi(map.Id, "Phòng lab", 2.5m, 1.5m), 45, [new("FRONT", 45)]));
+            // Every route has two stops (docs/lich-tour-theo-ca.md §2); twoStopsToEndPose now only adds the end pose.
+            var stops = new List<RouteRevisionStopInput> { new(library, 30, [new("FRONT", 30)]),
+                new(await VerifiedPoi(map.Id, "Phòng lab", 2.5m, 1.5m), 45, [new("FRONT", 45)]) };
             var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến READY", null, map.Id, 2.5m, 2.5m, 0m,
                 twoStopsToEndPose ? "POSE" : "LAST_POI", twoStopsToEndPose ? 1.5m : null, twoStopsToEndPose ? 2.5m : null, twoStopsToEndPose ? 0m : null, stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));

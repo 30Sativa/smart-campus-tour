@@ -89,6 +89,8 @@ public static class DependencyInjection
         services.AddScoped<IRouteManagementTransaction, EfRouteManagementTransaction>();
         services.AddScoped<ITourManagementRepository, EfTourManagementRepository>();
         services.AddSingleton(_ => new MapPoiSettings(configuration.GetValue<decimal?>("Maps:PoiClearanceMeters")));
+        services.AddSingleton(_ => new RouteRuleSettings(configuration.GetValue<int?>("Routes:MinStops"),
+            configuration.GetValue<decimal?>("Routes:MinStopSeparationMeters")));
         services.AddSingleton(_ => new TourScheduleSettings(configuration.GetSection("Tours:StartSlots").Get<string[]>(),
             configuration["Tours:CustomStartEarliest"], configuration["Tours:CustomStartLatest"]));
 

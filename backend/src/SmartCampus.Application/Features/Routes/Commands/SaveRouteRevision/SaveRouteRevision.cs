@@ -14,7 +14,7 @@ public sealed record SaveRouteRevisionCommand(Guid ActorUserId, Guid? RouteId, R
     : IRouteMutationCommand<RouteRevisionView>;
 public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRevisionCommand>
 {
-    public RouteRevisionDraftValidator()
+    public RouteRevisionDraftValidator(RouteRuleSettings rules)
     {
         RuleFor(c => c.Input.RequestId).NotEmpty();
         RuleFor(c => c.Input.ExpectedCurrentRevision).GreaterThanOrEqualTo(0);
@@ -28,11 +28,14 @@ public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRev
         RuleFor(c => c.Input.EndX).Must(value => !value.HasValue || Route.Coordinate(value.Value));
         RuleFor(c => c.Input.EndY).Must(value => !value.HasValue || Route.Coordinate(value.Value));
         RuleFor(c => c.Input.EndYaw).Must(value => !value.HasValue || Route.Heading(value.Value));
-        RuleFor(c => c.Input.Stops).NotNull().Must(stops => stops is { Count: > 0 and <= 100 });
+        RuleFor(c => c.Input.Stops).NotNull()
+            .Must(stops => stops is not null && stops.Count >= rules.MinStops && stops.Count <= RouteRuleSettings.MaxStops)
+            .WithMessage($"Tuyến cần từ {rules.MinStops} đến {RouteRuleSettings.MaxStops} điểm dừng.");
         RuleForEach(c => c.Input.Stops).ChildRules(stop =>
         {
             stop.RuleFor(s => s.PoiRevisionId).NotEmpty();
-            stop.RuleFor(s => s.DwellSeconds).InclusiveBetween(1, 3600);
+            stop.RuleFor(s => s.DwellSeconds).InclusiveBetween(RouteRuleSettings.MinDwellSeconds, RouteRuleSettings.MaxDwellSeconds)
+                .WithMessage($"Thời gian dừng mỗi điểm phải từ {RouteRuleSettings.MinDwellSeconds} đến {RouteRuleSettings.MaxDwellSeconds} giây.");
             stop.RuleFor(s => s.HeadSteps).NotNull().Must(steps => steps is { Count: > 0 and <= 100 });
             stop.RuleForEach(s => s.HeadSteps).ChildRules(step =>
             {
@@ -55,7 +58,7 @@ public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRev
     }
 }
 
-public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, MapPoiSettings settings, TimeProvider clock)
+public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, MapPoiSettings settings, RouteRuleSettings rules, TimeProvider clock)
     : IRequestHandler<SaveRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SaveRouteRevisionCommand c, CancellationToken ct)
@@ -106,6 +109,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             if (string.IsNullOrWhiteSpace(selected.Revision.NarrationText))
                 throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
+        EnsureStopSeparation(i, poiIds.Select(id => byId[id].Revision).ToArray());
         var package = MapPackageValidator.Validate(map.PackageBytes);
         var previous = current?.MapVersionId == map.Id ? current : null;
         EnsureWrittenPose(package, i.StartX, i.StartY, i.StartYaw, previous?.StartX, previous?.StartY);
@@ -180,6 +184,31 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
                 inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], []);
+    }
+
+    // docs/lich-tour-theo-ca.md §2: the start, each consecutive pair of stops and a separate end pose must be
+    // MinStopSeparationMeters apart. An end pose on the start is "return to start" and is always allowed.
+    private void EnsureStopSeparation(RouteRevisionDraftInput i, IReadOnlyList<PoiProposalRevision> stops)
+    {
+        var min = rules.MinStopSeparationMeters;
+        foreach (var stop in stops)
+            if (rules.TooClose(i.StartX, i.StartY, stop.X, stop.Y))
+                throw TooClose($"Điểm bắt đầu cách điểm dừng {stop.Name} {Meters(i.StartX, i.StartY, stop.X, stop.Y)} m, cần ít nhất {min} m. Chọn điểm bắt đầu khác.");
+        for (var index = 1; index < stops.Count; index++)
+        {
+            var previous = stops[index - 1];
+            var stop = stops[index];
+            if (rules.TooClose(previous.X, previous.Y, stop.X, stop.Y))
+                throw TooClose($"Điểm dừng {previous.Name} và {stop.Name} cách nhau {Meters(previous.X, previous.Y, stop.X, stop.Y)} m, cần ít nhất {min} m.");
+        }
+        if (i.EndMode != "POSE" || i.EndX is not { } endX || i.EndY is not { } endY || (endX == i.StartX && endY == i.StartY)) return;
+        var last = stops[^1];
+        if (rules.TooClose(endX, endY, last.X, last.Y))
+            throw TooClose($"Điểm kết thúc cách điểm dừng cuối {last.Name} {Meters(endX, endY, last.X, last.Y)} m, cần ít nhất {min} m. Chọn \"Dừng tại điểm dừng cuối\" hoặc một vị trí xa hơn.");
+
+        static ConflictException TooClose(string message) => new(message, "ROUTE_STOP_TOO_CLOSE");
+        static string Meters(decimal ax, decimal ay, decimal bx, decimal by) =>
+            RouteRuleSettings.Distance(ax, ay, bx, by).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     // A pose kept from the current revision on the same map may predate the clearance rule; see PoiProposalRules.

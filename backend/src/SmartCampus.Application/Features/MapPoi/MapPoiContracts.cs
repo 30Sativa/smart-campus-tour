@@ -12,7 +12,8 @@ public sealed record MapVersionView(
 public sealed record MapVersionListItem(MapVersionView Map, MapDeploymentCheckView? LatestDeployment,
     string TechnicalCheckStatus, bool CanUseForPoiPreparation, string? PreparationBlockReasonCode,
     string? PreparationBlockReason, MapDeploymentCheckView? PreparationEvidence,
-    IReadOnlyList<CurrentlyDeployedRobot> CurrentlyDeployedOn, decimal PoiClearanceMeters);
+    IReadOnlyList<CurrentlyDeployedRobot> CurrentlyDeployedOn, decimal PoiClearanceMeters,
+    int RouteMinStops, decimal RouteMinStopSeparationMeters);
 
 public sealed record CurrentlyDeployedRobot(string RobotCode, DateTimeOffset CheckedAt);
 

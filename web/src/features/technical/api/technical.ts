@@ -93,6 +93,9 @@ export type MapVersionItem = {
   preparationEvidence: DeploymentCheck | null
   currentlyDeployedOn: Array<{ robotCode: string; checkedAt: string }>
   poiClearanceMeters: number
+  // Route rules sent with the map, like the clearance, so the form never hard-codes them (docs/lich-tour-theo-ca.md §2).
+  routeMinStops: number
+  routeMinStopSeparationMeters: number
 }
 
 export type PoiVerificationMethod = 'MANUAL_CHECK' | 'POSE_CAPTURE'

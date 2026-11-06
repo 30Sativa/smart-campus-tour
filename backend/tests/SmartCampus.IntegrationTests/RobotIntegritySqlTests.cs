@@ -360,11 +360,17 @@ public sealed class RobotIntegritySqlTests
 
         public async Task<RouteRevisionView> TestedRoute()
         {
-            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, "Thư viện", "Tham quan", null, 1.5m, 1.5m, 0m, "FRONT", "Đây là thư viện."))));
-            var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
-            await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+            // A route needs two stops one metre apart (docs/lich-tour-theo-ca.md §2).
+            var stops = new List<RouteRevisionStopInput>();
+            foreach (var (name, x) in new[] { ("Thư viện", 1.5m), ("Phòng lab", 2.5m) })
+            {
+                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT", "Đây là điểm tham quan."))));
+                var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
+                await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+                stops.Add(new(proposal.Revision.Id, 30, [new("FRONT", 30)]));
+            }
             var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến robot", null, pilotMap.Id, 2.5m, 2.5m, 0m, "LAST_POI", null, null, null,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+                stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
