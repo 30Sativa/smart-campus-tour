@@ -7,6 +7,22 @@ import { useUpdateAccount } from '../hooks'
 import { accountRequestError } from '../errors'
 import type { AccountListItem } from '../types'
 
+function LockedField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <dt className="text-xs text-[#64748b]">{label}</dt>
+      <dd className={`mt-1 flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f1f5f9] px-3 py-2 font-semibold text-[#64748b] ${mono ? 'font-mono' : ''}`}>
+        <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 fill-none stroke-current" strokeWidth="1.6">
+          <rect x="3" y="7" width="10" height="7" rx="1.5" />
+          <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+        </svg>
+        <span className="truncate">{value}</span>
+        <span className="sr-only">(không thể sửa)</span>
+      </dd>
+    </div>
+  )
+}
+
 /** Edits the full name only. Username (login identity) and role are shown read-only on purpose. */
 export function EditAccountDialog({ account, onClose, onSaved }: { account: AccountListItem; onClose: () => void; onSaved: () => void }) {
   const formRef = useRef<HTMLFormElement>(null)
@@ -31,8 +47,8 @@ export function EditAccountDialog({ account, onClose, onSaved }: { account: Acco
   return (
     <ConfirmationDialog
       open
-      title="Sửa tài khoản"
-      description="Chỉ họ tên có thể sửa. Tên đăng nhập là định danh đăng nhập và vai trò gắn với dữ liệu của tài khoản, nên không đổi tại đây."
+      title="Sửa họ tên"
+      description="Tên đăng nhập là định danh đăng nhập, còn vai trò gắn với dữ liệu của tài khoản, nên cả hai được khóa sau khi tạo."
       confirmLabel="Lưu"
       busyLabel="Đang lưu…"
       busy={update.isPending}
@@ -44,9 +60,10 @@ export function EditAccountDialog({ account, onClose, onSaved }: { account: Acco
       <form ref={formRef} onSubmit={submit} noValidate className="space-y-4">
         {update.isError && <Notice tone="danger">{accountRequestError(update.error, 'Không thể cập nhật tài khoản. Vui lòng thử lại.')}</Notice>}
         <dl className="grid grid-cols-2 gap-3 text-[13px]">
-          <div><dt className="text-xs text-[#64748b]">Tên đăng nhập</dt><dd className="font-mono font-semibold text-[#1e293b]">{account.username}</dd></div>
-          <div><dt className="text-xs text-[#64748b]">Vai trò</dt><dd className="font-semibold text-[#1e293b]">{account.role === 'TechnicalStaff' ? 'Technical Staff' : account.role}</dd></div>
+          <LockedField label="Tên đăng nhập" value={account.username} mono />
+          <LockedField label="Vai trò" value={account.role === 'TechnicalStaff' ? 'Technical Staff' : account.role ?? '-'} />
         </dl>
+        <p className="text-xs leading-5 text-[#64748b]">Tạo nhầm tên đăng nhập hoặc vai trò? Vô hiệu hóa tài khoản này rồi tạo tài khoản mới.</p>
         <div>
           <label htmlFor="edit-account-full-name" className={labelClass}>Họ tên</label>
           <input

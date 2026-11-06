@@ -7,12 +7,30 @@ import { campusDate, campusDay, campusTime } from '../../features/administration
 import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 import { useFleetConnection, useFleetTelemetry } from '../../features/staff/operations/fleet-telemetry'
 import { RECONCILE_HEADLINE, RECONCILE_HINT } from '../../features/staff/operations/attention'
-import { useDayTours, useRunningTours, useToursNeedingReconcile } from '../../features/staff/operations/hooks'
+import { isTourStale, useDayTours, useRunningTours, useToursNeedingReconcile } from '../../features/staff/operations/hooks'
+import { useNow } from '../../features/staff/use-now'
 import { DayTours } from '../../features/staff/operations/DayTours'
 import { STEP_LABEL, assistanceInfo, commandStateInfo } from '../../features/staff/operations/operation-labels'
 import { ToneBadge } from '../../features/staff/operations/OperationParts'
 
-const CONNECTION_TEXT = { connecting: 'Đang kết nối kênh telemetry…', connected: 'Kênh telemetry đang kết nối.', reconnecting: 'Đang kết nối lại kênh telemetry…', disconnected: 'Mất kết nối kênh telemetry, đang thử lại.' } as const
+const CONNECTION_TEXT = { connecting: 'Đang kết nối kênh robot…', connected: 'Kênh robot đang nhận báo cáo.', reconnecting: 'Đang kết nối lại kênh robot…', disconnected: 'Mất kết nối kênh robot, đang thử lại.' } as const
+
+type Read = { isRefetchError: boolean; dataUpdatedAt: number }
+
+/**
+ * When the Tour data on this page was last read, and whether it may be out of
+ * date. Tours are polled, not pushed, so the robot channel's state says nothing
+ * about them. Uses the oldest of the reads the page is built from.
+ */
+function TourFreshness({ reads, now }: { reads: Read[]; now: number }) {
+  const done = reads.filter(read => read.dataUpdatedAt > 0)
+  if (done.length === 0) return null
+  const oldest = Math.min(...done.map(read => read.dataUpdatedAt))
+  const at = campusTime(new Date(oldest).toISOString())
+  return reads.some(read => isTourStale(read, now))
+    ? <p role="status" className="mb-3 text-xs font-semibold text-[#7d5310]">Dữ liệu Tour có thể đã cũ: lần đọc thành công cuối lúc {at}. Đang thử lại.</p>
+    : <p role="status" className="mb-3 text-xs text-[#64748b]">Dữ liệu Tour đọc lúc {at}, tự cập nhật.</p>
+}
 
 /**
  * Today at a glance, from real data only: the day's Tours, the running ones with
@@ -26,6 +44,7 @@ export default function OverviewPage() {
   const ended = useToursNeedingReconcile()
   const fleet = useFleetTelemetry()
   const connection = useFleetConnection(store => store.state)
+  const now = useNow(5_000)
   const list = tours.data?.data ?? []
   const known = tours.isSuccess
   const assistance = running.tours.filter(detail => detail.execution?.operationalStatus === 'NEEDS_ASSISTANCE')
@@ -35,6 +54,8 @@ export default function OverviewPage() {
     <StaffPage>
       <PageHeader eyebrow="Vận hành" title="Tổng quan vận hành" description={`Ngày ${campusDate(`${today}T05:00:00Z`)}. Số liệu đọc từ hệ thống, không có dữ liệu minh họa.`}
         action={<Link to="/staff/schedule" className={buttonClass('secondary')}><CalendarDays size={15} aria-hidden="true" />Xem lịch</Link>} />
+
+      <TourFreshness reads={[running.list, tours]} now={now} />
 
       {assistance.length > 0 && <section aria-label="Tour cần hỗ trợ" className="mb-4 space-y-2">{assistance.map(detail => {
         const reason = assistanceInfo(detail.execution?.assistanceReason)
@@ -53,7 +74,6 @@ export default function OverviewPage() {
       <KpiRow label="Tình hình hôm nay">
         <KpiTile label="Tour hôm nay" value={known ? list.length : '-'} />
         <KpiTile label="Đang diễn ra" value={running.list.isSuccess ? running.tours.length : '-'} />
-        <KpiTile label="Cần hỗ trợ" value={running.list.isSuccess ? assistance.length : '-'} tone={assistance.length ? 'danger' : 'plain'} />
         <KpiTile label="Đã kết thúc hôm nay" value={known ? list.filter(tour => tour.state === 'COMPLETED').length : '-'} />
       </KpiRow>
 

@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../../stores/auth-store'
 import StaffShell from './StaffShell'
-import { STAFF_NAV } from './staff-nav'
+import { REGISTRATIONS_NAV_PATH, STAFF_NAV, activeNavPath } from './staff-nav'
 import { useTourOriginStore } from './operations/tour-origin'
 
 function renderShell(role = 'Staff', path = '/staff') {
@@ -12,7 +12,40 @@ function renderShell(role = 'Staff', path = '/staff') {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[path]}><Routes><Route path="/staff" element={<StaffShell />}><Route index element={<h1>Tình hình điều hành</h1>} /><Route path="schedule" element={<h1>Lịch và phiên tour</h1>} /><Route path="tours/:id" element={<h1>Chi tiết tour</h1>} /></Route><Route path="/" element={<h1>Trang chủ</h1>} /></Routes></MemoryRouter></QueryClientProvider>)
 }
 
-afterEach(() => { useAuthStore.getState().logout(); useTourOriginStore.setState({ origin: null }) })
+afterEach(() => { useAuthStore.getState().logout(); useTourOriginStore.setState({ origin: null }); vi.unstubAllGlobals() })
+
+const RUNNING_TOUR = {
+  id: 'tour-run', name: 'Tour đang chạy', description: null, routeId: 'r', routeName: 'Tuyến', activeRouteId: 'r', scheduledStartAt: '2026-11-06T02:00:00Z',
+  state: 'RUNNING', createdByUserId: 'u', createdAt: '2026-11-01T00:00:00Z', updatedAt: null, rowVersion: 'v', registrationCount: 1, invitationCount: 1, routeRevisionId: 'rev',
+  execution: { operationalStatus: 'NORMAL', assistanceReason: null, currentStep: 'NAVIGATING', commandState: 'ACCEPTED', needsReconcile: false },
+}
+
+describe('StaffShell on every page', () => {
+  it('keeps the running Tour and the robot channel in view on a preparation page', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost')
+      const running = url.pathname === '/api/staff/manage/tours' && url.searchParams.get('phase') === 'RUNNING'
+      return new Response(JSON.stringify({ success: true, data: running ? [RUNNING_TOUR] : [], pagination: { page: 1, pageSize: 20, totalItems: running ? 1 : 0, totalPages: 1 } }), { status: 200 })
+    }))
+    useAuthStore.getState().setAuth('test-token', { userId: 'test-user', username: 'staff', role: 'Staff' })
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={['/staff/manage/pois']}><Routes>
+      <Route path="/staff" element={<StaffShell />}><Route path="manage/pois" element={<h1>POI</h1>} /></Route>
+    </Routes></MemoryRouter></QueryClientProvider>)
+    expect(await screen.findByRole('link', { name: /Đang chạy Tour đang chạy\. Mở điều hành trực tiếp/ })).toHaveAttribute('href', '/staff/live/tour-run')
+    // The chip names the robot channel, not the freshness of the Tour data.
+    expect(screen.getByText(/^Kênh robot: /)).toBeInTheDocument()
+    expect(screen.queryByText(/Telemetry:/)).not.toBeInTheDocument()
+  })
+
+  it('opens registrations on the pending queue its badge counts, and lights it for both views', () => {
+    renderShell()
+    const nav = screen.getByRole('navigation', { name: 'Điều hướng vận hành' })
+    expect(within(nav).getByRole('link', { name: /Đăng ký đoàn/ })).toHaveAttribute('href', '/staff/manage/registrations/pending')
+    expect(activeNavPath('/staff/manage/registrations')).toBe(REGISTRATIONS_NAV_PATH)
+    expect(activeNavPath('/staff/manage/registrations/pending')).toBe(REGISTRATIONS_NAV_PATH)
+    expect(activeNavPath('/staff/manage')).toBe('/staff/manage')
+  })
+})
 
 describe('StaffShell', () => {
   it('shows the active page and no cross-link to administration', () => {

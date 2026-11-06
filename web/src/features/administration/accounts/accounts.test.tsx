@@ -170,6 +170,33 @@ describe('Admin Account Management', () => {
     expect(screen.queryByText(/System\.InvalidOperationException|stack trace/i)).toBeNull()
   })
 
+  it('edits only the full name, showing username and role as locked', async () => {
+    let updatedPayload: unknown
+    const fetchMock = stubApi((url, init) => {
+      if (url.pathname === '/api/admin/accounts/staff-id' && init?.method === 'PUT') {
+        updatedPayload = JSON.parse(String(init.body)) as unknown
+        return jsonResponse({ success: true, message: 'Account updated.', data: { ...staff, fullName: 'Renamed Staff' }, errors: null })
+      }
+      return jsonResponse(paged([staff]))
+    })
+    renderPage()
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Sửa họ tên staff.user' }))[0])
+    const dialog = await screen.findByRole('dialog', { name: 'Sửa họ tên' })
+    expect(within(dialog).getByText('staff.user')).toBeInTheDocument()
+    expect(within(dialog).getAllByText('(không thể sửa)')).toHaveLength(2)
+    expect(within(dialog).queryByRole('textbox', { name: /Tên đăng nhập/ })).toBeNull()
+    expect(within(dialog).queryByRole('combobox')).toBeNull()
+    expect(within(dialog).getByText(/Vô hiệu hóa tài khoản này rồi tạo tài khoản mới/)).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: '  Renamed Staff  ' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+
+    await waitFor(() => expect(requestExists(fetchMock, (url, init) => url.pathname === '/api/admin/accounts/staff-id' && init?.method === 'PUT')).toBe(true))
+    expect(updatedPayload).toEqual({ fullName: 'Renamed Staff' })
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã cập nhật tài khoản staff.user')
+  })
+
   it('confirms managed-account lifecycle actions and keeps Admin/invalid-role rows read-only', async () => {
     const fetchMock = stubApi((_url, init) => {
       if (init?.method === 'POST') return jsonResponse({ success: true, message: 'Updated.', data: null, errors: null })

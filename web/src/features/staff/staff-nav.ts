@@ -13,6 +13,10 @@ import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-na
  * guard. Kept in its own module so the access matrix can list the area's pages
  * without pulling in the whole shell.
  */
+/** The registrations entry: the pending queue, which is what its badge counts. */
+export const REGISTRATIONS_NAV_PATH = '/staff/manage/registrations/pending'
+const REGISTRATIONS_AREA = '/staff/manage/registrations'
+
 export const STAFF_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Vận hành',
@@ -31,7 +35,8 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
       { label: 'Tổng quan chuẩn bị', path: '/staff/manage', icon: ClipboardList },
       { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
       { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
-      { label: 'Đăng ký đoàn', path: '/staff/manage/registrations', icon: ClipboardCheck },
+      // Opens the queue its badge counts; "Tất cả đăng ký" is a tab of that page.
+      { label: 'Đăng ký đoàn', path: REGISTRATIONS_NAV_PATH, icon: ClipboardCheck },
     ],
   },
   {
@@ -54,6 +59,8 @@ export const STAFF_NAV: NavItem[] = STAFF_NAV_SECTIONS.flatMap((section) => sect
 export function activeNavPath(pathname: string): string | null {
   // Creating a Tour starts from the calendar, and the old list address now redirects there.
   if (pathname === '/staff/manage/tours' || pathname.startsWith('/staff/manage/tours/')) return '/staff/schedule'
+  // Both registration views (pending and all) belong to the one entry.
+  if (pathname === REGISTRATIONS_AREA || pathname.startsWith(`${REGISTRATIONS_AREA}/`)) return REGISTRATIONS_NAV_PATH
   let best: string | null = null
   for (const { path } of STAFF_NAV) {
     const match = path === '/staff' ? pathname === '/staff' || pathname === '/staff/' : pathname === path || pathname.startsWith(`${path}/`)

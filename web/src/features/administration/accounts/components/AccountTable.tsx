@@ -54,9 +54,9 @@ function AccountAction({ account, onAction, onEdit }: { account: AccountListItem
   if (account.role === null) return <span className="text-xs text-[#94a3b8]">-</span>
   const action: AccountLifecycleAction = account.isActive ? 'deactivate' : 'reactivate'
   return (
-    <span className="inline-flex gap-1.5">
-      <button type="button" onClick={() => onEdit(account)} className={buttonClass('secondary', 'sm')} aria-label={`Sửa ${account.username}`}>
-        Sửa
+    <span className="inline-flex items-center justify-center gap-1.5">
+      <button type="button" onClick={() => onEdit(account)} className={buttonClass('secondary', 'sm')} aria-label={`Sửa họ tên ${account.username}`}>
+        Sửa họ tên
       </button>
       <button
         type="button"
@@ -77,7 +77,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction, onEdit
         <thead className="border-b border-[#e2e8f0] bg-[#f8fafc]">
           <tr>
             {SORT_COLUMNS.map((column) => <SortHeading key={column.field} {...column} sort={sort} onSort={onSort} />)}
-            <th scope="col" className={thClass}>Thao tác</th>
+            <th scope="col" className={`${thClass} text-center`}>Thao tác</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[#eef1f4]">
@@ -89,7 +89,7 @@ export function AccountTable({ accounts, sort, onSort, onLifecycleAction, onEdit
               <td className={tdClass}><AdminStatusBadge status={account.isActive ? 'account-active' : 'account-inactive'} /></td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.createdAt)}</td>
               <td className={`${tdClass} whitespace-nowrap text-xs text-[#64748b]`}>{formatStamp(account.updatedAt)}</td>
-              <td className={`${tdClass} text-right`}><AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} /></td>
+              <td className={`${tdClass} text-center`}><AccountAction account={account} onAction={onLifecycleAction} onEdit={onEdit} /></td>
             </tr>
           ))}
         </tbody>
