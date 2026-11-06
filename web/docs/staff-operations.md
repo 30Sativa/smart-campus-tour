@@ -20,7 +20,8 @@ Two vocabularies are kept apart on every screen:
 
 | Route | Screen | Backend |
 |---|---|---|
-| `/staff` | Tổng quan vận hành, the day page: Tours needing assistance or a reconcile, today's counts, running Tours with step and command state, robot telemetry, then today's Tours filtered by state (`?view=`) with one next step each, and the not-ended Tours of the next 7 days ("Sắp tới") | `GET /api/staff/manage/tours` (today, the 7 days after, `phase=RUNNING`), Tour detail, `/hubs/operations` |
+| `/staff` | Tổng quan, the one Staff home, ordered by urgency. "Bây giờ": Tours needing assistance or a reconcile, then the running Tours with step, command state and robot (or one line naming the next Tour today). Then today's Tours filtered by state (`?view=`), each with its held robot's own report ("Đang báo cáo" / "Báo cáo cũ" / "Chưa báo cáo", never "ready") and one next step, beside the preparation queue: registrations waiting (oldest first, with calendar time waited; "Xem & duyệt" opens the review drawer here via `?review=`), SCHEDULED Tours to make READY, POIs Staff must finish (draft or failed; those waiting for Technical are only counted). The queue folds to one line while anything needs a person now. Below: robot reports and the not-ended Tours of the next 7 days. A freshness line says when Tour data was read | `GET /api/staff/manage/tours` (today, the 7 days after, `phase=RUNNING`, `state=SCHEDULED`), `GET /api/staff/manage/registrations?state=SUBMITTED`, `GET /api/staff/poi-proposals`, `/hubs/operations` |
+| `/staff/manage` | Redirect to `/staff` with its query: "Tổng quan chuẩn bị" merged into the home on 2026-11-07 | — |
 | `/staff/tours` | Redirect to `/staff` with its query: "Buổi hôm nay" merged into the overview on 2026-11-05 | — |
 | `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
 | `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
@@ -122,6 +123,29 @@ Done since the first M2 console, listed so these rows are not re-opened:
   Technical Staff only, ADR-0043 D13).
 - Operator console presence: `operatorConsoleConnected` counts the Operator's
   `/hubs/operations` connections.
+
+## One Staff home (2026-11-07)
+
+- The operations overview and the preparation overview were two dashboards for
+  the same role. They are one home at `/staff`; `/staff/manage` redirects there.
+- Navigation: Vận hành (Tổng quan, Điều hành trực tiếp, Robot & thiết bị),
+  Tour & đăng ký (Lịch Tour, Đăng ký đoàn), Nội dung tham quan (POI, tuyến),
+  Lịch sử. "Đăng ký đoàn" opens the pending queue its badge counts.
+- The running-Tour card and the robot channel chip show on every Staff page.
+- Since the same day's API additions (`docs/architecture.md`, Tour list row):
+  - "Chỉ Tour tôi vận hành" (`?mine=1`) narrows the running, today and next-7-day
+    lists to the signed-in account's Tours, from each row's `operator`. Alerts
+    are never filtered. Rows and alerts say who operates ("Bạn vận hành" /
+    "Vận hành: …").
+  - The queue's "Tour chưa chốt" rows show the server's READY blockers
+    (`readyBlockers=true`, page of 5).
+  - Tours needing a reconcile are read with `needsReconcile=true` instead of
+    scanning the newest finished Tours; the row flag is still checked.
+  - `TourUpdated` on `/hubs/operations` makes every open Staff screen re-read
+    Tours at once; the existing polling stays as the fallback.
+- Not done, waiting for a decision: an incident record (safety stop) beyond
+  NEEDS_ASSISTANCE, and a working-day calendar for the 2-working-day review
+  target (the queue shows calendar time waited and says so).
 
 ## Staff interface update (2026-10-30)
 

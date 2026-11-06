@@ -23,7 +23,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
         // The leg command FindLegCommandAsync reads, as subqueries of this one statement.
         new TourExecutionSummary(t.OperationalStatus, t.AssistanceReason, t.CurrentStep,
             t.RobotCommands.Where(c => c.LegId == t.CurrentLegId && c.Kind == RobotCommandKinds.GoTo).Select(c => c.State).FirstOrDefault(),
-            t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown)));
+            t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown)),
+        // The assigned Operator (ADR-0034); a legacy Tour has none. CreatedByUserId is attribution, never this.
+        t.OperatorUser == null ? null : new RouteTestParticipantView(t.OperatorUser.Id, t.OperatorUser.FullName, t.OperatorUser.Username));
 
     public Task LockRequestAsync(Guid actor, Guid requestId, CancellationToken ct)
     {
@@ -60,6 +62,9 @@ public sealed class EfTourManagementRepository(ApplicationDbContext db) : ITourM
             TourPhases.Finished => query.Where(t => t.State == "COMPLETED" || t.State == "ENDED" || t.State == "CANCELLED"),
             _ => query
         };
+        if (request.OperatorUserId is { } operatorUserId) query = query.Where(t => t.OperatorUserId == operatorUserId);
+        if (request.NeedsReconcile)
+            query = query.Where(t => t.RobotCommands.Any(c => c.Kind == RobotCommandKinds.GoTo && c.State == RobotCommandStates.Unknown));
         if (request.From.HasValue) query = query.Where(t => t.ScheduledStartAt >= request.From.Value);
         if (request.To.HasValue) query = query.Where(t => t.ScheduledStartAt <= request.To.Value);
         var count = await query.LongCountAsync(ct);

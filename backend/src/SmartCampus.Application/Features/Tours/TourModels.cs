@@ -7,8 +7,14 @@ public sealed record TourInput(string Name, string? Description, Guid RouteId,
     DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
 public sealed record CreateTourInput(string Name, string? Description, Guid RouteRevisionId, string RobotCode,
     Guid OperatorUserId, DateTimeOffset ScheduledStartAt, string? FallbackVideoUrl);
+/// <summary>
+/// <see cref="OperatorUserId"/> keeps the Tours that account operates; <see cref="NeedsReconcile"/> keeps the Tours with an
+/// UNKNOWN GoTo, in any state. <see cref="IncludeReadyBlockers"/> evaluates READY for each SCHEDULED row of the page, the
+/// same advisory read as the Tour detail, so the page size is capped (see the validator).
+/// </summary>
 public sealed record TourListRequest(string? Search, string Sort, int Page, int Size,
-    string? State, DateTimeOffset? From, DateTimeOffset? To, string? Phase = null, DateTimeOffset Now = default);
+    string? State, DateTimeOffset? From, DateTimeOffset? To, string? Phase = null, DateTimeOffset Now = default,
+    Guid? OperatorUserId = null, bool NeedsReconcile = false, bool IncludeReadyBlockers = false);
 /// <summary>The Staff list's groupings of Tour state; a single <see cref="TourListRequest.State"/> cannot express them.</summary>
 public static class TourPhases
 {
@@ -20,7 +26,8 @@ public sealed record TourSummary(Guid Id, string Name, string? Description, Guid
     Guid ActiveRouteId, DateTimeOffset ScheduledStartAt, string State, Guid CreatedByUserId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt, string RowVersion,
     int RegistrationCount, int InvitationCount, Guid? RouteRevisionId, TourReservationView? Reservation = null,
-    TourExecutionSummary? Execution = null);
+    TourExecutionSummary? Execution = null, RouteTestParticipantView? Operator = null,
+    IReadOnlyList<ConflictBlocker>? ReadyBlockers = null);
 /// <summary>
 /// Read-only situation of a Tour for list rows. <see cref="CommandState"/> is the current leg's GoTo, the command
 /// <c>GetTour</c> shows. <see cref="NeedsReconcile"/> is true while any GoTo of the Tour is UNKNOWN, in any Tour state.

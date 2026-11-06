@@ -65,6 +65,17 @@ describe('fleet telemetry from /hubs/operations', () => {
     expect(hub.stop).toHaveBeenCalled()
     expect(hub.handlers.has('FleetUpdated')).toBe(false)
   })
+
+  it('re-reads the Tours on screen when the hub says a Tour changed, and stops listening on unmount', async () => {
+    useAuthStore.getState().setAuth('jwt-1', { userId: 'u', username: 'lan', role: 'Staff' })
+    const client = new QueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const view = render(<QueryClientProvider client={client}><Probe /></QueryClientProvider>)
+    act(() => hub.handlers.get('TourUpdated')?.())
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['admin', 'tour-management'] })
+    view.unmount()
+    expect(hub.handlers.has('TourUpdated')).toBe(false)
+  })
 })
 
 describe('a hub that cannot be created', () => {

@@ -19,6 +19,10 @@ public static class FleetSyncExtensions
         services.AddSingleton<HubOperatorConsolePresence>();
         services.AddSingleton<SmartCampus.Application.Common.Abstractions.FleetSync.IOperatorConsolePresence>(provider => provider.GetRequiredService<HubOperatorConsolePresence>());
         services.AddHostedService<FleetFreshnessMonitor>();
+        // Replaces the Application default: Tour commands tell the consoles to re-read (TourUpdated).
+        services.AddSingleton<TourChangeBroadcaster>();
+        services.AddSingleton<SmartCampus.Application.Common.Abstractions.Tours.ITourChangeNotifier>(provider => provider.GetRequiredService<TourChangeBroadcaster>());
+        services.AddHostedService(provider => provider.GetRequiredService<TourChangeBroadcaster>());
         services.AddAuthorization(options => options.AddPolicy(
             FleetOperationsAuthorization.StaffPolicy,
             policy => policy.RequireRole(ApplicationRoles.Staff)));

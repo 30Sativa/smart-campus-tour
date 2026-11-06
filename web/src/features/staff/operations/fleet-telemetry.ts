@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { createHubConnection } from '../../../api/signalr'
 import type { RealtimeConnectionState } from '../../../api/contracts/staff-realtime'
 import { useAuthStore } from '../../../stores/auth-store'
+import { tourKeys } from '../../administration/tours/hooks'
 
 /**
  * Live robot telemetry from the Staff-only `/hubs/operations` SignalR hub
@@ -41,6 +42,8 @@ export type FleetSnapshot = { robots: FleetRobot[]; receivedAt: number }
 export type FleetConnection = RealtimeConnectionState
 
 export const FLEET_HUB_PATH = '/hubs/operations'
+/** Sent by the hub after a Tour command commits; carries nothing (docs/architecture.md §3.1.2). */
+export const TOUR_UPDATED = 'TourUpdated'
 const fleetKey = ['staff', 'fleet-telemetry'] as const
 const RESTART_MS = 5_000
 
@@ -82,14 +85,20 @@ export function useFleetTelemetrySync() {
     connection.on('FleetUpdated', (robots: unknown) => {
       if (Array.isArray(robots)) client.setQueryData<FleetSnapshot>(fleetKey, { robots: robots as FleetRobot[], receivedAt: Date.now() })
     })
+    // A Tour command committed somewhere (TourUpdated has no payload): re-read the Tours on screen now instead of at
+    // the next poll. Polling stays as the fallback, since a signal may be coalesced or lost.
+    const refreshTours = () => void client.invalidateQueries({ queryKey: tourKeys.all })
+    connection.on(TOUR_UPDATED, refreshTours)
     connection.onreconnecting(() => setState('reconnecting'))
-    connection.onreconnected(() => setState('connected'))
+    // Signals sent while the socket was down are gone, so catch up once.
+    connection.onreconnected(() => { setState('connected'); refreshTours() })
     connection.onclose(() => { if (!disposed) { setState('disconnected'); schedule() } })
     start()
     return () => {
       disposed = true
       window.clearTimeout(restart)
       connection.off('FleetUpdated')
+      connection.off(TOUR_UPDATED)
       void connection.stop()
     }
   }, [client, setState])

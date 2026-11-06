@@ -52,7 +52,7 @@ branch-request endpoint is implemented here.
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null, and a read-only `execution` summary (additive; the detail's `tour` carries it too): `operationalStatus`, `assistanceReason`, `currentStep`, `commandState` (the current leg's GoTo state, the command the detail's `execution.command` shows, or null) and `needsReconcile` (true while any GoTo of the Tour is UNKNOWN, also after End Early, until Reconcile or a late result closes it). Read in the same list query; it changes no Tour or command. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. |
+| GET | `/api/staff/manage/tours` | Each row carries its active `reservation`, or null, and a read-only `execution` summary (additive; the detail's `tour` carries it too): `operationalStatus`, `assistanceReason`, `currentStep`, `commandState` (the current leg's GoTo state, the command the detail's `execution.command` shows, or null) and `needsReconcile` (true while any GoTo of the Tour is UNKNOWN, also after End Early, until Reconcile or a late result closes it). Read in the same list query; it changes no Tour or command. Paged list: search name/description/Route name; state; `phase` (`UPCOMING` = SCHEDULED/READY with a future start, `RUNNING`, `FINISHED` = COMPLETED/ENDED/CANCELLED); from/to inclusive schedule instants; sort `name`, `-name`, `scheduledStartAt`, `-scheduledStartAt`, `createdAt`, `-createdAt` (default scheduledStartAt); page >= 1, size 1–100. Non-empty expand rejected. Since 2026-11-07 (additive): each row carries `operator` (`userId`, `fullName`, `username` of the assigned Operator, null for a legacy Tour; never CreatedByUserId); `operator=me` keeps the caller's own Tours (any other value is 400); `needsReconcile=true` keeps Tours with an UNKNOWN GoTo in any state; `readyBlockers=true` adds `readyBlockers` (the detail's `permissions.readyBlockers`, same advisory checks without locks) to SCHEDULED rows, other rows null, and is 400 above size 10. |
 | GET | `/api/staff/manage/tours/{id}` | Tour summary plus base/active Route details using the existing Route contract, usage and permissions; no roster/contact/code data. `permissions` adds `canMarkReady`, `canReopen` and `readyBlockers` (`[{code, message}]`, Vietnamese message): the READY conditions evaluated now, without locks. `execution` gives state, operationalStatus, assistanceReason, currentStep, the current leg, the stop ids, dwellDeadlineAt (display only) and the leg's command. `allowedActions` (`start`, `next`, `endEarly`, `retryLeg`, `reconcile`) are `{allowed, reason, blockedBy}` for the caller, advisory until rechecked under locks. |
 | GET | `/api/staff/manage/tours/slots` | `routeRevisionId`, `robotCode`, `from`, `to` (Vietnam dates, at most 31 days), optional `time=HH:mm` to judge a typed start beside the slots (ADR-0036). Returns `customStartEarliest`/`customStartLatest`. Per day and configured slot: `available`, or `reasonCode` (`OUTSIDE_START_HOURS`, `LEAD_TIME_TOO_SHORT`, `RESERVATION_OVERLAP`, `ROUTE_TOO_LONG_FOR_GAP`, `ROUTE_TEST_REMEASURE_REQUIRED`) with Vietnamese `reason`, plus the reservation window and registration close. Same calculation as create (ADR-0035). |
 | GET | `/api/admin/system-audit-logs` | Admin only. Paged audit entries, newest first, filtered by `action`, `actor`, `from`, `to`. Safe columns only, never `DataJson`. |
@@ -912,6 +912,7 @@ can lag by one interval. Hub connections close when the Staff-role JWT expires.
 Account deactivation does not immediately revoke an already-issued JWT; it
 remains valid until expiry under current API authentication. Its legacy
 `connectionState: Live|Stale` describes recent HTTPS sync, not an open socket.
+`TourUpdated` (no payload, since 2026-11-07) follows any committed command of the Tours feature, robot command reports included. It is a hint to re-read Tours, coalesced to at most one send per second and possibly lost; clients keep polling as the fallback and re-read after reconnecting. A `tourId`/revision payload remains planned.
 `syncFresh`, `poseFresh`, execution status, `localized`, and `motionReady`
 remain separate. Neither a new sync nor a pose sample implies localization or
 motion readiness. No command is emitted by v1.
@@ -1687,8 +1688,8 @@ Backend-to-browser realtime uses the Staff-authorized `/hubs/operations`
 boundary. `FleetUpdated` now carries the current fleet telemetry projection on
 connect, after new sync reports, and when freshness changes. The backend
 projection matches the existing `AmrStatus` shape and adds explicit sync/pose
-freshness and readiness fields. `TourUpdated(tourId, revision)` and
-`AssistanceRequired` remain planned events. The web still selects its mock
+freshness and readiness fields. `TourUpdated` is sent without payload as a re-read hint (§3.1.2); its
+`(tourId, revision)` payload and `AssistanceRequired` remain planned. The web still selects its mock
 realtime provider; wiring production auth, reconnect/refetch, and Staff data
 flows is separate work. This decision does not approve or implement the
 proposed staff/admin HTTP APIs in `web/src/api/contracts/staff.ts` and

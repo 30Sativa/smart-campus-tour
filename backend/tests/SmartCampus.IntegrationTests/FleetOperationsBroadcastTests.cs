@@ -158,6 +158,38 @@ public sealed class FleetOperationsBroadcastTests
         Assert.True(Assert.Single(sends[1]).TelemetryAgeSeconds > Assert.Single(sends[0]).TelemetryAgeSeconds);
     }
 
+    [Fact]
+    public async Task TourChanges_AreSentAsOneTourUpdatedWithoutPayload_AndCoalescedWithinTheGap()
+    {
+        var sends = new List<(string Method, int Args)>();
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proxy = new TestClientProxy((method, args, _) =>
+        {
+            lock (sends) sends.Add((method, args.Length));
+            (sends.Count == 1 ? first : second).TrySetResult();
+            return Task.CompletedTask;
+        });
+        var broadcaster = new TourChangeBroadcaster(new TestHubContext(proxy), NullLogger<TourChangeBroadcaster>.Instance);
+        using var stopping = new CancellationTokenSource();
+        // Five commits before the sender runs are one pending signal.
+        for (var i = 0; i < 5; i++) broadcaster.TourChanged();
+        await broadcaster.StartAsync(stopping.Token);
+        try
+        {
+            await first.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            // Signals inside the gap after a send are kept as one, and sent once the gap has passed.
+            for (var i = 0; i < 5; i++) broadcaster.TourChanged();
+            await second.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await Task.Delay(TourChangeBroadcaster.MinimumGap + TimeSpan.FromMilliseconds(300));
+            lock (sends) Assert.Equal([(TourChangeBroadcaster.EventName, 0), (TourChangeBroadcaster.EventName, 0)], sends);
+        }
+        finally
+        {
+            await broadcaster.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static FleetOperationsBroadcaster CreateBroadcaster(
         IClientProxy client,
         IFleetTelemetryStore store,

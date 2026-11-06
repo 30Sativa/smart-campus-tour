@@ -39,13 +39,19 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] CollectionQueryParameters parameters,
-        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? phase, CancellationToken ct)
+        [FromQuery] string? state, [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, [FromQuery] string? phase,
+        [FromQuery(Name = "operator")] string? operatorFilter, [FromQuery] bool needsReconcile, [FromQuery] bool readyBlockers, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(parameters.Expand))
             throw new ValidationException([new ValidationFailure("Expand", "Tour expansion is not supported.")]);
+        // Only the caller's own Tours: `operator=me`. Another account's id is not a filter this list offers.
+        if (operatorFilter is not null && operatorFilter != "me")
+            throw new ValidationException([new ValidationFailure("Operator", "operator chỉ nhận giá trị 'me'.")]);
         var page = await sender.Send(new GetToursQuery(new(parameters.Search,
             string.IsNullOrWhiteSpace(parameters.Sort) ? "scheduledStartAt" : parameters.Sort.Trim(),
-            parameters.Page, parameters.Size, state, from, to, phase)), ct);
+            parameters.Page, parameters.Size, state, from, to, phase,
+            OperatorUserId: operatorFilter is null ? null : User.GetRequiredUserId(),
+            NeedsReconcile: needsReconcile, IncludeReadyBlockers: readyBlockers)), ct);
         return Ok(new PagedResponse<TourSummary> { Success = true, Message = "Tours retrieved.", Data = page.Items,
             Pagination = new PaginationMetadata(page.Page, page.PageSize, page.TotalItems, page.TotalPages) });
     }

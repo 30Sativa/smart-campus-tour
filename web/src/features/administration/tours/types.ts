@@ -21,6 +21,10 @@ export type TourSummary = {
   reservation?: TourReservation | null
   /** Read-only run situation from the list query. An older server omits it; then read the detail. */
   execution?: TourExecutionSummary | null
+  /** The assigned Operator; null for a legacy Tour. An older server omits it. */
+  operator?: TourOperator | null
+  /** READY blockers of a SCHEDULED row, only when the list was asked with `readyBlockers`; null otherwise. */
+  readyBlockers?: TourBlocker[] | null
 }
 /**
  * `commandState` is the current leg's GoTo, the command the detail shows.
@@ -81,6 +85,17 @@ export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
 export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
 export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'ROUTE_TEST_REMEASURE_REQUIRED'
 /** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
+
+/**
+ * `operator: 'me'` keeps the caller's own Tours; `needsReconcile` keeps Tours with an UNKNOWN GoTo; `readyBlockers`
+ * adds each SCHEDULED row's READY blockers and is refused by the server above 10 rows a page.
+ */
+export type TourListQuery = {
+  search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number
+  operator?: 'me'; needsReconcile?: boolean; readyBlockers?: boolean
+}
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+
 export type TourSlot = {
   time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null
   reservationStartsAt: string | null; reservationEndsAt: string | null; registrationClosesAt: string

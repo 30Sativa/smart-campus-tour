@@ -42,7 +42,7 @@ shared rules; this file only covers what is specific to `web/`.
     `Staff` role - they never diverged in permissions or in UI. Both spellings,
     and `operator`/`ops`, still normalise to `Staff` in `auth/roles.ts`, so a
     token minted before the merge is not locked out.
-  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): overview, legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator on a free slot or typed time judged by `/api/staff/manage/tours/slots` (ADR-0034, ADR-0035, ADR-0036); legacy Tours keep their projection. READY/Reopen use `/ready` and `/reopen` and follow `permissions.canMarkReady/canReopen/readyBlockers` (ADR-0042). Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
+  - `/staff/manage/*`: Tour preparation, owned by Staff (ADR-0020, routes ADR-0025): legacy pre-execution Tour management, per-row registration review, versioned POI proposals and Route revisions. POI screens use `/api/staff/poi-proposals`; Route authoring uses `/api/staff/routes` and `/api/routes`, selecting only PASS POI revisions for the exact map version. New Tours are created from a tested Route revision with a robot and Operator on a free slot or typed time judged by `/api/staff/manage/tours/slots` (ADR-0034, ADR-0035, ADR-0036); legacy Tours keep their projection. READY/Reopen use `/ready` and `/reopen` and follow `permissions.canMarkReady/canReopen/readyBlockers` (ADR-0042). Replaced `/api/admin/*` aliases and old POI/Route authoring operations are retired (ADR-0027). Page components live in `routes/staff/manage/StaffManage*Page.tsx`; legacy feature folders remain pending a focused module move. Screen map: `web/docs/admin-tours.md`.
   - `/technical/*`: Technical Staff (`TechnicalStaff` role) only. Map version
     listing/upload, deployment evidence and submitted POI verification use the
     existing `/api/technical/*` and `/api/maps/*` contracts. Whole-route manual test records use
@@ -66,7 +66,9 @@ shared rules; this file only covers what is specific to `web/`.
   - **Merged on 2026-11-05.** "Buổi hôm nay" (`/staff/tours`) is part of the
     operations overview `/staff`, and "Danh sách Tour" (`/staff/manage/tours`)
     is the list view of Lịch Tour (`/staff/schedule?view=list`). Both old
-    addresses redirect with their query. A single Tour's pages share
+    addresses redirect with their query. On 2026-11-07 the preparation
+    overview (`/staff/manage`) merged into the one Staff home `/staff`, which
+    also carries the preparation queue. A single Tour's pages share
     `TourStepper` and go back to the list they were opened from
     (`web/docs/staff-operations.md`).
   - The frontend route namespace and backend API namespace remain separate;
@@ -577,10 +579,12 @@ factory only:
   `start()` / `stop()`;
 - `withAutomaticReconnect()` is on by default.
 
-`/hubs/operations` is consumed for `FleetUpdated` only, with the in-memory
-JWT as `accessTokenFactory` and a restart 5 s after a close. `TourUpdated`
-and `AssistanceRequired` are planned backend events; until they exist, Tour
-screens poll the Tour detail.
+`/hubs/operations` is consumed for `FleetUpdated` and `TourUpdated`, with the
+in-memory JWT as `accessTokenFactory` and a restart 5 s after a close.
+`TourUpdated` carries nothing: it means a Tour command committed, so the shell
+invalidates the Tour queries (and once more after a reconnect). It may be
+coalesced or lost, so Tour screens keep polling as the fallback.
+`AssistanceRequired` remains a planned backend event.
 
 ---
 
