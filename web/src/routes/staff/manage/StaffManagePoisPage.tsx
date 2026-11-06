@@ -10,10 +10,11 @@ import type { MapVersionItem, PoiProposal } from '../../../features/technical/ap
 import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, mapVersionLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
+import { poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
 
-type Status = 'DRAFT' | 'WAIT' | 'PASS' | 'FAIL'
+type Status = PoiStatus
 type Filter = 'all' | Status
-const statusOf = (p: PoiProposal): Status => !p.revision.isSubmitted ? 'DRAFT' : p.revision.navigationStatus === 'PASS' ? 'PASS' : p.revision.navigationStatus === 'FAIL' ? 'FAIL' : 'WAIT'
+const statusOf = poiStatus
 /**
  * Labels carry a muted tint per state (grey draft, sand waiting, soft blue passed,
  * soft red to fix). On the map every point is grey except a failed one (red) and

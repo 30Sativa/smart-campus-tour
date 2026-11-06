@@ -74,6 +74,19 @@ describe('staff preparation UI', () => {
     expect(requests.some(url => url.searchParams.get('state') === 'SUBMITTED')).toBe(true)
   })
 
+  it('counts only the POIs Staff still has to finish, not passed or waiting ones', async () => {
+    const draft = proposal('poi-c', 'map-a', 'test123-v1', 'Điểm C')
+    const failed = proposal('poi-d', 'map-a', 'test123-v1', 'Điểm D')
+    const waiting = proposal('poi-e', 'map-a', 'test123-v1', 'Điểm E')
+    proposals = [...standardProposals,
+      { ...draft, revision: { ...draft.revision, isSubmitted: false, navigationStatus: null } },
+      { ...failed, revision: { ...failed.revision, navigationStatus: 'FAIL' } },
+      { ...waiting, revision: { ...waiting.revision, navigationStatus: null } }] as PoiProposal[]
+    show(<StaffManageDashboardPage />)
+    const tile = await screen.findByRole('link', { name: /POI cần hoàn thiện/ })
+    await waitFor(() => expect(tile).toHaveTextContent(/POI cần hoàn thiện\s*2/))
+  })
+
   it('keeps failed registration totals unknown while other dashboard sections load', async () => {
     failRegistrations = true
     show(<StaffManageDashboardPage />)

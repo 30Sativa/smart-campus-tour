@@ -10,6 +10,7 @@ import { useRegistrationReviews } from '../../../features/administration/registr
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { useReviewParam } from '../../../features/administration/use-review-param'
 import { ReviewDrawer } from '../../../features/administration/registrations/components/ReviewDrawer'
+import { needsStaffWork } from '../../../features/administration/pois/poi-status'
 
 /** Each summary reads the same API and totals as its destination list. */
 export default function StaffManageDashboardPage() {
@@ -20,6 +21,8 @@ export default function StaffManageDashboardPage() {
   const { reviewId, close } = useReviewParam()
   const totalTours = tours.isSuccess ? tours.data.pagination.totalItems : undefined
   const pending = registrations.isSuccess ? registrations.data.pagination.totalItems : undefined
+  // Only Staff's own POI work: waiting for the technical check is not, and a passed POI is done.
+  const poiWork = pois.isSuccess ? pois.data.filter(needsStaffWork).length : undefined
   return <AdminPage>
     <PageHeader eyebrow="Chuẩn bị Tour" title="Tổng quan chuẩn bị"
       description="Duyệt đăng ký, hoàn thiện điểm tham quan và chuẩn bị các Tour."
@@ -28,7 +31,7 @@ export default function StaffManageDashboardPage() {
       <KpiTile to="/staff/manage/registrations/pending" label="Đoàn chờ duyệt" value={pending ?? '-'} note={registrations.isError ? 'Không tải được' : undefined} tone={pending ? 'warn' : 'plain'} />
       <KpiTile to="/staff/schedule?view=list" label="Tour đang chuẩn bị" value={totalTours ?? '-'} note={tours.isError ? 'Không tải được' : undefined} />
       <KpiTile to="/staff/schedule?view=list&state=READY" label="Tour sẵn sàng" value={ready.isSuccess ? ready.data.pagination.totalItems : '-'} note={ready.isError ? 'Không tải được' : undefined} />
-      <KpiTile to="/staff/manage/pois" label="Đề xuất POI" value={pois.isSuccess ? pois.data.length : '-'} note={pois.isError ? 'Không tải được' : undefined} />
+      <KpiTile to="/staff/manage/pois" label="POI cần hoàn thiện" value={poiWork ?? '-'} note={pois.isError ? 'Không tải được' : 'Bản nháp và cần sửa, mọi bản đồ'} tone={poiWork ? 'warn' : 'plain'} />
     </KpiRow>
 
     <section className={`${panelClass} mb-5`} aria-label="Đăng ký cần duyệt">

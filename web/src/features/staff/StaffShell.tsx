@@ -12,18 +12,23 @@ import { useMobileNav } from '../../components/ui/use-mobile-nav'
 import { useDismiss } from '../../components/ui/use-dismiss'
 import { MobileNavToggle } from '../../components/ui/ConsoleSidebar'
 import { GroupedSidebar } from '../../components/ui/GroupedSidebar'
-import { ADMIN_LINK_ICON, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
+import { ADMIN_LINK_ICON, REGISTRATIONS_NAV_PATH, STAFF_NAV, STAFF_NAV_ENTRIES, STAFF_NAV_SECTIONS, activeNavPath } from './staff-nav'
 import { StaffBell } from './StaffBell'
 import { useFleetConnection, useFleetTelemetrySync } from './operations/fleet-telemetry'
 import { useRunningTours, type RunningTour } from './operations/hooks'
 import { STEP_LABEL } from './operations/operation-labels'
 import { isTourOrigin, originNavPath, tourPageId, useTourOriginStore } from './operations/tour-origin'
 
+/**
+ * The state of the robot report channel (the `/hubs/operations` socket). It
+ * says whether robot reports can arrive, not how fresh the Tour data is: Tours
+ * are polled separately and each page says when they were last read.
+ */
 const CONNECTION_LABEL = {
-  connecting: 'Telemetry: đang kết nối',
-  connected: 'Telemetry: đang nhận',
-  reconnecting: 'Telemetry: kết nối lại',
-  disconnected: 'Telemetry: mất kết nối',
+  connecting: 'Kênh robot: đang kết nối',
+  connected: 'Kênh robot: đang nhận',
+  reconnecting: 'Kênh robot: kết nối lại',
+  disconnected: 'Kênh robot: mất kết nối',
 } as const
 
 /**
@@ -58,8 +63,8 @@ export default function StaffShell() {
   const canBeOrigin = isTourOrigin(location.pathname)
   useEffect(() => { if (canBeOrigin) remember(here) }, [canBeOrigin, here, remember])
   const currentPath = onTourPage ? originNavPath(origin) : activeNavPath(location.pathname)
-  // Preparation pages do not need the telemetry state in their header.
-  const onLiveSqlPage = location.pathname === '/staff/manage' || location.pathname.startsWith('/staff/manage/') || location.pathname === '/staff/profile'
+  // The running Tour and the robot channel stay in view on every page: the same
+  // person prepares Tours while one runs, and must not lose sight of it.
   // The badge links to the live SQL queue, so it counts that queue, never the simulated registrations.
   const pendingCount = usePendingReviewCount() ?? 0
   const title = location.pathname.startsWith('/staff/digital-twin') ? 'Simulator robot' : location.pathname.startsWith('/staff/profile') ? 'Hồ sơ của tôi' : STAFF_NAV.find(({ path }) => path === currentPath)?.label ?? 'Vận hành tour'
@@ -86,7 +91,7 @@ export default function StaffShell() {
         currentPath={currentPath}
         badges={{
           '/staff/live': { value: assistCount, label: `${assistCount} Tour cần hỗ trợ`, tone: 'danger' },
-          '/staff/manage/registrations': { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
+          [REGISTRATIONS_NAV_PATH]: { value: pendingCount, label: `${pendingCount} đoàn chờ duyệt`, tone: 'info' },
         }}
         // Only an Admin sees a way across, and only because that account
         // genuinely has the other area. An operator is not shown a door it cannot open.
@@ -96,7 +101,7 @@ export default function StaffShell() {
         open={menuOpen}
         panelRef={navRef}
         closeRef={closeButtonRef}
-        highlight={!onLiveSqlPage && running ? (rail) => <RunningCard detail={running} rail={rail} onNavigate={closeMenu} /> : undefined}
+        highlight={running ? (rail) => <RunningCard detail={running} rail={rail} onNavigate={closeMenu} /> : undefined}
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -107,7 +112,7 @@ export default function StaffShell() {
               <p className="truncate text-[12px] text-[#a0aec0]">{section} <span className="mx-1">/</span> {onTourPage ? <>{title} <span className="mx-1">/</span> <span className="text-[#2d3748]">Tour</span></> : <span className="text-[#2d3748]">{title}</span>}</p>
               <p className="truncate text-sm font-bold text-[#2d3748]">{onTourPage ? 'Chi tiết Tour' : title}</p>
             </div>
-            {!onLiveSqlPage && <span
+            <span
               role="status"
               className={`hidden shrink-0 items-center gap-2 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold sm:inline-flex ${
                 connection === 'connected' ? 'bg-[#ecfdf3] text-[#15803d]' : connection === 'disconnected' ? 'bg-[#fef2f2] text-[#dc2626]' : 'bg-[#fffbeb] text-[#b45309]'
@@ -115,7 +120,7 @@ export default function StaffShell() {
             >
               <LiveDot tone={connection === 'connected' ? 'ok' : connection === 'disconnected' ? 'danger' : 'warn'} />
               {CONNECTION_LABEL[connection]}
-            </span>}
+            </span>
 
             <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <StaffBell />
