@@ -8,6 +8,7 @@ export type RouteTestRun = {
   /** Null for a run from before the measurement definition; it cannot size a reservation. */
   measurementBasis: string | null
 }
+export type RouteScheduleFit = 'UNKNOWN' | 'FITS' | 'OVER_RECOMMENDED' | 'TOO_LONG_FOR_SHIFT'
 export type VersionedRoute = {
   routeId: string; revisionId: string; revisionNumber: number; name: string; description: string | null
   mapVersionId: string; mapKey: string; mapPackageSha256: string; startX: number; startY: number; startYaw: number
@@ -18,6 +19,8 @@ export type VersionedRoute = {
   isActive: boolean
   /** Opaque concurrency token for deactivate/activate. */
   rowVersion: string
+  /** docs/lich-tour-theo-ca.md §4: how the expected length sits against the shifts. An older server omits it. */
+  scheduleFit?: RouteScheduleFit; expectedDurationSeconds?: number | null
   testRuns: RouteTestRun[]; revisionHistory: Array<{ revisionId: string; revisionNumber: number; mapVersionId: string; mapPackageSha256: string; configurationFingerprint: string; isSubmitted: boolean; verificationStatus: string; effectiveTestRunId: string | null; createdAt: string }>; eligibilityIssues: string[]
 }
 export type VersionedRouteDraft = {

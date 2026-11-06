@@ -37,7 +37,9 @@ public sealed record RouteRevisionView(Guid RouteId, Guid RevisionId, int Revisi
     Guid? EffectiveTestRunId, string DurationStatus, int DwellDurationSeconds,
     IReadOnlyList<RouteRevisionStopView> Stops, IReadOnlyList<RouteTestRunView> TestRuns,
     IReadOnlyList<RouteRevisionSummaryView> RevisionHistory, IReadOnlyList<string> EligibilityIssues,
-    bool IsActive = true, string RowVersion = "");
+    bool IsActive = true, string RowVersion = "",
+    // docs/lich-tour-theo-ca.md §4: kept apart from EligibilityIssues, which READY reads as stale POI evidence.
+    string ScheduleFit = "UNKNOWN", int? ExpectedDurationSeconds = null);
 public sealed record RouteAvailabilityRequest(Guid RequestId, string ExpectedRowVersion);
 public sealed record RouteScheduledTourView(Guid Id, string Name, DateTimeOffset ScheduledStartAt, string State);
 public sealed record RouteAvailabilityResult(Guid RouteId, bool IsActive, IReadOnlyList<RouteScheduledTourView> ScheduledTours);

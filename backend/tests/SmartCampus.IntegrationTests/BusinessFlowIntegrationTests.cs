@@ -725,10 +725,46 @@ public sealed class BusinessFlowIntegrationTests
         Assert.Equal(poiRevisionId, poiVerification.GetProperty("proposalRevisionId").GetGuid());
         Assert.Equal("PASS", poiVerification.GetProperty("resultCode").GetString());
 
+        // A route needs a second stop at least one metre away (docs/lich-tour-theo-ca.md §2).
+        using var createLab = await Json(host.Client, HttpMethod.Post, "/api/staff/poi-proposals", staffToken,
+            new { requestId = Guid.NewGuid(), draft = new { mapVersionId = mapId, name = "Lab", purpose = "Lab",
+                description = "Integration test", x = 1.5m, y = 0.5m, yaw = 0m, cameraPreset = "FRONT", narrationText = "Thông tin phòng lab.", fallbackVideoUrl = (string?)null } });
+        Assert.Equal(HttpStatusCode.OK, createLab.StatusCode);
+        var labProposal = (await Body(createLab)).GetProperty("data");
+        var labProposalId = labProposal.GetProperty("id").GetGuid();
+        var labRevisionId = labProposal.GetProperty("revision").GetProperty("id").GetGuid();
+        using var submitLab = await Json(host.Client, HttpMethod.Post, $"/api/staff/poi-proposals/{labProposalId}/submit", staffToken,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1, expectedRowVersion = labProposal.GetProperty("rowVersion").GetString() });
+        Assert.Equal(HttpStatusCode.OK, submitLab.StatusCode);
+        using var verifyLab = await Json(host.Client, HttpMethod.Post,
+            $"/api/technical/poi-proposals/{labProposalId}/revisions/1/verification", technicalToken,
+            new { requestId = Guid.NewGuid(), expectedRevisionNumber = 1,
+                expectedRowVersion = (await Body(submitLab)).GetProperty("data").GetProperty("rowVersion").GetString(),
+                robotCode = "flow_physical", resultCode = "PASS", reached = true, stopped = true,
+                localizationPassed = true, cameraPresetConfirmed = true, reason = (string?)null,
+                evidenceNote = "SIMULATED BACKEND TEST evidence; no physical robot test was run." });
+        Assert.Equal(HttpStatusCode.OK, verifyLab.StatusCode);
+        Assert.Equal(2, eligibleMap.GetProperty("routeMinStops").GetInt32());
+        Assert.Equal(1.0m, eligibleMap.GetProperty("routeMinStopSeparationMeters").GetDecimal());
+
+        var routeStops = new[]
+        {
+            new { poiRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } },
+            new { poiRevisionId = labRevisionId, dwellSeconds = 15, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } }
+        };
+        // A start on the first stop's own position leaves the robot nowhere to go.
+        using var startOnStop = await Json(host.Client, HttpMethod.Post, "/api/staff/routes", staffToken,
+            new { requestId = Guid.NewGuid(), expectedCurrentRevision = 0, name = "Flow Route", description = "API integration test",
+                mapVersionId = mapId, startX = 0.5m, startY = 0.5m, startYaw = 0m, endMode = "LAST_POI",
+                endX = (decimal?)null, endY = (decimal?)null, endYaw = (decimal?)null, stops = routeStops });
+        Assert.Equal(HttpStatusCode.Conflict, startOnStop.StatusCode);
+        var startOnStopError = (await Body(startOnStop)).GetProperty("errors");
+        Assert.Equal("ROUTE_STOP_TOO_CLOSE", startOnStopError.GetProperty("code").GetString());
+
         var routeDraft = new { requestId = Guid.NewGuid(), expectedCurrentRevision = 0, name = "Flow Route",
-            description = "API integration test", mapVersionId = mapId, startX = 0.5m, startY = 0.5m, startYaw = 0m,
+            description = "API integration test", mapVersionId = mapId, startX = 0.5m, startY = 1.5m, startYaw = 0m,
             endMode = "LAST_POI", endX = (decimal?)null, endY = (decimal?)null, endYaw = (decimal?)null,
-            stops = new[] { new { poiRevisionId, dwellSeconds = 10, headSteps = new[] { new { preset = "FRONT", holdSeconds = 5 } } } } };
+            stops = routeStops };
         using var createRoute = await Json(host.Client, HttpMethod.Post, "/api/staff/routes", staffToken, routeDraft);
         Assert.Equal(HttpStatusCode.OK, createRoute.StatusCode);
         var route = (await Body(createRoute)).GetProperty("data");
@@ -775,14 +811,39 @@ public sealed class BusinessFlowIntegrationTests
         var slotPath = $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}";
         using var slots = await Get(host.Client, slotPath, staffToken);
         Assert.Equal(HttpStatusCode.OK, slots.StatusCode);
-        var firstSlot = (await Body(slots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[0];
-        Assert.Equal("09:00", firstSlot.GetProperty("time").GetString());
+        // docs/lich-tour-theo-ca.md §3: one item per configured shift, each holding the robot for the whole shift.
+        var slotData = (await Body(slots)).GetProperty("data");
+        Assert.Equal(3600, slotData.GetProperty("recommendedMaxSeconds").GetInt32());
+        Assert.False(slotData.TryGetProperty("customStartEarliest", out _));
+        Assert.Equal(["S1", "S2", "S3"], slotData.GetProperty("days")[0].GetProperty("slots").EnumerateArray().Select(slot => slot.GetProperty("shiftCode").GetString()));
+        var firstSlot = slotData.GetProperty("days")[0].GetProperty("slots")[0];
+        Assert.Equal("08:15", firstSlot.GetProperty("time").GetString());
+        Assert.Equal("Ca sáng", firstSlot.GetProperty("shiftName").GetString());
+        Assert.Equal(5400, firstSlot.GetProperty("maxDurationSeconds").GetInt32());
+        Assert.Equal(firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(-15), firstSlot.GetProperty("reservationStartsAt").GetDateTimeOffset());
+        Assert.Equal(firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(105), firstSlot.GetProperty("reservationEndsAt").GetDateTimeOffset());
         Assert.True(firstSlot.GetProperty("available").GetBoolean());
+        using var shifts = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(6):yyyy-MM-dd}", staffToken);
+        Assert.Equal(HttpStatusCode.OK, shifts.StatusCode);
+        var shiftDays = (await Body(shifts)).GetProperty("data").GetProperty("days");
+        Assert.Equal(7, shiftDays.GetArrayLength());
+        Assert.Equal("13:15", shiftDays[0].GetProperty("shifts")[1].GetProperty("time").GetString());
+        using var shiftsAsTechnical = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}", technicalToken);
+        Assert.Equal(HttpStatusCode.Forbidden, shiftsAsTechnical.StatusCode);
         using var slotsTooWide = await Get(host.Client, $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(31):yyyy-MM-dd}", staffToken);
         Assert.Equal(HttpStatusCode.BadRequest, slotsTooWide.StatusCode);
         using var operators = await Get(host.Client, "/api/staff/manage/tours/operators", staffToken);
         Assert.Equal(HttpStatusCode.OK, operators.StatusCode);
         var operatorId = (await Body(operators)).GetProperty("data")[0].GetProperty("userId").GetGuid();
+        // A start that is not a shift's Tour start, such as the old 09:00 slot, is refused.
+        using var offShift = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
+            new { requestId = Guid.NewGuid(), configuration = new
+                { name = "Off shift", description = (string?)null, routeRevisionId = routeRevisionId,
+                    robotCode = "flow_physical", operatorUserId = operatorId,
+                    scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(45),
+                    fallbackVideoUrl = (string?)null } });
+        Assert.Equal(HttpStatusCode.Conflict, offShift.StatusCode);
+        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", (await Body(offShift)).GetProperty("errors").GetProperty("code").GetString());
         using var schedule = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
             new { requestId = Guid.NewGuid(), configuration = new
                 { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,

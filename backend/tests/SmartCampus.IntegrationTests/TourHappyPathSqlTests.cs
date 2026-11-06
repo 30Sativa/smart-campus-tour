@@ -283,12 +283,14 @@ public sealed class TourHappyPathSqlTests
         await using var w = await World.Create(enabled: true);
         await Start(w);
         await Result(w, await Delivered(w), "TERMINAL", "ARRIVED");
+        await Next(w); // The route has two stops; walk to the last one.
+        await Result(w, await Delivered(w), "TERMINAL", "ARRIVED");
         w.Clock.Now = w.Clock.Now!.Value.AddMinutes(5); // Telemetry is stale, which only matters for a new command.
         await w.H.Send(new NextTourStopCommand(w.H.TourId, w.H.OperatorId, new(Guid.NewGuid(), await w.H.Version())));
 
         await AssertCompletedAndReleased(w);
         await using var db = w.H.Context();
-        Assert.Single(await db.RobotCommands.AsNoTracking().ToArrayAsync());
+        Assert.Equal(2, await db.RobotCommands.AsNoTracking().CountAsync()); // One per stop, none for completing.
     }
 
     [SchemaV11Fact]
@@ -296,6 +298,8 @@ public sealed class TourHappyPathSqlTests
     {
         await using var w = await World.Create(enabled: true);
         await Start(w);
+        await Result(w, await Delivered(w), "TERMINAL", "ARRIVED");
+        await Next(w); // The route has two stops; walk to the last one.
         await Result(w, await Delivered(w), "TERMINAL", "ARRIVED");
         await w.H.Database.ExecuteAsync("UPDATE dbo.Robots SET NeedsInspection = 1;");
         await Next(w);

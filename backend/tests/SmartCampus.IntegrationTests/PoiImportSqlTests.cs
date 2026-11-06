@@ -255,7 +255,7 @@ public sealed class PoiImportSqlTests
         Assert.Equal("POSE_CAPTURE", content.Revision.VerificationMethod);
         Assert.Equal(noNarration.Revision.NavigationFingerprint, content.Revision.NavigationFingerprint);
         var route = await h.SaveRoute(content.Revision.Id);
-        Assert.Equal("Đây là thư viện.", Assert.Single(route.Stops).NarrationText);
+        Assert.Equal("Đây là thư viện.", route.Stops[0].NarrationText);
     }
 
     [SchemaV11Fact]
@@ -383,7 +383,7 @@ public sealed class PoiImportSqlTests
 
         AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.Send(new CreatePoiRevisionCommand(h.StaffId, proposalId,
             new(Guid.NewGuid(), edited.CurrentRevision, edited.RowVersion, new(h.MapId, "Thư viện", "Giới thiệu", null, 1.15m, 0.5m, 0m, "FRONT", "Nội dung mới."))))));
-        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(edited.Revision.Id, startX: 1.15m, startY: 0.5m,
+        AssertClearanceFailure(await Assert.ThrowsAsync<ValidationException>(() => h.SaveRoute(edited.Revision.Id, startX: 0.4m, startY: 1.25m,
             routeId: route.RouteId, expectedRevision: 2)));
     }
 
@@ -494,6 +494,9 @@ public sealed class PoiImportSqlTests
             var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
             settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
             settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
+            // Saving a route checks its dwell against the longest shift (docs/lich-tour-theo-ca.md §4).
+            settings["Tours:Shifts:0:Code"] = "S1"; settings["Tours:Shifts:0:Name"] = "Ca sáng";
+            settings["Tours:Shifts:0:Start"] = "08:00"; settings["Tours:Shifts:0:End"] = "10:00";
             if (clearanceMeters is { } clearance) settings["Maps:PoiClearanceMeters"] = clearance.ToString(CultureInfo.InvariantCulture);
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var services = new ServiceCollection();
@@ -547,11 +550,21 @@ public sealed class PoiImportSqlTests
                 new(MapId, name, "Giới thiệu điểm tham quan", null, revision.X, revision.Y, revision.Yaw, revision.CameraPreset, narration))));
         }
 
-        public Task<RouteRevisionView> SaveRoute(Guid poiRevisionId, decimal startX = 2.5m, decimal startY = 2.5m,
-            decimal? endX = null, decimal? endY = null, Guid? routeId = null, int expectedRevision = 0) =>
-            Send(new SaveRouteRevisionCommand(staffId, routeId, new(Guid.NewGuid(), expectedRevision, "Tuyến nhập", null, MapId,
+        private Guid? secondStop;
+
+        /// <summary>A route of the given POI then a second stop at (3.5, 1.5), since a route needs two stops (docs/lich-tour-theo-ca.md §2).</summary>
+        public async Task<RouteRevisionView> SaveRoute(Guid poiRevisionId, decimal startX = 2.5m, decimal startY = 2.5m,
+            decimal? endX = null, decimal? endY = null, Guid? routeId = null, int expectedRevision = 0)
+        {
+            if (secondStop is null)
+            {
+                var proposalId = (await Import([File("second-stop.yaml", "POI_SECOND_STOP", x: 3.5m, y: 1.5m)])).CreatedProposalIds[0];
+                secondStop = (await AddStaffContent(proposalId, "Phòng lab", "Đây là phòng lab.")).Revision.Id;
+            }
+            return await Send(new SaveRouteRevisionCommand(staffId, routeId, new(Guid.NewGuid(), expectedRevision, "Tuyến nhập", null, MapId,
                 startX, startY, 0m, endX is null ? "LAST_POI" : "POSE", endX, endY, endX is null ? null : 0m,
-                [new(poiRevisionId, 30, [new("FRONT", 10)])])));
+                [new(poiRevisionId, 30, [new("FRONT", 10)]), new(secondStop.Value, 30, [new("FRONT", 10)])])));
+        }
 
         public async Task AssertNothingImported() => await AssertCounts(0, 0, 0);
 

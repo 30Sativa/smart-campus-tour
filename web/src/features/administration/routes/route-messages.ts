@@ -1,6 +1,19 @@
 import { ApiError } from '../../../api/client'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
+import type { VersionedRoute } from './versioned-api'
+
+const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
+
+/** docs/lich-tour-theo-ca.md §4: the words for a route that does not sit comfortably in a shift; null when it fits or is not measured yet. */
+export function scheduleFitLabel(route: Pick<VersionedRoute, 'scheduleFit' | 'expectedDurationSeconds'>): { tone: 'danger' | 'warn'; text: string; detail: string } | null {
+  const expected = route.expectedDurationSeconds ? `Dự kiến ${fitMinutes(route.expectedDurationSeconds)}` : 'Thời lượng dự kiến'
+  if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT')
+    return { tone: 'danger', text: 'Quá dài cho 1 ca', detail: `${expected}, vượt thời lượng tối đa của mọi ca nên không xếp lịch được.` }
+  if (route.scheduleFit === 'OVER_RECOMMENDED')
+    return { tone: 'warn', text: 'Dài hơn mức khuyến nghị', detail: `${expected}, dài hơn mức khuyến nghị. Vẫn xếp lịch được.` }
+  return null
+}
 
 /** A revision's state as words and colour: draft, submitted and waiting, passed, failed. */
 export function revisionTone(submitted: boolean, status: string) {

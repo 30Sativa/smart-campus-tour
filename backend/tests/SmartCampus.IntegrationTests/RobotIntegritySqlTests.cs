@@ -303,9 +303,9 @@ public sealed class RobotIntegritySqlTests
             var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
             settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
             settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
-            settings["Tours:StartSlots:0"] = "09:00";
-            settings["Tours:CustomStartEarliest"] = "08:00";
-            settings["Tours:CustomStartLatest"] = "17:00";
+            settings["Tours:Shifts:0:Code"] = "S1"; settings["Tours:Shifts:0:Name"] = "Ca sáng";
+            settings["Tours:Shifts:0:Start"] = "08:00"; settings["Tours:Shifts:0:End"] = "10:00";
+            settings["Tours:Shifts:1:Code"] = "S2"; settings["Tours:Shifts:1:Name"] = "Ca chiều 1"; settings["Tours:Shifts:1:Start"] = "13:00"; settings["Tours:Shifts:1:End"] = "15:00";
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var services = new ServiceCollection();
             services.AddLogging();
@@ -360,11 +360,17 @@ public sealed class RobotIntegritySqlTests
 
         public async Task<RouteRevisionView> TestedRoute()
         {
-            var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, "Thư viện", "Tham quan", null, 1.5m, 1.5m, 0m, "FRONT", "Đây là thư viện."))));
-            var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
-            await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+            // A route needs two stops one metre apart (docs/lich-tour-theo-ca.md §2).
+            var stops = new List<RouteRevisionStopInput>();
+            foreach (var (name, x) in new[] { ("Thư viện", 1.5m), ("Phòng lab", 2.5m) })
+            {
+                var proposal = await Send(new CreatePoiProposalCommand(staffId, new(Guid.NewGuid(), new(pilotMap.Id, name, "Tham quan", null, x, 1.5m, 0m, "FRONT", "Đây là điểm tham quan."))));
+                var submitted = await Send(new SubmitPoiProposalCommand(staffId, proposal.Id, new(Guid.NewGuid(), 1, proposal.RowVersion)));
+                await Send(new RecordPoiVerificationCommand(technicalId, proposal.Id, 1, new(Guid.NewGuid(), 1, submitted.RowVersion, First, "PASS", true, true, true, true, null, "Kiểm tra tại chỗ.")));
+                stops.Add(new(proposal.Revision.Id, 30, [new("FRONT", 30)]));
+            }
             var route = await Send(new SaveRouteRevisionCommand(staffId, null, new(Guid.NewGuid(), 0, "Tuyến robot", null, pilotMap.Id, 2.5m, 2.5m, 0m, "LAST_POI", null, null, null,
-                [new(proposal.Revision.Id, 30, [new("FRONT", 30)])])));
+                stops)));
             await Send(new SubmitRouteRevisionCommand(staffId, route.RouteId, route.RevisionId, new(Guid.NewGuid(), 1)));
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
@@ -372,7 +378,7 @@ public sealed class RobotIntegritySqlTests
 
         public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
         {
-            var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(9, 0)), TimeSpan.FromHours(7));
+            var start = new DateTimeOffset(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10)).ToDateTime(new TimeOnly(8, 15)), TimeSpan.FromHours(7));
             var created = await Send(new CreateTourCommand(staffId, new(Guid.NewGuid(), new("Tour robot", null, route.RevisionId, robot, operatorId, start, null))));
             await using var db = Context();
             return (await db.Tours.AsNoTracking().OrderByDescending(tour => tour.CreatedAt).FirstAsync()).Id;

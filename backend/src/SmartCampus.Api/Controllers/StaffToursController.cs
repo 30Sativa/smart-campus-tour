@@ -24,6 +24,7 @@ using SmartCampus.Application.Features.Tours.Commands.RetryTourLeg;
 using SmartCampus.Application.Features.Tours.Commands.StartTour;
 using SmartCampus.Application.Features.Tours.Commands.UpdateTour;
 using SmartCampus.Application.Features.Tours.Queries.GetTour;
+using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Application.Features.Tours.Queries.GetTourStartChecks;
 using SmartCampus.Application.Features.Tours.Queries.ListTourRobots;
@@ -67,9 +68,14 @@ public sealed class StaffToursController(ISender sender) : ControllerBase
 
     [HttpGet("slots")]
     public async Task<IActionResult> Slots([FromQuery] Guid routeRevisionId, [FromQuery] string robotCode,
-        [FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] TimeOnly? time, CancellationToken ct) =>
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
         Ok(new BaseResponse<TourSlotsView> { Success = true, Message = "Tour slots retrieved.",
-            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to, time), ct) });
+            Data = await sender.Send(new GetTourSlotsQuery(routeRevisionId, robotCode, from, to), ct) });
+
+    [HttpGet("shifts")]
+    public async Task<IActionResult> Shifts([FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct) =>
+        Ok(new BaseResponse<TourShiftsView> { Success = true, Message = "Tour shifts retrieved.",
+            Data = await sender.Send(new GetTourShiftsQuery(from, to), ct) });
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

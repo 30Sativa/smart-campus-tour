@@ -23,10 +23,12 @@ const occupiedPackage = () => zipSync({
 const map = { id: 'map-v1', areaKey: 'library', areaName: 'Library', versionNumber: 1, mapKey: 'library-v1', packageFileName: 'library.zip', packageSha256: 'a'.repeat(64), imageFileName: 'map.pgm', imageWidth: 2, imageHeight: 2, resolution: 0.5, originX: 10, originY: 20, originYaw: 0, negate: false, occupiedThreshold: 0.65, freeThreshold: 0.25, frameId: 'map', validationStatus: 'VALID', uploadedAt: '2026-10-27T10:00:00Z' }
 const proposals = [
   { id: 'p-pass', currentRevision: 2, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pass', revisionNumber: 2, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Verified entrance', purpose: 'Entry', description: null, x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-pass' } },
+  { id: 'p-hall', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-hall', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Verified hall', purpose: 'Hall', description: null, x: 11.4, y: 20.4, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-hall' } },
+  { id: 'p-parking', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-parking', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Parking', purpose: 'Parking', description: null, x: 10.2, y: 21.6, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-parking' } },
   { id: 'p-pending', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-pending', revisionNumber: 1, mapVersionId: 'map-v1', mapKey: 'library-v1', name: 'Pending POI', purpose: 'Pending', description: null, x: 1, y: 1, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'NOT_CHECKED', verificationSourceRevisionId: null } },
   { id: 'p-other-map', currentRevision: 1, rowVersion: 'AQIDBAUGBwg=', revision: { id: 'poi-rev-other', revisionNumber: 1, mapVersionId: 'map-v2', mapKey: 'library-v2', name: 'Other map POI', purpose: 'Other', description: null, x: 2, y: 2, yaw: 0, cameraPreset: 'FRONT', isSubmitted: true, submittedAt: '2026-10-27T10:00:00Z', navigationStatus: 'PASS', verificationSourceRevisionId: 'poi-rev-other' } },
 ]
-const route = { routeId: 'route-1', revisionId: 'route-rev-1', revisionNumber: 1, name: 'Library tour', description: null, isActive: true, mapVersionId: 'map-v1', mapKey: 'library-v1', mapPackageSha256: 'a'.repeat(64), startX: 10, startY: 20, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null as string | null, durationStatus: 'INCOMPLETE_CONTENT_AUDIO_DATA', dwellDurationSeconds: 30, stops: [{ poiRevisionId: 'poi-rev-pass', sourcePoiVerificationRecordId: 'verify-1', stopOrder: 1, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified entrance', x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }], testRuns: [] as unknown[], revisionHistory: [{ revisionId: 'route-rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapPackageSha256: 'a'.repeat(64), configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null, createdAt: '2026-10-27T10:00:00Z' }], eligibilityIssues: ['INCOMPLETE_CONTENT_AUDIO_DATA'] }
+const route = { routeId: 'route-1', revisionId: 'route-rev-1', revisionNumber: 1, name: 'Library tour', description: null, isActive: true, mapVersionId: 'map-v1', mapKey: 'library-v1', mapPackageSha256: 'a'.repeat(64), startX: 11.4, startY: 21.6, startYaw: 0, endMode: 'LAST_POI', endX: null, endY: null, endYaw: null, configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null as string | null, durationStatus: 'INCOMPLETE_CONTENT_AUDIO_DATA', dwellDurationSeconds: 60, stops: [{ poiRevisionId: 'poi-rev-pass', sourcePoiVerificationRecordId: 'verify-1', stopOrder: 1, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified entrance', x: 10.2, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }, { poiRevisionId: 'poi-rev-hall', sourcePoiVerificationRecordId: 'verify-2', stopOrder: 2, dwellSeconds: 30, headSteps: [{ preset: 'FRONT', holdSeconds: 10 }], name: 'Verified hall', x: 11.4, y: 20.4, yaw: 0, cameraPreset: 'FRONT' }], testRuns: [] as unknown[], revisionHistory: [{ revisionId: 'route-rev-1', revisionNumber: 1, mapVersionId: 'map-v1', mapPackageSha256: 'a'.repeat(64), configurationFingerprint: 'c'.repeat(64), isSubmitted: false, verificationStatus: 'NOT_CHECKED', effectiveTestRunId: null, createdAt: '2026-10-27T10:00:00Z' }], eligibilityIssues: ['INCOMPLETE_CONTENT_AUDIO_DATA'] }
 const response = (data: unknown, status = 200) => new Response(JSON.stringify({ success: status < 400, message: 'OK', data, pagination: { page: 1, pageSize: 100, totalItems: 0, totalPages: 0 }, errors: null }), { status, headers: { 'Content-Type': 'application/json' } })
 let requests: Array<{ url: URL; init?: RequestInit }> = []
 let submissionFailure: 409 | 500 | null = null
@@ -61,7 +63,7 @@ describe('Staff versioned Route workflow', () => {
     useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'staff-token', user: { userId: 'staff-1', username: 'staff', role: 'Staff' } })
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost'); requests.push({ url, init })
-      if (url.pathname === '/api/maps/versions') return response([{ map: { ...map, id: 'map-empty', mapKey: 'map-without-poi', versionNumber: 3 }, latestDeployment: null, canUseForPoiPreparation: true }, { map, latestDeployment: null, canUseForPoiPreparation: mapEligible, poiClearanceMeters: clearanceMeters, currentlyDeployedOn: [] }])
+      if (url.pathname === '/api/maps/versions') return response([{ map: { ...map, id: 'map-empty', mapKey: 'map-without-poi', versionNumber: 3 }, latestDeployment: null, canUseForPoiPreparation: true }, { map, latestDeployment: null, canUseForPoiPreparation: mapEligible, poiClearanceMeters: clearanceMeters, routeMinStops: 2, routeMinStopSeparationMeters: 1, currentlyDeployedOn: [] }])
       if (url.pathname === '/api/maps/versions/map-v1/package') return new Response(occupiedPackage())
       if (url.pathname === '/api/staff/poi-proposals') return response([...proposals, ...extraProposals])
       if (url.pathname === '/api/routes' && init?.method !== 'POST') return response([currentRoute])
@@ -86,16 +88,17 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText('Verified entrance')).toBeInTheDocument()
     expect(screen.queryByText('Pending POI')).not.toBeInTheDocument()
     expect(screen.queryByText('Other map POI')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified entrance/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
     next()
-    startFromPoi('poi-rev-pass')
+    startFromPoi('poi-rev-parking')
     next()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
     expect(requests.filter(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')).toHaveLength(1)
     const create = requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!
     const createBody = JSON.parse(String(create.init?.body))
-    expect(createBody).toMatchObject({ mapVersionId: 'map-v1', expectedCurrentRevision: 0, startX: 10.2, startY: 20.4, startYaw: 0, endMode: 'LAST_POI', stops: [{ poiRevisionId: 'poi-rev-pass', dwellSeconds: 30 }] })
+    expect(createBody).toMatchObject({ mapVersionId: 'map-v1', expectedCurrentRevision: 0, startX: 10.2, startY: 21.6, startYaw: 0, endMode: 'LAST_POI', stops: [{ poiRevisionId: 'poi-rev-pass', dwellSeconds: 30 }, { poiRevisionId: 'poi-rev-hall', dwellSeconds: 30 }] })
     expect(createBody.requestId).toBeTruthy()
     expect(requests.some(r => r.url.pathname === '/api/technical/poi-verifications')).toBe(false)
     expect(screen.getByText('Chưa tạo được Tour: tuyến cần một lần chạy thử toàn tuyến đạt.')).toBeInTheDocument()
@@ -139,23 +142,34 @@ describe('Staff versioned Route workflow', () => {
     fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Steps' } })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     next()
-    expect(screen.getByText('Chưa sang bước tiếp được: chọn ít nhất một điểm dừng.')).toBeInTheDocument()
+    expect(screen.getByText('Chưa sang bước tiếp được: chọn ít nhất 2 điểm dừng.')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
+    // One stop is not a route: the minimum comes with the map version.
+    expect(screen.getByText('Chưa sang bước tiếp được: chọn ít nhất 2 điểm dừng.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Thời gian dừng Verified entrance (giây)'), { target: { value: '14' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+    expect(screen.getByText('Chưa sang bước tiếp được: thời gian dừng từ 15 đến 300 giây.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Thời gian dừng Verified entrance (giây)'), { target: { value: '301' } })
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Thời gian dừng Verified entrance (giây)'), { target: { value: '300' } })
     next()
     // A new route has no start until one is placed; nothing defaults to 0, 0, 0.
     expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByText('Chưa chọn')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
     fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
     expect(screen.getByText('Chưa sang bước tiếp được: chọn điểm bắt đầu và hướng, chọn điểm kết thúc và hướng.')).toBeInTheDocument()
-    startFromPoi('poi-rev-pass')
+    startFromPoi('poi-rev-parking')
     // The copy select keeps naming the POI the start came from instead of falling back to its placeholder.
-    expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByLabelText('Lấy vị trí có sẵn')).toHaveValue('poi-rev-pass')
+    expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByLabelText('Lấy vị trí có sẵn')).toHaveValue('poi-rev-parking')
     fireEvent.click(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ }))
     expect(screen.queryByRole('region', { name: 'Vị trí kết thúc' })).not.toBeInTheDocument()
     next()
     const review = within(screen.getByRole('region', { name: 'Xem lại và lưu' }))
-    expect(review.getByText('x 10.20 m · y 20.40 m · hướng 0.00 rad')).toBeInTheDocument()
+    expect(review.getByText('x 10.20 m · y 21.60 m · hướng 0.00 rad')).toBeInTheDocument()
     expect(review.getByText('Quay về điểm bắt đầu')).toBeInTheDocument()
+    expect(review.getByLabelText('Lộ trình robot đi')).toHaveTextContent('Bắt đầu → 1. Verified entrance → 2. Verified hall → Kết thúc tại điểm bắt đầu')
+    expect(review.getByText('5 phút 30 giây')).toBeInTheDocument()
+    expect(review.getByText('Thời lượng thật chốt sau khi Kỹ thuật chạy thử.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Quay lại/ }))
     expect(screen.getByRole('button', { name: /Bước 3/ })).toHaveAttribute('aria-current', 'step')
   })
@@ -170,9 +184,41 @@ describe('Staff versioned Route workflow', () => {
     expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByText(/quá sát vật cản/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
-    startFromPoi('poi-rev-pass')
+    startFromPoi('poi-rev-parking')
     expect(await screen.findByText('Chưa sang bước tiếp được: điểm bắt đầu quá sát vật cản.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+  })
+
+  it('does not offer a stop as the start and names the stop a pose is too close to', async () => {
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 3/ }))
+    const start = within(screen.getByRole('region', { name: 'Điểm bắt đầu' }))
+    expect(start.getByRole('option', { name: 'POI Verified entrance (đang là điểm dừng)' })).toBeDisabled()
+    expect(start.getByRole('option', { name: 'POI Verified hall (đang là điểm dừng)' })).toBeDisabled()
+    expect(start.getByRole('option', { name: 'POI Parking' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
+    const end = within(screen.getByRole('region', { name: 'Vị trí kết thúc' }))
+    expect(end.getByRole('option', { name: 'POI Verified hall (đang là điểm dừng)' })).toBeDisabled()
+    expect(end.getByRole('option', { name: 'POI Parking' })).toBeEnabled()
+  })
+
+  it('flags a start too close to a stop on the spot and blocks Next', async () => {
+    extraProposals = [{ ...proposals[0], id: 'p-near', revision: { ...proposals[0].revision, id: 'poi-rev-near', name: 'Near hall', x: 11.9, y: 20.4 } }]
+    renderAt('/staff/manage/routes/route-1/edit')
+    await screen.findByLabelText('Tên tuyến')
+    fireEvent.click(screen.getByRole('button', { name: /Bước 3/ }))
+    startFromPoi('poi-rev-near')
+    expect(within(screen.getByRole('region', { name: 'Điểm bắt đầu' })).getByRole('alert')).toHaveTextContent('Điểm bắt đầu cách điểm dừng Verified hall 0,5 m, cần ít nhất 1 m.')
+    expect(screen.getByText('Chưa sang bước tiếp được: điểm bắt đầu quá gần điểm dừng Verified hall.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
+    // A separate end near the last stop is refused the same way; "Quay về điểm bắt đầu" never is.
+    startFromPoi('poi-rev-parking')
+    fireEvent.click(screen.getByRole('radio', { name: /Về một vị trí riêng/ }))
+    fireEvent.change(within(screen.getByRole('region', { name: 'Vị trí kết thúc' })).getByLabelText('Lấy vị trí có sẵn'), { target: { value: 'poi-rev-near' } })
+    expect(screen.getByText('Chưa sang bước tiếp được: điểm kết thúc quá gần điểm dừng cuối Verified hall.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /Quay về điểm bắt đầu/ }))
+    expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeEnabled()
   })
 
   it('opens every step of an existing route and keeps its saved start', async () => {
@@ -180,7 +226,7 @@ describe('Staff versioned Route workflow', () => {
     await screen.findByLabelText('Tên tuyến')
     expect(screen.getByRole('button', { name: /Bước 4/ })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: /Bước 4/ }))
-    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 10.00 m · y 20.00 m · hướng 0.00 rad')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getByText('x 11.40 m · y 21.60 m · hướng 0.00 rad')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Lưu bản nháp' })).toBeEnabled()
   })
 
@@ -205,6 +251,22 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText(/Tuyến đang ngừng sử dụng nên chưa tạo được Tour mới/)).toBeInTheDocument()
   })
 
+  it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
+    currentRoute = { ...route, isSubmitted: true, verificationStatus: 'PASS', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 } as typeof route
+    const catalog = renderAt('/staff/manage/routes')
+    expect(await screen.findByText('Quá dài cho 1 ca')).toBeInTheDocument()
+    catalog.unmount()
+    const detail = renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText('Quá dài cho 1 ca')).toBeInTheDocument()
+    expect(screen.getByText(/Chưa tạo được Tour: Dự kiến 100 phút, vượt thời lượng tối đa của mọi ca/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+    detail.unmount()
+    currentRoute = { ...currentRoute, scheduleFit: 'OVER_RECOMMENDED', expectedDurationSeconds: 4000 } as typeof route
+    renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText('Dài hơn mức khuyến nghị')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tạo Tour' })).toBeInTheDocument()
+  })
+
   it('explains a submit refused because the map lost its technical check', async () => {
     submissionFailure = 409
     submissionFailureBody = { success: false, message: 'Không có robot nào đạt.', errors: { code: 'TECHNICAL_CHECK_NOT_PASSED', fields: null } }
@@ -215,24 +277,23 @@ describe('Staff versioned Route workflow', () => {
   })
 
   it('saves stops in the order shown after moving one up', async () => {
-    extraProposals = [{ ...proposals[0], id: 'p-second', revision: { ...proposals[0].revision, id: 'poi-rev-second', name: 'Second stop' } }]
     renderAt('/staff/manage/routes/new')
     fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Ordered' } })
     fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
     next()
     fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
-    fireEvent.click(screen.getByRole('checkbox', { name: /Second stop/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Đưa Second stop lên' }))
-    fireEvent.change(screen.getByLabelText('Thời gian dừng Second stop (giây)'), { target: { value: '45' } })
-    expect(screen.getAllByRole('checkbox').map(box => box.closest('label')?.textContent)).toEqual([expect.stringContaining('Second stop'), expect.stringContaining('Verified entrance')])
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Đưa Verified hall lên' }))
+    fireEvent.change(screen.getByLabelText('Thời gian dừng Verified hall (giây)'), { target: { value: '45' } })
+    expect(screen.getAllByRole('checkbox').slice(0, 2).map(box => box.closest('label')?.textContent)).toEqual([expect.stringContaining('Verified hall'), expect.stringContaining('Verified entrance')])
     next()
-    startFromPoi('poi-rev-second')
+    startFromPoi('poi-rev-parking')
     next()
-    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Second stop · dừng 45 giây', 'Verified entrance · dừng 30 giây'])
+    expect(within(screen.getByRole('region', { name: 'Xem lại và lưu' })).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Verified hall · dừng 45 giây', 'Verified entrance · dừng 30 giây'])
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản nháp' }))
     await waitFor(() => expect(requests.some(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')).toBe(true))
     const body = JSON.parse(String(requests.find(r => r.url.pathname === '/api/staff/routes' && r.init?.method === 'POST')!.init?.body))
-    expect(body.stops.map((stop: { poiRevisionId: string; dwellSeconds: number }) => [stop.poiRevisionId, stop.dwellSeconds])).toEqual([['poi-rev-second', 45], ['poi-rev-pass', 30]])
+    expect(body.stops.map((stop: { poiRevisionId: string; dwellSeconds: number }) => [stop.poiRevisionId, stop.dwellSeconds])).toEqual([['poi-rev-hall', 45], ['poi-rev-pass', 30]])
   })
 
   it('shows the route in plain words and keeps identifiers under technical details', async () => {

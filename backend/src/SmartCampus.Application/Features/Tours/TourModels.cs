@@ -43,11 +43,18 @@ public sealed record TourPermissions(bool CanEditMetadata, bool CanChangeSchedul
     bool CanMarkReady = false, bool CanReopen = false, IReadOnlyList<ConflictBlocker>? ReadyBlockers = null);
 public sealed record TourReservationView(string RobotCode, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
     int MeasuredDurationSeconds, DateTimeOffset? ReleasedAt, int ExpectedDurationSeconds);
+/// <summary>One shift on one day: <see cref="Time"/> is the Tour start, the reservation is the whole shift.</summary>
 public sealed record TourSlotView(string Time, DateTimeOffset StartsAt, bool Available, string? ReasonCode, string? Reason,
-    DateTimeOffset? ReservationStartsAt, DateTimeOffset? ReservationEndsAt, DateTimeOffset RegistrationClosesAt);
+    DateTimeOffset? ReservationStartsAt, DateTimeOffset? ReservationEndsAt, DateTimeOffset RegistrationClosesAt,
+    string ShiftCode, string ShiftName, int MaxDurationSeconds);
 public sealed record TourSlotDay(DateOnly Date, IReadOnlyList<TourSlotView> Slots);
 public sealed record TourSlotsView(Guid RouteRevisionId, string RobotCode, int? MeasuredDurationSeconds,
-    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, string CustomStartEarliest, string CustomStartLatest);
+    int? ExpectedDurationSeconds, IReadOnlyList<TourSlotDay> Days, int RecommendedMaxSeconds);
+/// <summary>A configured shift on one day, for drawing the calendar before a route or robot is chosen.</summary>
+public sealed record TourShiftView(string Code, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt,
+    DateTimeOffset TourStartsAt, string Time, int MaxDurationSeconds);
+public sealed record TourShiftDay(DateOnly Date, IReadOnlyList<TourShiftView> Shifts);
+public sealed record TourShiftsView(IReadOnlyList<TourShiftDay> Days, int RecommendedMaxSeconds);
 public sealed record TourTargetView(RouteTestParticipantView? Operator, TourReservationView? Reservation);
 /// <summary>A Tour scheduled from a revision has null Route/ActiveRoute and carries RouteRevision instead.</summary>
 public sealed record TourDetails(TourSummary Tour, RouteDetails? Route, RouteDetails? ActiveRoute,

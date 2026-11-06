@@ -20,7 +20,7 @@ public sealed class ListVersionedRoutesValidator : AbstractValidator<ListVersion
     }
 }
 
-public sealed class ListVersionedRoutesHandler(IRouteRevisionRepository repository)
+public sealed class ListVersionedRoutesHandler(IRouteRevisionRepository repository, Tours.TourScheduleSettings schedule)
     : IRequestHandler<ListVersionedRoutesQuery, PagedResult<RouteRevisionView>>
 {
     public async Task<PagedResult<RouteRevisionView>> Handle(ListVersionedRoutesQuery query, CancellationToken ct)
@@ -33,7 +33,7 @@ public sealed class ListVersionedRoutesHandler(IRouteRevisionRepository reposito
         {
             var revision = await repository.FindRevisionAsync(revisionId, ct)
                 ?? throw new InvalidOperationException("The current route revision disappeared while listing routes.");
-            items.Add(await RouteRevisionMapper.Load(repository, revision.RouteId, revision.Id, false, ct));
+            items.Add(await RouteRevisionMapper.Load(repository, revision.RouteId, revision.Id, false, ct, schedule));
         }
         return new PagedResult<RouteRevisionView>(items, page.Page, page.PageSize, page.TotalItems);
     }

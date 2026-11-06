@@ -8,13 +8,11 @@ using SmartCampus.Application.Features.Routes;
 
 namespace SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 
-/// <summary><paramref name="Time"/> adds one custom start to each day, judged like the configured slots.</summary>
-public sealed record GetTourSlotsQuery(Guid RouteRevisionId, string RobotCode, DateOnly From, DateOnly To, TimeOnly? Time = null) : IQuery<TourSlotsView>;
+/// <summary>Each configured shift of each day, judged for this revision and robot (docs/lich-tour-theo-ca.md §3).</summary>
+public sealed record GetTourSlotsQuery(Guid RouteRevisionId, string RobotCode, DateOnly From, DateOnly To) : IQuery<TourSlotsView>;
 
 public sealed class GetTourSlotsQueryValidator : AbstractValidator<GetTourSlotsQuery>
 {
-    private const int MaxDays = 31;
-
     public GetTourSlotsQueryValidator()
     {
         RuleFor(q => q.RouteRevisionId).NotEmpty();
@@ -22,7 +20,7 @@ public sealed class GetTourSlotsQueryValidator : AbstractValidator<GetTourSlotsQ
         RuleFor(q => q.From).NotEmpty();
         RuleFor(q => q.To).NotEmpty();
         RuleFor(q => q).Must(q => q.From <= q.To).WithMessage("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
-        RuleFor(q => q).Must(q => q.To.DayNumber - q.From.DayNumber < MaxDays).WithMessage($"Chỉ xem được tối đa {MaxDays} ngày.");
+        RuleFor(q => q).Must(q => q.To.DayNumber - q.From.DayNumber < TourShiftDays.MaxDays).WithMessage($"Chỉ xem được tối đa {TourShiftDays.MaxDays} ngày.");
     }
 }
 
@@ -36,23 +34,32 @@ public sealed class GetTourSlotsQueryHandler(ITourManagementRepository tours, IR
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
-        var dates = Enumerable.Range(query.From.DayNumber, query.To.DayNumber - query.From.DayNumber + 1).Select(DateOnly.FromDayNumber).ToArray();
-        var times = (query.Time is { } custom ? settings.StartSlots.Append(custom) : settings.StartSlots).Distinct().Order().ToArray();
+        var days = TourShiftDays.Expand(settings, query.From, query.To);
         var holds = plan is null ? [] : await tours.GetActiveReservationsAsync(robot.Id,
-            TourSchedule.Window(TourSchedule.SlotStart(dates[0], times[0]), plan.ExpectedDurationSeconds).StartsAt,
-            TourSchedule.Window(TourSchedule.SlotStart(dates[^1], times[^1]), plan.ExpectedDurationSeconds).EndsAt, ct);
+            TourSchedule.ShiftWindow(days[0][0].Date, days[0][0].Shift).StartsAt,
+            TourSchedule.ShiftWindow(days[^1][^1].Date, days[^1][^1].Shift).EndsAt, ct);
         var now = clock.GetUtcNow();
         return new(query.RouteRevisionId, robot.RobotCode, plan?.MeasuredDurationSeconds, plan?.ExpectedDurationSeconds,
-            dates.Select(date => new TourSlotDay(date, times.Select(slot => Slot(date, slot, now, plan, holds)).ToArray())).ToArray(),
-            settings.CustomStartEarliest.ToString("HH\\:mm"), settings.CustomStartLatest.ToString("HH\\:mm"));
+            days.Select(day => new TourSlotDay(day[0].Date, day.Select(shift => Slot(shift, now, plan, holds)).ToArray())).ToArray(),
+            settings.RecommendedMaxSeconds);
     }
 
-    private TourSlotView Slot(DateOnly date, TimeOnly slot, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds)
+    private static TourSlotView Slot(TourShiftOnDay shift, DateTimeOffset now, TourReservationPlan? plan, IReadOnlyList<TourReservationHold> holds)
     {
-        var start = TourSchedule.SlotStart(date, slot);
-        var block = TourSchedule.StartRule(settings, start) ?? TourSchedule.Evaluate(start, now, plan, holds);
-        var window = plan is null ? ((DateTimeOffset, DateTimeOffset)?)null : TourSchedule.Window(start, plan.ExpectedDurationSeconds);
-        return new(slot.ToString("HH\\:mm"), start, block is null, block?.Code, block?.Message,
-            window?.Item1, window?.Item2, start - TourSchedule.RegistrationClose);
+        var start = TourSchedule.TourStart(shift.Date, shift.Shift);
+        var block = TourSchedule.Evaluate(shift, now, plan, holds);
+        var (startsAt, endsAt) = TourSchedule.ShiftWindow(shift.Date, shift.Shift);
+        return new(shift.Shift.Start.Add(TourSchedule.ReservationBuffer).ToString("HH\\:mm"), start, block is null, block?.Code, block?.Message,
+            startsAt, endsAt, start - TourSchedule.RegistrationClose, shift.Shift.Code, shift.Shift.Name, TourSchedule.MaxDurationSeconds(shift.Shift));
     }
+}
+
+/// <summary>The configured shifts of each day in a range, shared by the slot list and the shift calendar.</summary>
+internal static class TourShiftDays
+{
+    public const int MaxDays = 31;
+
+    public static TourShiftOnDay[][] Expand(TourScheduleSettings settings, DateOnly from, DateOnly to) =>
+        Enumerable.Range(from.DayNumber, to.DayNumber - from.DayNumber + 1).Select(DateOnly.FromDayNumber)
+            .Select(date => settings.Shifts.Select(shift => new TourShiftOnDay(date, shift)).ToArray()).ToArray();
 }

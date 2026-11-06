@@ -11,20 +11,22 @@ using SmartCampus.Domain.Entities;
 namespace SmartCampus.Application.Features.Routes;
 
 public sealed record GetRouteRevisionQuery(Guid RouteId, Guid? RevisionId, bool IncludeHistory) : IRequest<RouteRevisionView>;
-public sealed class GetRouteRevisionHandler(IRouteRevisionRepository repo) : IRequestHandler<GetRouteRevisionQuery, RouteRevisionView>
+public sealed class GetRouteRevisionHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule) : IRequestHandler<GetRouteRevisionQuery, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(GetRouteRevisionQuery q, CancellationToken ct)
     {
         var route = await repo.FindRouteAsync(q.RouteId, ct) ?? throw new NotFoundException("Versioned route", q.RouteId);
         var revision = q.RevisionId.HasValue ? await repo.FindRevisionAsync(q.RevisionId.Value, ct) : await repo.GetCurrentRevisionAsync(q.RouteId, ct);
         if (revision is null || revision.RouteId != q.RouteId) throw new NotFoundException("Route revision", q.RevisionId ?? Guid.Empty);
-        return await RouteRevisionMapper.Load(repo, route.Id, revision.Id, q.IncludeHistory, ct);
+        return await RouteRevisionMapper.Load(repo, route.Id, revision.Id, q.IncludeHistory, ct, schedule);
     }
 }
 
 internal static class RouteRevisionMapper
 {
-    public static async Task<RouteRevisionView> Load(IRouteRevisionRepository repo, Guid routeId, Guid revisionId, bool history, CancellationToken ct)
+    /// <summary>Without <paramref name="schedule"/> the view reports ScheduleFit UNKNOWN; screens that show the label pass it.</summary>
+    public static async Task<RouteRevisionView> Load(IRouteRevisionRepository repo, Guid routeId, Guid revisionId, bool history, CancellationToken ct,
+        Tours.TourScheduleSettings? schedule = null)
     {
         var route = await repo.FindRouteAsync(routeId, ct) ?? throw new NotFoundException("Versioned route", routeId);
         var revision = await repo.FindRevisionAsync(revisionId, ct) ?? throw new NotFoundException("Route revision", revisionId);
@@ -48,6 +50,7 @@ internal static class RouteRevisionMapper
             .OrderBy(r => r.CheckedAt).ThenBy(r => r.Id).ToArray();
         var runs = history ? routeRuns : effectiveConfigurationRuns;
         var effective = effectiveConfigurationRuns.LastOrDefault();
+        var expected = ExpectedDuration(effective, stops);
         var duration = "INCOMPLETE_CONTENT_AUDIO_DATA";
         var dwell = stops.Sum(s => s.DwellSeconds);
         var dtoRuns = new List<RouteTestRunView>(runs.Count);
@@ -81,6 +84,14 @@ internal static class RouteRevisionMapper
             stops.Select(s => new RouteRevisionStopView(s.Id, s.PoiProposalRevisionId, s.SourcePoiVerificationRecordId,
                 s.StopOrder, s.DwellSeconds, Route.ReadHeadSteps(s.HeadStepsJson), s.Name, s.X, s.Y, s.Yaw,
                 s.CameraPreset, s.NarrationText, s.FallbackVideoUrl)).ToArray(), dtoRuns, summaries, eligibilityIssues,
-            route.IsOpenForNewTours, LegacyRouteRevision.For(route));
+            route.IsOpenForNewTours, LegacyRouteRevision.For(route), schedule is null ? Tours.RouteScheduleFit.Unknown
+                : Tours.TourSchedule.ScheduleFit(schedule, expected), expected);
     }
+
+    /// <summary>The effective PASS measured with dwell, plus any dwell added since (the same sum a reservation uses).</summary>
+    private static int? ExpectedDuration(RouteTestRun? effective, IReadOnlyList<RouteRevisionStop> stops) =>
+        effective is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
+            ? Tours.TourSchedule.ExpectedDurationSeconds(effective.MeasuredDurationSeconds,
+                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), stops.Select(stop => (stop.StopOrder, stop.DwellSeconds)))
+            : null;
 }
