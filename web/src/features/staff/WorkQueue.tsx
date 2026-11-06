@@ -8,6 +8,7 @@ import { needsStaffWork, poiStatus } from '../administration/pois/poi-status'
 import { Waited } from '../administration/registrations/components/Waited'
 import { useRegistrationReviews } from '../administration/registrations/hooks'
 import { useTours } from '../administration/tours/hooks'
+import type { TourBlocker } from '../administration/tours/types'
 import { useReviewParam } from '../administration/use-review-param'
 import { usePoiProposals } from '../technical/technical-hooks'
 
@@ -24,7 +25,8 @@ const PREVIEW = 5
  */
 export function WorkQueue({ urgent }: { urgent: boolean }) {
   const registrations = useRegistrationReviews({ state: 'SUBMITTED', page: 1, size: PREVIEW, sort: 'submittedAt' })
-  const scheduled = useTours({ state: 'SCHEDULED', page: 1, size: PREVIEW, sort: 'scheduledStartAt' })
+  // `readyBlockers`: the server says why each previewed Tour cannot be marked READY yet (same checks as its detail).
+  const scheduled = useTours({ state: 'SCHEDULED', page: 1, size: PREVIEW, sort: 'scheduledStartAt', readyBlockers: true })
   const pois = usePoiProposals()
   const { open: openReview } = useReviewParam()
   const [toggled, setToggled] = useState<boolean | null>(null)
@@ -60,7 +62,11 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
           note="Tour SCHEDULED cần chốt (READY) trước giờ bắt đầu."
           more={<Link to="/staff/schedule?view=list&state=SCHEDULED" className={buttonClass('ghost', 'sm')}>Tất cả</Link>}>
           {scheduled.data?.data.map(tour => <li key={tour.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-            <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span><span className="block truncate text-xs text-[#64748b]">{formatSlot(tour.scheduledStartAt)} · {tour.registrationCount} đoàn</span></span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-[#0f172a]">{tour.name}</span>
+              <span className="block truncate text-xs text-[#64748b]">{formatSlot(tour.scheduledStartAt)} · {tour.registrationCount} đoàn</span>
+              <ReadyVerdict blockers={tour.readyBlockers} />
+            </span>
             <Link to={`/staff/manage/tours/${tour.id}`} className={buttonClass('secondary', 'sm')}>Chuẩn bị và chốt<span className="sr-only"> {tour.name}</span></Link>
           </li>)}
         </QueueSection>
@@ -71,6 +77,18 @@ export function WorkQueue({ urgent }: { urgent: boolean }) {
       </div>}
     </section>
   )
+}
+
+/**
+ * Why a Tour cannot be marked READY yet, in the server's words: the first blocker and how many more. Nothing when
+ * the server did not say (an older server, or a row that is not SCHEDULED); "can be marked" only on an empty list.
+ */
+function ReadyVerdict({ blockers }: { blockers?: TourBlocker[] | null }) {
+  if (!blockers) return null
+  if (blockers.length === 0) return <span className="mt-0.5 block text-xs font-semibold text-[#15803d]">Đủ điều kiện chốt.</span>
+  return <span className="mt-0.5 block text-xs font-semibold text-[#8a5a06]" title={blockers.map(b => b.message).join('\n')}>
+    {blockers[0].message}{blockers.length > 1 ? ` (và ${blockers.length - 1} điều kiện khác)` : ''}
+  </span>
 }
 
 function QueueSection({ title, total, failed, loading, onRetry, note, more, children }: {

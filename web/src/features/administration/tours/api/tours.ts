@@ -13,6 +13,9 @@ export const toursApi = {
     if (query.from) params.set('from', query.from)
     if (query.to) params.set('to', query.to)
     if (query.sort) params.set('sort', query.sort)
+    if (query.operator) params.set('operator', query.operator)
+    if (query.needsReconcile) params.set('needsReconcile', 'true')
+    if (query.readyBlockers) params.set('readyBlockers', 'true')
     return apiClient<PagedApiResponse<TourSummary>>(`/api/staff/manage/tours?${params}`)
   },
   get: (id: string) => apiClient<ApiResponse<TourDetails>>(`/api/staff/manage/tours/${id}`).then(r => r.data!),
