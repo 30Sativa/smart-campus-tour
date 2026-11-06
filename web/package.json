@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lighthouse": "npm run build && npx --yes @lhci/cli@0.16.0 autorun"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",

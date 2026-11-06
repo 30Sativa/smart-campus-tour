@@ -628,3 +628,61 @@ claim the UI is correct.
 - Do not commit `node_modules/` or build output.
 
 <!-- TODO(WP4): thêm constraint khác khi có. -->
+
+---
+
+## 8. Design & Frontend Toolkit (agent skills)
+
+The toolkit lives in `web/.claude/skills/`. It is local only and gitignored;
+reinstall it from `web/.claude/skills/SOURCES.md`. If a skill is missing, say
+so and keep working under this file's rules — do not fetch one silently.
+
+**Each tool owns one decision. Load only the tool(s) the current task needs.**
+A pure logic, API or test change loads none of them.
+
+| Decision | Owner | Load when the task… |
+|---|---|---|
+| Art direction and aesthetics | `design-taste-frontend` (Taste Skill) | creates or reshapes the look of a visitor-facing surface (`/`, public pages, `/tour`) |
+| Design system and UX | `ui-ux-pro-max` | touches tokens, components, layout, typography, colour, accessibility, interaction, forms or charts, or reviews a screen |
+| 3D experience | `3dviz-pro-max` | changes the Digital Twin / R3F scene: models, materials, lighting, camera, motion |
+| React code quality | `vercel-react-best-practices` | writes, reviews or refactors React components, re-renders, lazy loading, bundle size |
+| Testing (a tool, not a skill) | Lighthouse — `npm run lighthouse` | has changed a public route; run it after the change, before reporting |
+
+When two owners disagree, the owner of that decision wins: Taste on mood and
+visual direction, UI UX Pro Max on tokens, components and UX rules, 3Dviz on
+the scene, React Best Practices on code. **This file and `docs/` outrank
+every skill.**
+
+Rules:
+
+- **Keep the brand identity.** Skills work inside the existing identity; they
+  do not replace it. Fixed: the logo, the `--lp-*` / `--auth-*` token layer
+  (§3), the shared operations/administration palette, the status tones in
+  `features/staff/status.ts`, and Vietnamese labels. A new palette, font or
+  logo needs a task that explicitly asks for a rebrand.
+- **Consoles are not marketing.** `/staff/*`, `/technical/*` and `/admin/*`
+  use `ui-ux-pro-max` and the existing component set only; Taste's art
+  direction is for visitor-facing surfaces.
+- **Robot logic is out of bounds.** The toolkit changes presentation, never
+  behaviour. Do not touch `robot/`, Tour state or command flow, confirmation
+  steps, telemetry meaning, SignalR contracts, or the single ROS-map -> Twin
+  transform (§4). `3dviz-pro-max` may change how a robot *looks*, never where
+  it is or which state it shows; the 3D view stays not-a-physics-engine.
+- **This file beats skill defaults.** Tailwind utilities only, no new CSS file
+  for consoles (§3), no new dependency (shadcn, Lenis, another animation
+  library…) without the reason the root `AGENTS.md` asks for. `gsap`, `motion`,
+  `three`, `@react-three/fiber` and `@react-three/drei` are already installed.
+- `vercel-react-best-practices` targets React and Next.js. This app is a Vite
+  SPA: skip the Server Component, Server Action and Next.js-only rules.
+- `3dviz-pro-max` helper scripts are `python3` scripts in its own folder;
+  frame capture needs Playwright. jsdom tests still do not assert WebGL (§5).
+- Lighthouse needs a local Chrome. It builds, serves `dist/` as an SPA and
+  audits `/`, `/login` and `/tour` (`web/lighthouserc.json`); reports go to
+  `web/.lighthouseci/` (gitignored). It is **not** part of `scripts/verify`,
+  and its scores are a report, not a DONE gate. Say which scores moved.
+- Every other skill in `web/.claude/skills/` (`gpt-taste`,
+  `high-end-visual-design`, `design`, `design-system`, `ui-styling`, `brand`,
+  `minimalist-ui`, `industrial-brutalist-ui`, `stitch-design-taste`,
+  `redesign-existing-projects`, `image-to-code`, `imagegen-*`, `banner-design`,
+  `slides`, `brandkit`, `design-taste-frontend-v1`, `full-output-enforcement`)
+  is **not** part of the toolkit. Do not load one unless the user names it.

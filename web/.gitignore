@@ -30,3 +30,6 @@ dist-ssr
 # AI agent skills cài từ repo ngoài (taste-skill, ui-ux-pro-max).
 # Chỉ dùng cục bộ, KHÔNG commit — xem web/.claude/skills/SOURCES.md để cài lại.
 .claude/
+
+# Báo cáo Lighthouse CI (npm run lighthouse) — chỉ cục bộ.
+.lighthouseci/
