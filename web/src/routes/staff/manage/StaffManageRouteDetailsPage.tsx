@@ -4,7 +4,8 @@ import { useMutation } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { revisionTone } from '../../../features/administration/routes/route-messages'
+import { revisionTone, scheduleFitLabel } from '../../../features/administration/routes/route-messages'
+import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { Note } from '../../../features/technical/TechnicalUi'
 import { ApiError } from '../../../api/client'
@@ -38,7 +39,8 @@ function tourReadiness(route: VersionedRoute): { tone: 'warn' | 'success'; text:
   if (route.verificationStatus !== 'PASS') return { tone: 'warn', text: 'Chưa tạo được Tour: tuyến cần một lần chạy thử toàn tuyến đạt.' }
   const effective = route.testRuns.find(run => run.id === route.effectiveTestRunId)
   if (effective && !effective.measurementBasis) return { tone: 'warn', text: 'Chưa tạo được Tour: lần chạy thử đạt được đo theo định nghĩa cũ. Nhờ Kỹ thuật chạy thử lại toàn tuyến.' }
-  return { tone: 'success', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và khung giờ.' }
+  if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Tạo phiên bản ngắn hơn rồi chạy thử lại.` }
+  return { tone: 'success', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.' }
 }
 
 const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
@@ -80,7 +82,7 @@ export default function StaffManageRouteDetailsPage() {
     </div>
     <section className={`${panelClass} p-4`} aria-label="Tổng quan tuyến">
       <dl className="grid gap-3 sm:grid-cols-4">
-        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1"><RevisionChip submitted={value.isSubmitted} status={value.verificationStatus} /></dd></div>
+        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1 flex flex-wrap gap-1"><RevisionChip submitted={value.isSubmitted} status={value.verificationStatus} /><ScheduleFitBadge route={value} /></dd></div>
         <div className="min-w-0"><dt className="text-xs text-[#64748b]">Bản đồ</dt><dd className="mt-0.5 break-words font-mono text-[13px]">{value.mapKey}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Số điểm dừng</dt><dd className="mt-0.5">{value.stops.length}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>

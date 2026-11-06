@@ -63,6 +63,22 @@ public sealed class RouteStopSeparationTests
     public async Task The_minimum_comes_from_configuration() =>
         Assert.Null(await Save(Draft(2.5m, 2m, Library, Lab), new RouteRuleSettings(null, 0.4m)));
 
+    [Theory]
+    [InlineData(18, 5400, false)] // 18 x 300 s fills the 90 minutes a two-hour shift holds.
+    [InlineData(19, 5700, true)]
+    public async Task Total_dwell_over_the_longest_shift_is_refused(int stopCount, int totalDwell, bool refused)
+    {
+        // docs/lich-tour-theo-ca.md §4: dwell alone already longer than any shift can hold.
+        var stops = Enumerable.Range(0, stopCount).Select(index => Poi($"Điểm {index + 1}", 10m + index * 1.5m, 2m)).ToArray();
+        var draft = Draft(0m, 0m, stops) with { Stops = stops.Select(s => new RouteRevisionStopInput(s.Revision.Id, 300, [new("FRONT", 30)])).ToArray() };
+        Assert.Equal(totalDwell, draft.Stops.Sum(stop => stop.DwellSeconds));
+        var handler = new SaveRouteRevisionHandler(RouteRepository(), MapRepository(), new MapPoiSettings(null),
+            new RouteRuleSettings(null, null), TourShiftsFixture.Settings, TimeProvider.System);
+        var error = await Record.ExceptionAsync(() => handler.Handle(new SaveRouteRevisionCommand(Guid.NewGuid(), null, draft), default));
+        Assert.Equal(refused, error is ConflictException { Code: "ROUTE_TOO_LONG_FOR_SHIFT" });
+        Assert.IsNotType<NotImplementedException>(error);
+    }
+
     private static RouteRevisionDraftInput Draft(decimal startX, decimal startY, params RoutePoiRevisionEvidence[] stops) =>
         new(Guid.NewGuid(), 0, "Tuyến thử", null, Map.Id, startX, startY, 0m, "LAST_POI", null, null, null,
             stops.Select(s => new RouteRevisionStopInput(s.Revision.Id, 30, [new("FRONT", 30)])).ToArray());
@@ -71,7 +87,7 @@ public sealed class RouteStopSeparationTests
     private static async Task<ConflictException?> Save(RouteRevisionDraftInput draft, RouteRuleSettings? rules = null)
     {
         var handler = new SaveRouteRevisionHandler(RouteRepository(), MapRepository(), new MapPoiSettings(null),
-            rules ?? new RouteRuleSettings(null, null), TimeProvider.System);
+            rules ?? new RouteRuleSettings(null, null), TourShiftsFixture.Settings, TimeProvider.System);
         try
         {
             await handler.Handle(new SaveRouteRevisionCommand(Guid.NewGuid(), null, draft), default);

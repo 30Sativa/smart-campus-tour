@@ -251,6 +251,22 @@ describe('Staff versioned Route workflow', () => {
     expect(await screen.findByText(/Tuyến đang ngừng sử dụng nên chưa tạo được Tour mới/)).toBeInTheDocument()
   })
 
+  it('labels a route too long for one shift in red and one over the recommendation in amber', async () => {
+    currentRoute = { ...route, isSubmitted: true, verificationStatus: 'PASS', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 } as typeof route
+    const catalog = renderAt('/staff/manage/routes')
+    expect(await screen.findByText('Quá dài cho 1 ca')).toBeInTheDocument()
+    catalog.unmount()
+    const detail = renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText('Quá dài cho 1 ca')).toBeInTheDocument()
+    expect(screen.getByText(/Chưa tạo được Tour: Dự kiến 100 phút, vượt thời lượng tối đa của mọi ca/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Tạo Tour' })).not.toBeInTheDocument()
+    detail.unmount()
+    currentRoute = { ...currentRoute, scheduleFit: 'OVER_RECOMMENDED', expectedDurationSeconds: 4000 } as typeof route
+    renderAt('/staff/manage/routes/route-1')
+    expect(await screen.findByText('Dài hơn mức khuyến nghị')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tạo Tour' })).toBeInTheDocument()
+  })
+
   it('explains a submit refused because the map lost its technical check', async () => {
     submissionFailure = 409
     submissionFailureBody = { success: false, message: 'Không có robot nào đạt.', errors: { code: 'TECHNICAL_CHECK_NOT_PASSED', fields: null } }

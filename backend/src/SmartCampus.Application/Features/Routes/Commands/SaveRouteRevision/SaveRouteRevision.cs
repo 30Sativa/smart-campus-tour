@@ -58,7 +58,8 @@ public sealed class RouteRevisionDraftValidator : AbstractValidator<SaveRouteRev
     }
 }
 
-public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, MapPoiSettings settings, RouteRuleSettings rules, TimeProvider clock)
+public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMapVersionRepository mapRepository, MapPoiSettings settings, RouteRuleSettings rules,
+    Tours.TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<SaveRouteRevisionCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(SaveRouteRevisionCommand c, CancellationToken ct)
@@ -71,7 +72,7 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
         if (prior is not null)
         {
             EnsureHash(prior.RequestHash, hash);
-            return await RouteRevisionMapper.Load(repo, prior.RouteId, prior.Id, true, ct);
+            return await RouteRevisionMapper.Load(repo, prior.RouteId, prior.Id, true, ct, schedule);
         }
 
         Route? route;
@@ -110,6 +111,10 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                 throw new ConflictException($"POI {selected.Revision.Name} chưa có nội dung thuyết minh. Bổ sung nội dung rồi chọn lại phiên bản mới.", "POI_NARRATION_REQUIRED");
         }
         EnsureStopSeparation(i, poiIds.Select(id => byId[id].Revision).ToArray());
+        // docs/lich-tour-theo-ca.md §4: dwell alone, before any travel, already longer than the longest shift can hold.
+        var totalDwell = i.Stops.Sum(stop => stop.DwellSeconds);
+        if (totalDwell > schedule.LongestShiftMaxSeconds)
+            throw new ConflictException($"Tổng thời gian dừng {totalDwell / 60} phút {totalDwell % 60} giây vượt thời lượng tối đa của ca dài nhất ({schedule.LongestShiftMaxSeconds / 60} phút). Giảm thời gian dừng hoặc bớt điểm dừng.", Tours.TourSchedule.RouteTooLongForShift);
         var package = MapPackageValidator.Validate(map.PackageBytes);
         var previous = current?.MapVersionId == map.Id ? current : null;
         EnsureWrittenPose(package, i.StartX, i.StartY, i.StartYaw, previous?.StartX, previous?.StartY);
@@ -170,6 +175,11 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
             inheritedRun.ParticipatingStaffUserId, inheritedRun.ResultCode, inheritedRun.AllStopsReached,
             inheritedRun.SafelyStopped, inheritedRun.LocalizationPassed, inheritedRun.MeasuredDurationSeconds,
             inheritedRun.FailureReason, inheritedRun.EvidenceNote, inheritedRun.CheckedAt, inheritedRun.MeasurementBasis)];
+        // A dwell-only change inherits the PASS; its length then follows like a reservation's (docs/lich-tour-theo-ca.md §4).
+        int? expected = inheritedRun is { ResultCode: "PASS", MeasurementBasis: RouteMeasurementBasis.TotalWithDwell, RouteRevision: { } tested }
+            ? Tours.TourSchedule.ExpectedDurationSeconds(inheritedRun.MeasuredDurationSeconds,
+                tested.RouteRevisionStops.Select(stop => (stop.StopOrder, stop.DwellSeconds)), i.Stops.Select((stop, index) => (index + 1, stop.DwellSeconds)))
+            : null;
         return new RouteRevisionView(routeId, revision.Id, number, revision.Name, revision.Description, map.Id, map.MapKey,
             Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), revision.StartX, revision.StartY, revision.StartYaw,
             revision.EndMode, revision.EndX, revision.EndY, revision.EndYaw,
@@ -183,7 +193,8 @@ public sealed class SaveRouteRevisionHandler(IRouteRevisionRepository repo, IMap
                     selected.Revision.CameraPreset, selected.Revision.NarrationText, selected.Revision.FallbackVideoUrl);
             }).ToArray(), inheritedTestRuns, [new RouteRevisionSummaryView(revision.Id, number, map.Id,
                 Convert.ToHexString(map.PackageSha256).ToLowerInvariant(), Convert.ToHexString(fingerprint).ToLowerInvariant(), false,
-                inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], []);
+                inheritedRun?.ResultCode ?? "NOT_TESTED", inheritedRun?.Id, revision.CreatedAt)], [],
+            ScheduleFit: Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds: expected);
     }
 
     // docs/lich-tour-theo-ca.md §2: the start, each consecutive pair of stops and a separate end pose must be

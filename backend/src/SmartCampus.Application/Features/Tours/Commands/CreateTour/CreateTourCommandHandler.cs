@@ -16,8 +16,7 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
         var replay = await TourRequestReceipt.ReplayAsync(repository, command.Actor, command.Request.RequestId, "TOUR_CREATED", null, fingerprint, ct);
         if (replay.HasValue) return new(replay.Value);
         TourPreparation.RequireFuture(input.ScheduledStartAt, clock.GetUtcNow());
-        if (TourSchedule.StartRule(settings, input.ScheduledStartAt) is { } outside)
-            throw new ConflictException(outside.Message, "TOUR_SLOT_NOT_ALLOWED");
+        var shift = TourSchedule.RequireShift(settings, input.ScheduledStartAt);
         var (revision, run) = await TourTarget.RequireTestedRevisionAsync(revisions, maps, input.RouteRevisionId, lockTarget: true, ct);
         await TourTarget.RequireOperatorAsync(revisions, input.OperatorUserId, ct);
         var found = await revisions.FindPhysicalRobotAsync(input.RobotCode, ct)
@@ -29,10 +28,11 @@ public sealed class CreateTourCommandHandler(ITourManagementRepository repositor
             ?? throw new NotFoundException("Không tìm thấy robot vật lý.");
         await TourTarget.RequireUsableRobotAsync(revisions, robot, revision, ct);
         var plan = await TourTarget.PlanReservationAsync(revisions, revision.Id, run, ct);
-        var (startsAt, endsAt) = TourSchedule.Window(input.ScheduledStartAt, plan?.ExpectedDurationSeconds ?? run.MeasuredDurationSeconds);
-        // Decided after the robot lock, on a fresh clock, so a slot taken while waiting is seen.
+        // The robot is held for the whole shift (docs/lich-tour-theo-ca.md §3).
+        var (startsAt, endsAt) = TourSchedule.ShiftWindow(shift.Date, shift.Shift);
+        // Decided after the robot lock, on a fresh clock, so a shift taken while waiting is seen.
         var now = clock.GetUtcNow();
-        TourSchedule.EnsureUsable(TourSchedule.Evaluate(input.ScheduledStartAt, now, plan,
+        TourSchedule.EnsureUsable(TourSchedule.Evaluate(shift, now, plan,
             await repository.GetActiveReservationsAsync(robot.Id, startsAt, endsAt, ct)));
         var tour = new Tour
         {

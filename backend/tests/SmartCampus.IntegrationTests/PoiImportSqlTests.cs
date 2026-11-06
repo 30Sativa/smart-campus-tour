@@ -494,6 +494,9 @@ public sealed class PoiImportSqlTests
             var settings = InvitationPrimitiveTests.ConfigurationValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value);
             settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
             settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
+            // Saving a route checks its dwell against the longest shift (docs/lich-tour-theo-ca.md §4).
+            settings["Tours:Shifts:0:Code"] = "S1"; settings["Tours:Shifts:0:Name"] = "Ca sáng";
+            settings["Tours:Shifts:0:Start"] = "08:00"; settings["Tours:Shifts:0:End"] = "10:00";
             if (clearanceMeters is { } clearance) settings["Maps:PoiClearanceMeters"] = clearance.ToString(CultureInfo.InvariantCulture);
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var services = new ServiceCollection();

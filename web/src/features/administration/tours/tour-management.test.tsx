@@ -50,12 +50,14 @@ const chooseTarget = async () => {
   fireEvent.change(screen.getByLabelText('Người vận hành'), { target: { value: 'staff-1' } })
 }
 const pickDate = () => fireEvent.change(screen.getByLabelText(/Ngày tổ chức/), { target: { value: '2099-01-03' } })
-const freeSlot = { time: '09:00', startsAt: '2099-01-03T02:00:00Z', available: true, reasonCode: null, reason: null,
-  reservationStartsAt: '2099-01-03T01:45:00Z', reservationEndsAt: '2099-01-03T02:37:00Z', registrationClosesAt: '2099-01-01T02:00:00Z' }
-const lockedSlot = { ...freeSlot, time: '10:00', startsAt: '2099-01-03T03:00:00Z', available: false, reasonCode: 'RESERVATION_OVERLAP', reason: 'Trùng khung giữ robot của Tour Tour chiều' }
-const customFree = { ...freeSlot, time: '13:30', startsAt: '2099-01-03T06:30:00Z', reservationStartsAt: '2099-01-03T06:15:00Z', reservationEndsAt: '2099-01-03T07:07:00Z' }
-const tooEarly = { ...freeSlot, time: '07:30', startsAt: '2099-01-03T00:30:00Z', available: false, reasonCode: 'OUTSIDE_START_HOURS', reason: 'Ngoài giờ cho phép, chọn từ 08:00 đến 17:00' }
+// docs/lich-tour-theo-ca.md §3: the morning shift holds the robot 08:00-10:00 and the Tour starts at 08:15.
+const freeSlot = { time: '08:15', startsAt: '2099-01-03T01:15:00Z', available: true, reasonCode: null, reason: null,
+  reservationStartsAt: '2099-01-03T01:00:00Z', reservationEndsAt: '2099-01-03T03:00:00Z', registrationClosesAt: '2099-01-01T01:15:00Z',
+  shiftCode: 'S1', shiftName: 'Ca sáng', maxDurationSeconds: 5400 }
+const lockedSlot = { ...freeSlot, time: '13:15', startsAt: '2099-01-03T06:15:00Z', reservationStartsAt: '2099-01-03T06:00:00Z', reservationEndsAt: '2099-01-03T08:00:00Z',
+  shiftCode: 'S2', shiftName: 'Ca chiều 1', available: false, reasonCode: 'RESERVATION_OVERLAP', reason: 'Trùng khung giữ robot của Tour Tour chiều' }
 let slotDay = [freeSlot, lockedSlot]
+let expectedSeconds = 1320
 let refuseCreate: string | null = null
 
 function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { ...TESTED, revisionId: 'revision-untested', name: 'Chưa đạt', verificationStatus: 'NOT_TESTED' }]) {
@@ -64,10 +66,9 @@ function api(detail: TourDetails = tour(), testedRoutes: unknown[] = [TESTED, { 
     const url = new URL(String(input), 'http://localhost')
     const path = url.pathname
     const method = init?.method ?? 'GET'
-    const typed = url.searchParams.get('time')
     if (path === '/api/staff/manage/tours/slots') return Promise.resolve(json({ success: true, data: { routeRevisionId: 'revision-2', robotCode: 'amr-01',
-      measuredDurationSeconds: 1200, expectedDurationSeconds: 1320, customStartEarliest: '08:00', customStartLatest: '17:00',
-      days: [{ date: '2099-01-03', slots: typed ? [...slotDay, typed === '07:30' ? tooEarly : customFree] : slotDay }] } }))
+      measuredDurationSeconds: 1200, expectedDurationSeconds: expectedSeconds, recommendedMaxSeconds: 3600,
+      days: [{ date: '2099-01-03', slots: slotDay }] } }))
     if (method !== 'GET') {
       writes.push({ method, path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
       if (refuseCreate) return Promise.resolve(json({ success: false, message: 'x', errors: { code: refuseCreate } }, 409))
@@ -94,7 +95,7 @@ function renderAt(path: string) {
     <Route path="/staff/manage/tours/:tourId/edit" element={<StaffManageTourEditPage />} />
   </Routes></MemoryRouter></QueryClientProvider>)
 }
-beforeEach(() => { slotDay = [freeSlot, lockedSlot]; refuseCreate = null })
+beforeEach(() => { slotDay = [freeSlot, lockedSlot]; expectedSeconds = 1320; refuseCreate = null })
 beforeEach(() => useAuthStore.setState({ isAuthReady: true, isAuthenticated: true, accessToken: 'test-token', user: { userId: 'admin', username: 'admin', role: 'Admin' } }))
 afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 
@@ -180,40 +181,44 @@ describe('live Tour management', () => {
     expect(await screen.findByText('1. Thư viện')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
     pickDate()
-    fireEvent.click(await screen.findByRole('button', { name: /09:00/ }))
+    // Shifts only: no typed time any more (docs/lich-tour-theo-ca.md §3).
+    expect(await screen.findByRole('button', { name: /Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00/ })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /Giờ khác/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Ca sáng/ }))
     const review = screen.getByRole('region', { name: 'Xem lại trước khi tạo' })
     expect(within(review).getByText('22 phút')).toBeInTheDocument()
-    expect(within(review).getByText('08:45 - 09:37')).toBeInTheDocument()
-    expect(within(review).getByText('09:00 01/01/2099')).toBeInTheDocument()
+    expect(within(review).getByText('08:00 - 10:00')).toBeInTheDocument()
+    expect(within(review).getByText('08:15 01/01/2099')).toBeInTheDocument()
+    expect(within(review).queryByText(/mức khuyến nghị/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await screen.findByRole('heading', { name: 'Tour sáng thứ Bảy' })
     expect(writes).toHaveLength(1)
     expect(writes[0]).toMatchObject({ method: 'POST', path: '/api/staff/manage/tours', body: {
-      configuration: { name: 'Tour sáng thứ Bảy', description: null, routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', scheduledStartAt: '2099-01-03T02:00:00Z', fallbackVideoUrl: null },
+      configuration: { name: 'Tour sáng thứ Bảy', description: null, routeRevisionId: 'revision-2', robotCode: 'amr-01', operatorUserId: 'staff-1', scheduledStartAt: '2099-01-03T01:15:00Z', fallbackVideoUrl: null },
     } })
     expect(writes[0].body.requestId).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/))
   })
 
-  it('creates a Tour at a typed time, judged by the server like a slot', async () => {
+  it('picks the day and shift from the calendar link and warns when the route is over the recommended length', async () => {
+    expectedSeconds = 4000
     const writes = api()
-    renderAt('/staff/manage/tours/new')
-    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour giờ riêng' } })
+    renderAt('/staff/manage/tours/new?date=2099-01-03&shift=S1')
+    fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour từ lịch' } })
+    expect(screen.getByLabelText(/Ngày tổ chức/)).toHaveValue('2099-01-03')
     await chooseTarget()
-    pickDate()
-    fireEvent.click(await screen.findByRole('button', { name: /09:00/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Giờ khác/ }))
-    // The picked slot no longer stands: nothing can be saved until the typed time is judged.
-    expect(screen.queryByRole('region', { name: 'Xem lại trước khi tạo' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/Giờ bắt đầu/), { target: { value: '07:30' } })
-    expect(await screen.findByRole('alert')).toHaveTextContent('Ngoài giờ cho phép, chọn từ 08:00 đến 17:00')
-    expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/Giờ bắt đầu/), { target: { value: '13:30' } })
-    const review = await screen.findByRole('region', { name: 'Xem lại trước khi tạo' })
-    expect(within(review).getByText('13:15 - 14:07')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Ca sáng/ })).toHaveAttribute('aria-pressed', 'true')
+    const review = screen.getByRole('region', { name: 'Xem lại trước khi tạo' })
+    expect(within(review).getByText("Tuyến dài 66 phút 40 giây, hơn mức khuyến nghị 60 phút. Vẫn tạo được, nhưng nên cân nhắc tuyến ngắn hơn.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0].body).toMatchObject({ configuration: { scheduledStartAt: '2099-01-03T06:30:00Z' } })
+    expect(writes[0].body).toMatchObject({ configuration: { scheduledStartAt: '2099-01-03T01:15:00Z' } })
+  })
+
+  it('shows a route too long for one shift but does not let it be chosen', async () => {
+    api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-long', name: 'Tuyến dài', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 }])
+    renderAt('/staff/manage/tours/new')
+    expect(await screen.findByRole('option', { name: 'Tuyến dài · phiên bản 3 · 1 điểm dừng (Quá dài cho 1 ca)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · phiên bản 3 · 1 điểm dừng' })).toBeEnabled()
   })
 
   it('locks a taken slot with its reason, so it cannot be chosen', async () => {
@@ -222,7 +227,7 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour cũ' } })
     await chooseTarget()
     pickDate()
-    const locked = await screen.findByRole('button', { name: /10:00/ })
+    const locked = await screen.findByRole('button', { name: /Ca chiều 1 · 13:15-14:45/ })
     expect(locked).toBeDisabled()
     expect(locked).toHaveTextContent('Trùng khung giữ robot của Tour Tour chiều')
     expect(screen.getByRole('button', { name: 'Tạo Tour' })).toBeDisabled()
@@ -235,7 +240,7 @@ describe('live Tour management', () => {
     fireEvent.change(screen.getByLabelText('Tên Tour'), { target: { value: 'Tour trễ' } })
     await chooseTarget()
     pickDate()
-    fireEvent.click(await screen.findByRole('button', { name: /09:00/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Ca sáng/ }))
     refuseCreate = 'ROBOT_RESERVATION_CONFLICT'
     slotDay = [{ ...freeSlot, available: false, reasonCode: 'RESERVATION_OVERLAP', reason: 'Trùng khung giữ robot của Tour Tour khác' }, lockedSlot]
     fireEvent.click(screen.getByRole('button', { name: 'Tạo Tour' }))

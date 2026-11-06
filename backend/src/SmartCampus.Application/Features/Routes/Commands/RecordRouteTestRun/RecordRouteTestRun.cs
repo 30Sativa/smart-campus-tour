@@ -45,7 +45,7 @@ public static class RouteRobotDeployment
         CryptographicOperations.FixedTimeEquals(map.PackageSha256, revision.MapPackageSha256);
 }
 
-public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, TimeProvider clock)
+public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tours.TourScheduleSettings schedule, TimeProvider clock)
     : IRequestHandler<RecordRouteTestRunCommand, RouteRevisionView>
 {
     public async Task<RouteRevisionView> Handle(RecordRouteTestRunCommand c, CancellationToken ct)
@@ -59,7 +59,7 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
         if (prior is not null)
         {
             SaveRouteRevisionHandler.EnsureHash(prior.RequestHash, hash);
-            return await RouteRevisionMapper.Load(repo, c.RouteId, c.RevisionId, true, ct);
+            return await RouteRevisionMapper.Load(repo, c.RouteId, c.RevisionId, true, ct, schedule);
         }
         var route = await repo.LockRouteAsync(c.RouteId, ct) ?? throw new NotFoundException("Versioned route", c.RouteId);
         var revision = await repo.FindRevisionAsync(c.RevisionId, ct) ?? throw new NotFoundException("Route revision", c.RevisionId);
@@ -99,11 +99,15 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tim
         repo.AddAudit(new AuditLog { ActorUserId = c.ActorUserId, RobotId = robot.Id, Action = result == "PASS" ? "ROUTE_TEST_PASSED" : "ROUTE_TEST_FAILED",
             EntityType = "RouteRevision", EntityId = revision.Id.ToString("D"), ResultCode = result, OccurredAt = now,
             DataJson = JsonSerializer.Serialize(new { revision.RevisionNumber, map.Id, robot.RobotCode, q.ParticipatingStaffUserId, q.MeasuredDurationSeconds }) });
-        var view = await RouteRevisionMapper.Load(repo, route.Id, revision.Id, true, ct);
+        var view = await RouteRevisionMapper.Load(repo, route.Id, revision.Id, true, ct, schedule);
         var testView = new RouteTestRunView(run.Id, run.RouteRevisionId, run.MapVersionId,
             Convert.ToHexString(run.MapPackageSha256).ToLowerInvariant(), robot.RobotCode, run.CheckedByUserId,
             run.ParticipatingStaffUserId, run.ResultCode, run.AllStopsReached, run.SafelyStopped,
             run.LocalizationPassed, run.MeasuredDurationSeconds, run.FailureReason, run.EvidenceNote, run.CheckedAt, run.MeasurementBasis);
-        return view with { VerificationStatus = result, EffectiveTestRunId = run.Id, TestRuns = [.. view.TestRuns, testView] };
+        // The new run is not committed yet, so the loaded view still describes the previous one; a run on this
+        // revision adds no dwell, so a PASS is expected to take exactly what it measured.
+        int? expected = result == "PASS" ? run.MeasuredDurationSeconds : null;
+        return view with { VerificationStatus = result, EffectiveTestRunId = run.Id, TestRuns = [.. view.TestRuns, testView],
+            ScheduleFit = Tours.TourSchedule.ScheduleFit(schedule, expected), ExpectedDurationSeconds = expected };
     }
 }

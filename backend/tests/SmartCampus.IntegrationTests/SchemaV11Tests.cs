@@ -426,7 +426,7 @@ public sealed class SchemaV11Tests
         Assert.Equal(60, passed.DwellDurationSeconds);
 
         var tourActor = Guid.Parse(Id(2));
-        var tourStart = TourSlot(4, 9);
+        var tourStart = TourSlot(4, "S1");
         CreateTourRequest NewTour(DateTimeOffset start, Guid? revision = null, Guid? operatorUser = null) => new(Guid.NewGuid(),
             new("Pilot Tour", null, revision ?? draft2.RevisionId, "physical_1", operatorUser ?? participatingStaffId, start, null));
         Assert.Equal("ROUTE_TEST_PASS_REQUIRED", (await Assert.ThrowsAsync<ConflictException>(() =>
@@ -434,17 +434,18 @@ public sealed class SchemaV11Tests
         Assert.Equal("OPERATOR_REQUIRED", (await Assert.ThrowsAsync<ConflictException>(() =>
             sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart, operatorUser: lockedStaffId))))).Code);
         var tour = await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart)));
-        // 260 s of PASS run plus 15 minutes on each side: the same slot overlaps, the next slot does not.
+        // One Tour per robot per shift: the same shift is taken, the next shift is not.
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", (await Assert.ThrowsAsync<ConflictException>(() =>
             sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart))))).Code);
-        var later = await sender.Send(new CreateTourCommand(tourActor, NewTour(tourStart.AddHours(1))));
+        var later = await sender.Send(new CreateTourCommand(tourActor, NewTour(TourSlot(4, "S2"))));
         var tourDetail = await sender.Send(new GetTourQuery(tour.Id));
         Assert.Null(tourDetail.Route);
         Assert.Equal(draft2.RevisionId, tourDetail.RouteRevision!.RevisionId);
         Assert.Equal(participatingStaffId, tourDetail.Operator!.UserId);
         Assert.Equal("physical_1", tourDetail.Reservation!.RobotCode);
+        // The hold is the whole 08:00-10:00 shift, not the measured run plus buffers.
         Assert.Equal(tourStart.AddMinutes(-15), tourDetail.Reservation.StartsAt);
-        Assert.Equal(tourStart.AddSeconds(260).AddMinutes(15), tourDetail.Reservation.EndsAt);
+        Assert.Equal(tourStart.AddMinutes(105), tourDetail.Reservation.EndsAt);
         Assert.Equal(260, tourDetail.Reservation.ExpectedDurationSeconds);
         Assert.Equal(new[] { "Library", "Lab" }, (await scope.ServiceProvider.GetRequiredService<IStudentTourViewReader>().LoadAsync(tour.Id, default))!.Stops.Select(stop => stop.Name));
         await sender.Send(new CancelTourCommand(tour.Id, tourActor, new(Guid.NewGuid(), tourDetail.Tour.RowVersion, "Rescheduling")));
@@ -475,45 +476,49 @@ public sealed class SchemaV11Tests
         }
 
         // The dwell-only revision adds 15 s to the 260 s measured on revision 2.
-        var dwellStart = TourSlot(5, 9);
+        var dwellStart = TourSlot(5, "S1");
         var dwellTour = await sender.Send(new CreateTourCommand(tourActor, NewTour(dwellStart, dwellOnly.RevisionId)));
         var dwellReservation = (await sender.Send(new GetTourQuery(dwellTour.Id))).Reservation!;
         Assert.Equal(260, dwellReservation.MeasuredDurationSeconds);
         Assert.Equal(275, dwellReservation.ExpectedDurationSeconds);
-        Assert.Equal(dwellStart.AddSeconds(275).AddMinutes(15), dwellReservation.EndsAt);
+        Assert.Equal(dwellStart.AddMinutes(105), dwellReservation.EndsAt);
         Assert.Equal(dwellStart.AddHours(-48), (await SlotOf(dwellStart)).RegistrationClosesAt);
+        Assert.Equal(("FITS", 275), (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))) is var fit
+            ? (fit.ScheduleFit, fit.ExpectedDurationSeconds!.Value) : default);
 
         var overlap = await SlotOf(dwellStart);
         Assert.False(overlap.Available);
         Assert.Equal("RESERVATION_OVERLAP", overlap.ReasonCode);
         Assert.Equal("Trùng khung giữ robot của Tour Pilot Tour", overlap.Reason);
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", await Refused(NewTour(dwellStart, dwellOnly.RevisionId)));
-        var free = await SlotOf(dwellStart.AddHours(1));
+        var free = await SlotOf(TourSlot(5, "S2"));
         Assert.True(free.Available);
-        Assert.Equal(dwellStart.AddHours(1).AddMinutes(-15), free.ReservationStartsAt);
-        Assert.Equal(dwellStart.AddHours(1).AddSeconds(275).AddMinutes(15), free.ReservationEndsAt);
+        Assert.Equal(("S2", "Ca chiều 1", "13:15", 5400), (free.ShiftCode, free.ShiftName, free.Time, free.MaxDurationSeconds));
+        Assert.Equal(free.StartsAt.AddMinutes(-15), free.ReservationStartsAt);
+        Assert.Equal(free.StartsAt.AddMinutes(105), free.ReservationEndsAt);
 
-        var tooClose = TourSlot(1, 9);
+        var tooClose = TourSlot(1, "S1");
         Assert.Equal("LEAD_TIME_TOO_SHORT", (await SlotOf(tooClose)).ReasonCode);
         Assert.Equal("TOUR_LEAD_TIME_TOO_SHORT", await Refused(NewTour(tooClose, dwellOnly.RevisionId)));
 
-        // ADR-0036: a time typed by Staff goes through the same calculation as a slot, inside the custom hours only.
-        var customDay = DateOnly.FromDateTime(TourSlot(10, 9).ToOffset(TimeSpan.FromHours(7)).DateTime);
-        async Task<TourSlotView> CustomSlot(int hour, int minute) =>
-            (await sender.Send(new GetTourSlotsQuery(dwellOnly.RevisionId, "physical_1", customDay, customDay, new TimeOnly(hour, minute)))).Days.Single().Slots.Single(slot => slot.Time == $"{hour:D2}:{minute:D2}");
-        var offSlot = await CustomSlot(11, 20);
-        Assert.True(offSlot.Available);
-        Assert.Equal(offSlot.StartsAt.AddMinutes(-15), offSlot.ReservationStartsAt);
-        Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(offSlot.StartsAt, dwellOnly.RevisionId)))).Id);
-        Assert.Equal("RESERVATION_OVERLAP", (await CustomSlot(11, 25)).ReasonCode);
-        Assert.Equal("ROBOT_RESERVATION_CONFLICT", await Refused(NewTour(offSlot.StartsAt.AddMinutes(5), dwellOnly.RevisionId)));
-        var tooEarly = await CustomSlot(7, 30);
-        Assert.Equal("OUTSIDE_START_HOURS", tooEarly.ReasonCode);
-        Assert.Equal("Ngoài giờ cho phép, chọn từ 08:00 đến 17:00", tooEarly.Reason);
-        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", await Refused(NewTour(tooEarly.StartsAt, dwellOnly.RevisionId)));
+        // docs/lich-tour-theo-ca.md §3: only a shift's Tour start is accepted; a typed time or one minute off is not.
+        var oddDay = TourSlot(10, "S1");
+        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", await Refused(NewTour(oddDay.AddMinutes(1), dwellOnly.RevisionId)));
+        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", await Refused(NewTour(oddDay.AddHours(3).AddMinutes(5), dwellOnly.RevisionId)));
+        Assert.Equal(3, (await sender.Send(new GetTourSlotsQuery(dwellOnly.RevisionId, "physical_1", DateOnly.FromDateTime(oddDay.ToOffset(TimeSpan.FromHours(7)).DateTime),
+            DateOnly.FromDateTime(oddDay.ToOffset(TimeSpan.FromHours(7)).DateTime)))).Days.Single().Slots.Count);
+
+        // A Tour from before the shifts keeps its odd-hour hold, and that hold still blocks the shift it reaches into.
+        var legacy = await sender.Send(new CreateTourCommand(tourActor, NewTour(TourSlot(10, "S2"), dwellOnly.RevisionId)));
+        await db.ExecuteAsync($"UPDATE dbo.TourRobotReservations SET StartsAt='{oddDay.AddMinutes(50):O}', EndsAt='{oddDay.AddMinutes(110):O}' WHERE TourId='{legacy.Id:D}';");
+        var reachedInto = await SlotOf(oddDay);
+        Assert.Equal("RESERVATION_OVERLAP", reachedInto.ReasonCode);
+        Assert.Equal("Trùng khung giữ robot của Tour Pilot Tour", reachedInto.Reason);
+        Assert.Equal("ROBOT_RESERVATION_CONFLICT", await Refused(NewTour(oddDay, dwellOnly.RevisionId)));
+        Assert.True((await SlotOf(TourSlot(10, "S2"))).Available);
 
         // Create decides on the server clock at the moment of saving: 71h59m is refused, 72h is accepted.
-        var boundary = TourSlot(9, 9);
+        var boundary = TourSlot(9, "S1");
         db.Clock.Fixed = boundary.AddHours(-72).AddMinutes(1);
         Assert.Equal("TOUR_LEAD_TIME_TOO_SHORT", await Refused(NewTour(boundary, dwellOnly.RevisionId)));
         db.Clock.Fixed = boundary.AddHours(-72);
@@ -521,7 +526,7 @@ public sealed class SchemaV11Tests
         db.Clock.Fixed = null;
 
         // Two Staff racing for one slot: the robot lock lets exactly one through.
-        var contested = TourSlot(8, 14);
+        var contested = TourSlot(8, "S2");
         async Task<object> Attempt()
         {
             using var attempt = services.CreateScope();
@@ -533,24 +538,32 @@ public sealed class SchemaV11Tests
         Assert.Equal("ROBOT_RESERVATION_CONFLICT", Assert.Single(outcomes.OfType<string>()));
         Assert.Equal(1, await db.ScalarAsync<int>($"SELECT COUNT(*) FROM dbo.TourRobotReservations WHERE StartsAt='{contested.AddMinutes(-15):O}' AND ReleasedAt IS NULL;"));
 
-        // A 40-minute run from 09:00 reaches into the hold of the 10:00 Tour: the slot opens free but cannot fit.
+        // docs/lich-tour-theo-ca.md §4: a PASS over the 90 minutes a shift holds stays PASS, but fits no shift.
+        var tooLong = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 5401,
+                null, "Whole-route measurement including dwell.")));
+        Assert.Equal(("PASS", "TOO_LONG_FOR_SHIFT", 5401), (tooLong.VerificationStatus, tooLong.ScheduleFit, tooLong.ExpectedDurationSeconds!.Value));
+        Assert.DoesNotContain(tooLong.EligibilityIssues, issue => issue.Contains("SHIFT"));
+        var noShift = await SlotOf(TourSlot(6, "S1"));
+        Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", noShift.ReasonCode);
+        Assert.Equal("Tuyến cần 90 phút 1 giây, ca này chỉ chứa được 90 phút", noShift.Reason);
+        Assert.Equal("ROUTE_TOO_LONG_FOR_SHIFT", await Refused(NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)));
+
+        // Over the 60 minutes recommended is only a warning: the Tour is still created.
         var longRun = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
-            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 2400,
+            new(Guid.NewGuid(), "physical_1", participatingStaffId, "PASS", true, true, true, 4000,
                 null, "Longer whole-route measurement including dwell.")));
-        var tenOClock = TourSlot(6, 10);
-        Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(tenOClock, dwellOnly.RevisionId)))).Id);
-        var noGap = await SlotOf(TourSlot(6, 9));
-        Assert.Equal("ROUTE_TOO_LONG_FOR_GAP", noGap.ReasonCode);
-        Assert.Equal("Tuyến dài hơn khoảng trống còn lại", noGap.Reason);
-        Assert.Equal("ROBOT_RESERVATION_CONFLICT", await Refused(NewTour(TourSlot(6, 9), dwellOnly.RevisionId)));
+        Assert.Equal("OVER_RECOMMENDED", longRun.ScheduleFit);
+        Assert.Equal("OVER_RECOMMENDED", Assert.Single((await sender.Send(new ListVersionedRoutesQuery("Dwell adjustment only", map.Id, 1, 10, "name"))).Items).ScheduleFit);
+        Assert.NotEqual(Guid.Empty, (await sender.Send(new CreateTourCommand(tourActor, NewTour(TourSlot(6, "S1"), dwellOnly.RevisionId)))).Id);
 
         // A run from before the definition cannot size a reservation, however good its result.
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis=NULL WHERE Id='{longRun.EffectiveTestRunId:D}';");
-        var remeasure = await SlotOf(TourSlot(7, 9));
+        Assert.Equal("UNKNOWN", (await sender.Send(new GetRouteRevisionQuery(dwellOnly.RouteId, dwellOnly.RevisionId, false))).ScheduleFit);
+        var remeasure = await SlotOf(TourSlot(7, "S1"));
         Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", remeasure.ReasonCode);
         Assert.Equal("Cần chạy thử lại tuyến để đo theo định nghĩa mới", remeasure.Reason);
-        Assert.Null(remeasure.ReservationEndsAt);
-        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", await Refused(NewTour(TourSlot(7, 9), dwellOnly.RevisionId)));
+        Assert.Equal("ROUTE_TEST_REMEASURE_REQUIRED", await Refused(NewTour(TourSlot(7, "S1"), dwellOnly.RevisionId)));
         await db.ExecuteAsync($"UPDATE dbo.RouteTestRuns SET MeasurementBasis='TOTAL_WITH_DWELL' WHERE Id='{longRun.EffectiveTestRunId:D}';");
 
         var newerFail = await sender.Send(new RecordRouteTestRunCommand(technicalStaffId, dwellOnly.RouteId, dwellOnly.RevisionId,
@@ -576,11 +589,12 @@ public sealed class SchemaV11Tests
 
         var history = await sender.Send(new GetRouteRevisionQuery(contentOnlyDraft.RouteId, null, true));
         Assert.Equal(4, history.RevisionHistory.Count);
-        Assert.Equal(4, history.TestRuns.Count);
+        Assert.Equal(5, history.TestRuns.Count);
         Assert.Equal("FAIL", history.TestRuns[0].ResultCode);
         Assert.Equal("PASS", history.TestRuns[1].ResultCode);
         Assert.Equal("PASS", history.TestRuns[2].ResultCode);
-        Assert.Equal("FAIL", history.TestRuns[3].ResultCode);
+        Assert.Equal("PASS", history.TestRuns[3].ResultCode);
+        Assert.Equal("FAIL", history.TestRuns[4].ResultCode);
         Assert.Equal("FAIL", (await sender.Send(new GetRouteRevisionQuery(draft1.RouteId, draft1.RevisionId, false))).VerificationStatus);
         var currentCatalog = await sender.Send(new ListVersionedRoutesQuery("Content wording update", map.Id, 1, 10, "name"));
         var currentItem = Assert.Single(currentCatalog.Items);
@@ -1544,7 +1558,7 @@ public sealed class SchemaV11Tests
             services.AddSingleton<IOperatorConsolePresence, UnavailableOperatorConsolePresence>();
             services.AddSingleton(new FleetCommandSettings());
             services.AddSingleton(new SmartCampus.Application.Common.Abstractions.Invitations.InvitationSettings(false, 24));
-            services.AddSingleton(new TourScheduleSettings(["09:00", "10:00", "14:00", "15:00"], "08:00", "17:00"));
+            services.AddSingleton(Shifts);
             services.AddSingleton(new MapPoiSettings(null));
             services.AddSingleton(new RouteRuleSettings(null, null));
             return services.BuildServiceProvider(validateScopes: true);
@@ -1672,9 +1686,15 @@ public sealed class SchemaV11Tests
         public override DateTimeOffset GetUtcNow() => Fixed ?? base.GetUtcNow();
     }
 
-    /// <summary>A configured start, the given number of campus days from today.</summary>
-    private static DateTimeOffset TourSlot(int days, int hour) => TourSchedule.SlotStart(
-        DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(days), new TimeOnly(hour, 0));
+    /// <summary>The shifts of docs/lich-tour-theo-ca.md §7.</summary>
+    private static readonly TourScheduleSettings Shifts = new([
+        new() { Code = "S1", Name = "Ca sáng", Start = "08:00", End = "10:00" },
+        new() { Code = "S2", Name = "Ca chiều 1", Start = "13:00", End = "15:00" },
+        new() { Code = "S3", Name = "Ca chiều 2", Start = "16:00", End = "18:00" }], 60);
+
+    /// <summary>The Tour start of a shift, the given number of campus days from today.</summary>
+    private static DateTimeOffset TourSlot(int days, string shift) => TourSchedule.TourStart(
+        DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(days), Shifts.Shifts.Single(item => item.Code == shift));
 
     private static async Task<MapVersionView> SendMapUploadAsync(IServiceProvider services, Guid actor,
         Guid requestId, byte[] package)

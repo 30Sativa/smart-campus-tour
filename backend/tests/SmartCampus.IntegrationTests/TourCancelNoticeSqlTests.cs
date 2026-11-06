@@ -173,9 +173,9 @@ public sealed class TourCancelNoticeSqlTests
             settings["Invitations:Enabled"] = emailEnabled ? "true" : "false";
             settings["ConnectionStrings:DefaultConnection"] = database.ConnectionString;
             settings["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey;
-            settings["Tours:StartSlots:0"] = "09:00";
-            settings["Tours:CustomStartEarliest"] = "08:00";
-            settings["Tours:CustomStartLatest"] = "17:00";
+            settings["Tours:Shifts:0:Code"] = "S1"; settings["Tours:Shifts:0:Name"] = "Ca sáng";
+            settings["Tours:Shifts:0:Start"] = "08:00"; settings["Tours:Shifts:0:End"] = "10:00";
+            settings["Tours:Shifts:1:Code"] = "S2"; settings["Tours:Shifts:1:Name"] = "Ca chiều 1"; settings["Tours:Shifts:1:Start"] = "13:00"; settings["Tours:Shifts:1:End"] = "15:00";
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var sender = new FakeSender();
             var services = new ServiceCollection();

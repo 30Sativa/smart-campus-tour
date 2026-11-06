@@ -223,7 +223,7 @@ public sealed class DeploymentDatabaseTests
         route = await Send(new GetRouteQuery(routeId));
         await Send(new SetRouteAvailabilityCommand(routeId, actor.Id, route.Version, true));
         route = await Send(new GetRouteQuery(routeId));
-        var schedule = TourSchedule.SlotStart(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10), new TimeOnly(9, 0));
+        var schedule = TourSchedule.SlotStart(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10), new TimeOnly(8, 15));
         await Assert.ThrowsAsync<NotFoundException>(() => Send(new CreateTourCommand(actor.Id,
             new CreateTourRequest(Guid.NewGuid(), new CreateTourInput("Runtime Tour", null, Guid.NewGuid(), "no-such-robot", actor.Id, schedule, null)))));
         var unused = (await Send(new CreateRouteCommand(actor.Id, input))).Id;

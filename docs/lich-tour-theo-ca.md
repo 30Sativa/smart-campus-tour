@@ -147,7 +147,7 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 | Phần | Nội dung | Trạng thái | Ghi chú |
 |---|---|---|---|
 | A | Quy tắc tuyến (mục 2, trừ dòng tổng thời gian dừng) | Xong, chờ xác nhận (06/11/2026) | Xem "Phần A" bên dưới |
-| B | Ca cố định và giới hạn thời lượng (mục 3, 4, cùng dòng tổng thời gian dừng ở mục 2) | Chưa làm | |
+| B | Ca cố định và giới hạn thời lượng (mục 3, 4, cùng dòng tổng thời gian dừng ở mục 2) | Xong, chờ xác nhận (07/11/2026) | Xem "Phần B" bên dưới |
 | C | Admin khoá ngày/ca (mục 5) | Chưa làm | |
 
 ### Phần A: quy tắc tuyến
@@ -211,3 +211,64 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
   commit riêng.
 - Branch `feature/schedule-shifts` tạo từ `origin/main`, vì `main` ở máy cũ hơn origin. Làm trong worktree
   `.claude/worktrees/schedule-shifts` để không đụng các file chưa commit ở checkout chính.
+
+### Phần B: ca cố định và giới hạn thời lượng
+
+**Đã làm**
+- Backend: `TourScheduleSettings` nay gồm danh sách ca (`Tours:Shifts`: Code, Name, Start, End) và
+  `Tours:RecommendedMaxMinutes` (mặc định 60). Server từ chối khởi tạo settings nếu: không có ca, trùng mã, giờ sai
+  dạng `HH:mm`, `Start` ≥ `End`, hai ca chồng nhau, ca ngắn hơn 31 phút, hoặc mức khuyến nghị ≤ 0. Đã bỏ `StartSlots`,
+  `CustomStartEarliest`, `CustomStartLatest` khỏi settings, `appsettings.json` và DI.
+- `TourSchedule`: giờ bắt đầu Tour của ca (đầu ca + 15'), khung giữ của ca (cả ca), thời lượng tối đa (độ dài ca − 30'),
+  `FindShift`/`RequireShift` (409 `TOUR_SLOT_NOT_ALLOWED`, message liệt kê giờ bắt đầu từng ca). Thứ tự trong
+  `Evaluate`: lead time → cần đo lại → `ROUTE_TOO_LONG_FOR_SHIFT` → trùng bất kỳ khung giữ nào trong ca
+  (`RESERVATION_OVERLAP`, có tên Tour). `EnsureUsable` trả `ROUTE_TOO_LONG_FOR_SHIFT` với cùng mã. Đã bỏ `StartRule`,
+  `Window`, `OUTSIDE_START_HOURS` và `ROUTE_TOO_LONG_FOR_GAP`.
+- Tạo Tour: `TourRobotReservation.StartsAt/EndsAt` = khung của ca. Khoá theo robot và kiểm lại trên đồng hồ mới sau
+  khi lấy khoá giữ nguyên.
+- `GET /api/staff/manage/tours/slots`: bỏ tham số `time` và hai trường `customStart*`. Mỗi ngày có một mục cho mỗi ca;
+  các trường cũ giữ tên, thêm `shiftCode`, `shiftName`, `maxDurationSeconds`, và `recommendedMaxSeconds` ở cấp response.
+- Thêm `GET /api/staff/manage/tours/shifts?from=&to=` (role Staff, tối đa 31 ngày), trả các ca đã cấu hình của từng ngày.
+- Lưu tuyến: tổng thời gian dừng vượt thời lượng tối đa của ca dài nhất thì trả 409 `ROUTE_TOO_LONG_FOR_SHIFT`.
+- `RouteRevisionView` thêm `scheduleFit` (`UNKNOWN`/`FITS`/`OVER_RECOMMENDED`/`TOO_LONG_FOR_SHIFT`) và
+  `expectedDurationSeconds`, tách khỏi `EligibilityIssues`. Thời lượng dự kiến lấy từ lần PASS hiệu lực đo theo
+  `TOTAL_WITH_DWELL`, cộng phần dừng tăng thêm, đúng công thức đặt chỗ.
+- Web: form tạo Tour chọn ngày rồi chọn ca dạng nút "Ca sáng · 08:15-09:45 · Giữ robot 08:00-10:00". Ca không dùng được
+  thì disable kèm lý do. Phần xem lại hiện thời lượng dự kiến, thời lượng tối đa của ca, và cảnh báo vàng khi vượt mức
+  khuyến nghị. Tuyến `TOO_LONG_FOR_SHIFT` bị disable trong danh sách chọn tuyến. Form đọc `?date=&shift=`. Đã bỏ nút
+  "Giờ khác", ô gõ giờ và `OUTSIDE_START_HOURS`; thêm câu báo cho `ROUTE_TOO_LONG_FOR_SHIFT`.
+- Danh mục tuyến và trang chi tiết: nhãn đỏ "Quá dài cho 1 ca", nhãn vàng "Dài hơn mức khuyến nghị". Trang chi tiết bỏ
+  nút "Tạo Tour" khi tuyến quá dài.
+- Trang Lịch Tour, chế độ Tuần và Ngày: vẽ dải nền cho từng ca lấy từ endpoint `shifts`. Ca còn trống (không có Tour
+  chưa huỷ giữ robot trong ca) và chưa qua hạn 72 giờ thì có "+ Tạo Tour" dẫn tới
+  `/staff/manage/tours/new?date=…&shift=…`. Tour nằm ngoài 07:00–19:00 hiện ở dải "Ngoài ca" đầu cột ngày (chế độ Tuần)
+  hoặc đầu trang ngày (chế độ Ngày), không vẽ tràn xuống dưới lưới. Chế độ Danh sách giữ nguyên.
+
+**Kiểm tra**
+- `scripts/verify web`: PASS (743 test).
+- `scripts/verify backend`: exit 0 (unit 472/472, integration 471/471, có chạy test SQL trên SQL Express ở máy local; chạy
+  trên bản sao không kèm `global.json`, như phần A).
+- Unit: `TourScheduleTests` viết lại theo ca: đúng giờ ca được nhận, lệch 1 phút bị từ chối; ca 2 tiếng chứa 5400 giây
+  (5400 được nhận, 5401 bị từ chối); vượt khuyến nghị vẫn tạo được; khung giữ cũ ở giờ lẻ báo `RESERVATION_OVERLAP`;
+  khung giữ mới bằng đúng ca; kiểm tra cấu hình lúc khởi tạo; phân loại `scheduleFit`; endpoint `shifts`.
+  `RouteStopSeparationTests`: 18 × 300 giây được nhận, 19 × 300 giây bị 409.
+- SQL/HTTP: `SchemaV11Tests` (phần lịch viết lại theo ca: một Tour mỗi robot mỗi ca, khung giữ cả ca, giờ lẻ và lệch 1 phút
+  bị từ chối, khung giữ cũ ở giờ lẻ chặn ca nó lấn vào, PASS dài quá ca vẫn là PASS nhưng không xếp lịch được, vượt khuyến
+  nghị vẫn tạo được, `scheduleFit` ở chi tiết/danh mục/kết quả chạy thử); `BusinessFlowIntegrationTests` (dạng response mới
+  của slots và shifts, Technical bị 403 ở `shifts`, 409 `TOUR_SLOT_NOT_ALLOWED` qua HTTP).
+- Web: form tạo theo ca, chọn sẵn từ query, cảnh báo vượt khuyến nghị, tuyến quá dài bị disable; lịch có dải ca,
+  "+ Tạo Tour" chỉ ở ca trống, dải "Ngoài ca"; nhãn ở danh mục và chi tiết tuyến.
+- Các fixture đang tạo Tour lúc 09:00 được đổi sang 08:15 (giờ bắt đầu của ca sáng), và cấu hình test đổi từ
+  `StartSlots`/`CustomStart*` sang `Tours:Shifts`. Mục đích của các test này giữ nguyên.
+
+**Lệch so với file này hoặc tài liệu khác**
+- Nhãn vàng ghi "Dài hơn mức khuyến nghị", không ghi cứng "60 phút", vì danh mục tuyến không nhận giá trị cấu hình. Chi
+  tiết thời lượng dự kiến nằm ở tooltip. Form tạo Tour thì có `recommendedMaxSeconds` nên ghi đúng số phút.
+- `ScheduleFit` được tính ở chi tiết tuyến, danh mục tuyến, lưu tuyến và ghi kết quả chạy thử. Các chỗ đọc khác (hàng đợi
+  kiểm chứng, chi tiết Tour, kiểm tra READY) trả `UNKNOWN`, vì không hiển thị nhãn này. Chặn xếp lịch không dựa vào
+  trường này mà dựa vào `Evaluate`.
+- `TOUR_SLOT_NOT_ALLOWED` được kiểm trước khi tìm robot, nên một yêu cầu vừa sai giờ vừa sai robot nay trả 409 thay vì 404.
+- "Ca còn trống" trên trang Lịch là ca chưa có Tour chưa huỷ nào giữ robot, tính trên mọi robot. Khi có nhiều robot, ca
+  có thể vẫn tạo được cho robot khác. Form tạo Tour mới là nơi quyết định theo từng robot.
+- `backend/docs/admin-tour-management.md`, ADR-0035, ADR-0036 và `web/AGENTS.md` vẫn mô tả slot và giờ gõ tay. Theo chỉ đạo
+  đợt này, các file đó chưa được sửa.

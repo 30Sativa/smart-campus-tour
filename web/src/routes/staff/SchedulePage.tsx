@@ -1,13 +1,13 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Map as MapIcon, Plus, Search, Timer, Bot, Users } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../components/ui/ui-classes'
-import { useTourCalendar } from '../../features/administration/tours/hooks'
+import { useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
 import { campusDay, campusMinutes, campusTime } from '../../features/administration/tours/tour-calendar'
 import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
-import type { TourState, TourSummary } from '../../features/administration/tours/types'
+import type { TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
 import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 
 const dayKey = (date: Date) =>
@@ -51,6 +51,20 @@ const durationOf = (tour: TourSummary) => tour.reservation?.expectedDurationSeco
 const endOf = (tour: TourSummary) => new Date(new Date(tour.scheduledStartAt).getTime() + durationOf(tour) * 1000).toISOString()
 const span = (tour: TourSummary) => `${campusTime(tour.scheduledStartAt)} - ${campusTime(endOf(tour))}`
 
+/** A Tour drawn on the grid must start and end inside 07:00-19:00; any other sits in the day's "Ngoài ca" strip. */
+const insideGrid = (tour: TourSummary) => {
+  const start = campusMinutes(tour.scheduledStartAt)
+  return start >= DAY_OPENS && start + durationOf(tour) / 60 <= DAY_OPENS + DAY_MINUTES
+}
+const LEAD_TIME_MS = 72 * 3600_000
+/** A shift still takes a new Tour: no live Tour holds it and its Tour start is at least 72 hours away (docs/lich-tour-theo-ca.md §3). */
+const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
+  new Date(shift.tourStartsAt).getTime() - now >= LEAD_TIME_MS && !tours.some(tour => tour.state !== 'CANCELLED' &&
+    (tour.reservation ? tour.reservation.startsAt : tour.scheduledStartAt) < shift.endsAt &&
+    (tour.reservation ? tour.reservation.endsAt : endOf(tour)) > shift.startsAt)
+const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
+const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)} - ${campusTime(shift.endsAt)}`
+
 /**
  * Tour schedule from the live Tour list and its robot reservations: the week
  * as a time grid (07:00-19:00), the chosen day by robot, or a list. The chosen
@@ -67,6 +81,10 @@ export default function SchedulePage() {
   const monday = weekStart(day)
   const week = Array.from({ length: 7 }, (_, i) => shift(monday, i))
   const tours = useTourCalendar(week[0], week[6], view !== 'list')
+  const shifts = useTourShifts(week[0], week[6], view !== 'list')
+  const shiftsOf = (key: string) => shifts.data?.days.find(item => item.date === key)?.shifts ?? []
+  // Read once per mount: whether a shift is past the 72-hour mark does not need to tick.
+  const [now] = useState(() => Date.now())
 
   const all = useMemo(() => tours.data?.data ?? [], [tours.data])
   const robots = useMemo(() => [...new Set(all.map(tour => tour.reservation?.robotCode).filter(Boolean) as string[])].sort(), [all])
@@ -75,6 +93,8 @@ export default function SchedulePage() {
     (!stateFilter || tour.state === stateFilter) &&
     (!query.trim() || `${tour.name} ${tour.routeName}`.toLowerCase().includes(query.trim().toLowerCase())))
   const inDay = (key: string) => filtered.filter(tour => campusDay(tour.scheduledStartAt) === key)
+  // Whether a shift is free does not depend on the filters, so it reads every Tour of the day.
+  const allInDay = (key: string) => all.filter(tour => campusDay(tour.scheduledStartAt) === key)
   const shown = inDay(day)
   const selected = all.find(tour => tour.id === params.get('tour'))
     ?? filtered.find(tour => campusDay(tour.scheduledStartAt) >= today && tour.state !== 'CANCELLED') ?? filtered[0]
@@ -149,8 +169,9 @@ export default function SchedulePage() {
 
           {!tours.isError && <div className="mt-4">
             {tours.isPending ? <LoadingPanel /> : view === 'week'
-              ? <WeekGrid week={week} today={today} inDay={inDay} selectedId={selected?.id} onSelect={id => set({ tour: id })} onDay={key => set({ date: key === today ? null : key, view: 'day', tour: null }, false)} />
+              ? <WeekGrid week={week} today={today} inDay={inDay} shiftsOf={shiftsOf} isOpen={(key, item) => openShift(item, allInDay(key), now)} selectedId={selected?.id} onSelect={id => set({ tour: id })} onDay={key => set({ date: key === today ? null : key, view: 'day', tour: null }, false)} />
               : <section aria-label={`Lịch tour ${heading}`} className="overflow-hidden rounded-xl border border-[#e2e8f0]">
+                <DayShifts day={day} shifts={shiftsOf(day)} isOpen={item => openShift(item, allInDay(day), now)} outside={shown.filter(tour => !insideGrid(tour))} onSelect={id => set({ tour: id })} />
                 {shown.length === 0 ? <div className="p-4"><EmptyPanel>Không có tour nào trong ngày này.</EmptyPanel></div>
                   // By robot first, then every Tour of the day: one without a robot hold has no bar but still shows below.
                   : <><RobotDay tours={shown} onSelect={id => set({ tour: id })} /><div className="border-t border-[#e2e8f0]"><SessionList tours={shown} onSelect={id => set({ tour: id })} selectedId={selected?.id} /></div></>}
@@ -188,9 +209,28 @@ function lanes(tours: TourSummary[]) {
   }).map((item, _, list) => ({ ...item, count: Math.max(...list.map(other => other.lane)) + 1 }))
 }
 
-function WeekGrid({ week, today, inDay, selectedId, onSelect, onDay }: { week: string[]; today: string; inDay: (key: string) => TourSummary[]; selectedId?: string; onSelect: (id: string) => void; onDay: (key: string) => void }) {
+/** A Tour outside 07:00-19:00, listed instead of drawn past the grid. */
+function OutsideChip({ tour, selected, onSelect }: { tour: TourSummary; selected?: boolean; onSelect: (id: string) => void }) {
+  return <button type="button" onClick={() => onSelect(tour.id)} aria-pressed={selected} aria-label={`Ngoài ca: ${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}`}
+    className={`block w-full truncate rounded-md border px-1.5 py-0.5 text-left text-[11px] font-semibold ${CHIP[tour.state]} ${selected ? 'ring-2 ring-[#93b8f5]' : ''} ${focus}`}>
+    <span className="tabular-nums">{campusTime(tour.scheduledStartAt)}</span> {tour.name}
+  </button>
+}
+
+/** One shift drawn behind the Tours of a day column; a free shift offers "+ Tạo Tour" for that day and shift. */
+function ShiftBand({ day, shift, open }: { day: string; shift: TourShift; open: boolean }) {
+  const top = (campusMinutes(shift.startsAt) - DAY_OPENS) / 60 * HOUR_PX
+  const tall = (campusMinutes(shift.endsAt) - campusMinutes(shift.startsAt)) / 60 * HOUR_PX
+  return <div aria-label={`${shift.name} ${shiftSpan(shift)}`} role="group" className="absolute inset-x-0 border-y border-dashed border-[#c9dcf2] bg-[#f3f8ff]/80 px-1.5 py-1" style={{ top, height: tall }}>
+    <span className="block truncate text-[10.5px] font-semibold text-[#4a6fa5]">{shift.name}</span>
+    {open && <Link to={createHref(day, shift)} aria-label={`Tạo Tour ${shift.name} ngày ${day}`} className={`absolute right-1 bottom-1 rounded-md bg-white/90 px-1.5 text-[10.5px] font-semibold text-[#2563eb] hover:bg-white ${focus}`}>+ Tạo Tour</Link>}
+  </div>
+}
+
+function WeekGrid({ week, today, inDay, shiftsOf, isOpen, selectedId, onSelect, onDay }: { week: string[]; today: string; inDay: (key: string) => TourSummary[]; shiftsOf: (key: string) => TourShift[]; isOpen: (key: string, shift: TourShift) => boolean; selectedId?: string; onSelect: (id: string) => void; onDay: (key: string) => void }) {
   const hours = Array.from({ length: 7 }, (_, i) => DAY_OPENS / 60 + i * 2)
   const height = (DAY_MINUTES / 60) * HOUR_PX
+  const anyOutside = week.some(key => inDay(key).some(tour => !insideGrid(tour)))
   return (
     <section aria-label="Lịch tuần" className="overflow-x-auto rounded-xl border border-[#e2e8f0]">
       <div className="grid min-w-[760px] grid-cols-[56px_repeat(7,minmax(0,1fr))]">
@@ -206,12 +246,20 @@ function WeekGrid({ week, today, inDay, selectedId, onSelect, onDay }: { week: s
           </button>
         })}
 
+        {anyOutside && <>
+          <div className="flex items-center justify-end border-b border-[#e2e8f0] bg-[#fffaf0] px-1 text-[10.5px] font-semibold text-[#9a6b16]">Ngoài ca</div>
+          {week.map(key => <div key={key} aria-label={`Ngoài ca ngày ${key}`} className="space-y-1 border-b border-l border-[#e2e8f0] bg-[#fffaf0] p-1">
+            {inDay(key).filter(tour => !insideGrid(tour)).map(tour => <OutsideChip key={tour.id} tour={tour} selected={tour.id === selectedId} onSelect={onSelect} />)}
+          </div>)}
+        </>}
+
         <div className="relative" style={{ height }}>
           {hours.map(hour => <span key={hour} className="absolute right-2 -translate-y-1/2 text-[11px] text-[#718096] tabular-nums first:translate-y-0.5" style={{ top: (hour * 60 - DAY_OPENS) / 60 * HOUR_PX }}>{String(hour).padStart(2, '0')}:00</span>)}
         </div>
         {week.map(key => (
           <div key={key} className={`relative border-l border-[#e2e8f0] ${key === today ? 'bg-[#f7faff]' : ''}`} style={{ height, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${HOUR_PX - 1}px, #eef2f6 ${HOUR_PX - 1}px, #eef2f6 ${HOUR_PX}px)` }}>
-            {lanes(inDay(key)).map(({ tour, lane, count }) => {
+            {shiftsOf(key).map(item => <ShiftBand key={item.code} day={key} shift={item} open={isOpen(key, item)} />)}
+            {lanes(inDay(key).filter(insideGrid)).map(({ tour, lane, count }) => {
               const top = Math.max(0, (campusMinutes(tour.scheduledStartAt) - DAY_OPENS) / 60 * HOUR_PX)
               const tall = Math.max(40, durationOf(tour) / 3600 * HOUR_PX)
               const selected = tour.id === selectedId
@@ -266,6 +314,28 @@ function TourPanel({ tour }: { tour?: TourSummary }) {
       <Link to="/staff/manage/registrations" className={`mt-3 block rounded-md text-center text-sm font-semibold text-[#2d3748] underline-offset-4 hover:underline ${focus}`}>Xem đăng ký</Link>
     </aside>
   )
+}
+
+/** The day's shifts on the same 07:00-19:00 scale as the robot rows, and any Tour outside that span. */
+function DayShifts({ day, shifts, isOpen, outside, onSelect }: { day: string; shifts: TourShift[]; isOpen: (shift: TourShift) => boolean; outside: TourSummary[]; onSelect: (id: string) => void }) {
+  if (shifts.length === 0 && outside.length === 0) return null
+  return <div className="border-b border-[#e2e8f0] p-4 pb-3">
+    {outside.length > 0 && <div aria-label="Ngoài ca" className="mb-3 rounded-lg bg-[#fffaf0] p-2">
+      <p className="mb-1 text-[11px] font-semibold text-[#9a6b16]">Ngoài ca</p>
+      <div className="grid gap-1 sm:grid-cols-2">{outside.map(tour => <OutsideChip key={tour.id} tour={tour} onSelect={onSelect} />)}</div>
+    </div>}
+    <div className="flex items-center gap-3">
+      <span className="w-24 shrink-0 text-xs font-semibold text-[#718096]">Ca</span>
+      <ul aria-label="Các ca trong ngày" className="relative h-12 min-w-0 flex-1 rounded-lg bg-[#f8fafc]">{shifts.map(item => {
+        const left = Math.max(0, (campusMinutes(item.startsAt) - DAY_OPENS) / DAY_MINUTES * 100)
+        const width = (campusMinutes(item.endsAt) - campusMinutes(item.startsAt)) / DAY_MINUTES * 100
+        return <li key={item.code} aria-label={`${item.name} ${shiftSpan(item)}`} className="absolute inset-y-1 overflow-hidden rounded-md border border-dashed border-[#c9dcf2] bg-[#f3f8ff] px-1.5" style={{ left: `${left}%`, width: `${width}%` }}>
+          <span className="block truncate text-[11px] font-semibold text-[#4a6fa5]">{item.name} · {shiftSpan(item)}</span>
+          {isOpen(item) && <Link to={createHref(day, item)} aria-label={`Tạo Tour ${item.name} ngày ${day}`} className={`block truncate text-[11px] font-semibold text-[#2563eb] hover:underline ${focus}`}>+ Tạo Tour</Link>}
+        </li>
+      })}</ul>
+    </div>
+  </div>
 }
 
 /** Each robot's held windows across the working day. A Tour without a hold has no bar and stays in the list view. */

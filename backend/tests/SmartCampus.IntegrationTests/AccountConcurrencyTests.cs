@@ -86,9 +86,9 @@ public sealed class AccountConcurrencyTests
         {
             ["ConnectionStrings:DefaultConnection"] = connection,
             ["Authentication:Jwt:SigningKey"] = InitialAdminSeederTests.TestJwtSigningKey,
-            ["Tours:StartSlots:0"] = "09:00",
-            ["Tours:CustomStartEarliest"] = "08:00",
-            ["Tours:CustomStartLatest"] = "17:00"
+            ["Tours:Shifts:0:Code"] = "S1", ["Tours:Shifts:0:Name"] = "Ca sáng",
+            ["Tours:Shifts:0:Start"] = "08:00", ["Tours:Shifts:0:End"] = "10:00",
+            ["Tours:Shifts:1:Code"] = "S2", ["Tours:Shifts:1:Name"] = "Ca chiều 1", ["Tours:Shifts:1:Start"] = "13:00", ["Tours:Shifts:1:End"] = "15:00"
         }).Build();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddInfrastructure(configuration);

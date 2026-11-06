@@ -811,14 +811,39 @@ public sealed class BusinessFlowIntegrationTests
         var slotPath = $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}";
         using var slots = await Get(host.Client, slotPath, staffToken);
         Assert.Equal(HttpStatusCode.OK, slots.StatusCode);
-        var firstSlot = (await Body(slots)).GetProperty("data").GetProperty("days")[0].GetProperty("slots")[0];
-        Assert.Equal("09:00", firstSlot.GetProperty("time").GetString());
+        // docs/lich-tour-theo-ca.md §3: one item per configured shift, each holding the robot for the whole shift.
+        var slotData = (await Body(slots)).GetProperty("data");
+        Assert.Equal(3600, slotData.GetProperty("recommendedMaxSeconds").GetInt32());
+        Assert.False(slotData.TryGetProperty("customStartEarliest", out _));
+        Assert.Equal(["S1", "S2", "S3"], slotData.GetProperty("days")[0].GetProperty("slots").EnumerateArray().Select(slot => slot.GetProperty("shiftCode").GetString()));
+        var firstSlot = slotData.GetProperty("days")[0].GetProperty("slots")[0];
+        Assert.Equal("08:15", firstSlot.GetProperty("time").GetString());
+        Assert.Equal("Ca sáng", firstSlot.GetProperty("shiftName").GetString());
+        Assert.Equal(5400, firstSlot.GetProperty("maxDurationSeconds").GetInt32());
+        Assert.Equal(firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(-15), firstSlot.GetProperty("reservationStartsAt").GetDateTimeOffset());
+        Assert.Equal(firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(105), firstSlot.GetProperty("reservationEndsAt").GetDateTimeOffset());
         Assert.True(firstSlot.GetProperty("available").GetBoolean());
+        using var shifts = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(6):yyyy-MM-dd}", staffToken);
+        Assert.Equal(HttpStatusCode.OK, shifts.StatusCode);
+        var shiftDays = (await Body(shifts)).GetProperty("data").GetProperty("days");
+        Assert.Equal(7, shiftDays.GetArrayLength());
+        Assert.Equal("13:15", shiftDays[0].GetProperty("shifts")[1].GetProperty("time").GetString());
+        using var shiftsAsTechnical = await Get(host.Client, $"/api/staff/manage/tours/shifts?from={slotDate:yyyy-MM-dd}&to={slotDate:yyyy-MM-dd}", technicalToken);
+        Assert.Equal(HttpStatusCode.Forbidden, shiftsAsTechnical.StatusCode);
         using var slotsTooWide = await Get(host.Client, $"/api/staff/manage/tours/slots?routeRevisionId={routeRevisionId}&robotCode=flow_physical&from={slotDate:yyyy-MM-dd}&to={slotDate.AddDays(31):yyyy-MM-dd}", staffToken);
         Assert.Equal(HttpStatusCode.BadRequest, slotsTooWide.StatusCode);
         using var operators = await Get(host.Client, "/api/staff/manage/tours/operators", staffToken);
         Assert.Equal(HttpStatusCode.OK, operators.StatusCode);
         var operatorId = (await Body(operators)).GetProperty("data")[0].GetProperty("userId").GetGuid();
+        // A start that is not a shift's Tour start, such as the old 09:00 slot, is refused.
+        using var offShift = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
+            new { requestId = Guid.NewGuid(), configuration = new
+                { name = "Off shift", description = (string?)null, routeRevisionId = routeRevisionId,
+                    robotCode = "flow_physical", operatorUserId = operatorId,
+                    scheduledStartAt = firstSlot.GetProperty("startsAt").GetDateTimeOffset().AddMinutes(45),
+                    fallbackVideoUrl = (string?)null } });
+        Assert.Equal(HttpStatusCode.Conflict, offShift.StatusCode);
+        Assert.Equal("TOUR_SLOT_NOT_ALLOWED", (await Body(offShift)).GetProperty("errors").GetProperty("code").GetString());
         using var schedule = await Json(host.Client, HttpMethod.Post, "/api/staff/manage/tours", staffToken,
             new { requestId = Guid.NewGuid(), configuration = new
                 { name = "Scheduled from a tested revision", description = (string?)null, routeRevisionId = routeRevisionId,
