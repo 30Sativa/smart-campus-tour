@@ -82,10 +82,6 @@ export type TourStartChecks = { checks: TourStartCheck[]; canStart: boolean; blo
 /** The four on-site confirmations of a Start request (SRS §7). */
 export type StartConfirmation = { robotPlaced: boolean; areaClear: boolean; attendantPresent: boolean; previewChecked: boolean }
 export type TourPhase = 'UPCOMING' | 'RUNNING' | 'FINISHED'
-export type TourListQuery = { search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number }
-export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
-/** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
-
 /**
  * `operator: 'me'` keeps the caller's own Tours; `needsReconcile` keeps Tours with an UNKNOWN GoTo; `readyBlockers`
  * adds each SCHEDULED row's READY blockers and is refused by the server above 10 rows a page.
@@ -94,8 +90,8 @@ export type TourListQuery = {
   search?: string; state?: TourState; phase?: TourPhase; from?: string; to?: string; sort?: string; page: number; size: number
   operator?: 'me'; needsReconcile?: boolean; readyBlockers?: boolean
 }
-export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_GAP' | 'ROUTE_TEST_REMEASURE_REQUIRED'
-
+export type TourSlotReason = 'LEAD_TIME_TOO_SHORT' | 'RESERVATION_OVERLAP' | 'ROUTE_TOO_LONG_FOR_SHIFT' | 'SHIFT_BLOCKED' | 'ROUTE_TEST_REMEASURE_REQUIRED'
+/** One shift of one day (docs/lich-tour-theo-ca.md §3): `time` is the Tour start, the reservation is the whole shift. */
 export type TourSlot = {
   time: string; startsAt: string; available: boolean; reasonCode: TourSlotReason | null; reason: string | null
   reservationStartsAt: string | null; reservationEndsAt: string | null; registrationClosesAt: string
