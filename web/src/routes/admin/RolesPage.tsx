@@ -64,7 +64,7 @@ export default function RolesPage() {
         <PageHeader
           eyebrow="Phân quyền"
           title="Vai trò & quyền"
-          description="Vai trò nào vào được khu vực nào. Bảng này đọc trực tiếp từ quy tắc mà route guard đang áp dụng, nên luôn khớp với hành vi thật của ứng dụng."
+          description="Vai trò nào vào được khu vực nào trên giao diện. Bảng đọc trực tiếp từ quy tắc route guard đang áp dụng. Quyền gọi từng API do máy chủ kiểm tra riêng và chi tiết hơn bảng này."
         />
 
         {/* The three figures this page is about, read off the same source the

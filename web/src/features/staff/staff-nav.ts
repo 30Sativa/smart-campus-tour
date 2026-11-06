@@ -1,4 +1,5 @@
 import { Bot, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route, ShieldCheck } from 'lucide-react'
+import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, MapPinned, MonitorPlay, Route } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
@@ -76,5 +77,3 @@ export function activeNavPath(pathname: string): string | null {
   return best
 }
 
-/** Icon reused by the shell for the admin cross-link. */
-export const ADMIN_LINK_ICON = ShieldCheck
