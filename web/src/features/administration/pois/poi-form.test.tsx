@@ -77,6 +77,15 @@ describe('Staff versioned POI workflow', () => {
     expect(requests.some(r => r.url.pathname === '/api/maps/versions/map-v1/package')).toBe(true)
   })
 
+  it('groups the camera angle with the robot pose and keeps the content fields in their own card', async () => {
+    renderAt('/staff/manage/pois/new')
+    const camera = await screen.findByLabelText('Góc camera')
+    expect(screen.getByRole('region', { name: 'Vị trí và hướng robot' })).toContainElement(camera)
+    const content = screen.getByRole('complementary', { name: 'Nội dung điểm' })
+    expect(content).not.toContainElement(camera)
+    expect(content).toContainElement(screen.getByLabelText('Nội dung thuyết minh'))
+  })
+
   it('shows the clearance message before submit and sends nothing for a pose too close to the map edge', async () => {
     mapItem = { ...eligibleMap, poiClearanceMeters: 0.3 }
     renderAt('/staff/manage/pois/new')

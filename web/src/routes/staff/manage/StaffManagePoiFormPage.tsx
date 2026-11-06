@@ -157,7 +157,7 @@ export default function StaffManagePoiFormPage() {
     </section>
     {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
 
-    <form id="poi-form" className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
+    <form id="poi-form" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
       <section className={`${card} min-w-0 p-5`} aria-label="Vị trí và hướng robot">
         <h2 className="mb-3 text-lg font-bold text-[#2d3748]">Vị trí & hướng robot</h2>
         {mapError && <div role="alert" className="mb-3"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
@@ -174,9 +174,21 @@ export default function StaffManagePoiFormPage() {
           <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Nhập tọa độ thủ công <span className="font-normal text-[#718096]">(không bắt buộc){placed && yawDeg != null ? ` · ${yawDeg}°` : ''}</span></summary>
           <div className="grid gap-3 border-t border-[#e2e8f0] p-3.5 sm:grid-cols-3"><PoseNumberField label="X (m)" value={draft.x} disabled={locked} change={x => update({ x })} /><PoseNumberField label="Y (m)" value={draft.y} disabled={locked} change={y => update({ y })} /><PoseNumberField label="Hướng (độ)" value={yawDeg} disabled={locked} change={deg => update({ yaw: deg == null ? null : deg * Math.PI / 180 })} /></div>
         </details>
+        <div className="mt-5 space-y-2 border-t border-[#e2e8f0] pt-5">
+          <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
+          <div><label htmlFor="poi-camera" className={label}>Góc camera tại POI</label><select id="poi-camera" aria-label="Góc camera" className={field} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{!(draft.cameraPreset in cameraPresetLabel) && <option value={draft.cameraPreset} disabled>Hướng cũ {draft.cameraPreset}, cần chọn lại</option>}{Object.entries(cameraPresetLabel).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></div>
+          <p className="text-xs text-[#718096]">Khác với hướng thân robot được đặt trên bản đồ.</p>
+          <details className="group rounded-xl border border-[#e2e8f0] text-sm" open={Boolean(draft.fallbackVideoUrl)}>
+            <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></summary>
+            <div className="border-t border-[#e2e8f0] p-3.5"><label className="block text-sm text-[#2d3748]">Đường dẫn video<input className={field} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} placeholder="https://…" /></label></div>
+          </details>
+        </div>
       </section>
 
-      <aside className={`${card} space-y-5 p-5 lg:sticky lg:top-4`} aria-label="Nội dung điểm">
+      {/* Both cards share the row's height, so the shorter one never ends in a bare
+          strip of page; its fields follow the scroll inside the card instead. */}
+      <aside className={`${card} p-5`} aria-label="Nội dung điểm">
+        <div className="space-y-5 lg:sticky lg:top-4">
         <div className="space-y-3.5">
           <h2 className="text-lg font-bold text-[#2d3748]">Thông tin điểm</h2>
           <div><span className={label}><label htmlFor="poi-name">Tên POI</label>{required}</span><input id="poi-name" className={field} required maxLength={150} value={draft.name} onChange={e => update({ name: e.target.value })} placeholder="Sảnh thư viện" /></div>
@@ -188,16 +200,8 @@ export default function StaffManagePoiFormPage() {
           <div><span className={label}><label htmlFor="poi-narration">Thuyết minh</label>{required}</span><textarea id="poi-narration" aria-label="Nội dung thuyết minh" className={field} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} placeholder="Nhập nội dung giới thiệu tại điểm này…" /></div>
           <p className="text-xs text-[#718096]">Robot đọc nội dung này khi dừng tại điểm.</p>
         </div>
-        <div className="space-y-2 border-t border-[#e2e8f0] pt-5">
-          <h2 className="text-lg font-bold text-[#2d3748]">Camera & tư liệu</h2>
-          <div><label htmlFor="poi-camera" className={label}>Góc camera tại POI</label><select id="poi-camera" aria-label="Góc camera" className={field} value={draft.cameraPreset} onChange={e => update({ cameraPreset: e.target.value })}>{!(draft.cameraPreset in cameraPresetLabel) && <option value={draft.cameraPreset} disabled>Hướng cũ {draft.cameraPreset}, cần chọn lại</option>}{Object.entries(cameraPresetLabel).map(([value, name]) => <option key={value} value={value}>{name}</option>)}</select></div>
-          <p className="text-xs text-[#718096]">Khác với hướng thân robot được đặt trên bản đồ.</p>
-          <details className="group rounded-xl border border-[#e2e8f0] text-sm" open={Boolean(draft.fallbackVideoUrl)}>
-            <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl px-3.5 py-2.5 font-medium text-[#2d3748] [&::-webkit-details-marker]:hidden ${focus}`}><ChevronRight size={15} aria-hidden="true" className="text-[#718096] transition-transform group-open:rotate-90" />Video dự phòng HTTPS <span className="font-normal text-[#718096]">(không bắt buộc)</span></summary>
-            <div className="border-t border-[#e2e8f0] p-3.5"><label className="block text-sm text-[#2d3748]">Đường dẫn video<input className={field} type="url" maxLength={2048} pattern="https://.*" value={draft.fallbackVideoUrl} onChange={e => update({ fallbackVideoUrl: e.target.value })} placeholder="https://…" /></label></div>
-          </details>
-        </div>
         <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một phiên bản mới.</p>
+        </div>
       </aside>
     </form>
 
