@@ -1,12 +1,14 @@
-import { Bot, CalendarDays, ClipboardCheck, ClipboardList, History, LayoutDashboard, MapPinned, MonitorPlay, Route, ShieldCheck } from 'lucide-react'
+import { Bot, CalendarDays, ClipboardCheck, History, LayoutDashboard, MapPinned, MonitorPlay, Route, ShieldCheck } from 'lucide-react'
 import type { NavItem, NavSection } from '../../components/ui/nav-types'
 import { sectionNav, type GroupedNavEntry } from '../../components/ui/grouped-nav'
 
 /**
- * Staff navigation in the order of a working day: the day's sessions, running
- * the live session with the robot, preparing Tours (Tours, registrations,
- * Routes, POIs), and the log of what happened (SRS v1.9 §3.2.c). Every section
- * stays open so each page is one click away.
+ * Staff navigation by what a person works on (SRS v1.9 §3.2.c): one home that
+ * orders the whole day by urgency, running the Tour with the robot, Tours and
+ * the registrations for them, the content Tours are built from (POIs, Routes),
+ * and the log of what happened. There is one overview: the former preparation
+ * overview (`/staff/manage`) is part of the home. Every section stays open so
+ * each page is one click away.
  *
  * Administration (users, roles, permissions, configuration) is not hidden from
  * this list, it does not belong to it. Those live at `/admin/*` behind their own
@@ -21,22 +23,27 @@ export const STAFF_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Vận hành',
     items: [
-      { label: 'Tổng quan vận hành', path: '/staff', icon: LayoutDashboard },
-      { label: 'Lịch Tour', path: '/staff/schedule', icon: CalendarDays },
+      { label: 'Tổng quan', path: '/staff', icon: LayoutDashboard },
       { label: 'Điều hành trực tiếp', path: '/staff/live', icon: MonitorPlay },
       { label: 'Robot & thiết bị', path: '/staff/robot', icon: Bot },
     ],
   },
   {
     // Tour preparation is Staff work (SRS v1.9 §3.2.c), moved here from `/admin/*`.
-    label: 'Chuẩn bị Tour',
+    // Creating a Tour is a page action (home, calendar), not an entry.
+    label: 'Tour & đăng ký',
     items: [
-      // Keep creation and registration subviews inside their owning pages.
-      { label: 'Tổng quan chuẩn bị', path: '/staff/manage', icon: ClipboardList },
-      { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
-      { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
+      { label: 'Lịch Tour', path: '/staff/schedule', icon: CalendarDays },
       // Opens the queue its badge counts; "Tất cả đăng ký" is a tab of that page.
       { label: 'Đăng ký đoàn', path: REGISTRATIONS_NAV_PATH, icon: ClipboardCheck },
+    ],
+  },
+  {
+    // In the order they are made: POIs first, then Routes through them.
+    label: 'Nội dung tham quan',
+    items: [
+      { label: 'Quản lý POI', path: '/staff/manage/pois', icon: MapPinned },
+      { label: 'Danh mục tuyến', path: '/staff/manage/routes', icon: Route },
     ],
   },
   {

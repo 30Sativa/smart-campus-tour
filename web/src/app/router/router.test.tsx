@@ -52,17 +52,16 @@ describe('route table', () => {
 
 
 
-  // Compile both dashboards before timing session/guard behavior on a cold Windows run.
+  // Compile the Staff home before timing session/guard behavior on a cold Windows run.
   beforeAll(async () => {
-    await import('../../routes/staff/manage/StaffManageDashboardPage')
     await import('../../routes/staff/OverviewPage')
   }, 30_000)
 
 
 
 
-  // Compile the dashboard's chart chunk before timing session/guard behavior.
-  beforeAll(async () => { await import('../../routes/staff/manage/StaffManageDashboardPage') }, 30_000)
+  // Compile the Staff home before timing session/guard behavior.
+  beforeAll(async () => { await import('../../routes/staff/OverviewPage') }, 30_000)
 
 
   beforeEach(() => useAuthStore.getState().setAuthReady())
@@ -182,7 +181,7 @@ describe('route table', () => {
       signIn('Staff')
       const router = renderAt('/staff')
       await settled(router, '/staff')
-      expect(await screen.findByRole('heading', { name: /Tổng quan vận hành/i, level: 1 })).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /^Tổng quan$/, level: 1 })).toBeInTheDocument()
     })
 
     it('keeps Admin out of the Staff workspace', async () => {
@@ -203,7 +202,7 @@ describe('route table', () => {
       signIn('Admin')
       const router = renderAt('/admin')
       await settled(router, '/admin/accounts')
-      expect(screen.queryByRole('heading', { name: /Tổng quan vận hành/i })).toBeNull()
+      expect(screen.queryByRole('heading', { name: /^Tổng quan$/ })).toBeNull()
     })
 
     it('keeps /admin/roles as a real route rather than a legacy redirect', async () => {
@@ -259,7 +258,6 @@ describe('route table', () => {
       ['/staff/manage/registrations/pending', /Đăng ký chờ duyệt/],
       ['/staff/manage/registrations', /Tất cả đăng ký/],
       ['/staff/manage/routes', /Danh mục tuyến/],
-      ['/staff/manage', /Tổng quan chuẩn bị/],
     ])('serves %s to Staff', async (path, heading) => {
       signIn('Staff')
       if (path === '/staff/manage/routes') {
@@ -318,6 +316,7 @@ describe('route table', () => {
       ['/staff/tours?view=READY', '/staff', '?view=READY'],
       ['/staff/manage/tours?state=READY', '/staff/schedule', '?state=READY&view=list'],
       ['/staff/manage/tours', '/staff/schedule', '?view=list'],
+      ['/staff/manage?review=abc', '/staff', '?review=abc'],
     ])('sends %s to %s with its filters', async (from, to, search) => {
       signIn('Staff')
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 404 })))

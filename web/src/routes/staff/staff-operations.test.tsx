@@ -9,7 +9,7 @@ import { useAuthStore } from '../../stores/auth-store'
 import { useTourOriginStore } from '../../features/staff/operations/tour-origin'
 import LiveOperationsPage from './LiveOperationsPage'
 import StartCheckPage from './StartCheckPage'
-import { DayTours } from '../../features/staff/operations/DayTours'
+import { TodayTours, UpcomingTours } from '../../features/staff/operations/DayTours'
 import StaffManageTourDetailPage from './manage/StaffManageTourDetailPage'
 
 const STOP = { poiRevisionId: 'poi-rev-1', sourcePoiVerificationRecordId: 'v-1', stopOrder: 1, dwellSeconds: 60, headSteps: [], name: 'Thư viện', x: 0, y: 0, yaw: 0, cameraPreset: 'FRONT' }
@@ -131,7 +131,7 @@ describe('pre-start check on the real Tour API', () => {
     tour = detail('READY'); checks = OPEN_CHECKS
     useTourOriginStore.setState({ origin: '/staff?view=READY' })
     renderAt('/staff/tours/tour-1/start', '/staff/tours/:tourId/start', <StartCheckPage />)
-    expect(await screen.findByRole('link', { name: /Tổng quan vận hành/ })).toHaveAttribute('href', '/staff?view=READY')
+    expect(await screen.findByRole('link', { name: /Tổng quan/ })).toHaveAttribute('href', '/staff?view=READY')
     // READY: preparation is done and still opens; the console has nothing to show yet.
     const steps = screen.getByRole('navigation', { name: 'Các bước của Tour' })
     expect(within(steps).getByRole('link', { name: /Chuẩn bị & chốt/ })).toHaveAttribute('href', '/staff/manage/tours/tour-1')
@@ -458,7 +458,7 @@ describe('READY and Reopen on Tour preparation', () => {
 describe('today list', () => {
   it('reads today from the Tour API and offers the next step by state', async () => {
     tour = detail('READY')
-    renderAt('/staff', '/staff', <DayTours />)
+    renderAt('/staff', '/staff', <TodayTours />)
     const today = await screen.findByRole('table', { name: 'Tour hôm nay' })
     expect(within(today).getByRole('link', { name: 'Kiểm tra trước khi bắt đầu' })).toHaveAttribute('href', '/staff/tours/tour-1/start')
     const calls = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), 'http://localhost'))
@@ -469,7 +469,7 @@ describe('today list', () => {
 
   it('lists the next week under today, so a Tour two days out is reachable from here', async () => {
     tour = detail('READY')
-    renderAt('/staff', '/staff', <DayTours />)
+    renderAt('/staff', '/staff', <><TodayTours /><UpcomingTours /></>)
     const ahead = await screen.findByRole('region', { name: 'Tour sắp tới' })
     const table = await within(ahead).findByRole('table', { name: 'Tour sắp tới' })
     expect(within(table).getByRole('columnheader', { name: 'Ngày giờ' })).toBeInTheDocument()

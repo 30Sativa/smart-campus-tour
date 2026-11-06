@@ -20,7 +20,8 @@ Two vocabularies are kept apart on every screen:
 
 | Route | Screen | Backend |
 |---|---|---|
-| `/staff` | Tổng quan vận hành, the day page: Tours needing assistance or a reconcile, today's counts, running Tours with step and command state, robot telemetry, then today's Tours filtered by state (`?view=`) with one next step each, and the not-ended Tours of the next 7 days ("Sắp tới") | `GET /api/staff/manage/tours` (today, the 7 days after, `phase=RUNNING`), Tour detail, `/hubs/operations` |
+| `/staff` | Tổng quan, the one Staff home, ordered by urgency. "Bây giờ": Tours needing assistance or a reconcile, then the running Tours with step, command state and robot (or one line naming the next Tour today). Then today's Tours filtered by state (`?view=`), each with its held robot's own report ("Đang báo cáo" / "Báo cáo cũ" / "Chưa báo cáo", never "ready") and one next step, beside the preparation queue: registrations waiting (oldest first, with calendar time waited; "Xem & duyệt" opens the review drawer here via `?review=`), SCHEDULED Tours to make READY, POIs Staff must finish (draft or failed; those waiting for Technical are only counted). The queue folds to one line while anything needs a person now. Below: robot reports and the not-ended Tours of the next 7 days. A freshness line says when Tour data was read | `GET /api/staff/manage/tours` (today, the 7 days after, `phase=RUNNING`, `state=SCHEDULED`), `GET /api/staff/manage/registrations?state=SUBMITTED`, `GET /api/staff/poi-proposals`, `/hubs/operations` |
+| `/staff/manage` | Redirect to `/staff` with its query: "Tổng quan chuẩn bị" merged into the home on 2026-11-07 | — |
 | `/staff/tours` | Redirect to `/staff` with its query: "Buổi hôm nay" merged into the overview on 2026-11-05 | — |
 | `/staff/tours/:id` | Redirect to the screen that fits the Tour's state | Tour detail |
 | `/staff/tours/:id/start` | Kiểm tra trước khi bắt đầu: a verdict first (before the window opens: when it opens and how long until then), then only the root causes grouped by who clears them: Tour and operator, Robot (each row tagged with its server source, e.g. "Robot tự báo" for telemetry, plus what to do), and the M2.3 system gates in one box nobody on site can open; the full list folded per group; Start and the 4 on-site confirmations in a sticky side column (confirmations shown only to the assigned Operator) | `GET …/start-checks` (polled 3 s), `POST …/start` |
@@ -122,6 +123,18 @@ Done since the first M2 console, listed so these rows are not re-opened:
   Technical Staff only, ADR-0043 D13).
 - Operator console presence: `operatorConsoleConnected` counts the Operator's
   `/hubs/operations` connections.
+
+## One Staff home (2026-11-07)
+
+- The operations overview and the preparation overview were two dashboards for
+  the same role. They are one home at `/staff`; `/staff/manage` redirects there.
+- Navigation: Vận hành (Tổng quan, Điều hành trực tiếp, Robot & thiết bị),
+  Tour & đăng ký (Lịch Tour, Đăng ký đoàn), Nội dung tham quan (POI, tuyến),
+  Lịch sử. "Đăng ký đoàn" opens the pending queue its badge counts.
+- The running-Tour card and the robot channel chip show on every Staff page.
+- Not yet possible without API changes: "my Tours" for the assigned Operator
+  (list rows carry no Operator), READY blockers on list rows, and a server-side
+  filter for Tours needing a reconcile (the client scans the newest 100).
 
 ## Staff interface update (2026-10-30)
 
