@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.ruff_cache/**)",
+      "Read(./**/bin/**)",
+      "Read(./**/obj/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/.next/**)",
+      "Read(./**/__pycache__/**)",
+      "Read(./robot/**/build/**)",
+      "Read(./robot/**/install/**)",
+      "Read(./robot/**/log/**)",
+      "Read(./.aider-desk/**)",
+      "Read(./.artifacts/**)",
+      "Read(./.claude/worktrees/**)",
+      "Read(./Claude outputs/**/*.png)",
+      "Read(./Claude outputs/**/*.jpg)",
+      "Read(./Claude outputs/**/*.tgz)"
+    ]
+  }
+}

@@ -472,4 +472,5 @@ skills-lock.json
 /robot/.native-state/
 
 # Claude Code local state and worktrees
-.claude/
+.claude/worktrees/
+.claude/settings.local.json
