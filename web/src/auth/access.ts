@@ -9,9 +9,11 @@ import { ALL_ROLES, REPRESENTATIVE_HOME, TECHNICAL_HOME, homePathForRole, isAdmi
  * drift from the guard: if someone changes a rule, the documentation of that
  * rule changes with it, because it is the same call.
  *
- * The server is still the real enforcement. This layer stops a signed-in
- * account from opening the wrong area by typing the URL, and it is what decides
- * what an account is shown.
+ * The server is still the real enforcement, and it is finer-grained: each API
+ * action carries its own role check, and a few of them reach outside the
+ * caller's area (an Admin can list robots, for instance). This layer only
+ * stops a signed-in account from opening the wrong area by typing the URL, and
+ * decides what an account is shown.
  */
 export type AreaId = 'public' | 'staff' | 'admin' | 'representative' | 'technical'
 
@@ -85,9 +87,9 @@ function areaOfPath(path: string): AreaId {
  *
  * A blocked navigation remembers where it was going, and that memory is honored
  * only when it points into the area this role calls home. Without that test an
- * administrator who had been bounced off `/staff` would sign in and land back on
- * the operations console: Admin is allowed there, so nothing would send them on
- * to `/admin`, and the administration dashboard would look missing.
+ * account that had been bounced off another area (an Admin off `/staff`, say)
+ * would sign in and be sent back to a page it cannot open, only for the guard
+ * to bounce it again instead of landing it on its own home.
  */
 export function landingPathAfterLogin(role: string | null | undefined, from?: string | null): string {
   const home = homePathForRole(role)
