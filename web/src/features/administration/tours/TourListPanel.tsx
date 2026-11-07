@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Pagination, SearchField, panelClass } from '../../../components/ui/ConsolePrimitives'
+import { Pagination, SearchField } from '../../../components/ui/ConsolePrimitives'
 import { inputClass, rowClass, tdClass, thClass } from '../../../components/ui/ui-classes'
 import { CapacityBar } from '../../../components/ui/Charts'
 import { AdminErrorPanel, EmptyState, SkeletonRows } from '../AdminUi'
@@ -45,19 +45,21 @@ export function TourListPanel() {
   const update = (key: 'tab' | 'state', value: string) => { setParams(current => { const next = new URLSearchParams(current); next.delete('tab'); next.delete('state'); if (value) next.set(key, value); return next }, { replace: true }); setPage(1) }
   const pickTab = (phase: TourPhase) => update('tab', phase)
   return <>
-    <section className={panelClass} aria-label="Danh sách Tour">
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#eef1f4] px-3 py-2.5">
-        <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" />
+    <section aria-label="Danh sách Tour">
+      <div className="flex min-h-10 flex-wrap items-center gap-2">
         <div role="group" aria-label="Nhóm Tour" className="inline-flex flex-wrap gap-0.5 rounded-[10px] bg-[#eef2f6] p-[3px]">
           {TABS.map(item => <button key={item.phase} type="button" aria-pressed={tab?.phase === item.phase} onClick={() => pickTab(item.phase)}
-            className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${tab?.phase === item.phase ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{item.label}</button>)}
+            className={`min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold ${tab?.phase === item.phase ? 'bg-white text-[#173b59] shadow-[0_1px_2px_rgba(15,23,42,0.08)]' : 'text-[#475569]'}`}>{item.label}</button>)}
         </div>
         <label className="flex items-center gap-2 whitespace-nowrap text-sm">Trạng thái<select aria-label="Trạng thái Tour" className={inputClass} value={everything ? 'ALL' : state} onChange={e => update('state', e.target.value)}>
           <option value="">Theo nhóm đang chọn</option>
           <option value="ALL">Tất cả</option>
           {(Object.keys(TOUR_STATE_LABEL) as TourState[]).map(s => <option key={s} value={s}>{TOUR_STATE_LABEL[s]}</option>)}
         </select></label>
+        <SearchField value={search} onChange={v => { setSearch(v); setPage(1) }} label="Tìm Tour" placeholder="Tên Tour" className="min-w-48 flex-1" />
       </div>
+      {/* Same place and least height as the calendar under it, so changing view does not move the table. */}
+      <div className="mt-4 min-h-[26rem]"><div className="overflow-hidden rounded-xl border border-[#e2e8f0]">
       {tours.isError ? <AdminErrorPanel title={tourError(tours.error)} onRetry={() => void tours.refetch()} /> : tours.isPending ? <SkeletonRows rows={4} label="Đang tải danh sách Tour" /> : tours.data.data.length === 0 ?
         <EmptyState title="Chưa có Tour phù hợp" description="Tạo Tour mới từ một tuyến khả dụng hoặc đổi bộ lọc." /> :
         <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left" aria-label="Danh sách Tour">
@@ -72,6 +74,7 @@ export function TourListPanel() {
           </tr>)}</tbody>
         </table></div>}
       {tours.data && <Pagination page={page} pageCount={Math.max(1, tours.data.pagination.totalPages)} total={tours.data.pagination.totalItems} pageSize={PAGE_SIZE} onPage={setPage} label="Tour" />}
+      </div></div>
     </section>
   </>
 }
