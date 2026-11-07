@@ -21,15 +21,19 @@ function useOverlay(open: boolean, onClose: () => void) {
 
 const scrim = 'fixed inset-0 bg-[#0f172a]/35 backdrop-blur-[2px] transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none'
 
-/** A task or a record opened in the middle of the page, the page dimmed behind it. */
-export function Drawer({ open, title, description, onClose, children, footer, wide = false }: {
-  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean | 'xl'
+/**
+ * A task or a record opened over the dimmed page: in the middle by default, or against the
+ * right edge (`side="right"`) when the page behind it should stay recognisable.
+ */
+export function Drawer({ open, title, description, onClose, children, footer, wide = false, side = 'center' }: {
+  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean | 'xl'; side?: 'center' | 'right'
 }) {
   const titleId = useId()
   const panelRef = useOverlay(open, onClose)
   if (!open) return null
+  const right = side === 'right'
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
+    <div className={`fixed inset-0 z-50 flex ${right ? 'justify-end' : 'items-start justify-center overflow-y-auto p-3 sm:items-center sm:p-6'}`}>
       <div className={scrim} onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
@@ -37,7 +41,7 @@ export function Drawer({ open, title, description, onClose, children, footer, wi
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] transition-[opacity,scale] duration-200 ease-out starting:scale-[0.98] starting:opacity-0 motion-reduce:transition-none focus-visible:outline-none sm:max-h-[calc(100dvh-3rem)] ${wide === 'xl' ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-xl'}`}
+        className={`relative z-10 flex w-full flex-col overflow-hidden bg-white shadow-[0_30px_80px_-24px_rgba(15,23,42,0.5)] duration-200 ease-out motion-reduce:transition-none focus-visible:outline-none ${right ? 'h-dvh max-w-md rounded-l-2xl transition-[opacity,translate] starting:translate-x-6 starting:opacity-0' : `max-h-[calc(100dvh-1.5rem)] rounded-2xl transition-[opacity,scale] starting:scale-[0.98] starting:opacity-0 sm:max-h-[calc(100dvh-3rem)] ${wide === 'xl' ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-xl'}`}`}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[#eef1f4] px-5 py-3.5">
           <div>

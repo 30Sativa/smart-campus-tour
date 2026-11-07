@@ -16,12 +16,6 @@ export const campusStamp = (value: string) => `${campusTime(value)} ${campusDate
 export const dayStart = (day: string) => new Date(`${day}T00:00:00+07:00`).toISOString()
 export const dayEnd = (day: string) => new Date(`${day}T23:59:59.999+07:00`).toISOString()
 
-/** Minutes after campus midnight. */
-export const campusMinutes = (value: string) => {
-  const [hours, minutes] = campusTime(value).split(':').map(Number)
-  return hours * 60 + minutes
-}
-
 export function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60)
   const rest = seconds % 60
