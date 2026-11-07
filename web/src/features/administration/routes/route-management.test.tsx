@@ -83,7 +83,7 @@ describe('Staff versioned Route workflow', () => {
   it('selects only PASS POI revisions for the chosen map and creates/submits the exact route revision', async () => {
     renderAt('/staff/manage/routes/new')
     fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Library tour' } })
-    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
     next()
     expect(await screen.findByText('Verified entrance')).toBeInTheDocument()
     expect(screen.queryByText('Pending POI')).not.toBeInTheDocument()
@@ -112,9 +112,9 @@ describe('Staff versioned Route workflow', () => {
 
   it('only offers maps that already have a passed POI', async () => {
     renderAt('/staff/manage/routes/new')
-    const select = await screen.findByLabelText('Phiên bản bản đồ')
-    expect(within(select).getByRole('option', { name: /Library · library · phiên bản 1/ })).toBeEnabled()
-    const otherMap = within(select).getByRole('option', { name: /Library · library · phiên bản 3/ })
+    const select = await screen.findByLabelText('Bản đồ')
+    expect(within(select).getByRole('option', { name: /Library · library-v1/ })).toBeEnabled()
+    const otherMap = within(select).getByRole('option', { name: /Library · map-without-poi/ })
     expect(otherMap).toBeDisabled()
     expect(otherMap).toHaveTextContent('chưa có POI đạt')
   })
@@ -122,8 +122,8 @@ describe('Staff versioned Route workflow', () => {
   it('blocks a map that lost its passing technical check even when its POIs passed', async () => {
     mapEligible = false
     renderAt('/staff/manage/routes/new')
-    const select = await screen.findByLabelText('Phiên bản bản đồ')
-    const option = within(select).getByRole('option', { name: /Library · library · phiên bản 1/ })
+    const select = await screen.findByLabelText('Bản đồ')
+    const option = within(select).getByRole('option', { name: /Library · library-v1/ })
     expect(option).toBeDisabled()
     expect(option).toHaveTextContent('chưa đạt kiểm tra kỹ thuật')
     fireEvent.change(select, { target: { value: 'map-v1' } })
@@ -140,7 +140,7 @@ describe('Staff versioned Route workflow', () => {
     expect(screen.getByRole('button', { name: /^Tiếp/ })).toBeDisabled()
     expect(screen.getByText('Chưa sang bước tiếp được: nhập tên tuyến, chọn bản đồ.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tên tuyến'), { target: { value: 'Steps' } })
-    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
     next()
     expect(screen.getByText('Chưa sang bước tiếp được: chọn ít nhất 2 điểm dừng.')).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
@@ -279,7 +279,7 @@ describe('Staff versioned Route workflow', () => {
   it('saves stops in the order shown after moving one up', async () => {
     renderAt('/staff/manage/routes/new')
     fireEvent.change(await screen.findByLabelText('Tên tuyến'), { target: { value: 'Ordered' } })
-    fireEvent.change(screen.getByLabelText('Phiên bản bản đồ'), { target: { value: 'map-v1' } })
+    fireEvent.change(screen.getByLabelText('Bản đồ'), { target: { value: 'map-v1' } })
     next()
     fireEvent.click(await screen.findByRole('checkbox', { name: /Verified entrance/ }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Verified hall/ }))
@@ -300,7 +300,7 @@ describe('Staff versioned Route workflow', () => {
     currentRoute = { ...route, isSubmitted: true, verificationStatus: 'NOT_TESTED', dwellDurationSeconds: 120 } as typeof route
     renderAt('/staff/manage/routes/route-1')
     expect(await screen.findByText(/Đang chờ Kỹ thuật chạy thử/)).toBeInTheDocument()
-    expect(screen.getAllByText('Chờ kiểm chứng').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Chờ chạy thử').length).toBeGreaterThan(0)
     expect(screen.getByText('2 phút')).toBeInTheDocument()
     expect(screen.queryByText('NOT_TESTED')).not.toBeInTheDocument()
     expect(screen.getByText('Thông tin kỹ thuật').closest('details')).not.toHaveAttribute('open')
@@ -331,13 +331,13 @@ describe('Staff versioned Route workflow', () => {
     submissionFailure = 409
     renderAt('/staff/manage/routes/route-1')
     fireEvent.click(await screen.findByRole('button', { name: 'Gửi kiểm chứng tuyến' }))
-    expect(await screen.findByText(/Phiên bản hoặc dữ liệu nguồn đã thay đổi/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tải lại phiên bản' })).toBeInTheDocument()
+    expect(await screen.findByText(/Tuyến hoặc dữ liệu nguồn đã thay đổi/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tải lại tuyến' })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(currentRoute.isSubmitted).toBe(false)
     expect(requests.filter(item => item.url.pathname.endsWith('/submit'))).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Tải lại phiên bản' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tải lại phiên bản' })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Tải lại tuyến' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Tải lại tuyến' })).not.toBeInTheDocument())
     expect(requests.filter(item => item.url.pathname.endsWith('/submit'))).toHaveLength(1)
   })
 
@@ -357,7 +357,7 @@ describe('Staff versioned Route workflow', () => {
     currentRoute = historical
     renderAt('/staff/manage/routes/route-1?revisionId=route-rev-1')
     expect(await screen.findByRole('heading', { name: 'Library tour' })).toBeInTheDocument()
-    expect(screen.getByText(/phiên bản cũ, chỉ xem được/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Đây là bản lưu \d\d\/\d\d \d\d:\d\d, chỉ xem được\.$/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Gửi kiểm chứng tuyến' })).not.toBeInTheDocument()
   })
 })

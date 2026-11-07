@@ -63,7 +63,7 @@ export function TourForm({ initial, currentRoute, fixedStops, scheduleLocked = f
         <option value="">— Chọn tuyến khả dụng —</option>
         {options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
-        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : fixedStops ? 'Tour gắn với đúng phiên bản tuyến này.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>
+        <span className="mt-1 block text-xs text-[#64748b]">{routes.isError ? 'Không tải được danh mục tuyến.' : fixedStops ? 'Tour dùng đúng bản tuyến đã chạy thử lúc tạo.' : 'Danh sách này chỉ có tuyến kiểu cũ.'}</span></label>
       <label className="block text-sm">Video dự phòng (không bắt buộc)<input type="url" maxLength={1000} className={inputClass} value={video} onChange={e => setVideo(e.target.value)} placeholder="https://…" /></label>
       {fixedStops ? <Notice tone="info">Muốn đổi lịch, tuyến hoặc robot, hãy hủy Tour rồi tạo lại; ở đây chỉ sửa được tên, mô tả và video.</Notice>
         : scheduleLocked && <Notice tone="info">Tour đã có đăng ký hoặc lịch sử nên lịch và tuyến bị khóa; chỉ sửa được tên, mô tả và video.</Notice>}

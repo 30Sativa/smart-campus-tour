@@ -108,7 +108,7 @@ describe('staff preparation UI', () => {
 
   it('keeps POI rows and map markers on the selected map version and explains empty filters', async () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    const picker = await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
+    const picker = await screen.findByRole('combobox', { name: 'Bản đồ' })
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
     expect(within(list).getByText('Điểm A')).toBeInTheDocument()
     expect(within(list).queryByText('Điểm B')).not.toBeInTheDocument()
@@ -137,7 +137,7 @@ describe('staff preparation UI', () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
     const first = await screen.findByRole('img', { name: 'Bản đồ test123-v1 với 1 POI' })
     const firstUrl = first.querySelector('image')!.getAttribute('href')!
-    const picker = screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' })
+    const picker = screen.getByRole('combobox', { name: 'Bản đồ' })
     fireEvent.change(picker, { target: { value: 'map-b' } })
     const second = await screen.findByRole('img', { name: 'Bản đồ test123-v2 với 1 POI' })
     expect(second.querySelector('image')).toHaveAttribute('width', '40')
@@ -151,18 +151,18 @@ describe('staff preparation UI', () => {
     mapVersions = [mapVersion('map-a', 'tang-6-v1', [], 'Tầng 6'), mapVersion('map-b', 'test123-v1', [], 'Tầng 6')]
     proposals = [proposal('poi-a', 'map-a', 'tang-6-v1', 'Điểm A'), proposal('poi-b', 'map-b', 'test123-v1', 'Điểm B')]
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6 · phiên bản 1' })
-    const secondChoice = await screen.findByRole('option', { name: 'Tầng 6 · test123 · phiên bản 1' })
+    const firstChoice = await screen.findByRole('option', { name: 'Tầng 6 · tang-6-v1 (mới nhất)' })
+    const secondChoice = await screen.findByRole('option', { name: 'Tầng 6 · test123-v1 (mới nhất)' })
     expect(firstChoice).toHaveValue('map-a')
     expect(secondChoice).toHaveValue('map-b')
     const first = await screen.findByRole('img', { name: 'Bản đồ tang-6-v1 với 1 POI' })
     expect(first.querySelector('image')).toHaveAttribute('width', '10')
-    fireEvent.change(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' }), { target: { value: 'map-b' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Bản đồ' }), { target: { value: 'map-b' } })
     const second = await screen.findByRole('img', { name: 'Bản đồ test123-v1 với 1 POI' })
     expect(second.querySelector('image')).toHaveAttribute('width', '40')
     expect(screen.getByRole('button', { name: 'Chọn Điểm B' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Chọn Điểm A' })).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' })).toHaveDisplayValue('Tầng 6 · test123 · phiên bản 1')
+    expect(screen.getByRole('combobox', { name: 'Bản đồ' })).toHaveDisplayValue('Tầng 6 · test123-v1 (mới nhất)')
   })
 
   it('shows the server message for a failed map download and recovers on retry', async () => {
@@ -260,7 +260,7 @@ describe('staff preparation UI', () => {
 
   it('filters POIs to the maps a robot is running, and shows every POI by default', async () => {
     show(<StaffManagePoisPage />, '/staff/manage/pois')
-    await screen.findByRole('combobox', { name: 'Bản đồ / Phiên bản' })
+    await screen.findByRole('combobox', { name: 'Bản đồ' })
     const list = screen.getByRole('region', { name: 'Danh sách đề xuất POI' })
     expect(screen.getByRole('checkbox', { name: 'Chỉ bản đồ đang chạy trên robot' })).not.toBeChecked()
     expect(within(list).getByText('Điểm A')).toBeInTheDocument()
@@ -270,7 +270,7 @@ describe('staff preparation UI', () => {
       expect(within(list).getByText('Điểm B')).toBeInTheDocument()
     })
     expect(within(list).queryByText('Điểm A')).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Bản đồ / Phiên bản' })).toHaveValue('map-b')
+    expect(screen.getByRole('combobox', { name: 'Bản đồ' })).toHaveValue('map-b')
   })
 
   it('opens the Tour list on upcoming Tours and asks the API for each tab', async () => {

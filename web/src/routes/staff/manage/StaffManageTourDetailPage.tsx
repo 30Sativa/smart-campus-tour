@@ -6,7 +6,9 @@ import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { notify } from '../../../components/ui/toast-store'
 import { AdminErrorPanel, AdminPage, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { formatSlot, formatStamp } from '../../../features/administration/admin-format'
+import { passedAt } from '../../../features/administration/routes/route-messages'
 import { newRequestId, useCancelTour, useTour } from '../../../features/administration/tours/hooks'
+import { campusShortDate } from '../../../features/administration/tours/tour-calendar'
 import { TOUR_STATE_LABEL, tourError } from '../../../features/administration/tours/tour-messages'
 import { TourReadyPanel } from '../../../features/administration/tours/TourReadyPanel'
 import { TourStepper } from '../../../features/staff/operations/TourStepper'
@@ -27,6 +29,7 @@ export default function StaffManageTourDetailPage() {
   if (detail.isError) return <AdminPage><AdminErrorPanel title={tourError(detail.error)} onRetry={() => void detail.refetch()} /></AdminPage>
   if (!data) return <AdminPage><SkeletonRows rows={5} label="Đang tải Tour" /></AdminPage>
   const { tour, route, routeRevision, operator, reservation, permissions } = data
+  const routePassedAt = routeRevision && passedAt(routeRevision)
 
   const confirmCancel = async (reason: string) => {
     try {
@@ -67,7 +70,7 @@ export default function StaffManageTourDetailPage() {
         <h2 className="text-[15px] font-semibold">Tuyến: {routeRevision.name}</h2>
         <Link to={`/staff/manage/routes/${routeRevision.routeId}?revisionId=${routeRevision.revisionId}`} className="text-sm text-[#2d719e]">Mở tuyến</Link>
       </div>
-      <p className="mt-1 text-sm text-[#64748b]">{routeRevision.mapKey} · phiên bản {routeRevision.revisionNumber} · {routeRevision.stops.length} điểm dừng</p>
+      <p className="mt-1 text-sm text-[#64748b]">{routePassedAt && `Tuyến đã chạy thử đạt ngày ${campusShortDate(routePassedAt)} · `}{routeRevision.stops.length} điểm dừng</p>
       <ol className="mt-3 divide-y divide-[#e2e8f0]">{routeRevision.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
         <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
         <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s</span>

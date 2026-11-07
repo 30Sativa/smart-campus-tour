@@ -139,7 +139,7 @@ describe('Staff versioned POI workflow', () => {
 
     renderAt('/staff/manage/pois')
     expect(await screen.findByText('Chưa thể tạo điểm tham quan')).toBeInTheDocument()
-    expect(screen.getByText('Library · library · phiên bản 1')).toBeInTheDocument()
+    expect(screen.getByText('Library · library-v1 (mới nhất)')).toBeInTheDocument()
     expect(screen.getByText('Chờ kỹ thuật kiểm tra')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Tạo điểm mới' })).toHaveAccessibleDescription('Chưa có bản đồ nào đạt kiểm tra kỹ thuật')
@@ -160,14 +160,14 @@ describe('Staff versioned POI workflow', () => {
     const picker = await screen.findByLabelText('Bản đồ') as HTMLSelectElement
     fireEvent.change(picker, { target: { value: 'map-v1' } })
 
-    expect(await screen.findByText('Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa có robot nào đang chạy bản đồ này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.')).toBeInTheDocument()
     expect(picker.selectedOptions[0].disabled).toBe(false)
     expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeEnabled()
   })
 
   it('revises with the current revision and rowversion and shows rejection reason/history', async () => {
     renderAt('/staff/manage/pois/proposal-1')
-    expect((await screen.findAllByText(/Phiên bản 1 · Không đạt/)).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/Bản lưu \d\d\/\d\d \d\d:\d\d · Không đạt/)).length).toBeGreaterThan(0)
     expect(await screen.findByText(/Lý do: POI chưa tới được/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Tên POI'), { target: { value: 'Library updated' } })
     fireEvent.change(screen.getByLabelText('Nội dung thuyết minh'), { target: { value: 'Nội dung đã cập nhật.' } })

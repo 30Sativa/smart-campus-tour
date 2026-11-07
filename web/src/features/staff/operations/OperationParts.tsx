@@ -145,7 +145,7 @@ function stopMark(detail: TourDetails, stopId: string | undefined): StopMark | n
 /** The revision's stops in order, marked from the Tour's execution stop ids while it runs. */
 export function RouteStopList({ detail }: { detail: TourDetails }) {
   const revision = detail.routeRevision
-  if (!revision) return <p className="text-[13px] text-[#64748b]">Tour này không chạy trên một phiên bản tuyến đã kiểm chứng.</p>
+  if (!revision) return <p className="text-[13px] text-[#64748b]">Tour này không chạy trên tuyến đã chạy thử đạt.</p>
   const marks = revision.stops.map(stop => stopMark(detail, stop.id))
   const returning = detail.tour.state === 'RUNNING' && detail.execution?.currentStep === 'RETURNING_TO_END'
   const marked = returning || marks.some(Boolean)

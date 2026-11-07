@@ -7,7 +7,8 @@ import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '..
 import { ToneBadge } from '../../../features/technical/TechnicalUi'
 import { useMapVersions, usePoiProposals } from '../../../features/technical/technical-hooks'
 import type { MapVersionItem, PoiProposal } from '../../../features/technical/api/technical'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, mapVersionLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { staffMapLabels } from '../../../features/administration/map-labels'
 import { rosToImage } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
 import { poiStatus, type PoiStatus } from '../../../features/administration/pois/poi-status'
@@ -64,7 +65,7 @@ export default function StaffManagePoisPage() {
   const blocked = !mapVersions.isPending && !mapVersions.error && !mapItems.some(item => item.canUseForPoiPreparation)
   const mapName = (id: string, fallback: string) => {
     const found = mapItems.find(item => item.map.id === id)?.map
-    return found ? mapVersionLabel(found) : fallback
+    return found ? staffMapLabels(mapItems)(found) : fallback
   }
   const currentKey = maps.find(map => map.id === mapVersionId)?.key
 
@@ -83,7 +84,7 @@ export default function StaffManagePoisPage() {
     {/* One toolbar for everything that narrows the view: map, robot filter, search and status. */}
     <div className={`${card} mb-4 px-4 py-3`}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        {maps.length > 0 && <select title="" aria-label="Bản đồ / Phiên bản" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`${inputClass} font-semibold sm:w-auto sm:min-w-64 sm:max-w-full`}>
+        {maps.length > 0 && <select title="" aria-label="Bản đồ" value={mapVersionId} onChange={e => { setSelectedMap(e.target.value); setChosen(null) }} className={`${inputClass} font-semibold sm:w-auto sm:min-w-64 sm:max-w-full`}>
           {maps.map(map => <option key={map.id} value={map.id}>{mapName(map.id, map.key)}</option>)}
         </select>}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-[#2d3748]">
@@ -116,7 +117,7 @@ export default function StaffManagePoisPage() {
           {proposals.isSuccess && <span className="text-xs text-[#718096]">{scoped.length} điểm{rows.length !== scoped.length ? `, đang hiện ${rows.length}` : ''}</span>}
         </div>
         {proposals.isPending ? <SkeletonRows rows={4} /> : proposals.error ? <AdminErrorPanel title="Không tải được đề xuất POI." onRetry={() => void proposals.refetch()} /> : !rows.length ?
-          (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một phiên bản bản đồ đã tải lên.'} />) :
+          (blocked && !everyProposal.length ? <NoEligibleMap maps={mapItems} /> : <EmptyState title={all.length || deployedOnly ? 'Không có POI khớp bộ lọc' : 'Chưa có đề xuất POI'} description={all.length || deployedOnly ? 'Đổi trạng thái hoặc từ khóa để tìm điểm tham quan.' : 'Tạo đề xuất từ một bản đồ đã tải lên.'} />) :
           <ul ref={listRef} aria-label="Điểm tham quan" className="min-h-0 divide-y divide-[#eef2f6] overflow-y-auto border-t border-[#eef2f6]">{rows.map((p) => {
             const st = STATUS[statusOf(p)]
             const active = p.id === selected?.id
@@ -162,7 +163,6 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
   const tone = needsNarration ? NEXT_TONE.WAIT : NEXT_TONE[status]
   const facts: Array<[string, string]> = [
     ['Góc camera', cameraPresetLabel[proposal.revision.cameraPreset] ?? proposal.revision.cameraPreset],
-    ['Phiên bản POI', `${proposal.currentRevision}`],
     ['Thuyết minh', proposal.revision.narrationText ? 'Đã có nội dung' : 'Chưa có nội dung'],
     ['Cách kiểm chứng', proposal.revision.verificationMethod ? verificationMethodLabel[proposal.revision.verificationMethod] ?? '-' : '-'],
   ]
@@ -179,13 +179,14 @@ function PoiDetail({ proposal }: { proposal: PoiProposal }) {
 
 /** No map has passed its technical check yet, so there is nowhere to place a POI. */
 function NoEligibleMap({ maps }: { maps: MapVersionItem[] }) {
+  const mapLabel = staffMapLabels(maps)
   return <div className="px-6 py-10 text-center">
     <MapPinOff size={28} className="mx-auto text-[#b7791f]" aria-hidden="true" />
     <h2 className="mt-3 text-[15px] font-semibold text-[#0f172a]">Chưa thể tạo điểm tham quan</h2>
     <p className="mx-auto mt-1 max-w-md text-sm text-[#64748b]">Cần ít nhất một bản đồ đã được kỹ thuật viên kiểm tra đạt.</p>
     {maps.length > 0
       ? <ul className="mx-auto mt-4 max-w-md divide-y divide-[#eef1f4] rounded-xl border border-[#e2e8f0] text-left text-sm">
-        {maps.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapVersionLabel(item.map)}</span><ToneBadge tone={item.technicalCheckStatus === 'FAILED' ? 'danger' : 'warn'}>{mapCheckLabel(item.technicalCheckStatus)}</ToneBadge></li>)}
+        {maps.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapLabel(item.map)}</span><ToneBadge tone={item.technicalCheckStatus === 'FAILED' ? 'danger' : 'warn'}>{mapCheckLabel(item.technicalCheckStatus)}</ToneBadge></li>)}
       </ul>
       : <p className="mt-3 text-sm text-[#64748b]">Hệ thống chưa có bản đồ nào được tải lên.</p>}
   </div>

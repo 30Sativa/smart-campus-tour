@@ -4,7 +4,8 @@ import { useMutation } from '@tanstack/react-query'
 import { PageHeader, panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
-import { revisionTone, scheduleFitLabel } from '../../../features/administration/routes/route-messages'
+import { passedAt, scheduleFitLabel, staffRouteStatus } from '../../../features/administration/routes/route-messages'
+import { campusShortDate, campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
 import { versionedRoutesApi, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { Note } from '../../../features/technical/TechnicalUi'
@@ -15,7 +16,7 @@ function submitMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Không gửi được tuyến. Kiểm tra kết nối rồi thử lại.'
   if (error.status === 400) return 'Tuyến chưa hợp lệ hoặc còn thiếu điều kiện để gửi kiểm chứng.'
   if (error.status === 409 && error.body.includes('TECHNICAL_CHECK_')) return 'Bản đồ của tuyến không còn kiểm tra kỹ thuật đạt nên chưa gửi được. Nhờ Kỹ thuật kiểm tra lại bản đồ rồi thử lại.'
-  if (error.status === 409) return 'Phiên bản hoặc dữ liệu nguồn đã thay đổi. Tải lại và xem nội dung mới trước khi gửi lại.'
+  if (error.status === 409) return 'Tuyến hoặc dữ liệu nguồn đã thay đổi. Tải lại và xem nội dung mới trước khi gửi lại.'
   if (error.status >= 500) return 'Máy chủ chưa xử lý được yêu cầu. Chưa xác nhận tuyến đã được gửi.'
   return 'Không gửi được tuyến. Kiểm tra quyền và dữ liệu rồi thử lại.'
 }
@@ -24,7 +25,7 @@ function submitMessage(error: unknown): string {
 function nextStep(route: VersionedRoute) {
   if (!route.isSubmitted) return 'Đây là bản nháp. Kiểm tra lại các điểm dừng rồi bấm Gửi kiểm chứng tuyến để Kỹ thuật chạy thử.'
   if (route.verificationStatus === 'PASS') return 'Kỹ thuật đã chạy thử toàn tuyến và ghi nhận đạt.'
-  if (route.verificationStatus === 'FAIL') return 'Kỹ thuật ghi nhận chạy thử không đạt. Tạo phiên bản mới để chỉnh tuyến rồi gửi lại.'
+  if (route.verificationStatus === 'FAIL') return 'Kỹ thuật ghi nhận chạy thử không đạt. Sửa tuyến rồi gửi lại.'
   return 'Đã gửi kiểm chứng. Đang chờ Kỹ thuật chạy thử toàn tuyến trên robot và ghi kết quả.'
 }
 
@@ -39,15 +40,17 @@ function tourReadiness(route: VersionedRoute): { tone: 'warn' | 'success'; text:
   if (route.verificationStatus !== 'PASS') return { tone: 'warn', text: 'Chưa tạo được Tour: tuyến cần một lần chạy thử toàn tuyến đạt.' }
   const effective = route.testRuns.find(run => run.id === route.effectiveTestRunId)
   if (effective && !effective.measurementBasis) return { tone: 'warn', text: 'Chưa tạo được Tour: lần chạy thử đạt được đo theo định nghĩa cũ. Nhờ Kỹ thuật chạy thử lại toàn tuyến.' }
-  if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Tạo phiên bản ngắn hơn rồi chạy thử lại.` }
+  if (route.scheduleFit === 'TOO_LONG_FOR_SHIFT') return { tone: 'warn', text: `Chưa tạo được Tour: ${scheduleFitLabel(route)!.detail} Sửa tuyến cho ngắn hơn rồi chạy thử lại.` }
   return { tone: 'success', text: 'Dùng được để tạo Tour. Khi tạo, hệ thống còn kiểm tra bản đồ, robot và ca.' }
 }
 
 const formatDuration =(seconds: number) => seconds < 60 ? `${seconds} giây` : `${Math.floor(seconds / 60)} phút${seconds % 60 ? ` ${seconds % 60} giây` : ''}`
 
-function RevisionChip({ submitted, status }: { submitted: boolean; status: string }) {
-  const tone = revisionTone(submitted, status)
-  return <span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${tone.chip}`}>{tone.label}</span>
+/** The one line under the title: the route's state, with the day of the run that passed it. */
+function statusLine(route: VersionedRoute) {
+  const { label } = staffRouteStatus(route)
+  const passed = label === 'Đã chạy thử đạt' ? passedAt(route) : undefined
+  return passed ? `${label} ngày ${campusShortDate(passed)}` : label
 }
 
 export default function StaffManageRouteDetailsPage() {
@@ -70,19 +73,22 @@ export default function StaffManageRouteDetailsPage() {
   const hasUnverifiedPoi = value.eligibilityIssues.some(issue => issue.startsWith('POI_VERIFICATION_REQUIRED:'))
   const canSubmit = isCurrentRevision && !value.isSubmitted && !hasUnverifiedPoi && !submitMutation.isPending
   const reload = async () => { submitMutation.reset(); await route.refetch() }
+  const viewedAt = value.revisionHistory.find(revision => revision.revisionId === value.revisionId)?.createdAt
+  const status = staffRouteStatus(value)
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow={`Tuyến · Phiên bản ${value.revisionNumber}`} title={value.name} description={value.description ?? 'Chưa có mô tả.'} action={<div className="flex flex-wrap gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Tạo phiên bản mới</Link>{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div>} />
+    <PageHeader eyebrow="Tuyến" title={value.name} description={statusLine(value)} action={<div className="flex max-w-sm flex-col items-end gap-1.5"><div className="flex flex-wrap justify-end gap-2"><Link className={buttonClass('secondary')} to={`/staff/manage/routes/${value.routeId}/edit`}>Sửa tuyến</Link>{!value.isSubmitted && isCurrentRevision && <button className={buttonClass('primary')} disabled={!canSubmit} onClick={() => void submitMutation.mutateAsync(value).catch(() => undefined)}>{submitMutation.isPending ? 'Đang gửi…' : 'Gửi kiểm chứng tuyến'}</button>}</div><p className="text-right text-xs text-[#64748b]">Lưu sẽ tạo bản mới; bản mới cần gửi kiểm chứng và chạy thử lại. Tour đã tạo vẫn dùng bản cũ.</p></div>} />
     <div className="mb-4 space-y-2">
-      {!isCurrentRevision && <Notice tone="warn">Đây là phiên bản cũ, chỉ xem được. Hãy mở phiên bản mới nhất để gửi kiểm chứng.</Notice>}
-      {isCurrentRevision && hasUnverifiedPoi && <Notice tone="warn">Chưa gửi kiểm chứng được vì có POI không còn kết quả đạt. Tạo phiên bản mới với các POI đã đạt.</Notice>}
+      {!isCurrentRevision && <Notice tone="warn">{viewedAt ? `Đây là bản lưu ${campusShortStamp(viewedAt)}, chỉ xem được.` : 'Đây là bản lưu cũ, chỉ xem được.'}</Notice>}
+      {isCurrentRevision && hasUnverifiedPoi && <Notice tone="warn">Chưa gửi kiểm chứng được vì có POI không còn kết quả đạt. Sửa tuyến để chỉ dùng các POI đã đạt.</Notice>}
       {isCurrentRevision && !hasUnverifiedPoi && <div role={submitMutation.isSuccess ? 'status' : undefined}><Note>{nextStep(value)}</Note></div>}
-      {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại phiên bản</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}
+      {submitMutation.isError && <Notice tone="danger" action={submitMutation.error instanceof ApiError && submitMutation.error.status === 409 ? <button className={buttonClass('secondary', 'sm')} disabled={route.isFetching} onClick={() => void reload()}>Tải lại tuyến</button> : undefined}>{submitMessage(submitMutation.error)}</Notice>}
       {readiness && <Notice tone={readiness.tone} action={readiness.tone === 'success' ? <Link to="/staff/manage/tours/new" className={buttonClass('secondary', 'sm')}>Tạo Tour</Link> : undefined}>{readiness.text}</Notice>}
     </div>
     <section className={`${panelClass} p-4`} aria-label="Tổng quan tuyến">
       <dl className="grid gap-3 sm:grid-cols-4">
-        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1 flex flex-wrap gap-1"><RevisionChip submitted={value.isSubmitted} status={value.verificationStatus} /><ScheduleFitBadge route={value} /></dd></div>
+        <div className="min-w-0 sm:col-span-4"><dt className="text-xs text-[#64748b]">Mô tả</dt><dd className="mt-0.5 break-words">{value.description ?? 'Chưa có mô tả.'}</dd></div>
+        <div><dt className="text-xs text-[#64748b]">Trạng thái</dt><dd className="mt-1 flex flex-wrap gap-1"><span className={`inline-flex rounded-full border px-2 py-px text-[11px] font-bold whitespace-nowrap ${status.chip}`}>{status.label}</span><ScheduleFitBadge route={value} /></dd></div>
         <div className="min-w-0"><dt className="text-xs text-[#64748b]">Bản đồ</dt><dd className="mt-0.5 break-words font-mono text-[13px]">{value.mapKey}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Số điểm dừng</dt><dd className="mt-0.5">{value.stops.length}</dd></div>
         <div><dt className="text-xs text-[#64748b]">Tổng thời gian dừng</dt><dd className="mt-0.5">{formatDuration(value.dwellDurationSeconds)}</dd></div>
@@ -101,12 +107,15 @@ export default function StaffManageRouteDetailsPage() {
         <ul className="mt-2 space-y-2">{value.stops.map(stop => <li key={stop.poiRevisionId} className="break-all"><span className="font-medium text-[#334155]">{stop.stopOrder}. {stop.name}</span>: tọa độ {stop.x}, {stop.y}, {stop.yaw}. POI revision {stop.poiRevisionId}. Kết quả kiểm chứng {stop.sourcePoiVerificationRecordId}.</li>)}</ul>
       </details>
     </section>
-    <section className={`${panelClass} mt-4 p-4`} aria-label="Lịch sử phiên bản">
-      <h2 className="font-semibold">Lịch sử phiên bản</h2>
-      <ol className="mt-2 space-y-2">{value.revisionHistory.map(revision => <li key={revision.revisionId} className="flex flex-wrap items-center gap-2 text-sm">
-        {revision.revisionId === value.revisionId ? <span className="font-medium">Phiên bản {revision.revisionNumber} (đang xem)</span> : <Link className="text-[#2d719e]" to={`/staff/manage/routes/${value.routeId}?revisionId=${revision.revisionId}`}>Phiên bản {revision.revisionNumber}</Link>}
-        <RevisionChip submitted={revision.isSubmitted} status={revision.verificationStatus} />
-      </li>)}</ol>
-    </section>
+    <details className={`${panelClass} mt-4 p-4`} aria-label="Lịch sử thay đổi">
+      <summary className="cursor-pointer font-semibold">Lịch sử thay đổi</summary>
+      <ol className="mt-2 space-y-2">{value.revisionHistory.map(revision => {
+        const viewing = revision.revisionId === value.revisionId
+        const text = `Bản lưu ${campusShortStamp(revision.createdAt)} · ${staffRouteStatus(viewing ? value : revision).label}`
+        return <li key={revision.revisionId} className="text-sm">
+          {viewing ? <span className="font-medium">{text} (đang xem)</span> : <Link className="text-[#2d719e]" to={`/staff/manage/routes/${value.routeId}?revisionId=${revision.revisionId}`}>{text}</Link>}
+        </li>
+      })}</ol>
+    </details>
   </AdminPage>
 }
