@@ -189,8 +189,12 @@ public sealed class RegistrationReviewEndpointTests
         await using var db = f.Context();
         Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.EntityId == detail.GetProperty("roster")[0].GetProperty("id").GetGuid().ToString("D") &&
             (a.Action == "ROSTER_ROW_ACCEPTED" || a.Action == "ROSTER_ROW_REJECTED")));
-        Assert.Equal(1, await db.AuditLogs.CountAsync(a => a.EntityId == opened.GetProperty("roster")[0].GetProperty("id").GetGuid().ToString("D") &&
-            (a.Action == "ROSTER_ROW_ACCEPTED" || a.Action == "REGISTRATION_UPDATED")));
+        // Either request may win. An edit is audited on the registration and an accept on the row; the loser writes nothing.
+        var editWon = pair[1].Status == HttpStatusCode.OK;
+        var openedRowId = opened.GetProperty("roster")[0].GetProperty("id").GetGuid().ToString("D");
+        var editedRegistrationId = editId.ToString("D");
+        Assert.Equal(editWon ? 0 : 1, await db.AuditLogs.CountAsync(a => a.EntityId == openedRowId && a.Action == "ROSTER_ROW_ACCEPTED"));
+        Assert.Equal(editWon ? 1 : 0, await db.AuditLogs.CountAsync(a => a.EntityId == editedRegistrationId && a.Action == "REGISTRATION_UPDATED"));
     }
 
     [SchemaV11Fact]
