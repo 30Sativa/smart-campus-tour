@@ -233,7 +233,7 @@ public sealed class GetTechnicalDashboardQueryHandler(
             HeldForInspectionCount: heldCount,
             PendingPoiVerificationsCount: poiQueue.Count,
             PendingRouteTestsCount: routeQueue.Count,
-            ActiveMapVersionsCount: activeMaps.Count(m => m.ValidationStatus == "PASSED"));
+            ActiveMapVersionsCount: activeMaps.Count(m => m.ValidationStatus == "VALID"));
 
         return new TechnicalDashboardDto(now, kpis, actionItems, robotSummaries);
     }

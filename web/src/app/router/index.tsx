@@ -13,7 +13,7 @@ import { homePathForRole } from '../../auth/roles'
  *   `/`        public   marketing pages, no account
  *   `/staff/*` staff    tour preparation (`/staff/manage/*`) and operations, for Staff and Admin
  *   `/admin/*` admin    accounts and roles, Admin only
- *   `/technical/*`      Technical Staff: map versions, POI import, technical confirmation
+ *   `/technical/*`      Technical Staff: dashboard, robot/Mini PC monitoring, map versions, POI import, technical confirmation
  *   `/dai-dien/*`       school representative: register a group, roster, invitation
  *   `/tour/*`           students, no account: join, waiting room, live, end
  *
@@ -76,6 +76,8 @@ const AdminProfilePage = lazy(() => import('../../routes/admin/AdminProfilePage'
 const TechnicalProfilePage = lazy(() => import('../../routes/technical/TechnicalProfilePage'))
 
 const TechnicalShell = lazy(() => import('../../features/technical/TechnicalShell'))
+const TechnicalDashboardPage = lazy(() => import('../../routes/technical/TechnicalDashboardPage'))
+const TechnicalMonitoringPage = lazy(() => import('../../routes/technical/TechnicalMonitoringPage'))
 const TechnicalMapsPage = lazy(() => import('../../routes/technical/TechnicalMapsPage'))
 const TechnicalRobotsPage = lazy(() => import('../../routes/technical/TechnicalRobotsPage'))
 const TechnicalPoiImportPage = lazy(() => import('../../routes/technical/TechnicalPoiImportPage'))
@@ -297,7 +299,9 @@ export const routes = [
     element: <TechnicalArea />,
     children: [
       // Technical Staff: map versions, POI YAML import, version-bound confirmation (SRS v1.9 §3.2.c).
-      { index: true, element: <Navigate to="/technical/maps" replace /> },
+      { index: true, element: <Navigate to="/technical/dashboard" replace /> },
+      { path: 'dashboard', element: <TechnicalDashboardPage /> },
+      { path: 'monitoring', element: <TechnicalMonitoringPage /> },
       { path: 'maps', element: <TechnicalMapsPage /> },
       { path: 'robots', element: <TechnicalRobotsPage /> },
       { path: 'poi-import', element: <TechnicalPoiImportPage /> },

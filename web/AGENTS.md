@@ -49,6 +49,10 @@ shared rules; this file only covers what is specific to `web/`.
     `/api/technical/route-verifications/*` and the test-run endpoint; they are
     human-entered evidence, not proof of a physical run or READY. Robot pose files import
     through `/api/technical/poi-imports` (ADR-0038); project YAML templates remain pending.
+    `/technical` opens the read-only Dashboard (`/api/technical/dashboard`); Robot and Mini PC
+    monitoring (`/technical/monitoring?robot=<code>`) reads `/api/technical/robots/{code}/diagnostics`.
+    Fleet Sync and the Mini PC diagnostics report are separate sources: each shows live, stale
+    (last known) or no data, and Mini PC numbers are never printed for a stale or missing report.
   - `/admin/*`: administration, `Admin` only: Accounts, Roles, robot key history and the read-only system audit log. `/admin`
     opens Accounts. Admin never prepares, starts, holds, advances or ends a
     Tour and never controls a robot.
