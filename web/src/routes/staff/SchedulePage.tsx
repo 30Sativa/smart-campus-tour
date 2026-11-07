@@ -122,9 +122,8 @@ export default function SchedulePage() {
   const openDay = (key: string) => set({ date: key === today ? null : key, view: 'day', tour: null }, false)
   const selectTour = (id: string) => set({ tour: id })
 
-  const short = (key: string) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(`${key}T12:00:00`))
   const heading = view === 'week'
-    ? `${short(week[0]).slice(0, 2)} - ${short(week[6])}/${week[6].slice(0, 4)}`
+    ? `${dayMonth(week[0]).slice(0, 2)} - ${dayMonth(week[6])}/${week[6].slice(0, 4)}`
     : new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${day}T12:00:00`))
   const step = view === 'week' ? 7 : 1
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size

@@ -68,6 +68,7 @@ describe('Staff Tour calendar', () => {
     show()
     const table = await screen.findByRole('table')
     expect(within(table).getAllByRole('columnheader')).toHaveLength(8)
+    expect(screen.getByRole('heading', { name: '05 - 11/01/2099' })).toBeInTheDocument()
     const morning = within(table).getByRole('rowheader', { name: /Ca sáng/ })
     expect(morning).toHaveTextContent('Ca sáng · 08:00-10:00')
     expect(morning).toHaveTextContent('Tour bắt đầu 08:15')
