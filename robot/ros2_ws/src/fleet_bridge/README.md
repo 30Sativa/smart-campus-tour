@@ -11,6 +11,33 @@ the native Nav2, localization or DDS configuration. Its launch namespace
 defaults to `robot_01`; confirm the namespace with read-only graph inspection
 and override `robot_namespace` if the surveyed graph uses another name.
 
+## Mini PC diagnostics report (on by default)
+
+`diagnostics_enabled: true` adds a second background HTTPS thread that sends one snapshot every
+`diagnostics_period_sec` (10 s, allowed 1..30 s) to `POST /api/fleet/v1/diagnostics`, with the same credential
+and TLS rules as Fleet Sync. The URL is the sibling of `FLEET_SYNC_URL` unless `diagnostics_url` is set. The
+backend shows it on the Technical Staff pages `/technical/dashboard` and `/technical/monitoring`, and treats a
+report older than 60 s as stale. It is observation only: it never changes Fleet Sync, Nav2 or commands, and a
+failed report is dropped (never retried) and logged once until a report is accepted again.
+
+| Report section | Source |
+|---|---|
+| `miniPc.cpuPercent` | `/proc/stat` busy share since the previous report (null on the first) |
+| `miniPc.memory` | `/proc/meminfo` `MemTotal` / `MemAvailable` |
+| `miniPc.disk` | `statvfs(diagnostics_disk_path)` (default `/`), same basis as `df` |
+| `miniPc.cpuTemperatureCelsius` | hottest `/sys/class/thermal` zone of type `x86_pkg_temp`, `coretemp`, ... |
+| `miniPc.gpu` | null: not measured on the Mini PC |
+| `sensors.lidar` / `odometry` / `depthCamera` | arrival rate of `scan`, `wheel/odom`, `camera/depth/points` (relative to the namespace), raw subscription with sensor-data QoS |
+| `sensors.imu` | the `stm32_bridge` `<namespace>/stm32_bridge_node: imu` status on `/diagnostics` (level, message, outages, firmware counters) |
+| `ros2` | `middlewareStatus: OK`, `tfValid` from this node's `map -> base_footprint` sample, `nav2State: UNKNOWN`, no node list |
+
+Anything that cannot be measured is sent as null ("could not measure"), never zero. A sensor topic with no
+message yet is `UNKNOWN`; silent for `diagnostics_stale_after_sec` (3 s) is `STALE`; below its minimum rate is
+`WARN`. Set a topic parameter to `""` for a sensor the robot does not have (`NOT_EQUIPPED`). Nodes and Nav2 state
+are not reported because graph introspection is unreliable under the Fast DDS Discovery Server. Set
+`diagnostics_enabled: false` to turn the report off. Code: `diagnostics.py` (pure logic and HTTPS loop,
+`test/test_diagnostics.py`) and `diagnostics_ros.py` (subscriptions only, no publisher).
+
 ## Head receiver (off by default, ADR-0045)
 
 `head_enabled: true` adds a Fleet Head v1 long-poll loop (`docs/contracts/fleet-head/v1/`): the Operator's head
