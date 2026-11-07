@@ -931,6 +931,11 @@ to two minutes in the past and 15 seconds in the future, with CPU and
 temperature bounds validated. The latest report is held in process memory and
 clears on restart. This endpoint reports observations only: it does not change
 Fleet Sync v1, ROS ownership, map assignment, readiness, or command transport.
+The robot-side sender is the `fleet_bridge` node (`diagnostics_enabled`, on by
+default): every 10 s it reports Mini PC resources from `/proc` and `/sys`, sensor
+topic arrival rates, the `stm32_bridge` IMU diagnostic and its own TF sample on
+a separate HTTPS thread. Values it cannot measure are null; it reports no ROS
+node list or Nav2 state (see `robot/ros2_ws/src/fleet_bridge/README.md`).
 
 `GET /api/technical/dashboard` and
 `GET /api/technical/robots/{robotCode}/diagnostics` require the

@@ -50,6 +50,16 @@ class FleetBridgeNode(Node):
         self.declare_parameter('head_enabled', False)
         self.declare_parameter('head_base_url', '')
         self.declare_parameter('head_wait_ms', 1500)
+        # Mini PC diagnostics report (POST /api/fleet/v1/diagnostics): observation only, own HTTPS thread.
+        self.declare_parameter('diagnostics_enabled', True)
+        self.declare_parameter('diagnostics_url', '')
+        self.declare_parameter('diagnostics_period_sec', 10.0)
+        self.declare_parameter('diagnostics_disk_path', '/')
+        self.declare_parameter('diagnostics_stale_after_sec', 3.0)
+        self.declare_parameter('diagnostics_lidar_topic', 'scan')
+        self.declare_parameter('diagnostics_odometry_topic', 'wheel/odom')
+        self.declare_parameter('diagnostics_imu_topic', 'imu/data')
+        self.declare_parameter('diagnostics_depth_topic', 'camera/depth/points')
 
         backend_url = str(self.get_parameter('backend_url').value).strip()
         robot_code = str(self.get_parameter('robot_code').value).strip()
@@ -145,6 +155,11 @@ class FleetBridgeNode(Node):
                 FleetHeadHttpClient(head_base, robot_code, credential, request_timeout_sec),
                 head_state.latest, self.get_logger().warning)
 
+        self._diagnostics_worker = None
+        if bool(self.get_parameter('diagnostics_enabled').value):
+            self._diagnostics_worker = self._create_diagnostics_worker(
+                backend_url, robot_code, credential, request_timeout_sec, retry_max_sec)
+
         self._worker = FleetSyncWorker(
             report_state,
             transport,
@@ -157,12 +172,60 @@ class FleetBridgeNode(Node):
         if self._head_worker is not None:
             self._head_worker.start()
             self.get_logger().info('Fleet Head enabled: Operator head buttons reach stm32_bridge head/*.')
+        if self._diagnostics_worker is not None:
+            self._diagnostics_worker.start()
+            self.get_logger().info('Mini PC diagnostics report enabled.')
         self.get_logger().info(
             'Fleet Bridge started with commands enabled; do not run another goal sender on this robot.'
             if self._command_worker is not None else
             'Fleet Bridge started in telemetry-only mode; HTTPS runs on a background thread.')
 
+    def _create_diagnostics_worker(self, backend_url, robot_code, credential, request_timeout_sec,
+                                   retry_max_sec):
+        # Imported only here: the ROS message packages are needed only on this path.
+        from .diagnostics import (
+            DiagnosticsWorkerConfig,
+            FleetDiagnosticsHttpClient,
+            FleetDiagnosticsWorker,
+            MiniPcCollector,
+            build_diagnostics_report,
+            diagnostics_url_from_sync_url,
+        )
+        from .diagnostics_ros import RosSensorObserver, SensorLimits, SensorTopics
+
+        period = float(self.get_parameter('diagnostics_period_sec').value)
+        stale_after = float(self.get_parameter('diagnostics_stale_after_sec').value)
+        # The backend treats a report older than 60 s as stale; stay well inside that.
+        if not 1.0 <= period <= 30.0 or stale_after <= 0:
+            raise RuntimeError('diagnostics_period_sec must be 1..30 and diagnostics_stale_after_sec positive.')
+        url = str(self.get_parameter('diagnostics_url').value).strip() or diagnostics_url_from_sync_url(backend_url)
+        topics = SensorTopics(
+            lidar=str(self.get_parameter('diagnostics_lidar_topic').value).strip(),
+            odometry=str(self.get_parameter('diagnostics_odometry_topic').value).strip(),
+            imu=str(self.get_parameter('diagnostics_imu_topic').value).strip(),
+            depth_camera=str(self.get_parameter('diagnostics_depth_topic').value).strip(),
+        )
+        observer = RosSensorObserver(self, topics, SensorLimits(stale_after_sec=stale_after))
+        collector = MiniPcCollector(str(self.get_parameter('diagnostics_disk_path').value).strip() or '/')
+
+        def report() -> dict:
+            with self._observation_lock:
+                tf_valid = None if self._pose_reason == 'tf_not_sampled' else not self._pose_stale
+            # Node liveness and Nav2 state are not observed here: graph introspection is unreliable under
+            # the Fast DDS Discovery Server, so the report lists no nodes rather than guessing.
+            ros2 = {'middlewareStatus': 'OK', 'nodes': [], 'tfValid': tf_valid, 'nav2State': 'UNKNOWN'}
+            return build_diagnostics_report(robot_code, datetime.now(timezone.utc), collector.collect(), ros2,
+                                            observer.sensors())
+
+        return FleetDiagnosticsWorker(
+            DiagnosticsWorkerConfig(report_period_sec=period, retry_max_sec=max(period, min(retry_max_sec, 60.0))),
+            FleetDiagnosticsHttpClient(url, robot_code, credential, request_timeout_sec),
+            report, self.get_logger().warning)
+
     def destroy_node(self):
+        diagnostics_worker = getattr(self, '_diagnostics_worker', None)
+        if diagnostics_worker is not None:
+            diagnostics_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)
         head_worker = getattr(self, '_head_worker', None)
         if head_worker is not None:
             head_worker.stop(join_timeout_sec=self._request_timeout_sec + 1.0)

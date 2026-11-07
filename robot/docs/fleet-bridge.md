@@ -32,6 +32,12 @@ equal the configured TF `map_frame`; the node stops at startup if they differ.
 Both values must exactly match the robot's current database assignment or the
 Backend rejects Fleet Sync reports.
 
+The same node also sends a separate Mini PC diagnostics report (CPU, RAM, disk,
+CPU temperature, sensor topic rates and the `stm32_bridge` IMU diagnostic) to
+`POST /api/fleet/v1/diagnostics` every 10 s on its own thread. It is on by
+default, observation only and independent of Fleet Sync retries; sources and
+parameters are in `robot/ros2_ws/src/fleet_bridge/README.md`.
+
 ## Runtime and retry behavior
 
 - A ROS timer samples TF every 0.2 seconds by default. A lock-protected latest
