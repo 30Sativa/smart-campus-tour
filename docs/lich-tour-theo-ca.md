@@ -4,9 +4,8 @@
 - **Thay thế:** ADR-0035 quyết định 2 (slot chỉ là giờ bắt đầu) và toàn bộ ADR-0036 (Staff gõ giờ trong 08:00–17:00).
   Các quyết định khác của ADR-0034/0035 giữ nguyên: tạo Tour trước ít nhất 72 giờ, đóng đăng ký 48 giờ trước giờ Tour,
   thời lượng lấy từ lần chạy thử PASS (đo cả thời gian dừng) cộng phần dừng tăng thêm.
-- **Cách ghi tài liệu:** Đợt này không viết ADR mới, không sửa `docs/requirements/`, `docs/decisions/` hay
-  `docs/architecture.md`. File này là nguồn duy nhất cho các thay đổi bên dưới. Chỗ nào mâu thuẫn với tài liệu cũ thì
-  theo file này.
+- **Cách ghi tài liệu:** Đợt này không viết ADR mới. File này là nguồn duy nhất cho các thay đổi bên dưới; từ 07/11/2026
+  các tài liệu trên đã trỏ về file này. Chỗ nào còn mâu thuẫn với tài liệu cũ thì theo file này.
 
 ## 1. Vì sao đổi
 
@@ -89,6 +88,15 @@ Kiểm tra ở 3 chỗ:
 
 Với ca bị khoá, danh sách ca trống hiện lý do `SHIFT_BLOCKED`, còn tạo Tour vào đó trả 409 `SHIFT_BLOCKED`.
 
+**API**
+
+| Endpoint | Role | Việc |
+|---|---|---|
+| `GET /api/staff/manage/tours/shifts?from=&to=` | Staff | Các ca của từng ngày kèm `block`, tối đa 31 ngày |
+| `GET /api/admin/schedule-blocks?from=&to=` | Admin | Cùng dạng response với `shifts` |
+| `POST /api/admin/schedule-blocks` | Admin | Khoá ngày (`shiftCode` null) hoặc khoá một ca; không khoá được ngày đã qua |
+| `POST /api/admin/schedule-blocks/{id}/remove` | Admin | Gỡ khoá, kể cả khoá của ngày đã qua |
+
 ## 6. Mã lỗi và lý do mới
 
 | Mã | Ở đâu | Nghĩa |
@@ -98,6 +106,9 @@ Với ca bị khoá, danh sách ca trống hiện lý do `SHIFT_BLOCKED`, còn t
 | `SHIFT_BLOCKED` | 409 khi tạo Tour; lý do ở danh sách ca | Admin đã khoá ca hoặc ngày đó |
 | `SHIFT_HAS_TOURS` | 409 khi Admin khoá | Ca hoặc ngày đó đang có Tour chưa huỷ |
 | `TOUR_SLOT_NOT_ALLOWED` | 409 khi tạo Tour (mã đã có) | Nay nghĩa là giờ gửi lên không phải giờ bắt đầu Tour của ca nào |
+| `SCHEDULE_BLOCK_EXISTS` | 409 khi Admin khoá | Khoá trùng, hoặc vừa khoá cả ngày vừa khoá ca lẻ |
+| `SCHEDULE_BLOCK_ALREADY_REMOVED` | 409 khi Admin gỡ khoá | Khoá này đã được gỡ trước đó |
+| Lỗi validation, message "Không khoá được ngày đã qua." | 400 khi Admin khoá | Ngày khoá trước hôm nay, tính theo giờ Việt Nam |
 
 Bỏ lý do `OUTSIDE_START_HOURS`. Với Tour mới, `ROUTE_TOO_LONG_FOR_GAP` không còn xuất hiện vì giữ robot trọn ca,
 trùng với khung giữ của Tour cũ thì báo `RESERVATION_OVERLAP`.
@@ -303,7 +314,7 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 - `scripts/verify robot` và `scripts/verify ai-assistant` không qua trên máy này vì thiếu môi trường, nên `scripts/verify` đầy đủ
   chưa exit 0 ở đây. Đợt này không sửa hai thư mục đó. Xem báo cáo phần C.
 - Test `HeadControl_TheOperatorOfARunningTour_...` hỏng một lần (`HEAD_ROBOT_NOT_CONNECTED`) khi máy đang chạy tsc và vitest
-  song song, và qua ở lần chạy verify đủ sau đó. Có thể test này nhạy với tải máy; chưa điều tra thêm.
+  song song, và qua ở lần chạy verify đủ sau đó. Đã tìm ra nguyên nhân và sửa: xem "Dọn sau review (07/11/2026)".
 - Test mới: `ScheduleBlockSqlTests` (khoá ca đang có Tour bị từ chối và nêu tên Tour, Tour đã huỷ không chặn, tạo Tour vào
   ca bị khoá, gỡ khoá xong tạo được, audit, khoá trùng, ngày và ca lẻ loại trừ nhau, gửi trùng `requestId`, đầu vào sai,
   đua giữa tạo Tour và tạo khoá qua 5 vòng); `SchemaV11Tests` (patch khớp snapshot, chạy lại được, từ chối phiên bản khác,
@@ -316,10 +327,41 @@ Cập nhật sau mỗi phần: đã làm gì, kiểm tra bằng gì, chỗ nào 
 
 **Lệch so với file này hoặc tài liệu khác**
 - Quy tắc "không vừa khoá cả ngày vừa khoá ca lẻ" được kiểm trong ứng dụng dưới khoá ngày, trả 409 `SCHEDULE_BLOCK_EXISTS`;
-  SQL không có ràng buộc riêng cho quy tắc này. Mã này và `SCHEDULE_BLOCK_ALREADY_REMOVED` là hai mã mới, chưa có trong mục 6.
+  SQL không có ràng buộc riêng cho quy tắc này. Mã này và `SCHEDULE_BLOCK_ALREADY_REMOVED` là hai mã mới, nay đã có trong mục 6.
 - Entity `TourScheduleBlock` và mapping EF được viết tay theo đúng dạng scaffold, không chạy `scaffold-db`. Test SQL đọc và
   ghi bảng này đều qua.
-- `AGENTS.md` yêu cầu ADR cho thay đổi schema và ghi hợp đồng API vào `docs/architecture.md`. Theo chỉ đạo đợt này, chưa có
-  ADR và chưa sửa `docs/architecture.md`, `backend/database/README.md`, `backend/docs/ec2-deployment.md`.
-- **Khi triển khai:** `deploy-ec2.sh` nay yêu cầu schema 1.16, nên database production phải chạy luồng nâng cấp có backup
-  (`upgrade-db-schema-ec2.sh`, tạo image `backend-db-init:schema-v1.16`) trước hoặc cùng lúc với API mới.
+- `AGENTS.md` yêu cầu ADR cho thay đổi schema và ghi hợp đồng API vào `docs/architecture.md`. Theo chỉ đạo đợt này, không có
+  ADR. `docs/architecture.md` đã được sửa ở lần dọn 07/11/2026; `backend/database/README.md` và
+  `backend/docs/ec2-deployment.md` vẫn chưa sửa.
+- **Khi triển khai:** `deploy-ec2.sh` nay yêu cầu schema 1.16. `backend/deploy/receive-release.sh` ở chế độ `application`
+  gọi `upgrade-db-schema-ec2.sh --if-needed` trước khi deploy API, nên không cần chạy nâng cấp riêng: script kiểm tra chỉ đọc,
+  nếu database chưa nhận DB tool v1.16 thì tạo backup đã kiểm chứng rồi nâng cấp. Thiếu chương trình hoặc cấu hình backup thì
+  delivery dừng với lỗi. Có deployment đang chờ khôi phục thì script bỏ qua bước nâng cấp.
+
+### Dọn sau review (07/11/2026)
+
+**Đã làm**
+- Tài liệu cũ: bỏ các mô tả sai về khung 30 phút và giờ tuỳ chọn, trỏ về file này. Không tạo ADR mới, không sửa SRS.
+- Mục 5 và mục 6 của file này: thêm bảng API và các mã lỗi còn thiếu; sửa lại đoạn "Khi triển khai" theo script thật.
+- Không khoá được ngày đã qua: `POST /api/admin/schedule-blocks` trả 400 "Không khoá được ngày đã qua.", tính theo ngày ở
+  campus. Hôm nay vẫn khoá được, gỡ khoá cũ vẫn được. Web hiện "Đã qua", không có nút khoá, vẫn hiện khoá cũ kèm lý do.
+- Sửa hai test không ổn định. Cả hai là lỗi của test, code chạy thật không đổi:
+  - `HeadControl_TheOperatorOfARunningTour_...`: test gửi lệnh sau một khoảng chờ cố định 300 ms, có thể trước khi poll của robot
+    tới server, và khi đó `HEAD_ROBOT_NOT_CONNECTED` là câu trả lời đúng. Nay test chờ `connected` rồi mới gửi. Khi đổi 300 ms
+    thành 0 ms, bản cũ hỏng 3/3 lần với đúng mã này.
+  - `ConcurrentDecisionsAndRepresentativeEdits_...`: lỗi này lộ ra khi chạy verify đợt này, không nằm trong danh sách việc.
+    Khi Representative thắng cuộc đua, audit ghi theo id của đăng ký, còn test tìm theo id của dòng. Nay test kiểm đúng audit của bên
+    thắng và kiểm bên thua không ghi audit.
+
+**Kiểm tra**
+- `scripts/verify web`: exit 0 (745 test).
+- `scripts/verify backend`: exit 0 (unit 480/480, integration 238/238, SQL 248/248), chạy trong WSL trên bản sao không kèm
+  `global.json`, có `SMARTCAMPUS_REQUIRE_SQL_TESTS=true`.
+- Test head-control: trước khi sửa 0/20 lần lỗi khi tải bình thường, và 3/10 lần lỗi khi có tải rất nặng; 2 trong 3 lần đó là lỗi mở
+  kết nối SQL, lần còn lại không ghi được chi tiết. Sau khi sửa 0/20 khi tải bình thường và 0/20 với 20 tiến trình chiếm CPU trên 20 lõi.
+  Mức tải của hai lần đo có tải khác nhau (40 và 20 tiến trình).
+- Test đăng ký: trước khi sửa 2/10 lần lỗi, ép Representative thắng thì hỏng đúng assert đó. Sau khi sửa ép thứ tự đó vẫn qua, và 0/15
+  lần lỗi với cuộc đua thật.
+
+**Chưa chạy được:** `scripts/verify robot`, `scripts/verify ai-assistant` (thiếu môi trường trên máy này; đợt này không sửa hai thư
+mục đó), `backend/scripts/test-db-upgrade` và `backend/scripts/test-deployment` (cần Docker).

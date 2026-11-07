@@ -24,6 +24,9 @@ links SRS requirements to code/schema, dependencies and acceptance.
   differ.
 - [Requirements index](requirements/README.md) — authority, status, and how the
   current code/schema relates to target behavior.
+- [Lịch Tour theo ca](lich-tour-theo-ca.md) — owner decision record for fixed
+  shifts, duration limits, route stop rules and Admin schedule blocks. It replaces
+  ADR-0036 and part of ADR-0035.
 
 ## 2. System Architecture
 

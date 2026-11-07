@@ -5,10 +5,10 @@ Implemented scope: legacy pre-execution behavior in
 Every endpoint below currently requires the `Staff` JWT role (product label:
 Tour Staff); the former `/api/admin/tours` alias is retired under ADR-0027. New Tours are
 created from one exact tested RouteRevision with a robot reservation and an
-assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-route-revision.md). Start slots, the 72-hour
-lead time and the reservation formula are in [ADR-0035](../../docs/decisions/0035-tour-slots-lead-time-and-measured-reservation.md);
-slots are configured in `Tours:StartSlots`, and typed times in
-`Tours:CustomStartEarliest` and `Tours:CustomStartLatest` ([ADR-0036](../../docs/decisions/0036-tour-custom-start-time.md)).
+assigned Operator; see [ADR-0034](../../docs/decisions/0034-tour-from-tested-route-revision.md). The 72-hour
+lead time and the duration formula are in [ADR-0035](../../docs/decisions/0035-tour-slots-lead-time-and-measured-reservation.md);
+a Tour starts only at a fixed shift configured in `Tours:Shifts` and holds the robot for the
+whole shift ([Lịch Tour theo ca](../../docs/lich-tour-theo-ca.md)).
 Existing legacy Tours keep their legacy Route and cannot be marked READY. READY and
 Reopen follow [ADR-0042](../../docs/decisions/0042-m2-command-transport-and-start-readiness.md);
 no immutable READY snapshot is stored: the Tour already pins its exact revision.
@@ -31,7 +31,7 @@ no immutable READY snapshot is stored: the Tour already pins its exact revision.
     "routeRevisionId": "<revision with an effective PASS run>",
     "robotCode": "<physical robot code>",
     "operatorUserId": "<active Staff user from /operators>",
-    "scheduledStartAt": "2026-12-01T09:00:00+07:00",
+    "scheduledStartAt": "2026-12-01T08:15:00+07:00",
     "fallbackVideoUrl": null
   }
 }

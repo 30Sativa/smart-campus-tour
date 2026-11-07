@@ -2,7 +2,8 @@
 
 - **Status:** Accepted by the repository owner, 2026-10-30. Physical behavior remains unverified.
 - **Amends:** ADR-0034 decision 1 (reservation length) and its known limitation about dwell-only revisions. Every other ADR-0034 decision stays in force.
-- **Amended by:** ADR-0036 (decision 2: a typed start inside configured hours).
+- **Amended by:** ADR-0036 (decision 2: a typed start inside configured hours), itself superseded.
+- **Amended by** `docs/lich-tour-theo-ca.md` (07/11/2026). Replaced: decision 2 (slots) by fixed shifts; the robot hold [start−15, start+expected+15] in decision 4 by holding the whole shift; in decision 5, the reason `ROUTE_TOO_LONG_FOR_GAP` is gone and `ROUTE_TOO_LONG_FOR_SHIFT` and `SHIFT_BLOCKED` are added. Unchanged: decision 1 (72-hour lead time), decision 3 (what a test measures), the `expected` formula in decision 4, and decision 6 (concurrency).
 - **Related:** ADR-0023 (versioned routes), ADR-0024, ADR-0026 (registration).
 
 ## Context

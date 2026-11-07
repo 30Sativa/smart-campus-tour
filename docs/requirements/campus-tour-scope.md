@@ -124,14 +124,14 @@ future interactions remains pending; HTTPS telemetry sync is not a command path.
 The server maintains SCHEDULED→READY→RUNNING→COMPLETED/CANCELLED, with allowed
 pre-start reopen/reschedule/cancel. READY locks route/content/list and is
 blocked by pending row or email-change decisions.
-Reserve the one robot atomically for 15 minutes before + the longest allowed
-tested path duration + 15 minutes after. Overlaps are rejected; route/time
-changes rerun reservation and exact-version checks.
+Reserve the one robot atomically for the whole fixed shift, which includes
+15 minutes before and 15 minutes after the Tour (`docs/lich-tour-theo-ca.md`).
+Overlaps are rejected; route/time changes rerun reservation and exact-version checks.
 Assign a Staff Operator explicitly. READY is not physical safety proof.
 Until an approved content/audio duration exists, the tested path duration is the
 effective PASS run of the exact route revision (ADR-0034, interim), counted as the
-whole run including dwell, plus any dwell the revision adds. A Tour starts on a
-configured slot or a time typed inside the allowed hours (ADR-0036), at least
+whole run including dwell, plus any dwell the revision adds. A Tour starts only at
+a fixed shift (`docs/lich-tour-theo-ca.md`), at least
 72 hours ahead; registration still closes 48 hours
 before the start (ADR-0035). Time, route
 and robot changes on a created Tour mean cancelling and recreating it.
