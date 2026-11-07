@@ -72,9 +72,15 @@ public sealed class RecordRouteTestRunHandler(IRouteRevisionRepository repo, Tou
             participantRole != ApplicationRoles.Staff)
             throw new ConflictException("The participating operator must be an active Staff account, recorded explicitly.", "STAFF_PARTICIPANT_REQUIRED");
         if (q.ParticipatingStaffUserId == c.ActorUserId) throw new ConflictException("Technical checker and participating Staff must be distinct accounts.", "SEPARATE_TEST_ROLES_REQUIRED");
-        var robot = await repo.FindPhysicalRobotAsync(q.RobotCode.Trim(), ct) ?? throw new NotFoundException("Physical robot", q.RobotCode.Trim());
-        await repo.LockRobotDeploymentStateAsync(robot.Id, ct);
+        var found = await repo.FindPhysicalRobotAsync(q.RobotCode.Trim(), ct) ?? throw new NotFoundException("Physical robot", q.RobotCode.Trim());
+        await repo.LockRobotDeploymentStateAsync(found.Id, ct);
+        // Read again behind the lock: deactivation or a key reissue may have changed the robot meanwhile.
+        var robot = await repo.FindPhysicalRobotAsync(found.RobotCode, ct) ?? throw new NotFoundException("Physical robot", found.RobotCode);
         RobotLifecycleRules.EnsureActive(robot);
+        // A key reissue clears the connection confirmation but keeps older deployment checks, so check it here too.
+        if (robot.FirstAcceptedSyncAt is null)
+            throw new ConflictException("Robot chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại rồi ghi lại kết quả chạy thử.",
+                "ROBOT_CONNECTION_UNCONFIRMED");
         var deployment = await repo.GetLatestDeploymentForRobotAsync(robot.Id, ct);
         var map = await repo.GetMapAsync(revision.MapVersionId, ct) ?? throw new NotFoundException("Map version", revision.MapVersionId);
         if (!RouteRobotDeployment.IsCurrent(deployment, map, revision))

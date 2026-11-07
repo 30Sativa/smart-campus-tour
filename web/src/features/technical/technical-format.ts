@@ -1,5 +1,5 @@
 import { ApiError } from '../../api/client'
-import type { PhysicalRobotConnectionStatus } from './api/technical'
+import type { PhysicalRobotConnectionStatus, PhysicalRobotOption } from './api/technical'
 
 export const connectionStatusLabel = (status: PhysicalRobotConnectionStatus) => ({
   UNCONFIRMED: 'Chưa xác nhận kết nối',
@@ -82,6 +82,7 @@ export function poiVerifyErrors(error: unknown): PoiVerifyErrors {
 export type RouteTestErrors = { robotCode?: string; staff?: string; form?: string }
 
 const routeTestConflicts: Record<string, RouteTestErrors> = {
+  ROBOT_CONNECTION_UNCONFIRMED: { robotCode: 'Robot này chưa xác nhận kết nối. Chạy bridge Fleet Sync bằng khóa hiện tại, bấm Cập nhật trạng thái rồi thử lại.' },
   MAP_NOT_CURRENTLY_DEPLOYED: { robotCode: 'Lần kiểm tra triển khai mới nhất của robot này phải đạt trên đúng bản đồ và checksum của phiên bản tuyến.' },
   STAFF_PARTICIPANT_REQUIRED: { staff: 'Người đi cùng phải là tài khoản Staff đang hoạt động. Chọn lại Staff.' },
   SEPARATE_TEST_ROLES_REQUIRED: { staff: 'Người kiểm tra và Staff đi cùng phải là hai tài khoản khác nhau.' },
@@ -121,3 +122,15 @@ export function releaseInspectionError(error: unknown) {
 }
 
 export const stamp =(iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '-'
+
+/** A robot is ready for a map when its latest deployment check passed on that exact map. The server rechecks on save. */
+export const readyOn = (robot: PhysicalRobotOption, mapKey: string) => robot.latestDeploymentPassed === true && robot.latestDeployedMapKey === mapKey
+
+/**
+ * Why a robot cannot be used for a whole-route test on `mapKey`, or null when it can. The order is the business
+ * order: connection confirmed first, then a passing deployment check on that exact map. The server rechecks both.
+ */
+export const robotNotReadyReason = (robot: PhysicalRobotOption, mapKey: string) =>
+  robot.connectionStatus === 'UNCONFIRMED' ? 'chưa xác nhận kết nối'
+    : !readyOn(robot, mapKey) ? 'chưa kiểm tra triển khai đạt trên map này'
+      : null

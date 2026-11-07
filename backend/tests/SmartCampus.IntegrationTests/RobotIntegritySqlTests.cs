@@ -115,6 +115,18 @@ public sealed class RobotIntegritySqlTests
     }
 
     [SchemaV11Fact]
+    public async Task UnconfirmedRobot_CannotRecordARouteTest_EvenWithAnOlderPassingDeployment()
+    {
+        await using var h = await Harness.Create();
+        var tested = await h.TestedRoute();
+        await h.Database.ExecuteAsync($"UPDATE dbo.Robots SET FirstAcceptedSyncAt=NULL, FirstAcceptedMapKey=NULL, FirstAcceptedFrameId=NULL WHERE RobotCode=N'{First}';");
+
+        var error = await Assert.ThrowsAsync<ConflictException>(() => h.RecordRouteTest(tested, First));
+
+        Assert.Equal("ROBOT_CONNECTION_UNCONFIRMED", error.Code);
+    }
+
+    [SchemaV11Fact]
     public async Task RobotLastCheckedOnAnotherMap_IsBlockedEverywhere()
     {
         await using var h = await Harness.Create();
@@ -375,6 +387,10 @@ public sealed class RobotIntegritySqlTests
             return await Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
                 new(Guid.NewGuid(), First, staffId, "PASS", true, true, true, 260, null, "Chạy thử đạt.")));
         }
+
+        public Task<RouteRevisionView> RecordRouteTest(RouteRevisionView route, string robot) =>
+            Send(new RecordRouteTestRunCommand(technicalId, route.RouteId, route.RevisionId,
+                new(Guid.NewGuid(), robot, staffId, "PASS", true, true, true, 260, null, "Chạy thử lại.")));
 
         public async Task<Guid> CreateTour(RouteRevisionView route, string robot)
         {
