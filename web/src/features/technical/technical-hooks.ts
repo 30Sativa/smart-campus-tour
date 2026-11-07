@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notify, type ToastInput } from '../../components/ui/toast-store'
 import { versionedRoutesApi } from '../administration/routes/versioned-api'
 import { technicalApi, type ReleaseRobotInspectionInput, type RouteTestRunInput } from './api/technical'
+import { diagnosticsApi } from './api/diagnostics-api'
 
 const keys = {
   maps: ['technical', 'maps'] as const,
@@ -150,3 +151,15 @@ export function useClearRobotMap() {
 export const useVerifyPoi = () => useTechnicalMutation(technicalApi.verifyPoi, keys.poiProposals, (input) => input.resultCode === 'PASS'
   ? { title: 'Đã ghi POI đạt', detail: `Kiểm tra cùng robot ${input.robotCode}, gắn với revision ${input.revisionNumber}.` }
   : { tone: 'info', title: 'Đã ghi POI không đạt', detail: 'Staff cần chỉnh POI rồi gửi lại để kiểm chứng.' })
+
+/**
+ * Fleet overview and one robot's diagnostics. Both read the backend's latest in-memory snapshots, so they
+ * poll; freshness is judged by the server (`syncFresh`, `diagnosticsFresh`), never by the browser clock.
+ */
+export function useTechnicalDashboard(refetchInterval: number | false) {
+  return useQuery({ queryKey: ['technical', 'dashboard'], queryFn: diagnosticsApi.getDashboard, refetchInterval })
+}
+
+export function useRobotDiagnostics(robotCode: string, refetchInterval: number | false) {
+  return useQuery({ queryKey: ['technical', 'robot-diagnostics', robotCode], queryFn: () => diagnosticsApi.getRobotDiagnostics(robotCode), enabled: Boolean(robotCode), refetchInterval })
+}
