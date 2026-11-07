@@ -955,6 +955,27 @@ describe('Technical Staff API integration', () => {
     expect(JSON.parse(String(testRunCalls()[1].init?.body)).requestId).toBe(JSON.parse(String(testRunCalls()[0].init?.body)).requestId)
   })
 
+  it('lets only robots confirmed and deployed on the route map be picked for a route test', async () => {
+    physicalRobots = [
+      makePhysicalRobot(),
+      makePhysicalRobot({ id: 'robot-2', robotCode: 'amr-02', displayName: 'AMR 02', connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null }),
+      makePhysicalRobot({ id: 'robot-3', robotCode: 'amr-03', displayName: 'AMR 03', latestDeployedMapKey: 'other-v1' }),
+    ]
+    await openRouteTest()
+    expect(screen.getByRole('option', { name: /AMR 01 · amr-01/ })).not.toBeDisabled()
+    expect(screen.getByRole('option', { name: /AMR 02 · amr-02 · Chưa xác nhận kết nối/ })).toBeDisabled()
+    expect(screen.getByRole('option', { name: /AMR 03 · amr-03 .* · chưa kiểm tra triển khai đạt trên map này/ })).toBeDisabled()
+  })
+
+  it('blocks saving when the picked robot loses its connection confirmation', async () => {
+    await openRouteTest()
+    for (const label of ['Robot đi đủ các điểm dừng', 'Robot dừng an toàn', 'Localization đạt']) fireEvent.click(screen.getByLabelText(label))
+    physicalRobots = [makePhysicalRobot({ connectionStatus: 'UNCONFIRMED', firstAcceptedSyncAt: null, firstAcceptedMapKey: null, firstAcceptedFrameId: null })]
+    fireEvent.click(screen.getByRole('button', { name: 'Cập nhật trạng thái' }))
+    expect(await screen.findByText(/Robot này chưa xác nhận kết nối/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu kết quả' })).toBeDisabled()
+  })
+
   it('lists recorded runs read-only and lets a new run be added', async () => {
     const run = { id: 'run-1', robotCode: 'amr-01', participatingStaffUserId: 'staff-1', resultCode: 'FAIL', allStopsReached: false, safelyStopped: true, localizationPassed: true, measuredDurationSeconds: 300, failureReason: 'Lệch điểm 2.', evidenceNote: 'Lần một.', checkedAt: '2026-10-30T10:00:00Z' }
     routeCatalog = [{ ...routeFixture, verificationStatus: 'FAIL' }]

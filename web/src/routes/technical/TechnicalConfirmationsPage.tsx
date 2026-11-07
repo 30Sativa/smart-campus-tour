@@ -7,7 +7,7 @@ import { revisionTone } from '../../features/administration/routes/route-message
 import type { VersionedRoute } from '../../features/administration/routes/versioned-api'
 import { RobotPicker } from '../../features/technical/RobotPicker'
 import { CheckRow, Note, ResultToggle, SaveBlockedHint, TechnicalPage, ToneBadge } from '../../features/technical/TechnicalUi'
-import { errorText, routeTestErrors, stamp } from '../../features/technical/technical-format'
+import { errorText, robotNotReadyReason, routeTestErrors, stamp } from '../../features/technical/technical-format'
 import { usePhysicalRobots, useRecordRouteTest, useRouteRevision, useRouteTestParticipants, useRouteTestQueue, useSubmittedRoutes } from '../../features/technical/technical-hooks'
 
 type RouteFilter = 'pending' | 'passed' | 'failed'
@@ -121,13 +121,13 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
   const seconds = Number(duration)
   const durationValid = Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400
   const selectedRobot = robots.data?.find(robot => robot.robotCode === robotCode)
-  // The server refuses this either way (ROBOT_NOT_READY_FOR_ROUTE), so save waits for a fresh robot list that shows a pass on this map.
-  const robotElsewhere = selectedRobot && (selectedRobot.latestDeployedMapKey !== route.mapKey || selectedRobot.latestDeploymentPassed === false)
+  // The server refuses this either way, so save waits for a fresh robot list showing the robot confirmed and passing on this map.
+  const robotNotReady = selectedRobot ? robotNotReadyReason(selectedRobot, route.mapKey) : null
   const errors = record.error ? routeTestErrors(record.error) : {}
   const changed = () => { record.reset(); setRequestId(crypto.randomUUID()) }
   const missingToSave = [
     !robotCode && 'chọn robot',
-    robotElsewhere && 'robot chưa kiểm tra triển khai đạt trên map này',
+    robotNotReady && `robot ${robotNotReady}`,
     !staffUserId && 'chọn Staff đi cùng',
     !durationValid && 'nhập tổng thời gian chạy',
     passBlocked && 'tick đủ ba mục để ghi Đạt',
@@ -152,9 +152,9 @@ function RecordRouteTestModal({ route, onClose }: { route: VersionedRoute; onClo
       footer={<div className="flex flex-wrap items-center justify-end gap-2"><SaveBlockedHint id="route-test-missing" missing={missingToSave} /><button type="button" className={buttonClass('secondary')} onClick={onClose}>Đóng</button><button type="submit" form="route-test-form" className={buttonClass('primary')} aria-describedby={ready ? undefined : 'route-test-missing'} disabled={!ready || record.isPending}>{record.isPending ? 'Đang lưu…' : 'Lưu kết quả'}</button></div>}>
       <form id="route-test-form" className="space-y-3.5" onSubmit={submit}>
         <div>
-          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
+          <RobotPicker id="route-test-robot" label="Robot vật lý" mapKey={route.mapKey} value={robotCode} onChange={value => { setRobotCode(value); changed() }} robots={robots} requireReady emptyText="Chưa có robot vật lý được đăng ký. Cần đăng ký robot trước khi ghi kết quả." />
           {errors.robotCode && <p role="alert" className="mt-1 text-xs text-[#b23e18]">{errors.robotCode}</p>}
-          {robotElsewhere && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên {route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
+          {robotNotReady && !errors.robotCode && <p role="status" className="mt-1 text-xs text-amber-800">{selectedRobot?.connectionStatus === 'UNCONFIRMED' ? 'Robot này chưa xác nhận kết nối. Hãy chạy bridge Fleet Sync bằng khóa hiện tại' : `Lần kiểm tra triển khai gần nhất của robot này không phải kết quả đạt trên ${route.mapKey}. Ghi kiểm tra triển khai đạt ở trang Quản lý bản đồ`} rồi bấm Cập nhật trạng thái, hoặc chọn robot khác.</p>}
         </div>
         <div>
           <label className={labelClass} htmlFor="route-test-staff">Staff đi cùng</label>
