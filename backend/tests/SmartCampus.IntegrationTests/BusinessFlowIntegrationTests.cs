@@ -874,6 +874,10 @@ public sealed class BusinessFlowIntegrationTests
             Assert.Equal("SHIFT_HAS_TOURS", errors.GetProperty("code").GetString());
             Assert.Contains("Scheduled from a tested revision", errors.GetProperty("blockers")[0].GetProperty("message").GetString());
         }
+        var yesterday = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7)).DateTime).AddDays(-1);
+        using (var pastDay = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", adminToken,
+            new { requestId = Guid.NewGuid(), date = yesterday.ToString("yyyy-MM-dd"), shiftCode = "S2", reason = "Bảo trì robot" }))
+            Assert.Equal(HttpStatusCode.BadRequest, pastDay.StatusCode);
         using var closeShift = await Json(host.Client, HttpMethod.Post, "/api/admin/schedule-blocks", adminToken, BlockBody("S2"));
         Assert.Equal(HttpStatusCode.OK, closeShift.StatusCode);
         var closedId = (await Body(closeShift)).GetProperty("data").GetProperty("id").GetGuid();

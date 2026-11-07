@@ -14,10 +14,11 @@ public sealed record CreateScheduleBlockCommand(Guid Actor, CreateScheduleBlockR
 
 public sealed class CreateScheduleBlockCommandValidator : AbstractValidator<CreateScheduleBlockCommand>
 {
-    public CreateScheduleBlockCommandValidator(TourScheduleSettings settings)
+    public CreateScheduleBlockCommandValidator(TourScheduleSettings settings, TimeProvider clock)
     {
         RuleFor(c => c.Request.RequestId).NotEmpty();
         RuleFor(c => c.Request.Date).NotEmpty();
+        RuleFor(c => c.Request.Date).Must(date => date >= TourSchedule.CampusDate(clock.GetUtcNow())).WithMessage("Không khoá được ngày đã qua.");
         RuleFor(c => c.Request.Reason).Must(reason => !string.IsNullOrWhiteSpace(reason)).WithMessage("Nhập lý do khoá.").MaximumLength(500);
         RuleFor(c => c.Request.ShiftCode).Must(code => code is null || settings.Shifts.Any(shift => shift.Code == code))
             .WithMessage("Ca này không có trong cấu hình.");

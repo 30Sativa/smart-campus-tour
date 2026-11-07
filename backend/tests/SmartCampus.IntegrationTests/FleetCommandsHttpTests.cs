@@ -334,16 +334,21 @@ public sealed class FleetCommandsHttpTests
 
         var poll = b.Post("/api/fleet/head/v1/poll", new
         {
-            epoch = (Guid?)null, afterSeq = 0, waitMs = 5000,
+            epoch = (Guid?)null, afterSeq = 0, waitMs = 10_000,
             head = new { state = "IDLE", referenced = true, panDeg = 0.0, tiltDeg = 0.0 }
         });
-        await Task.Delay(300);
+        // Send only once the server has the poll: before that, HEAD_ROBOT_NOT_CONNECTED is the correct answer.
+        // The poll's own deadline ends this loop if it never opens.
+        while (!(await b.OperatorCall(HttpMethod.Get, "head")).Body.GetProperty("data").GetProperty("connected").GetBoolean())
+            Assert.False(poll.IsCompleted, "the poll ended without the server seeing it");
         Assert.False(poll.IsCompleted, "nothing queued yet: the robot's poll waits");
         var sent = await b.OperatorCall(HttpMethod.Post, "head-commands", new { kind = "JOG", panDir = -1, tiltDir = 0 });
         Assert.True(sent.Status == HttpStatusCode.OK, sent.Body.ToString());
         Assert.Equal(TourReadySqlTests.Robot, sent.Body.GetProperty("data").GetProperty("robotCode").GetString());
 
-        var reply = await poll.WaitAsync(TimeSpan.FromSeconds(3));
+        // A poll that only reached its 10-second deadline would find this command too old (5 seconds), and the wake-up
+        // itself is timed in FleetHeadChannelTests on a fake clock; this real process has the real clock.
+        var reply = await poll;
         Assert.True(reply.Status == HttpStatusCode.OK, reply.Body.ToString());
         var data = reply.Body.GetProperty("data");
         var command = Assert.Single(data.GetProperty("commands").EnumerateArray());
@@ -392,7 +397,11 @@ public sealed class FleetCommandsHttpTests
                 ["FleetCommands__MaxTelemetryAgeSeconds"] = maxTelemetryAgeSeconds.ToString(),
                 // The sweeper is covered on its own; a slow test machine must not expire these commands.
                 ["FleetCommands__AcceptWindowSeconds"] = "300",
-                ["FleetHead__Enabled"] = headEnabled ? "true" : "false"
+                ["FleetHead__Enabled"] = headEnabled ? "true" : "false",
+                // As above: a slow test machine must not close the poll, age the command or end the connected window.
+                ["FleetHead__MaxWaitMs"] = "10000",
+                ["FleetHead__MaxCommandAgeMs"] = "5000",
+                ["FleetHead__RobotConnectedWithinMs"] = "300000"
             });
             var token = await RepresentativeEndpointTests.LoginAsync(host.Client, "ready.operator");
             var bridge = new Bridge(world, host, credential.Secret, token, await OpenConsole(host, token));

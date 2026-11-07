@@ -1,6 +1,7 @@
 using SmartCampus.Application.Common.Abstractions.Persistence;
 using SmartCampus.Application.Common.Exceptions;
 using SmartCampus.Application.Features.Tours;
+using SmartCampus.Application.Features.Tours.Commands.CreateScheduleBlock;
 using SmartCampus.Application.Features.Tours.Queries.GetTourShifts;
 using SmartCampus.Application.Features.Tours.Queries.GetTourSlots;
 using SmartCampus.Domain.Entities;
@@ -20,6 +21,34 @@ internal static class TourShiftsFixture
     ];
 
     public static readonly TourScheduleSettings Settings = new(Options, 60);
+}
+
+public sealed class CreateScheduleBlockValidatorTests
+{
+    private sealed class Clock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    // 18:00 UTC on 30/11 is already 01:00 on 01/12 in Vietnam.
+    private static readonly CreateScheduleBlockCommandValidator Validator =
+        new(TourShiftsFixture.Settings, new Clock(new DateTimeOffset(2026, 11, 30, 18, 0, 0, TimeSpan.Zero)));
+
+    private static FluentValidation.Results.ValidationResult Validate(int year, int month, int day) =>
+        Validator.Validate(new CreateScheduleBlockCommand(Guid.NewGuid(), new(Guid.NewGuid(), new DateOnly(year, month, day), "S1", "Bảo trì")));
+
+    [Fact]
+    public void Yesterday_InVietnam_IsRefused()
+    {
+        var result = Validate(2026, 11, 30);
+        Assert.Contains(result.Errors, error => error.ErrorMessage == "Không khoá được ngày đã qua.");
+    }
+
+    [Theory]
+    [InlineData(2026, 12, 1)]
+    [InlineData(2026, 12, 2)]
+    public void TodayInVietnamAndLater_AreAccepted(int year, int month, int day) =>
+        Assert.True(Validate(year, month, day).IsValid);
 }
 
 public sealed class TourScheduleTests

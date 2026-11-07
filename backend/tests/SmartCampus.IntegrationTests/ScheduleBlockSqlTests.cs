@@ -125,6 +125,27 @@ public sealed class ScheduleBlockSqlTests
     }
 
     [SchemaV11Fact]
+    public async Task APastDay_CannotBeClosed_ButItsOldBlockCanStillBeRemoved()
+    {
+        await using var h = await TourReadySqlTests.Harness.Create();
+        var yesterday = TourSchedule.CampusDate(DateTimeOffset.UtcNow).AddDays(-1);
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => Close(h, yesterday, "S1"));
+
+        var oldBlock = new SmartCampus.Domain.Entities.TourScheduleBlock
+        {
+            Id = Guid.NewGuid(), BlockDate = yesterday, ShiftCode = "S1", Reason = Reason, CreatedByUserId = h.StaffId, CreatedAt = DateTimeOffset.UtcNow.AddDays(-2)
+        };
+        await using (var seed = h.Context())
+        {
+            seed.TourScheduleBlocks.Add(oldBlock);
+            await seed.SaveChangesAsync();
+        }
+        await h.Send(new RemoveScheduleBlockCommand(oldBlock.Id, h.StaffId, new(Guid.NewGuid())));
+        await using var db = h.Context();
+        Assert.NotNull((await db.TourScheduleBlocks.AsNoTracking().SingleAsync(block => block.Id == oldBlock.Id)).RemovedAt);
+    }
+
+    [SchemaV11Fact]
     public async Task ACreateAndABlockRacingForOneShift_NeverBothSucceed()
     {
         await using var h = await TourReadySqlTests.Harness.Create();

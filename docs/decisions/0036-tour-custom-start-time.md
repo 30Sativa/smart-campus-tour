@@ -1,6 +1,6 @@
 # ADR-0036: Custom Tour start time
 
-- **Status:** Accepted by the repository owner, 2026-10-31.
+- **Status:** Superseded by `docs/lich-tour-theo-ca.md` (07/11/2026): Tours start only at a fixed shift; Staff no longer types a start time.
 - **Amends:** ADR-0035 decision 2 (fixed slots). Every other ADR-0035 decision stays in force.
 
 ## Context

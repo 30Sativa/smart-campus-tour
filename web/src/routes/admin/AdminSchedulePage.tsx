@@ -52,6 +52,7 @@ export default function AdminSchedulePage() {
     else create.mutate({ requestId: requestId(`close:${target.date}:${target.shift?.code ?? ''}:${reason.trim()}`), date: target.date, shiftCode: target.shift?.code ?? null, reason: reason.trim() }, done)
   }
   const columns = shifts.data?.days[0]?.shifts ?? []
+  const today = campusDay(new Date())
 
   return <AdminPage>
     <PageHeader eyebrow="Cấu hình" title="Lịch vận hành" description="Khoá cả ngày hoặc một ca khi nghỉ lễ, bảo trì. Staff không tạo được Tour vào ca bị khoá và thấy lý do trên Lịch Tour." />
@@ -73,15 +74,18 @@ export default function AdminSchedulePage() {
           </tr></thead>
           <tbody>{shifts.data.days.map(day => {
             const dayBlock = day.shifts.find(shift => shift.block?.scope === 'DAY')?.block ?? null
+            const past = day.date < today
             return <tr key={day.date} className="border-t border-[#f1f5f9] align-top">
               <td className={`${tdClass} font-medium whitespace-nowrap first-letter:uppercase`}>{dayLabel(day.date)}</td>
               {day.shifts.map(shift => <td key={shift.code} className={tdClass}>
                 {dayBlock ? <span className="text-xs text-[#64748b]">Khoá theo ngày</span>
                   : shift.block ? <Closed reason={shift.block.reason} label={`Gỡ khoá ${shift.name} ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift, block: shift.block! })} />
+                  : past ? <PastDay />
                   : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Khoá ${shift.name} ${day.date}`} onClick={() => open({ kind: 'close', date: day.date, shift })}><Lock size={13} aria-hidden="true" />Khoá ca</button>}
               </td>)}
               <td className={tdClass}>
                 {dayBlock ? <Closed reason={dayBlock.reason} label={`Gỡ khoá cả ngày ${day.date}`} onRemove={() => open({ kind: 'remove', date: day.date, shift: null, block: dayBlock })} />
+                  : past ? <PastDay />
                   : <button type="button" className={buttonClass('secondary', 'sm')} aria-label={`Khoá cả ngày ${day.date}`} onClick={() => open({ kind: 'close', date: day.date, shift: null })}><Lock size={13} aria-hidden="true" />Khoá ngày</button>}
               </td>
             </tr>
@@ -103,6 +107,8 @@ export default function AdminSchedulePage() {
     </ConfirmationDialog>}
   </AdminPage>
 }
+
+const PastDay = () => <span className="text-xs text-[#64748b]">Đã qua</span>
 
 function Closed({ reason, label, onRemove }: { reason: string; label: string; onRemove: () => void }) {
   return <div className="max-w-56">

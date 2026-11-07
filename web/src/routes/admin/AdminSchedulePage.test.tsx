@@ -29,6 +29,9 @@ const show = () => render(<QueryClientProvider client={new QueryClient({ default
 
 describe('Admin operating calendar', () => {
   beforeEach(() => {
+    // Monday, 09:00 in Vietnam: the first row of the page is today, whichever day the suite runs.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-01-05T02:00:00Z'))
     blocks = {}
     refusal = null
     writes = []
@@ -42,7 +45,24 @@ describe('Admin operating calendar', () => {
       return json({ success: true, data: { days: days(url.searchParams.get('from')!), recommendedMaxSeconds: 3600 } })
     }))
   })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  it('offers no closing on a past day, keeps its old block with the reason, and still closes today', async () => {
+    // Wednesday, 00:30 in Vietnam but still Tuesday in UTC: "today" is the Vietnam date.
+    vi.setSystemTime(new Date('2099-01-06T17:30:00Z'))
+    blocks = { '2099-01-05': { S1: { id: 'old-block', scope: 'SHIFT', reason: 'Bảo trì cũ' }, S2: null } }
+    show()
+    await screen.findByRole('table', { name: 'Lịch vận hành' })
+    for (const past of ['2099-01-05', '2099-01-06']) {
+      expect(screen.queryByRole('button', { name: `Khoá Ca chiều 1 ${past}` })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: `Khoá cả ngày ${past}` })).not.toBeInTheDocument()
+    }
+    expect(screen.getAllByText('Đã qua')).toHaveLength(5)
+    expect(screen.getByText('Bảo trì cũ')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Gỡ khoá Ca sáng 2099-01-05' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Khoá Ca sáng 2099-01-07' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Khoá cả ngày 2099-01-07' })).toBeInTheDocument()
+  })
 
   it('closes one shift with a required reason', async () => {
     show()
