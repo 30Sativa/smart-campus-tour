@@ -214,6 +214,24 @@ describe('Staff Tour calendar', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
+  it('keeps the view toggle and the content inside one frame in every view', async () => {
+    show()
+    await screen.findByRole('region', { name: 'Lịch tuần' })
+    const inFrame = () => within(screen.getByRole('region', { name: 'Lịch' }))
+    expect(inFrame().getByRole('group', { name: 'Chế độ xem lịch' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ngày' }))
+    expect(await inFrame().findAllByRole('article')).toHaveLength(2)
+    expect(inFrame().getByRole('group', { name: 'Chế độ xem lịch' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Danh sách' }))
+    expect(await inFrame().findByRole('table', { name: 'Danh sách Tour' })).toBeInTheDocument()
+    expect(inFrame().getByRole('group', { name: 'Chế độ xem lịch' })).toBeInTheDocument()
+  })
+
+  it('prints the robot code in the Tour dialog as it is, only the date gets a capital', async () => {
+    show('/staff/schedule?date=2099-01-05&tour=tour-1')
+    expect((await within(await screen.findByRole('dialog')).findByText('amr-01')).className).not.toContain('first-letter:uppercase')
+  })
+
   it('lists every Tour across time in the list view, which was the Tour list page', async () => {
     show()
     await screen.findByRole('region', { name: 'Lịch tuần' })

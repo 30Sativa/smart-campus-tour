@@ -82,7 +82,7 @@ function useNarrowScreen() {
 /**
  * Tour schedule from the live Tour list and the fixed shifts: the week as a shift-by-day table
  * (a list of days on a narrow screen), the chosen day as one card per shift, or a list. The
- * chosen Tour (`?tour=`) opens in a drawer on the right.
+ * chosen Tour (`?tour=`) opens in a dialog in the middle of the screen.
  */
 export default function SchedulePage() {
   const [params, setParams] = useSearchParams()
@@ -143,12 +143,19 @@ export default function SchedulePage() {
     ))}
   </div>
 
-  // The list is every Tour across time, not this week: it has its own filters and paging.
+  // All three views share this frame, so switching between them moves neither the toggle nor the top of the table.
+  // The list is every Tour across time, not this week: it has no week to step through and keeps its own filters and paging.
   if (view === 'list') return (
     <StaffPage>
       {header}
-      <div className="mb-3 flex">{viewToggle}</div>
-      <TourListPanel />
+
+      <section className={`${card} p-4 sm:p-5`} aria-label="Lịch">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="flex min-h-10 items-center px-1 text-base font-bold text-[#2d3748]">Tất cả Tour</h2>
+          {viewToggle}
+        </div>
+        <div className="mt-3"><TourListPanel /></div>
+      </section>
     </StaffPage>
   )
 
@@ -182,7 +189,7 @@ export default function SchedulePage() {
 
         {failed && <div className="mt-4"><ErrorPanel error={new Error(tourError(failed))} onRetry={() => { if (tours.isError) void tours.refetch(); if (shifts.isError) void shifts.refetch() }} /></div>}
 
-        {!failed && <div className="mt-4">
+        {!failed && <div className="mt-4 min-h-[26rem]">
           {tours.isPending || shifts.isPending ? <LoadingPanel />
             : view === 'day' ? <section aria-label={`Lịch tour ${heading}`}><DayShifts day={day} shifts={shiftsOf(day)} tours={shown} isOpen={item => isOpen(day, item)} onSelect={selectTour} /></section>
             : narrow ? <WeekList week={week} today={today} inDay={inDay} shiftsOf={shiftsOf} isOpen={isOpen} onSelect={selectTour} onDay={openDay} />
@@ -349,7 +356,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],
   ]
   return (
-    <Drawer open side="right" title="Buổi đang chọn" onClose={onClose} footer={<>
+    <Drawer open title="Buổi đang chọn" onClose={onClose} footer={<>
       <Link to={`/staff/manage/tours/${tour.id}`} className={`${buttonClass('primary')} w-full`}>Xem chi tiết Tour</Link>
       <Link to="/staff/manage/registrations" className={`mt-3 block rounded-md text-center text-sm font-semibold text-[#2d3748] underline-offset-4 hover:underline ${focus}`}>Xem đăng ký</Link>
     </>}>
@@ -360,7 +367,7 @@ function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void 
           <div key={label} className="flex items-center gap-3 py-2.5 text-sm">
             <Icon size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
             <dt className="w-32 shrink-0 text-[#718096]">{label}</dt>
-            <dd className="min-w-0 font-semibold break-words text-[#2d3748] first-letter:uppercase">{value}</dd>
+            <dd className={`min-w-0 font-semibold break-words text-[#2d3748] ${label === 'Ngày tổ chức' ? 'first-letter:uppercase' : ''}`}>{value}</dd>
           </div>
         ))}
       </dl>
