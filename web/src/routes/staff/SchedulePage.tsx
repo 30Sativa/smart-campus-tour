@@ -1,19 +1,20 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Map as MapIcon, Plus, Search, Timer, Bot, Users } from 'lucide-react'
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, Info, Lock, Map as MapIcon, Plus, Search, Timer, Bot, Users } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { LoadingPanel } from '../../components/ui/ConsolePrimitives'
+import { Drawer } from '../../components/ui/Drawer'
 import { buttonClass } from '../../components/ui/ui-classes'
 import { useTourCalendar, useTourShifts } from '../../features/administration/tours/hooks'
 import { TourListPanel } from '../../features/administration/tours/TourListPanel'
-import { campusDay, campusMinutes, campusTime } from '../../features/administration/tours/tour-calendar'
+import { campusDay, campusTime } from '../../features/administration/tours/tour-calendar'
 import { TOUR_STATE_LABEL, tourError } from '../../features/administration/tours/tour-messages'
 import type { TourShift, TourState, TourSummary } from '../../features/administration/tours/types'
-import { EmptyPanel, ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
+import { ErrorPanel, StaffPage } from '../../features/staff/StaffUi'
 
 const dayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-function shift(day: string, delta: number) {
+function addDays(day: string, delta: number) {
   const date = new Date(`${day}T12:00:00`)
   date.setDate(date.getDate() + delta)
   return dayKey(date)
@@ -22,40 +23,32 @@ function shift(day: string, delta: number) {
 /** Monday of the week holding `day`. */
 function weekStart(day: string) {
   const date = new Date(`${day}T12:00:00`)
-  return shift(day, -((date.getDay() + 6) % 7))
+  return addDays(day, -((date.getDay() + 6) % 7))
 }
 
 const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-/** The robot's working day the grid shows (07:00-19:00). */
-const DAY_OPENS = 7 * 60
-const DAY_MINUTES = 12 * 60
-const HOUR_PX = 44
 const STATES: TourState[] = ['SCHEDULED', 'READY', 'RUNNING', 'COMPLETED', 'CANCELLED']
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] focus-visible:ring-offset-2'
 const card = 'ct-panel min-w-0 rounded-[15px] bg-white shadow-[0_3.5px_5.5px_rgba(0,0,0,0.04)]'
 const control = `min-h-10 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm text-[#2d3748] ${focus}`
 
-/** Soft fills, one per state; the legend under the grid names them. */
+/** Soft fills, one per state; the legend under the calendar names them. */
 const CHIP: Record<TourState, string> = {
   SCHEDULED: 'border-[#f3e2b8] bg-[#fff8e8] text-[#2d3748]',
   READY: 'border-[#cfe0fb] bg-[#eef4ff] text-[#2d3748]',
   RUNNING: 'border-[#d6e4f8] bg-[#e3eeff] text-[#2d3748]',
   COMPLETED: 'border-[#e2e8f0] bg-[#f1f5f9] text-[#475569]',
-  CANCELLED: 'border-[#e2e8f0] bg-white text-[#94a3b8] line-through',
+  CANCELLED: 'border-[#e2e8f0] bg-white text-[#64748b]',
 }
 const DOT: Record<TourState, string> = {
   SCHEDULED: 'bg-[#f6ddb0]', READY: 'bg-[#cfe0fb]', RUNNING: 'bg-[#a9c8f8]', COMPLETED: 'bg-[#e2e8f0]', CANCELLED: 'bg-white ring-1 ring-[#e2e8f0]',
 }
+const struck = (tour: TourSummary) => tour.state === 'CANCELLED' ? 'line-through' : ''
 
 const durationOf = (tour: TourSummary) => tour.reservation?.expectedDurationSeconds ?? tour.reservation?.measuredDurationSeconds ?? 3600
 const endOf = (tour: TourSummary) => new Date(new Date(tour.scheduledStartAt).getTime() + durationOf(tour) * 1000).toISOString()
 const span = (tour: TourSummary) => `${campusTime(tour.scheduledStartAt)} - ${campusTime(endOf(tour))}`
 
-/** A Tour drawn on the grid must start and end inside 07:00-19:00; any other sits in the day's "Ngoài ca" strip. */
-const insideGrid = (tour: TourSummary) => {
-  const start = campusMinutes(tour.scheduledStartAt)
-  return start >= DAY_OPENS && start + durationOf(tour) / 60 <= DAY_OPENS + DAY_MINUTES
-}
 const LEAD_TIME_MS = 72 * 3600_000
 const instant = (value: string) => new Date(value).getTime()
 /** A shift still takes a new Tour: not closed by Admin, no live Tour holds it and its Tour start is at least 72 hours away (docs/lich-tour-theo-ca.md §3, §5). */
@@ -64,12 +57,32 @@ const openShift = (shift: TourShift, tours: TourSummary[], now: number) =>
     instant(tour.reservation ? tour.reservation.startsAt : tour.scheduledStartAt) < instant(shift.endsAt) &&
     instant(tour.reservation ? tour.reservation.endsAt : endOf(tour)) > instant(shift.startsAt))
 const createHref = (day: string, shift: TourShift) => `/staff/manage/tours/new?date=${day}&shift=${encodeURIComponent(shift.code)}`
-const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)} - ${campusTime(shift.endsAt)}`
+const shiftSpan = (shift: TourShift) => `${campusTime(shift.startsAt)}-${campusTime(shift.endsAt)}`
+/** `2099-01-05` as people read it: 05/01/2099. */
+const readableDay = (day: string) => day.split('-').reverse().join('/')
+const createLabel = (day: string, shift: TourShift) => `Tạo Tour ${shift.name} ngày ${readableDay(day)}`
+const lockLabel = (shift: TourShift) => `${shift.name} ${shiftSpan(shift)}, đã khoá: ${shift.block!.reason}`
+
+/** A Tour belongs to the shift its start falls in, so an older Tour typed at 09:00 stays with the morning shift it holds. */
+const startsIn = (tour: TourSummary, shift: TourShift) =>
+  instant(shift.startsAt) <= instant(tour.scheduledStartAt) && instant(tour.scheduledStartAt) < instant(shift.endsAt)
+const byRobot = (a: TourSummary, b: TourSummary) => (a.reservation?.robotCode ?? '').localeCompare(b.reservation?.robotCode ?? '')
+const toursOfShift = (tours: TourSummary[], shift: TourShift) => tours.filter(tour => startsIn(tour, shift)).sort(byRobot)
+const toursOutside = (tours: TourSummary[], shifts: TourShift[]) => tours.filter(tour => !shifts.some(shift => startsIn(tour, shift)))
+
+const NARROW_SCREEN = '(max-width: 767px)'
+function useNarrowScreen() {
+  return useSyncExternalStore(onChange => {
+    const query = window.matchMedia(NARROW_SCREEN)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, () => window.matchMedia(NARROW_SCREEN).matches)
+}
 
 /**
- * Tour schedule from the live Tour list and its robot reservations: the week
- * as a time grid (07:00-19:00), the chosen day by robot, or a list. The chosen
- * Tour (`?tour=`) stays open on the right with its time and robot hold.
+ * Tour schedule from the live Tour list and the fixed shifts: the week as a shift-by-day table
+ * (a list of days on a narrow screen), the chosen day as one card per shift, or a list. The
+ * chosen Tour (`?tour=`) opens in a drawer on the right.
  */
 export default function SchedulePage() {
   const [params, setParams] = useSearchParams()
@@ -80,10 +93,11 @@ export default function SchedulePage() {
   const stateFilter = (STATES as string[]).includes(params.get('state') ?? '') ? params.get('state') as TourState : ''
   const query = params.get('q') ?? ''
   const monday = weekStart(day)
-  const week = Array.from({ length: 7 }, (_, i) => shift(monday, i))
+  const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
   const tours = useTourCalendar(week[0], week[6], view !== 'list')
   const shifts = useTourShifts(week[0], week[6], view !== 'list')
-  const shiftsOf = (key: string) => shifts.data?.days.find(item => item.date === key)?.shifts ?? []
+  const narrow = useNarrowScreen()
+  const shiftsOf = (key: string) => [...(shifts.data?.days.find(item => item.date === key)?.shifts ?? [])].sort((a, b) => a.time.localeCompare(b.time))
   // Read once per mount: whether a shift is past the 72-hour mark does not need to tick.
   const [now] = useState(() => Date.now())
 
@@ -95,10 +109,9 @@ export default function SchedulePage() {
     (!query.trim() || `${tour.name} ${tour.routeName}`.toLowerCase().includes(query.trim().toLowerCase())))
   const inDay = (key: string) => filtered.filter(tour => campusDay(tour.scheduledStartAt) === key)
   // Whether a shift is free does not depend on the filters, so it reads every Tour of the day.
-  const allInDay = (key: string) => all.filter(tour => campusDay(tour.scheduledStartAt) === key)
+  const isOpen = (key: string, item: TourShift) => openShift(item, all.filter(tour => campusDay(tour.scheduledStartAt) === key), now)
   const shown = inDay(day)
   const selected = all.find(tour => tour.id === params.get('tour'))
-    ?? filtered.find(tour => campusDay(tour.scheduledStartAt) >= today && tour.state !== 'CANCELLED') ?? filtered[0]
 
   const set = (changes: Record<string, string | null>, replace = true) => setParams(current => {
     const next = new URLSearchParams(current)
@@ -106,13 +119,15 @@ export default function SchedulePage() {
     return next
   }, { replace })
   const setDay = (next: string) => set({ date: next === today ? null : next, tour: null }, false)
+  const openDay = (key: string) => set({ date: key === today ? null : key, view: 'day', tour: null }, false)
+  const selectTour = (id: string) => set({ tour: id })
 
-  const short = (key: string) => new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(`${key}T12:00:00`))
   const heading = view === 'week'
-    ? `${short(week[0]).slice(0, 2)} - ${short(week[6])}/${week[6].slice(0, 4)}`
+    ? `${dayMonth(week[0]).slice(0, 2)} - ${dayMonth(week[6])}/${week[6].slice(0, 4)}`
     : new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${day}T12:00:00`))
   const step = view === 'week' ? 7 : 1
   const robotCount = new Set(filtered.map(tour => tour.reservation?.robotCode).filter(Boolean)).size
+  const failed = tours.isError ? tours.error : shifts.isError ? shifts.error : null
 
   const header = <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div className="min-w-0">
@@ -141,156 +156,188 @@ export default function SchedulePage() {
     <StaffPage>
       {header}
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className={`${card} p-4 sm:p-5`} aria-label="Lịch">
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setDay(shift(day, -step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần trước' : 'Ngày trước'}><ChevronLeft size={16} /></button>
-            <h2 className="min-w-36 px-1 text-center text-base font-bold text-[#2d3748] tabular-nums first-letter:uppercase">{heading}</h2>
-            <button type="button" onClick={() => setDay(shift(day, step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần sau' : 'Ngày sau'}><ChevronRight size={16} /></button>
-            <button type="button" onClick={() => setDay(today)} disabled={day === today} className={`${buttonClass('secondary', 'sm')} min-h-10`}>Hôm nay</button>
-            {viewToggle}
-          </div>
+      <section className={`${card} p-4 sm:p-5`} aria-label="Lịch">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setDay(addDays(day, -step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần trước' : 'Ngày trước'}><ChevronLeft size={16} /></button>
+          <h2 className="min-w-36 px-1 text-center text-base font-bold text-[#2d3748] tabular-nums first-letter:uppercase">{heading}</h2>
+          <button type="button" onClick={() => setDay(addDays(day, step))} className={`${buttonClass('secondary', 'sm')} size-10 px-0`} aria-label={view === 'week' ? 'Tuần sau' : 'Ngày sau'}><ChevronRight size={16} /></button>
+          <button type="button" onClick={() => setDay(today)} disabled={day === today} className={`${buttonClass('secondary', 'sm')} min-h-10`}>Hôm nay</button>
+          {viewToggle}
+        </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <select aria-label="Lọc theo robot" value={robotFilter} onChange={event => set({ robot: event.target.value || null })} className={`${control} min-w-44`}>
-              <option value="">Robot: Tất cả</option>
-              {robots.map(code => <option key={code} value={code}>Robot: {code}</option>)}
-            </select>
-            <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={event => set({ state: event.target.value || null })} className={`${control} min-w-44`}>
-              <option value="">Trạng thái: Tất cả</option>
-              {STATES.map(state => <option key={state} value={state}>Trạng thái: {TOUR_STATE_LABEL[state]}</option>)}
-            </select>
-            <label className={`${control} flex min-w-48 flex-1 items-center gap-2 focus-within:ring-2 focus-within:ring-[#5b9dc9]`}>
-              <Search size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
-              <input type="search" aria-label="Tìm Tour" value={query} onChange={event => set({ q: event.target.value || null })} placeholder="Tìm Tour…" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a0aec0]" />
-            </label>
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select aria-label="Lọc theo robot" value={robotFilter} onChange={event => set({ robot: event.target.value || null })} className={`${control} min-w-44`}>
+            <option value="">Robot: Tất cả</option>
+            {robots.map(code => <option key={code} value={code}>Robot: {code}</option>)}
+          </select>
+          <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={event => set({ state: event.target.value || null })} className={`${control} min-w-44`}>
+            <option value="">Trạng thái: Tất cả</option>
+            {STATES.map(state => <option key={state} value={state}>Trạng thái: {TOUR_STATE_LABEL[state]}</option>)}
+          </select>
+          <label className={`${control} flex min-w-48 flex-1 items-center gap-2 focus-within:ring-2 focus-within:ring-[#5b9dc9]`}>
+            <Search size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
+            <input type="search" aria-label="Tìm Tour" value={query} onChange={event => set({ q: event.target.value || null })} placeholder="Tìm Tour…" className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[#a0aec0]" />
+          </label>
+        </div>
 
-          {tours.isError && <div className="mt-4"><ErrorPanel error={new Error(tourError(tours.error))} onRetry={() => void tours.refetch()} /></div>}
+        {failed && <div className="mt-4"><ErrorPanel error={new Error(tourError(failed))} onRetry={() => { if (tours.isError) void tours.refetch(); if (shifts.isError) void shifts.refetch() }} /></div>}
 
-          {!tours.isError && <div className="mt-4">
-            {tours.isPending ? <LoadingPanel /> : view === 'week'
-              ? <WeekGrid week={week} today={today} inDay={inDay} shiftsOf={shiftsOf} isOpen={(key, item) => openShift(item, allInDay(key), now)} selectedId={selected?.id} onSelect={id => set({ tour: id })} onDay={key => set({ date: key === today ? null : key, view: 'day', tour: null }, false)} />
-              : <section aria-label={`Lịch tour ${heading}`} className="overflow-hidden rounded-xl border border-[#e2e8f0]">
-                <DayShifts day={day} shifts={shiftsOf(day)} isOpen={item => openShift(item, allInDay(day), now)} outside={shown.filter(tour => !insideGrid(tour))} onSelect={id => set({ tour: id })} />
-                {shown.length === 0 ? <div className="p-4"><EmptyPanel>Không có tour nào trong ngày này.</EmptyPanel></div>
-                  // By robot first, then every Tour of the day: one without a robot hold has no bar but still shows below.
-                  : <><RobotDay tours={shown} onSelect={id => set({ tour: id })} /><div className="border-t border-[#e2e8f0]"><SessionList tours={shown} onSelect={id => set({ tour: id })} selectedId={selected?.id} /></div></>}
-              </section>}
-          </div>}
+        {!failed && <div className="mt-4">
+          {tours.isPending || shifts.isPending ? <LoadingPanel />
+            : view === 'day' ? <section aria-label={`Lịch tour ${heading}`}><DayShifts day={day} shifts={shiftsOf(day)} tours={shown} isOpen={item => isOpen(day, item)} onSelect={selectTour} /></section>
+            : narrow ? <WeekList week={week} today={today} inDay={inDay} shiftsOf={shiftsOf} isOpen={isOpen} onSelect={selectTour} onDay={openDay} />
+            : <WeekTable week={week} today={today} inDay={inDay} shiftsOf={shiftsOf} isOpen={isOpen} showRobot={robots.length >= 2} onSelect={selectTour} onDay={openDay} />}
+        </div>}
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[#718096]">
-            <ul aria-label="Chú thích trạng thái" className="flex flex-wrap gap-x-5 gap-y-1.5">
-              {STATES.map(state => <li key={state} className="flex items-center gap-2"><span aria-hidden="true" className={`h-3.5 w-6 rounded ${DOT[state]}`} />{TOUR_STATE_LABEL[state]}</li>)}
-            </ul>
-            <span>Giờ Việt Nam (UTC+7)</span>
-          </div>
-        </section>
-
-        <TourPanel tour={selected} />
-      </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-[#718096]">
+          <ul aria-label="Chú thích trạng thái" className="flex flex-wrap gap-x-3.5 gap-y-1">
+            {STATES.map(state => <li key={state} className="flex items-center gap-1.5"><span aria-hidden="true" className={`size-2.5 rounded-full ${DOT[state]}`} />{TOUR_STATE_LABEL[state]}</li>)}
+          </ul>
+          <span>Giờ Việt Nam (UTC+7)</span>
+        </div>
+      </section>
 
       <footer className={`${card} mt-5 flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-sm`}>
         <p className="font-bold text-[#2d3748]">{tours.isSuccess ? `${view === 'week' ? filtered.length : shown.length} Tour trong ${view === 'week' ? 'tuần' : 'ngày'} · ${robotCount} robot` : '-'}</p>
-        <p className="flex items-center gap-2 text-[13px] text-[#718096]"><Info size={15} aria-hidden="true" />Chọn một Tour để xem thông tin và khung giữ robot.</p>
+        <p className="flex items-center gap-2 text-[13px] text-[#718096]"><Info size={15} aria-hidden="true" />Bấm vào một Tour để xem thông tin và khung giữ robot.</p>
       </footer>
+
+      {selected && <TourDrawer tour={selected} onClose={() => set({ tour: null })} />}
     </StaffPage>
   )
 }
 
-/** Side-by-side lanes for Tours that overlap on one day. */
-function lanes(tours: TourSummary[]) {
-  const ends: number[] = []
-  return [...tours].sort((a, b) => a.scheduledStartAt.localeCompare(b.scheduledStartAt)).map(tour => {
-    const start = campusMinutes(tour.scheduledStartAt)
-    let lane = ends.findIndex(end => end <= start)
-    if (lane === -1) { lane = ends.length; ends.push(0) }
-    ends[lane] = start + durationOf(tour) / 60
-    return { tour, lane }
-  }).map((item, _, list) => ({ ...item, count: Math.max(...list.map(other => other.lane)) + 1 }))
+type WeekProps = {
+  week: string[]; today: string; inDay: (key: string) => TourSummary[]; shiftsOf: (key: string) => TourShift[]
+  isOpen: (key: string, shift: TourShift) => boolean; onSelect: (id: string) => void; onDay: (key: string) => void
 }
 
-/** A Tour outside 07:00-19:00, listed instead of drawn past the grid. */
-function OutsideChip({ tour, selected, onSelect }: { tour: TourSummary; selected?: boolean; onSelect: (id: string) => void }) {
-  return <button type="button" onClick={() => onSelect(tour.id)} aria-pressed={selected} aria-label={`Ngoài ca: ${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}`}
-    className={`block w-full truncate rounded-md border px-1.5 py-0.5 text-left text-[11px] font-semibold ${CHIP[tour.state]} ${selected ? 'ring-2 ring-[#93b8f5]' : ''} ${focus}`}>
-    <span className="tabular-nums">{campusTime(tour.scheduledStartAt)}</span> {tour.name}
-  </button>
-}
+const weekdayOf = (key: string) => WEEKDAY[new Date(`${key}T12:00:00`).getDay()]
+const dayMonth = (key: string) => readableDay(key).slice(0, 5)
 
-/** One shift drawn behind the Tours of a day column; a free shift offers "+ Tạo Tour" for that day and shift. */
-function ShiftBand({ day, shift, open }: { day: string; shift: TourShift; open: boolean }) {
-  const top = (campusMinutes(shift.startsAt) - DAY_OPENS) / 60 * HOUR_PX
-  const tall = (campusMinutes(shift.endsAt) - campusMinutes(shift.startsAt)) / 60 * HOUR_PX
-  if (shift.block) return <div aria-label={`${shift.name} ${shiftSpan(shift)}, đã khoá: ${shift.block.reason}`} role="group" title={shift.block.reason}
-    className="absolute inset-x-0 overflow-hidden border-y border-[#d5dbe3] bg-[#e8ecf1] px-1.5 py-1" style={{ top, height: tall }}>
-    <span className="block truncate text-[10.5px] font-semibold text-[#475569]">{shift.name} · Đã khoá</span>
-    <span className="block text-[10.5px] leading-tight text-[#64748b]">{shift.block.reason}</span>
-  </div>
-  return <div aria-label={`${shift.name} ${shiftSpan(shift)}`} role="group" className="absolute inset-x-0 border-y border-dashed border-[#c9dcf2] bg-[#f3f8ff]/80 px-1.5 py-1" style={{ top, height: tall }}>
-    <span className="block truncate text-[10.5px] font-semibold text-[#4a6fa5]">{shift.name}</span>
-    {open && <Link to={createHref(day, shift)} aria-label={`Tạo Tour ${shift.name} ngày ${day}`} className={`absolute right-1 bottom-1 rounded-md bg-white/90 px-1.5 text-[10.5px] font-semibold text-[#2563eb] hover:bg-white ${focus}`}>+ Tạo Tour</Link>}
-  </div>
-}
-
-function WeekGrid({ week, today, inDay, shiftsOf, isOpen, selectedId, onSelect, onDay }: { week: string[]; today: string; inDay: (key: string) => TourSummary[]; shiftsOf: (key: string) => TourShift[]; isOpen: (key: string, shift: TourShift) => boolean; selectedId?: string; onSelect: (id: string) => void; onDay: (key: string) => void }) {
-  const hours = Array.from({ length: 7 }, (_, i) => DAY_OPENS / 60 + i * 2)
-  const height = (DAY_MINUTES / 60) * HOUR_PX
-  const anyOutside = week.some(key => inDay(key).some(tour => !insideGrid(tour)))
+/** The week as one row per shift and one column per day, each shift named once at the head of its row. */
+function WeekTable({ week, today, inDay, shiftsOf, isOpen, showRobot, onSelect, onDay }: WeekProps & { showRobot: boolean }) {
+  // Every day carries the same configured shifts; a row is one of them, the days supply its cells.
+  const rows = [...new Map(week.flatMap(shiftsOf).map(item => [item.code, item])).values()].sort((a, b) => a.time.localeCompare(b.time))
+  const outside = week.map(key => toursOutside(inDay(key), shiftsOf(key)))
+  const rowHead = 'w-44 border-t border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-2 text-left align-middle font-normal'
+  const cellEdge = 'border-t border-l border-[#e2e8f0]'
   return (
     <section aria-label="Lịch tuần" className="overflow-x-auto rounded-xl border border-[#e2e8f0]">
-      <div className="grid min-w-[760px] grid-cols-[56px_repeat(7,minmax(0,1fr))]">
-        <div className="border-b border-[#e2e8f0] bg-[#f8fafc]" />
-        {week.map(key => {
-          const date = new Date(`${key}T12:00:00`)
-          const isToday = key === today
-          return <button key={key} type="button" onClick={() => onDay(key)} aria-label={`${WEEKDAY[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}: ${inDay(key).length} buổi. Xem theo robot`}
-            className={`flex flex-col items-center gap-0.5 border-b border-l border-[#e2e8f0] px-1 py-2.5 transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${isToday ? 'bg-[#f2f7ff]' : 'bg-[#f8fafc]'}`}>
-            <b className="text-sm text-[#2d3748]">{WEEKDAY[date.getDay()]}</b>
-            <span className="text-xs text-[#718096] tabular-nums">{String(date.getDate()).padStart(2, '0')}/{String(date.getMonth() + 1).padStart(2, '0')}</span>
-            {isToday && <span className="mt-0.5 rounded-full bg-[#edf3fb] px-2 text-[11px] font-semibold text-[#4a6fa5]">Hôm nay</span>}
-          </button>
-        })}
-
-        {anyOutside && <>
-          <div className="flex items-center justify-end border-b border-[#e2e8f0] bg-[#fffaf0] px-1 text-[10.5px] font-semibold text-[#9a6b16]">Ngoài ca</div>
-          {week.map(key => <div key={key} aria-label={`Ngoài ca ngày ${key}`} className="space-y-1 border-b border-l border-[#e2e8f0] bg-[#fffaf0] p-1">
-            {inDay(key).filter(tour => !insideGrid(tour)).map(tour => <OutsideChip key={tour.id} tour={tour} selected={tour.id === selectedId} onSelect={onSelect} />)}
-          </div>)}
-        </>}
-
-        <div className="relative" style={{ height }}>
-          {hours.map(hour => <span key={hour} className="absolute right-2 -translate-y-1/2 text-[11px] text-[#718096] tabular-nums first:translate-y-0.5" style={{ top: (hour * 60 - DAY_OPENS) / 60 * HOUR_PX }}>{String(hour).padStart(2, '0')}:00</span>)}
-        </div>
-        {week.map(key => (
-          <div key={key} className={`relative border-l border-[#e2e8f0] ${key === today ? 'bg-[#f7faff]' : ''}`} style={{ height, backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${HOUR_PX - 1}px, #eef2f6 ${HOUR_PX - 1}px, #eef2f6 ${HOUR_PX}px)` }}>
-            {shiftsOf(key).map(item => <ShiftBand key={item.code} day={key} shift={item} open={isOpen(key, item)} />)}
-            {lanes(inDay(key).filter(insideGrid)).map(({ tour, lane, count }) => {
-              const top = Math.max(0, (campusMinutes(tour.scheduledStartAt) - DAY_OPENS) / 60 * HOUR_PX)
-              const tall = Math.max(40, durationOf(tour) / 3600 * HOUR_PX)
-              const selected = tour.id === selectedId
-              return <button key={tour.id} type="button" onClick={() => onSelect(tour.id)} aria-pressed={selected} aria-label={`${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}`}
-                className={`absolute overflow-hidden rounded-lg border px-2 py-1.5 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9] ${CHIP[tour.state]} ${selected ? 'ring-2 ring-[#93b8f5]' : ''}`}
-                style={{ top: top + 2, height: Math.min(tall, height - top) - 4, left: `calc(${(lane / count) * 100}% + 3px)`, width: `calc(${100 / count}% - 6px)` }}>
-                <span className="block truncate text-[11px] text-[#718096] tabular-nums">{span(tour)}</span>
-                <span className="block truncate text-xs font-bold">{tour.name}</span>
-                {tall >= 56 && <span className="mt-1 inline-block rounded bg-white/70 px-1.5 text-[10.5px] font-semibold text-[#475569] no-underline">{TOUR_STATE_LABEL[tour.state]}</span>}
+      <table className="w-full min-w-[720px] table-fixed border-collapse">
+        <thead>
+          <tr>
+            <th scope="col" className="w-44 bg-[#f8fafc]"><span className="sr-only">Ca</span></th>
+            {week.map(key => <th key={key} scope="col" className="border-l border-[#e2e8f0] p-0 font-normal">
+              <button type="button" onClick={() => onDay(key)} aria-label={`${weekdayOf(key)} ${dayMonth(key)}: ${inDay(key).length} buổi. Xem theo ca`}
+                className={`flex w-full flex-col items-center gap-0.5 px-1 py-2 transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${key === today ? 'bg-[#edf3fb]' : 'bg-[#f8fafc]'}`}>
+                <b className="text-sm text-[#2d3748]">{weekdayOf(key)}</b>
+                <span className="text-xs text-[#718096] tabular-nums">{dayMonth(key)}</span>
+                {key === today && <span className="text-[11px] font-semibold text-[#4a6fa5]">Hôm nay</span>}
               </button>
+            </th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => <tr key={row.code}>
+            <th scope="row" className={rowHead}>
+              <span className="block text-[13px] leading-snug text-[#2d3748]"><b className="font-semibold">{row.name}</b> · <span className="whitespace-nowrap tabular-nums">{shiftSpan(row)}</span></span>
+              <span className="mt-0.5 block text-[11px] text-[#718096] tabular-nums">Tour bắt đầu {row.time}</span>
+            </th>
+            {week.map(key => {
+              const item = shiftsOf(key).find(other => other.code === row.code)
+              return <ShiftCell key={key} day={key} shift={item} tours={item ? toursOfShift(inDay(key), item) : []} open={item ? isOpen(key, item) : false} showRobot={showRobot} onSelect={onSelect} className={cellEdge} />
             })}
-          </div>
-        ))}
-      </div>
+          </tr>)}
+          {outside.some(list => list.length > 0) && <tr>
+            <th scope="row" className={`${rowHead} text-[13px] font-semibold text-[#9a6b16]`}>Ngoài ca</th>
+            {week.map((key, index) => <td key={key} aria-label={`Ngoài ca ngày ${readableDay(key)}`} className={`${cellEdge} space-y-1 p-1.5 align-top`}>
+              {outside[index].map(tour => <TourCard key={tour.id} tour={tour} outside showRobot={showRobot} onSelect={onSelect} />)}
+            </td>)}
+          </tr>}
+        </tbody>
+      </table>
     </section>
   )
 }
 
+/** One shift of one day. Tours print first; then the shift is closed, free to create in, or plain empty. */
+function ShiftCell({ day, shift, tours, open, showRobot, onSelect, className }: { day: string; shift?: TourShift; tours: TourSummary[]; open: boolean; showRobot: boolean; onSelect: (id: string) => void; className: string }) {
+  const tone = shift?.block ? 'bg-[#e8ecf1]' : tours.length > 0 || open ? 'bg-white' : 'bg-[#f8fafc]'
+  return <td className={`${className} ${tone} h-20 space-y-1 p-1.5 ${tours.length > 0 ? 'align-top' : 'align-middle'}`}>
+    {tours.map(tour => <TourCard key={tour.id} tour={tour} showRobot={showRobot} onSelect={onSelect} />)}
+    {shift?.block && <div role="group" aria-label={lockLabel(shift)} title={shift.block.reason} className="flex items-center gap-1 text-[11px] font-medium text-[#475569]">
+      <Lock size={12} aria-hidden="true" className="shrink-0" /><span className="min-w-0 truncate">{shift.block.reason}</span>
+    </div>}
+    {shift && open && <Link to={createHref(day, shift)} aria-label={createLabel(day, shift)} title={createLabel(day, shift)}
+      className={`mx-auto grid size-8 place-items-center rounded-lg border border-dashed border-[#cbd5e1] text-[#7c8ba1] transition-colors hover:border-[#2563eb] hover:bg-[#eff6ff] hover:text-[#2563eb] focus-visible:border-[#2563eb] focus-visible:bg-[#eff6ff] focus-visible:text-[#2563eb] ${focus}`}><Plus size={16} aria-hidden="true" /></Link>}
+  </td>
+}
+
+function TourCard({ tour, outside = false, showRobot, onSelect }: { tour: TourSummary; outside?: boolean; showRobot: boolean; onSelect: (id: string) => void }) {
+  const robot = showRobot ? tour.reservation?.robotCode : undefined
+  return <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" title={tour.name}
+    aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}${robot ? `, robot ${robot}` : ''}`}
+    className={`block w-full rounded-lg border px-1.5 py-1 text-left transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${CHIP[tour.state]} ${focus}`}>
+    <span className="flex flex-wrap gap-x-1.5 text-[11px] tabular-nums opacity-80">{campusTime(tour.scheduledStartAt)}{robot && <span className="font-mono whitespace-nowrap">{robot}</span>}</span>
+    <span className={`line-clamp-2 text-xs font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
+    <span className="mt-1 inline-block rounded bg-white/70 px-1 text-[10.5px] font-semibold">{TOUR_STATE_LABEL[tour.state]}</span>
+  </button>
+}
+
+/** The week on a narrow screen: a list of days, so nothing scrolls sideways. */
+function WeekList({ week, today, inDay, shiftsOf, isOpen, onSelect, onDay }: WeekProps) {
+  return <section aria-label="Lịch tuần">
+    <ol className="space-y-5">{week.map(key => <li key={key}>
+      <button type="button" onClick={() => onDay(key)} className={`mb-2 flex min-h-10 w-full items-center gap-2 rounded-lg bg-[#f8fafc] px-3 text-left text-sm text-[#2d3748] ${focus}`}>
+        <b>{weekdayOf(key)}</b><span className="text-[#718096] tabular-nums">{dayMonth(key)}</span>
+        {key === today && <span className="ml-auto text-xs font-semibold text-[#4a6fa5]">Hôm nay</span>}
+      </button>
+      <DayShifts day={key} shifts={shiftsOf(key)} tours={inDay(key)} isOpen={item => isOpen(key, item)} onSelect={onSelect} />
+    </li>)}</ol>
+  </section>
+}
+
+/** One day: a card per shift, then any Tour outside every shift. */
+function DayShifts({ day, shifts, tours, isOpen, onSelect }: { day: string; shifts: TourShift[]; tours: TourSummary[]; isOpen: (shift: TourShift) => boolean; onSelect: (id: string) => void }) {
+  const outside = toursOutside(tours, shifts)
+  return <div className="space-y-2.5">
+    {shifts.map(item => <ShiftCard key={item.code} day={day} shift={item} tours={toursOfShift(tours, item)} open={isOpen(item)} onSelect={onSelect} />)}
+    {outside.length > 0 && <section aria-label={`Ngoài ca ngày ${readableDay(day)}`} className="rounded-xl border border-[#e2e8f0] p-3.5 sm:p-4">
+      <h3 className="text-sm font-semibold text-[#9a6b16]">Ngoài ca</h3>
+      <TourRows tours={outside} outside onSelect={onSelect} />
+    </section>}
+  </div>
+}
+
+function ShiftCard({ day, shift, tours, open, onSelect }: { day: string; shift: TourShift; tours: TourSummary[]; open: boolean; onSelect: (id: string) => void }) {
+  return <article aria-label={`${shift.name} ${shiftSpan(shift)}`} className={`rounded-xl border border-[#e2e8f0] p-3.5 sm:p-4 ${shift.block ? 'bg-[#f1f4f7]' : ''}`}>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <h3 className="text-sm text-[#2d3748]"><b className="font-semibold">{shift.name}</b> · <span className="tabular-nums">{shiftSpan(shift)}</span></h3>
+      <span className="text-xs text-[#718096] tabular-nums">Tour bắt đầu {shift.time}</span>
+    </div>
+    {tours.length > 0 && <TourRows tours={tours} onSelect={onSelect} />}
+    {shift.block && <p role="group" aria-label={lockLabel(shift)} className="mt-2 flex items-start gap-1.5 text-[13px] font-medium text-[#475569]"><Lock size={14} aria-hidden="true" className="mt-0.5 shrink-0" /><span className="min-w-0 break-words">Đã khoá: {shift.block.reason}</span></p>}
+    {open && <Link to={createHref(day, shift)} aria-label={createLabel(day, shift)} className={`${buttonClass('secondary', 'sm')} mt-2.5`}><Plus size={14} aria-hidden="true" />Tạo Tour</Link>}
+    {!tours.length && !shift.block && !open && <p className="mt-2 text-[13px] text-[#718096]">Chưa có Tour.</p>}
+  </article>
+}
+
+/** Tours of one shift, by robot: the same facts the day's robot view gave, with nothing cut short. */
+function TourRows({ tours, outside = false, onSelect }: { tours: TourSummary[]; outside?: boolean; onSelect: (id: string) => void }) {
+  return <ul aria-label="Tour trong ca" className="mt-2.5 space-y-2">{tours.map(tour => <li key={tour.id}>
+    <button type="button" onClick={() => onSelect(tour.id)} aria-haspopup="dialog" aria-label={`${outside ? 'Ngoài ca: ' : ''}${span(tour)} ${tour.name}, ${TOUR_STATE_LABEL[tour.state]}`}
+      className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-left text-sm transition-shadow hover:shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] ${CHIP[tour.state]} ${focus}`}>
+      <span className="font-semibold tabular-nums">{span(tour)}</span>
+      <span className="min-w-0 flex-1 basis-48"><span className={`block font-semibold break-words ${struck(tour)}`}>{tour.name}</span>
+        <span className="block text-xs break-words opacity-80">{tour.routeName} · {tour.reservation ? `robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}` : 'không giữ robot'}</span></span>
+      <span className="rounded bg-white/70 px-1.5 text-[11px] font-semibold whitespace-nowrap">{TOUR_STATE_LABEL[tour.state]}</span>
+    </button>
+  </li>)}</ul>
+}
+
 /** The chosen Tour: its time, robot hold and where to go next. */
-function TourPanel({ tour }: { tour?: TourSummary }) {
-  if (!tour) return (
-    <aside aria-label="Buổi đang chọn" className={`${card} flex min-h-60 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[#718096]`}>
-      <CalendarDays size={22} aria-hidden="true" className="text-[#a0aec0]" />Chọn một Tour trên lịch để xem thông tin.
-    </aside>
-  )
+function TourDrawer({ tour, onClose }: { tour: TourSummary; onClose: () => void }) {
   const hold = tour.reservation
   const rows: Array<[typeof Clock, string, ReactNode]> = [
     [CalendarDays, 'Ngày tổ chức', new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(tour.scheduledStartAt))],
@@ -302,84 +349,22 @@ function TourPanel({ tour }: { tour?: TourSummary }) {
     [Users, 'Đăng ký', `${tour.registrationCount} đoàn`],
   ]
   return (
-    <aside aria-label="Buổi đang chọn" className={`${card} sticky top-4 p-5`}>
-      <h2 className="text-base font-bold text-[#2d3748]">Buổi đang chọn</h2>
-      <p className="mt-3 text-lg leading-snug font-bold text-[#2d3748]">{tour.name}</p>
+    <Drawer open side="right" title="Buổi đang chọn" onClose={onClose} footer={<>
+      <Link to={`/staff/manage/tours/${tour.id}`} className={`${buttonClass('primary')} w-full`}>Xem chi tiết Tour</Link>
+      <Link to="/staff/manage/registrations" className={`mt-3 block rounded-md text-center text-sm font-semibold text-[#2d3748] underline-offset-4 hover:underline ${focus}`}>Xem đăng ký</Link>
+    </>}>
+      <p className={`text-lg leading-snug font-bold break-words text-[#2d3748] ${struck(tour)}`}>{tour.name}</p>
       <span className={`mt-2 inline-block rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${CHIP[tour.state]}`}>{TOUR_STATE_LABEL[tour.state]}</span>
       <dl className="mt-4 divide-y divide-[#eef2f6]">
         {rows.map(([Icon, label, value]) => (
           <div key={label} className="flex items-center gap-3 py-2.5 text-sm">
             <Icon size={16} aria-hidden="true" className="shrink-0 text-[#a0aec0]" />
             <dt className="w-32 shrink-0 text-[#718096]">{label}</dt>
-            <dd className="min-w-0 font-semibold text-[#2d3748] first-letter:uppercase">{value}</dd>
+            <dd className="min-w-0 font-semibold break-words text-[#2d3748] first-letter:uppercase">{value}</dd>
           </div>
         ))}
       </dl>
       <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-[#f8fafc] px-3.5 py-3 text-[13px] text-[#718096]"><Info size={16} aria-hidden="true" className="mt-0.5 shrink-0" />Giữ chỗ robot gồm cả thời gian chuẩn bị và kết thúc.</p>
-      <Link to={`/staff/manage/tours/${tour.id}`} className={`${buttonClass('primary')} mt-4 w-full`}>Xem chi tiết Tour</Link>
-      <Link to="/staff/manage/registrations" className={`mt-3 block rounded-md text-center text-sm font-semibold text-[#2d3748] underline-offset-4 hover:underline ${focus}`}>Xem đăng ký</Link>
-    </aside>
+    </Drawer>
   )
-}
-
-/** The day's shifts on the same 07:00-19:00 scale as the robot rows, and any Tour outside that span. */
-function DayShifts({ day, shifts, isOpen, outside, onSelect }: { day: string; shifts: TourShift[]; isOpen: (shift: TourShift) => boolean; outside: TourSummary[]; onSelect: (id: string) => void }) {
-  if (shifts.length === 0 && outside.length === 0) return null
-  return <div className="border-b border-[#e2e8f0] p-4 pb-3">
-    {outside.length > 0 && <div aria-label="Ngoài ca" className="mb-3 rounded-lg bg-[#fffaf0] p-2">
-      <p className="mb-1 text-[11px] font-semibold text-[#9a6b16]">Ngoài ca</p>
-      <div className="grid gap-1 sm:grid-cols-2">{outside.map(tour => <OutsideChip key={tour.id} tour={tour} onSelect={onSelect} />)}</div>
-    </div>}
-    <div className="flex items-center gap-3">
-      <span className="w-24 shrink-0 text-xs font-semibold text-[#718096]">Ca</span>
-      <ul aria-label="Các ca trong ngày" className="relative h-12 min-w-0 flex-1 rounded-lg bg-[#f8fafc]">{shifts.map(item => {
-        const left = Math.max(0, (campusMinutes(item.startsAt) - DAY_OPENS) / DAY_MINUTES * 100)
-        const width = (campusMinutes(item.endsAt) - campusMinutes(item.startsAt)) / DAY_MINUTES * 100
-        if (item.block) return <li key={item.code} aria-label={`${item.name} ${shiftSpan(item)}, đã khoá: ${item.block.reason}`} title={item.block.reason}
-          className="absolute inset-y-1 overflow-hidden rounded-md border border-[#d5dbe3] bg-[#e8ecf1] px-1.5" style={{ left: `${left}%`, width: `${width}%` }}>
-          <span className="block truncate text-[11px] font-semibold text-[#475569]">{item.name} · Đã khoá</span>
-          <span className="block truncate text-[11px] text-[#64748b]">{item.block.reason}</span>
-        </li>
-        return <li key={item.code} aria-label={`${item.name} ${shiftSpan(item)}`} className="absolute inset-y-1 overflow-hidden rounded-md border border-dashed border-[#c9dcf2] bg-[#f3f8ff] px-1.5" style={{ left: `${left}%`, width: `${width}%` }}>
-          <span className="block truncate text-[11px] font-semibold text-[#4a6fa5]">{item.name} · {shiftSpan(item)}</span>
-          {isOpen(item) && <Link to={createHref(day, item)} aria-label={`Tạo Tour ${item.name} ngày ${day}`} className={`block truncate text-[11px] font-semibold text-[#2563eb] hover:underline ${focus}`}>+ Tạo Tour</Link>}
-        </li>
-      })}</ul>
-    </div>
-  </div>
-}
-
-/** Each robot's held windows across the working day. A Tour without a hold has no bar and stays in the list view. */
-function RobotDay({ tours, onSelect }: { tours: TourSummary[]; onSelect: (id: string) => void }) {
-  const held = tours.filter(tour => tour.reservation)
-  const robots = [...new Set(held.map(tour => tour.reservation!.robotCode))].sort()
-  if (robots.length === 0) return <div className="p-4"><EmptyPanel>Các buổi trong ngày này không giữ robot.</EmptyPanel></div>
-  const marks = Array.from({ length: 7 }, (_, i) => DAY_OPENS / 60 + i * 2)
-  return <div className="p-4">
-    <div aria-hidden="true" className="relative mb-2 ml-28 h-4 text-[11px] text-[#718096]">{marks.map(hour => <span key={hour} className="absolute -translate-x-1/2 tabular-nums" style={{ left: `${(hour * 60 - DAY_OPENS) / DAY_MINUTES * 100}%` }}>{String(hour).padStart(2, '0')}:00</span>)}</div>
-    <ul aria-label="Robot trong ngày" className="space-y-2">{robots.map(robot => <li key={robot} className="flex items-center gap-3">
-      <span className="w-24 shrink-0 truncate font-mono text-xs font-semibold text-[#2d3748]">{robot}</span>
-      <div className="relative h-11 min-w-0 flex-1 rounded-lg bg-[#f8fafc]">
-        {held.filter(tour => tour.reservation!.robotCode === robot).map(tour => {
-          const left = Math.max(0, (campusMinutes(tour.reservation!.startsAt) - DAY_OPENS) / DAY_MINUTES * 100)
-          const width = Math.min(100 - left, (new Date(tour.reservation!.endsAt).getTime() - new Date(tour.reservation!.startsAt).getTime()) / 60_000 / DAY_MINUTES * 100)
-          return <Link key={tour.id} to={`/staff/manage/tours/${tour.id}`} onClick={event => { if (!event.metaKey && !event.ctrlKey) { event.preventDefault(); onSelect(tour.id) } }}
-            title={`${campusTime(tour.reservation!.startsAt)} - ${campusTime(tour.reservation!.endsAt)}`}
-            className={`absolute inset-y-1 truncate rounded-md border px-2 text-xs leading-8 font-semibold ${CHIP[tour.state]} ${focus}`}
-            style={{ left: `${left}%`, width: `${width}%` }}>{tour.name}</Link>
-        })}
-      </div>
-    </li>)}</ul>
-  </div>
-}
-
-function SessionList({ tours, onSelect, selectedId }: { tours: TourSummary[]; onSelect: (id: string) => void; selectedId?: string }) {
-  return <ul aria-label="Lịch tour" className="divide-y divide-[#eef2f6]">{tours.map(tour => <li key={tour.id}>
-    <button type="button" onClick={() => onSelect(tour.id)} aria-pressed={tour.id === selectedId} className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left text-sm transition-colors hover:bg-[#f8fafc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#5b9dc9] ${tour.id === selectedId ? 'bg-[#f5f9ff]' : ''}`}>
-      <span className="w-24 shrink-0 font-bold text-[#2d3748] tabular-nums">{span(tour)}</span>
-      <span className="min-w-0 flex-1"><span className="block font-semibold text-[#2d3748]">{tour.name}</span>
-        <span className="block text-xs text-[#718096]">{tour.routeName}{tour.reservation && ` · robot ${tour.reservation.robotCode} · giữ ${campusTime(tour.reservation.startsAt)} - ${campusTime(tour.reservation.endsAt)}`}</span></span>
-      <span className={`rounded-lg border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${CHIP[tour.state]}`}>{TOUR_STATE_LABEL[tour.state]}</span>
-    </button>
-  </li>)}</ul>
 }

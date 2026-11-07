@@ -9,7 +9,7 @@ import { SaveBlockedHint, ToneBadge } from '../../../features/technical/Technica
 import { AdminPage, Notice } from '../../../features/administration/AdminUi'
 import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type MapVersionItem, type PoiProposal } from '../../../features/technical/api/technical'
-import { mapVersionLabel } from '../../../features/technical/poi-labels'
+import { staffMapLabels } from '../../../features/administration/map-labels'
 import { errorText } from '../../../features/technical/technical-format'
 import { usePoiProposals } from '../../../features/technical/technical-hooks'
 import { versionedRoutesApi, type VersionedRouteDraft } from '../../../features/administration/routes/versioned-api'
@@ -75,6 +75,7 @@ export default function StaffManageRouteFormPage() {
   const poiMapIds = new Set(verifiedPois.map(proposal => proposal.revision.mapVersionId))
   const mapBlock = ({ map, canUseForPoiPreparation }: MapVersionItem) => !canUseForPoiPreparation ? 'chưa đạt kiểm tra kỹ thuật' : poiMapIds.has(map.id) ? null : 'chưa có POI đạt'
   const mapOptions = [...(maps.data ?? [])].sort((a, b) => Number(mapBlock(a) !== null) - Number(mapBlock(b) !== null))
+  const mapLabel = staffMapLabels(maps.data ?? [], item => mapBlock(item) === null)
   const chosenMap = maps.data?.find(item => item.map.id === draft.mapVersionId)
   const mapNotReady = Boolean(chosenMap && !chosenMap.canUseForPoiPreparation)
   const raster = useMapRaster(draft.mapVersionId)
@@ -150,7 +151,7 @@ export default function StaffManageRouteFormPage() {
     setBusy(true); setError(null)
     try {
       const route = routeId ? await versionedRoutesApi.revise(routeId, body) : await versionedRoutesApi.create(body)
-      if (routeId) notify({ title: `Đã tạo phiên bản mới cho “${body.name}”`, detail: 'Phiên bản mới là bản nháp; gửi kiểm chứng lại trước khi dùng cho Tour.' })
+      if (routeId) notify({ title: `Đã lưu thay đổi cho “${body.name}”; bản mới cần gửi kiểm chứng lại.` })
       else celebrate({ title: `Đã tạo tuyến “${body.name}”`, detail: `${stops.length} POI trên map đã chọn. Tuyến đang là bản nháp: gửi kiểm chứng để kỹ thuật chạy thử trước khi dùng cho Tour.` })
       navigate(`/staff/manage/routes/${route.routeId}`, { replace: true })
     } catch (cause) { setError(routeSaveError(cause)) }
@@ -163,7 +164,7 @@ export default function StaffManageRouteFormPage() {
   const missingHere = missingByStep[step]
   return <AdminPage>
     <Link to="/staff/manage/routes" className="mb-3 inline-flex text-sm text-[#2d719e]">← Danh sách tuyến</Link>
-    <PageHeader eyebrow="Tuyến" title={routeId ? 'Tạo phiên bản mới của tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một phiên bản bản đồ và chỉ gồm các POI đã đạt kiểm chứng trên bản đồ đó." />
+    <PageHeader eyebrow="Tuyến" title={routeId ? 'Sửa tuyến' : 'Tạo tuyến'} description="Tuyến gắn với đúng một bản đồ và chỉ gồm các POI đã đạt kiểm chứng trên bản đồ đó." />
     <div className="mb-4"><Notice>Lưu xong, gửi kiểm chứng để Kỹ thuật chạy thử toàn tuyến. Chỉ tuyến chạy thử đạt mới dùng được để tạo Tour.</Notice></div>
 
     <nav aria-label="Các bước tạo tuyến" className="mb-4">
@@ -183,7 +184,7 @@ export default function StaffManageRouteFormPage() {
     <form onSubmit={event => void save(event)} className="space-y-4">
       {step === 0 && <section aria-label={STEPS[0]} className={`${panelClass} grid gap-3 p-4 sm:grid-cols-2`}>
         <label className="text-sm">Tên tuyến<input className={`${inputClass} mt-1`} required maxLength={150} value={draft.name} onChange={e => updateDraft({ name: e.target.value })} /></label>
-        <div className="text-sm"><label htmlFor="route-map">Phiên bản bản đồ</label><select title="" id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => chooseMap(e.target.value)}><option value="">— Chọn bản đồ —</option>{mapOptions.map(item => <option key={item.map.id} value={item.map.id} disabled={mapBlock(item) !== null}>{mapVersionLabel(item.map)}{mapBlock(item) ? ` (${mapBlock(item)})` : ''}</option>)}</select>{mapNotReady ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">Bản đồ này không còn kiểm tra kỹ thuật đạt nên không lưu được tuyến. Nhờ Kỹ thuật kiểm tra lại hoặc chọn bản đồ khác.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đạt kiểm tra kỹ thuật và đã có POI đạt kiểm chứng. Đổi bản đồ sẽ chọn lại điểm dừng và điểm bắt đầu.</p>}</div>
+        <div className="text-sm"><label htmlFor="route-map">Bản đồ</label><select title="" id="route-map" className={`${inputClass} mt-1`} required value={draft.mapVersionId} onChange={e => chooseMap(e.target.value)}><option value="">— Chọn bản đồ —</option>{mapOptions.map(item => <option key={item.map.id} value={item.map.id} disabled={mapBlock(item) !== null}>{mapLabel(item.map)}{mapBlock(item) ? ` (${mapBlock(item)})` : ''}</option>)}</select>{mapNotReady ? <p role="alert" className="mt-1 text-xs text-[#b23e31]">Bản đồ này không còn kiểm tra kỹ thuật đạt nên không lưu được tuyến. Nhờ Kỹ thuật kiểm tra lại hoặc chọn bản đồ khác.</p> : <p className="mt-1 text-xs text-[#64748b]">Chỉ chọn được bản đồ đạt kiểm tra kỹ thuật và đã có POI đạt kiểm chứng. Đổi bản đồ sẽ chọn lại điểm dừng và điểm bắt đầu.</p>}</div>
         <label className="text-sm sm:col-span-2">Mô tả<textarea className={`${inputClass} mt-1`} rows={2} maxLength={1000} value={draft.description} onChange={e => updateDraft({ description: e.target.value })} /></label>
       </section>}
 
@@ -196,7 +197,7 @@ export default function StaffManageRouteFormPage() {
             <label className="flex min-w-0 flex-1 basis-56 cursor-pointer items-center gap-3">
               <input type="checkbox" className="size-4 shrink-0 accent-[#2d719e]" checked={selected} onChange={() => toggle(poi)} />
               {selected && <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#173b5f] text-xs font-semibold text-white">{index + 1}</span>}
-              <span className="min-w-0 break-words"><span className="font-semibold text-[#0f172a]">{poi.revision.name}</span> <span className="text-xs text-[#64748b]">phiên bản {poi.revision.revisionNumber}</span></span>
+              <span className="min-w-0 break-words"><span className="font-semibold text-[#0f172a]">{poi.revision.name}</span></span>
               <ToneBadge tone="ok">Đã đạt</ToneBadge>
             </label>
             {selected && <div className="flex items-center gap-2">
@@ -243,7 +244,7 @@ export default function StaffManageRouteFormPage() {
         <h2 className="font-semibold">Xem lại trước khi lưu</h2>
         <dl className="mt-3 divide-y divide-[#f1f5f9] text-sm">
           <ReviewRow label="Tên tuyến" onEdit={() => goTo(0)}>{draft.name.trim()}{draft.description.trim() && <span className="block text-xs text-[#64748b]">{draft.description.trim()}</span>}</ReviewRow>
-          <ReviewRow label="Bản đồ" onEdit={() => goTo(0)}>{chosenMap ? mapVersionLabel(chosenMap.map) : '-'}</ReviewRow>
+          <ReviewRow label="Bản đồ" onEdit={() => goTo(0)}>{chosenMap ? mapLabel(chosenMap.map) : '-'}</ReviewRow>
           <ReviewRow label={`Điểm dừng (${stops.length})`} onEdit={() => goTo(1)}><ol className="list-inside list-decimal">{stops.map(stop => <li key={stop.poiRevisionId}>{poiName(stop.poiRevisionId)} · dừng {stop.dwellSeconds} giây</li>)}</ol></ReviewRow>
           <ReviewRow label="Điểm bắt đầu" onEdit={() => goTo(2)}><span className="font-mono text-xs">{poseText(startPose)}</span></ReviewRow>
           <ReviewRow label="Điểm kết thúc" onEdit={() => goTo(2)}>{endChoice === 'LAST_POI' ? 'Dừng tại điểm dừng cuối' : endChoice === 'START' ? 'Quay về điểm bắt đầu' : <span className="font-mono text-xs">{poseText(endPose)}</span>}</ReviewRow>

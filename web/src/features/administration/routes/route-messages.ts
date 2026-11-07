@@ -1,7 +1,7 @@
 import { ApiError } from '../../../api/client'
 import { MISSING_ENDPOINT_MESSAGE, backendMessage } from '../tours/tour-messages'
 import type { StopDraft } from './RouteStopsEditor'
-import type { VersionedRoute } from './versioned-api'
+import type { RouteScheduleFit, VersionedRoute } from './versioned-api'
 
 const fitMinutes = (seconds: number) => `${Math.ceil(seconds / 60)} phút`
 
@@ -22,6 +22,24 @@ export function revisionTone(submitted: boolean, status: string) {
   if (status === 'FAIL') return { label: 'Không đạt', chip: 'border-[#f5c8c2] bg-[#fff1ef] text-[#b23e31]' }
   return { label: 'Chờ kiểm chứng', chip: 'border-[#f0d89f] bg-[#fff8e6] text-[#8a5a06]' }
 }
+
+/**
+ * A route's state in Staff's words: whether it passed a run, never which revision it is.
+ * `scheduleFit` is UNKNOWN on a PASS measured before the current definition, which cannot size a
+ * reservation, so that run has to be repeated. Technical screens keep `revisionTone`.
+ */
+export function staffRouteStatus(route: { isSubmitted: boolean; verificationStatus: string; scheduleFit?: RouteScheduleFit }) {
+  const { chip } = revisionTone(route.isSubmitted, route.verificationStatus)
+  if (!route.isSubmitted) return { label: 'Bản nháp', chip }
+  if (route.verificationStatus === 'FAIL') return { label: 'Chạy thử không đạt', chip }
+  if (route.verificationStatus !== 'PASS') return { label: 'Chờ chạy thử', chip }
+  if (route.scheduleFit === 'UNKNOWN') return { label: 'Cần chạy thử lại', chip: revisionTone(true, 'WAITING').chip }
+  return { label: 'Đã chạy thử đạt', chip }
+}
+
+/** When the run behind this revision's PASS was recorded; undefined when the data does not say. */
+export const passedAt = (route: Pick<VersionedRoute, 'effectiveTestRunId' | 'testRuns'>) =>
+  route.testRuns?.find(run => run.id === route.effectiveTestRunId)?.checkedAt
 
 const ISSUES: Record<string, string> = {
   MAP_REQUIRED: 'Chưa có map và frame.', START_POSE_INVALID: 'Pose bắt đầu không hợp lệ.',

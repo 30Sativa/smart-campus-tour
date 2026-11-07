@@ -42,7 +42,7 @@ const versionedTour = tour({ route: null, activeRoute: null, routeRevision: TEST
   reservation: { robotCode: 'amr-01', startsAt: '2099-01-03T01:45:00Z', endsAt: '2099-01-03T02:22:00Z', measuredDurationSeconds: 420, expectedDurationSeconds: 420, releasedAt: null },
   permissions: { canEditMetadata: true, canChangeScheduleAndRoute: true, canCancel: true } })
 const chooseTarget = async () => {
-  await screen.findByRole('option', { name: 'Tuyến đã duyệt · phiên bản 3 · 1 điểm dừng' })
+  await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
   fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
   await screen.findByRole('option', { name: 'AMR 01 · amr-01' })
   fireEvent.change(screen.getByLabelText('Robot'), { target: { value: 'amr-01' } })
@@ -102,7 +102,7 @@ afterEach(() => { vi.unstubAllGlobals(); useAuthStore.getState().logout() })
 it('offers only robots the chosen route can use, and says why the others are off', async () => {
   api()
   renderAt('/staff/manage/tours/new')
-  await screen.findByRole('option', { name: 'Tuyến đã duyệt · phiên bản 3 · 1 điểm dừng' })
+  await screen.findByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })
   expect(screen.getByLabelText('Robot')).toBeDisabled()
   fireEvent.change(screen.getByLabelText('Tuyến đã kiểm chứng'), { target: { value: 'revision-2' } })
 
@@ -217,8 +217,8 @@ describe('live Tour management', () => {
   it('shows a route too long for one shift but does not let it be chosen', async () => {
     api(tour(), [TESTED, { ...TESTED, revisionId: 'revision-long', name: 'Tuyến dài', scheduleFit: 'TOO_LONG_FOR_SHIFT', expectedDurationSeconds: 6000 }])
     renderAt('/staff/manage/tours/new')
-    expect(await screen.findByRole('option', { name: 'Tuyến dài · phiên bản 3 · 1 điểm dừng (Quá dài cho 1 ca)' })).toBeDisabled()
-    expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · phiên bản 3 · 1 điểm dừng' })).toBeEnabled()
+    expect(await screen.findByRole('option', { name: 'Tuyến dài · 1 điểm dừng (Quá dài cho 1 ca)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Tuyến đã duyệt · 1 điểm dừng' })).toBeEnabled()
   })
 
   it('locks a taken slot with its reason, so it cannot be chosen', async () => {

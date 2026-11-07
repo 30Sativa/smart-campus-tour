@@ -13,14 +13,15 @@ export const campusDate = (value: string) =>
 
 export const campusStamp = (value: string) => `${campusTime(value)} ${campusDate(value)}`
 
-export const dayStart = (day: string) => new Date(`${day}T00:00:00+07:00`).toISOString()
-export const dayEnd = (day: string) => new Date(`${day}T23:59:59.999+07:00`).toISOString()
+/** `05/11`, for naming one saved or tested copy of something without its number. en-GB because vi-VN prints day and month alone as `05-11`. */
+export const campusShortDate = (value: string) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: ZONE, day: '2-digit', month: '2-digit' }).format(new Date(value))
 
-/** Minutes after campus midnight. */
-export const campusMinutes = (value: string) => {
-  const [hours, minutes] = campusTime(value).split(':').map(Number)
-  return hours * 60 + minutes
-}
+/** `05/11 14:20` */
+export const campusShortStamp = (value: string) => `${campusShortDate(value)} ${campusTime(value)}`
+
+export const dayStart =(day: string) => new Date(`${day}T00:00:00+07:00`).toISOString()
+export const dayEnd = (day: string) => new Date(`${day}T23:59:59.999+07:00`).toISOString()
 
 export function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60)

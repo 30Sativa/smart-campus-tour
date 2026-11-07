@@ -3,9 +3,10 @@ import { Link, useSearchParams } from 'react-router'
 import { panelClass } from '../../../components/ui/ConsolePrimitives'
 import { buttonClass, inputClass } from '../../../components/ui/ui-classes'
 import { Notice } from '../AdminUi'
-import { scheduleFitLabel } from '../routes/route-messages'
+import { passedAt, scheduleFitLabel } from '../routes/route-messages'
+import { useMapVersions } from '../../technical/technical-hooks'
 import { useTestedRoutes, useTourOperators, useTourRobots, useTourSlots } from './hooks'
-import { campusDay, campusStamp, campusTime, formatDuration } from './tour-calendar'
+import { campusDay, campusShortDate, campusStamp, campusTime, formatDuration } from './tour-calendar'
 import { tourError } from './tour-messages'
 import type { CreateTourInput, TourSlot } from './types'
 
@@ -35,7 +36,10 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
   const robots = useTourRobots(routeRevisionId)
   const operators = useTourOperators()
   const slots = useTourSlots(routeRevisionId, robotCode, date)
+  const maps = useMapVersions()
   const selected = routes.data?.find(route => route.revisionId === routeRevisionId)
+  const selectedArea = maps.data?.find(item => item.map.id === selected?.mapVersionId)?.map.areaName
+  const selectedPassedAt = selected && passedAt(selected)
   const day = slots.data?.days[0]
   // Derived, so a shift that stops being free after a refresh drops out of the review by itself.
   const picked = day?.slots.find(item => item.shiftCode === shiftCode)
@@ -62,7 +66,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         <option value="">— Chọn tuyến —</option>
         {/* docs/lich-tour-theo-ca.md §4: a route no shift can hold is shown but cannot be chosen. */}
         {routes.data?.map(route => <option key={route.revisionId} value={route.revisionId} disabled={route.scheduleFit === 'TOO_LONG_FOR_SHIFT'}>
-          {route.name} · phiên bản {route.revisionNumber} · {route.stops.length} điểm dừng{route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? ` (${scheduleFitLabel(route)!.text})` : ''}</option>)}
+          {route.name} · {route.stops.length} điểm dừng{route.scheduleFit === 'TOO_LONG_FOR_SHIFT' ? ` (${scheduleFitLabel(route)!.text})` : ''}</option>)}
       </select>
         {routes.isError ? <span role="alert" className="mt-1 block text-xs text-[#b23e31]">Không tải được danh mục tuyến.</span>
           : routes.data?.length === 0 ? <span role="status" className="mt-1 block text-xs text-[#b23e31]">Chưa có tuyến nào chạy thử đạt. Gửi kiểm chứng ở Danh mục tuyến và chờ Kỹ thuật ghi kết quả.</span>
@@ -117,7 +121,7 @@ export function CreateTourForm({ busy, error, onSubmit }: { busy: boolean; error
         <h2 className="text-[15px] font-semibold">Xem trước tuyến</h2>
         {!selected ? <p className="py-10 text-center text-sm text-[#94a3b8]">Chọn một tuyến để xem các điểm dừng.</p>
           : <div className="mt-3 space-y-3">
-            <p className="text-sm text-[#64748b]">{selected.mapKey} · phiên bản {selected.revisionNumber}</p>
+            <p className="text-sm text-[#64748b]">{selectedArea && `${selectedArea} · `}đã chạy thử đạt{selectedPassedAt && ` ngày ${campusShortDate(selectedPassedAt)}`}</p>
             <ol className="divide-y divide-[#e2e8f0]">{selected.stops.map(stop => <li key={stop.poiRevisionId} className="py-2.5 text-sm">
               <span className="font-medium">{stop.stopOrder}. {stop.name}</span>
               <span className="block text-xs text-[#64748b]">Dừng {stop.dwellSeconds}s</span>

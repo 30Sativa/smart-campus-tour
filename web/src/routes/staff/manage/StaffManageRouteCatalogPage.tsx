@@ -7,13 +7,14 @@ import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog'
 import { buttonClass } from '../../../components/ui/ui-classes'
 import { AdminErrorPanel, AdminPage, EmptyState, Notice, SkeletonRows } from '../../../features/administration/AdminUi'
 import { formatSlot } from '../../../features/administration/admin-format'
-import { revisionTone, routeAvailabilityError } from '../../../features/administration/routes/route-messages'
+import { routeAvailabilityError, staffRouteStatus } from '../../../features/administration/routes/route-messages'
 import { ScheduleFitBadge } from '../../../features/administration/routes/ScheduleFitBadge'
 import { versionedRoutesApi, type RouteScheduledTour, type VersionedRoute } from '../../../features/administration/routes/versioned-api'
 import { tourKeys } from '../../../features/administration/tours/hooks'
 import { TOUR_STATE_LABEL } from '../../../features/administration/tours/tour-messages'
+import { useMapVersions } from '../../../features/technical/technical-hooks'
 
-/** Routes as cards: the stops as a small path, every revision as a chip, and what still blocks scheduling. */
+/** Routes as cards: the stops as a small path, whether the route passed a run, and what still blocks scheduling. */
 export default function StaffManageRouteCatalogPage() {
   const [page, setPage] = useState(1)
   const [active, setActive] = useState(true)
@@ -21,6 +22,7 @@ export default function StaffManageRouteCatalogPage() {
   const [outcome, setOutcome] = useState('')
   const client = useQueryClient()
   const routes = useQuery({ queryKey: ['versioned-routes', page, active], queryFn: () => versionedRoutesApi.list(page, active) })
+  const maps = useMapVersions()
   const availability = useMutation({
     // A retry after a lost reply reuses this id, so the server does not count it twice.
     mutationFn: ({ route, requestId, open }: { route: VersionedRoute; requestId: string; open: boolean }) => versionedRoutesApi.setAvailability(route, requestId, open),
@@ -34,7 +36,7 @@ export default function StaffManageRouteCatalogPage() {
   return <AdminPage>
     <PageHeader eyebrow="Chuẩn bị Tour · Tuyến" title="Danh mục tuyến" description="Xem lộ trình, các điểm tham quan và trạng thái kiểm chứng của từng tuyến."
       action={<Link to="/staff/manage/routes/new" className={buttonClass('primary')}><Plus size={15} aria-hidden="true" />Tạo tuyến</Link>} />
-    <div className="mb-3"><Notice tone="warn">Tuyến đã lưu hoặc đã chạy thử chưa đủ để lập lịch Tour. Chức năng lập lịch từ phiên bản tuyến mới chưa được hỗ trợ.</Notice></div>
+    <p className="mb-3 text-[13px] text-[#64748b]">Chỉ tuyến đã chạy thử đạt mới tạo được Tour.</p>
     {outcome && <div className="mb-3"><Notice tone="success">{outcome}</Notice></div>}
     {availability.isError && !deactivating && <div className="mb-3"><Notice tone="danger">{routeAvailabilityError(availability.error)}</Notice></div>}
     <section className={`${panelClass} overflow-hidden`} aria-label="Danh mục tuyến">
@@ -46,17 +48,14 @@ export default function StaffManageRouteCatalogPage() {
       </div>
       {routes.isPending ? <SkeletonRows rows={4} /> : routes.error ? <AdminErrorPanel title="Không tải được danh mục tuyến." onRetry={() => void routes.refetch()} /> : !routes.data?.data.length ? <EmptyState title={active ? 'Chưa có tuyến nào' : 'Không có tuyến ngừng sử dụng'} action={active ? <Link to="/staff/manage/routes/new" className={buttonClass('primary')}>Tạo tuyến</Link> : undefined} /> :
         <div className="grid gap-3 p-3 md:grid-cols-2 2xl:grid-cols-3">{routes.data.data.map(route => {
-          const tone = revisionTone(route.isSubmitted, route.verificationStatus)
+          const tone = staffRouteStatus(route)
+          const area = maps.data?.find(item => item.map.id === route.mapVersionId)?.map.areaName
           return <article key={route.routeId} className="grid content-start gap-3 rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-3 transition-colors hover:border-[#c9dcec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5b9dc9]">
             <span className="flex items-start justify-between gap-2">
-              <span className="min-w-0"><Link to={`/staff/manage/routes/${route.routeId}`} className="block text-[15px] font-semibold text-[#173b59] hover:underline">{route.name}</Link><small className="block text-xs text-[#64748b]">{route.mapKey} · {route.stops.length} điểm · phiên bản {route.revisionNumber}</small></span>
+              <span className="min-w-0"><Link to={`/staff/manage/routes/${route.routeId}`} className="block text-[15px] font-semibold text-[#173b59] hover:underline">{route.name}</Link><small className="block text-xs text-[#64748b]">{area && `${area} · `}{route.stops.length} điểm dừng</small></span>
               <span className="flex shrink-0 flex-col items-end gap-1"><span className={`rounded-full border px-2 py-px text-[11px] font-bold ${tone.chip}`}>{tone.label}</span><ScheduleFitBadge route={route} /></span>
             </span>
             <span className="flex items-center" aria-hidden="true">{route.stops.map((stop, i) => <span key={stop.poiRevisionId} className="flex flex-1 items-center last:flex-none">{i > 0 && <i className="h-0.5 flex-1 bg-[#c9dfee]" />}<span className="size-2.5 shrink-0 rounded-full bg-[#7db9db]" title={stop.name} /></span>)}</span>
-            <details className="text-xs text-[#64748b]">
-              <summary className="cursor-pointer font-medium">Lịch sử phiên bản ({route.revisionHistory.length})</summary>
-              <ul className="mt-2 space-y-2">{route.revisionHistory.map(rev => <li key={rev.revisionId}>Phiên bản {rev.revisionNumber} · {revisionTone(rev.isSubmitted, rev.verificationStatus).label}</li>)}</ul>
-            </details>
             {route.eligibilityIssues.length > 0 && <small className="text-xs text-[#8a5a06]">{route.eligibilityIssues.length} điều kiện chưa đạt để lập lịch</small>}
             <span>{route.isActive
               ? <button type="button" className={buttonClass('secondary', 'sm')} onClick={() => { availability.reset(); setOutcome(''); setDeactivating(route) }}>Ngừng sử dụng</button>
@@ -75,7 +74,7 @@ function DeactivateRouteDialog({ route, busy, error, onConfirm, onCancel }: { ro
   const [requestId] = useState(() => crypto.randomUUID())
   const tours = useQuery({ queryKey: ['versioned-routes', route.routeId, 'scheduled-tours'], queryFn: () => versionedRoutesApi.scheduledTours(route.routeId) })
   return <ConfirmationDialog open title={`Ngừng sử dụng tuyến ${route.name}?`} confirmLabel="Ngừng sử dụng" tone="danger" withReason={false} busy={busy} error={error}
-    description="Tuyến sẽ không dùng được cho Tour mới. Phiên bản, kết quả chạy thử và Tour đã lên lịch không thay đổi."
+    description="Tuyến sẽ không dùng được cho Tour mới. Các bản đã lưu, kết quả chạy thử và Tour đã lên lịch không thay đổi."
     onConfirm={() => onConfirm(requestId)} onCancel={onCancel}>
     {tours.isPending ? <p aria-busy="true" className="text-xs text-[#64748b]">Đang tải Tour đã lên lịch…</p>
       : tours.isError ? <p role="alert" className="text-xs text-[#b23e31]">{routeAvailabilityError(tours.error)}</p>

@@ -9,7 +9,9 @@ import { celebrate, notify } from '../../../components/ui/toast-store'
 import { technicalApi, type PoiProposal } from '../../../features/technical/api/technical'
 import { errorText } from '../../../features/technical/technical-format'
 import { useMapVersions } from '../../../features/technical/technical-hooks'
-import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, mapVersionLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { NARRATION_NEEDED, cameraPresetLabel, mapCheckLabel, poiStatus, verificationMethodLabel } from '../../../features/technical/poi-labels'
+import { staffMapLabels } from '../../../features/administration/map-labels'
+import { campusShortStamp } from '../../../features/administration/tours/tour-calendar'
 import { PoiPosePicker, type PickerMode, type PickerPose } from '../../../features/administration/pois/map/PoiPosePicker'
 import { clearanceMessage, poseClearance } from '../../../features/administration/pois/map/occupancy-grid'
 import { useMapRaster } from '../../../features/administration/pois/map/use-map-raster'
@@ -47,6 +49,7 @@ export default function StaffManagePoiFormPage() {
   const selectedItem = maps.data?.find(item => item.map.id === draft.mapVersionId)
     ?? (mapDetailsQuery.data?.map.id === draft.mapVersionId ? mapDetailsQuery.data : undefined)
   const eligibleMaps = (maps.data ?? []).filter(item => item.canUseForPoiPreparation)
+  const mapLabel = staffMapLabels(maps.data ?? [])
   const { map: pickerMap, error: mapError, retry: retryMap } = useMapRaster(draft.mapVersionId)
   const mapEligible = Boolean(selectedItem?.canUseForPoiPreparation)
   const historicalReadOnly = Boolean(current && selectedItem && !mapEligible)
@@ -84,7 +87,7 @@ export default function StaffManagePoiFormPage() {
       if (created) celebrate({ title: `Đã tạo POI “${body.name}”`, detail: submitted ? 'Đã gửi kiểm chứng. POI dùng được cho tuyến khi kỹ thuật xác nhận PASS.' : 'Đã lưu bản nháp. Gửi kiểm chứng để kỹ thuật xác nhận PASS trước khi dùng cho tuyến.' })
       else notify(submitted
         ? { title: `Đã gửi kiểm chứng POI “${body.name}”`, detail: 'Chờ kỹ thuật xác nhận. Gửi kiểm chứng chưa tạo kết quả PASS.' }
-        : { title: `Đã lưu revision POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
+        : { title: `Đã lưu POI “${body.name}”`, detail: 'Bản nháp; chưa gửi kiểm chứng.' })
       if (!poiId) navigate(`/staff/manage/pois/${result.id}`, { replace: true })
     } catch (cause) {
       setError(errorText(cause))
@@ -109,7 +112,7 @@ export default function StaffManagePoiFormPage() {
       <h2 className="mt-3 text-[15px] font-semibold text-[#0f172a]">Chưa có bản đồ được kỹ thuật xác nhận đạt</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-[#64748b]">Điểm tham quan phải được đặt trên một bản đồ đã kiểm tra đạt. Hãy liên hệ kỹ thuật viên trước khi tạo POI.</p>
       {(maps.data?.length ?? 0) > 0 && <ul className="mx-auto mt-4 max-w-md divide-y divide-[#eef1f4] rounded-xl border border-[#e2e8f0] text-left text-sm">
-        {maps.data!.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapVersionLabel(item.map)}</span><span className="text-xs font-semibold text-[#7d5310]">{mapCheckLabel(item.technicalCheckStatus)}</span></li>)}
+        {maps.data!.map(item => <li key={item.map.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="text-[#334155]">{mapLabel(item.map)}</span><span className="text-xs font-semibold text-[#7d5310]">{mapCheckLabel(item.technicalCheckStatus)}</span></li>)}
       </ul>}
     </section>
   </AdminPage>
@@ -135,14 +138,14 @@ export default function StaffManagePoiFormPage() {
       <h1 className="text-2xl leading-tight font-bold text-[#2d3748]">{poiId ? (current?.revision.name ?? 'Điểm tham quan') : 'Tạo điểm tham quan'}</h1>
       <p className="mt-1 text-sm text-[#718096]">Đặt vị trí và hướng robot, sau đó hoàn thiện nội dung.</p>
     </header>
-    {current && state && <div className="mb-4"><Notice tone={state.tone === 'danger' ? 'danger' : state.tone === 'ok' ? 'success' : 'info'}>Phiên bản {current.currentRevision} · {state.label}{current.revision.verificationSourceRevisionId ? ' · kết quả lấy từ một phiên bản trước' : ''}</Notice></div>}
+    {current && state && <div className="mb-4"><Notice tone={state.tone === 'danger' ? 'danger' : state.tone === 'ok' ? 'success' : 'info'}>{state.label}{current.revision.verificationSourceRevisionId ? ' · kết quả lấy từ một bản lưu trước' : ''}</Notice></div>}
     {current?.revision.verificationMethod && <div className="mb-4"><Notice tone="info">Cách kiểm chứng: {verificationMethodLabel[current.revision.verificationMethod]}.</Notice></div>}
     {current?.sourcePoiId && !current.revision.narrationText && <div className="mb-4"><Notice tone="warn">{NARRATION_NEEDED}. POI này được nhập từ tệp ghi pose trên robot, chỉ cần thêm tên và thuyết minh; vị trí giữ nguyên thì không phải kiểm chứng lại.</Notice></div>}
     {current && selectedItem && !selectedItem.canUseForPoiPreparation && <div className="mb-4"><Notice tone="warn">Bản đồ của điểm này hiện không đủ điều kiện để chỉnh sửa: {selectedItem.preparationBlockReason} Lịch sử và kết quả kiểm chứng vẫn được giữ; bản đồ và vị trí bên dưới chỉ để xem.</Notice></div>}
 
     <section className={`${card} mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-3.5`} aria-label="Bản đồ và tiến độ">
-      <span className="text-sm text-[#718096]">Bản đồ / Phiên bản</span>
-      <select title="" id="poi-map" aria-label="Bản đồ" className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapVersionLabel(map)}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapVersionLabel(selectedItem.map)} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
+      <span className="text-sm text-[#718096]">Bản đồ</span>
+      <select title="" id="poi-map" aria-label="Bản đồ" className={`min-h-10 min-w-56 rounded-xl border border-[#e2e8f0] bg-white px-3 text-sm font-semibold text-[#2d3748] ${focus}`} required value={draft.mapVersionId} onChange={event => { update({ mapVersionId: event.target.value, x: null, y: null, yaw: null }); setPoseMode('position') }}><option value="">— Chọn bản đồ —</option>{maps.data?.map(item => { const { map } = item; return <option key={map.id} value={map.id} disabled={!item.canUseForPoiPreparation}>{mapLabel(map)}{item.canUseForPoiPreparation ? '' : ` · ${mapCheckLabel(item.technicalCheckStatus)}`}</option> })}{selectedItem && !maps.data?.some(item => item.map.id === selectedItem.map.id) && <option value={selectedItem.map.id} disabled={!selectedItem.canUseForPoiPreparation}>{mapLabel(selectedItem.map)} · {mapCheckLabel(selectedItem.technicalCheckStatus)}</option>}</select>
       {selectedItem && <span className="rounded-lg bg-[#f1f5f9] px-2.5 py-1 font-mono text-xs text-[#475569]">{selectedItem.map.mapKey}</span>}
       {selectedItem && selectedItem.currentlyDeployedOn.length > 0 && <span className="rounded-lg bg-[#edf3fc] px-2.5 py-1 text-xs font-medium text-[#3f62a0]">Robot kiểm tra đạt: {selectedItem.currentlyDeployedOn.map(robot => robot.robotCode).join(', ')}</span>}
       <ol aria-label="Tiến độ" className="flex flex-wrap items-center gap-x-3 gap-y-2 xl:ml-auto xl:border-l xl:border-[#e2e8f0] xl:pl-4">
@@ -155,13 +158,13 @@ export default function StaffManagePoiFormPage() {
         ))}
       </ol>
     </section>
-    {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot nào đang chạy phiên bản này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
+    {selectedItem?.technicalCheckStatus === 'PASSED' && selectedItem.currentlyDeployedOn.length === 0 && <div role="status" className="mb-4"><Notice tone="warn">Chưa có robot nào đang chạy bản đồ này. POI có thể không kiểm chứng được cho đến khi kỹ thuật triển khai lại.</Notice></div>}
 
     <form id="poi-form" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]" onSubmit={event => { event.preventDefault(); void mutate('save') }}>
       <section className={`${card} min-w-0 p-5`} aria-label="Vị trí và hướng robot">
         <h2 className="mb-3 text-lg font-bold text-[#2d3748]">Vị trí & hướng robot</h2>
         {mapError && <div role="alert" className="mb-3"><Notice tone="danger" action={<button type="button" onClick={retryMap} className={buttonClass('secondary', 'sm')}>Thử lại</button>}>{mapError}</Notice></div>}
-        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className="grid min-h-[380px] place-items-center rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-5 text-center text-sm text-[#718096]"><div><MapPinned size={26} className="mx-auto mb-2 text-[#a0aec0]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được phiên bản bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
+        {pickerMap && selectedItem ? <PoiPosePicker map={pickerMap} pose={pose} editable={mapEligible} mode={mapEligible ? poseMode : 'pan'} onModeChange={setPoseMode} onPoseChange={value => update(value)} clearanceMeters={selectedItem.poiClearanceMeters} /> : <div className="grid min-h-[380px] place-items-center rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-5 text-center text-sm text-[#718096]"><div><MapPinned size={26} className="mx-auto mb-2 text-[#a0aec0]" aria-hidden="true" />{mapDetailsQuery.isError ? 'Không tải được bản đồ lịch sử.' : mapError ? 'Chưa tải được bản đồ.' : draft.mapVersionId ? 'Đang tải bản đồ…' : 'Chọn bản đồ ở trên để đặt vị trí điểm.'}</div></div>}
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
           {([['X (m)', draft.x == null ? null : draft.x.toFixed(2), 'Chưa đặt'], ['Y (m)', draft.y == null ? null : draft.y.toFixed(2), 'Chưa đặt'], ['Hướng thân robot (rad)', draft.yaw == null ? null : draft.yaw.toFixed(3), 'Chưa chọn']] as const).map(([name, value, none]) => (
             <div key={name} className="rounded-xl border border-[#e2e8f0] px-3.5 py-2.5">
@@ -200,12 +203,12 @@ export default function StaffManagePoiFormPage() {
           <div><span className={label}><label htmlFor="poi-narration">Thuyết minh</label>{required}</span><textarea id="poi-narration" aria-label="Nội dung thuyết minh" className={field} rows={4} required maxLength={4000} value={draft.narrationText} onChange={e => update({ narrationText: e.target.value })} placeholder="Nhập nội dung giới thiệu tại điểm này…" /></div>
           <p className="text-xs text-[#718096]">Robot đọc nội dung này khi dừng tại điểm.</p>
         </div>
-        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một phiên bản mới.</p>
+        <p className="flex items-start gap-2 text-xs text-[#718096]"><Info size={14} aria-hidden="true" className="mt-0.5 shrink-0" />Gửi đề xuất để kỹ thuật viên kiểm chứng. Mỗi lần lưu tạo một bản mới.</p>
         </div>
       </aside>
     </form>
 
-    {current && <section className={`${card} mt-4 p-5`} aria-label="Lịch sử phiên bản"><h2 className="text-lg font-bold text-[#2d3748]">Lịch sử phiên bản</h2>{historyRows.length ? <ol className="mt-2 space-y-1.5">{historyRows.map(item => <li key={item.id} className="text-sm text-[#2d3748]">Phiên bản {item.revisionNumber} · {poiStatus(item).label}</li>)}</ol> : <p className="mt-2 text-sm text-[#718096]">{history.isPending ? 'Đang tải lịch sử…' : 'Chưa có lịch sử.'}</p>}{history.data?.verificationRecords.length ? <div className="mt-3 border-t border-[#e2e8f0] pt-3"><h3 className="text-sm font-semibold text-[#2d3748]">Kết quả kiểm chứng</h3><ul className="mt-2 space-y-2">{history.data.verificationRecords.map(record => <li key={record.id} className="text-sm text-[#2d3748]">Phiên bản {record.revisionNumber} · {record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · {record.robotCode} · {new Date(record.checkedAt).toLocaleString('vi-VN')}{record.reason && <p className="text-[#a4473d]">Lý do: {record.reason}</p>}<p className="text-xs text-[#718096]">{record.evidenceNote}</p></li>)}</ul></div> : null}</section>}
+    {current && <section className={`${card} mt-4 p-5`} aria-label="Lịch sử thay đổi"><h2 className="text-lg font-bold text-[#2d3748]">Lịch sử thay đổi</h2>{historyRows.length ? <ol className="mt-2 space-y-1.5">{historyRows.map(item => <li key={item.id} className="text-sm text-[#2d3748]">Bản lưu {campusShortStamp(item.createdAt)} · {poiStatus(item).label}</li>)}</ol> : <p className="mt-2 text-sm text-[#718096]">{history.isPending ? 'Đang tải lịch sử…' : 'Chưa có lịch sử.'}</p>}{history.data?.verificationRecords.length ? <div className="mt-3 border-t border-[#e2e8f0] pt-3"><h3 className="text-sm font-semibold text-[#2d3748]">Kết quả kiểm chứng</h3><ul className="mt-2 space-y-2">{history.data.verificationRecords.map(record => <li key={record.id} className="text-sm text-[#2d3748]">{record.resultCode === 'PASS' ? 'Đạt' : 'Không đạt'} · {record.robotCode} · {new Date(record.checkedAt).toLocaleString('vi-VN')}{record.reason && <p className="text-[#a4473d]">Lý do: {record.reason}</p>}<p className="text-xs text-[#718096]">{record.evidenceNote}</p></li>)}</ul></div> : null}</section>}
 
     {/* The page's actions stay in reach at the bottom of the screen. */}
     <div className="sticky bottom-3 z-20 mt-4 rounded-[15px] border border-[#e2e8f0] bg-white/90 shadow-[0_10px_30px_-12px_rgba(15,23,42,0.25)] backdrop-blur-xl">
@@ -216,7 +219,7 @@ export default function StaffManagePoiFormPage() {
             : missing.length ? <p className="flex items-start gap-2.5 text-sm"><CircleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-[#c08a1e]" /><span><b className="block font-semibold text-[#2d3748]">Chưa đủ thông tin</b><span className="text-[#718096]">Còn thiếu: {missing.join(', ')}.</span></span></p>
             : <p className="flex items-center gap-2 text-sm font-semibold text-[#2d3748]"><Check size={16} aria-hidden="true" className="text-[#3f62a0]" />Đủ thông tin để gửi kiểm chứng.</p>}
         </div>
-        <p className="hidden text-xs text-[#a0aec0] xl:block">Lưu tạo phiên bản mới; gửi kiểm chứng chưa phải kết quả đạt.</p>
+        <p className="hidden text-xs text-[#a0aec0] xl:block">Lưu tạo bản mới; gửi kiểm chứng chưa phải kết quả đạt.</p>
         <Link to="/staff/manage/pois" className={buttonClass('secondary')}>Hủy bỏ</Link>
         <button type="submit" form="poi-form" disabled={busy || locked} className={buttonClass('secondary')}>{busy ? 'Đang lưu…' : 'Lưu nháp'}</button>
         <button type="button" disabled={busy || locked} onClick={() => void mutate('submit')} className={buttonClass('primary')}>{busy ? 'Đang xử lý…' : 'Gửi kiểm chứng'}</button>
